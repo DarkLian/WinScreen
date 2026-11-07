@@ -149,6 +149,7 @@ public sealed class WindowToolbar : Form
         AppCommand.ToggleDark => "",
         AppCommand.ToggleGlass => "",
         AppCommand.ToggleShrink => "",
+        AppCommand.Arrange => "\uE7C2",
         AppCommand.ToggleCrop => "",
         AppCommand.SaveWindowSetup => "",
         AppCommand.RestoreWindow => "",

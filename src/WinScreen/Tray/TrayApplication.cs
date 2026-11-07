@@ -18,6 +18,7 @@ public sealed class TrayApplication : ApplicationContext
     private const int BalloonMilliseconds = 3000;
 
     private readonly WindowController _windows;
+    private readonly WindowPlacer _placer;
     private readonly AppSettings _settings;
     private readonly string _settingsPath;
     private readonly HotkeyHost _hotkeys = new();
@@ -50,6 +51,7 @@ public sealed class TrayApplication : ApplicationContext
     public TrayApplication(WindowController windows, AppSettings settings, string settingsPath)
     {
         _windows = windows;
+        _placer = new WindowPlacer(windows);
         _settings = settings;
         _settingsPath = settingsPath;
         // Update news stays out of Last result, where it could replace a failure someone needs to read.
@@ -602,6 +604,12 @@ public sealed class TrayApplication : ApplicationContext
             return;
         }
 
+        if (CommandCatalog.AnchorOf(command) is { } anchor)
+        {
+            Attempt(() => _placer.Align(window, anchor));
+            return;
+        }
+
         if (!recovery && !IsAvailable(command))
         {
             Alert(T("WinScreen couldn't do that"), T("Enable experimental effects in Settings to use this action."));
@@ -644,6 +652,25 @@ public sealed class TrayApplication : ApplicationContext
                     _pips[window] = pip;
                     pip.FormClosed += (_, _) => _pips.Remove(window);
                     OpenView(pip);
+                    break;
+                case AppCommand.Arrange:
+                    ShowArrangeMenu(window);
+                    break;
+                case AppCommand.MoveToNextDisplay:
+                    _placer.MoveToNextDisplay(window);
+                    break;
+                case AppCommand.PlaceExactly:
+                    PlaceExactly(window);
+                    break;
+                case AppCommand.RestorePlacement:
+                    if (!_placer.RestorePrior(window))
+                        Alert(CommandCatalog.Name(command), T("WinScreen hasn't moved this window."), ToolTipIcon.Info);
+                    break;
+                case AppCommand.SendToBottom:
+                    _windows.SendToBottom(window);
+                    break;
+                case AppCommand.ShowWindowInfo:
+                    ShowWindowInfo(window);
                     break;
                 case AppCommand.ToggleDark:
                     _dark.Toggle(window);
@@ -702,6 +729,77 @@ public sealed class TrayApplication : ApplicationContext
         {
             Alert(T("WinScreen couldn't do that"), failure.Message);
         }
+    }
+
+    private void Attempt(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception failure) when (IsExpected(failure))
+        {
+            Alert(T("WinScreen couldn't do that"), failure.Message);
+        }
+    }
+
+    /// <summary>Everything that moves a window, from one button, so the toolbar doesn't need a button for each.</summary>
+    private void ShowArrangeMenu(nint window)
+    {
+        var menu = new ContextMenuStrip();
+        foreach (AppCommand? entry in CommandCatalog.ArrangeMenu)
+        {
+            if (entry is not { } command)
+                menu.Items.Add(new ToolStripSeparator());
+            else if (IsAvailable(command))
+                menu.Items.Add(CommandCatalog.Name(command), null, (_, _) => Run(command, window));
+        }
+
+        // A menu only closes on an outside click while its program has the focus.
+        menu.Closed += (_, _) =>
+        {
+            User32.SetForegroundWindow(window);
+            BeginInvokeDispose(menu);
+        };
+        User32.SetForegroundWindow(_toolbar.Handle);
+        menu.Show(Cursor.Position);
+    }
+
+    private void BeginInvokeDispose(IDisposable item) => _toolbar.BeginInvoke(item.Dispose);
+
+    private void PlaceExactly(nint window)
+    {
+        if (!WindowInfo.TryGetFrameBounds(window, out Rectangle frame, out _))
+            return;
+        using var dialog = new PlacementDialog(CommandCatalog.Name(AppCommand.PlaceExactly), frame);
+        if (dialog.ShowDialog() == DialogResult.OK)
+            _placer.SetFrame(window, dialog.Frame);
+    }
+
+    private static void ShowWindowInfo(nint window)
+    {
+        (string Label, string Value)[] facts = WindowInfo.Facts(window);
+        string text = string.Join(Environment.NewLine, facts.Select(fact => $"{fact.Label}: {fact.Value}"));
+        using var dialog = new Form
+        {
+            Text = CommandCatalog.Name(AppCommand.ShowWindowInfo), Size = new Size(620, 340),
+            StartPosition = FormStartPosition.CenterScreen, TopMost = true,
+        };
+        var box = new TextBox { Multiline = true, ReadOnly = true, Dock = DockStyle.Fill, Text = text, ScrollBars = ScrollBars.Both, WordWrap = false };
+        var copy = new Button { Text = T("Copy"), AutoSize = true };
+        copy.Click += (_, _) =>
+        {
+            try { Clipboard.SetText(text); }
+            catch (ExternalException) { /* Someone else has the clipboard for a moment; pressing again works. */ }
+        };
+        string path = WindowInfo.ExecutablePath(window);
+        var folder = new Button { Text = T("Open file location"), AutoSize = true, Enabled = path.Length > 0 };
+        folder.Click += (_, _) => System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"")?.Dispose();
+        var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true };
+        buttons.Controls.AddRange([copy, folder]);
+        dialog.Controls.Add(box);
+        dialog.Controls.Add(buttons);
+        dialog.ShowDialog();
     }
 
     private void OpenView(PipWindow pip)

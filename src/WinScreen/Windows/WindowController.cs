@@ -400,6 +400,21 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
                 : (byte)255;
     }
 
+    /// <summary>Puts a window behind all others. A pinned window stays in front of them by definition, so it's refused.</summary>
+    public void SendToBottom(nint window)
+    {
+        if (Refusal(window) is { } refusal)
+            throw new WindowOperationException(refusal);
+        if (IsHidden(window) || IsPeeking(window))
+            throw new WindowOperationException(T("Show this window first, then try again."));
+        if ((User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0)
+            throw new WindowOperationException(T("Unpin this window first, then send it to the bottom."));
+        EnsureResponsive(window);
+        const uint flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
+        if (!User32.SetWindowPos(window, User32.HWND_BOTTOM, 0, 0, 0, 0, flags))
+            throw Failure(T("move"), window);
+    }
+
     /// <summary>Makes a solid window as see-through as the default level, or a see-through one solid.</summary>
     public byte ToggleDefaultOpacity(nint window)
     {
@@ -1152,6 +1167,31 @@ public static class WindowInfo
         {
             return "";
         }
+    }
+
+    /// <summary>The facts about a window, as label and value, for the person to read or copy.</summary>
+    public static (string Label, string Value)[] Facts(nint window)
+    {
+        uint thread = User32.GetWindowThreadProcessId(window, out uint processId);
+        string frame = TryGetFrameBounds(window, out Rectangle bounds, out _)
+            ? $"{bounds.Width}×{bounds.Height} @ {bounds.Left}, {bounds.Top}"
+            : T("Unavailable");
+        string path = ExecutablePath(window);
+        Screen screen = Screen.FromHandle(window);
+        return
+        [
+            (T("Title"), Title(window)),
+            (T("Program"), ProcessName(processId)),
+            (T("Program file"), path.Length > 0 ? path : T("Unavailable")),
+            ("HWND", $"0x{window:X}"),
+            (T("Process ID"), processId.ToString()),
+            (T("Thread ID"), thread.ToString()),
+            (T("Window class"), ClassName(window)),
+            (T("Visible frame"), frame),
+            (T("Display"), $"{screen.DeviceName} ({screen.Bounds.Width}×{screen.Bounds.Height})"),
+            (T("Scaling"), $"{Dpi.Of(window) * 100 / Dpi.Default}%"),
+            (T("Runs as administrator"), ProcessInfo.IsElevated(processId) ? T("Yes") : T("No")),
+        ];
     }
 
     public static bool IsAvailable(nint window)

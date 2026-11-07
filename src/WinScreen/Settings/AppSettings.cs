@@ -22,6 +22,21 @@ public enum AppCommand
     ToggleCrop,
     RestoreWindow,
     PickPipSource,
+    Arrange,
+    AlignTopLeft,
+    AlignTop,
+    AlignTopRight,
+    AlignLeft,
+    AlignCenter,
+    AlignRight,
+    AlignBottomLeft,
+    AlignBottom,
+    AlignBottomRight,
+    MoveToNextDisplay,
+    PlaceExactly,
+    RestorePlacement,
+    SendToBottom,
+    ShowWindowInfo,
 }
 
 /// <summary>What a program's windows get automatically. Click-through and Glass are left out on purpose:
@@ -62,12 +77,33 @@ public static class CommandCatalog
     [
         AppCommand.TogglePin, AppCommand.OpacityDown, AppCommand.ToggleDefaultOpacity, AppCommand.OpacityUp,
         AppCommand.ToggleClickThrough, AppCommand.OpenPip, AppCommand.ToggleAnchor, AppCommand.ToggleDark,
-        AppCommand.ToggleGlass, AppCommand.ToggleShrink, AppCommand.ToggleCrop, AppCommand.SaveWindowSetup,
+        AppCommand.ToggleGlass, AppCommand.ToggleShrink, AppCommand.ToggleCrop, AppCommand.Arrange, AppCommand.SaveWindowSetup,
         AppCommand.RestoreWindow, AppCommand.RestoreAll,
     ];
 
     /// <summary>Commands with a place in the tray and Hotkeys but no toolbar button.</summary>
-    public static readonly AppCommand[] Extra = [AppCommand.PickPipSource];
+    public static readonly AppCommand[] Extra =
+    [
+        AppCommand.PickPipSource, AppCommand.AlignTopLeft, AppCommand.AlignTop, AppCommand.AlignTopRight,
+        AppCommand.AlignLeft, AppCommand.AlignCenter, AppCommand.AlignRight, AppCommand.AlignBottomLeft,
+        AppCommand.AlignBottom, AppCommand.AlignBottomRight, AppCommand.MoveToNextDisplay, AppCommand.PlaceExactly,
+        AppCommand.RestorePlacement, AppCommand.SendToBottom, AppCommand.ShowWindowInfo,
+    ];
+
+    /// <summary>What the Arrange menu offers, in order, with null where a divider goes.</summary>
+    public static readonly AppCommand?[] ArrangeMenu =
+    [
+        AppCommand.AlignTopLeft, AppCommand.AlignTop, AppCommand.AlignTopRight, AppCommand.AlignLeft,
+        AppCommand.AlignCenter, AppCommand.AlignRight, AppCommand.AlignBottomLeft, AppCommand.AlignBottom,
+        AppCommand.AlignBottomRight, null, AppCommand.MoveToNextDisplay, AppCommand.PlaceExactly,
+        AppCommand.RestorePlacement, null, AppCommand.SendToBottom, null, AppCommand.ShowWindowInfo,
+    ];
+
+    /// <summary>The corner or edge an alignment command goes to, or null for any other command.</summary>
+    public static Windows.WindowAnchor? AnchorOf(AppCommand command) =>
+        command is >= AppCommand.AlignTopLeft and <= AppCommand.AlignBottomRight
+            ? (Windows.WindowAnchor)(command - AppCommand.AlignTopLeft)
+            : null;
 
     /// <summary>Everything that can have a hotkey.</summary>
     public static IEnumerable<AppCommand> All => Ordered.Concat(Extra);
@@ -96,6 +132,21 @@ public static class CommandCatalog
         AppCommand.RestoreWindow => "Restore this window",
         AppCommand.RestoreAll => "Restore all windows",
         AppCommand.PickPipSource => "Choose what to show",
+        AppCommand.Arrange => "Arrange window",
+        AppCommand.AlignTopLeft => "Top left",
+        AppCommand.AlignTop => "Top center",
+        AppCommand.AlignTopRight => "Top right",
+        AppCommand.AlignLeft => "Middle left",
+        AppCommand.AlignCenter => "Center",
+        AppCommand.AlignRight => "Middle right",
+        AppCommand.AlignBottomLeft => "Bottom left",
+        AppCommand.AlignBottom => "Bottom center",
+        AppCommand.AlignBottomRight => "Bottom right",
+        AppCommand.MoveToNextDisplay => "Move to next display",
+        AppCommand.PlaceExactly => "Exact position and size...",
+        AppCommand.RestorePlacement => "Restore prior position",
+        AppCommand.SendToBottom => "Send to bottom",
+        AppCommand.ShowWindowInfo => "Window information",
         _ => command.ToString(),
     });
 }

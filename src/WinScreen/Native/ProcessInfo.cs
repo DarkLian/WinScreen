@@ -1,0 +1,54 @@
+using System.Runtime.InteropServices;
+
+namespace WinScreen.Native;
+
+/// <summary>What Windows will say about another process.</summary>
+internal static partial class ProcessInfo
+{
+    private const uint ProcessQueryLimited = 0x1000;
+    private const uint TokenQuery = 0x8;
+    private const int TokenElevation = 20;
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    private static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool CloseHandle(nint handle);
+
+    [LibraryImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool OpenProcessToken(nint process, uint access, out nint token);
+
+    [LibraryImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetTokenInformation(nint token, int kind, out int value, int size, out int returned);
+
+    /// <summary>
+    /// True when a process runs as administrator. A normal process isn't allowed to look at an elevated
+    /// one's token, so being refused counts as yes. That's also the answer that keeps WinScreen away from it.
+    /// </summary>
+    public static bool IsElevated(uint processId)
+    {
+        nint process = OpenProcess(ProcessQueryLimited, false, processId);
+        if (process == 0)
+            return true;
+        try
+        {
+            if (!OpenProcessToken(process, TokenQuery, out nint token))
+                return true;
+            try
+            {
+                return !GetTokenInformation(token, TokenElevation, out int elevated, sizeof(int), out _) || elevated != 0;
+            }
+            finally
+            {
+                CloseHandle(token);
+            }
+        }
+        finally
+        {
+            CloseHandle(process);
+        }
+    }
+}

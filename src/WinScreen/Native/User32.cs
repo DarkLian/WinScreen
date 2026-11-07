@@ -85,6 +85,7 @@ internal static partial class User32
 
     public static readonly nint HWND_TOPMOST = -1;
     public static readonly nint HWND_NOTOPMOST = -2;
+    public static readonly nint HWND_BOTTOM = 1;
 
     [LibraryImport("user32.dll", EntryPoint = "FindWindowW", StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint FindWindow(string? className, string? title);

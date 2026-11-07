@@ -175,6 +175,21 @@ remains visible and retryable. Glass samples visible screen content and can be a
   select the window in Alt-Tab, select it on the taskbar, or press the Shrink hotkey again to restore it.
   Drag the tile to move it, or right-click it for its menu.
 
+## Arrange a window
+
+The toolbar's **Arrange window** button lists everything that moves a window, and each entry can also have a hotkey in
+**Settings → Hotkeys**. None has one by default.
+
+- **Nine positions:** the corners, the middle of each edge, and the center of the screen.
+- **Move to next display:** keeps the same relative place on the next display.
+- **Exact position and size:** enter the visible frame's position and size in screen pixels.
+- **Restore prior position:** steps back through recent moves. This is forgotten when WinScreen exits.
+- **Send to bottom:** puts the window behind all others. Unpin it first.
+- **Window information:** shows the window's handle, process, program file, class, position, and display.
+
+A minimized or maximized window stays that way and gets a new place to come back to. **Restore all windows** doesn't undo
+these moves, because you chose them.
+
 ## Remember a program's setup
 
 Adjust pinning, opacity, and dark mode, then press **Ctrl+Alt+Shift+S**. Windows belonging to that program receive the setup
@@ -263,3 +278,4 @@ These are limits of the current version, listed so you can decide before you rel
 - **Regions:** a region stays on one display.
 - **Presets:** a saved crop is in pixels, so it may not fit a differently sized window.
 - **Click-through views:** they can't be clicked, so use the tray menu or **Restore all windows** to reach them.
+- **Arranging windows:** some apps enforce their own minimum size or position, and multiple displays and mixed scaling are unverified.

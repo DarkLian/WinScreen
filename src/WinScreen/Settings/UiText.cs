@@ -248,5 +248,44 @@ public static class UiText
                                    Save as preset...|保存为预设...|儲存為預設組合...
                                    Remove preset|移除预设|移除預設組合
                                    Save|保存|儲存
+                                   Arrange window|排列窗口|排列視窗
+                                   Top left|左上|左上
+                                   Top center|上方居中|上方置中
+                                   Top right|右上|右上
+                                   Middle left|左侧居中|左側置中
+                                   Center|居中|置中
+                                   Middle right|右侧居中|右側置中
+                                   Bottom left|左下|左下
+                                   Bottom center|下方居中|下方置中
+                                   Bottom right|右下|右下
+                                   Move to next display|移到下一台显示器|移至下一台顯示器
+                                   Exact position and size...|精确位置和大小...|精確位置與大小...
+                                   Restore prior position|恢复之前的位置|還原先前的位置
+                                   Send to bottom|置于底层|移至最下層
+                                   Window information|窗口信息|視窗資訊
+                                   There is only one display.|只有一台显示器。|只有一台顯示器。
+                                   "{0}" didn't go where it was asked.|“{0}”未移动到指定位置。|「{0}」未移動到指定位置。
+                                   Show this window first, then try again.|请先显示此窗口，然后重试。|請先顯示此視窗，然後再試一次。
+                                   Unpin this window first, then send it to the bottom.|请先取消置顶此窗口，然后再置于底层。|請先取消置頂此視窗，然後再移至最下層。
+                                   WinScreen hasn't moved this window.|WinScreen 未移动过此窗口。|WinScreen 未移動過此視窗。
+                                   Left|左|左
+                                   Top|上|上
+                                   Width|宽度|寬度
+                                   Height|高度|高度
+                                   Apply|应用|套用
+                                   Copy|复制|複製
+                                   Open file location|打开文件位置|開啟檔案位置
+                                   Unavailable|不可用|無法使用
+                                   Title|标题|標題
+                                   Program|程序|程式
+                                   Program file|程序文件|程式檔案
+                                   Process ID|进程 ID|處理程序識別碼
+                                   Thread ID|线程 ID|執行緒識別碼
+                                   Window class|窗口类|視窗類別
+                                   Visible frame|可见边框|可見外框
+                                   Display|显示器|顯示器
+                                   Runs as administrator|以管理员身份运行|以系統管理員身分執行
+                                   Yes|是|是
+                                   No|否|否
                                    """;
 }
