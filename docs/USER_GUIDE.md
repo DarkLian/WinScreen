@@ -105,6 +105,8 @@ Middle-click does not force an application to quit. The application may show an 
 or hide to its own tray. The Anchor still disappears; add it again with Ctrl+Alt+A if wanted.
 Anchors are also removed when their target window is destroyed, when restoring all windows, or when WinScreen exits.
 
+**Settings → Anchors** can add an Anchor by itself for a window that is fully hidden behind others. It goes when the window is uncovered or brought forward. Up to eight windows get one at a time, most recently used first. Minimized windows, windows on other desktops, dialogs, and originals hidden by a view get none, and nothing appears during games and full-screen apps. Press Ctrl+Alt+A on a window to keep its automatic Anchor; removing one keeps it away until the window has been uncovered. Program lists on the same page limit which programs get them.
+
 ### Picture-in-Picture controls
 
 The compact title bar appears on hover with the source title, icon, Minimize, and Close. Drag its title to move the view;

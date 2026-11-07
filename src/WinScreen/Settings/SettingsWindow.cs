@@ -18,6 +18,11 @@ public sealed class SettingsWindow : Form
     private readonly TextBox _borderColor = new() { Width = 90 };
     private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _borderThickness = new() { Minimum = 1, Maximum = 12, Width = 70 };
+    private readonly CheckBox _autoAnchors = new() { Text = T("anchors.auto.enable"), AutoSize = true };
+    private readonly ListBox _anchorOnly = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ListBox _anchorExcluded = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ComboBox _newAnchorOnly = ProgramPicker();
+    private readonly ComboBox _newAnchorExcluded = ProgramPicker();
     private readonly ComboBox _toolbarPlacement = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
     private readonly ComboBox _toolbarTrigger = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
     private readonly NumericUpDown _toolbarDelay = new() { Minimum = 100, Maximum = 2000, Increment = 100, Width = 90 };
@@ -149,7 +154,8 @@ public sealed class SettingsWindow : Form
         var gesturePage = Tab(T("gestures.title"), BuildModifierDrag());
         var appearancePage = Tab(T("settings.customization"), BuildCustomization());
         var toolbarPage = Tab(T("toolbar.settings.title"), BuildToolbar());
-        tabs.TabPages.AddRange([pipPage, gesturePage, appearancePage, toolbarPage]);
+        var anchorsPage = Tab(T("anchors.settings.title"), BuildAnchors());
+        tabs.TabPages.AddRange([pipPage, gesturePage, appearancePage, toolbarPage, anchorsPage]);
         tabs.Selected += (_, _) => { if (tabs.SelectedTab == featuresPage) RefreshFeatures(); };
         _features.ItemActivate += (_, _) => // A double-click, or Enter from the keyboard.
         {
@@ -164,6 +170,7 @@ public sealed class SettingsWindow : Form
             tabs.SelectedTab = (tag as string) switch
             {
                 "toolbar" => toolbarPage,
+                "anchors" => anchorsPage,
                 "gestures" => gesturePage,
                 "pip" => pipPage,
                 "appearance" => appearancePage,
@@ -236,6 +243,14 @@ public sealed class SettingsWindow : Form
             Trigger = (ToolbarTrigger)Math.Max(0, _toolbarTrigger.SelectedIndex),
             HoverDelayMilliseconds = (int)_toolbarDelay.Value,
             Buttons = _toolbarButtons.CheckedItems.Cast<ToolbarChoice>().Select(choice => choice.Command).ToList(),
+        }.Validated();
+        AddTyped(_anchorOnly, _newAnchorOnly);
+        AddTyped(_anchorExcluded, _newAnchorExcluded);
+        draft.Anchors = new AnchorPreferences
+        {
+            Automatic = _autoAnchors.Checked,
+            OnlyPrograms = _anchorOnly.Items.Cast<string>().ToList(),
+            ExcludedPrograms = _anchorExcluded.Items.Cast<string>().ToList(),
         }.Validated();
         draft.ShowNotifications = _showNotifications.Checked;
         draft.AutomaticUpdates = _automaticUpdates.Checked;
@@ -372,6 +387,7 @@ public sealed class SettingsWindow : Form
             nameof(AppSettings.AllowPipInFullScreen) => _allowPip,
             nameof(AppSettings.ModifierDrag) => _modifierDrag,
             nameof(AppSettings.OpacityWheel) => _opacityWheel,
+            nameof(AnchorPreferences.Automatic) => _autoAnchors,
             nameof(AppSettings.PausePinWhenMaximized) => _pausePin,
             nameof(AppSettings.OpaqueOnHover) => _opaqueOnHover,
             nameof(AppSettings.HighlightPinned) => _highlightPinned,
@@ -403,6 +419,12 @@ public sealed class SettingsWindow : Form
         _toolbarDelay.Value = toolbar.HoverDelayMilliseconds;
         for (int i = 0; i < _toolbarButtons.Items.Count; i++)
             _toolbarButtons.SetItemChecked(i, toolbar.Buttons.Contains(((ToolbarChoice)_toolbarButtons.Items[i]).Command));
+        AnchorPreferences anchors = values.Anchors.Validated();
+        _autoAnchors.Checked = anchors.Automatic;
+        _anchorOnly.Items.Clear();
+        _anchorOnly.Items.AddRange(anchors.OnlyPrograms.Cast<object>().ToArray());
+        _anchorExcluded.Items.Clear();
+        _anchorExcluded.Items.AddRange(anchors.ExcludedPrograms.Cast<object>().ToArray());
         _showNotifications.Checked = values.ShowNotifications;
         _automaticUpdates.Checked = values.AutomaticUpdates;
         _experimental.Checked = values.ExperimentalFeatures;
@@ -759,6 +781,18 @@ public sealed class SettingsWindow : Form
         return page;
     }
 
+    private Control BuildAnchors()
+    {
+        var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Dock = DockStyle.Fill };
+        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        page.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        page.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        page.Controls.Add(Section(T("anchors.settings.title"), _autoAnchors, Note(T("anchors.auto.help"))), 0, 0);
+        page.Controls.Add(BuildProgramList(T("anchors.auto.only"), _anchorOnly, _newAnchorOnly), 0, 1);
+        page.Controls.Add(BuildProgramList(T("anchors.auto.excluded"), _anchorExcluded, _newAnchorExcluded), 0, 2);
+        return page;
+    }
+
     private Control BuildFeatures()
     {
         _features.Columns.Add(T("features.name"), 230);
@@ -796,6 +830,7 @@ public sealed class SettingsWindow : Form
             _ => T("gestures.menu.ctrlRight"),
         };
         Option(T("features.windowMenu"), gesture, _windowMenu.Checked, "gestures");
+        Option(T("features.autoAnchors"), none, _autoAnchors.Checked, "anchors");
         Option(T("features.opacityWheel"), T("features.wheelShortcut"), _opacityWheel.Checked, "appearance");
         Option(_detectDark.Text, none, _detectDark.Checked && _experimental.Checked, "appearance");
         Option(_pipTitleBar.Text, none, _pipTitleBar.Checked, "pip");

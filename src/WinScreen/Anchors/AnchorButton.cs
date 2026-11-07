@@ -59,6 +59,10 @@ internal sealed class AnchorButton : Form
     }
 
     public nint Target => _target;
+
+    /// <summary>True for one the app added for a covered window, which it may also take away.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool Automatic { get; set; }
     public bool TargetAlive => _identity.Matches();
 
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]

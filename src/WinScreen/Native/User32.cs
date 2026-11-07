@@ -103,6 +103,19 @@ internal static partial class User32
     public const int WM_NCHITTEST = 0x0084;
     public const int HTCAPTION = 2;
     public const int HTMINBUTTON = 8;
+
+    public delegate void WinEventProc(nint hook, uint kind, nint window, int item, int child, uint thread, uint time);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint SetWinEventHook(uint first, uint last, nint module, nint callback, uint process, uint thread, uint flags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool UnhookWinEvent(nint hook);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool EnumWindows(nint callback, nint state);
     public const int WM_HOTKEY = 0x0312;
 
     public static readonly nint HWND_TOPMOST = -1;

@@ -340,5 +340,11 @@
   "features.windowMenu": "滑鼠視窗選單",
   "features.opacityWheel": "滾輪不透明度",
   "features.wheelShortcut": "Ctrl+Alt+滾輪",
-  "setups.view": "子母畫面檢視"
+  "setups.view": "子母畫面檢視",
+  "anchors.settings.title": "錨點",
+  "anchors.auto.enable": "為完全被遮蔽的視窗新增錨點",
+  "anchors.auto.help": "視窗被其他視窗完全遮蔽時會出現錨點，不再被遮蔽時錨點會消失。遊戲和全螢幕應用程式執行時不會出現。你自己新增的錨點會保留。",
+  "anchors.auto.only": "僅這些程式（留空表示全部）",
+  "anchors.auto.excluded": "排除這些程式",
+  "features.autoAnchors": "自動錨點"
 }

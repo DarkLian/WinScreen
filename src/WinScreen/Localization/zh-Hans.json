@@ -340,5 +340,11 @@
   "features.windowMenu": "鼠标窗口菜单",
   "features.opacityWheel": "滚轮不透明度",
   "features.wheelShortcut": "Ctrl+Alt+滚轮",
-  "setups.view": "画中画视图"
+  "setups.view": "画中画视图",
+  "anchors.settings.title": "锚点",
+  "anchors.auto.enable": "为完全被遮挡的窗口添加锚点",
+  "anchors.auto.help": "窗口被其他窗口完全遮挡时会出现锚点，不再被遮挡时锚点会消失。游戏和全屏应用运行时不会出现。你自己添加的锚点会保留。",
+  "anchors.auto.only": "仅这些程序（留空表示全部）",
+  "anchors.auto.excluded": "排除这些程序",
+  "features.autoAnchors": "自动锚点"
 }

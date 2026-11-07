@@ -11,8 +11,10 @@ public sealed class AnchorSet : IDisposable
     private const int Margin = 16;
     private const int FirstTop = 120;
     private const int Gap = 8;
+    private const int AutomaticLimit = 8;
 
     private readonly Dictionary<nint, AnchorButton> _anchors = [];
+    private readonly HashSet<nint> _dismissed = [];
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 500 };
 
     public AnchorSet()
@@ -20,7 +22,10 @@ public sealed class AnchorSet : IDisposable
         _watch.Tick += (_, _) => DropClosedWindows();
     }
 
-    public bool Has(nint window) => _anchors.ContainsKey(window);
+    /// <summary>True for an Anchor someone added themselves, which is what commands report and toggle.</summary>
+    public bool Has(nint window) => _anchors.TryGetValue(window, out AnchorButton? anchor) && !anchor.Automatic;
+
+    internal IReadOnlyCollection<nint> Automatic => _anchors.Where(pair => pair.Value.Automatic).Select(pair => pair.Key).ToArray();
 
     public event Action<nint>? Created;
     public event Action<nint>? ShowRequested;
@@ -28,30 +33,77 @@ public sealed class AnchorSet : IDisposable
     /// <summary>Adds an anchor for a window, or removes the one it has. Returns the new state.</summary>
     public bool Toggle(nint window)
     {
-        if (_anchors.Remove(window, out AnchorButton? existing))
+        if (_anchors.TryGetValue(window, out AnchorButton? existing))
         {
+            if (existing.Automatic)
+            {
+                existing.Automatic = false; // Asking for one keeps it, so uncovering won't remove it.
+                return true;
+            }
+
+            _anchors.Remove(window);
             existing.Dispose();
             _watch.Enabled = _anchors.Count > 0;
             return false;
         }
 
+        Add(window, automatic: false);
+        return true;
+    }
+
+    /// <summary>
+    /// Makes the automatic Anchors match the covered windows, topmost first. One the person removed
+    /// stays away until its window has been uncovered.
+    /// </summary>
+    internal void SyncAutomatic(IReadOnlyList<nint> covered)
+    {
+        _dismissed.IntersectWith(covered);
+        var wanted = covered.Where(window => !_dismissed.Contains(window) && !HasManualOrDead(window))
+            .Take(AutomaticLimit).ToHashSet();
+        foreach ((nint window, AnchorButton anchor) in _anchors.ToArray())
+        {
+            if (anchor.Automatic && !wanted.Contains(window))
+            {
+                _anchors.Remove(window);
+                anchor.Dispose();
+            }
+        }
+
+        foreach (nint window in wanted.Where(window => !_anchors.ContainsKey(window)))
+        {
+            try { Add(window, automatic: true); }
+            catch (Windows.WindowOperationException) { } // It closed during the pass.
+        }
+
+        _watch.Enabled = _anchors.Count > 0;
+    }
+
+    private bool HasManualOrDead(nint window) =>
+        _anchors.TryGetValue(window, out AnchorButton? anchor) && (!anchor.Automatic || anchor.IsDisposed);
+
+    private void Add(nint window, bool automatic)
+    {
         Rectangle area = Screen.FromHandle(window).WorkingArea;
         var anchor = new AnchorButton(window)
         {
             Location = FreePosition(area, Dpi.Of(window)),
             ShowTarget = ShowRequested is null ? null : target => ShowRequested?.Invoke(target),
+            Automatic = automatic,
         };
         _anchors[window] = anchor;
         anchor.FormClosed += (_, _) =>
         {
             if (_anchors.TryGetValue(window, out var current) && ReferenceEquals(current, anchor))
+            {
                 _anchors.Remove(window);
+                if (anchor.Automatic) _dismissed.Add(window);
+            }
+
             _watch.Enabled = _anchors.Count > 0;
         };
         Created?.Invoke(anchor.Handle);
         anchor.Show();
         _watch.Enabled = true;
-        return true;
     }
 
     public void RemoveAll()

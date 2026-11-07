@@ -340,5 +340,11 @@
   "features.windowMenu": "Mouse window menu",
   "features.opacityWheel": "Opacity wheel",
   "features.wheelShortcut": "Ctrl+Alt+wheel",
-  "setups.view": "view"
+  "setups.view": "view",
+  "anchors.settings.title": "Anchors",
+  "anchors.auto.enable": "Add an Anchor for windows that are fully covered",
+  "anchors.auto.help": "An Anchor appears when a window is hidden behind others and goes when it's uncovered. Nothing appears during games and full-screen apps. Anchors you add yourself stay.",
+  "anchors.auto.only": "Only these programs (leave empty for all)",
+  "anchors.auto.excluded": "Never these programs",
+  "features.autoAnchors": "Automatic Anchors"
 }

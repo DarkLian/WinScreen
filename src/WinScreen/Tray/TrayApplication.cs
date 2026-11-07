@@ -32,6 +32,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly StartWithWindows _startup = new();
     private readonly DarkMode _dark = new();
     private readonly AnchorSet _anchors = new();
+    private readonly AutomaticAnchors _automaticAnchors;
     private readonly PinBorders _borders = new();
     private readonly ActionFlash _flash = new();
     private readonly Dictionary<nint, ShrinkTile> _shrunk = [];
@@ -91,6 +92,7 @@ public sealed class TrayApplication : ApplicationContext
                 catch (Exception failure) when (IsExpected(failure)) { Alert(T("errors.operation.title"), failure.Message); }
             });
         };
+        _automaticAnchors = new AutomaticAnchors(_anchors, CanHaveAutomaticAnchor, () => Paused || FullScreen.IsActive());
         _anchors.Created += _dark.Ignore;
         _anchors.ShowRequested += window =>
         {
@@ -291,6 +293,7 @@ public sealed class TrayApplication : ApplicationContext
         _dark.DetectAlreadyDark = _settings.DetectAlreadyDark;
         _toolbar.Enable(_settings.ShowToolbar);
         _toolbar.Configure(_settings.Toolbar);
+        _automaticAnchors.Configure(_settings.Anchors.Automatic);
         _updates.SetEnabled(_settings.AutomaticUpdates);
         _updateTimer.Interval = 30_000;
         foreach (PipWindow pip in _viewsInOrder)
@@ -352,6 +355,11 @@ public sealed class TrayApplication : ApplicationContext
 
     private static string Describe(IEnumerable<HotkeyProblem> problems) =>
         string.Join(Environment.NewLine, problems.Select(problem => problem.Message));
+
+    /// <summary>Only windows a person would look for, that are really out of sight and allowed by Settings.</summary>
+    private bool CanHaveAutomaticAnchor(nint window) =>
+        WindowInfo.IsMainWindow(window) && _windows.CanControl(window) && !WindowInfo.IsConcealed(window) &&
+        !_windows.IsHidden(window) && _settings.Anchors.Allows(WindowInfo.ProgramOf(window));
 
     private bool Paused => _settings.PauseInFullScreen && FullScreen.IsActive();
 
@@ -731,6 +739,7 @@ public sealed class TrayApplication : ApplicationContext
         _watch.Dispose();
         _borders.Dispose();
         _dark.Dispose();
+        _automaticAnchors.Dispose();
         _anchors.Dispose();
         _windowMenu?.Close();
         _modifierDrag.Dispose();
