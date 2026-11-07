@@ -2,16 +2,18 @@
 
 [README](../README.md) · [Development Guide](DEVELOPMENT.md)
 
-This is the exact intended source-file list for the initial public commit. It includes the public update verification key, never its private signing key.
+This is the source-file list after the 0.5 audit changes. It includes the public update verification key, never its private signing key.
 
-Total: **73 files**.
+Total: **77 files**.
 
 ```text
 .github/workflows/build.yml
+.github/workflows/desktop.yml
 .github/workflows/release.yml
 .gitignore
 build.ps1
 Directory.Build.props
+docs/AUDIT_IMPLEMENTATION.md
 docs/DEVELOPMENT.md
 docs/PUBLIC_FILES.md
 docs/USER_GUIDE.md
@@ -58,6 +60,7 @@ src/WinScreen/Windows/FullScreen.cs
 src/WinScreen/Windows/PinBorders.cs
 src/WinScreen/Windows/ScreenColors.cs
 src/WinScreen/Windows/WindowController.cs
+src/WinScreen/Windows/WindowIdentity.cs
 src/WinScreen/WinScreen.csproj
 tests/WinScreen.Tests/AnchorTests.cs
 tests/WinScreen.Tests/AppEndToEndTests.cs
@@ -68,6 +71,7 @@ tests/WinScreen.Tests/HotkeyHostTests.cs
 tests/WinScreen.Tests/LocalizationTests.cs
 tests/WinScreen.Tests/PipGeometryTests.cs
 tests/WinScreen.Tests/PipWindowTests.cs
+tests/WinScreen.Tests/RecoverySafetyTests.cs
 tests/WinScreen.Tests/SettingsTests.cs
 tests/WinScreen.Tests/Support/Desktop.cs
 tests/WinScreen.Tests/Support/Setup.cs
@@ -99,4 +103,4 @@ The release workflow uploads generated files from `dist/release` as GitHub Relea
 - `releases.win.json` and `releases.win.json.sig`
 - Velopack release index files, if generated
 
-Release publication requires the private signing key in a GitHub Actions repository secret. The secret and local private key are not published.
+Release publication requires protected update and Authenticode signing configuration, the expected publisher thumbprint, and a successful dedicated desktop-validation run for the exact commit. Secrets and local private keys are not published. See [Development](DEVELOPMENT.md) for configuration and remaining acceptance checks.

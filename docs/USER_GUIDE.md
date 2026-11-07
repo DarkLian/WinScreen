@@ -26,6 +26,7 @@ Click a hotkey field and press a combination; press Delete to clear it. Save app
 | Toggle click-through | Ctrl+Alt+C |
 | Open Picture-in-Picture | Ctrl+Alt+P |
 | Restore all changed windows | Ctrl+Alt+R |
+| Restore only this window (also works for excluded targets) | Ctrl+Alt+U |
 | Toggle dark mode | Ctrl+Alt+D |
 | Toggle Glass | Ctrl+Alt+G |
 | Add / remove Anchor | Ctrl+Alt+A |
@@ -49,9 +50,9 @@ Press **Ctrl+Alt+A** on a window to add or remove its Anchor. Drag the Anchor to
 | Input on the Anchor | Result |
 | --- | --- |
 | Left-click | Restore a minimized window and bring it forward |
-| Right-click | Minimize its window |
+| Right-click | Open the standard context menu |
 | Middle-click | Request that the window close, and immediately remove the Anchor |
-| Shift+right-click | Open a menu: Show, Minimize, Close, or Remove Anchor only |
+| Shift+right-click / Shift+F10 | Open the same menu: Show, Minimize, Close, or Remove Anchor only |
 | Menu → Remove Anchor only | Dismiss the shortcut while leaving its window open |
 | Drag a file over it | Bring its window forward so the file can be dropped there |
 
@@ -65,17 +66,22 @@ Press **Ctrl+Alt+P** to open a live view. The original window keeps its real siz
 
 | Input on PiP | Result |
 | --- | --- |
-| Click | Bring the original forward at the clicked location and interact with it |
+| Click | Go to the original window; no synthetic click is sent by default |
 | Drag | Move the view |
 | Mouse wheel | Resize the view |
 | Ctrl+drag | Select a crop |
 | Ctrl+double-click | Remove the crop |
 | Right-click | Hide/show the original, go to it, remove crop, enable automatic movement, or close PiP |
 
-When you click PiP, WinScreen brings the actual window under the cursor at full size, with the clicked spot beneath it,
-and passes the click on. You then use the original app with ordinary mouse and keyboard input. The window goes back
-when the pointer leaves it. A maximized original stays maximized; move the pointer back over PiP to return to its view.
-If the maximized original's clicked point is covered by PiP, the initial click may not be forwarded to avoid clicking the view again.
+By default, clicking PiP shows/activates the original so you can interact with it normally. This does not move the
+system pointer or inject a click. Only one PiP or Shrink tile is kept per source; opening one replaces the other.
+
+To opt into click forwarding, enable both **Experimental effects** and **Forward PiP clicks** in General settings.
+The original is then temporarily positioned beneath the pointer. Before forwarding, WinScreen checks its lifetime
+identity, foreground activation, visibility, click-through style, and the actual window under the point. A refused or
+covered target cancels the click and falls back to **Go to original**. Failed movement is rolled back, with failed
+cleanup retained for recovery. A maximized source stays maximized. This remains experimental because focus and real
+input cannot be made atomic with other applications; leave it off for sensitive or unsaved content.
 
 PiP usually keeps updating while its original is covered or hidden and closes when the original is destroyed.
 Some apps stop drawing when covered, so their previews may freeze. A hidden original still appears in Alt-Tab and the taskbar;
@@ -108,6 +114,10 @@ Click-through cannot be saved as a program's automatic setup.
 
 ## Dark mode, Glass, Crop, and Shrink
 
+These effects and PiP auto-move are **experimental, disabled by default**. Enable them explicitly in General settings.
+Disabling experimental effects cancels crop selection and removes those effects where cleanup succeeds. Any failure
+remains visible and retryable. Glass samples visible screen content and can be affected by overlapping windows.
+
 - **Dark mode** swaps light and dark while preserving colors through an overlay. It changes the appearance on screen;
   a PiP view keeps the original colors.
 - **Glass** removes the window's most common color. It works best with a flat background and depends on how the app draws.
@@ -122,6 +132,10 @@ Click-through cannot be saved as a program's automatic setup.
 Adjust pinning, opacity, and dark mode, then press **Ctrl+Alt+S**. Windows belonging to that program receive the setup
 the first time they come forward, including after a restart. Later manual changes stay changed.
 
+New setups are matched by executable path, which is displayed in Saved setups. Older name-only entries remain
+compatible until you resave them. A failed application retries after five seconds; successful setups are not reapplied.
+Saved dark mode is only applied while experimental effects are enabled.
+
 Press the shortcut on a window with no such changes to forget its program's saved setup, or remove it in
 **Settings → Saved setups**. Click-through, Glass, Crop, and Shrink are deliberately not saved.
 
@@ -132,6 +146,7 @@ Press the shortcut on a window with no such changes to forget its program's save
 | General → Language | System default, English, 简体中文, or 繁體中文; save and restart to apply |
 | General → Show notifications | Controls startup notices, action confirmations, and operation-error balloons immediately after saving |
 | General → Automatic updates | Opt-in download and install-on-exit behavior described below |
+| General → Experimental effects / Forward PiP clicks | Opt-in controls for effects still under validation |
 | General → Start when signing in | Starts WinScreen for your Windows user |
 | General → Pause during games / full-screen apps | Pauses ordinary commands; tray Restore all remains available |
 | General → Pause pinning when maximized | Temporarily suspends pinning for maximized windows |
@@ -159,6 +174,11 @@ For a manual upgrade, exit WinScreen and run the newer installer. No uninstall i
 kept in `%APPDATA%\WinScreen`, separately from the installed program.
 
 ## Exit, restore, and troubleshooting
+
+Failed restoration steps keep their recovery records for retry. If cleanup fails on exit, WinScreen stays running
+and does not schedule an update. Open the tray's **Last result** for details, then retry the per-window or all-window
+restore action when the target responds. Damaged or unverifiable legacy recovery data is preserved in `.invalid-*`
+backups; unreadable recovery data blocks new changes so it cannot be overwritten.
 
 - **Restore all windows** removes pinning, transparency, click-through, hiding, crops, dark overlays, and Anchors.
 - Exiting WinScreen restores changed windows. After a forced termination or crash, the next start uses its recovery journal.

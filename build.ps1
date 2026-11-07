@@ -4,7 +4,9 @@
     .\build.ps1                     Everything, on a real Windows desktop. The final step runs the
                                     packaged WinScreen.exe and takes over the mouse and keyboard
                                     for a few seconds.
-    .\build.ps1 -SkipInteractive    Everything except that final step.
+    .\build.ps1 -SkipInteractive    Logic tests and packaging only; no desktop input.
+    .\build.ps1 -DesktopTests -SkipInteractive
+                                    Includes native desktop tests; may use the mouse/keyboard.
     .\build.ps1 -CI                 For build servers with no desktop: logic tests only.
     .\build.ps1 -Version 1.2.3      Use this version instead of the one in Directory.Build.props.
 
@@ -13,6 +15,7 @@
 param(
     [switch]$SkipInteractive,
     [switch]$CI,
+    [switch]$DesktopTests,
     [string]$Version,
     [string]$UpdateRepository = 'DarkLian/WinScreen',
     [switch]$SignUpdates
@@ -56,7 +59,7 @@ foreach ($folder in $program, $release) {
 
 Step 'Build' @('build', 'WinScreen.slnx', '-c', 'Release', "-p:Version=$Version", $updateProperty)
 
-$filter = if ($CI) { 'Category!=RealWindows&Category!=Interactive' } else { 'Category!=Interactive' }
+$filter = if ($CI -or ($SkipInteractive -and -not $DesktopTests)) { 'Category!=RealWindows&Category!=Interactive' } else { 'Category!=Interactive' }
 Step 'Test' @('test', 'WinScreen.slnx', '-c', 'Release', '--no-build', '--filter', $filter)
 
 # Self-contained, so people don't have to install .NET first.
@@ -70,10 +73,14 @@ if (-not $CI -and -not $SkipInteractive) {
 }
 
 Step 'Restore packaging tool' @('tool', 'restore')
-Step 'Make the installer' @('tool', 'run', 'vpk', '--', 'pack',
+$packageArguments = @('tool', 'run', 'vpk', '--', 'pack',
     '--packId', 'WinScreen', '--packVersion', $Version, '--packDir', $program, '--mainExe', 'WinScreen.exe',
     '--runtime', 'win-x64', '--packTitle', 'WinScreen', '--packAuthors', 'WinScreen', '--icon', 'src\WinScreen\Assets\WinScreen.ico',
     '--outputDir', $release)
+if ($env:WINSCREEN_AUTHENTICODE_SIGN_PARAMS) {
+    $packageArguments += @('--signParams', $env:WINSCREEN_AUTHENTICODE_SIGN_PARAMS)
+}
+Step 'Make the installer' $packageArguments
 
 Write-Output "Done: $(Join-Path $release 'WinScreen-win-Setup.exe')"
 

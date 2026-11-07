@@ -25,6 +25,7 @@ internal sealed class DarkOverlay : Form
     private static bool _initialized;
 
     private readonly nint _target;
+    private readonly Windows.WindowIdentity _identity;
     private readonly bool _pinned;
     private nint _magnifier;
     private Rectangle? _shape;
@@ -37,6 +38,7 @@ internal sealed class DarkOverlay : Form
     public DarkOverlay(nint target, bool pinned)
     {
         _target = target;
+        _identity = Windows.WindowIdentity.Capture(target);
         _pinned = pinned;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -47,6 +49,7 @@ internal sealed class DarkOverlay : Form
 
     /// <summary>False once the target has been pinned or unpinned and this overlay is in the wrong group.</summary>
     public bool MatchesTarget => IsPinned(_target) == _pinned;
+    public bool TargetAlive => _identity.Matches();
 
     public static bool IsPinned(nint window)
     {
@@ -95,10 +98,10 @@ internal sealed class DarkOverlay : Form
     /// <summary>Follows the target and redraws. Returns false once the target has closed.</summary>
     public bool Follow()
     {
-        if (!User32.IsWindow(_target))
+        if (!_identity.Matches())
             return false;
 
-        if (User32.IsIconic(_target) || Windows.WindowInfo.IsConcealed(_target) || !User32.GetWindowRect(_target, out Rect r))
+        if (!Windows.WindowInfo.IsAvailable(_target) || Windows.WindowInfo.IsConcealed(_target) || !User32.GetWindowRect(_target, out Rect r))
         {
             Hide();
             return true;
@@ -140,7 +143,7 @@ internal sealed class DarkOverlay : Form
         if (above == Handle)
             return;
 
-        nint insertAfter = _pinned ? User32.HWND_TOPMOST : above;
+        nint insertAfter = above;
         User32.SetWindowPos(Handle, insertAfter, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
     }
 }

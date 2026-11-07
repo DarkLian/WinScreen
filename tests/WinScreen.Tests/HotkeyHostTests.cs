@@ -61,4 +61,27 @@ public class HotkeyHostTests
             Assert.False(string.IsNullOrWhiteSpace(failure));
         });
     }
+
+    [Fact]
+    public void Replacement_conflicts_and_failed_persistence_leave_the_previous_recovery_binding_active()
+    {
+        OnUiThread(() =>
+        {
+            using var host = new HotkeyHost();
+            using var blocker = new HotkeyHost();
+            using var probe = new HotkeyHost();
+            Assert.True(host.TryRegister(1, Modifiers, Keys.F24, out _));
+            Assert.True(blocker.TryRegister(2, Modifiers, Keys.F23, out _));
+            bool persisted = false;
+            Assert.False(host.TryReplaceBindings(new Dictionary<int, (uint, Keys)> { [1] = (Modifiers, Keys.F23) },
+                () => persisted = true, out var conflicts));
+            Assert.Equal([1], conflicts);
+            Assert.False(persisted);
+            Assert.False(probe.TryRegister(3, Modifiers, Keys.F24, out _));
+            Assert.Throws<IOException>(() => host.TryReplaceBindings(new Dictionary<int, (uint, Keys)> { [1] = (Modifiers, Keys.F22) },
+                () => throw new IOException("Injected write failure"), out _));
+            Assert.False(probe.TryRegister(3, Modifiers, Keys.F24, out _));
+            Assert.True(probe.TryRegister(4, Modifiers, Keys.F22, out _));
+        });
+    }
 }

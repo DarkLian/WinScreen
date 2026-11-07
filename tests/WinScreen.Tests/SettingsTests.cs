@@ -30,6 +30,22 @@ public class SettingsTests
         Assert.Equal("Ctrl+Alt+D", AppSettings.Load(path).Hotkeys[AppCommand.ToggleDark]);
     }
 
+    [Theory]
+    [InlineData("{\"Hotkeys\":null,\"ExcludedPrograms\":null,\"IncludedPrograms\":null,\"SavedSetups\":null}")]
+    [InlineData("{\"Hotkeys\":{\"TogglePin\":null},\"SavedSetups\":[null,{\"Program\":null}]}")]
+    public void Valid_JSON_with_null_collections_and_entries_cannot_prevent_startup(string json)
+    {
+        string path = NewPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, json);
+        AppSettings loaded = AppSettings.Load(path);
+        Assert.Equal("Ctrl+Alt+T", loaded.Hotkeys[AppCommand.TogglePin]);
+        Assert.NotNull(loaded.ExcludedPrograms);
+        Assert.NotNull(loaded.IncludedPrograms);
+        Assert.Empty(loaded.SavedSetups);
+        Assert.NotEmpty(Directory.GetFiles(Path.GetDirectoryName(path)!, "settings.json.invalid-*"));
+    }
+
     [Fact]
     public void Choices_survive_a_restart()
     {
@@ -206,7 +222,9 @@ public sealed class SettingsWindowTests : IDisposable
             window.RemoveSetup(forgotten);
             Assert.True(window.SaveChanges());
 
-            Assert.Equal([savedByHotkey], settings.SavedSetups);
+            var retained = Assert.Single(settings.SavedSetups);
+            Assert.Equal(savedByHotkey.Program, retained.Program);
+            Assert.True(retained.Dark);
         });
     }
 
@@ -257,6 +275,26 @@ public sealed class SettingsWindowTests : IDisposable
             using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key), _ => ["Ctrl+Alt+T"]);
             _ = window.Handle;
             Assert.False(window.SaveChanges());
+        });
+    }
+
+    [Fact]
+    public void A_rejected_save_does_not_change_live_settings_or_startup_registration()
+    {
+        OnUiThread(() =>
+        {
+            var settings = new AppSettings();
+            var startup = new StartWithWindows(_key);
+            using var window = new SettingsWindow(settings, startup, _ => ["Ctrl+Alt+F21"]);
+            window.CaptureHotkey(AppCommand.RestoreAll, Keys.Control | Keys.Alt | Keys.F21);
+            window.SetOption("StartWithWindows", true);
+            window.SetOption(nameof(AppSettings.ShowNotifications), false);
+            window.AddExcluded("NewExclusion");
+            Assert.False(window.SaveChanges());
+            Assert.Equal("Ctrl+Alt+R", settings.Hotkeys[AppCommand.RestoreAll]);
+            Assert.True(settings.ShowNotifications);
+            Assert.DoesNotContain("NewExclusion", settings.ExcludedPrograms);
+            Assert.False(startup.IsOn);
         });
     }
 

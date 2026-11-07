@@ -37,6 +37,7 @@ public sealed class AppEndToEndTests : IDisposable
     public AppEndToEndTests()
     {
         Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0, "Close the running WinScreen before these tests.");
+        new AppSettings { ExperimentalFeatures = true, PipClickForwarding = true }.Save(Path.Combine(_data, "settings.json"));
         _app = Start();
         nint window = 0;
         Assert.True(Desktop.WaitFor(() =>
@@ -54,6 +55,8 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(_app.WaitForExit(4000));
         _app.Dispose();
 
+        settings.ExperimentalFeatures = true;
+        settings.PipClickForwarding = true;
         settings.Save(Path.Combine(_data, "settings.json"));
         _app = Start();
         _appWindow = WaitForAppWindow();
@@ -224,9 +227,13 @@ public sealed class AppEndToEndTests : IDisposable
         Desktop.ClickOn(middle, anchor);
         Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle), "Left-click didn't bring the window forward.");
 
-        // Right-click minimizes, left-click brings it back.
+        // Right-click opens the standard menu; choose its second (Minimize) action with the keyboard.
         Desktop.RightClickOn(middle, anchor);
-        Assert.True(Desktop.WaitFor(() => User32.IsIconic(target.Handle)), "Right-click didn't minimize.");
+        Thread.Sleep(150);
+        Desktop.Press(Keys.Down);
+        Desktop.Press(Keys.Down);
+        Desktop.Press(Keys.Enter);
+        Assert.True(Desktop.WaitFor(() => User32.IsIconic(target.Handle)), "The Anchor menu didn't minimize.");
         Desktop.ClickOn(middle, anchor);
         Assert.True(Desktop.WaitFor(() => !User32.IsIconic(target.Handle) && User32.GetForegroundWindow() == target.Handle), "Left-click didn't restore.");
 

@@ -29,10 +29,10 @@ public sealed class AnchorSet : IDisposable
             return false;
         }
 
-        Rectangle area = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
+        Rectangle area = Screen.FromHandle(window).WorkingArea;
         var anchor = new AnchorButton(window)
         {
-            Location = new Point(area.Right - AnchorButton.ButtonSize - Margin, FreeTop()),
+            Location = FreePosition(area),
         };
         _anchors[window] = anchor;
         anchor.FormClosed += (_, _) =>
@@ -60,19 +60,22 @@ public sealed class AnchorSet : IDisposable
         _watch.Dispose();
     }
 
-    private int FreeTop()
+    private Point FreePosition(Rectangle area)
     {
-        int top = FirstTop;
-        while (_anchors.Values.Any(a => Math.Abs(a.Top - top) < AnchorButton.ButtonSize))
-            top += AnchorButton.ButtonSize + Gap;
-        return top;
+        for (int left = area.Right - AnchorButton.ButtonSize - Margin; left >= area.Left; left -= AnchorButton.ButtonSize + Gap)
+            for (int top = area.Top + Margin; top + AnchorButton.ButtonSize <= area.Bottom; top += AnchorButton.ButtonSize + Gap)
+            {
+                var candidate = new Rectangle(left, top, AnchorButton.ButtonSize, AnchorButton.ButtonSize);
+                if (!_anchors.Values.Any(anchor => anchor.Bounds.IntersectsWith(candidate))) return candidate.Location;
+            }
+        return new Point(Math.Max(area.Left, area.Right - AnchorButton.ButtonSize), Math.Max(area.Top, area.Bottom - AnchorButton.ButtonSize));
     }
 
     private void DropClosedWindows()
     {
         foreach ((nint window, AnchorButton anchor) in _anchors.ToArray())
         {
-            if (!User32.IsWindow(window))
+            if (anchor.IsDisposed || !anchor.TargetAlive)
             {
                 _anchors.Remove(window);
                 anchor.Dispose();

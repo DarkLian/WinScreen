@@ -1,6 +1,7 @@
 using static WinScreen.Settings.UiText;
 using WinScreen.Native;
 using WinScreen.Settings;
+using WinScreen.Windows;
 
 namespace WinScreen.Tray;
 
@@ -43,7 +44,10 @@ public sealed class WindowToolbar : Form
     private readonly Dictionary<AppCommand, Button> _buttons = [];
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = Interval };
     private nint _window;
+    private WindowIdentity? _identity;
     private int _hoverTime;
+    private Rectangle _targetBounds;
+    private readonly ToolTip _tips = new();
 
     public WindowToolbar(Func<nint, bool> canUse, Func<AppCommand, nint, bool> isOn, Action<AppCommand, nint> run)
     {
@@ -57,7 +61,6 @@ public sealed class WindowToolbar : Form
         Text = T("WinScreen toolbar");
         ClientSize = new Size(ButtonSize * Items.Length, ButtonSize);
 
-        var tips = new ToolTip();
         for (int i = 0; i < Items.Length; i++)
         {
             (AppCommand command, string glyph, string name) = Items[i];
@@ -76,10 +79,11 @@ public sealed class WindowToolbar : Form
             button.FlatAppearance.MouseOverBackColor = Hover;
             button.Click += (_, _) =>
             {
+                if (!TargetIsCurrent()) { Hide(); return; }
                 _run(command, _window);
                 ShowStates();
             };
-            tips.SetToolTip(button, name);
+            _tips.SetToolTip(button, name);
             _buttons[command] = button;
             Controls.Add(button);
         }
@@ -123,7 +127,10 @@ public sealed class WindowToolbar : Form
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             _watch.Dispose();
+            _tips.Dispose();
+        }
         base.Dispose(disposing);
     }
 
@@ -133,7 +140,7 @@ public sealed class WindowToolbar : Form
         if (Visible)
         {
             bool overToolbar = Rectangle.Inflate(Bounds, 12, 12).Contains(cursor);
-            if (!overToolbar || !User32.IsWindow(_window))
+            if (!overToolbar || !TargetIsCurrent())
                 Hide();
             return;
         }
@@ -157,7 +164,10 @@ public sealed class WindowToolbar : Form
             return;
 
         _hoverTime = 0;
+        try { _identity = WindowIdentity.Capture(foreground); }
+        catch (WindowOperationException) { return; }
         _window = foreground;
+        _targetBounds = bounds;
         Location = new Point(bounds.Left + (bounds.Width - Width) / 2, bounds.Top);
         ShowStates();
         Show();
@@ -174,4 +184,9 @@ public sealed class WindowToolbar : Form
         foreach ((AppCommand command, Button button) in _buttons)
             button.ForeColor = _isOn(command, _window) ? On : Color.White;
     }
+
+    private bool TargetIsCurrent() => _identity?.Matches() == true &&
+        User32.GetForegroundWindow() == _window && _canUse(_window) &&
+        User32.GetWindowRect(_window, out var current) &&
+        Rectangle.FromLTRB(current.Left, current.Top, current.Right, current.Bottom) == _targetBounds;
 }

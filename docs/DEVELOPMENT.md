@@ -11,13 +11,14 @@ Use the .NET 10 SDK pinned in `global.json` on Windows. `build.ps1` prefers the 
 .\build.ps1 -SkipInteractive
 ```
 
-This builds the solution, runs logic and real-window tests, publishes a self-contained app, and creates
+This builds the solution, runs logic tests without desktop input, publishes a self-contained app, and creates
 `dist\release\WinScreen-win-Setup.exe`. Each run replaces the generated `dist\win-x64` and `dist\release` directories.
 
 | Command | Additional behavior |
 | --- | --- |
 | `.\build.ps1` | Also runs the packaged app end to end; briefly uses the mouse and keyboard |
-| `.\build.ps1 -SkipInteractive` | Leaves out that final interactive app test |
+| `.\build.ps1 -SkipInteractive` | Excludes native desktop and packaged-app interactive tests |
+| `.\build.ps1 -DesktopTests -SkipInteractive` | Runs native desktop tests; may move the pointer or type into disposable windows |
 | `.\build.ps1 -CI` | Runs logic tests only, suitable for a build server |
 | `.\build.ps1 -Version 0.4.3` | Overrides the version in `Directory.Build.props` |
 | `.\build.ps1 -SkipInteractive -SignUpdates` | Also signs the update feed with the local signing key |
@@ -48,7 +49,7 @@ Back it up securely. The local signing tool reads that file; CI reads the reposi
 Push a stable version tag such as **v0.4.3**, using a higher version for each release. The Release workflow:
 
 1. Builds with the tag's version and embeds the hosting repository.
-2. Packages the application and signs the exact `releases.win.json` bytes using RSA-PSS/SHA-256.
+2. Packages and Authenticode-signs the application/installer, verifies its expected publisher, and signs the exact `releases.win.json` bytes using RSA-PSS/SHA-256.
 3. Publishes the installer, full package, feed, detached signature, and generated portable release asset together.
 
 The updater requires these assets in the release:
@@ -68,7 +69,7 @@ The signing helper lives in `tools/WinScreen.UpdateSigning`. Its `init` command 
 Do not regenerate the established key just to build from a fresh checkout; use the securely backed-up signing key
 or the configured CI secret. Unsigned developer builds can still be built and tested without that secret.
 
-Signing update metadata is separate from Windows Authenticode signing. The installer is currently not Authenticode signed.
+Signing update metadata is separate from Windows Authenticode signing. Local developer installers remain unsigned unless signing is configured. Public publication rejects unsigned installers.
 See [Security](../SECURITY.md) for verification requirements and remaining risks.
 
 ## Repository layout
@@ -102,8 +103,21 @@ topmost state because Windows may report success without actually pinning a back
 - Real Windows sign-in/startup registration and its removal on uninstall have not been verified end to end.
 - A real two-version installed upgrade and a live signed update from hosted releases still need verification.
 - Elevated target apps may reject control. Hidden browsers may suspend rendering and freeze PiP.
-- Testing has mainly used one 1920×1080 display at 100% scaling on Windows 11 26H2. More monitor/DPI/Windows 10 testing is needed.
+- Testing has mainly used one 1920×1080 display at 100% scaling on Windows 11 Pro build 26300. More monitor/DPI/Windows 10 testing is needed.
 - See the repository's Actions page for current CI results; local checks do not establish that hosted workflows pass.
 
 Source commits exclude generated builds, installers, private keys, IDE settings, runtime preferences, and local development records.
 The exact intended source list is in [PUBLIC_FILES.md](PUBLIC_FILES.md). Installer packages belong in GitHub Releases.
+
+## Audit remediation and release gates (0.5)
+
+Public release also requires a successful manual Desktop validation workflow for the exact commit, a Windows signing
+provider configured through the protected secret `WINSCREEN_AUTHENTICODE_SIGN_PARAMS`, and the expected publisher
+thumbprint in `WINSCREEN_PUBLISHER_THUMBPRINT`. Provision that signing provider/certificate in the release job before
+packaging. The workflow does not invent or purchase a trusted signing certificate.
+Protect the `release` environment with required reviewers and restrict stable version tags. Action revisions are pinned.
+
+Run the `interactive-desktop` self-hosted runner only on a dedicated, disposable, signed-in Windows VM. Do not attach a
+personal workstation runner to this public repository. A fast CI pass does not replace native/interactive validation.
+Installer install, startup at sign-in, update N to N+1, uninstall, and the mixed-DPI/monitor matrix still need real VM runs.
+See [audit implementation and remaining acceptance checks](AUDIT_IMPLEMENTATION.md) for the finding-by-finding status.

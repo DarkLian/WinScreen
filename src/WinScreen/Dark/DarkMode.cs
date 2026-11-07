@@ -65,6 +65,13 @@ public sealed class DarkMode : IDisposable
         foreach ((nint window, DarkOverlay current) in _overlays.ToArray())
         {
             DarkOverlay overlay = current;
+            if (!overlay.TargetAlive)
+            {
+                _overlays.Remove(window);
+                overlay.Dispose();
+                UpdateFilters();
+                continue;
+            }
             if (Native.User32.IsWindow(window) && !overlay.MatchesTarget)
             {
                 overlay.Dispose();
@@ -84,6 +91,11 @@ public sealed class DarkMode : IDisposable
 
     private void UpdateFilters()
     {
+        _ignored.RemoveWhere(window =>
+        {
+            Native.User32.GetWindowThreadProcessId(window, out uint pid);
+            return !Native.User32.IsWindow(window) || pid != Environment.ProcessId;
+        });
         nint[] windows = [.. _overlays.Values.Select(o => o.Handle), .. _ignored];
         foreach (DarkOverlay overlay in _overlays.Values)
             overlay.SetIgnoredWindows(windows);

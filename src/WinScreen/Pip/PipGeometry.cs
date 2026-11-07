@@ -51,10 +51,27 @@ public static class PipGeometry
     /// <summary>The spot in the source window that a point in the view is showing.</summary>
     public static Point PointToSource(Point point, Rectangle viewArea, Rectangle shown)
     {
+        if (viewArea.Width <= 0 || viewArea.Height <= 0 || shown.Width <= 0 || shown.Height <= 0)
+            throw new ArgumentException("Preview bounds must be nonempty.");
         return new Point(
-            shown.Left + (int)Math.Round((point.X - viewArea.Left) * (double)shown.Width / viewArea.Width),
-            shown.Top + (int)Math.Round((point.Y - viewArea.Top) * (double)shown.Height / viewArea.Height));
+            Math.Clamp(shown.Left + (int)Math.Round((point.X - viewArea.Left) * (double)shown.Width / viewArea.Width), shown.Left, shown.Right - 1),
+            Math.Clamp(shown.Top + (int)Math.Round((point.Y - viewArea.Top) * (double)shown.Height / viewArea.Height), shown.Top, shown.Bottom - 1));
     }
+
+    public static Size FitWithin(int preferredWidth, Rectangle source, Size available)
+    {
+        if (source.Width <= 0 || source.Height <= 0)
+            return Size.Empty;
+        int width = Math.Max(1, Math.Min(preferredWidth - 2 * Border, available.Width - 2 * Border));
+        int height = Math.Max(1, available.Height - 2 * Border);
+        double scale = Math.Min(width / (double)source.Width, height / (double)source.Height);
+        return new Size(Math.Max(1, (int)Math.Floor(source.Width * scale)) + 2 * Border,
+            Math.Max(1, (int)Math.Floor(source.Height * scale)) + 2 * Border);
+    }
+
+    public static Point KeepInside(Rectangle bounds, Rectangle area) => new(
+        Math.Clamp(bounds.Left, area.Left, Math.Max(area.Left, area.Right - bounds.Width)),
+        Math.Clamp(bounds.Top, area.Top, Math.Max(area.Top, area.Bottom - bounds.Height)));
 
     /// <summary>
     /// Where a source window goes so that <paramref name="spot"/> sits under the cursor, kept on
@@ -76,6 +93,8 @@ public static class PipGeometry
     public static Point? CalmerSpot(bool[,] busy, Rectangle area, Rectangle view)
     {
         int rows = busy.GetLength(0), columns = busy.GetLength(1);
+        if (rows == 0 || columns == 0 || view.Width > area.Width || view.Height > area.Height)
+            return null;
         int high = Math.Min(rows, (int)Math.Ceiling(view.Height / (double)ContentCell));
         int wide = Math.Min(columns, (int)Math.Ceiling(view.Width / (double)ContentCell));
 

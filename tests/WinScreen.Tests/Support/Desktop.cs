@@ -72,6 +72,12 @@ internal static partial class Desktop
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetLastInputInfo(ref LastInput info);
 
+    public static uint LastInputTick()
+    {
+        var info = new LastInput { Size = (uint)Marshal.SizeOf<LastInput>() };
+        return GetLastInputInfo(ref info) ? info.Time : 0;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect
     {

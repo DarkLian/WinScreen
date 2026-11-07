@@ -20,6 +20,7 @@ public enum AppCommand
     SaveWindowSetup,
     ToggleShrink,
     ToggleCrop,
+    RestoreWindow,
 }
 
 /// <summary>What a program's windows get automatically. Click-through and Glass are left out on purpose:
@@ -27,6 +28,7 @@ public enum AppCommand
 public sealed class ProgramSetup
 {
     public string Program { get; set; } = "";
+    public string? ExecutablePath { get; set; }
     public bool Pinned { get; set; }
     public byte Alpha { get; set; } = 255;
     public bool Dark { get; set; }
@@ -43,7 +45,8 @@ public sealed class ProgramSetup
             parts.Add(string.Format(T("{0}% solid"), (int)Math.Round(Alpha * 100.0 / 255)));
         if (Dark)
             parts.Add(T("dark"));
-        return $"{Program}: {string.Join(", ", parts)}";
+        string identity = string.IsNullOrWhiteSpace(ExecutablePath) ? Program : $"{Program} ({ExecutablePath})";
+        return $"{identity}: {string.Join(", ", parts)}";
     }
 }
 
@@ -70,6 +73,7 @@ public sealed class AppSettings
         [AppCommand.SaveWindowSetup] = "Ctrl+Alt+S",
         [AppCommand.ToggleShrink] = "Ctrl+Alt+W",
         [AppCommand.ToggleCrop] = "Ctrl+Alt+X",
+        [AppCommand.RestoreWindow] = "Ctrl+Alt+U",
     };
 
     /// <summary>Programs WinScreen never touches, for example games that dislike overlays.</summary>
@@ -90,6 +94,9 @@ public sealed class AppSettings
     public bool OpaqueOnHover { get; set; }
     public bool HighlightPinned { get; set; }
     public bool PipAutoMove { get; set; }
+    public bool ExperimentalFeatures { get; set; }
+    public bool PipClickForwarding { get; set; }
+    public bool? StartWithWindows { get; set; }
 
     /// <summary>How solid a window is after the default see-through command, and after click-through.</summary>
     public int DefaultOpacityPercent { get; set; } = 80;
@@ -103,6 +110,24 @@ public sealed class AppSettings
         return SavedSetups.Find(setup => string.Equals(setup.Program, program, StringComparison.OrdinalIgnoreCase));
     }
 
+    public ProgramSetup? SetupForWindow(nint window)
+    {
+        string path = Windows.WindowInfo.ExecutablePath(window);
+        return SavedSetups.Find(setup => !string.IsNullOrEmpty(setup.ExecutablePath) &&
+                   string.Equals(setup.ExecutablePath, path, StringComparison.OrdinalIgnoreCase))
+               ?? SavedSetups.Find(setup => string.IsNullOrEmpty(setup.ExecutablePath) &&
+                   string.Equals(setup.Program, Windows.WindowInfo.ProgramOf(window), StringComparison.OrdinalIgnoreCase));
+    }
+
+    public AppSettings Clone() => JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(this))!;
+
+    public void CopyFrom(AppSettings settings)
+    {
+        var copy = settings.Clone();
+        foreach (var property in typeof(AppSettings).GetProperties().Where(property => property.CanWrite))
+            property.SetValue(this, property.GetValue(copy));
+    }
+
     /// <summary>Reads the settings. A missing or damaged file gives the defaults.</summary>
     public static AppSettings Load(string path)
     {
@@ -112,13 +137,36 @@ public sealed class AppSettings
 
         try
         {
+            if (new FileInfo(path).Length > 1024 * 1024)
+                throw new JsonException("Settings file is too large.");
             AppSettings loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path)) ?? defaults;
+            if (loaded.Hotkeys is null || loaded.ExcludedPrograms is null || loaded.IncludedPrograms is null ||
+                loaded.SavedSetups is null || loaded.SavedSetups.Any(value => value is null) ||
+                loaded.Hotkeys.Any(pair => pair.Value is null))
+            {
+                try { File.Copy(path, path + ".invalid-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff")); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            }
+            loaded.Hotkeys ??= [];
+            loaded.ExcludedPrograms = (loaded.ExcludedPrograms ?? defaults.ExcludedPrograms).Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+            loaded.IncludedPrograms = (loaded.IncludedPrograms ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+            loaded.SavedSetups = (loaded.SavedSetups ?? []).Where(value => value is not null && !string.IsNullOrWhiteSpace(value.Program)).ToList();
+            loaded.Language = loaded.Language is "en" or "zh-Hans" or "zh-Hant" ? loaded.Language : "system";
+            loaded.DefaultOpacityPercent = Math.Clamp(loaded.DefaultOpacityPercent, LowestOpacityPercent, HighestOpacityPercent);
             foreach ((AppCommand command, string hotkey) in defaults.Hotkeys)
+            {
                 loaded.Hotkeys.TryAdd(command, hotkey);
+                if (loaded.Hotkeys[command] is null)
+                    loaded.Hotkeys[command] = hotkey;
+            }
+            foreach (AppCommand command in loaded.Hotkeys.Keys.Where(command => !Enum.IsDefined(command)).ToArray())
+                loaded.Hotkeys.Remove(command);
             return loaded;
         }
-        catch (JsonException)
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {
+            try { File.Copy(path, path + ".invalid-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff")); }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { }
             return defaults;
         }
     }

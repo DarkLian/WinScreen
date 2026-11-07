@@ -13,6 +13,9 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
     public const string WindowTitle = "WinScreen.HotkeyHost";
 
     private readonly List<int> _registered = [];
+    private readonly Dictionary<int, (uint Modifiers, Keys Key)> _bindings = [];
+    private readonly Dictionary<int, int> _dispatch = [];
+    private int _nextId = 0x4000;
 
     public HotkeyHost()
     {
@@ -28,6 +31,8 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
         if (User32.RegisterHotKey(Handle, id, modifiers | User32.MOD_NOREPEAT, (uint)key))
         {
             _registered.Add(id);
+            _bindings[id] = (modifiers, key);
+            _dispatch[id] = id;
             failure = null;
             return true;
         }
@@ -41,6 +46,55 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
         foreach (int id in _registered)
             User32.UnregisterHotKey(Handle, id);
         _registered.Clear();
+        _bindings.Clear();
+        _dispatch.Clear();
+    }
+
+    /// <summary>Reserve new combinations while every old binding stays active. Commit preferences before releasing obsolete bindings.</summary>
+    internal bool TryReplaceBindings(IReadOnlyDictionary<int, (uint Modifiers, Keys Key)> desired, Action persist, out IReadOnlyList<int> conflicts)
+    {
+        var reserved = new List<int>();
+        var dispatch = new Dictionary<int, int>();
+        var problems = new List<int>();
+        var used = new HashSet<(uint, Keys)>();
+        foreach (var (command, combination) in desired)
+        {
+            if (!used.Add(combination)) { problems.Add(command); continue; }
+            int nativeId = _bindings.FirstOrDefault(pair => pair.Value == combination).Key;
+            if (nativeId == 0)
+            {
+                while (_registered.Contains(_nextId)) _nextId = _nextId >= 0xbffe ? 0x4000 : _nextId + 1;
+                nativeId = _nextId;
+                _nextId = _nextId >= 0xbffe ? 0x4000 : _nextId + 1;
+                if (!User32.RegisterHotKey(Handle, nativeId, combination.Modifiers | User32.MOD_NOREPEAT, (uint)combination.Key))
+                { problems.Add(command); continue; }
+                reserved.Add(nativeId);
+            }
+            dispatch[nativeId] = command;
+        }
+        if (problems.Count > 0)
+        {
+            foreach (int id in reserved) User32.UnregisterHotKey(Handle, id);
+            conflicts = problems;
+            return false;
+        }
+        try { persist(); }
+        catch
+        {
+            foreach (int id in reserved) User32.UnregisterHotKey(Handle, id);
+            throw;
+        }
+        foreach (int obsolete in _registered.Where(id => !dispatch.ContainsKey(id)).ToArray())
+            User32.UnregisterHotKey(Handle, obsolete);
+        _registered.Clear(); _bindings.Clear(); _dispatch.Clear();
+        foreach (var (nativeId, command) in dispatch)
+        {
+            _registered.Add(nativeId);
+            _bindings[nativeId] = desired[command];
+            _dispatch[nativeId] = command;
+        }
+        conflicts = [];
+        return true;
     }
 
     protected override void WndProc(ref Message m)
@@ -48,7 +102,8 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
         switch (m.Msg)
         {
             case User32.WM_HOTKEY:
-                Pressed?.Invoke(m.WParam.ToInt32());
+                if (_dispatch.TryGetValue(m.WParam.ToInt32(), out int command))
+                    Pressed?.Invoke(command);
                 break;
             case User32.WM_CLOSE:
                 CloseRequested?.Invoke();

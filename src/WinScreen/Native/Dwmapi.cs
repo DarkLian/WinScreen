@@ -42,4 +42,7 @@ internal static partial class Dwmapi
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint window, int attribute, out Rect value, int size);
+
+    [LibraryImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")]
+    public static partial int DwmGetWindowAttribute(nint window, int attribute, out int value, int size);
 }

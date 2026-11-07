@@ -17,6 +17,7 @@ internal sealed class AnchorButton : Form
     private const int SW_MINIMIZE = 6;
 
     private readonly nint _target;
+    private readonly WindowIdentity _identity;
     private readonly Icon? _icon;
     private readonly ToolTip _tip = new();
     private readonly ContextMenuStrip _menu = new();
@@ -27,6 +28,7 @@ internal sealed class AnchorButton : Form
     public AnchorButton(nint target)
     {
         _target = target;
+        _identity = WindowIdentity.Capture(target);
         _icon = LoadIcon(target);
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -37,15 +39,17 @@ internal sealed class AnchorButton : Form
         DoubleBuffered = true;
         Text = T("WinScreen anchor - ") + WindowInfo.Title(target);
         _tip.SetToolTip(this, WindowInfo.Title(target) + Environment.NewLine +
-            T("Left: show • Right: minimize • Middle: close • Shift+right: menu"));
+            T("Left: show • Right: menu • Middle: close • Drag: move"));
         _menu.Items.Add(T("Show window"), null, (_, _) => BringForward());
-        _menu.Items.Add(T("Minimize window"), null, (_, _) => User32.ShowWindow(_target, SW_MINIMIZE));
+        _menu.Items.Add(T("Minimize window"), null, (_, _) => { if (_identity.Matches()) User32.ShowWindow(_target, SW_MINIMIZE); else Close(); });
         _menu.Items.Add(T("Close window and remove Anchor"), null, (_, _) => CloseTarget());
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(T("Remove Anchor only"), null, (_, _) => Close());
+        ContextMenuStrip = _menu;
     }
 
     public nint Target => _target;
+    public bool TargetAlive => _identity.Matches();
 
     protected override bool ShowWithoutActivation => true;
 
@@ -85,7 +89,9 @@ internal sealed class AnchorButton : Form
         if (_dragged || Math.Abs(e.X - _pressedAt.X) >= DragThreshold || Math.Abs(e.Y - _pressedAt.Y) >= DragThreshold)
         {
             _dragged = true;
-            Location = new Point(Left + e.X - _pressedAt.X, Top + e.Y - _pressedAt.Y);
+            var area = Screen.FromPoint(Cursor.Position).WorkingArea;
+            Location = new Point(Math.Clamp(Left + e.X - _pressedAt.X, area.Left, Math.Max(area.Left, area.Right - Width)),
+                Math.Clamp(Top + e.Y - _pressedAt.Y, area.Top, Math.Max(area.Top, area.Bottom - Height)));
         }
     }
 
@@ -105,10 +111,7 @@ internal sealed class AnchorButton : Form
                 BringForward();
                 break;
             case MouseButtons.Right:
-                if ((ModifierKeys & Keys.Shift) != 0)
-                    _menu.Show(this, e.Location);
-                else
-                    User32.ShowWindow(_target, SW_MINIMIZE);
+                // ContextMenuStrip provides ordinary right-click and keyboard (Shift+F10) access.
                 break;
             case MouseButtons.Middle:
                 CloseTarget();
@@ -120,7 +123,8 @@ internal sealed class AnchorButton : Form
     {
         // Close requests are asynchronous and apps may hide or cancel closing. Dismiss our shortcut
         // independently; never force the app to quit or discard an unsaved-work prompt.
-        User32.PostMessage(_target, User32.WM_CLOSE, 0, 0);
+        if (_identity.Matches())
+            User32.PostMessage(_target, User32.WM_CLOSE, 0, 0);
         Close();
     }
 
@@ -143,6 +147,7 @@ internal sealed class AnchorButton : Form
 
     private void BringForward()
     {
+        if (!_identity.Matches()) { Close(); return; }
         if (User32.IsIconic(_target))
             User32.ShowWindow(_target, User32.SW_RESTORE);
         User32.SetForegroundWindow(_target);

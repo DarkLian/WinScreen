@@ -65,5 +65,26 @@ internal sealed class UpdateTransport : IDisposable
         return buffer.ToArray();
     }
 
+    internal async Task<Uri> ResolveRelease(Uri uri, CancellationToken cancellation)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        deadline.CancelAfter(TimeSpan.FromSeconds(30));
+        for (int hop = 0; hop < 6; hop++)
+        {
+            if (!IsAllowed(uri)) throw new InvalidDataException("Untrusted release URL.");
+            using var request = new HttpRequestMessage(HttpMethod.Head, uri);
+            using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+            if (response.StatusCode is HttpStatusCode.MovedPermanently or HttpStatusCode.Redirect or
+                HttpStatusCode.SeeOther or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect)
+            {
+                uri = new Uri(uri, response.Headers.Location ?? throw new InvalidDataException("Missing release redirect."));
+                continue;
+            }
+            response.EnsureSuccessStatusCode();
+            return uri;
+        }
+        throw new InvalidDataException("Too many release redirects.");
+    }
+
     public void Dispose() => _client.Dispose();
 }

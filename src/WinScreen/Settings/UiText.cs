@@ -27,6 +27,18 @@ public static class UiText
         .Select(line => line.TrimEnd('\r').Split('|')).ToDictionary(parts => parts[0], parts => parts[1..]);
 
     private const string Catalog = """
+Restore this window|还原此窗口|還原此視窗
+Enable experimental effects (Dark, Glass, Crop, Shrink, auto-move)|启用实验性效果（深色、玻璃、裁剪、缩小、自动避让）|啟用實驗性效果（深色、玻璃、裁切、縮小、自動避讓）
+Forward PiP clicks (experimental; off uses Go to original)|转发画中画点击（实验性；关闭时切换到原窗口）|轉送子母畫面點擊（實驗性；關閉時切換至原視窗）
+Target: |目标： |目標： |
+No eligible window|没有可用窗口|沒有可用視窗
+Last result: |最近结果： |最近結果： |
+Recovery needs attention|需要处理窗口恢复|需要處理視窗復原
+Commands are paused for the full-screen app.|全屏应用运行期间，普通命令已暂停。|全螢幕應用程式執行期間，一般命令已暫停。
+The target is unavailable or excluded. Recovery is still available from the tray.|目标窗口不可用或已排除，仍可从托盘菜单还原。|目標視窗無法使用或已排除，仍可從系統匣選單還原。
+Enable experimental effects in Settings to use this action.|请先在设置中启用实验性效果。|請先在設定中啟用實驗性效果。
+All changes restored.|已还原所有更改。|已還原所有變更。
+Left: show • Right: menu • Middle: close • Drag: move|左键：显示 • 右键：菜单 • 中键：关闭 • 拖动：移动|左鍵：顯示 • 右鍵：選單 • 中鍵：關閉 • 拖曳：移動
 Left: show • Right: minimize • Middle: close • Shift+right: menu|左键：显示 • 右键：最小化 • 中键：关闭 • Shift+右键：菜单|左鍵：顯示 • 右鍵：最小化 • 中鍵：關閉 • Shift+右鍵：選單
 Show window|显示窗口|顯示視窗
 Minimize window|最小化窗口|最小化視窗

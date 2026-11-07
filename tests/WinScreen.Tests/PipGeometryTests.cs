@@ -5,6 +5,21 @@ namespace WinScreen.Tests;
 
 public class PipGeometryTests
 {
+    [Theory]
+    [InlineData(400, 300)]
+    [InlineData(300, 1600)]
+    [InlineData(3840, 2160)]
+    public void Initial_preview_fits_both_work_area_dimensions_and_its_click_never_maps_outside_the_source(int width, int height)
+    {
+        var source = new Rectangle(20, 30, width, height);
+        var available = new Size(640, 480);
+        Size fitted = PipGeometry.FitWithin(480, source, available);
+        Assert.InRange(fitted.Width, 1, available.Width);
+        Assert.InRange(fitted.Height, 1, available.Height);
+        var view = PipGeometry.ViewArea(fitted);
+        var point = PipGeometry.PointToSource(new Point(view.Right - 1, view.Bottom - 1), view, source);
+        Assert.True(source.Contains(point));
+    }
     private static readonly Rectangle Screen = new(0, 0, 320, 320);
 
     /// <summary>A 320x320 screen in 16 pixel cells, busy wherever the rectangles say.</summary>

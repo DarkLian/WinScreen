@@ -62,4 +62,16 @@ public class ChangeJournalTests
 
         Assert.Empty(new ChangeJournal(path).Load());
     }
+
+    [Fact]
+    public void Malformed_records_are_skipped_individually_and_the_original_is_preserved()
+    {
+        string path = MissingFolder();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "[null,{\"Window\":\"bad\",\"ProcessId\":2},{\"Window\":1,\"ProcessId\":2,\"Placement\":[1,2]}," +
+            "{\"Window\":3,\"ProcessId\":4,\"Placement\":null}]");
+        var valid = Assert.Single(new ChangeJournal(path).Load());
+        Assert.Equal(3, valid.Window);
+        Assert.NotEmpty(Directory.GetFiles(Path.GetDirectoryName(path)!, "journal.json.invalid-*"));
+    }
 }

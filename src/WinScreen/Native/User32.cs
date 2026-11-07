@@ -62,6 +62,7 @@ internal static partial class User32
     public const uint SWP_NOZORDER = 0x4;
     public const uint SWP_NOACTIVATE = 0x10;
     public const uint SWP_FRAMECHANGED = 0x20;
+    public const uint SWP_ASYNCWINDOWPOS = 0x4000;
 
     public const int SW_SHOWNOACTIVATE = 4;
     public const int SW_RESTORE = 9;
@@ -100,6 +101,19 @@ internal static partial class User32
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsWindow(nint hWnd);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetPropW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint GetProp(nint window, string name);
+
+    [LibraryImport("user32.dll", EntryPoint = "SetPropW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool SetProp(nint window, string name, nint value);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint WindowFromPoint(NativePoint point);
+
+    [LibraryImport("user32.dll", EntryPoint = "SendMessageTimeoutW", SetLastError = true)]
+    public static partial nint SendMessageTimeout(nint window, uint message, nint wParam, nint lParam, uint flags, uint timeout, out nint result);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -173,7 +187,13 @@ internal static partial class User32
         MouseInput* inputs = stackalloc MouseInput[2];
         inputs[0] = new MouseInput { Flags = leftDown };
         inputs[1] = new MouseInput { Flags = leftUp };
-        SendInput(2, inputs, sizeof(MouseInput));
+        uint sent = SendInput(2, inputs, sizeof(MouseInput));
+        if (sent != 2)
+        {
+            if (sent == 1)
+                SendInput(1, inputs + 1, sizeof(MouseInput)); // Do not leave the mouse button held down.
+            throw new Windows.WindowOperationException("Windows refused the forwarded click.");
+        }
     }
 
     [LibraryImport("user32.dll")]

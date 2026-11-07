@@ -22,11 +22,15 @@ public sealed class SettingsWindow : Form
         (AppCommand.ToggleCrop, T("Crop")),
         (AppCommand.SaveWindowSetup, T("Remember setup for the program")),
         (AppCommand.RestoreAll, T("Restore all windows")),
+        (AppCommand.RestoreWindow, T("Restore this window")),
     ];
 
     private readonly AppSettings _settings;
     private readonly CheckBox _showNotifications = new() { Text = T("Show notifications"), AutoSize = true };
     private readonly CheckBox _automaticUpdates = new() { Text = T("Download updates automatically; install when WinScreen exits"), AutoSize = true };
+    private readonly CheckBox _experimental = new() { Text = T("Enable experimental effects (Dark, Glass, Crop, Shrink, auto-move)"), AutoSize = true };
+    private readonly CheckBox _pipInput = new() { Text = T("Forward PiP clicks (experimental; off uses Go to original)"), AutoSize = true };
+    private readonly ErrorProvider _errors = new();
     private readonly ComboBox _language = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private static readonly string[] Languages = ["system", "en", "zh-Hans", "zh-Hant"];
     private readonly StartWithWindows _startup;
@@ -58,6 +62,12 @@ public sealed class SettingsWindow : Form
         _settings = settings;
         _startup = startup;
         _apply = apply;
+        _errors.ContainerControl = this;
+        _experimental.CheckedChanged += (_, _) =>
+        {
+            _pipInput.Enabled = _experimental.Checked;
+            _pipAutoMove.Enabled = _experimental.Checked;
+        };
         _language.Items.AddRange([T("System default"), "English", "简体中文", "繁體中文"]);
 
         Text = T("WinScreen Settings");
@@ -83,6 +93,14 @@ public sealed class SettingsWindow : Form
         Controls.Add(page);
 
         LoadValues();
+        _pipInput.Enabled = _experimental.Checked;
+        _pipAutoMove.Enabled = _experimental.Checked;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _errors.Dispose();
+        base.Dispose(disposing);
     }
 
     /// <summary>Called when a key combination is pressed in a hotkey box.</summary>
@@ -104,28 +122,47 @@ public sealed class SettingsWindow : Form
     /// <summary>Applies and saves what is on screen. Returns false if a hotkey couldn't be claimed.</summary>
     internal bool SaveChanges()
     {
+        var draft = _settings.Clone();
         foreach ((AppCommand command, TextBox box) in _hotkeys)
-            _settings.Hotkeys[command] = box.Text;
-        _settings.ExcludedPrograms = _excluded.Items.Cast<string>().ToList();
-        _settings.IncludedPrograms = _included.Items.Cast<string>().ToList();
-        _settings.SavedSetups.RemoveAll(setup => _removedSetups.Contains(setup));
-        _settings.ShowToolbar = _showToolbar.Checked;
-        _settings.ShowNotifications = _showNotifications.Checked;
-        _settings.AutomaticUpdates = _automaticUpdates.Checked;
-        _settings.Language = Languages[Math.Max(0, _language.SelectedIndex)];
-        _settings.PauseInFullScreen = _pauseInFullScreen.Checked;
-        _settings.PausePinWhenMaximized = _pausePin.Checked;
-        _settings.OpaqueOnHover = _opaqueOnHover.Checked;
-        _settings.HighlightPinned = _highlightPinned.Checked;
-        _settings.PipAutoMove = _pipAutoMove.Checked;
-        _settings.DefaultOpacityPercent = (int)_defaultOpacity.Value;
-        _startup.IsOn = _startWithWindows.Checked;
-
-        IReadOnlyList<string> taken = _apply(_settings);
-        _status.Text = taken.Count == 0 ? "" : T("Another app already uses: ") + string.Join(", ", taken);
-        return taken.Count == 0;
+        {
+            draft.Hotkeys[command] = box.Text;
+            _errors.SetError(box, "");
+        }
+        draft.ExcludedPrograms = _excluded.Items.Cast<string>().ToList();
+        draft.IncludedPrograms = _included.Items.Cast<string>().ToList();
+        draft.SavedSetups.RemoveAll(setup => _removedSetups.Any(removed => removed.Program == setup.Program && removed.ExecutablePath == setup.ExecutablePath));
+        draft.ShowToolbar = _showToolbar.Checked;
+        draft.ShowNotifications = _showNotifications.Checked;
+        draft.AutomaticUpdates = _automaticUpdates.Checked;
+        draft.ExperimentalFeatures = _experimental.Checked;
+        draft.PipClickForwarding = _pipInput.Checked;
+        draft.StartWithWindows = _startWithWindows.Checked;
+        draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
+        draft.PauseInFullScreen = _pauseInFullScreen.Checked;
+        draft.PausePinWhenMaximized = _pausePin.Checked;
+        draft.OpaqueOnHover = _opaqueOnHover.Checked;
+        draft.HighlightPinned = _highlightPinned.Checked;
+        draft.PipAutoMove = _pipAutoMove.Checked;
+        draft.DefaultOpacityPercent = (int)_defaultOpacity.Value;
+        try
+        {
+            IReadOnlyList<string> taken = _apply(draft);
+            _status.Text = taken.Count == 0 ? "" : T("Another app already uses: ") + string.Join(", ", taken);
+            foreach (var box in _hotkeys.Values)
+                if (box.Text.Length > 0 && taken.Any(problem => problem.Contains(box.Text, StringComparison.Ordinal)))
+                    _errors.SetError(box, _status.Text);
+            if (taken.Count > 0)
+                return false;
+            _startup.IsOn = _startWithWindows.Checked;
+            _settings.CopyFrom(draft);
+            return true;
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            _status.Text = failure.Message;
+            return false;
+        }
     }
-
     internal void AddExcluded(string program) => AddProgram(_excluded, program);
 
     internal void AddIncluded(string program) => AddProgram(_included, program);
@@ -155,6 +192,8 @@ public sealed class SettingsWindow : Form
             nameof(AppSettings.ShowToolbar) => _showToolbar,
             nameof(AppSettings.ShowNotifications) => _showNotifications,
             nameof(AppSettings.AutomaticUpdates) => _automaticUpdates,
+            nameof(AppSettings.ExperimentalFeatures) => _experimental,
+            nameof(AppSettings.PipClickForwarding) => _pipInput,
             nameof(AppSettings.PauseInFullScreen) => _pauseInFullScreen,
             nameof(AppSettings.PausePinWhenMaximized) => _pausePin,
             nameof(AppSettings.OpaqueOnHover) => _opaqueOnHover,
@@ -176,6 +215,8 @@ public sealed class SettingsWindow : Form
         _showToolbar.Checked = _settings.ShowToolbar;
         _showNotifications.Checked = _settings.ShowNotifications;
         _automaticUpdates.Checked = _settings.AutomaticUpdates;
+        _experimental.Checked = _settings.ExperimentalFeatures;
+        _pipInput.Checked = _settings.PipClickForwarding;
         _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, _settings.Language));
         _pauseInFullScreen.Checked = _settings.PauseInFullScreen;
         _pausePin.Checked = _settings.PausePinWhenMaximized;
@@ -197,8 +238,11 @@ public sealed class SettingsWindow : Form
         var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true };
         page.Controls.Add(new Label { Text = T("Language (restart WinScreen to apply)"), AutoSize = true });
         page.Controls.Add(_language);
-        foreach (CheckBox option in new[] { _showNotifications, _automaticUpdates, _startWithWindows, _showToolbar, _pauseInFullScreen, _pausePin, _opaqueOnHover, _highlightPinned, _pipAutoMove })
+        foreach (CheckBox option in new[] { _showNotifications, _automaticUpdates, _experimental, _pipInput, _startWithWindows, _showToolbar, _pauseInFullScreen, _pausePin, _opaqueOnHover, _highlightPinned, _pipAutoMove })
+        {
+            option.MaximumSize = new Size(490, 0);
             page.Controls.Add(option);
+        }
         if (!VelopackUpdateSession.IsConfigured)
             page.Controls.Add(new Label { Text = T("Automatic updates need a release repository configured in this build."), AutoSize = true, MaximumSize = new Size(490, 0) });
         page.Controls.Add(new Label { Text = T("Views that do this stay out of screenshots and screen sharing."), AutoSize = true, Margin = new Padding(20, 0, 0, 0) });

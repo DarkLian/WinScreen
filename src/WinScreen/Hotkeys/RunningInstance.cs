@@ -18,10 +18,18 @@ internal static class RunningInstance
         nint window = User32.FindWindow(null, HotkeyHost.WindowTitle);
         if (window == 0)
             return;
-
-        User32.PostMessage(window, User32.WM_CLOSE, 0, 0);
+        string targetPath = Windows.WindowInfo.ExecutablePath(window);
+        if (!string.Equals(targetPath, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The window named WinScreen.HotkeyHost does not belong to this installation. Close WinScreen manually before updating.");
+        var identity = Windows.WindowIdentity.Capture(window);
+        using var process = System.Diagnostics.Process.GetProcessById((int)identity.ProcessId);
+        identity.Require();
+        if (!User32.PostMessage(window, User32.WM_CLOSE, 0, 0))
+            throw new InvalidOperationException("Windows refused WinScreen's shutdown request.");
         DateTime end = DateTime.UtcNow.AddMilliseconds(CloseTimeoutMilliseconds);
-        while (DateTime.UtcNow < end && User32.IsWindow(window))
+        while (DateTime.UtcNow < end && !process.HasExited)
             Thread.Sleep(50);
+        if (!process.HasExited)
+            throw new TimeoutException("WinScreen did not confirm shutdown. Restore its windows and exit it before updating or uninstalling.");
     }
 }

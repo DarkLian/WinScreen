@@ -17,6 +17,7 @@ public sealed class ShrinkTile : Form
     private static readonly Color Accent = Color.FromArgb(79, 140, 255);
 
     private readonly nint _source;
+    private readonly WindowIdentity _identity;
     private readonly WindowController _windows;
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 100 };
     private DwmThumbnail? _thumbnail;
@@ -28,6 +29,7 @@ public sealed class ShrinkTile : Form
     public ShrinkTile(nint source, WindowController windows)
     {
         _source = source;
+        _identity = WindowIdentity.Capture(source);
         _windows = windows;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -47,6 +49,7 @@ public sealed class ShrinkTile : Form
     /// <summary>Opens the tile, then hides the window it stands for.</summary>
     public void ShowOnTop()
     {
+        _identity.Require();
         if (User32.IsIconic(_source))
             User32.ShowWindow(_source, User32.SW_RESTORE);
         Show();
@@ -60,6 +63,7 @@ public sealed class ShrinkTile : Form
         try
         {
             WindowController.Pin(Handle);
+            _hid = true; // A partially failed conceal must still be revealed by OnFormClosed.
             _windows.Hide(_source);
         }
         catch (WindowOperationException)
@@ -81,8 +85,10 @@ public sealed class ShrinkTile : Form
 
         var shown = new Rectangle(Point.Empty, sourceSize);
         Width = Math.Clamp(sourceSize.Width / 2, PipGeometry.MinimumWidth, TileWidth);
-        Height = PipGeometry.FitHeight(Width, shown);
-        _thumbnail.Show(PipGeometry.ViewArea(ClientSize), shown);
+        Size = PipGeometry.FitWithin(Width, shown, Screen.FromHandle(_source).WorkingArea.Size);
+        Location = KeptOnScreen(Bounds);
+        try { _thumbnail.Show(PipGeometry.ViewArea(ClientSize), shown); }
+        catch (WindowOperationException) { return false; }
         return true;
     }
 
@@ -126,7 +132,7 @@ public sealed class ShrinkTile : Form
         _watch.Dispose();
         _thumbnail?.Dispose();
         _thumbnail = null;
-        if (_hid && User32.IsWindow(_source))
+        if (_hid && _identity.Matches())
         {
             try
             {
@@ -144,7 +150,7 @@ public sealed class ShrinkTile : Form
 
     private void FollowSource()
     {
-        if (!User32.IsWindow(_source) || !_windows.IsHidden(_source) || User32.GetForegroundWindow() == _source)
+        if (!_identity.Matches() || !_windows.IsHidden(_source) || User32.GetForegroundWindow() == _source)
             Close();
     }
 

@@ -13,6 +13,8 @@ WinScreen adds a signed update source and an opt-in lifecycle around it.
 - `releases.win.json.sig` must be an RSA-PSS/SHA-256 signature of the exact feed bytes, verified using the embedded
   public key (RSA 3072 bits or stronger). The feed is not parsed until verification succeeds. Signing uses .NET's
   standard cryptography implementation. Unsigned feeds have no fallback.
+- Latest is resolved once to an exact stable release tag before requesting metadata. Feed, signature and package use
+  that versioned release path; signed versions must match the tag, avoiding separate latest-download requests during rollover.
 - Only stable full packages for `WinScreen` on the `win` channel are accepted. Package paths/URLs, missing SHA-256,
   invalid sizes, deltas and prereleases are rejected. Only versions newer than the current installation are selected.
 - Metadata is limited to 1 MiB, signatures to 1 KiB, and packages to 512 MiB. Downloads have a ten-minute deadline
@@ -33,6 +35,10 @@ the release build/signing workflow can authorize malicious updates. Protect the 
 The installer and executable are still **not Authenticode signed**. Signed update metadata authenticates subsequent
 packages to an already trusted installation; it does not authenticate a first downloaded installer to Windows or
 remove SmartScreen warnings. Verify initial distribution independently. This is not a claim that the app is malware-free.
+
+Public release workflows now require a valid installer signature from the configured publisher and successful desktop
+validation for the exact commit. The certificate/provider, expected thumbprint, dedicated desktop runner and protected
+release environment still need external configuration. Local developer builds remain unsigned unless signing is configured.
 
 Version checks prevent installing an older/equal version, but there is no signed-feed expiry or independent transparency
 log: a host can withhold updates. An attacker who can already change files as the current Windows user can tamper

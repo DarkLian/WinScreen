@@ -36,6 +36,10 @@ internal static class Program
                         break;
                     if (parts[0] == "color")
                         window.BeginInvoke(() => window.SetColors(parts[1]));
+                    if (parts[0] == "layered")
+                        window.BeginInvoke(window.CreateUnattributedLayeredWindow);
+                    if (parts[0] == "hang")
+                        window.BeginInvoke(() => { Console.WriteLine("hung"); Console.Out.Flush(); Thread.Sleep(10000); });
                 }
 
                 window.BeginInvoke(window.Close);
@@ -49,6 +53,17 @@ internal static class Program
 
 internal sealed partial class TargetForm : Form
 {
+    [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial nint CreateWindowEx(uint exStyle, string className, string title, uint style,
+        int x, int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
+
+    public void CreateUnattributedLayeredWindow()
+    {
+        // Native STATIC avoids WinForms automatically calling SetLayeredWindowAttributes on style changes.
+        nint layered = CreateWindowEx(0x80000, "STATIC", "Unattributed layered test", 0,
+            700, 200, 100, 100, 0, 0, 0, 0);
+        Report("layered " + layered.ToInt64());
+    }
     private const int WM_INPUT = 0x00FF;
     private const int RealInputWindowMilliseconds = 250;
 

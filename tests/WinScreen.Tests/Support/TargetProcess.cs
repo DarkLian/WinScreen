@@ -51,6 +51,21 @@ internal sealed class TargetProcess : IDisposable
         _process.StandardInput.Flush();
     }
 
+    public nint CreateUnattributedLayeredWindow()
+    {
+        _process.StandardInput.WriteLine("layered");
+        _process.StandardInput.Flush();
+        string report = NextReport() ?? throw new InvalidOperationException("No layered window was created.");
+        return (nint)long.Parse(report.Split(' ')[1]);
+    }
+
+    public void Hang()
+    {
+        _process.StandardInput.WriteLine("hang");
+        _process.StandardInput.Flush();
+        if (NextReport() != "hung") throw new InvalidOperationException("The target did not hang as requested.");
+    }
+
     public void Dispose()
     {
         try

@@ -77,6 +77,55 @@ public class PipWindowTests
     }
 
     [Fact]
+    public void A_location_chosen_before_the_deferred_Shown_event_is_preserved()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        OnUiThread(pump =>
+        {
+            bool shown = false;
+            using var pip = new PipWindow(source.Handle, new WindowController([]));
+            pip.Shown += (_, _) => shown = true;
+            Desktop.GainForegroundRights();
+            pip.ShowOnTop();
+            bool shownBeforeMove = shown;
+            var desired = new Point(100, 100);
+            pip.Location = desired;
+            pump(200);
+            Assert.True(pip.Location == desired,
+                $"Shown before explicit move: {shownBeforeMove}; after pump: {shown}; position: {pip.Location}; expected: {desired}");
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Safe_default_and_click_through_sources_do_not_receive_synthetic_clicks(bool experimental)
+    {
+        using var source = new TargetProcess(SourceSpot);
+        OnUiThread(pump =>
+        {
+            var windows = new WindowController([]);
+            if (experimental) windows.ToggleClickThrough(source.Handle);
+            using var pip = new PipWindow(source.Handle, windows) { AllowClickForwarding = experimental };
+            Desktop.GainForegroundRights();
+            pip.ShowOnTop();
+            pump(150);
+            Point pointerBefore = Desktop.CursorPosition();
+            uint inputBefore = Desktop.LastInputTick();
+            int packed = (50 << 16) | 50;
+            User32.PostMessage(pip.Handle, 0x0201, 1, (nint)packed);
+            User32.PostMessage(pip.Handle, 0x0202, 0, (nint)packed);
+            pump(150);
+            Assert.Null(source.NextReport(100));
+            Assert.Equal(SourceSpot, Desktop.BoundsOf(source.Handle));
+            // A physical mouse move during a desktop test is not evidence that PiP moved the cursor.
+            if (inputBefore == Desktop.LastInputTick())
+                Assert.Equal(pointerBefore, Desktop.CursorPosition());
+            windows.RestoreAll();
+        });
+    }
+
+    [Fact]
     public void Auto_move_leaves_text_and_images_for_a_plain_spot()
     {
         Rectangle area = System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;

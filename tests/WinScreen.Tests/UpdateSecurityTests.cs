@@ -154,10 +154,21 @@ public sealed class UpdateSecurityTests
         byte[] feed = Feed(asset);
         byte[] signature = key.SignData(feed, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
         bool corrupt = false;
-        var handler = new Handler(request => new HttpResponseMessage(HttpStatusCode.OK)
+        var requested = new List<string>();
+        var handler = new Handler(request =>
         {
-            Content = new ByteArrayContent(request.RequestUri!.AbsolutePath.EndsWith(".sig") ? signature :
-                request.RequestUri.AbsolutePath.EndsWith(".json") ? feed : corrupt ? [3, 2, 1] : package),
+            requested.Add(request.RequestUri!.AbsolutePath);
+            if (request.RequestUri.AbsolutePath.EndsWith("/latest"))
+            {
+                var redirect = new HttpResponseMessage(HttpStatusCode.Redirect);
+                redirect.Headers.Location = new Uri("https://github.com/owner/repo/releases/tag/v0.4.2");
+                return redirect;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(request.RequestUri.AbsolutePath.EndsWith(".sig") ? signature :
+                    request.RequestUri.AbsolutePath.EndsWith(".json") ? feed : corrupt ? [3, 2, 1] : package),
+            };
         });
         using var transport = new UpdateTransport("owner/repo", handler);
         var source = new SignedUpdateSource("owner/repo", key.ExportSubjectPublicKeyInfoPem(), transport, CancellationToken.None);
@@ -168,6 +179,9 @@ public sealed class UpdateSecurityTests
         {
             await Assert.ThrowsAsync<InvalidDataException>(() => source.DownloadReleaseEntry(null!, asset, path, _ => { }, CancellationToken.None));
             var verified = await source.GetReleaseFeed(null!, "WinScreen", "win");
+            Assert.Contains("/owner/repo/releases/download/v0.4.2/releases.win.json", requested);
+            Assert.Contains("/owner/repo/releases/download/v0.4.2/releases.win.json.sig", requested);
+            Assert.DoesNotContain(requested, path => path.Contains("latest/download"));
             asset = Assert.Single(verified.Assets);
             await source.DownloadReleaseEntry(null!, asset, path, _ => { }, CancellationToken.None);
             Assert.Equal(package, await File.ReadAllBytesAsync(path));
@@ -189,9 +203,16 @@ public sealed class UpdateSecurityTests
         asset.Version = SemanticVersion.Parse(version);
         byte[] feed = Feed(asset);
         byte[] signature = key.SignData(feed, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
-        var handler = new Handler(request => new HttpResponseMessage(HttpStatusCode.OK)
+        var handler = new Handler(request =>
         {
-            Content = new ByteArrayContent(request.RequestUri!.AbsolutePath.EndsWith(".sig") ? signature : feed),
+            if (request.RequestUri!.AbsolutePath.EndsWith("/latest"))
+            {
+                var redirect = new HttpResponseMessage(HttpStatusCode.Redirect);
+                redirect.Headers.Location = new Uri("https://github.com/owner/repo/releases/tag/v" + version);
+                return redirect;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new ByteArrayContent(request.RequestUri.AbsolutePath.EndsWith(".sig") ? signature : feed) };
         });
         using var transport = new UpdateTransport("owner/repo", handler);
         string directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());

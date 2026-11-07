@@ -40,7 +40,9 @@ internal sealed class DwmThumbnail : IDisposable
             Opacity = opacity,
             Visible = 1,
         };
-        Dwmapi.DwmUpdateThumbnailProperties(_handle, ref properties);
+        if (destination.Width <= 0 || destination.Height <= 0 || source.Width <= 0 || source.Height <= 0 ||
+            Dwmapi.DwmUpdateThumbnailProperties(_handle, ref properties) != 0)
+            throw new Windows.WindowOperationException("Windows could not render the live preview. The original will remain available.");
     }
 
     public void Dispose()

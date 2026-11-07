@@ -6,13 +6,21 @@ namespace WinScreen.Pip;
 internal static class ScreenContent
 {
     private const int Contrast = 48;
+    private static readonly Dictionary<Rectangle, (long Time, bool[,] Cells)> Cache = [];
 
     public static bool[,] BusyCells(Rectangle area)
     {
+        long now = Environment.TickCount64;
+        if (Cache.TryGetValue(area, out var cached) && now - cached.Time < 1000)
+            return cached.Cells;
+        if (Cache.Count > 8)
+            Cache.Clear();
         using var bitmap = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb);
         using (Graphics graphics = Graphics.FromImage(bitmap))
             graphics.CopyFromScreen(area.Location, Point.Empty, area.Size);
-        return BusyCells(bitmap);
+        bool[,] cells = BusyCells(bitmap);
+        Cache[area] = (now, cells);
+        return cells;
     }
 
     /// <summary>

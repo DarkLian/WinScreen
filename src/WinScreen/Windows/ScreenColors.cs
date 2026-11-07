@@ -7,6 +7,8 @@ public static class ScreenColors
 
     public static Color MostCommon(Rectangle area)
     {
+        try
+        {
         using var bitmap = new Bitmap(area.Width, area.Height);
         using (Graphics graphics = Graphics.FromImage(bitmap))
             graphics.CopyFromScreen(area.Location, Point.Empty, area.Size);
@@ -22,5 +24,10 @@ public static class ScreenColors
         }
 
         return Color.FromArgb(counts.MaxBy(pair => pair.Value).Key);
+        }
+        catch (Exception e) when (e is System.Runtime.InteropServices.ExternalException or ArgumentException or InvalidOperationException)
+        {
+            throw new WindowOperationException("The screen could not be sampled for Glass. The window was not changed: " + e.Message);
+        }
     }
 }

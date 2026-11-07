@@ -7,19 +7,44 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
     runs-on: windows-latest
+    environment: release
+    permissions:
+      contents: write
+      actions: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate stable tag and desktop release gate
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ($env:GITHUB_REF_NAME -notmatch '\Av(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\z') { throw 'Only stable vMAJOR.MINOR.PATCH tags can be published.' }
+          $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/desktop.yml/runs?head_sha=$env:GITHUB_SHA&status=success" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not ($runs.workflow_runs | Where-Object { $_.head_sha -eq $env:GITHUB_SHA -and $_.conclusion -eq 'success' -and $_.event -eq 'workflow_dispatch' })) { throw 'Run the desktop validation workflow successfully for this exact commit before releasing.' }
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
       - name: Build and package
         shell: pwsh
-        run: ./build.ps1 -CI -Version "$($env:GITHUB_REF_NAME.TrimStart('v'))" -UpdateRepository $env:GITHUB_REPOSITORY
+        env:
+          WINSCREEN_AUTHENTICODE_SIGN_PARAMS: ${{ secrets.WINSCREEN_AUTHENTICODE_SIGN_PARAMS }}
+        run: |
+          if (-not $env:WINSCREEN_AUTHENTICODE_SIGN_PARAMS) { throw 'Production Authenticode signing must be configured before public release.' }
+          ./build.ps1 -CI -Version "$($env:GITHUB_REF_NAME.TrimStart('v'))" -UpdateRepository $env:GITHUB_REPOSITORY
+      - name: Verify installer publisher
+        shell: pwsh
+        env:
+          EXPECTED_THUMBPRINT: ${{ vars.WINSCREEN_PUBLISHER_THUMBPRINT }}
+        run: |
+          $signature = Get-AuthenticodeSignature dist/release/WinScreen-win-Setup.exe
+          if (-not $env:EXPECTED_THUMBPRINT -or $signature.Status -ne 'Valid' -or $signature.SignerCertificate.Thumbprint -ne $env:EXPECTED_THUMBPRINT) { throw 'Installer publisher signature verification failed.' }
       - name: Sign update feed
         shell: pwsh
         env:

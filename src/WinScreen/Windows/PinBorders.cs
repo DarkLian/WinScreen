@@ -53,10 +53,12 @@ internal sealed class PinBorder : Form
     private const int Thickness = 3;
 
     private readonly nint _target;
+    private readonly WindowIdentity _identity;
 
     public PinBorder(nint target)
     {
         _target = target;
+        _identity = WindowIdentity.Capture(target);
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
@@ -87,7 +89,7 @@ internal sealed class PinBorder : Form
 
     public void Follow()
     {
-        if (!User32.IsWindow(_target) || User32.IsIconic(_target) || !WindowInfo.TryGetVisibleBounds(_target, out Rectangle bounds))
+        if (!_identity.Matches() || !WindowInfo.IsAvailable(_target) || !WindowInfo.TryGetVisibleBounds(_target, out Rectangle bounds))
         {
             Hide();
             return;
