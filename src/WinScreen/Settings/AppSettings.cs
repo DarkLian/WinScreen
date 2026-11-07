@@ -40,6 +40,9 @@ public enum AppCommand
     ToggleRollUp,
 }
 
+/// <summary>The key to hold for modifier move and resize.</summary>
+public enum ModifierKey { Alt, Win }
+
 /// <summary>What a program's windows get automatically. Click-through and Glass are left out on purpose:
 /// a window that opens unreachable, or with its colours removed, is never what someone wants.</summary>
 public sealed class ProgramSetup
@@ -200,6 +203,15 @@ public sealed class AppSettings
     public bool HighlightPinned { get; set; }
     public bool PipAutoMove { get; set; }
     public bool ExperimentalFeatures { get; set; }
+
+    /// <summary>Hold a key and drag anywhere in a window to move or resize it. Off until someone asks for it.</summary>
+    public bool ModifierDrag { get; set; }
+
+    public ModifierKey ModifierKey { get; set; }
+
+    /// <summary>Programs that use the modifier and a drag themselves, such as drawing and 3D apps.</summary>
+    public List<string> ModifierExclusions { get; set; } = ["blender", "maya", "3dsmax", "Photoshop", "krita", "gimp"];
+
     public bool PipClickForwarding { get; set; }
     [JsonConverter(typeof(PipPreferencesConverter))]
     public PipPreferences Pip { get; set; } = new();
@@ -276,6 +288,9 @@ public sealed class AppSettings
             }
 
             loaded.PipPresets ??= [];
+            loaded.ModifierExclusions = (loaded.ModifierExclusions ?? defaults.ModifierExclusions)
+                .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+            loaded.ModifierKey = Enum.IsDefined(loaded.ModifierKey) ? loaded.ModifierKey : ModifierKey.Alt;
             loaded.Hotkeys ??= [];
             loaded.ExcludedPrograms = (loaded.ExcludedPrograms ?? defaults.ExcludedPrograms)
                 .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();

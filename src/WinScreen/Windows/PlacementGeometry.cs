@@ -2,6 +2,9 @@ namespace WinScreen.Windows;
 
 public enum WindowAnchor { TopLeft, Top, TopRight, Left, Center, Right, BottomLeft, Bottom, BottomRight }
 
+[Flags]
+public enum ResizeEdges { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 }
+
 /// <summary>The arithmetic of placing a window, kept apart from Windows so it can be tested directly.</summary>
 public static class PlacementGeometry
 {
@@ -30,6 +33,28 @@ public static class PlacementGeometry
         double top = from.Height > frame.Height ? Math.Clamp((frame.Top - from.Top) / (double)(from.Height - frame.Height), 0, 1) : 0;
         return new Point(to.Left + (int)Math.Round(left * Math.Max(0, to.Width - frame.Width)),
             to.Top + (int)Math.Round(top * Math.Max(0, to.Height - frame.Height)));
+    }
+
+    /// <summary>Which edges a resize grabs for a press at this point: the third of the window it's in, each way.</summary>
+    public static ResizeEdges EdgesAt(Point point, Rectangle window)
+    {
+        ResizeEdges edges = ResizeEdges.None;
+        if (point.X < window.Left + window.Width / 3) edges |= ResizeEdges.Left;
+        else if (point.X >= window.Right - window.Width / 3) edges |= ResizeEdges.Right;
+        if (point.Y < window.Top + window.Height / 3) edges |= ResizeEdges.Top;
+        else if (point.Y >= window.Bottom - window.Height / 3) edges |= ResizeEdges.Bottom;
+        return edges == ResizeEdges.None ? ResizeEdges.Right | ResizeEdges.Bottom : edges;
+    }
+
+    /// <summary>The window after dragging these edges by this much, never smaller than <paramref name="smallest"/>.</summary>
+    public static Rectangle Resized(Rectangle window, ResizeEdges edges, Size moved, Size smallest)
+    {
+        int left = window.Left, top = window.Top, right = window.Right, bottom = window.Bottom;
+        if (edges.HasFlag(ResizeEdges.Left)) left = Math.Min(left + moved.Width, right - smallest.Width);
+        if (edges.HasFlag(ResizeEdges.Right)) right = Math.Max(right + moved.Width, left + smallest.Width);
+        if (edges.HasFlag(ResizeEdges.Top)) top = Math.Min(top + moved.Height, bottom - smallest.Height);
+        if (edges.HasFlag(ResizeEdges.Bottom)) bottom = Math.Max(bottom + moved.Height, top + smallest.Height);
+        return Rectangle.FromLTRB(left, top, right, bottom);
     }
 
     /// <summary>The display after <paramref name="current"/>, wrapping round, or -1 when there's only one.</summary>

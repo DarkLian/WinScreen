@@ -191,6 +191,16 @@ The toolbar's **Arrange window** button lists everything that moves a window, an
 A minimized or maximized window stays that way and gets a new place to come back to. **Restore all windows** doesn't undo
 these moves, because you chose them.
 
+### Move and resize from anywhere in a window
+
+Turn this on in **Settings → Move and resize**; it's off by default. Hold Alt, or Win if you prefer, and drag anywhere in
+a window with the left button to move it, or the right button to resize it from the nearest edge or corner. Esc while
+dragging puts the window back, and **Restore prior position** undoes a drag afterwards.
+
+This needs a system mouse hook, because a click can only be kept from an app that way. The hook exists only while the
+feature is on and can act. It is removed while a game, full-screen app, or excluded program is in front, and while the PC
+is locked. WinScreen doesn't hook the keyboard for this. Add apps that use Alt+drag themselves to the list on that page.
+
 ## Remember a program's setup
 
 Adjust pinning, opacity, and dark mode, then press **Ctrl+Alt+Shift+S**. Windows belonging to that program receive the setup
@@ -281,3 +291,5 @@ These are limits of the current version, listed so you can decide before you rel
 - **Click-through views:** they can't be clicked, so use the tray menu or **Restore all windows** to reach them.
 - **Arranging windows:** some apps enforce their own minimum size or position, and multiple displays and mixed scaling are unverified.
 - **Roll up:** it needs a standard title bar, and apps that draw their own or enforce a minimum height may refuse.
+- **Move and resize:** off by default. It doesn't apply to administrator apps or maximized windows, and pauses in full-screen apps, detected games, and excluded programs.
+- **Windowed games:** a game running in a normal window can't always be detected, so add it to the exclusions. Some touchpads may not work reliably with move and resize.

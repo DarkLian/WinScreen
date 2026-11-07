@@ -267,7 +267,17 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
                     string.Format(T("\"{0}\" has no standard title bar, so it can't be rolled up."), WindowInfo.Title(window)));
 
             state.PlacementBeforeRollUp = ReadPlacement(window);
-            Prepare(window, state); // Journals where it came from before anything changes.
+            try
+            {
+                Prepare(window, state); // Journals where it came from before anything changes.
+            }
+            catch (WindowOperationException)
+            {
+                state.PlacementBeforeRollUp = null;
+                TrySaveJournal();
+                throw;
+            }
+
             uint dpi = (uint)Dpi.Of(window);
             int height = User32.GetSystemMetricsForDpi(CaptionMetric, dpi) +
                          2 * (User32.GetSystemMetricsForDpi(FrameMetric, dpi) + User32.GetSystemMetricsForDpi(PaddingMetric, dpi));
@@ -386,6 +396,10 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
     /// program, and one of the included programs when any are listed.
     /// </summary>
     public bool CanControl(nint window) => Refusal(window) is null;
+
+    /// <summary>True for the desktop, taskbar and other parts of Windows, which fill screens without being apps.</summary>
+    public static bool IsShell(nint window) => window == User32.GetShellWindow() || window == User32.GetDesktopWindow() ||
+                                               ShellClasses.Contains(WindowInfo.ClassName(window));
 
     /// <summary>Why WinScreen won't change this window, in words for the person, or null when it will.</summary>
     public string? Refusal(nint window)
@@ -1269,6 +1283,19 @@ public static class WindowInfo
             (T("Scaling"), $"{Dpi.Of(window) * 100 / Dpi.Default}%"),
             (T("Runs as administrator"), ProcessInfo.IsElevated(processId) ? T("Yes") : T("No")),
         ];
+    }
+
+    /// <summary>
+    /// True for a borderless window covering its whole monitor, which is how most games run today. A maximized
+    /// window has a title bar and leaves the taskbar alone, so it doesn't count.
+    /// </summary>
+    public static bool FillsMonitor(nint window)
+    {
+        if (window == 0 || WindowController.IsShell(window) || User32.IsIconic(window) ||
+            (User32.GetWindowLongPtr(window, User32.GWL_STYLE) & User32.WS_CAPTION) == User32.WS_CAPTION ||
+            !User32.GetWindowRect(window, out Rect r))
+            return false;
+        return Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).Contains(Screen.FromHandle(window).Bounds);
     }
 
     public static bool IsAvailable(nint window)

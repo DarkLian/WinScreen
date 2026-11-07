@@ -16,9 +16,15 @@ public sealed class TrayApplication : ApplicationContext
 {
     private const int MenuTextLimit = 60;
     private const int BalloonMilliseconds = 3000;
+    private const int HookSilenceSeconds = 2;
 
     private readonly WindowController _windows;
     private readonly WindowPlacer _placer;
+    private readonly ModifierDrag _modifierDrag;
+    private nint _hookForeground;
+    private bool _hookForegroundExcluded;
+    private Point _hookCursor;
+    private bool _hookReported;
     private readonly AppSettings _settings;
     private readonly string _settingsPath;
     private readonly HotkeyHost _hotkeys = new();
@@ -52,6 +58,7 @@ public sealed class TrayApplication : ApplicationContext
     {
         _windows = windows;
         _placer = new WindowPlacer(windows);
+        _modifierDrag = new ModifierDrag(CanDrag, _placer.Remember);
         _settings = settings;
         _settingsPath = settingsPath;
         // Update news stays out of Last result, where it could replace a failure someone needs to read.
@@ -368,8 +375,67 @@ public sealed class TrayApplication : ApplicationContext
             ApplySavedSetup(foreground);
         }
 
+        FollowModifierHook(foreground);
         _windows.Refresh(Cursor.Position, _settings.OpaqueOnHover, _settings.PausePinWhenMaximized);
         _borders.Show(_settings.HighlightPinned ? _windows.VisiblePinnedWindows() : []);
+    }
+
+    /// <summary>
+    /// Keeps the mouse hook only for as long as it could do anything. With the feature off this is one
+    /// comparison, and the hook's absence is the point: nothing runs behind a game.
+    /// </summary>
+    private void FollowModifierHook(nint foreground)
+    {
+        if (!_settings.ModifierDrag)
+        {
+            _modifierDrag.SetActive(false);
+            return;
+        }
+
+        if (foreground != _hookForeground)
+        {
+            _hookForeground = foreground;
+            _hookForegroundExcluded = foreground != 0 && IsDragExcluded(foreground);
+        }
+
+        _modifierDrag.Key = _settings.ModifierKey;
+        bool run = ModifierHookPolicy.ShouldRun(true, FullScreen.Current(), WindowInfo.FillsMonitor(foreground),
+            _hookForegroundExcluded, FullScreen.IsAway());
+        Point cursor = Cursor.Position;
+        // Windows drops a slow hook without saying so. Input with no callback means it has, so put it back.
+        if (run && _modifierDrag.Active && cursor != _hookCursor &&
+            System.Diagnostics.Stopwatch.GetElapsedTime(_modifierDrag.LastCallback).TotalSeconds > HookSilenceSeconds)
+            _modifierDrag.SetActive(false);
+        _hookCursor = cursor;
+        try
+        {
+            _modifierDrag.SetActive(run);
+            _hookReported = false;
+        }
+        catch (System.ComponentModel.Win32Exception failure)
+        {
+            if (!_hookReported)
+                Alert(T("WinScreen couldn't do that"), failure.Message);
+            _hookReported = true;
+        }
+    }
+
+    private bool IsDragExcluded(nint window)
+    {
+        string program = WindowInfo.ProgramOf(window);
+        return _settings.ExcludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase) ||
+               _settings.ModifierExclusions.Contains(program, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Asked inside the mouse hook, only for a press with the modifier held, so it can afford these calls.</summary>
+    private bool CanDrag(nint window)
+    {
+        if (_windows.Refusal(window) is not null || _windows.IsHidden(window) || _windows.IsPeeking(window) ||
+            User32.IsZoomed(window) || User32.IsIconic(window) || WindowInfo.FillsMonitor(window))
+            return false;
+        User32.GetWindowThreadProcessId(window, out uint process);
+        return !ProcessInfo.IsElevated(process) && !_settings.ModifierExclusions.Contains(WindowInfo.ProcessName(process),
+            StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -557,6 +623,7 @@ public sealed class TrayApplication : ApplicationContext
         _borders.Dispose();
         _dark.Dispose();
         _anchors.Dispose();
+        _modifierDrag.Dispose();
         foreach (Form form in Application.OpenForms.Cast<Form>().ToArray())
             form.Close();
         _toolbar.Dispose();

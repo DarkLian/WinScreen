@@ -89,6 +89,7 @@ public sealed class RollUpTests
         };
         Assert.Throws<WindowOperationException>(() => windows.ToggleRollUp(target.Handle));
         Assert.Equal(height, RectOf(target.Handle).Height);
+        Assert.False(windows.IsRolledUp(target.Handle));
     }
 
     [Fact]

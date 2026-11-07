@@ -11,6 +11,7 @@ public enum FullScreenAction { Run, CloseLatestView, Refuse, ExplainExclusive }
 /// <summary>Tells when a game or other full-screen app is running.</summary>
 public static partial class FullScreen
 {
+    private const int NotPresent = 1;
     private const int Busy = 2;
     private const int RunningFullScreenGame = 3;
     private const int PresentationMode = 4;
@@ -32,6 +33,9 @@ public static partial class FullScreen
     }
 
     public static bool IsActive() => Current() != FullScreenState.None;
+
+    /// <summary>True while the PC is locked, on a screen saver, or switched to another user.</summary>
+    public static bool IsAway() => SHQueryUserNotificationState(out int state) == 0 && state == NotPresent;
 }
 
 /// <summary>

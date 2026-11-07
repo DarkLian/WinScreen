@@ -63,6 +63,13 @@ public sealed class SettingsWindow : Form
     private readonly CheckBox _allowPip =
         new() { Text = T("Still allow opening Picture-in-Picture in full-screen apps"), AutoSize = true };
 
+    private readonly CheckBox _modifierDrag = new()
+        { Text = T("Move and resize windows by holding a key and dragging"), AutoSize = true };
+
+    private readonly ComboBox _modifierKey = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
+
+    private readonly TextBox _modifierExclusions = new() { Width = 455 };
+
     private readonly CheckBox _pausePin = new()
         { Text = T("Pause pinning while a pinned window is maximized"), AutoSize = true };
 
@@ -113,6 +120,7 @@ public sealed class SettingsWindow : Form
         tabs.TabPages.Add(Tab(T("Programs"), BuildPrograms()));
         tabs.TabPages.Add(Tab(T("Saved setups"), BuildSetups()));
         tabs.TabPages.Add(Tab(T("Picture-in-Picture"), BuildPip()));
+        tabs.TabPages.Add(Tab(T("Move and resize"), BuildModifierDrag()));
 
         var page = new FlowLayoutPanel
             { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Dock = DockStyle.Fill };
@@ -180,6 +188,9 @@ public sealed class SettingsWindow : Form
         draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
         draft.PauseInFullScreen = _pauseInFullScreen.Checked;
         draft.AllowPipInFullScreen = _allowPip.Checked;
+        draft.ModifierDrag = _modifierDrag.Checked;
+        draft.ModifierKey = (ModifierKey)Math.Max(0, _modifierKey.SelectedIndex);
+        draft.ModifierExclusions = _modifierExclusions.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
         draft.PausePinWhenMaximized = _pausePin.Checked;
         draft.OpaqueOnHover = _opaqueOnHover.Checked;
         draft.HighlightPinned = _highlightPinned.Checked;
@@ -287,6 +298,7 @@ public sealed class SettingsWindow : Form
             nameof(AppSettings.PipClickForwarding) => _pipInput,
             nameof(AppSettings.PauseInFullScreen) => _pauseInFullScreen,
             nameof(AppSettings.AllowPipInFullScreen) => _allowPip,
+            nameof(AppSettings.ModifierDrag) => _modifierDrag,
             nameof(AppSettings.PausePinWhenMaximized) => _pausePin,
             nameof(AppSettings.OpaqueOnHover) => _opaqueOnHover,
             nameof(AppSettings.HighlightPinned) => _highlightPinned,
@@ -312,6 +324,9 @@ public sealed class SettingsWindow : Form
         _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, _settings.Language));
         _pauseInFullScreen.Checked = _settings.PauseInFullScreen;
         _allowPip.Checked = _settings.AllowPipInFullScreen;
+        _modifierDrag.Checked = _settings.ModifierDrag;
+        _modifierKey.SelectedIndex = (int)_settings.ModifierKey;
+        _modifierExclusions.Text = string.Join(", ", _settings.ModifierExclusions);
         _pausePin.Checked = _settings.PausePinWhenMaximized;
         _opaqueOnHover.Checked = _settings.OpaqueOnHover;
         _highlightPinned.Checked = _settings.HighlightPinned;
@@ -406,6 +421,22 @@ public sealed class SettingsWindow : Form
             Text = string.Format(T("WinScreen version {0}"), AppInfo.Version), AutoSize = true,
             ForeColor = SystemColors.GrayText, Margin = new Padding(3, 2, 3, 0),
         });
+        return page;
+    }
+
+    private FlowLayoutPanel BuildModifierDrag()
+    {
+        _modifierKey.Items.AddRange(["Alt", "Win"]);
+        var key = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
+        key.Controls.Add(new Label { Text = T("Key to hold"), Width = 145, Height = 26, TextAlign = ContentAlignment.MiddleLeft });
+        key.Controls.Add(_modifierKey);
+        var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false,
+            Dock = DockStyle.Fill, AutoScroll = true };
+        page.Controls.Add(Section(T("Move and resize"), _modifierDrag, key,
+            new Label { Text = T("Leave these programs alone (separate names with commas):"), AutoSize = true },
+            _modifierExclusions));
+        page.Controls.Add(Note(T("Hold the key and drag with the left button to move a window, or the right button to resize it from the nearest edge. Esc cancels.")));
+        page.Controls.Add(Note(T("This watches the mouse with a system hook. The hook only exists while this is on, and is removed during games, full-screen apps, excluded programs and when the PC is locked. WinScreen never watches the keyboard for this.")));
         return page;
     }
 
