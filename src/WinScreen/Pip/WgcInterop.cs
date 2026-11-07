@@ -18,7 +18,13 @@ internal static unsafe partial class WgcInterop
     [LibraryImport("d3d11.dll")]
     private static partial int CreateDirect3D11DeviceFromDXGIDevice(nint device, out nint result);
 
-    internal static GraphicsCaptureItem Item(nint hwnd)
+    private const int CreateForWindow = 3, CreateForMonitor = 4;
+
+    internal static GraphicsCaptureItem Item(nint hwnd) => CreateItem(hwnd, CreateForWindow);
+
+    internal static GraphicsCaptureItem ItemForMonitor(nint monitor) => CreateItem(monitor, CreateForMonitor);
+
+    private static GraphicsCaptureItem CreateItem(nint target, int method)
     {
         const string className = "Windows.Graphics.Capture.GraphicsCaptureItem";
         Marshal.ThrowExceptionForHR(WindowsCreateString(className, className.Length, out nint name));
@@ -28,8 +34,8 @@ internal static unsafe partial class WgcInterop
             Marshal.ThrowExceptionForHR(RoGetActivationFactory(name,
                 new Guid("3628E81B-3CAC-4C60-B7F4-23CE0E0C3356"), out factory));
             Guid iid = new("79C3F95B-31F7-4EC2-A464-632EF5D30760");
-            var create = (delegate* unmanaged[Stdcall]<nint, nint, Guid*, nint*, int>)(*(nint**)factory)[3];
-            Marshal.ThrowExceptionForHR(create(factory, hwnd, &iid, &item));
+            var create = (delegate* unmanaged[Stdcall]<nint, nint, Guid*, nint*, int>)(*(nint**)factory)[method];
+            Marshal.ThrowExceptionForHR(create(factory, target, &iid, &item));
             return WinRT.MarshalInterface<GraphicsCaptureItem>.FromAbi(item);
         }
         finally

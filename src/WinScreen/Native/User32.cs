@@ -231,6 +231,10 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetWindowDisplayAffinity(nint hWnd, uint affinity);
 
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetWindowDisplayAffinity(nint hWnd, out uint affinity);
+
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsWindowVisible(nint hWnd);

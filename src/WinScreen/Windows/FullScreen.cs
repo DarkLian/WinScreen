@@ -47,6 +47,8 @@ public static class FullScreenPolicy
     {
         if (state == FullScreenState.None || !pause || targetHasView)
             return FullScreenAction.Run;
+        if (command == AppCommand.PickPipSource)
+            return allowPip && state == FullScreenState.Busy ? FullScreenAction.Run : FullScreenAction.Refuse;
         if (command != AppCommand.OpenPip)
             return FullScreenAction.Refuse;
         if (allowPip && state == FullScreenState.Busy)

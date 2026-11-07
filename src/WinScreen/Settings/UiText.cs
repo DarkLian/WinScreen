@@ -219,5 +219,20 @@ public static class UiText
                                    "{0}" was minimized, so it was restored to start its view.|“{0}”已最小化，因此已将其还原以开始预览。|「{0}」已最小化，因此已將其還原以開始預覽。
                                    Still allow opening Picture-in-Picture in full-screen apps|仍允许在全屏应用中打开画中画|仍允許在全螢幕應用程式中開啟子母畫面
                                    Views can't reliably appear over exclusive full-screen apps. Use borderless or windowed mode.|预览无法可靠地显示在独占全屏应用上方。请使用无边框或窗口模式。|預覽無法可靠地顯示在獨占全螢幕應用程式上方。請使用無邊框或視窗模式。
+                                   Choose what to show|选择显示内容|選擇顯示內容
+                                   Picture-in-Picture views|画中画预览|子母畫面預覽
+                                   Close|关闭|關閉
+                                   Displays|显示器|顯示器
+                                   Open|打开|開啟
+                                   Search by title or program|按标题或程序搜索|依標題或程式搜尋
+                                   Select a region...|选择区域...|選取區域...
+                                   (main)|（主显示器）|（主顯示器）
+                                   (minimized, will be restored)|（已最小化，将被还原）|（已最小化，將被還原）
+                                   Display {0}|显示器 {0}|顯示器 {0}
+                                   Display {0} region|显示器 {0} 区域|顯示器 {0} 區域
+                                   That display is no longer available.|该显示器已不可用。|該顯示器已無法使用。
+                                   Screen capture stopped, so this view closed.|屏幕捕获已停止，因此此预览已关闭。|螢幕擷取已停止，因此此預覽已關閉。
+                                   This version of Windows can't show a view of the screen.|此版本的 Windows 无法显示屏幕预览。|此版本的 Windows 無法顯示螢幕預覽。
+                                   Drag: move • Wheel: resize • Ctrl+drag: crop • Right-click: menu|拖动：移动 • 滚轮：调整大小 • Ctrl+拖动：裁剪 • 右键：菜单|拖曳：移動 • 滾輪：調整大小 • Ctrl+拖曳：裁切 • 右鍵：選單
                                    """;
 }

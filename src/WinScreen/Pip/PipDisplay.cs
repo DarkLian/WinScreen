@@ -22,6 +22,12 @@ internal static partial class PipDisplay
     [LibraryImport("user32.dll")]
     internal static partial nint MonitorFromWindow(nint hwnd, uint flags = 2);
 
+    [LibraryImport("user32.dll")]
+    private static partial nint MonitorFromPoint(Native.NativePoint point, uint flags);
+
+    internal static nint MonitorOf(Screen screen) =>
+        MonitorFromPoint(new Native.NativePoint { X = screen.Bounds.Left, Y = screen.Bounds.Top }, 2);
+
     // DEVMODEW's display union is 16 bytes; the full layout must be retained for EnumDisplaySettings.
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct DisplayMode

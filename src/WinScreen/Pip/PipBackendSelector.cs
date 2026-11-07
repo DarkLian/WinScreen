@@ -109,7 +109,16 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         _dwm?.SetSelection(_selection);
     }
 
+    /// <exception cref="WindowOperationException">The source is gone, or a source with nothing to fall back on can't be shown.</exception>
     internal void Poll(Size client)
+    {
+        PollCapture(client);
+        if (_dwm is null && _policy.Pinned)
+            throw new WindowOperationException(T("Screen capture stopped, so this view closed.") +
+                                               (_lastDiagnostics.Failure is { } failure ? " " + failure : ""));
+    }
+
+    private void PollCapture(Size client)
     {
         if (_disposed) return;
         _source.Require();
@@ -143,7 +152,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
             _lastDiagnostics.Failure = "Capture/render worker exceeded its progress deadline.";
             // A hung driver cannot be forcibly disposed. Keep one retiring worker and never allocate another beside it.
             _policy.Pin(Stopwatch.GetTimestamp());
-            if (!_warned) { _warned = true; Problem?.Invoke(T("Advanced PiP unavailable; using Compatibility (DWM).")); }
+            if (!_warned && _dwm is not null) { _warned = true; Problem?.Invoke(T("Advanced PiP unavailable; using Compatibility (DWM).")); }
             return;
         }
         if (advanced.State == PipSessionState.Failed && advanced.Completion.IsCompleted)
@@ -163,7 +172,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
             else
             {
                 _restart = false;
-                if (!_warned)
+                if (!_warned && _dwm is not null)
                 {
                     _warned = true;
                     Problem?.Invoke(T("Advanced PiP unavailable; using Compatibility (DWM).") + " " + _lastDiagnostics.Failure);
@@ -202,7 +211,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         {
             _policy.Pin(Stopwatch.GetTimestamp());
             _lastDiagnostics.Failure = $"{e.GetType().Name} 0x{e.HResult:X8}";
-            if (!_warned) { _warned = true; Problem?.Invoke(T("Advanced PiP unavailable; using Compatibility (DWM).")); }
+            if (!_warned && _dwm is not null) { _warned = true; Problem?.Invoke(T("Advanced PiP unavailable; using Compatibility (DWM).")); }
         }
         UpdateAdvanced();
     }

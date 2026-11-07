@@ -70,6 +70,13 @@ Anchors are also removed when their target window is destroyed, when restoring a
 
 Press **Ctrl+Alt+P** to open a live view. The original window keeps its real size.
 
+To show something else, right-click the tray icon and choose **Picture-in-Picture views → Choose what to show**.
+You can search for a window, pick a whole display, or use **Select a region** and drag out part of a display.
+Select a display first to choose which one; otherwise the region comes from the display under the pointer.
+You can give this command a hotkey in Settings. Views of a display or region use Advanced capture, whatever
+the rendering setting says, and show the pointer. Windows shows its capture border while they are open.
+Close them with their ✕, their menu, or the tray's **Picture-in-Picture views** list.
+
 In Settings → **Picture-in-Picture**, choose **Auto**, **Compatibility (DWM)** or **Advanced (WGC)**.
 Existing settings keep Compatibility until you change it. New installations use Auto, which shows DWM first and
 switches only after advanced capture has presented a frame. Advanced capture keeps Windows' capture indicator;
@@ -243,3 +250,6 @@ These are limits of the current version, listed so you can decide before you rel
 - **Dark, Glass, and Crop:** results depend on how each app draws.
 - **Compatibility mode:** WinScreen can only tell that a source is minimized, not that it has otherwise stopped updating. In Advanced mode, **No new picture** can also mean the source is simply idle.
 - **Full-screen apps:** commands stay paused unless you opt in, but views can always be closed.
+- **Display and region views:** they need Advanced capture and have no Compatibility fallback, and Windows shows its capture border. If capture stops, the view closes.
+- **Screen sharing:** display and region views don't appear in your own screenshots or screen sharing, because otherwise a view would capture itself.
+- **Regions:** a region stays on one display.

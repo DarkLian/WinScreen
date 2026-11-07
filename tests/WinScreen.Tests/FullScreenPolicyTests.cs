@@ -50,6 +50,14 @@ public sealed class FullScreenPolicyTests
     }
 
     [Fact]
+    public void Choosing_a_source_follows_the_same_opt_in()
+    {
+        Assert.Equal(FullScreenAction.Refuse, Decide(AppCommand.PickPipSource, FullScreenState.Busy, anyViewOpen: true));
+        Assert.Equal(FullScreenAction.Run, Decide(AppCommand.PickPipSource, FullScreenState.Busy, allowPip: true));
+        Assert.Equal(FullScreenAction.Refuse, Decide(AppCommand.PickPipSource, FullScreenState.Exclusive, allowPip: true));
+    }
+
+    [Fact]
     public void Turning_pause_off_lets_everything_run()
     {
         foreach (FullScreenState state in Enum.GetValues<FullScreenState>())

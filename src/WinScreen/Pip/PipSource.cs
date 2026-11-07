@@ -1,3 +1,4 @@
+using static WinScreen.Settings.UiText;
 using Windows.Graphics.Capture;
 using WinScreen.Native;
 using WinScreen.Windows;
@@ -54,4 +55,48 @@ internal sealed class WindowPipSource(WindowIdentity identity) : PipSource
     public override Point CaptureOrigin(Rectangle whole) => whole.Location;
     public override GraphicsCaptureItem CreateItem() => WgcInterop.Item(identity.Window);
     public override void Require() => identity.Require();
+}
+
+/// <summary>
+/// A whole display, or one rectangle of it. Displays are remembered by device name because a monitor
+/// handle doesn't survive display changes. A region is a crop of the display, in physical pixels
+/// measured from the display's corner, and it stays on that one display.
+/// </summary>
+internal sealed class ScreenPipSource(string device, Rectangle? region) : PipSource
+{
+    public string Device => device;
+    public Rectangle? Region => region;
+    private Screen? Display => Screen.AllScreens.FirstOrDefault(screen => screen.DeviceName == device);
+
+    public override string Title => region is null
+        ? string.Format(T("Display {0}"), Number)
+        : string.Format(T("Display {0} region"), Number);
+
+    private string Number => new(device.Where(char.IsAsciiDigit).ToArray());
+
+    public override nint Window => 0;
+    public override bool IsAvailable => Display is { } display && !Clamped(display.Bounds.Size).IsEmpty;
+    public override bool IsMinimized => false;
+    public override bool ShowsCursor => true;
+    public override Screen Screen => Display ?? Screen.PrimaryScreen!;
+    public override nint Monitor => PipDisplay.MonitorOf(Screen);
+    public override int Dpi => Native.Dpi.Default * Native.Dpi.ScaleOf(Monitor) / 100;
+    public override int RefreshRate => PipDisplay.CachedRefresh(device);
+    public override Size SurfaceSize => Screen.Bounds.Size;
+    public override Rectangle Whole(Size surface) => Clamped(surface);
+    public override Point CaptureOrigin(Rectangle whole) => Point.Empty;
+    public override GraphicsCaptureItem CreateItem() => WgcInterop.ItemForMonitor(Monitor);
+
+    public override void Require()
+    {
+        if (!IsAvailable)
+            throw new WindowOperationException(T("That display is no longer available."));
+    }
+
+    /// <summary>What's left of the region on a display of this size; a region off the display is empty.</summary>
+    internal Rectangle Clamped(Size display)
+    {
+        var all = new Rectangle(Point.Empty, display);
+        return region is { } part ? Rectangle.Intersect(part, all) : all;
+    }
 }

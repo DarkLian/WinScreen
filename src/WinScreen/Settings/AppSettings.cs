@@ -21,6 +21,7 @@ public enum AppCommand
     ToggleShrink,
     ToggleCrop,
     RestoreWindow,
+    PickPipSource,
 }
 
 /// <summary>What a program's windows get automatically. Click-through and Glass are left out on purpose:
@@ -65,6 +66,12 @@ public static class CommandCatalog
         AppCommand.RestoreWindow, AppCommand.RestoreAll,
     ];
 
+    /// <summary>Commands with a place in the tray and Hotkeys but no toolbar button.</summary>
+    public static readonly AppCommand[] Extra = [AppCommand.PickPipSource];
+
+    /// <summary>Everything that can have a hotkey.</summary>
+    public static IEnumerable<AppCommand> All => Ordered.Concat(Extra);
+
     /// <summary>The last command of each group, where a divider follows.</summary>
     public static bool EndsGroup(AppCommand command) =>
         command is AppCommand.ToggleClickThrough or AppCommand.ToggleCrop or AppCommand.SaveWindowSetup;
@@ -88,6 +95,7 @@ public static class CommandCatalog
         AppCommand.SaveWindowSetup => "Remember setup",
         AppCommand.RestoreWindow => "Restore this window",
         AppCommand.RestoreAll => "Restore all windows",
+        AppCommand.PickPipSource => "Choose what to show",
         _ => command.ToString(),
     });
 }

@@ -449,8 +449,9 @@ public sealed class SettingsWindow : Form
         var table = new TableLayoutPanel { ColumnCount = 2, Dock = DockStyle.Fill, AutoScroll = true };
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 255));
-        table.RowCount = CommandCatalog.Ordered.Length + 1; // The spare row takes the leftover height.
-        foreach (AppCommand command in CommandCatalog.Ordered)
+        AppCommand[] commands = CommandCatalog.All.ToArray();
+        table.RowCount = commands.Length + 1; // The spare row takes the leftover height.
+        foreach (AppCommand command in commands)
         {
             table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var box = new TextBox { ReadOnly = true, Dock = DockStyle.Fill, ShortcutsEnabled = false };

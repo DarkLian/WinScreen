@@ -17,9 +17,11 @@ public sealed class CropOverlay : Form
     private bool _pressed;
     private bool _finished;
     private Rectangle _selection;
+    private readonly Rectangle _covers;
 
     public CropOverlay(Rectangle window)
     {
+        _covers = window;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
@@ -38,6 +40,13 @@ public sealed class CropOverlay : Form
     {
         Show();
         WindowController.Pin(Handle);
+    }
+
+    /// <summary>Moving onto a monitor with other scaling must not change what's covered.</summary>
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(e);
+        Bounds = _covers;
     }
 
     protected override void OnPaint(PaintEventArgs e)

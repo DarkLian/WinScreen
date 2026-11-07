@@ -183,8 +183,8 @@ public class SettingsTests
     [Fact]
     public void Every_command_has_one_place_and_a_name()
     {
-        Assert.Equal(Enum.GetValues<AppCommand>().Length, CommandCatalog.Ordered.Distinct().Count());
-        Assert.All(CommandCatalog.Ordered,
+        Assert.Equal(Enum.GetValues<AppCommand>().Length, CommandCatalog.All.Distinct().Count());
+        Assert.All(CommandCatalog.All,
             command => Assert.NotEqual(command.ToString(), CommandCatalog.Name(command)));
     }
 

@@ -26,6 +26,7 @@ public sealed class PipWindow : Form
     private const int WM_MOUSEACTIVATE = 0x0021;
     private const int MA_NOACTIVATE = 3;
     private const int WM_DISPLAYCHANGE = 0x007E;
+    private const int MinimumExclusionBuild = 19041;
 
     private static readonly Color Accent = Color.FromArgb(79, 140, 255);
 
@@ -83,8 +84,9 @@ public sealed class PipWindow : Form
         StartPosition = FormStartPosition.Manual;
         Text = T("PiP - ") + source.Title;
         _longSide = Dpi.Scale(StartLongSide, source.Dpi);
-        _tips.SetToolTip(this,
-            T("Click: go to the original • Drag: move • Wheel: resize • Ctrl+drag: crop • Right-click: menu"));
+        _tips.SetToolTip(this, source.IsWindow
+            ? T("Click: go to the original • Drag: move • Wheel: resize • Ctrl+drag: crop • Right-click: menu")
+            : T("Drag: move • Wheel: resize • Ctrl+drag: crop • Right-click: menu"));
 
         _hideItem = new ToolStripMenuItem(T("&Keep updating (hide original)"), null,
             (_, _) => SetOriginalHidden(!_hideItem!.Checked));
@@ -151,6 +153,7 @@ public sealed class PipWindow : Form
             User32.ShowWindow(_source, User32.SW_SHOWNOACTIVATE);
         try
         {
+            KeepOutOfScreenCapture();
             _thumbnail = new PipBackendSelector(_origin, Handle, _preferences);
             _thumbnail.Problem += text => Problem?.Invoke(text);
             OpenInFreeSpot(_thumbnail);
@@ -195,6 +198,25 @@ public sealed class PipWindow : Form
         using (dialog) dialog.ShowDialog();
     }
 
+    /// <summary>
+    /// A view of the screen would otherwise show itself, and then show that, without end. Windows only
+    /// honours this from version 2004; before that the view would appear as a black box instead.
+    /// </summary>
+    private void KeepOutOfScreenCapture()
+    {
+        if (_origin.IsWindow)
+            return;
+        if (Environment.OSVersion.Version.Build < MinimumExclusionBuild ||
+            !User32.SetWindowDisplayAffinity(Handle, User32.WDA_EXCLUDEFROMCAPTURE))
+            throw new WindowOperationException(T("This version of Windows can't show a view of the screen."));
+    }
+
+    private void KeepPartOutOfScreenCapture(Form part)
+    {
+        if (!_origin.IsWindow)
+            User32.SetWindowDisplayAffinity(part.Handle, User32.WDA_EXCLUDEFROMCAPTURE);
+    }
+
     /// <summary>Crops the view to a part of the source window, or shows all of it when empty.</summary>
     /// <param name="crop">The part to show, measured from the window's visible top-left corner.</param>
     public void SetCrop(Rectangle crop)
@@ -210,7 +232,7 @@ public sealed class PipWindow : Form
     /// </summary>
     public void SetAutoMove(bool on)
     {
-        if (!User32.SetWindowDisplayAffinity(Handle, on ? User32.WDA_EXCLUDEFROMCAPTURE : User32.WDA_NONE))
+        if (!User32.SetWindowDisplayAffinity(Handle, on || !_origin.IsWindow ? User32.WDA_EXCLUDEFROMCAPTURE : User32.WDA_NONE))
         {
             Problem?.Invoke(T("This version of Windows can't move the view by itself."));
             return;
@@ -692,7 +714,12 @@ public sealed class PipWindow : Form
         }
 
         int size = Dpi.Scale(CloseButtonSize, DeviceDpi);
-        _closeButton ??= new PipCloseButton(this, T("&Close PiP").Replace("&", ""), size);
+        if (_closeButton is null)
+        {
+            _closeButton = new PipCloseButton(this, T("&Close PiP").Replace("&", ""), size);
+            KeepPartOutOfScreenCapture(_closeButton);
+        }
+
         _closeButton.Location = new Point(Right - size - PipGeometry.Border, Top + PipGeometry.Border);
         if (_closeButton.Visible)
             return;
@@ -716,6 +743,7 @@ public sealed class PipWindow : Form
         {
             _chip = new PipStateChip(this);
             _chip.Chosen += KeepUpdating;
+            KeepPartOutOfScreenCapture(_chip);
         }
 
         _chip.Show(state, new Point(Left + PipGeometry.Border, Bottom - PipGeometry.Border));

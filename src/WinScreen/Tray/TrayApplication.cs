@@ -44,6 +44,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = 30_000 };
     private readonly AutomaticUpdates _updates;
     private SettingsWindow? _settingsWindow;
+    private PipSourcePicker? _picker;
     private CropOverlay? _cropping;
 
     public TrayApplication(WindowController windows, AppSettings settings, string settingsPath)
@@ -115,6 +116,7 @@ public sealed class TrayApplication : ApplicationContext
                 menu.Items.Add(new ToolStripSeparator());
         }
 
+        menu.Items.Add(BuildViewsMenu());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(T("Settings"), null, (_, _) => OpenSettings());
         menu.Items.Add(T("Check for updates"), null, async (_, _) => await CheckForUpdates());
@@ -143,6 +145,24 @@ public sealed class TrayApplication : ApplicationContext
             }
         };
         return menu;
+    }
+
+    /// <summary>What can be opened, and the views that are open, which may have no original to act from.</summary>
+    private ToolStripMenuItem BuildViewsMenu()
+    {
+        var views = new ToolStripMenuItem(T("Picture-in-Picture views"));
+        views.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
+        views.DropDownOpening += (_, _) =>
+        {
+            views.DropDownItems.Clear();
+            views.DropDownItems.Add(CommandCatalog.Name(AppCommand.PickPipSource) + "...", null,
+                (_, _) => Run(AppCommand.PickPipSource, 0));
+            if (_viewsInOrder.Count > 0)
+                views.DropDownItems.Add(new ToolStripSeparator());
+            foreach (PipWindow view in _viewsInOrder)
+                views.DropDownItems.Add(T("Close") + ": " + MenuText(view.Text), null, (_, _) => view.Close());
+        };
+        return views;
     }
 
     /// <summary>
@@ -208,7 +228,7 @@ public sealed class TrayApplication : ApplicationContext
         _toolbar.Enable(_settings.ShowToolbar);
         _updates.SetEnabled(_settings.AutomaticUpdates);
         _updateTimer.Interval = 30_000;
-        foreach (var pip in _pips.Values)
+        foreach (PipWindow pip in _viewsInOrder)
         {
             pip.ApplyPipPreferences(_settings.Pip);
             pip.AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding;
@@ -232,7 +252,7 @@ public sealed class TrayApplication : ApplicationContext
         desired = [];
         var problems = new List<HotkeyProblem>();
         var used = new Dictionary<(uint, Keys), AppCommand>();
-        foreach (AppCommand command in CommandCatalog.Ordered)
+        foreach (AppCommand command in CommandCatalog.All)
         {
             string value = settings.Hotkeys.GetValueOrDefault(command, "");
             if (value.Length == 0)
@@ -518,7 +538,7 @@ public sealed class TrayApplication : ApplicationContext
             return;
         }
 
-        foreach (var preview in _pips.Values.ToArray()) preview.Close();
+        foreach (PipWindow preview in _viewsInOrder.ToArray()) preview.Close();
         foreach (var tile in _shrunk.Values.ToArray()) tile.Close();
         _dark.TurnAllOff();
         _anchors.RemoveAll();
@@ -561,6 +581,12 @@ public sealed class TrayApplication : ApplicationContext
             case FullScreenAction.Refuse:
                 Alert(T("WinScreen couldn't do that"), T("Commands are paused while a full-screen app is running."));
                 return;
+        }
+
+        if (command == AppCommand.PickPipSource)
+        {
+            ShowPicker();
+            return;
         }
 
         if (!recovery && _windows.Refusal(window) is { } refusal)
@@ -607,26 +633,10 @@ public sealed class TrayApplication : ApplicationContext
                     }
 
                     if (_shrunk.Remove(window, out var tile)) tile.Close();
-                    var pip = new PipWindow(window, _windows)
-                    {
-                        AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding,
-                        AllowAutoMove = _settings.ExperimentalFeatures,
-                    };
+                    var pip = new PipWindow(window, _windows);
                     _pips[window] = pip;
-                    _viewsInOrder.Add(pip);
-                    pip.FormClosed += (_, _) =>
-                    {
-                        _pips.Remove(window);
-                        _viewsInOrder.Remove(pip);
-                    };
-                    pip.Problem += text => Alert(T("WinScreen couldn't do that"), text);
-                    pip.Notice += text => Alert(T("Picture-in-Picture"), text, ToolTipIcon.Info);
-                    pip.ApplyPipPreferences(_settings.Pip);
-                    pip.ShowOnTop();
-                    if (pip.IsDisposed) break;
-                    _dark.Ignore(pip.Handle);
-                    if (_settings.ExperimentalFeatures && _settings.PipAutoMove)
-                        pip.SetAutoMove(true);
+                    pip.FormClosed += (_, _) => _pips.Remove(window);
+                    OpenView(pip);
                     break;
                 case AppCommand.ToggleDark:
                     _dark.Toggle(window);
@@ -648,7 +658,7 @@ public sealed class TrayApplication : ApplicationContext
                     break;
                 case AppCommand.RestoreAll:
                     CancelCrop();
-                    foreach (var preview in _pips.Values.ToArray()) preview.Close();
+                    foreach (PipWindow preview in _viewsInOrder.ToArray()) preview.Close();
                     foreach (var shrunk in _shrunk.Values.ToArray()) shrunk.Close();
                     _dark.TurnAllOff();
                     _anchors.RemoveAll();
@@ -684,6 +694,76 @@ public sealed class TrayApplication : ApplicationContext
         catch (Exception failure) when (IsExpected(failure))
         {
             Alert(T("WinScreen couldn't do that"), failure.Message);
+        }
+    }
+
+    private void OpenView(PipWindow pip)
+    {
+        pip.AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding;
+        pip.AllowAutoMove = _settings.ExperimentalFeatures;
+        _viewsInOrder.Add(pip);
+        pip.FormClosed += (_, _) => _viewsInOrder.Remove(pip);
+        pip.Problem += text => Alert(T("WinScreen couldn't do that"), text);
+        pip.Notice += text => Alert(T("Picture-in-Picture"), text, ToolTipIcon.Info);
+        pip.ApplyPipPreferences(_settings.Pip);
+        pip.ShowOnTop();
+        if (pip.IsDisposed) return;
+        _dark.Ignore(pip.Handle);
+        if (_settings.ExperimentalFeatures && _settings.PipAutoMove)
+            pip.SetAutoMove(true);
+    }
+
+    private void OpenScreenView(ScreenPipSource source)
+    {
+        try
+        {
+            OpenView(new PipWindow(source, _windows));
+        }
+        catch (Exception failure) when (IsExpected(failure))
+        {
+            Alert(T("WinScreen couldn't do that"), failure.Message);
+        }
+    }
+
+    private void ShowPicker()
+    {
+        if (_picker is { IsDisposed: false })
+        {
+            _picker.Activate();
+            return;
+        }
+
+        var picker = new PipSourcePicker(window => _windows.CanControl(window) && !_pips.ContainsKey(window));
+        picker.WindowChosen += window => Run(AppCommand.OpenPip, window);
+        picker.ScreenChosen += device => OpenScreenView(new ScreenPipSource(device, null));
+        picker.RegionWanted += SelectRegion;
+        _picker = picker;
+        picker.FormClosed += (_, _) => _picker = null;
+        picker.Show();
+        picker.Activate();
+    }
+
+    private void SelectRegion(string device)
+    {
+        if (_cropping is { IsDisposed: false })
+            return;
+        var source = new ScreenPipSource(device, null);
+        var overlay = new CropOverlay(source.Screen.Bounds);
+        overlay.Chosen += part =>
+        {
+            if (_cropping != overlay) return;
+            _cropping = null;
+            OpenScreenView(new ScreenPipSource(device, part));
+        };
+        _cropping = overlay;
+        try
+        {
+            overlay.ShowOnTop();
+        }
+        catch
+        {
+            CancelCrop();
+            throw;
         }
     }
 
