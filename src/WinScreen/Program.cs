@@ -15,8 +15,14 @@ internal static class Program
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinScreen");
 
     [STAThread]
-    private static void Main()
+    private static void Main(string[] arguments)
     {
+        if (RecoveryWatcher.ParentFrom(arguments) is { } parent)
+        {
+            RecoveryWatcher.Watch(parent, RecoverLeftWindows);
+            return;
+        }
+
         VelopackApp.Build()
             .SetAutoApplyOnStartup(false)
             .OnBeforeUpdateFastCallback(_ => RunningInstance.Close())
@@ -41,7 +47,11 @@ internal static class Program
 
         var windows = new WindowController(settings.ExcludedPrograms,
             new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")));
-        windows.RecoverFromJournal();
+        using (Mutex recovery = RecoveryWatcher.ForRecovery(out bool held))
+        {
+            windows.RecoverFromJournal();
+            if (held) recovery.ReleaseMutex();
+        }
 
         // A crash must not leave someone's window see-through and impossible to click.
         AppDomain.CurrentDomain.ProcessExit += (_, _) => windows.RestoreAll();
@@ -55,5 +65,14 @@ internal static class Program
         };
 
         Application.Run(new TrayApplication(windows, settings, settingsPath));
+    }
+
+    /// <summary>What the watcher does after the app was killed: the same recovery as the next start.</summary>
+    private static void RecoverLeftWindows()
+    {
+        AppSettings settings = AppSettings.Load(Path.Combine(DataFolder, "settings.json"));
+        UiText.Initialize(settings.Language);
+        new WindowController(settings.ExcludedPrograms, new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")))
+            .RecoverFromJournal();
     }
 }

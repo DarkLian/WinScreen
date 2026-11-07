@@ -286,6 +286,20 @@ internal static partial class Desktop
 
     public static void MoveMouse(Point point) => SetCursorPos(point.X, point.Y);
 
+    /// <summary>Moves the pointer as input, so low-level hooks see it. Setting its position doesn't reach them.</summary>
+    public static void SlideMouse(Point point)
+    {
+        Rectangle screen = SystemInformation.VirtualScreen;
+        mouse_event(0x8001 | 0x4000, (uint)((point.X - screen.Left + 0.5) * 65536 / screen.Width),
+            (uint)((point.Y - screen.Top + 0.5) * 65536 / screen.Height), 0, 0);
+    }
+
+    /// <summary>Moves relative to now, with the system's pointer acceleration, as a real mouse does.</summary>
+    public static void NudgeMouse(int x, int y) => mouse_event(0x0001, unchecked((uint)x), unchecked((uint)y), 0, 0);
+
+    [DllImport("user32.dll")]
+    private static extern void mouse_event(uint flags, uint x, uint y, uint data, nuint extra);
+
     public static void MouseButton(bool down) => SendMouse(down ? MouseLeftDown : MouseLeftUp, 0);
 
     private static void Click(Point point)

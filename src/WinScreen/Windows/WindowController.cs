@@ -651,6 +651,43 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
+    /// <summary>
+    /// Makes a hidden window take real input while it stays invisible, just below its view. This is the
+    /// riskiest state there is: invisible, clickable, and larger than the view. It lasts one pointer visit.
+    /// The placement is journaled first, so a forced kill during a slide puts the window back.
+    /// </summary>
+    public void BeginInteractive(nint window, nint view)
+    {
+        lock (_gate)
+        {
+            ChangedWindow state = Track(window);
+            if (!state.Hidden)
+                throw new WindowOperationException(T("errors.pip.previewNotReady"));
+            if (state.PlacementBeforePeek is null)
+            {
+                state.PlacementBeforePeek = ReadPlacement(window);
+                SaveJournal();
+            }
+
+            WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
+            User32.SetWindowPos(window, view, 0, 0, 0, 0,
+                User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        }
+    }
+
+    /// <summary>First takes clicks away from the window, so it can't catch another, then returns it to its place.</summary>
+    public void EndInteractive(nint window)
+    {
+        lock (_gate)
+        {
+            if (!_changed.TryGetValue(window, out ChangedWindow? state) || !User32.IsWindow(window))
+                return;
+            WriteExStyle(window, ReadExStyle(window) | User32.WS_EX_TRANSPARENT);
+            FinishPeek(window, state);
+            SaveJournal();
+        }
+    }
+
     /// <summary>Sends a window back to where it was before <see cref="BeginPeek"/>.</summary>
     public void EndPeek(nint window)
     {
@@ -779,6 +816,11 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
+    private bool _anythingConcealed;
+
+    /// <summary>Raised when the first window is concealed and again when the last is revealed.</summary>
+    public event Action<bool>? ConcealmentChanged;
+
     private void SaveJournal()
     {
         PublishGestureState();
@@ -793,6 +835,14 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         {
             throw new WindowOperationException(
                 T("errors.recovery.saveFailedPrefix") + e.Message);
+        }
+
+        // After the save, so a watcher that starts now already has this window to recover.
+        bool concealed = _changed.Values.Any(state => state.Hidden);
+        if (concealed != _anythingConcealed)
+        {
+            _anythingConcealed = concealed;
+            ConcealmentChanged?.Invoke(concealed);
         }
     }
 

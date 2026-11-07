@@ -77,6 +77,10 @@ public sealed class PipWindow : Form
     private bool _interacting;
     private Rectangle _selection;
     private bool _cleaned;
+    private PipInteraction? _live;
+    private readonly System.Collections.Concurrent.ConcurrentQueue<PressOutcome> _pressOutcomes = new();
+    private nint _foregroundBeforeLive;
+    private readonly ToolStripMenuItem _interactiveItem;
     private const uint PrintFullContent = 2; // PW_RENDERFULLCONTENT: includes content drawn with the GPU.
 
     [System.ComponentModel.DefaultValue(false)]
@@ -85,6 +89,9 @@ public sealed class PipWindow : Form
     /// <summary>Whether this view offers to move itself, which is an experimental effect.</summary>
     [System.ComponentModel.DefaultValue(false)]
     public bool AllowAutoMove { get; set; }
+
+    [System.ComponentModel.DefaultValue(false)]
+    public bool AllowInteractive { get; set; }
 
     [System.ComponentModel.DefaultValue(false)]
     public bool AllowSwitcherHiding { get; set; }
@@ -116,6 +123,8 @@ public sealed class PipWindow : Form
             (_, _) => SetSwitcherHidden(!_windows.IsOutOfSwitcher(_source)));
         _autoMoveItem = new ToolStripMenuItem(T("pip.autoMove"), null,
             (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
+        _interactiveItem = new ToolStripMenuItem(T("pip.interactive"), null,
+            (_, _) => SetInteractive(!_interactiveItem!.Checked));
         var options = new ToolStripMenuItem(T("pip.options"));
         options.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
         options.DropDownOpening += (_, _) => FillOptions(options);
@@ -123,6 +132,7 @@ public sealed class PipWindow : Form
         _menu.Items.Add(_hideItem);
         _menu.Items.Add(_switcherItem);
         _menu.Items.Add(_autoMoveItem);
+        _menu.Items.Add(_interactiveItem);
         _goToItem = _menu.Items.Add(T("pip.goToOriginal"), null, (_, _) => GoToSource());
         _removeCropItem = new ToolStripMenuItem(T("pip.removeCrop"), null, (_, _) => SetCrop(Rectangle.Empty));
         _menu.Items.Add(_removeCropItem);
@@ -135,6 +145,7 @@ public sealed class PipWindow : Form
         {
             _retryItem.Visible = _thumbnail?.CanRetry == true;
             _autoMoveItem.Visible = AllowAutoMove;
+            _interactiveItem.Visible = AllowInteractive && _origin.IsWindow;
             _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
             _switcherItem.Visible = AllowSwitcherHiding && _origin.IsWindow;
             _switcherItem.Enabled = _origin.IsAvailable && _windows.IsHidden(_source);
@@ -232,6 +243,7 @@ public sealed class PipWindow : Form
     {
         if (_suspended || _cleaned) return;
         CancelPress();
+        EndLive();
         EndInteraction();
         _suspended = true;
         DropHoverPreview();
@@ -710,6 +722,8 @@ public sealed class PipWindow : Form
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
+        if (_interactiveItem.Checked && e.Button == MouseButtons.None && !_pressed)
+            BeginLive(e.Location);
         if (_panning && e.Button == MouseButtons.Middle)
         {
             Rectangle area = PipGeometry.ViewArea(ClientSize);
@@ -829,6 +843,7 @@ public sealed class PipWindow : Form
         _watch.Dispose();
         _autoMove.Dispose();
         ClaimEscape(false);
+        EndLive();
         // Teardown must never submit another draw: the source or destination HWND may already be gone.
         _selecting = false;
         _thumbnail?.Dispose();
@@ -907,6 +922,130 @@ public sealed class PipWindow : Form
             GoToSource();
             return;
         }
+    }
+
+    /// <summary>Turns direct use of this view on or off. It needs the original hidden: sliding a visible window around isn't acceptable.</summary>
+    internal void SetInteractive(bool on)
+    {
+        if (on)
+        {
+            if (!PressRules.SharedScaling(Screen.AllScreens.Select(ScreenDpi)))
+            {
+                Notice?.Invoke(T("pip.interactive.mixedDpi"));
+                return;
+            }
+
+            SetOriginalHidden(true);
+            if (!_windows.IsHidden(_source))
+                return;
+            if (_overrides.ClickThrough)
+                Overrides = _overrides with { ClickThrough = false };
+        }
+        else
+        {
+            EndLive();
+        }
+
+        _interactiveItem.Checked = on;
+    }
+
+    private static int ScreenDpi(Screen screen)
+    {
+        return Dpi.ScaleOf(User32.MonitorFromPoint(new NativePoint { X = screen.Bounds.Left, Y = screen.Bounds.Top }, 2));
+    }
+
+    internal PipInteraction? LiveInteraction => _live;
+
+    /// <summary>Every press's outcome over this view's life, so none can pass unnoticed in tests.</summary>
+    internal IReadOnlyCollection<PressOutcome> PressOutcomes => _pressOutcomes;
+
+    /// <summary>The pointer came onto the view. Everything that lets real input through exists from here until it leaves.</summary>
+    private void BeginLive(Point pointer)
+    {
+        if (_live is not null || _thumbnail is null || _suspended || !_origin.IsAvailable || !_windows.IsHidden(_source))
+            return;
+        Rectangle area = PipGeometry.ViewArea(ClientSize);
+        if (!area.Contains(pointer))
+            return;
+        _foregroundBeforeLive = User32.GetForegroundWindow();
+        var live = new PipInteraction(_source, RectangleToScreen(area), ShownPart(_thumbnail.SourceSize));
+        live.Left += () => BeginInvokeIfAlive(EndLive);
+        live.Pressed += _pressOutcomes.Enqueue;
+        live.ViewDragged += moved => BeginInvokeIfAlive(() => DragLiveView(moved));
+        try
+        {
+            _windows.BeginInteractive(_source, Handle);
+            SetInputPassesThrough(true);
+            live.Start(PointToScreen(pointer));
+            _live = live;
+        }
+        catch (WindowOperationException failure)
+        {
+            live.Dispose();
+            SetInputPassesThrough(false);
+            try { _windows.EndInteractive(_source); }
+            catch (WindowOperationException) { }
+            _interactiveItem.Checked = false;
+            Problem?.Invoke(failure.Message);
+        }
+    }
+
+    private void BeginInvokeIfAlive(Action action)
+    {
+        if (IsHandleCreated && !IsDisposed)
+            BeginInvoke(action);
+    }
+
+    private void DragLiveView(Size moved)
+    {
+        if (_live is null || _overrides.PositionLocked)
+            return;
+        Location += moved;
+        if (_thumbnail is not null)
+            _live.Update(RectangleToScreen(PipGeometry.ViewArea(ClientSize)), ShownPart(_thumbnail.SourceSize));
+    }
+
+    /// <summary>In this order: the source stops taking clicks, goes home, the hook goes, the view takes input, keys come back.</summary>
+    private void EndLive()
+    {
+        if (_live is not { } live)
+            return;
+        _live = null;
+        try
+        {
+            if (_origin.IsAvailable)
+                _windows.EndInteractive(_source);
+        }
+        catch (WindowOperationException failure)
+        {
+            Problem?.Invoke(failure.Message);
+        }
+
+        live.Dispose();
+        SetInputPassesThrough(false);
+        if (User32.GetForegroundWindow() == _source)
+        {
+            nint back = _foregroundBeforeLive != 0 && _foregroundBeforeLive != _source ? _foregroundBeforeLive : Handle;
+            User32.SetForegroundWindow(back); // Keys mustn't go to a window that can't be seen.
+        }
+
+        if (!IsDisposed)
+            StayOnTop();
+    }
+
+    private void SetInputPassesThrough(bool on)
+    {
+        if (!IsHandleCreated)
+            return;
+        if (!on)
+        {
+            ApplyClickThrough();
+            return;
+        }
+
+        const long both = User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT;
+        User32.SetWindowLongPtr(Handle, User32.GWL_EXSTYLE, (nint)(User32.GetWindowLongPtr(Handle, User32.GWL_EXSTYLE) | both));
+        User32.SetLayeredWindowAttributes(Handle, 0, _preferences.Alpha, User32.LWA_ALPHA);
     }
 
     private void EndInteraction()
@@ -1093,6 +1232,14 @@ public sealed class PipWindow : Form
             Problem?.Invoke(failure.Message);
             Close();
             return;
+        }
+
+        if (_live is not null && _thumbnail is not null)
+        {
+            _live.Update(RectangleToScreen(PipGeometry.ViewArea(ClientSize)), ShownPart(_thumbnail.SourceSize));
+            // Windows drops a hook it thinks is slow. The source must not stay clickable if that happens.
+            if (!Bounds.Contains(Cursor.Position) && MouseButtons == MouseButtons.None && !_live.InPopup)
+                EndLive();
         }
 
         if (_interacting && ShouldEndInteraction())

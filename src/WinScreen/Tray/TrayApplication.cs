@@ -33,6 +33,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly DarkMode _dark = new();
     private readonly AnchorSet _anchors = new();
     private readonly AutomaticAnchors _automaticAnchors;
+    private readonly RecoveryWatcher _recoveryWatcher = new();
     private readonly PinBorders _borders = new();
     private readonly ActionFlash _flash = new();
     private readonly Dictionary<nint, ShrinkTile> _shrunk = [];
@@ -92,6 +93,7 @@ public sealed class TrayApplication : ApplicationContext
                 catch (Exception failure) when (IsExpected(failure)) { Alert(T("errors.operation.title"), failure.Message); }
             });
         };
+        _windows.ConcealmentChanged += _recoveryWatcher.Follow;
         _automaticAnchors = new AutomaticAnchors(_anchors, CanHaveAutomaticAnchor, () => Paused || FullScreen.IsActive());
         _anchors.Created += _dark.Ignore;
         _anchors.HasView = _pips.ContainsKey;
@@ -304,7 +306,10 @@ public sealed class TrayApplication : ApplicationContext
             pip.ApplyViewPreferences(_settings.PipViews);
             pip.AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding;
             pip.AllowAutoMove = _settings.ExperimentalFeatures;
+            pip.AllowInteractive = _settings.ExperimentalFeatures;
+            if (!_settings.ExperimentalFeatures) pip.SetInteractive(false);
             pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;
+        pip.AllowInteractive = _settings.ExperimentalFeatures;
             if (!_settings.ExperimentalFeatures) pip.SetSwitcherHidden(false);
             if (!_settings.ExperimentalFeatures) pip.SetAutoMove(false);
         }
@@ -742,6 +747,7 @@ public sealed class TrayApplication : ApplicationContext
         _borders.Dispose();
         _dark.Dispose();
         _automaticAnchors.Dispose();
+        _recoveryWatcher.Dispose();
         _anchors.Dispose();
         _windowMenu?.Close();
         _modifierDrag.Dispose();

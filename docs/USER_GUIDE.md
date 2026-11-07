@@ -182,6 +182,8 @@ covered target cancels the click and falls back to **Go to original**. Failed mo
 cleanup retained for recovery. A maximized source stays maximized. This remains experimental because focus and real
 input cannot be made atomic with other applications; leave it off for sensitive or unsaved content.
 
+**Use this view directly** is a further experiment, in a view's menu while **Experimental effects** is on. It hides the original. While the pointer is on the view, the hidden window slides underneath it, so clicks, text selection, and the wheel reach the real app at the point you see. A press on the original's title bar or frame never reaches it and moves the view instead, as does Alt+drag. When the pointer leaves, the window goes back and keys return to the window you were using; a press just past the edge is ignored. Popups appear at their real position near the pointer, which can be outside the view. It isn't available across displays with different scaling, where **Go to original** remains. It has been tested with simulated input only, not yet with a physical mouse, so leave it off for sensitive or unsaved content.
+
 PiP usually keeps updating while its original is covered or hidden and closes when the original is destroyed.
 Browsers and apps built on them, such as Chrome, Edge and Discord, stop drawing while fully covered, so their view freezes.
 Choose **Keep updating (hide original)** from the view's menu to keep them live: a hidden original stays above other windows,
@@ -335,6 +337,7 @@ These are limits of the current version, listed so you can decide before you rel
 - **Windows:** WinScreen supports 64-bit Windows 11. Windows 10 is not supported or tested.
 - **Testing so far:** one 1920×1080 display at 100% scaling. Multiple monitors, mixed scaling, and other Windows editions are unverified.
 - **Administrator apps:** WinScreen can't change windows running as administrator.
+- **If WinScreen is killed:** while a window is hidden, a small second copy of WinScreen waits in the background and brings the window back within about two seconds if WinScreen is killed. It leaves when nothing is hidden. Ending the whole process tree stops both, and the next start still restores the window.
 - **Minimized apps:** a minimized app stops drawing, so its view shows the last picture. Windows gives WinScreen no new frames.
 - **Browsers and apps built on them:** these can stop drawing when another window fully covers them. **Keep updating (hide original)** keeps them updating.
 - **Keep updating (hide original):** the original keeps running and stays in Alt-Tab and the taskbar unless you enable the experimental option to hide both. It appears above other windows when shown again.

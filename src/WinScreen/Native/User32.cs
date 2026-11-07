@@ -127,6 +127,9 @@ internal static partial class User32
     [LibraryImport("gdi32.dll")]
     public static partial nint CreateDIBSection(nint context, in BitmapInfoHeader header, uint usage, out nint bits, nint section, uint offset);
 
+    [LibraryImport("user32.dll")]
+    public static partial nint MonitorFromPoint(NativePoint point, uint flags);
+
     public delegate void WinEventProc(nint hook, uint kind, nint window, int item, int child, uint thread, uint time);
 
     [LibraryImport("user32.dll")]

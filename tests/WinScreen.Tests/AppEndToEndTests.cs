@@ -776,6 +776,64 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.Equal(1, Desktop.CountProcessWindows(_app.Id, title => title.StartsWith("PiP - ", StringComparison.Ordinal)));
     }
 
+    private static int Copies() => Process.GetProcessesByName("WinScreen").Length;
+
+    private void ShrinkAndAwaitWatcher(TargetProcess target)
+    {
+        Focus(target);
+        Hotkey(Keys.W, target);
+        Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.IsConcealed(target.Handle)), "Shrink didn't hide the window.");
+        Assert.True(Desktop.WaitFor(() => Copies() == 2), "The watcher didn't start.");
+    }
+
+    [Fact]
+    public void A_forced_kill_reveals_a_hidden_window_within_two_seconds_and_the_watcher_leaves()
+    {
+        using var target = new TargetProcess(Spot);
+        ShrinkAndAwaitWatcher(target);
+        _app.Kill();
+        Assert.True(Desktop.WaitFor(() => !Windows.WindowInfo.IsConcealed(target.Handle), 2000), "The window stayed hidden.");
+        Assert.True(Desktop.WaitFor(() => Copies() == 0, 2000), "The watcher stayed.");
+        Assert.False(File.Exists(Path.Combine(_data, "changed-windows.json")));
+        _app.WaitForExit();
+        _app.Dispose();
+        _app = Start();
+        _appWindow = WaitForAppWindow();
+    }
+
+    [Fact]
+    public void The_watcher_goes_when_nothing_is_hidden_and_does_nothing_after_a_clean_exit()
+    {
+        using var target = new TargetProcess(Spot);
+        ShrinkAndAwaitWatcher(target);
+        Desktop.PostMessage(_appWindow, User32.WM_CLOSE, 0, 0);
+        Assert.True(_app.WaitForExit(4000));
+        Assert.False(Windows.WindowInfo.IsConcealed(target.Handle));
+        Assert.True(Desktop.WaitFor(() => Copies() == 0, 2000), "The watcher stayed after a clean exit.");
+        _app.Dispose();
+        _app = Start();
+        _appWindow = WaitForAppWindow();
+        Assert.Equal(1, Copies());
+    }
+
+    [Fact]
+    public void A_restart_racing_the_watcher_recovers_once_and_keeps_working()
+    {
+        using var target = new TargetProcess(Spot);
+        ShrinkAndAwaitWatcher(target);
+        _app.Kill();
+        _app.WaitForExit();
+        _app.Dispose();
+        _app = Start(); // Started at once, so it and the watcher reach the journal together.
+        _appWindow = WaitForAppWindow();
+        Assert.True(Desktop.WaitFor(() => !Windows.WindowInfo.IsConcealed(target.Handle), 2000));
+        Assert.True(Desktop.WaitFor(() => Copies() == 1, 2000), "The watcher stayed.");
+        Assert.False(File.Exists(Path.Combine(_data, "changed-windows.json")));
+        Focus(target);
+        Hotkey(Keys.T, target);
+        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST) != 0), "The new copy didn't work.");
+    }
+
     private nint WaitForPip()
     {
         nint pip = 0;

@@ -360,5 +360,7 @@
   "anchors.avoid": "將自動錨點移離文字和圖片",
   "anchors.avoid.help": "開啟後，錨點不會出現在螢幕擷取畫面或螢幕分享中。",
   "anchors.controls.view": "此視窗有檢視。",
-  "pip.taskbar.enable": "將最小化的檢視保留在工作列上"
+  "pip.taskbar.enable": "將最小化的檢視保留在工作列上",
+  "pip.interactive": "直接使用此檢視（實驗性）",
+  "pip.interactive.mixedDpi": "顯示器縮放比例不同時無法直接使用檢視。請改用「前往原視窗」。"
 }

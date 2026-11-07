@@ -360,5 +360,7 @@
   "anchors.avoid": "Move automatic Anchors off text and images",
   "anchors.avoid.help": "While this is on, Anchors don't appear in screenshots or screen sharing.",
   "anchors.controls.view": "This window has a view.",
-  "pip.taskbar.enable": "Keep minimized views on the taskbar"
+  "pip.taskbar.enable": "Keep minimized views on the taskbar",
+  "pip.interactive": "Use this view directly (experimental)",
+  "pip.interactive.mixedDpi": "Direct use isn't available across displays with different scaling. Use Go to original instead."
 }
