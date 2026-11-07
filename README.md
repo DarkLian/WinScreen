@@ -6,7 +6,8 @@ A free window helper for 64-bit Windows 11. No account, trial, or activation key
 Locally tested on Windows 11 Pro build 26300, one 1920×1080 display at 100% scaling. Other Windows editions, Windows 10,
 mixed DPI, and multiple monitors remain unverified.
 
-Keep a window on top, adjust its transparency, open a live Picture-in-Picture view, or jump to it with a floating Anchor.
+Keep a window on top, adjust its transparency, open a live Picture-in-Picture view of a window, display, or screen region,
+move and resize windows exactly, or jump to them with a floating Anchor.
 The interface supports English, 简体中文, and 繁體中文.
 
 ## Install
@@ -19,7 +20,7 @@ Uninstall through **Windows Settings → Apps → Installed apps**.
 
 ## Safety defaults
 
-PiP clicks bring the original window forward by default. Click forwarding, Dark, Glass, Crop, Shrink, and auto-move
+PiP clicks bring the original window forward by default. Click forwarding, Dark, Glass, Crop, Shrink, Roll up, and auto-move
 are experimental and must be explicitly enabled in Settings. Anchor right-click opens a normal context menu.
 Use **Ctrl+Alt+U** to restore one window or **Ctrl+Alt+R** to restore all. Recovery remains available for excluded windows.
 Problems always appear as a notification and stay in the tray's **Last result** item, even with confirmations turned off.
