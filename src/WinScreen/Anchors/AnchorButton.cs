@@ -1,0 +1,165 @@
+using static WinScreen.Settings.UiText;
+using WinScreen.Native;
+using WinScreen.Windows;
+
+namespace WinScreen.Anchors;
+
+/// <summary>
+/// A small floating button for one window. Left-click brings it forward, right-click minimizes it,
+/// middle-click closes it, and dragging a file over it brings it forward so the file can be dropped there.
+/// The button itself can be dragged anywhere.
+/// </summary>
+internal sealed class AnchorButton : Form
+{
+    public const int ButtonSize = 48;
+
+    private const int DragThreshold = 4;
+    private const int SW_MINIMIZE = 6;
+
+    private readonly nint _target;
+    private readonly Icon? _icon;
+    private readonly ToolTip _tip = new();
+    private readonly ContextMenuStrip _menu = new();
+    private Point _pressedAt;
+    private bool _pressed;
+    private bool _dragged;
+
+    public AnchorButton(nint target)
+    {
+        _target = target;
+        _icon = LoadIcon(target);
+        FormBorderStyle = FormBorderStyle.None;
+        ShowInTaskbar = false;
+        StartPosition = FormStartPosition.Manual;
+        BackColor = Color.FromArgb(32, 32, 32);
+        ClientSize = new Size(ButtonSize, ButtonSize);
+        AllowDrop = true;
+        DoubleBuffered = true;
+        Text = T("WinScreen anchor - ") + WindowInfo.Title(target);
+        _tip.SetToolTip(this, WindowInfo.Title(target) + Environment.NewLine +
+            T("Left: show • Right: minimize • Middle: close • Shift+right: menu"));
+        _menu.Items.Add(T("Show window"), null, (_, _) => BringForward());
+        _menu.Items.Add(T("Minimize window"), null, (_, _) => User32.ShowWindow(_target, SW_MINIMIZE));
+        _menu.Items.Add(T("Close window and remove Anchor"), null, (_, _) => CloseTarget());
+        _menu.Items.Add(new ToolStripSeparator());
+        _menu.Items.Add(T("Remove Anchor only"), null, (_, _) => Close());
+    }
+
+    public nint Target => _target;
+
+    protected override bool ShowWithoutActivation => true;
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            CreateParams parameters = base.CreateParams;
+            parameters.ExStyle |= (int)(User32.WS_EX_TOPMOST | User32.WS_EX_TOOLWINDOW);
+            return parameters;
+        }
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        if (_icon is not null)
+            e.Graphics.DrawIcon(_icon, new Rectangle(8, 8, 32, 32));
+        else
+            e.Graphics.DrawIcon(SystemIcons.Application, new Rectangle(8, 8, 32, 32));
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        _pressed = true;
+        _dragged = false;
+        _pressedAt = e.Location;
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (!_pressed || e.Button != MouseButtons.Left)
+            return;
+
+        if (_dragged || Math.Abs(e.X - _pressedAt.X) >= DragThreshold || Math.Abs(e.Y - _pressedAt.Y) >= DragThreshold)
+        {
+            _dragged = true;
+            Location = new Point(Left + e.X - _pressedAt.X, Top + e.Y - _pressedAt.Y);
+        }
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (!_pressed || _dragged)
+        {
+            _pressed = false;
+            return;
+        }
+
+        _pressed = false;
+        switch (e.Button)
+        {
+            case MouseButtons.Left:
+                BringForward();
+                break;
+            case MouseButtons.Right:
+                if ((ModifierKeys & Keys.Shift) != 0)
+                    _menu.Show(this, e.Location);
+                else
+                    User32.ShowWindow(_target, SW_MINIMIZE);
+                break;
+            case MouseButtons.Middle:
+                CloseTarget();
+                break;
+        }
+    }
+
+    private void CloseTarget()
+    {
+        // Close requests are asynchronous and apps may hide or cancel closing. Dismiss our shortcut
+        // independently; never force the app to quit or discard an unsaved-work prompt.
+        User32.PostMessage(_target, User32.WM_CLOSE, 0, 0);
+        Close();
+    }
+
+    protected override void OnDragEnter(DragEventArgs e)
+    {
+        base.OnDragEnter(e);
+        BringForward();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _icon?.Dispose();
+            _tip.Dispose();
+            _menu.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+
+    private void BringForward()
+    {
+        if (User32.IsIconic(_target))
+            User32.ShowWindow(_target, User32.SW_RESTORE);
+        User32.SetForegroundWindow(_target);
+    }
+
+    private static Icon? LoadIcon(nint target)
+    {
+        User32.GetWindowThreadProcessId(target, out uint processId);
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById((int)processId);
+            string? path = process.MainModule?.FileName;
+            return path is null ? null : Icon.ExtractAssociatedIcon(path);
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
+    }
+}

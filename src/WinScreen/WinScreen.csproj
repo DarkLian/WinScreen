@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UpdateRepository Condition="'$(UpdateRepository)' == ''">DarkLian/WinScreen</UpdateRepository>
+    <AssemblyName>WinScreen</AssemblyName>
+    <RootNamespace>WinScreen</RootNamespace>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\WinScreen.ico</ApplicationIcon>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="UpdateRepository" Value="$(UpdateRepository)" />
+    <EmbeddedResource Include="Updates\update-public-key.pem" LogicalName="WinScreen.UpdatePublicKey" Condition="Exists('Updates\update-public-key.pem')" />
+    <InternalsVisibleTo Include="WinScreen.Tests" />
+    <None Include="..\..\LICENSE" Link="LICENSE" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+</Project>

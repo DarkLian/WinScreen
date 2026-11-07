@@ -1,0 +1,37 @@
+# Build and test output
+bin/
+obj/
+dist/
+TestResults/
+
+# Local IDE settings and credentials
+.vs/
+.idea/
+*.user
+*.suo
+.mcp.json
+mcp.json
+.env
+.env.*
+*.key
+*.pem
+!src/WinScreen/Updates/update-public-key.pem
+*.pfx
+*.p12
+
+# Private development records
+capture/
+checks/
+inbox/
+investigation.cany/
+reference/
+agent-session.jsonl
+*.log
+craft.json
+feed.json
+questions.json
+usage.json
+
+# Local WinScreen runtime data
+/settings.json
+/changed-windows.json

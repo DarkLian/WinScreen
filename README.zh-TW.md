@@ -1,0 +1,66 @@
+# WinScreen
+
+[English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
+
+免費的 Windows 視窗工具，支援 64 位元 Windows 10（2004 及以上）與 Windows 11。無須帳號、試用期或啟用碼。
+
+可將視窗置頂、調整透明度、開啟即時子母畫面預覽，或透過浮動錨點快速切換至指定視窗。
+介面支援 English、简体中文與繁體中文。
+
+## 安裝
+
+發行版本後，從 [Releases](https://github.com/DarkLian/WinScreen/releases) 下載 **WinScreen-win-Setup.exe** 並執行。
+無須系統管理員權限，也無須另外安裝 .NET。啟動後，WinScreen 會在系統匣中執行。
+
+安裝程式尚未進行 Authenticode 程式碼簽章，Windows 可能顯示 SmartScreen 警告。請只執行你信任的安裝程式。
+解除安裝位置：**Windows 設定 → 應用程式 → 已安裝的應用程式**。
+
+## 快速開始
+
+1. 先啟用需要操作的視窗。
+2. 按 **Ctrl+Alt+T** 置頂，按 **Ctrl+Alt+P** 開啟子母畫面，或按 **Ctrl+Alt+A** 新增浮動錨點。
+3. 以滑鼠右鍵點選系統匣中的 WinScreen 圖示，開啟 **設定**，修改快捷鍵、語言、通知與其他選項。
+4. 按 **Ctrl+Alt+R**，或在系統匣選單中選擇 **還原所有視窗**，復原 WinScreen 對視窗的變更。
+
+將滑鼠停在目前視窗標題列的中間，也會顯示工具列。
+
+| 功能 | 預設快捷鍵 |
+| --- | --- |
+| 置頂／取消置頂原視窗 | Ctrl+Alt+T |
+| 開啟小型即時子母畫面預覽 | Ctrl+Alt+P |
+| 新增／移除浮動錨點 | Ctrl+Alt+A |
+| 切換預設透明度 | Ctrl+Alt+O |
+| 增加／減少不透明度 | Ctrl+Alt+Up / Down |
+| 開啟／關閉滑鼠穿透 | Ctrl+Alt+C |
+| 還原所有已變更的視窗 | Ctrl+Alt+R |
+
+完整快捷鍵、錨點操作、子母畫面互動、設定與疑難排解，請參閱 **[使用指南](docs/USER_GUIDE.zh-TW.md)**。
+
+## 更新
+
+手動升級時，先結束 WinScreen，再使用同一個 Windows 帳號執行新版安裝程式。通常無須先移除舊版；設定儲存在獨立目錄中。
+
+自動更新需要在設定中**主動開啟**。安裝版會在背景檢查新版本，驗證更新中繼資料的簽章與套件的雜湊值，
+並在正常結束時安裝，不會自動重新啟動。關閉此選項會取消待處理的更新工作與安裝。
+
+自動更新需要本儲存庫中已簽章的發行檔案。首次透過工作流程發行前，必須先設定更新簽章金鑰 Secret。
+目前尚未完成兩個已發行版本之間的實際升級驗證。
+
+更新中繼資料的簽章與安裝程式的 Windows 程式碼簽章是兩回事。安裝程式目前仍未進行 Authenticode 簽章。
+信任邊界與限制請參閱 **[安全說明（英文）](SECURITY.md)**。
+
+## 建置與貢獻
+
+需要 `global.json` 中指定的 .NET 10 SDK。
+
+```powershell
+.\build.ps1 -SkipInteractive
+```
+
+輸出檔案：`dist\release\WinScreen-win-Setup.exe`。
+測試、專案結構、發行簽章與已知限制請參閱 **[開發指南（英文）](docs/DEVELOPMENT.md)**。
+**[公開檔案清單（英文）](docs/PUBLIC_FILES.md)** 列出了準備提交至 GitHub 的原始碼檔案；安裝程式透過 Releases 散布，不提交至原始碼中。
+
+## 授權條款
+
+[MIT](LICENSE)。

@@ -1,0 +1,35 @@
+name: Release
+
+# Push a version tag to build the installer and publish it as a GitHub Release.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Build and package
+        shell: pwsh
+        run: ./build.ps1 -CI -Version "$($env:GITHUB_REF_NAME.TrimStart('v'))" -UpdateRepository $env:GITHUB_REPOSITORY
+      - name: Sign update feed
+        shell: pwsh
+        env:
+          WINSCREEN_UPDATE_SIGNING_KEY: ${{ secrets.WINSCREEN_UPDATE_SIGNING_KEY }}
+        run: |
+          if (-not $env:WINSCREEN_UPDATE_SIGNING_KEY) { throw 'The update signing secret is required for publishing.' }
+          dotnet run --project tools/WinScreen.UpdateSigning/WinScreen.UpdateSigning.csproj -c Release -- sign dist/release/releases.win.json src/WinScreen/Updates/update-public-key.pem
+          if ($LASTEXITCODE -ne 0) { throw 'Update signing failed.' }
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME (Get-ChildItem dist/release -File).FullName --title "WinScreen $env:GITHUB_REF_NAME" --generate-notes

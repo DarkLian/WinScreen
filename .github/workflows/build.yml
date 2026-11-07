@@ -1,0 +1,23 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      # Real-window tests need a signed-in desktop, so build servers run the logic tests only.
+      - run: ./build.ps1 -CI
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WinScreen-Setup
+          path: dist/release/WinScreen-win-Setup.exe
