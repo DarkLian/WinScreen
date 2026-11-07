@@ -256,8 +256,10 @@ is locked. WinScreen doesn't hook the keyboard for this. Add apps that use Alt+d
 
 ## Remember a program's setup
 
-Adjust pinning, opacity, and dark mode, then press **Ctrl+Alt+Shift+S**. Windows belonging to that program receive the setup
+Adjust pinning, opacity, and dark mode, open a view if you want one, then press **Ctrl+Alt+Shift+S**. Windows belonging to that program receive the setup
 the first time they come forward, including after a restart. Later manual changes stay changed.
+
+A saved view returns with its crop, size, place, and options for the first window of that program each session; other windows open no view unless you ask. If the view keeps updating, the original hides only after you first leave it, so a window never disappears as it opens. A crop follows the window's size. A view saved on a display that's gone opens on the nearest one.
 
 New setups are matched by executable path, which is displayed in Saved setups. Older name-only entries remain
 compatible until you resave them. A failed application retries after five seconds; successful setups are not reapplied.

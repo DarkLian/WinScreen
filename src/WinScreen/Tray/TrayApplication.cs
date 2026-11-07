@@ -38,6 +38,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly Dictionary<nint, PipWindow> _pips = [];
     private readonly List<PipWindow> _viewsInOrder = [];
     private readonly Dictionary<nint, WindowIdentity> _setupDone = [];
+    private readonly SavedViews _savedViews = new();
     private readonly Dictionary<nint, long> _setupRetryAt = [];
     private readonly ToolStripMenuItem _targetTitle = new() { Enabled = false };
     private readonly ToolStripMenuItem _statusItem = new();
@@ -411,6 +412,7 @@ public sealed class TrayApplication : ApplicationContext
     private void Watch()
     {
         nint foreground = User32.GetForegroundWindow();
+        _savedViews.ConcealIfLeft(foreground);
         if (_windows.CanControl(foreground))
         {
             if (_lastIdentity is null || _lastIdentity.Window != foreground || !_lastIdentity.IsSameWindow())
@@ -548,6 +550,8 @@ public sealed class TrayApplication : ApplicationContext
             if (setup.Alpha < 255) _windows.SetOpacity(window, setup.Alpha);
             identity.Require();
             if (_settings.ExperimentalFeatures && setup.Dark && !_dark.IsDark(window)) _dark.Toggle(window);
+            identity.Require();
+            RestoreSavedView(window, setup);
             _setupDone[window] = identity;
             _setupRetryAt.Remove(window);
         }
@@ -556,6 +560,23 @@ public sealed class TrayApplication : ApplicationContext
             _setupRetryAt[window] = Environment.TickCount64 + 5000;
             Alert(T("errors.operation.title"), failure.Message);
         }
+    }
+
+    /// <summary>
+    /// Brings back a saved view, for the first window of its program in this session. A view that keeps
+    /// updating doesn't hide its source yet: this window just opened and the person is about to use it.
+    /// </summary>
+    private void RestoreSavedView(nint window, ProgramSetup setup)
+    {
+        if (!_savedViews.ShouldOpen(setup, _pips.ContainsKey(window)))
+            return;
+        PipWindow pip = OpenViewOf(window);
+        if (pip.IsDisposed)
+            return;
+        pip.ApplyPreset(setup.View!);
+        _savedViews.Opened(setup);
+        if (setup.ViewKeepsUpdating)
+            _savedViews.ConcealOnLeaving(window, pip);
     }
 
     /// <summary>Saves how this window is now for its program, or forgets the program's setup if it has none.</summary>
@@ -570,6 +591,11 @@ public sealed class TrayApplication : ApplicationContext
             Alpha = _windows.OpacityOf(window),
             Dark = _dark.IsDark(window),
         };
+        if (_pips.TryGetValue(window, out PipWindow? view))
+        {
+            setup.View = view.CurrentPreset(program).Validated();
+            setup.ViewKeepsUpdating = view.KeepsUpdating;
+        }
 
         List<ProgramSetup> before = _settings.SavedSetups.ToList();
         bool hadSetup = _settings.SavedSetups.RemoveAll(saved =>
@@ -809,11 +835,7 @@ public sealed class TrayApplication : ApplicationContext
                         break;
                     }
 
-                    if (_shrunk.Remove(window, out var tile)) tile.Close();
-                    var pip = new PipWindow(window, _windows);
-                    _pips[window] = pip;
-                    pip.FormClosed += (_, _) => _pips.Remove(window);
-                    OpenView(pip);
+                    OpenViewOf(window);
                     break;
                 case AppCommand.Arrange:
                     ShowArrangeMenu(window);
@@ -967,6 +989,16 @@ public sealed class TrayApplication : ApplicationContext
         dialog.Controls.Add(box);
         dialog.Controls.Add(buttons);
         dialog.ShowDialog();
+    }
+
+    private PipWindow OpenViewOf(nint window)
+    {
+        if (_shrunk.Remove(window, out var tile)) tile.Close();
+        var pip = new PipWindow(window, _windows);
+        _pips[window] = pip;
+        pip.FormClosed += (_, _) => _pips.Remove(window);
+        OpenView(pip);
+        return pip;
     }
 
     private void OpenView(PipWindow pip)

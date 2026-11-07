@@ -228,6 +228,25 @@ public sealed class PipViewOptionTests
     }
 
     [Fact]
+    public void A_share_crop_fits_a_differently_sized_source_and_a_missing_display_stays_on_screen()
+    {
+        using var source = new TargetProcess(new(200, 160, 400, 300));
+        OnUiThread(pump =>
+        {
+            using PipWindow pip = Open(source.Handle, pump);
+            pip.ApplyPreset(new PipPreset
+            {
+                Name = "Shares", CropX = 1, CropY = 1, CropWidth = 2, CropHeight = 2,
+                CropShares = new(0.25, 0.5, 0.5, 0.25), Device = @"\\.\NoSuchDisplay", Left = 0.5, Top = 0.5,
+            });
+            pump(100);
+            Assert.Equal(new Rectangle(100, 150, 200, 75), pip.Crop);
+            Assert.Contains(Screen.AllScreens, screen => screen.WorkingArea.Contains(pip.Bounds));
+            pip.Close();
+        });
+    }
+
+    [Fact]
     public void A_crop_larger_than_the_source_still_shows_something()
     {
         using var source = new TargetProcess(new(200, 160, 400, 300));

@@ -395,21 +395,30 @@ public sealed class PipWindow : Form
     internal PipPreset CurrentPreset(string name)
     {
         (double left, double top) = PipGeometry.ToShares(Bounds, Screen.FromControl(this).WorkingArea);
+        Size whole = WholeSize();
         return new PipPreset
         {
             Name = name, CropX = _crop.X, CropY = _crop.Y, CropWidth = _crop.Width, CropHeight = _crop.Height,
             LongSide = _longSide, Device = Screen.FromControl(this).DeviceName, Left = left, Top = top,
             FrameRate = _overrides.FrameRate, OpacityPercent = _overrides.OpacityPercent, Scaling = _overrides.Scaling,
+            CropShares = PipCropShares.Of(_crop, whole), PositionLocked = _overrides.PositionLocked ? true : null,
         };
     }
+
+    /// <summary>The size a crop is measured against, or empty before the view has a picture.</summary>
+    private Size WholeSize() => _thumbnail is null ? Size.Empty : _origin.Whole(_thumbnail.SourceSize).Size;
+
+    /// <summary>Whether the original is hidden while this view keeps showing it.</summary>
+    internal bool KeepsUpdating => _hideItem.Checked;
 
     internal void ApplyPreset(PipPreset preset)
     {
         Overrides = _overrides with
         {
             FrameRate = preset.FrameRate, OpacityPercent = preset.OpacityPercent, Scaling = preset.Scaling,
+            PositionLocked = preset.PositionLocked ?? _overrides.PositionLocked,
         };
-        _crop = preset.Crop;
+        _crop = preset.CropFor(WholeSize());
         _zoom = PipGeometry.WholeView;
         if (preset.LongSide > 0)
             _longSide = preset.LongSide;

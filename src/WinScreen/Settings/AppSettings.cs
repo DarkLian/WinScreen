@@ -57,9 +57,15 @@ public sealed class ProgramSetup
     public bool Pinned { get; set; }
     public byte Alpha { get; set; } = 255;
     public bool Dark { get; set; }
+    [System.Text.Json.Serialization.JsonConverter(typeof(SavedViewConverter))]
+    public PipPreset? View { get; set; }
+    public bool ViewKeepsUpdating { get; set; }
 
     /// <summary>False when the setup leaves a window exactly as it opens, so it isn't worth keeping.</summary>
-    public bool ChangesAnything => Pinned || Alpha < 255 || Dark;
+    public bool ChangesAnything => Pinned || Alpha < 255 || Dark || View is not null;
+
+    /// <summary>What tells one program's setup from another's.</summary>
+    internal string Key => string.IsNullOrEmpty(ExecutablePath) ? Program : ExecutablePath;
 
     public override string ToString()
     {
@@ -70,6 +76,8 @@ public sealed class ProgramSetup
             parts.Add(string.Format(T("window.opacity.percent"), (int)Math.Round(Alpha * 100.0 / 255)));
         if (Dark)
             parts.Add(T("setups.dark"));
+        if (View is not null)
+            parts.Add(T("setups.view"));
         string location = string.IsNullOrWhiteSpace(ExecutablePath) ? "" : $" ({ExecutablePath})";
         return $"{Program}: {string.Join(", ", parts)}{location}";
     }

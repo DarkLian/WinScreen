@@ -216,14 +216,14 @@
   "settings.programs": "程式",
   "settings.save": "儲存(&S)",
   "settings.savedSetups": "已儲存的設定",
-  "settings.setups.help": "調整視窗後，按「記住設定」快捷鍵。該程式的視窗將自動套用置頂、透明度及深色模式。滑鼠穿透、玻璃、裁切及縮小不會儲存。",
+  "settings.setups.help": "依喜好設定視窗，然後按「記住設定」快捷鍵。此後該程式的視窗都會這樣啟動：置頂、半透明和深色。已開啟的檢視會在每次工作階段中為第一個視窗還原。滑鼠穿透、玻璃、裁切和縮小不會被記住。",
   "settings.startWithWindows": "登入時啟動 WinScreen",
   "settings.startupAndUpdates": "啟動與更新",
   "settings.title": "設定",
   "settings.toolbar.enable": "顯示視窗工具列",
   "settings.window.title": "WinScreen 設定",
   "settings.windows": "視窗",
-  "setups.changeWindowFirst": "請先置頂此視窗或變更其不透明度。",
+  "setups.changeWindowFirst": "請先置頂此視窗、變更其不透明度或開啟子母畫面檢視。",
   "setups.dark": "深色",
   "setups.nothingToRemember": "沒有可記住的內容",
   "setups.pinned": "置頂",
@@ -339,5 +339,6 @@
   "features.dragShortcut": "{0}+拖曳",
   "features.windowMenu": "滑鼠視窗選單",
   "features.opacityWheel": "滾輪不透明度",
-  "features.wheelShortcut": "Ctrl+Alt+滾輪"
+  "features.wheelShortcut": "Ctrl+Alt+滾輪",
+  "setups.view": "子母畫面檢視"
 }

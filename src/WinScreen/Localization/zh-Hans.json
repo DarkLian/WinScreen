@@ -216,14 +216,14 @@
   "settings.programs": "程序",
   "settings.save": "保存(&S)",
   "settings.savedSetups": "已保存的配置",
-  "settings.setups.help": "调整窗口后，按「记住配置」快捷键。该程序的窗口将自动应用置顶、透明度及深色模式。鼠标穿透、玻璃、裁剪及缩小不会保存。",
+  "settings.setups.help": "按喜欢的方式设置窗口，然后按“记住配置”快捷键。此后该程序的窗口都会这样启动：置顶、半透明和深色。已打开的视图会在每次会话中为第一个窗口恢复。鼠标穿透、玻璃、裁剪和缩小不会被记住。",
   "settings.startWithWindows": "登录时启动 WinScreen",
   "settings.startupAndUpdates": "启动与更新",
   "settings.title": "设置",
   "settings.toolbar.enable": "显示窗口工具栏",
   "settings.window.title": "WinScreen 设置",
   "settings.windows": "窗口",
-  "setups.changeWindowFirst": "请先置顶此窗口或更改其不透明度。",
+  "setups.changeWindowFirst": "请先置顶此窗口、更改其不透明度或打开画中画视图。",
   "setups.dark": "深色",
   "setups.nothingToRemember": "没有可记住的内容",
   "setups.pinned": "置顶",
@@ -339,5 +339,6 @@
   "features.dragShortcut": "{0}+拖动",
   "features.windowMenu": "鼠标窗口菜单",
   "features.opacityWheel": "滚轮不透明度",
-  "features.wheelShortcut": "Ctrl+Alt+滚轮"
+  "features.wheelShortcut": "Ctrl+Alt+滚轮",
+  "setups.view": "画中画视图"
 }

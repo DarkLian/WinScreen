@@ -46,7 +46,28 @@ public sealed class PipPreferences
 internal sealed record PipOverrides(int? FrameRate = null, int? OpacityPercent = null, PipScaling? Scaling = null,
     bool PositionLocked = false, bool ClickThrough = false);
 
-/// <summary>A named view setup. Null values follow Settings. A crop is in pixels of the source.</summary>
+/// <summary>A crop as shares of the whole source, so it still fits after the window is resized.</summary>
+public sealed record PipCropShares(double X, double Y, double Width, double Height)
+{
+    internal PipCropShares? Validated() =>
+        new[] { X, Y, Width, Height }.All(double.IsFinite) && X >= 0 && Y >= 0 && Width > 0 && Height > 0 &&
+        X + Width <= 1.0001 && Y + Height <= 1.0001 ? this : null;
+
+    internal static PipCropShares? Of(Rectangle crop, Size whole) => crop.IsEmpty || whole.Width <= 0 || whole.Height <= 0
+        ? null
+        : new PipCropShares((double)crop.X / whole.Width, (double)crop.Y / whole.Height,
+            (double)crop.Width / whole.Width, (double)crop.Height / whole.Height).Validated();
+
+    internal Rectangle Within(Size whole)
+    {
+        int left = (int)Math.Round(X * whole.Width), top = (int)Math.Round(Y * whole.Height);
+        return new Rectangle(left, top, Math.Max(1, (int)Math.Round(Width * whole.Width)),
+            Math.Max(1, (int)Math.Round(Height * whole.Height)));
+    }
+}
+
+/// <summary>A named view setup. Null values follow Settings. A crop is in pixels of the source,
+/// with shares alongside it in newer files; older files have pixels only and keep working.</summary>
 public sealed class PipPreset
 {
     public const int NameLimit = 60;
@@ -63,11 +84,17 @@ public sealed class PipPreset
     public int? FrameRate { get; set; }
     public int? OpacityPercent { get; set; }
     public PipScaling? Scaling { get; set; }
+    public PipCropShares? CropShares { get; set; }
+    public bool? PositionLocked { get; set; }
 
     [JsonIgnore]
     public Rectangle Crop => CropWidth > 0 && CropHeight > 0
         ? new Rectangle(CropX, CropY, CropWidth, CropHeight)
         : Rectangle.Empty;
+
+    /// <summary>The crop for a source of this size.</summary>
+    internal Rectangle CropFor(Size whole) =>
+        CropShares is { } shares && whole.Width > 0 && whole.Height > 0 ? shares.Within(whole) : Crop;
 
     /// <summary>This preset with its numbers in range, or null when it has no usable name.</summary>
     internal PipPreset? Validated()
@@ -85,8 +112,24 @@ public sealed class PipPreset
             FrameRate = FrameRate is { } rate ? (rate == 0 ? 0 : Math.Clamp(rate, 15, 480)) : null,
             OpacityPercent = OpacityPercent is { } opacity ? Math.Clamp(opacity, 10, 100) : null,
             Scaling = Scaling is { } scaling && Enum.IsDefined(scaling) ? scaling : null,
+            CropShares = CropShares?.Validated(),
+            PositionLocked = PositionLocked,
         };
     }
+}
+
+/// <summary>A damaged saved view is dropped. It must never cost the rest of the settings.</summary>
+internal sealed class SavedViewConverter : JsonConverter<PipPreset>
+{
+    public override PipPreset? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        try { return document.RootElement.Deserialize<PipPreset>()?.Validated(); }
+        catch (JsonException) { return null; }
+    }
+
+    public override void Write(Utf8JsonWriter writer, PipPreset value, JsonSerializerOptions options) =>
+        JsonSerializer.Serialize(writer, value);
 }
 
 /// <summary>One damaged preset is skipped. It must never cost the rest of the settings.</summary>

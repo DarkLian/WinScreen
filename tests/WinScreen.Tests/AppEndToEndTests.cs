@@ -742,6 +742,40 @@ public sealed class AppEndToEndTests : IDisposable
         return owner == _app.Id;
     }
 
+    [Fact]
+    public void A_saved_view_returns_after_a_restart_for_the_first_window_only()
+    {
+        using var first = new TargetProcess(Spot);
+        Focus(first);
+        Hotkey(Keys.P, first);
+        nint pip = WaitForPip();
+        Hotkey(Keys.S, first);
+        string settingsFile = Path.Combine(_data, "settings.json");
+        ProgramSetup setup = null!;
+        Assert.True(Desktop.WaitFor(() =>
+        {
+            setup = AppSettings.Load(settingsFile).SavedSetups.FirstOrDefault()!;
+            return setup?.View is not null;
+        }), "The view wasn't saved with the setup.");
+        Rectangle place = Desktop.BoundsOf(pip);
+
+        AppSettings saved = AppSettings.Load(settingsFile);
+        saved.SavedSetups[0].ViewKeepsUpdating = true;
+        RestartWith(saved);
+        Focus(first);
+        pip = WaitForPip();
+        Assert.Equal(place, Desktop.BoundsOf(pip));
+        Assert.Equal(first.Handle, User32.GetForegroundWindow());
+        Thread.Sleep(600); // Past the app's foreground watch: the source mustn't hide while it's in use.
+        Assert.False(Windows.WindowInfo.IsConcealed(first.Handle));
+
+        using var second = new TargetProcess(new Rectangle(640, 200, 300, 240));
+        Focus(second);
+        Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.IsConcealed(first.Handle)), "The source didn't hide after losing the foreground.");
+        Thread.Sleep(600);
+        Assert.Equal(1, Desktop.CountProcessWindows(_app.Id, title => title.StartsWith("PiP - ", StringComparison.Ordinal)));
+    }
+
     private nint WaitForPip()
     {
         nint pip = 0;

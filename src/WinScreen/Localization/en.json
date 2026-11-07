@@ -216,14 +216,14 @@
   "settings.programs": "Programs",
   "settings.save": "&Save",
   "settings.savedSetups": "Saved setups",
-  "settings.setups.help": "Set a window up the way you like it and press the Remember setup hotkey. Its program's windows then start that way: pinned, see-through and dark. Click-through, Glass, Crop and Shrink aren't remembered.",
+  "settings.setups.help": "Set a window up the way you like it and press the Remember setup hotkey. Its program's windows then start that way: pinned, see-through and dark. An open view comes back for the first window each session. Click-through, Glass, Crop and Shrink aren't remembered.",
   "settings.startWithWindows": "Start WinScreen when I sign in",
   "settings.startupAndUpdates": "Startup and updates",
   "settings.title": "Settings",
   "settings.toolbar.enable": "Show the window toolbar",
   "settings.window.title": "WinScreen Settings",
   "settings.windows": "Windows",
-  "setups.changeWindowFirst": "Pin this window or change its opacity first.",
+  "setups.changeWindowFirst": "Pin this window, change its opacity, or open a view first.",
   "setups.dark": "dark",
   "setups.nothingToRemember": "Nothing to remember",
   "setups.pinned": "pinned",
@@ -339,5 +339,6 @@
   "features.dragShortcut": "{0}+drag",
   "features.windowMenu": "Mouse window menu",
   "features.opacityWheel": "Opacity wheel",
-  "features.wheelShortcut": "Ctrl+Alt+wheel"
+  "features.wheelShortcut": "Ctrl+Alt+wheel",
+  "setups.view": "view"
 }

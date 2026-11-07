@@ -235,6 +235,19 @@ internal static partial class Desktop
                && Math.Abs(actual.B - expected.B) <= tolerance;
     }
 
+    public static int CountProcessWindows(int processId, Func<string, bool> titleMatches)
+    {
+        int count = 0;
+        EnumWindows((window, _) =>
+        {
+            User32.GetWindowThreadProcessId(window, out uint owner);
+            if (owner == processId && IsWindowVisible(window) && titleMatches(Windows.WindowInfo.Title(window)))
+                count++;
+            return true;
+        }, 0);
+        return count;
+    }
+
     public static nint FindProcessWindow(int processId, Func<string, bool> titleMatches)
     {
         nint found = 0;
