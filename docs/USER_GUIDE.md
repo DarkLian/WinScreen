@@ -107,6 +107,15 @@ Anchors are also removed when their target window is destroyed, when restoring a
 
 ### Picture-in-Picture controls
 
+The compact title bar appears on hover with the source title, icon, Minimize, and Close. Drag its title to move the view;
+position lock also applies to title-bar dragging. Minimize suspends the picture and hides the view; restore it from the
+tray's **Picture-in-Picture views → [view] → Restore view**. Its crop, position, size and options are kept.
+
+In **Settings → Picture-in-Picture**, choose **Hover preview → Whole view** or **Reading lens** for a window view.
+Rest the pointer on the picture briefly to open the preview. The lens follows the pointer within the picture;
+leaving the view dismisses it. Preview takes no focus or clicks. Display and region views have no hover preview.
+Hover preview is off by default, and click-through views have no hover controls.
+
 View titles follow the original window. Clicking an Anchor reveals a source hidden by its view before bringing it forward.
 If an original window is unresponsive and cannot be revealed, closing its view leaves the view open so it remains reachable.
 

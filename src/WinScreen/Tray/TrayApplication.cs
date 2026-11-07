@@ -211,6 +211,8 @@ public sealed class TrayApplication : ApplicationContext
             foreach (PipWindow view in _viewsInOrder)
             {
                 var item = new ToolStripMenuItem(MenuText(view.Text));
+                if (view.IsSuspended)
+                    item.DropDownItems.Add(T("pip.restoreView"), null, (_, _) => view.ResumeView());
                 item.DropDownItems.Add(new ToolStripMenuItem(T("window.clickThrough"), null,
                     (_, _) => view.Overrides = view.Overrides with { ClickThrough = !view.Overrides.ClickThrough })
                     { Checked = view.Overrides.ClickThrough });
@@ -292,6 +294,7 @@ public sealed class TrayApplication : ApplicationContext
         foreach (PipWindow pip in _viewsInOrder)
         {
             pip.ApplyPipPreferences(_settings.Pip);
+            pip.ApplyViewPreferences(_settings.PipViews);
             pip.AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding;
             pip.AllowAutoMove = _settings.ExperimentalFeatures;
             pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;
@@ -455,12 +458,14 @@ public sealed class TrayApplication : ApplicationContext
         _modifierDrag.MenuGesture = _settings.WindowMenuGesture;
         _modifierDrag.OpacityWheelEnabled = _settings.OpacityWheel;
         string program = WindowInfo.ProgramOf(foreground);
-        bool menuExcluded = _settings.ExcludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase) ||
+        bool programExcluded = _settings.ExcludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase) ||
+            (_settings.IncludedPrograms.Count > 0 && !_settings.IncludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase));
+        bool menuExcluded = programExcluded ||
                             _settings.WindowMenuExclusions.Contains(program, StringComparer.OrdinalIgnoreCase);
         bool run = ModifierHookPolicy.ShouldRun(
             (_settings.ModifierDrag && !_hookForegroundExcluded) ||
             ((_settings.WindowMenu || fallbackMenu) && !menuExcluded) ||
-            (_settings.OpacityWheel && !_settings.ExcludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase)),
+            (_settings.OpacityWheel && !programExcluded),
             FullScreen.Current(), WindowInfo.FillsMonitor(foreground), false, FullScreen.IsAway());
         if (!run && _windowMenu is { IsDisposed: false }) _windowMenu.Close();
         Point cursor = Cursor.Position;
@@ -486,6 +491,7 @@ public sealed class TrayApplication : ApplicationContext
     {
         string program = WindowInfo.ProgramOf(window);
         return _settings.ExcludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase) ||
+               (_settings.IncludedPrograms.Count > 0 && !_settings.IncludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase)) ||
                _settings.ModifierExclusions.Contains(program, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -979,6 +985,7 @@ public sealed class TrayApplication : ApplicationContext
         });
         pip.PresetRemoved += name => ChangePresets(presets => presets.RemoveAll(saved => saved.Name == name));
         pip.ApplyPipPreferences(_settings.Pip);
+        pip.ApplyViewPreferences(_settings.PipViews);
         pip.ShowOnTop();
         if (pip.IsDisposed) return;
         _dark.Ignore(pip.Handle);

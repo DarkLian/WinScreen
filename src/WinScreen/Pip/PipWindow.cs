@@ -47,6 +47,13 @@ public sealed class PipWindow : Form
     private readonly ContextMenuStrip _menu = new();
     private readonly ToolTip _tips = new() { ShowAlways = true };
     private PipCloseButton? _closeButton;
+    private PipTitleBar? _titleBar;
+    private PipHoverPreview? _hoverPreview;
+    private PipViewPreferences _viewPreferences = new();
+    private Point _hoverPoint;
+    private long _hoverSince;
+    private Icon? _sourceIcon;
+    private bool _suspended;
     private PipStateChip? _chip;
     private PipBackendSelector? _thumbnail;
     private PipPreferences _preferences = new() { Backend = PipBackendPreference.Dwm };
@@ -120,6 +127,7 @@ public sealed class PipWindow : Form
         _menu.Items.Add(T("pip.diagnostics.title"), null, (_, _) => ShowDiagnostics());
         _retryItem = new ToolStripMenuItem(T("pip.backend.retry"), null, (_, _) => _thumbnail?.Retry());
         _menu.Items.Add(_retryItem);
+        _menu.Items.Add(T("pip.minimize"), null, (_, _) => SuspendView());
         _menu.Items.Add(T("pip.close"), null, (_, _) => Close());
         _menu.Opening += (_, _) =>
         {
@@ -170,6 +178,8 @@ public sealed class PipWindow : Form
     public void ShowOnTop()
     {
         _origin.Require();
+        _sourceIcon ??= LoadSourceIcon();
+        Icon = _sourceIcon;
         // A minimized window has no shape or picture to show, so opening a view needs it back, and says so.
         bool restored = User32.IsIconic(_source);
         if (restored)
@@ -177,7 +187,7 @@ public sealed class PipWindow : Form
         try
         {
             KeepOutOfScreenCapture();
-            _thumbnail = new PipBackendSelector(_origin, Handle, _preferences);
+            _thumbnail = new PipBackendSelector(_origin, Handle, BackendPreferences());
             _thumbnail.Problem += text => Problem?.Invoke(text);
             OpenInFreeSpot(_thumbnail);
             ApplyClickThrough();
@@ -204,6 +214,69 @@ public sealed class PipWindow : Form
         Reconfigure();
     }
 
+    public void ApplyViewPreferences(PipViewPreferences preferences)
+    {
+        _viewPreferences = preferences.Validated();
+        _titleBar?.Dispose();
+        _titleBar = null;
+        _closeButton?.Dispose();
+        _closeButton = null;
+        DropHoverPreview();
+    }
+
+    internal bool IsSuspended => _suspended;
+
+    internal void SuspendView()
+    {
+        if (_suspended || _cleaned) return;
+        CancelPress();
+        EndInteraction();
+        _suspended = true;
+        DropHoverPreview();
+        _titleBar?.Hide();
+        _closeButton?.Hide();
+        _chip?.Hide();
+        _autoMove.Stop();
+        _thumbnail?.Dispose();
+        _thumbnail = null;
+        Hide();
+    }
+
+    internal void ResumeView()
+    {
+        if (!_suspended || _cleaned) return;
+        if (!_origin.IsAvailable) { Close(); return; }
+        try
+        {
+            _thumbnail = new PipBackendSelector(_origin, Handle, BackendPreferences());
+            _thumbnail.Problem += text => Problem?.Invoke(text);
+            _thumbnail.SetViewport(PipGeometry.ViewArea(ClientSize), _lastShown);
+            _suspended = false;
+            ApplyClickThrough();
+            Show();
+            StayOnTop();
+            if (_autoMoveItem.Checked) _autoMove.Start();
+        }
+        catch (WindowOperationException failure)
+        {
+            _thumbnail?.Dispose();
+            _thumbnail = null;
+            _suspended = true;
+            Problem?.Invoke(failure.Message);
+        }
+    }
+
+    private Icon LoadSourceIcon()
+    {
+        try
+        {
+            string path = _origin.IsWindow ? WindowInfo.ExecutablePath(_source) : "";
+            if (!string.IsNullOrEmpty(path) && Icon.ExtractAssociatedIcon(path) is { } icon) return icon;
+        }
+        catch (Exception failure) when (failure is ArgumentException or IOException or ExternalException or System.ComponentModel.Win32Exception) { }
+        return (Icon)SystemIcons.Application.Clone();
+    }
+
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal PipOverrides Overrides
     {
@@ -227,9 +300,12 @@ public sealed class PipWindow : Form
     {
         _preferences = _global.With(_overrides);
         // A view clicks can pass through is an overlay, so its opacity is real see-through, not a fade to black.
-        _thumbnail?.Configure(_overrides.ClickThrough ? _preferences.With(new PipOverrides(OpacityPercent: 100)) : _preferences);
+        _thumbnail?.Configure(BackendPreferences());
         ApplyClickThrough();
     }
+
+    private PipPreferences BackendPreferences() => _overrides.ClickThrough
+        ? _preferences.With(new PipOverrides(OpacityPercent: 100)) : _preferences;
 
     /// <summary>Click-through needs the layered style too, or Windows still gives this window the clicks.</summary>
     private void ApplyClickThrough()
@@ -393,8 +469,8 @@ public sealed class PipWindow : Form
 
     private void KeepPartOutOfScreenCapture(Form part)
     {
-        if (!_origin.IsWindow)
-            User32.SetWindowDisplayAffinity(part.Handle, User32.WDA_EXCLUDEFROMCAPTURE);
+        if ((!_origin.IsWindow || _autoMoveItem.Checked) && !User32.SetWindowDisplayAffinity(part.Handle, User32.WDA_EXCLUDEFROMCAPTURE))
+            throw new WindowOperationException(T("errors.pip.screenUnsupported"));
     }
 
     /// <summary>Crops the view to a part of the source window, or shows all of it when empty.</summary>
@@ -421,7 +497,9 @@ public sealed class PipWindow : Form
         }
 
         _autoMoveItem.Checked = on;
-        _autoMove.Enabled = on;
+        _autoMove.Enabled = on && !_suspended;
+        foreach (Form part in OwnedForms)
+            User32.SetWindowDisplayAffinity(part.Handle, on || !_origin.IsWindow ? User32.WDA_EXCLUDEFROMCAPTURE : User32.WDA_NONE);
     }
 
     /// <summary>Makes the original invisible, or brings it back. The view keeps updating either way.</summary>
@@ -697,6 +775,9 @@ public sealed class PipWindow : Form
         if (_hideItem.Checked && _origin.IsAvailable)
             SetOriginalHidden(false);
         _tips.Dispose();
+        DropHoverPreview();
+        _titleBar?.Dispose();
+        _sourceIcon?.Dispose();
         _closeButton?.Dispose();
         _chip?.Dispose();
         _menu.Dispose();
@@ -926,6 +1007,7 @@ public sealed class PipWindow : Form
 
         string title = T("pip.titlePrefix") + _origin.Title;
         if (Text != title) Text = title;
+        if (_suspended) return;
 
         try
         {
@@ -943,8 +1025,13 @@ public sealed class PipWindow : Form
             _hideItem.Checked = false;
         if (_pressed && MouseButtons == MouseButtons.None)
             CancelPress();
-        FollowPointer();
-        ShowState();
+        try { FollowPointer(); ShowState(); }
+        catch (WindowOperationException failure)
+        {
+            Problem?.Invoke(failure.Message);
+            Close();
+            return;
+        }
 
         if (_interacting && ShouldEndInteraction())
             EndInteraction();
@@ -964,14 +1051,39 @@ public sealed class PipWindow : Form
 
     /// <summary>Shows the close button while the pointer is on the view, and keeps it in the corner.</summary>
     private void FollowPointer()
+        => UpdateHover(Cursor.Position, Environment.TickCount64);
+
+    internal void UpdateHover(Point pointer, long now)
     {
-        bool over = Bounds.Contains(Cursor.Position);
+        bool over = Bounds.Contains(pointer) || _titleBar?.Dragging == true;
         ClaimEscape(_selecting);
-        if (!over || _interacting || _selecting || _pressed || _overrides.ClickThrough)
+        if (!over || _suspended || _interacting || _selecting || _pressed || _overrides.ClickThrough)
         {
             _closeButton?.Hide();
+            _titleBar?.Hide();
+            DropHoverPreview();
             return;
         }
+
+        if (_viewPreferences.CompactTitleBar)
+        {
+            if (_titleBar is null)
+            {
+                _titleBar = new PipTitleBar(this, () => _overrides.PositionLocked, SuspendView);
+                KeepPartOutOfScreenCapture(_titleBar);
+            }
+            _titleBar.UpdateTitle(_origin.Title, _sourceIcon);
+            _titleBar.Bounds = new Rectangle(Left + PipGeometry.Border, Top + PipGeometry.Border,
+                Width - 2 * PipGeometry.Border, Dpi.Scale(28, DeviceDpi));
+            if (!_titleBar.Visible) _titleBar.Show();
+        }
+        else ShowCloseButton();
+
+        FollowHoverPreview(pointer, now);
+    }
+
+    private void ShowCloseButton()
+    {
 
         int size = Dpi.Scale(CloseButtonSize, DeviceDpi);
         if (_closeButton is null)
@@ -986,6 +1098,53 @@ public sealed class PipWindow : Form
         _closeButton.Show();
         User32.SetWindowPos(_closeButton.Handle, User32.HWND_TOPMOST, 0, 0, 0, 0,
             User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+    }
+
+    private void DropHoverPreview()
+    {
+        _hoverPreview?.Dispose();
+        _hoverPreview = null;
+        _hoverSince = 0;
+    }
+
+    private void FollowHoverPreview(Point pointer, long now)
+    {
+        if (_viewPreferences.HoverPreview == Settings.PipHoverPreview.Off || !_origin.IsWindow || _lastShown.IsEmpty ||
+            _titleBar?.Dragging == true || _titleBar?.Bounds.Contains(pointer) == true)
+        {
+            DropHoverPreview();
+            return;
+        }
+        if (_hoverPreview is null && (_hoverSince == 0 || pointer != _hoverPoint))
+        {
+            _hoverPoint = pointer;
+            _hoverSince = now;
+            return;
+        }
+        if (_hoverPreview is null && now - _hoverSince < _viewPreferences.HoverDelayMilliseconds) return;
+        Rectangle shown = _lastShown;
+        Rectangle area = Screen.FromControl(this).WorkingArea;
+        bool lens = _viewPreferences.HoverPreview == Settings.PipHoverPreview.Lens;
+        if (lens)
+        {
+            Point mapped = PipGeometry.PointToSource(PointToClient(pointer), PipGeometry.ViewArea(ClientSize), shown);
+            shown = PipPreviewGeometry.Lens(shown, mapped, new Size(240, 160));
+        }
+        Size size = PipGeometry.FitLongSide(lens ? Dpi.Scale(400, DeviceDpi) : Math.Min(960, Math.Max(Width, Height) * 2), shown, area.Size);
+        Rectangle avoid = lens ? new Rectangle(pointer, new Size(16, 16)) : Bounds;
+        try
+        {
+            if (_hoverPreview is null)
+            {
+                _hoverPreview = new PipHoverPreview(this, _source);
+                KeepPartOutOfScreenCapture(_hoverPreview);
+            }
+            _hoverPreview.UpdatePreview(shown, PipPreviewGeometry.Place(avoid, size, area));
+        }
+        catch (WindowOperationException)
+        {
+            DropHoverPreview(); // A source that refuses a thumbnail still has its ordinary view.
+        }
     }
 
     /// <summary>Says when the picture may be out of date, without claiming more than WinScreen can tell.</summary>

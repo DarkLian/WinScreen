@@ -298,10 +298,19 @@
   "settings.pin.opacity": "Opacity (%)",
   "settings.pin.thickness": "Thickness",
   "settings.transfer.title": "Settings file",
-  "settings.transfer.export": "Export saved settings?",
-  "settings.transfer.import": "Import settings?",
+  "settings.transfer.export": "Export saved settings…",
+  "settings.transfer.import": "Import settings…",
   "settings.transfer.paths": "Exported files include program paths. Startup on this PC is kept when importing.",
   "settings.transfer.invalid": "This is not a supported WinScreen settings file.",
   "settings.transfer.review": "Settings loaded for review. Save applies them and keeps a backup.",
-  "settings.transfer.exported": "Saved settings exported."
+  "settings.transfer.exported": "Saved settings exported.",
+  "pip.minimize": "Minimize view",
+  "pip.restoreView": "Restore view",
+  "pip.titleBar.enable": "Show compact title bar on hover",
+  "pip.hover.off": "Off",
+  "pip.hover.whole": "Whole view",
+  "pip.hover.lens": "Reading lens",
+  "pip.hover.title": "Hover controls and preview",
+  "pip.hover.mode": "Hover preview",
+  "pip.hover.windowsOnly": "Preview uses window thumbnails only; display and region views have none."
 }

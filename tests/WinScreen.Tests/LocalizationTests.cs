@@ -108,6 +108,8 @@ public sealed class LocalizationTests : IDisposable
         {
             Assert.Matches(KeyPattern, key);
             Assert.False(string.IsNullOrWhiteSpace(value), $"{language}: {key} is empty.");
+            Assert.DoesNotContain("??", value);
+            Assert.DoesNotContain("\uFFFD", value);
         }
     }
 
@@ -178,9 +180,9 @@ public sealed class LocalizationTests : IDisposable
     [Theory]
     // Reviewed catalog values, sorted by stable key with NUL separators.
     // Update deliberately when adding labels; existing values retain their migration output.
-    [InlineData("en", "8840B30D48A1534864B344FED5C54FE0B1643592267A675962DDFC1729AD2E09")]
-    [InlineData("zh-Hans", "20DA3B2507BFDFC285F616ABEE24BDEF9952CAD8FAAB47080D1AD3D45BB829DA")]
-    [InlineData("zh-Hant", "016F1842B4935D4EDA6A9D1384D1267340136C4BDD6DC2D4E254EC257FF20142")]
+    [InlineData("en", "38AD00B8E10149E7A98F73D7E0994D2106BD2960201DBD1505519A81770EA7D0")]
+    [InlineData("zh-Hans", "9A2DC550B554E6A2BAF16322AF5C958908712C843BAB906A1612E131BF39F3DF")]
+    [InlineData("zh-Hant", "075D743BB7BBA475CC780D6354ADD28E0B0D5F0E39EA8001ECE1D554C85908CE")]
     public void Every_translation_matches_the_reviewed_catalog(string language, string expectedDigest)
     {
         UiText.Initialize(language);

@@ -22,6 +22,8 @@ public sealed class SettingsWindow : Form
     private readonly ComboBox _pipRate = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
     private readonly ComboBox _pipScaling = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private readonly NumericUpDown _pipOpacity = new() { Minimum = 10, Maximum = 100, Width = 75 };
+    private readonly CheckBox _pipTitleBar = new() { Text = T("pip.titleBar.enable"), AutoSize = true };
+    private readonly ComboBox _pipPreview = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private readonly CheckBox _pipDiagnostics = new() { Text = T("pip.diagnostics.includeHardware"), AutoSize = true };
     private readonly List<int> _pipRates = [.. PipPreferences.FrameRates];
 
@@ -225,6 +227,9 @@ public sealed class SettingsWindow : Form
         draft.Pip.Scaling = (PipScaling)Math.Max(0, _pipScaling.SelectedIndex);
         draft.Pip.OpacityPercent = (int)_pipOpacity.Value;
         draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
+        draft.PipViews = new PipViewPreferences { CompactTitleBar = _pipTitleBar.Checked,
+            HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
+            HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds };
         try
         {
             IReadOnlyList<HotkeyProblem> problems = _apply(draft);
@@ -377,6 +382,8 @@ public sealed class SettingsWindow : Form
         _pipScaling.SelectedIndex = (int)pip.Scaling;
         _pipOpacity.Value = pip.OpacityPercent;
         _pipDiagnostics.Checked = pip.ShowDiagnostics;
+        _pipTitleBar.Checked = values.PipViews.CompactTitleBar;
+        _pipPreview.SelectedIndex = (int)values.PipViews.Validated().HoverPreview;
         _opacityStep.Value = Math.Clamp(values.OpacityStepPercent, 1, 25);
         _opacityWheel.Checked = values.OpacityWheel;
         _detectDark.Checked = values.DetectAlreadyDark;
@@ -487,6 +494,7 @@ public sealed class SettingsWindow : Form
 
     private FlowLayoutPanel BuildPip()
     {
+        _pipPreview.Items.AddRange([T("pip.hover.off"), T("pip.hover.whole"), T("pip.hover.lens")]);
         _pipBackend.Items.AddRange([T("common.auto"), T("pip.backend.compatibility"), T("pip.backend.advanced")]);
         _pipScaling.Items.AddRange([T("pip.scaling.auto"), T("pip.scaling.crisp"), T("pip.scaling.smooth")]);
         _pipBackend.SelectedIndexChanged += (_, _) =>
@@ -517,6 +525,7 @@ public sealed class SettingsWindow : Form
         page.Controls.Add(Note(T("pip.rendering.compatibilityHelp")));
         page.Controls.Add(Note(T("pip.rendering.captureIndicatorHelp")));
         page.Controls.Add(Note(T("pip.diagnostics.retryHelp")));
+        page.Controls.Add(Section(T("pip.hover.title"), _pipTitleBar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));
         return page;
     }
 

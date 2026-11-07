@@ -10,6 +10,11 @@ Keep a window on top, adjust its transparency, open a live Picture-in-Picture vi
 move and resize windows exactly, or jump to them with a floating Anchor.
 The interface supports English, 简体中文, and 繁體中文.
 
+Settings include adjustable opacity steps and pin borders, optional Ctrl+Alt+wheel opacity, already-dark detection,
+and JSON import/export. Exported files contain program paths; the opacity wheel cannot control administrator apps.
+Window views have a compact hover title bar and optional whole-view preview or reading lens. Minimized views are
+restored from the tray. Hover previews are available for window sources only.
+
 ## Install
 
 Download **WinScreen-win-Setup.exe** from [Releases](https://github.com/DarkLian/WinScreen/releases) when a release is available, then run it.
@@ -71,10 +76,6 @@ share your experience, suggest an idea, or report a problem. Small annoyances co
 If WinScreen is useful to you, you can also [support it on Ko-fi](https://ko-fi.com/darklian).
 
 ## Build
-
-Settings include adjustable opacity steps and pin borders, optional Ctrl+Alt+wheel opacity, already-dark detection,
-and JSON import/export. Exported files contain program paths; the opacity wheel cannot control administrator apps.
-See the [User Guide](docs/USER_GUIDE.md) for controls and limits.
 
 Requires the .NET 10 SDK specified in `global.json`.
 

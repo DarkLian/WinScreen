@@ -87,6 +87,7 @@ public sealed class CustomizationTests : IDisposable
     }
 
     [Fact]
+    [Trait("Category", "RealWindows")]
     public void Opacity_wheel_can_share_a_hook_without_starting_a_mover()
     {
         using var gestures = new MouseGestures(_ => false, _ => { }) { MoveEnabled = false, OpacityWheelEnabled = true };
@@ -99,6 +100,7 @@ public sealed class CustomizationTests : IDisposable
     }
 
     [Fact]
+    [Trait("Category", "RealWindows")]
     public void Border_settings_apply_to_real_pixels_and_leave_the_centre_open()
     {
         using var target = new TargetProcess(new Rectangle(240, 160, 400, 300));
@@ -114,6 +116,7 @@ public sealed class CustomizationTests : IDisposable
     }
 
     [Theory]
+    [Trait("Category", "RealWindows")]
     [InlineData(false)]
     [InlineData(true)]
     public void Import_uses_the_apps_hotkey_transaction_and_backs_up_only_an_applied_file(bool duplicateHotkeys)
