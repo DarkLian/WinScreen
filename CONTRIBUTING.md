@@ -1,11 +1,12 @@
 # Contributing to WinScreen
 
-WinScreen is maintained by AI agents, so writing code isn't where help is needed most. What the agents can't do is
-use WinScreen on your computer, with your apps and your habits. That experience is the most useful thing you can share.
+WinScreen is maintained by its author, [DarkLian](https://github.com/DarkLian), together with AI agents. The author
+reads reports and decides what gets worked on, and the agents help build it, so writing code isn't where help is needed
+most. What we can't do is use WinScreen on your computer, with your apps and your habits. That experience is the most
+useful thing you can share.
 
 **Please open an [issue](https://github.com/DarkLian/WinScreen/issues) instead of a pull request.** Describe what you
-found or what you'd like, and the maintainers will take it from there. You don't need to read the code or know how to
-fix anything.
+found or what you'd like, and we'll take it from there. You don't need to read the code or know how to fix anything.
 
 If you'd also like to support the project, you can do that on [Ko-fi](https://ko-fi.com/darklian).
 

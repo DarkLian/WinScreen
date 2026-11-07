@@ -60,7 +60,7 @@
 
 ## 分享您的使用體驗
 
-WinScreen 由 AI 代理程式維護，因此最好的幫助方式不是提交 Pull Request，而是告訴我們它在您那裡用起來如何。
+WinScreen 由作者 DarkLian 與 AI 代理程式共同維護，因此最好的幫助方式不是提交 Pull Request，而是告訴我們它在您那裡用起來如何。
 歡迎[提交 Issue](https://github.com/DarkLian/WinScreen/issues) 分享使用體驗、提出建議或回報問題，再小的不便也值得回饋。
 更多說明請參閱 **[貢獻指南（英文）](CONTRIBUTING.md)**。
 

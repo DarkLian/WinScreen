@@ -58,9 +58,9 @@ Local installers remain unsigned even though update metadata is signed. See **[S
 
 ## Share your experience
 
-WinScreen is maintained by AI agents, so the best way to help isn't a pull request. It's telling us how WinScreen works
-for you. Please [open an issue](https://github.com/DarkLian/WinScreen/issues) to share your experience, suggest an idea,
-or report a problem. Small annoyances count too. See **[Contributing](CONTRIBUTING.md)** for what helps most.
+WinScreen is maintained by its author, DarkLian, together with AI agents, so the best way to help isn't a pull request.
+It's telling us how WinScreen works for you. Please [open an issue](https://github.com/DarkLian/WinScreen/issues) to
+share your experience, suggest an idea, or report a problem. Small annoyances count too. See **[Contributing](CONTRIBUTING.md)** for what helps most.
 
 If WinScreen is useful to you, you can also [support it on Ko-fi](https://ko-fi.com/darklian).
 

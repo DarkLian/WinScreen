@@ -192,7 +192,7 @@ public static class UiText
                                    The preview is not ready; its original window will not be hidden.|预览尚未就绪，不会隐藏原窗口。|預覽尚未就緒，不會隱藏原視窗。
                                    The PiP click was cancelled because its target could not be verified. Use Go to original window.|无法验证目标，画中画点击已取消。请使用“切换到原窗口”。|無法驗證目標，子母畫面點擊已取消。請使用「切換到原視窗」。
                                    The source has no drawable preview surface.|原窗口没有可显示的预览内容。|原視窗沒有可顯示的預覽內容。
-                                   Click: go to the original • Drag: move • Wheel: resize • Ctrl+drag: crop • Right-click: menu • Esc: close|点击：转到原窗口 • 拖动：移动 • 滚轮：调整大小 • Ctrl+拖动：裁剪 • 右键：菜单 • Esc：关闭|點選：前往原視窗 • 拖曳：移動 • 滾輪：調整大小 • Ctrl+拖曳：裁切 • 右鍵：選單 • Esc：關閉
+                                   Click: go to the original • Drag: move • Wheel: resize • Ctrl+drag: crop • Right-click: menu|点击：转到原窗口 • 拖动：移动 • 滚轮：调整大小 • Ctrl+拖动：裁剪 • 右键：菜单|點選：前往原視窗 • 拖曳：移動 • 滾輪：調整大小 • Ctrl+拖曳：裁切 • 右鍵：選單
                                    Click: show the window • Drag: move • Right-click: menu|点击：显示窗口 • 拖动：移动 • 右键：菜单|點選：顯示視窗 • 拖曳：移動 • 右鍵：選單
                                    """;
 }

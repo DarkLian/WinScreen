@@ -60,7 +60,7 @@
 
 ## 分享你的使用体验
 
-WinScreen 由 AI 智能体维护，因此最好的帮助方式不是提交 Pull Request，而是告诉我们它在你那里用起来怎么样。
+WinScreen 由作者 DarkLian 与 AI 智能体共同维护，因此最好的帮助方式不是提交 Pull Request，而是告诉我们它在你那里用起来怎么样。
 欢迎[提交 Issue](https://github.com/DarkLian/WinScreen/issues) 分享使用体验、提出建议或报告问题，再小的不便也值得反馈。
 更多说明请参阅 **[贡献指南（英文）](CONTRIBUTING.md)**。
 

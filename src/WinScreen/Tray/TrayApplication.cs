@@ -578,7 +578,7 @@ public sealed class TrayApplication : ApplicationContext
                 case AppCommand.OpenPip:
                     if (_pips.TryGetValue(window, out var existing))
                     {
-                        existing.Activate();
+                        existing.Close();
                         break;
                     }
 

@@ -78,10 +78,12 @@ Press **Ctrl+Alt+P** to open a live view. The original window keeps its real siz
 | Ctrl+drag | Select a crop |
 | Ctrl+double-click | Remove the crop |
 | Right-click | Hide/show the original, go to it, remove crop, or close PiP |
-| Esc, or the ✕ button shown while the pointer is on the view | Close PiP |
+| The ✕ button shown while the pointer is on the view | Close PiP |
 
 By default, clicking PiP shows/activates the original so you can interact with it normally. This does not move the
 system pointer or inject a click. Only one PiP or Shrink tile is kept per source; opening one replaces the other.
+Pressing Ctrl+Alt+P again on the same window closes its view. Dragging, resizing and cropping a view leave the keyboard
+with the app you're using. Esc cancels a crop selection once Ctrl is released.
 
 To opt into click forwarding, enable both **Experimental effects** and **Forward PiP clicks** in General settings.
 The original is then temporarily positioned beneath the pointer. Before forwarding, WinScreen checks its lifetime
@@ -91,8 +93,10 @@ cleanup retained for recovery. A maximized source stays maximized. This remains 
 input cannot be made atomic with other applications; leave it off for sensitive or unsaved content.
 
 PiP usually keeps updating while its original is covered or hidden and closes when the original is destroyed.
-Some apps stop drawing when covered, so their previews may freeze. A hidden original still appears in Alt-Tab and the taskbar;
-use PiP's **Hide original window** menu item again to show it.
+Browsers and apps built on them, such as Chrome, Edge and Discord, stop drawing while fully covered, so their view freezes.
+Choose **Hide original window** from the view's menu to keep them live: a hidden original stays above other windows,
+invisible and click-through, so it keeps drawing. Minimized apps show their last frame.
+A hidden original still appears in Alt-Tab and the taskbar; use **Hide original window** again to show it.
 
 **Move away from text and images** looks for an emptier screen area about once per second. It stays still while the pointer
 is over the view and when no better spot exists. It estimates content by contrast rather than understanding text.
@@ -197,7 +201,7 @@ has it open, new changes pause until **Restore all windows** can read it. Exitin
 - Exiting WinScreen restores changed windows. After a forced termination or crash, the next start uses its recovery journal.
 - If a shortcut does nothing, check for conflicts in Settings, exclusions/inclusions, full-screen pause, or an elevated target app.
 - If an Anchor disappears but the app remains, it may have cancelled closing or hidden itself. Find the app on the taskbar or in Alt-Tab.
-- If a PiP view freezes, show its original window. The app may suspend rendering when covered.
+- If a PiP view freezes, choose **Hide original window** from its menu. Apps can stop drawing while covered or minimized.
 - If Settings looks unchanged after choosing a language, save, exit WinScreen, and reopen it.
 - Display scaling above 100%, multiple monitors, Windows 10, and real installed-version upgrades still need broader validation.
 

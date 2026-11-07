@@ -463,8 +463,9 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
             EnsureLayeringSafe(state);
             state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
             state.Hidden = true;
-            Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT);
+            Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT | User32.WS_EX_TOPMOST);
             Conceal(window, state);
+            LiftWhileHidden(window, state);
         }
     }
 
@@ -725,7 +726,11 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         Attempt("peek-pin", () => SetTopmost(window, state.Pinned, state.Identity));
         Attempt("peek-placement", () => WritePlacement(window, placement));
         if (state.Hidden)
-            Attempt("peek-hide", () => Conceal(window, state));
+            Attempt("peek-hide", () =>
+            {
+                Conceal(window, state);
+                LiftWhileHidden(window, state);
+            });
         if (failures.Count > 0)
             throw new WindowOperationException(string.Join(Environment.NewLine, failures));
         state.PlacementBeforePeek = null;
@@ -757,6 +762,59 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         ApplyAlpha(window, state, state.AlphaBeforeHiding);
         if (!state.ClickThrough)
             WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
+        if (!state.Pinned)
+            TrySetTopmost(window, false, state.Identity);
+    }
+
+    /// <summary>
+    /// Chromium and Electron apps stop drawing once other windows cover them, which would freeze their
+    /// live view. A hidden window can be neither seen nor clicked, so keeping it above the others costs
+    /// nothing and keeps it drawing. It stays out of <see cref="ChangedWindow.Pinned"/> because the person
+    /// didn't pin it, and only liveness depends on it, so a refusal isn't worth stopping for.
+    /// </summary>
+    private static void LiftWhileHidden(nint window, ChangedWindow state)
+    {
+        if (!state.Pinned)
+            TrySetTopmost(window, true, state.Identity);
+    }
+
+    /// <summary>
+    /// Changes the topmost state of a window that isn't in use. Windows can ignore that for a background
+    /// window, so it's brought forward for a moment if needed and the focus goes back where it was.
+    /// </summary>
+    private static void TrySetTopmost(nint window, bool topmost, WindowIdentity identity)
+    {
+        try
+        {
+            SetTopmost(window, topmost, identity);
+            return;
+        }
+        catch (WindowOperationException)
+        {
+            // Fall through to bringing it forward.
+        }
+
+        nint previous = User32.GetForegroundWindow();
+        try
+        {
+            for (int attempt = 0; attempt < PinAttempts && User32.GetForegroundWindow() != window; attempt++)
+            {
+                User32.SetForegroundWindow(window);
+                if (User32.GetForegroundWindow() != window)
+                    Thread.Sleep(PinRetryMilliseconds);
+            }
+
+            SetTopmost(window, topmost, identity);
+        }
+        catch (WindowOperationException)
+        {
+            // Owned in the journal, so Restore all windows and crash recovery still put it right.
+        }
+        finally
+        {
+            if (previous != 0 && previous != window)
+                User32.SetForegroundWindow(previous);
+        }
     }
 
     private void Move(nint window, Point position)
@@ -1166,17 +1224,18 @@ public static class WindowInfo
 
     /// <summary>
     /// The part of a live preview's source that shows the window, leaving out its invisible resize
-    /// margins. A preview's source is the whole GetWindowRect area.
+    /// margins. Preview coordinates start at the GetWindowRect corner, but the size Windows reports for
+    /// them is only the frame's, so this deliberately reaches past <paramref name="sourceSize"/>: clipping
+    /// to it would lose the window's right and bottom edges. A minimized window has no frame to measure.
     /// </summary>
     public static Rectangle VisiblePart(nint window, Size sourceSize)
     {
         var all = new Rectangle(Point.Empty, sourceSize);
-        if (!TryGetFrameBounds(window, out Rectangle frame, out Rectangle whole))
+        if (User32.IsIconic(window) || !TryGetFrameBounds(window, out Rectangle frame, out Rectangle whole))
             return all;
 
         frame.Offset(-whole.Left, -whole.Top);
-        Rectangle visible = Rectangle.Intersect(frame, all);
-        return visible.IsEmpty ? all : visible;
+        return frame.Width > 0 && frame.Height > 0 ? frame : all;
     }
 
     /// <summary>

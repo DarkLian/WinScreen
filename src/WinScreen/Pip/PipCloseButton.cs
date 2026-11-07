@@ -4,7 +4,8 @@ namespace WinScreen.Pip;
 
 /// <summary>
 /// A close button for a PiP view. Nothing can be painted over a DWM thumbnail in the same window,
-/// so this is a small window of its own, owned by the view so it always stays above it.
+/// so this is a small window of its own. The view is topmost, and owning isn't enough to rise above
+/// that: this has to be topmost as well or it sits behind the view, out of sight and out of reach.
 /// </summary>
 internal sealed class PipCloseButton : Form
 {
@@ -42,7 +43,7 @@ internal sealed class PipCloseButton : Form
         get
         {
             CreateParams parameters = base.CreateParams;
-            parameters.ExStyle |= (int)(User32.WS_EX_NOACTIVATE | User32.WS_EX_TOOLWINDOW);
+            parameters.ExStyle |= (int)(User32.WS_EX_NOACTIVATE | User32.WS_EX_TOOLWINDOW | User32.WS_EX_TOPMOST);
             return parameters;
         }
     }

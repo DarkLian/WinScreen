@@ -296,6 +296,327 @@ public class PipWindowTests
         });
     }
 
+    /// <summary>A real framed window, unlike the borderless test target, with a colour along each far edge.</summary>
+    private sealed class EdgeStripes : Form
+    {
+        public const int Stripe = 24;
+
+        public EdgeStripes()
+        {
+            ResizeRedraw = true;
+            DoubleBuffered = true;
+            BackColor = Green;
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.Manual;
+            Text = "WinScreen edge test";
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            int width = ClientSize.Width, height = ClientSize.Height;
+            using var left = new SolidBrush(Red);
+            using var right = new SolidBrush(Blue);
+            using var bottom = new SolidBrush(Color.Yellow);
+            e.Graphics.FillRectangle(left, 0, 0, Stripe, height);
+            e.Graphics.FillRectangle(right, width - Stripe, 0, Stripe, height);
+            e.Graphics.FillRectangle(bottom, Stripe, height - Stripe, width - 2 * Stripe, Stripe);
+        }
+    }
+
+    private static bool Near(Point spot, Color color, Action<int> pump)
+    {
+        return Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(new Rectangle(spot, new Size(3, 3))), color),
+            3000, () => pump(20));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Shows_all_four_edges_of_a_framed_window(bool maximized)
+    {
+        OnUiThread(pump =>
+        {
+            using var source = new EdgeStripes();
+            source.Show();
+            pump(200);
+            User32.ShowWindow(source.Handle, maximized ? 3 : User32.SW_RESTORE);
+            pump(300);
+            if (!maximized)
+                source.Bounds = new Rectangle(120, 90, 900, 600);
+            pump(300);
+
+            Desktop.GainForegroundRights();
+            using var pip = new PipWindow(source.Handle, new WindowController([]));
+            pip.ShowOnTop();
+            pump(300);
+
+            Rectangle b = pip.Bounds;
+            const int inset = PipGeometry.Border + 2;
+            int middle = b.Top + b.Height / 2;
+            Assert.True(Near(new Point(b.Left + inset, middle), Red, pump),
+                $"Left edge: {Desktop.ColorOnScreen(new Rectangle(b.Left + inset, middle, 3, 3))}");
+            Assert.True(Near(new Point(b.Right - inset - 3, middle), Blue, pump),
+                $"Right edge: {Desktop.ColorOnScreen(new Rectangle(b.Right - inset - 3, middle, 3, 3))}");
+            Assert.True(Near(new Point(b.Left + b.Width / 2, b.Bottom - inset - 3), Color.Yellow, pump),
+                $"Bottom edge: {Desktop.ColorOnScreen(new Rectangle(b.Left + b.Width / 2, b.Bottom - inset - 3, 3, 3))}");
+        });
+    }
+
+    [Fact]
+    public void The_close_button_is_really_there_to_click()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        Point mouse = Desktop.CursorPosition();
+        try
+        {
+            OnUiThread(pump =>
+            {
+                using PipWindow pip = OpenAwayFromToasts(source.Handle);
+                pump(150);
+                var corner = new Point(pip.Right - 16, pip.Top + 16);
+                Desktop.MoveMouse(corner);
+
+                // Only what the pointer would hit counts; a window can be visible behind the view.
+                bool onTop = Desktop.WaitFor(() =>
+                {
+                    nint root = User32.GetAncestor(Desktop.TopWindowAt(corner), User32.GA_ROOT);
+                    return root != pip.Handle && (Desktop.ExStyle(root) & User32.WS_EX_NOACTIVATE) != 0;
+                }, 2000, () => pump(20));
+                Assert.True(onTop, "The close button is behind the view.");
+            });
+        }
+        finally
+        {
+            Desktop.MoveMouse(mouse);
+        }
+    }
+
+    [Fact]
+    public void Opens_ready_on_top_without_taking_the_focus()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        OnUiThread(pump =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(source.Handle);
+            using var pip = new PipWindow(source.Handle, new WindowController([]));
+            pip.ShowOnTop();
+
+            // Nothing has been pumped yet, so this is what the very first frame shows.
+            Assert.Equal(PipGeometry.FitHeight(pip.Width, new Rectangle(0, 0, 400, 300)), pip.Height);
+            Assert.NotEqual(0, Desktop.ExStyle(pip.Handle) & User32.WS_EX_TOPMOST);
+            Assert.NotEqual(0, Desktop.ExStyle(pip.Handle) & User32.WS_EX_TOOLWINDOW);
+            Assert.NotEqual(0, Desktop.ExStyle(pip.Handle) & User32.WS_EX_NOACTIVATE);
+            Assert.Equal(source.Handle, User32.GetForegroundWindow());
+            Assert.True(Shows(pip, Red, pump));
+            Assert.Equal(source.Handle, User32.GetForegroundWindow());
+        });
+    }
+
+    [Fact]
+    public void Tall_windows_open_a_sensible_size()
+    {
+        using var source = new TargetProcess(new Rectangle(240, 60, 300, 800));
+        OnUiThread(pump =>
+        {
+            using PipWindow pip = OpenAwayFromToasts(source.Handle);
+            pump(100);
+            Assert.InRange(pip.Height, 470, 490);
+            Assert.InRange(pip.Width, 170, 190);
+        });
+    }
+
+    [Fact]
+    public void Scrolling_while_the_source_is_minimized_keeps_the_view_whole()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        OnUiThread(pump =>
+        {
+            using PipWindow pip = OpenAwayFromToasts(source.Handle);
+            pump(200);
+            double shape = pip.Height / (double)pip.Width;
+
+            User32.ShowWindow(source.Handle, 6);
+            pump(500);
+            Wheel(pip, 120);
+            pump(200);
+            Assert.InRange(pip.Height / (double)pip.Width, shape - 0.02, shape + 0.02);
+
+            User32.ShowWindow(source.Handle, User32.SW_RESTORE);
+            pump(500);
+            Assert.InRange(pip.Height / (double)pip.Width, shape - 0.02, shape + 0.02);
+            Assert.True(Shows(pip, Red, pump));
+        });
+    }
+
+    [Fact]
+    public void A_crop_survives_the_source_shrinking_and_growing_back()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        OnUiThread(pump =>
+        {
+            using PipWindow pip = OpenAwayFromToasts(source.Handle);
+            pump(200);
+            var crop = new Rectangle(100, 100, 250, 150);
+            pip.SetCrop(crop);
+            pump(150);
+
+            Resize(source.Handle, 200, 200);
+            pump(300);
+            Assert.False(pip.IsDisposed);
+            Resize(source.Handle, SourceSpot.Width, SourceSpot.Height);
+            pump(300);
+
+            Assert.Equal(crop, pip.Crop);
+            Assert.Equal(PipGeometry.FitLongSide(480, new Rectangle(0, 0, 250, 150), new Size(1920, 1040)), pip.Size);
+        });
+    }
+
+    [Fact]
+    public void A_crop_stays_on_the_same_part_when_the_source_is_maximized_and_restored()
+    {
+        OnUiThread(pump =>
+        {
+            using var source = new EdgeStripes();
+            source.Show();
+            pump(200);
+            User32.ShowWindow(source.Handle, User32.SW_RESTORE);
+            pump(300);
+            source.Bounds = new Rectangle(120, 90, 900, 600);
+            pump(300);
+
+            Desktop.GainForegroundRights();
+            using var pip = new PipWindow(source.Handle, new WindowController([]));
+            pip.ShowOnTop();
+            pump(200);
+            var crop = new Rectangle(0, 200, 16, 16);
+            pip.SetCrop(crop);
+            pump(200);
+            Assert.True(Shows(pip, Red, pump), $"Cropped view: {Desktop.ColorOnScreen(Middle(pip))}.");
+
+            User32.ShowWindow(source.Handle, 3);
+            pump(600);
+            Assert.Equal(crop, pip.Crop);
+            Assert.True(Shows(pip, Red, pump), $"Maximized: {Desktop.ColorOnScreen(Middle(pip))}.");
+
+            User32.ShowWindow(source.Handle, User32.SW_RESTORE);
+            pump(600);
+            Assert.Equal(crop, pip.Crop);
+            Assert.True(Shows(pip, Red, pump), $"Restored: {Desktop.ColorOnScreen(Middle(pip))}.");
+        });
+    }
+
+    [Fact]
+    public void Live_resizing_the_source_does_not_shrink_the_view()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        OnUiThread(pump =>
+        {
+            using PipWindow pip = OpenAwayFromToasts(source.Handle);
+            pump(200);
+            for (int i = 0; i < 12; i++)
+            {
+                Resize(source.Handle, 500 + 7 * i, 300 + 3 * i);
+                pump(90);
+                Assert.Equal(480, pip.Width);
+            }
+        });
+    }
+
+    [Fact]
+    public void Two_views_never_open_on_top_of_each_other()
+    {
+        using var first = new TargetProcess(SourceSpot);
+        using var second = new TargetProcess(new Rectangle(700, 160, 400, 300), "1E64C8");
+        OnUiThread(pump =>
+        {
+            var windows = new WindowController([]);
+            using var one = new PipWindow(first.Handle, windows);
+            using var two = new PipWindow(second.Handle, windows);
+            one.ShowOnTop();
+            two.ShowOnTop();
+            pump(100);
+            Assert.False(one.Bounds.IntersectsWith(two.Bounds), $"{one.Bounds} and {two.Bounds}");
+        });
+    }
+
+    [Fact]
+    public void A_hidden_original_stays_on_top_without_counting_as_pinned()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        OnUiThread(pump =>
+        {
+            var windows = new WindowController([]);
+            using var pip = new PipWindow(source.Handle, windows);
+            Desktop.GainForegroundRights();
+            pip.ShowOnTop();
+            pump(150);
+
+            pip.SetOriginalHidden(true);
+            Assert.NotEqual(0, Desktop.ExStyle(source.Handle) & User32.WS_EX_TOPMOST);
+            Assert.False(windows.IsPinned(source.Handle));
+            Assert.Empty(windows.VisiblePinnedWindows());
+
+            pip.SetOriginalHidden(false);
+            Assert.Equal(0, Desktop.ExStyle(source.Handle) & User32.WS_EX_TOPMOST);
+            windows.RestoreAll();
+        });
+    }
+
+    [Fact]
+    public void A_hidden_original_that_the_person_pinned_stays_pinned()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        OnUiThread(pump =>
+        {
+            var windows = new WindowController([]);
+            Desktop.GainForegroundRights();
+            windows.TogglePin(source.Handle);
+            using var pip = new PipWindow(source.Handle, windows);
+            pip.ShowOnTop();
+            pump(150);
+
+            pip.SetOriginalHidden(true);
+            pip.SetOriginalHidden(false);
+
+            Assert.NotEqual(0, Desktop.ExStyle(source.Handle) & User32.WS_EX_TOPMOST);
+            Assert.True(windows.IsPinned(source.Handle));
+            windows.RestoreAll();
+        });
+    }
+
+    [Fact]
+    public void Restore_all_takes_a_hidden_original_off_the_top()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        OnUiThread(pump =>
+        {
+            var windows = new WindowController([]);
+            using var pip = new PipWindow(source.Handle, windows);
+            Desktop.GainForegroundRights();
+            pip.ShowOnTop();
+            pump(150);
+            pip.SetOriginalHidden(true);
+
+            windows.RestoreAll();
+
+            Assert.Equal(0, Desktop.ExStyle(source.Handle) & User32.WS_EX_TOPMOST);
+            Assert.Equal((byte?)255, Desktop.Alpha(source.Handle) ?? 255);
+        });
+    }
+
+    private static void Resize(nint window, int width, int height)
+    {
+        User32.SetWindowPos(window, 0, 0, 0, width, height,
+            User32.SWP_NOMOVE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+    }
+
+    private static void Wheel(PipWindow pip, int delta)
+    {
+        Point spot = pip.PointToScreen(new Point(30, 30));
+        User32.PostMessage(pip.Handle, 0x020A, unchecked((nint)(delta << 16)), (spot.Y << 16) | spot.X);
+    }
+
     [Fact]
     public void Closes_when_the_source_window_closes()
     {

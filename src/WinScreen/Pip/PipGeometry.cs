@@ -71,9 +71,62 @@ public static class PipGeometry
             Math.Max(1, (int)Math.Floor(source.Height * scale)) + 2 * Border);
     }
 
+    /// <summary>
+    /// The window size that shows <paramref name="source"/> undistorted with its longer side at
+    /// <paramref name="longSide"/>, so tall and wide windows both come out a sensible size. The result
+    /// depends only on its inputs, so fitting again never makes the view creep smaller.
+    /// </summary>
+    public static Size FitLongSide(int longSide, Rectangle source, Size available)
+    {
+        if (source.Width <= 0 || source.Height <= 0)
+            return Size.Empty;
+        double scale = Math.Max(1, longSide - 2 * Border) / (double)Math.Max(source.Width, source.Height);
+        scale = Math.Min(scale, Math.Min(
+            Math.Max(1, available.Width - 2 * Border) / (double)source.Width,
+            Math.Max(1, available.Height - 2 * Border) / (double)source.Height));
+        return new Size(Math.Max(1, (int)Math.Round(source.Width * scale)) + 2 * Border,
+            Math.Max(1, (int)Math.Round(source.Height * scale)) + 2 * Border);
+    }
+
     public static Point KeepInside(Rectangle bounds, Rectangle area) => new(
         Math.Clamp(bounds.Left, area.Left, Math.Max(area.Left, area.Right - bounds.Width)),
         Math.Clamp(bounds.Top, area.Top, Math.Max(area.Top, area.Bottom - bounds.Height)));
+
+    /// <summary>
+    /// Where a resized view goes so the corner nearest the edge of the screen stays put, keeping a view
+    /// parked in a corner there instead of drifting away from it.
+    /// </summary>
+    public static Point KeepCorner(Rectangle old, Size size, Rectangle area)
+    {
+        bool right = old.Left + old.Width / 2 > area.Left + area.Width / 2;
+        bool bottom = old.Top + old.Height / 2 > area.Top + area.Height / 2;
+        return new Point(right ? old.Right - size.Width : old.Left, bottom ? old.Bottom - size.Height : old.Top);
+    }
+
+    /// <summary>Where a resized view goes so that the same spot of it stays under the pointer.</summary>
+    public static Point KeepUnderPointer(Rectangle old, Size size, Point pointer) => new(
+        pointer.X - (int)Math.Round((pointer.X - old.Left) * (double)size.Width / old.Width),
+        pointer.Y - (int)Math.Round((pointer.Y - old.Top) * (double)size.Height / old.Height));
+
+    /// <summary>
+    /// The first spot clear of <paramref name="taken"/>, going up the screen from
+    /// <paramref name="wanted"/> and then a column to the left. A full screen falls back to the first.
+    /// </summary>
+    public static Point FreeSpot(Rectangle wanted, IEnumerable<Rectangle> taken, Rectangle area, int gap)
+    {
+        Rectangle[] others = taken.ToArray();
+        for (int x = wanted.X; x >= area.Left; x -= wanted.Width + gap)
+        {
+            for (int y = wanted.Y; y >= area.Top; y -= wanted.Height + gap)
+            {
+                var spot = new Rectangle(new Point(x, y), wanted.Size);
+                if (!others.Any(spot.IntersectsWith))
+                    return spot.Location;
+            }
+        }
+
+        return wanted.Location;
+    }
 
     /// <summary>
     /// Where a source window goes so that <paramref name="spot"/> sits under the cursor, kept on

@@ -55,13 +55,28 @@ public sealed class ShrinkTile : Form
     /// <summary>Raised when Windows refuses something, with a message for the person.</summary>
     public event Action<string>? Problem;
 
-    /// <summary>Opens the tile, then hides the window it stands for.</summary>
+    protected override bool ShowWithoutActivation => true;
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            CreateParams parameters = base.CreateParams;
+            parameters.ExStyle |= (int)(User32.WS_EX_TOPMOST | User32.WS_EX_TOOLWINDOW);
+            return parameters;
+        }
+    }
+
+    /// <summary>
+    /// Opens the tile, then hides the window it stands for. The live view is ready before the tile
+    /// appears, and being created on top needs no focus, so Windows has nothing to refuse.
+    /// </summary>
     public void ShowOnTop()
     {
         _identity.Require();
         if (User32.IsIconic(_source))
             User32.ShowWindow(_source, User32.SW_RESTORE);
-        Show();
+        _ = Handle;
         if (!ShowLiveView())
         {
             Problem?.Invoke(T("This window can't be shrunk."));
@@ -71,9 +86,12 @@ public sealed class ShrinkTile : Form
 
         try
         {
-            WindowController.Pin(Handle);
+            Show();
             _hid = true; // A partially failed conceal must still be revealed by OnFormClosed.
             _windows.Hide(_source);
+            User32.SetForegroundWindow(Handle); // Keys mustn't go to a window that can't be seen.
+            User32.SetWindowPos(Handle, User32.HWND_TOPMOST, 0, 0, 0, 0,
+                User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
         }
         catch (WindowOperationException)
         {
@@ -81,7 +99,6 @@ public sealed class ShrinkTile : Form
             throw;
         }
 
-        _hid = true;
         _watch.Start();
     }
 

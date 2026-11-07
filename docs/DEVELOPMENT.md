@@ -90,7 +90,14 @@ See [Security](../SECURITY.md) for verification requirements and remaining risks
 
 PiP uses DWM thumbnails rather than a pixel-copy capture loop. A second thumbnail shows crop selection because
 nothing can be painted above a thumbnail in the same window. Pinning first raises the target and reads back the
-topmost state because Windows may report success without actually pinning a background window.
+topmost state because Windows may report success without actually pinning a background window. PiP views and Shrink
+tiles avoid that by being created topmost, and they use `WS_EX_NOACTIVATE`; answering `WM_MOUSEACTIVATE` alone left
+the foreground window empty after a repeat press.
+
+Thumbnail coordinates start at the `GetWindowRect` corner, but `DwmQueryThumbnailSourceSize` reports only the frame's
+size, so the visible part reaches past it. Clipping to the reported size loses the right and bottom edges. Hidden
+originals stay topmost, outside the pinned state, because covered Chromium windows stop drawing. Test framed windows:
+the borderless test target has no invisible margins.
 
 ## Known limits and validation gaps
 
@@ -100,7 +107,8 @@ topmost state because Windows may report success without actually pinning a back
 - Cropping has mainly been tested on a plain test window; apps may redraw their window region.
 - Real Windows sign-in/startup registration and its removal on uninstall have not been verified end to end.
 - A real two-version installed upgrade and a live signed update from hosted releases still need verification.
-- Elevated target apps may reject control. Hidden browsers may suspend rendering and freeze PiP.
+- Elevated target apps may reject control. Covered, minimized, or otherwise occluded browsers may suspend rendering and freeze PiP.
+- PiP across virtual desktops and monitors with different scaling has not been tested.
 - Testing has mainly used one 1920×1080 display at 100% scaling on Windows 11 Pro build 26300. More monitor/DPI/Windows 10 testing is needed.
 - See the repository's Actions page for current CI results; local checks do not establish that hosted workflows pass.
 

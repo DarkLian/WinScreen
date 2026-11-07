@@ -173,6 +173,76 @@ public class PipGeometryTests
             PipGeometry.PeekPosition(new Point(1900, 1030), new Point(300, 150), new Size(800, 600), area));
     }
 
+    [Theory]
+    [InlineData(800, 400, 480, 242)]
+    [InlineData(400, 800, 242, 480)]
+    public void The_longer_side_sets_the_size_so_tall_windows_stay_small(int width, int height, int fitWidth,
+        int fitHeight)
+    {
+        Assert.Equal(new Size(fitWidth, fitHeight),
+            PipGeometry.FitLongSide(480, new Rectangle(0, 0, width, height), new Size(1920, 1040)));
+    }
+
+    [Fact]
+    public void Fitting_stays_inside_the_screen()
+    {
+        Size fitted = PipGeometry.FitLongSide(3000, new Rectangle(0, 0, 1000, 2000), new Size(1920, 1040));
+        Assert.Equal(1040, fitted.Height);
+        Assert.InRange(fitted.Width, 520, 522);
+    }
+
+    [Theory]
+    [InlineData(686, 393)]
+    [InlineData(679, 393)]
+    [InlineData(777, 431)]
+    public void Fitting_again_never_creeps_smaller(int width, int height)
+    {
+        var source = new Rectangle(0, 0, width, height);
+        Size first = PipGeometry.FitLongSide(480, source, new Size(1920, 1040));
+        for (int i = 0; i < 50; i++)
+            Assert.Equal(first, PipGeometry.FitLongSide(first.Width, source, new Size(1920, 1040)));
+    }
+
+    [Theory]
+    [InlineData(1400, 700, 1500, 660)] // Bottom right: the far corner stays.
+    [InlineData(100, 100, 100, 100)] // Top left: the near corner stays.
+    public void A_resized_view_holds_its_corner(int left, int top, int expectedLeft, int expectedTop)
+    {
+        var area = new Rectangle(0, 0, 1920, 1040);
+        var old = new Rectangle(left, top, 400, 300);
+        Assert.Equal(new Point(expectedLeft, expectedTop), PipGeometry.KeepCorner(old, new Size(300, 340), area));
+    }
+
+    [Fact]
+    public void The_spot_under_the_pointer_stays_there_while_resizing()
+    {
+        var old = new Rectangle(100, 100, 400, 200);
+        Assert.Equal(new Point(50, 75),
+            PipGeometry.KeepUnderPointer(old, new Size(600, 300), new Point(200, 150)));
+    }
+
+    [Fact]
+    public void A_second_view_opens_clear_of_the_first()
+    {
+        var area = new Rectangle(0, 0, 1920, 1040);
+        var wanted = new Rectangle(1420, 720, 480, 300);
+        Assert.Equal(wanted.Location, PipGeometry.FreeSpot(wanted, [], area, 20));
+
+        Point second = PipGeometry.FreeSpot(wanted, [wanted], area, 20);
+        Assert.Equal(new Point(1420, 400), second);
+
+        Point third = PipGeometry.FreeSpot(wanted, [wanted, new Rectangle(second, wanted.Size)], area, 20);
+        Assert.Equal(new Point(1420, 80), third);
+    }
+
+    [Fact]
+    public void A_full_screen_falls_back_to_the_first_spot()
+    {
+        var area = new Rectangle(0, 0, 1000, 1000);
+        var wanted = new Rectangle(500, 500, 400, 400);
+        Assert.Equal(wanted.Location, PipGeometry.FreeSpot(wanted, [area], area, 20));
+    }
+
     [Fact]
     public void Between_works_whichever_way_you_drag()
     {
