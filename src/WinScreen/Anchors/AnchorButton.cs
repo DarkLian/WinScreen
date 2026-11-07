@@ -22,7 +22,9 @@ internal sealed class AnchorButton : Form
     private readonly WindowIdentity _identity;
     private readonly Icon? _icon;
     private readonly ToolTip _tip = new() { ShowAlways = true };
-    private readonly Rectangle _iconBounds;
+    private Rectangle _iconBounds;
+    private bool _marksView;
+    private bool _excluded;
     private readonly ContextMenuStrip _menu = new();
     private Point _pressedAt;
     private bool _pressed;
@@ -63,6 +65,38 @@ internal sealed class AnchorButton : Form
     /// <summary>True for one the app added for a covered window, which it may also take away.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public bool Automatic { get; set; }
+
+    /// <summary>True once the person has dragged it. It stays where they put it.</summary>
+    public bool Placed { get; private set; }
+
+    /// <summary>Sets how it looks now. Skips anything unchanged, because this runs after every window change.</summary>
+    internal void Apply(int size, double opacity, bool light, bool marksView, bool excludeFromCapture)
+    {
+        if (ClientSize.Width != size)
+        {
+            ClientSize = new Size(size, size);
+            int inset = Math.Max(2, size / 6);
+            _iconBounds = new Rectangle(inset, inset, size - 2 * inset, size - 2 * inset);
+            Invalidate();
+        }
+
+        if (Math.Abs(Opacity - opacity) > 0.001) Opacity = opacity;
+        Color back = light ? Color.FromArgb(240, 240, 240) : Color.FromArgb(32, 32, 32);
+        if (BackColor != back) BackColor = back;
+        if (_marksView != marksView)
+        {
+            _marksView = marksView;
+            _tip.SetToolTip(this, WindowInfo.Title(_target) + Environment.NewLine + T("anchor.controls") +
+                                  (marksView ? Environment.NewLine + T("anchors.controls.view") : ""));
+            Invalidate();
+        }
+
+        if (_excluded != excludeFromCapture && IsHandleCreated)
+        {
+            _excluded = excludeFromCapture;
+            User32.SetWindowDisplayAffinity(Handle, excludeFromCapture ? User32.WDA_EXCLUDEFROMCAPTURE : User32.WDA_NONE);
+        }
+    }
     public bool TargetAlive => _identity.Matches();
 
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -84,6 +118,14 @@ internal sealed class AnchorButton : Form
     {
         base.OnPaint(e);
         e.Graphics.DrawIcon(_icon ?? SystemIcons.Application, _iconBounds);
+        if (_marksView)
+        {
+            // A notch in the corner, so a window with a view reads differently without relying on colour.
+            int notch = Math.Max(6, ClientSize.Width / 4);
+            int right = ClientSize.Width, bottom = ClientSize.Height;
+            using var brush = new SolidBrush(BackColor.GetBrightness() > 0.5 ? Color.Black : Color.White);
+            e.Graphics.FillPolygon(brush, [new Point(right, bottom - notch), new Point(right, bottom), new Point(right - notch, bottom)]);
+        }
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -103,6 +145,7 @@ internal sealed class AnchorButton : Form
         if (_dragged || Math.Abs(e.X - _pressedAt.X) >= DragThreshold || Math.Abs(e.Y - _pressedAt.Y) >= DragThreshold)
         {
             _dragged = true;
+            Placed = true;
             var area = Screen.FromPoint(Cursor.Position).WorkingArea;
             Location = new Point(
                 Math.Clamp(Left + e.X - _pressedAt.X, area.Left, Math.Max(area.Left, area.Right - Width)),

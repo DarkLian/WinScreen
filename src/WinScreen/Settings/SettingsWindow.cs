@@ -19,6 +19,12 @@ public sealed class SettingsWindow : Form
     private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _borderThickness = new() { Minimum = 1, Maximum = 12, Width = 70 };
     private readonly CheckBox _autoAnchors = new() { Text = T("anchors.auto.enable"), AutoSize = true };
+    private readonly ComboBox _anchorSide = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
+    private readonly ComboBox _anchorLook = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
+    private readonly NumericUpDown _anchorLimit = new() { Minimum = 1, Maximum = 10, Width = 70 };
+    private readonly NumericUpDown _anchorSize = new() { Minimum = 32, Maximum = 72, Increment = 4, Width = 70 };
+    private readonly CheckBox _anchorRecency = new() { Text = T("anchors.recency"), AutoSize = true };
+    private readonly CheckBox _anchorAvoid = new() { Text = T("anchors.avoid"), AutoSize = true };
     private readonly ListBox _anchorOnly = new() { Dock = DockStyle.Fill, IntegralHeight = false };
     private readonly ListBox _anchorExcluded = new() { Dock = DockStyle.Fill, IntegralHeight = false };
     private readonly ComboBox _newAnchorOnly = ProgramPicker();
@@ -251,6 +257,12 @@ public sealed class SettingsWindow : Form
             Automatic = _autoAnchors.Checked,
             OnlyPrograms = _anchorOnly.Items.Cast<string>().ToList(),
             ExcludedPrograms = _anchorExcluded.Items.Cast<string>().ToList(),
+            Side = (AnchorSide)Math.Max(0, _anchorSide.SelectedIndex),
+            Style = (AnchorLook)Math.Max(0, _anchorLook.SelectedIndex),
+            MaxAutomatic = (int)_anchorLimit.Value,
+            Size = (int)_anchorSize.Value,
+            RecencyEmphasis = _anchorRecency.Checked,
+            AvoidContent = _anchorAvoid.Checked,
         }.Validated();
         draft.ShowNotifications = _showNotifications.Checked;
         draft.AutomaticUpdates = _automaticUpdates.Checked;
@@ -421,6 +433,12 @@ public sealed class SettingsWindow : Form
             _toolbarButtons.SetItemChecked(i, toolbar.Buttons.Contains(((ToolbarChoice)_toolbarButtons.Items[i]).Command));
         AnchorPreferences anchors = values.Anchors.Validated();
         _autoAnchors.Checked = anchors.Automatic;
+        _anchorSide.SelectedIndex = (int)anchors.Side;
+        _anchorLook.SelectedIndex = (int)anchors.Style;
+        _anchorLimit.Value = anchors.MaxAutomatic;
+        _anchorSize.Value = anchors.Size;
+        _anchorRecency.Checked = anchors.RecencyEmphasis;
+        _anchorAvoid.Checked = anchors.AvoidContent;
         _anchorOnly.Items.Clear();
         _anchorOnly.Items.AddRange(anchors.OnlyPrograms.Cast<object>().ToArray());
         _anchorExcluded.Items.Clear();
@@ -783,13 +801,21 @@ public sealed class SettingsWindow : Form
 
     private Control BuildAnchors()
     {
-        var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Dock = DockStyle.Fill };
+        _anchorSide.Items.AddRange([T("anchors.side.right"), T("anchors.side.left"), T("anchors.side.near")]);
+        _anchorLook.Items.AddRange([T("anchors.look.dark"), T("anchors.look.light")]);
+        var page = new TableLayoutPanel { ColumnCount = 2, RowCount = 2, Dock = DockStyle.Fill };
+        page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        page.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        page.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        page.Controls.Add(Section(T("anchors.settings.title"), _autoAnchors, Note(T("anchors.auto.help"))), 0, 0);
+        page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        GroupBox options = Section(T("anchors.settings.title"), _autoAnchors, Note(T("anchors.auto.help")),
+            SettingRow(T("anchors.side.label"), _anchorSide), SettingRow(T("anchors.look.label"), _anchorLook),
+            SettingRow(T("anchors.limit"), _anchorLimit), SettingRow(T("anchors.size"), _anchorSize),
+            _anchorRecency, _anchorAvoid, Note(T("anchors.avoid.help")));
+        page.Controls.Add(options, 0, 0);
+        page.SetColumnSpan(options, 2);
         page.Controls.Add(BuildProgramList(T("anchors.auto.only"), _anchorOnly, _newAnchorOnly), 0, 1);
-        page.Controls.Add(BuildProgramList(T("anchors.auto.excluded"), _anchorExcluded, _newAnchorExcluded), 0, 2);
+        page.Controls.Add(BuildProgramList(T("anchors.auto.excluded"), _anchorExcluded, _newAnchorExcluded), 1, 1);
         return page;
     }
 

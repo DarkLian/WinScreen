@@ -107,6 +107,8 @@ Anchors are also removed when their target window is destroyed, when restoring a
 
 **Settings → Anchors** can add an Anchor by itself for a window that is fully hidden behind others. It goes when the window is uncovered or brought forward. Up to eight windows get one at a time, most recently used first. Minimized windows, windows on other desktops, dialogs, and originals hidden by a view get none, and nothing appears during games and full-screen apps. Press Ctrl+Alt+A on a window to keep its automatic Anchor; removing one keeps it away until the window has been uncovered. Program lists on the same page limit which programs get them.
 
+The same page sets where new Anchors appear (right, left, or near the window), how many automatic ones to show (1–10), their size, and a dark or light style. By default the most recent automatic Anchor is the largest and most solid. A notch in the corner marks a window that has a view, and clicking that Anchor goes through the view. **Move automatic Anchors off text and images** checks the screen after windows change, at most every three seconds, and moves one only when a clearly calmer spot exists. An Anchor you've dragged, or added yourself, stays where it is. **While this option is on, Anchors don't appear in screenshots or screen sharing.**
+
 ### Picture-in-Picture controls
 
 The compact title bar appears on hover with the source title, icon, Minimize, and Close. Drag its title to move the view;

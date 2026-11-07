@@ -1,15 +1,30 @@
 namespace WinScreen.Settings;
 
+public enum AnchorSide { Right, Left, NearWindow }
+public enum AnchorLook { Dark, Light }
+
 public sealed record AnchorPreferences
 {
+    public const int DefaultLimit = 8;
+
     public bool Automatic { get; init; }
     public List<string> OnlyPrograms { get; init; } = [];
     public List<string> ExcludedPrograms { get; init; } = [];
+    public AnchorSide Side { get; init; }
+    public int MaxAutomatic { get; init; } = DefaultLimit;
+    public int Size { get; init; } = 48;
+    public AnchorLook Style { get; init; }
+    public bool RecencyEmphasis { get; init; } = true;
+    public bool AvoidContent { get; init; }
 
     internal AnchorPreferences Validated() => this with
     {
         OnlyPrograms = Clean(OnlyPrograms),
         ExcludedPrograms = Clean(ExcludedPrograms),
+        Side = Enum.IsDefined(Side) ? Side : AnchorSide.Right,
+        MaxAutomatic = Math.Clamp(MaxAutomatic, 1, 10),
+        Size = Math.Clamp(Size, 32, 72),
+        Style = Enum.IsDefined(Style) ? Style : AnchorLook.Dark,
     };
 
     private static List<string> Clean(List<string>? names) =>

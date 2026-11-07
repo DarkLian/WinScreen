@@ -1,9 +1,11 @@
 using WinScreen.Native;
+using WinScreen.Pip;
+using WinScreen.Settings;
 
 namespace WinScreen.Anchors;
 
 /// <summary>
-/// The anchors on screen, stacked in columns from the right edge until someone moves them. They start
+/// The anchors on screen, stacked in columns from the chosen edge until someone moves them. They start
 /// below the top of the screen, which is where a maximized window keeps its close button.
 /// </summary>
 public sealed class AnchorSet : IDisposable
@@ -11,15 +13,19 @@ public sealed class AnchorSet : IDisposable
     private const int Margin = 16;
     private const int FirstTop = 120;
     private const int Gap = 8;
-    private const int AutomaticLimit = 8;
 
     private readonly Dictionary<nint, AnchorButton> _anchors = [];
     private readonly HashSet<nint> _dismissed = [];
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 500 };
+    private AnchorPreferences _preferences = new();
 
     public AnchorSet()
     {
-        _watch.Tick += (_, _) => DropClosedWindows();
+        _watch.Tick += (_, _) =>
+        {
+            DropClosedWindows();
+            Restyle();
+        };
     }
 
     /// <summary>True for an Anchor someone added themselves, which is what commands report and toggle.</summary>
@@ -27,8 +33,17 @@ public sealed class AnchorSet : IDisposable
 
     internal IReadOnlyCollection<nint> Automatic => _anchors.Where(pair => pair.Value.Automatic).Select(pair => pair.Key).ToArray();
 
+    /// <summary>Tells which windows have a view, so their Anchors can say so.</summary>
+    internal Func<nint, bool>? HasView { get; set; }
+
     public event Action<nint>? Created;
     public event Action<nint>? ShowRequested;
+
+    internal void Configure(AnchorPreferences preferences)
+    {
+        _preferences = preferences.Validated();
+        Restyle();
+    }
 
     /// <summary>Adds an anchor for a window, or removes the one it has. Returns the new state.</summary>
     public bool Toggle(nint window)
@@ -38,6 +53,7 @@ public sealed class AnchorSet : IDisposable
             if (existing.Automatic)
             {
                 existing.Automatic = false; // Asking for one keeps it, so uncovering won't remove it.
+                Restyle();
                 return true;
             }
 
@@ -48,6 +64,7 @@ public sealed class AnchorSet : IDisposable
         }
 
         Add(window, automatic: false);
+        Restyle();
         return true;
     }
 
@@ -58,8 +75,8 @@ public sealed class AnchorSet : IDisposable
     internal void SyncAutomatic(IReadOnlyList<nint> covered)
     {
         _dismissed.IntersectWith(covered);
-        var wanted = covered.Where(window => !_dismissed.Contains(window) && !HasManualOrDead(window))
-            .Take(AutomaticLimit).ToHashSet();
+        List<nint> wanted = covered.Where(window => !_dismissed.Contains(window) && !HasManualOrDead(window))
+            .Take(_preferences.MaxAutomatic).ToList();
         foreach ((nint window, AnchorButton anchor) in _anchors.ToArray())
         {
             if (anchor.Automatic && !wanted.Contains(window))
@@ -75,8 +92,12 @@ public sealed class AnchorSet : IDisposable
             catch (Windows.WindowOperationException) { } // It closed during the pass.
         }
 
+        _recency = wanted;
+        Restyle();
         _watch.Enabled = _anchors.Count > 0;
     }
+
+    private List<nint> _recency = [];
 
     private bool HasManualOrDead(nint window) =>
         _anchors.TryGetValue(window, out AnchorButton? anchor) && (!anchor.Automatic || anchor.IsDisposed);
@@ -86,7 +107,7 @@ public sealed class AnchorSet : IDisposable
         Rectangle area = Screen.FromHandle(window).WorkingArea;
         var anchor = new AnchorButton(window)
         {
-            Location = FreePosition(area, Dpi.Of(window)),
+            Location = StartPosition(window, area, Dpi.Of(window)),
             ShowTarget = ShowRequested is null ? null : target => ShowRequested?.Invoke(target),
             Automatic = automatic,
         };
@@ -102,8 +123,44 @@ public sealed class AnchorSet : IDisposable
             _watch.Enabled = _anchors.Count > 0;
         };
         Created?.Invoke(anchor.Handle);
+        Style(anchor);
         anchor.Show();
         _watch.Enabled = true;
+    }
+
+    private void Restyle()
+    {
+        foreach (AnchorButton anchor in _anchors.Values)
+            Style(anchor);
+    }
+
+    private void Style(AnchorButton anchor)
+    {
+        int rank = anchor.Automatic ? _recency.IndexOf(anchor.Target) : -1;
+        (double size, double opacity) = rank >= 0 && _preferences.RecencyEmphasis
+            ? AnchorEmphasis.For(rank, _recency.Count)
+            : (1.0, 1.0);
+        int full = Dpi.Scale(_preferences.Size, Dpi.Of(anchor.Target));
+        anchor.Apply((int)Math.Round(full * size), opacity, _preferences.Style == AnchorLook.Light,
+            HasView?.Invoke(anchor.Target) == true, _preferences.AvoidContent);
+    }
+
+    /// <summary>
+    /// Moves automatic Anchors off text and images when a clearly calmer spot exists. Anchors the person
+    /// placed, or added themselves, stay put. Each is left out of screen capture while this is on, so the
+    /// check sees what's under them.
+    /// </summary>
+    internal void AvoidContent(Func<Rectangle, bool[,]> busyCells)
+    {
+        foreach (AnchorButton anchor in _anchors.Values.Where(anchor => anchor.Automatic && !anchor.Placed).ToArray())
+        {
+            Rectangle area = Screen.FromRectangle(anchor.Bounds).WorkingArea;
+            if (PipGeometry.CalmerSpot(busyCells(area), area, anchor.Bounds) is not { } spot)
+                continue;
+            var moved = new Rectangle(spot, anchor.Size);
+            if (!_anchors.Values.Any(other => !ReferenceEquals(other, anchor) && other.Bounds.IntersectsWith(moved)))
+                anchor.Location = spot;
+        }
     }
 
     public void RemoveAll()
@@ -120,15 +177,38 @@ public sealed class AnchorSet : IDisposable
         _watch.Dispose();
     }
 
+    private Point StartPosition(nint window, Rectangle area, int dpi)
+    {
+        if (_preferences.Side == AnchorSide.NearWindow && NearWindow(window, area, dpi) is { } near)
+            return near;
+        return FreePosition(area, dpi);
+    }
+
+    /// <summary>Just outside the window's right edge, or inside it when the screen ends first.</summary>
+    private Point? NearWindow(nint window, Rectangle area, int dpi)
+    {
+        if (!User32.GetWindowRect(window, out Rect bounds))
+            return null;
+        int size = Dpi.Scale(_preferences.Size, dpi), gap = Dpi.Scale(Gap, dpi);
+        return AnchorGeometry.NearWindow(Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom), size, gap, area,
+            candidate => !_anchors.Values.Any(anchor => anchor.Bounds.IntersectsWith(candidate)));
+    }
+
     private Point FreePosition(Rectangle area, int dpi)
     {
-        int size = Dpi.Scale(AnchorButton.ButtonSize, dpi);
+        int size = Dpi.Scale(_preferences.Size, dpi);
         int step = size + Dpi.Scale(Gap, dpi);
-        for (int left = area.Right - size - Dpi.Scale(Margin, dpi); left >= area.Left; left -= step)
-        for (int top = area.Top + Dpi.Scale(FirstTop, dpi); top + size <= area.Bottom; top += step)
+        int margin = Dpi.Scale(Margin, dpi);
+        bool leftSide = _preferences.Side == AnchorSide.Left;
+        int columns = Math.Max(1, (area.Width - margin) / step);
+        for (int column = 0; column < columns; column++)
         {
-            var candidate = new Rectangle(left, top, size, size);
-            if (!_anchors.Values.Any(anchor => anchor.Bounds.IntersectsWith(candidate))) return candidate.Location;
+            int left = leftSide ? area.Left + margin + column * step : area.Right - size - margin - column * step;
+            for (int top = area.Top + Dpi.Scale(FirstTop, dpi); top + size <= area.Bottom; top += step)
+            {
+                var candidate = new Rectangle(left, top, size, size);
+                if (!_anchors.Values.Any(anchor => anchor.Bounds.IntersectsWith(candidate))) return candidate.Location;
+            }
         }
 
         return new Point(Math.Max(area.Left, area.Right - size), Math.Max(area.Top, area.Bottom - size));
@@ -146,5 +226,41 @@ public sealed class AnchorSet : IDisposable
         }
 
         _watch.Enabled = _anchors.Count > 0;
+    }
+}
+
+/// <summary>Where Anchors go and how they show their age, kept apart so it can be tested directly.</summary>
+internal static class AnchorGeometry
+{
+    public static Point? NearWindow(Rectangle window, int size, int gap, Rectangle area, Func<Rectangle, bool> isFree)
+    {
+        int left = window.Right + gap;
+        if (left + size > area.Right)
+            left = Math.Max(area.Left, window.Right - size - gap);
+        for (int top = Math.Max(window.Top, area.Top); top + size <= area.Bottom; top += size + gap)
+        {
+            var candidate = new Rectangle(left, top, size, size);
+            if (isFree(candidate))
+                return candidate.Location;
+        }
+
+        return null;
+    }
+}
+
+/// <summary>
+/// The most recent covered window has the largest, most solid Anchor. Size and opacity carry this, so it
+/// doesn't rest on colour.
+/// </summary>
+internal static class AnchorEmphasis
+{
+    private const double SmallestSize = 0.7;
+    private const double FaintestOpacity = 0.6;
+
+    public static (double Size, double Opacity) For(int rank, int count)
+    {
+        if (count <= 1) return (1, 1);
+        double age = (double)Math.Clamp(rank, 0, count - 1) / (count - 1);
+        return (1 - age * (1 - SmallestSize), 1 - age * (1 - FaintestOpacity));
     }
 }

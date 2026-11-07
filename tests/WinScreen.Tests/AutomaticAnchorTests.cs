@@ -2,6 +2,7 @@ using WinScreen.Anchors;
 using WinScreen.Native;
 using WinScreen.Settings;
 using WinScreen.Tests.Support;
+using WinScreen.Tray;
 using WinScreen.Windows;
 using Xunit;
 
@@ -73,9 +74,160 @@ public sealed class AnchorPreferenceTests
     }
 }
 
+public sealed class AnchorPolishTests
+{
+    [Fact]
+    public void The_most_recent_Anchor_is_largest_and_most_solid_and_each_older_one_less_so()
+    {
+        Assert.Equal((1.0, 1.0), AnchorEmphasis.For(0, 1));
+        var steps = Enumerable.Range(0, 5).Select(rank => AnchorEmphasis.For(rank, 5)).ToList();
+        Assert.Equal((1.0, 1.0), steps[0]);
+        for (int rank = 1; rank < 5; rank++)
+        {
+            Assert.True(steps[rank].Size < steps[rank - 1].Size);
+            Assert.True(steps[rank].Opacity < steps[rank - 1].Opacity);
+        }
+
+        Assert.True(steps[4].Size >= 0.69 && steps[4].Opacity >= 0.59, "An old Anchor must stay usable.");
+    }
+
+    [Fact]
+    public void Near_a_window_means_beside_it_or_inside_at_the_screen_edge_and_skips_taken_spots()
+    {
+        var area = new Rectangle(0, 0, 1920, 1032);
+        Assert.Equal(new Point(508, 100), AnchorGeometry.NearWindow(new Rectangle(100, 100, 400, 300), 48, 8, area, _ => true));
+        Assert.Equal(new Point(1844, 100), AnchorGeometry.NearWindow(new Rectangle(1500, 100, 400, 300), 48, 8, area, _ => true));
+        Assert.Equal(new Point(508, 156), AnchorGeometry.NearWindow(new Rectangle(100, 100, 400, 300), 48, 8, area, spot => spot.Top != 100));
+        Assert.Null(AnchorGeometry.NearWindow(new Rectangle(100, 100, 400, 300), 48, 8, area, _ => false));
+    }
+
+    [Fact]
+    public void Older_settings_keep_todays_look_and_values_stay_in_range()
+    {
+        AnchorPreferences old = AppSettings.Parse("{}").Anchors;
+        Assert.Equal(AnchorSide.Right, old.Side);
+        Assert.Equal(8, old.MaxAutomatic);
+        Assert.Equal(48, old.Size);
+        Assert.Equal(AnchorLook.Dark, old.Style);
+        Assert.False(old.AvoidContent);
+        AnchorPreferences wild = AppSettings.Parse("""{"Anchors":{"MaxAutomatic":99,"Size":4,"Side":7,"Style":9}}""").Anchors;
+        Assert.Equal(10, wild.MaxAutomatic);
+        Assert.Equal(32, wild.Size);
+        Assert.Equal(AnchorSide.Right, wild.Side);
+        Assert.Equal(AnchorLook.Dark, wild.Style);
+    }
+
+    [Fact]
+    public void The_Settings_page_shows_and_saves_every_Anchor_choice()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            AppSettings? saved = null;
+            var settings = new AppSettings { Anchors = new()
+            {
+                Automatic = true, Side = AnchorSide.NearWindow, Style = AnchorLook.Light, MaxAutomatic = 3, Size = 60,
+                RecencyEmphasis = false, AvoidContent = true, OnlyPrograms = ["one"], ExcludedPrograms = ["two"],
+            } };
+            using var window = new SettingsWindow(settings, new StartWithWindows(@"Software\WinScreenTests\Anchors"),
+                draft => { saved = draft; return []; });
+            Assert.True(window.SaveChanges());
+            AnchorPreferences kept = saved!.Anchors;
+            Assert.True(kept.Automatic);
+            Assert.Equal(AnchorSide.NearWindow, kept.Side);
+            Assert.Equal(AnchorLook.Light, kept.Style);
+            Assert.Equal(3, kept.MaxAutomatic);
+            Assert.Equal(60, kept.Size);
+            Assert.False(kept.RecencyEmphasis);
+            Assert.True(kept.AvoidContent);
+            Assert.Equal(["one"], kept.OnlyPrograms);
+            Assert.Equal(["two"], kept.ExcludedPrograms);
+        });
+    }
+}
+
 [Trait("Category", "RealWindows")]
 public sealed class AutomaticAnchorTests
 {
+    private static List<Form> Buttons() => Application.OpenForms.OfType<Form>().Where(form => form.GetType().Name == "AnchorButton").ToList();
+
+    [Fact]
+    public void Avoidance_moves_only_automatic_Anchors_and_leaves_them_out_of_capture()
+    {
+        using var automaticTarget = new TargetProcess(Back);
+        using var manualTarget = new TargetProcess(Front);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var anchors = new AnchorSet();
+            anchors.Configure(new AnchorPreferences { AvoidContent = true });
+            anchors.Toggle(manualTarget.Handle);
+            anchors.SyncAutomatic([automaticTarget.Handle]);
+            Form manual = Buttons()[0], automatic = Buttons()[1];
+            Assert.True(User32.GetWindowDisplayAffinity(automatic.Handle, out uint affinity) && affinity == User32.WDA_EXCLUDEFROMCAPTURE);
+            Point manualAt = manual.Location, automaticAt = automatic.Location;
+
+            bool[,] Busy(Rectangle area)
+            {
+                int rows = area.Height / 16, columns = area.Width / 16;
+                var cells = new bool[rows, columns];
+                for (int row = 0; row < rows; row++)
+                    for (int column = columns / 2; column < columns; column++)
+                        cells[row, column] = true; // Content on the right, a calm left half.
+                return cells;
+            }
+
+            anchors.AvoidContent(Busy);
+            Assert.Equal(manualAt, manual.Location);
+            Assert.NotEqual(automaticAt, automatic.Location);
+            Assert.True(automatic.Left < Screen.PrimaryScreen!.WorkingArea.Width / 2);
+
+            anchors.Configure(new AnchorPreferences());
+            Assert.True(User32.GetWindowDisplayAffinity(automatic.Handle, out affinity) && affinity == User32.WDA_NONE);
+        });
+    }
+
+    [Fact]
+    public void Size_style_side_and_limit_apply_and_recency_shrinks_older_Anchors()
+    {
+        var targets = Enumerable.Range(0, 4).Select(_ => new TargetProcess(new Rectangle(200, 200, 200, 150))).ToList();
+        try
+        {
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                using var anchors = new AnchorSet();
+                anchors.Configure(new AnchorPreferences { Size = 64, Side = AnchorSide.Left, Style = AnchorLook.Light, MaxAutomatic = 3 });
+                anchors.SyncAutomatic(targets.Select(target => target.Handle).ToList());
+                List<Form> shown = Buttons();
+                Assert.Equal(3, shown.Count);
+                Assert.Equal(64, shown[0].ClientSize.Width);
+                Assert.True(shown[2].ClientSize.Width < shown[1].ClientSize.Width && shown[1].ClientSize.Width < 64);
+                Assert.True(shown[2].Opacity < shown[0].Opacity);
+                Assert.Equal(Color.FromArgb(240, 240, 240), shown[0].BackColor);
+                Assert.True(shown[0].Left < Screen.PrimaryScreen!.WorkingArea.Width / 2);
+            });
+        }
+        finally { targets.ForEach(target => target.Dispose()); }
+    }
+
+    [Fact]
+    public void An_Anchor_marks_a_window_that_has_a_view()
+    {
+        using var target = new TargetProcess(Back);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            bool hasView = false;
+            using var anchors = new AnchorSet { HasView = _ => hasView };
+            anchors.Toggle(target.Handle);
+            Form button = Buttons()[0];
+            using var plain = new Bitmap(button.Width, button.Height);
+            button.DrawToBitmap(plain, new Rectangle(Point.Empty, button.Size));
+            hasView = true;
+            anchors.Configure(new AnchorPreferences());
+            using var marked = new Bitmap(button.Width, button.Height);
+            button.DrawToBitmap(marked, new Rectangle(Point.Empty, button.Size));
+            Assert.NotEqual(plain.GetPixel(button.Width - 2, button.Height - 2), marked.GetPixel(button.Width - 2, button.Height - 2));
+        });
+    }
+
     private static readonly Rectangle Back = new(300, 240, 300, 200);
     private static readonly Rectangle Front = new(240, 180, 500, 400);
 

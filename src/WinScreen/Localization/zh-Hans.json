@@ -346,5 +346,18 @@
   "anchors.auto.help": "窗口被其他窗口完全遮挡时会出现锚点，不再被遮挡时锚点会消失。游戏和全屏应用运行时不会出现。你自己添加的锚点会保留。",
   "anchors.auto.only": "仅这些程序（留空表示全部）",
   "anchors.auto.excluded": "排除这些程序",
-  "features.autoAnchors": "自动锚点"
+  "features.autoAnchors": "自动锚点",
+  "anchors.side.label": "新锚点位置",
+  "anchors.side.right": "右侧",
+  "anchors.side.left": "左侧",
+  "anchors.side.near": "窗口旁边",
+  "anchors.look.label": "样式",
+  "anchors.look.dark": "深色",
+  "anchors.look.light": "浅色",
+  "anchors.limit": "自动锚点数量上限",
+  "anchors.size": "大小（像素）",
+  "anchors.recency": "让最近的自动锚点最大、最不透明",
+  "anchors.avoid": "将自动锚点移离文字和图片",
+  "anchors.avoid.help": "开启后，锚点不会出现在屏幕截图或屏幕共享中。",
+  "anchors.controls.view": "此窗口有视图。"
 }

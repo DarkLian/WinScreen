@@ -94,6 +94,7 @@ public sealed class TrayApplication : ApplicationContext
         };
         _automaticAnchors = new AutomaticAnchors(_anchors, CanHaveAutomaticAnchor, () => Paused || FullScreen.IsActive());
         _anchors.Created += _dark.Ignore;
+        _anchors.HasView = _pips.ContainsKey;
         _anchors.ShowRequested += window =>
         {
             if (_pips.TryGetValue(window, out var pip)) pip.GoToSource();
@@ -293,7 +294,8 @@ public sealed class TrayApplication : ApplicationContext
         _dark.DetectAlreadyDark = _settings.DetectAlreadyDark;
         _toolbar.Enable(_settings.ShowToolbar);
         _toolbar.Configure(_settings.Toolbar);
-        _automaticAnchors.Configure(_settings.Anchors.Automatic);
+        _anchors.Configure(_settings.Anchors);
+        _automaticAnchors.Configure(_settings.Anchors.Automatic, _settings.Anchors.AvoidContent);
         _updates.SetEnabled(_settings.AutomaticUpdates);
         _updateTimer.Interval = 30_000;
         foreach (PipWindow pip in _viewsInOrder)

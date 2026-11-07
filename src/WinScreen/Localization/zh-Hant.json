@@ -346,5 +346,18 @@
   "anchors.auto.help": "視窗被其他視窗完全遮蔽時會出現錨點，不再被遮蔽時錨點會消失。遊戲和全螢幕應用程式執行時不會出現。你自己新增的錨點會保留。",
   "anchors.auto.only": "僅這些程式（留空表示全部）",
   "anchors.auto.excluded": "排除這些程式",
-  "features.autoAnchors": "自動錨點"
+  "features.autoAnchors": "自動錨點",
+  "anchors.side.label": "新錨點位置",
+  "anchors.side.right": "右側",
+  "anchors.side.left": "左側",
+  "anchors.side.near": "視窗旁邊",
+  "anchors.look.label": "樣式",
+  "anchors.look.dark": "深色",
+  "anchors.look.light": "淺色",
+  "anchors.limit": "自動錨點數量上限",
+  "anchors.size": "大小（像素）",
+  "anchors.recency": "讓最近的自動錨點最大、最不透明",
+  "anchors.avoid": "將自動錨點移離文字和圖片",
+  "anchors.avoid.help": "開啟後，錨點不會出現在螢幕擷取畫面或螢幕分享中。",
+  "anchors.controls.view": "此視窗有檢視。"
 }

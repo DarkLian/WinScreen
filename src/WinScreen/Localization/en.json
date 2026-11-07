@@ -346,5 +346,18 @@
   "anchors.auto.help": "An Anchor appears when a window is hidden behind others and goes when it's uncovered. Nothing appears during games and full-screen apps. Anchors you add yourself stay.",
   "anchors.auto.only": "Only these programs (leave empty for all)",
   "anchors.auto.excluded": "Never these programs",
-  "features.autoAnchors": "Automatic Anchors"
+  "features.autoAnchors": "Automatic Anchors",
+  "anchors.side.label": "New Anchors appear",
+  "anchors.side.right": "On the right",
+  "anchors.side.left": "On the left",
+  "anchors.side.near": "Near the window",
+  "anchors.look.label": "Style",
+  "anchors.look.dark": "Dark",
+  "anchors.look.light": "Light",
+  "anchors.limit": "Most automatic Anchors",
+  "anchors.size": "Size (px)",
+  "anchors.recency": "Make the most recent automatic Anchor largest and most solid",
+  "anchors.avoid": "Move automatic Anchors off text and images",
+  "anchors.avoid.help": "While this is on, Anchors don't appear in screenshots or screen sharing.",
+  "anchors.controls.view": "This window has a view."
 }
