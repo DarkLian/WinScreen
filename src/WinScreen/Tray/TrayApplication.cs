@@ -76,6 +76,20 @@ public sealed class TrayApplication : ApplicationContext
         _dark.Ignore(_toolbar.Handle);
         _ = _flash.Handle;
         _dark.Ignore(_flash.Handle);
+        _dark.Notice += text => Alert(T("window.dark"), text, ToolTipIcon.Info);
+        _modifierDrag.OpacityEligible = CanChangeOpacity;
+        _modifierDrag.OpacityRequested = (window, steps) =>
+        {
+            WindowIdentity identity;
+            try { identity = WindowIdentity.Capture(window); }
+            catch (WindowOperationException) { return; }
+            _toolbar.BeginInvoke(() =>
+            {
+                if (!_settings.OpacityWheel || !identity.Matches() || !CanChangeOpacity(window)) return;
+                try { ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(steps))); }
+                catch (Exception failure) when (IsExpected(failure)) { Alert(T("errors.operation.title"), failure.Message); }
+            });
+        };
         _anchors.Created += _dark.Ignore;
         _anchors.ShowRequested += window =>
         {
@@ -246,6 +260,8 @@ public sealed class TrayApplication : ApplicationContext
             {
                 try
                 {
+                    if (settings.Imported && File.Exists(_settingsPath))
+                        File.Copy(_settingsPath, _settingsPath + ".before-import-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"));
                     if (settings.StartWithWindows is { } startup) _startup.IsOn = startup;
                     settings.Save(_settingsPath);
                 }
@@ -268,6 +284,8 @@ public sealed class TrayApplication : ApplicationContext
         _windows.SetExcluded(_settings.ExcludedPrograms);
         _windows.SetIncluded(_settings.IncludedPrograms);
         _windows.DefaultOpacity = _settings.DefaultAlpha;
+        _borders.Configure(_settings.PinBorder);
+        _dark.DetectAlreadyDark = _settings.DetectAlreadyDark;
         _toolbar.Enable(_settings.ShowToolbar);
         _updates.SetEnabled(_settings.AutomaticUpdates);
         _updateTimer.Interval = 30_000;
@@ -417,8 +435,9 @@ public sealed class TrayApplication : ApplicationContext
     /// </summary>
     private void FollowModifierHook(nint foreground)
     {
+        _modifierDrag.OpacityWheelEnabled = _settings.OpacityWheel;
         bool fallbackMenu = _windowMenu is { IsDisposed: false, NeedsHook: true };
-        if (!_settings.ModifierDrag && !_settings.WindowMenu && !fallbackMenu)
+        if (!_settings.ModifierDrag && !_settings.WindowMenu && !_settings.OpacityWheel && !fallbackMenu)
         {
             _modifierDrag.SetActive(false);
             return;
@@ -434,11 +453,15 @@ public sealed class TrayApplication : ApplicationContext
         _modifierDrag.MoveEnabled = _settings.ModifierDrag;
         _modifierDrag.MenuEnabled = _settings.WindowMenu;
         _modifierDrag.MenuGesture = _settings.WindowMenuGesture;
+        _modifierDrag.OpacityWheelEnabled = _settings.OpacityWheel;
         string program = WindowInfo.ProgramOf(foreground);
         bool menuExcluded = _settings.ExcludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase) ||
                             _settings.WindowMenuExclusions.Contains(program, StringComparer.OrdinalIgnoreCase);
-        bool run = ModifierHookPolicy.ShouldRun(_settings.ModifierDrag, _settings.WindowMenu || fallbackMenu,
-            FullScreen.Current(), WindowInfo.FillsMonitor(foreground), _hookForegroundExcluded, menuExcluded, FullScreen.IsAway());
+        bool run = ModifierHookPolicy.ShouldRun(
+            (_settings.ModifierDrag && !_hookForegroundExcluded) ||
+            ((_settings.WindowMenu || fallbackMenu) && !menuExcluded) ||
+            (_settings.OpacityWheel && !_settings.ExcludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase)),
+            FullScreen.Current(), WindowInfo.FillsMonitor(foreground), false, FullScreen.IsAway());
         if (!run && _windowMenu is { IsDisposed: false }) _windowMenu.Close();
         Point cursor = Cursor.Position;
         // Windows drops a slow hook without saying so. Input with no callback means it has, so put it back.
@@ -487,6 +510,9 @@ public sealed class TrayApplication : ApplicationContext
     private bool CanOpenWindowMenu(nint window) => CanGesture(window) && !User32.IsIconic(window) &&
         !WindowInfo.FillsMonitor(window) && !_settings.WindowMenuExclusions.Contains(WindowInfo.ProgramOf(window),
             StringComparer.OrdinalIgnoreCase);
+
+    private bool CanChangeOpacity(nint window) => FullScreen.Current() == FullScreenState.None &&
+        !FullScreen.IsAway() && !User32.IsIconic(window) && !WindowInfo.FillsMonitor(window) && CanGesture(window);
 
     /// <summary>
     /// Gives a window its program's saved setup the first time it comes forward, and never again: pinning
@@ -753,10 +779,10 @@ public sealed class TrayApplication : ApplicationContext
                     Confirm(_windows.TogglePin(window) ? T("status.pinned") : T("status.unpinned"), WindowInfo.Title(window));
                     break;
                 case AppCommand.OpacityUp:
-                    ShowOpacity(window, _windows.ChangeOpacity(window, WindowController.OpacityStep));
+                    ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(1)));
                     break;
                 case AppCommand.OpacityDown:
-                    ShowOpacity(window, _windows.ChangeOpacity(window, -WindowController.OpacityStep));
+                    ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(-1)));
                     break;
                 case AppCommand.ToggleDefaultOpacity:
                     ShowOpacity(window, _windows.ToggleDefaultOpacity(window));
@@ -1036,6 +1062,8 @@ public sealed class TrayApplication : ApplicationContext
     private bool HasAnythingToRestore(nint window) =>
         _windows.HasChanges(window) || _pips.ContainsKey(window) || _shrunk.ContainsKey(window) ||
         _dark.IsDark(window) || _anchors.Has(window) || _croppingWindow == window;
+
+    private int OpacityDelta(int steps) => steps * (int)Math.Round(Math.Clamp(_settings.OpacityStepPercent, 1, 25) * 255 / 100.0);
 
     private void ShowOpacity(nint window, byte alpha)
     {

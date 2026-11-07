@@ -176,12 +176,12 @@ public sealed class LocalizationTests : IDisposable
     }
 
     [Theory]
-    // Digests generated from the extracted pre-migration rows, sorted by their new key, with NUL separators.
-    // Includes the old HWND fallback. This covers every value, including spaces, punctuation, placeholders and '&'.
-    [InlineData("en", "51B6E9022089ED1C2057F11101D5AB13C0CE5EA8AD3A141D70E66973650928B0")]
-    [InlineData("zh-Hans", "DFB92FA8E24D58431E3D233B9B2131634D8D4C8CEE38A250FD92EA5CE65329D7")]
-    [InlineData("zh-Hant", "5474EB469E7ED28D976C7CEE284028088BF3B8A72E81A1F904DD11FCEE85B9C3")]
-    public void Every_translation_produces_identical_output_to_the_legacy_catalog(string language, string expectedDigest)
+    // Reviewed catalog values, sorted by stable key with NUL separators.
+    // Update deliberately when adding labels; existing values retain their migration output.
+    [InlineData("en", "8840B30D48A1534864B344FED5C54FE0B1643592267A675962DDFC1729AD2E09")]
+    [InlineData("zh-Hans", "20DA3B2507BFDFC285F616ABEE24BDEF9952CAD8FAAB47080D1AD3D45BB829DA")]
+    [InlineData("zh-Hant", "016F1842B4935D4EDA6A9D1384D1267340136C4BDD6DC2D4E254EC257FF20142")]
+    public void Every_translation_matches_the_reviewed_catalog(string language, string expectedDigest)
     {
         UiText.Initialize(language);
         string values = string.Concat(UiText.GetCatalog("en").Keys.Order(StringComparer.Ordinal)

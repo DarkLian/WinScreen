@@ -6,6 +6,8 @@ public sealed class DarkMode : IDisposable
     private readonly Dictionary<nint, DarkOverlay> _overlays = [];
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 33 };
     private readonly HashSet<nint> _ignored = [];
+    public bool DetectAlreadyDark { get; set; }
+    public event Action<string>? Notice;
 
     public DarkMode()
     {
@@ -25,6 +27,12 @@ public sealed class DarkMode : IDisposable
             return false;
         }
 
+        if (DetectAlreadyDark && Windows.WindowInfo.TryGetVisibleBounds(window, out Rectangle bounds) &&
+            Windows.ScreenColors.Brightness(Windows.ScreenColors.MostCommon(bounds)) < .35)
+        {
+            Notice?.Invoke(Localization.UiText.T("dark.alreadyDark"));
+            return false;
+        }
         Add(window).Follow();
         _timer.Enabled = true;
         return true;

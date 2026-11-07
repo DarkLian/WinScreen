@@ -1,5 +1,8 @@
 # WinScreen
 
+设置支持调整不透明度步长和置顶边框、可选 Ctrl+Alt+滚轮不透明度控制、深色检测及 JSON 导入/导出。
+导出文件包含程序路径；滚轮不透明度控制不适用于管理员应用。详见[用户指南](docs/USER_GUIDE.zh-CN.md)。
+
 [English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
 
 免费的 Windows 窗口工具，面向 64 位 Windows 11。无需账号、试用期或激活码。

@@ -1,4 +1,5 @@
 using WinScreen.Native;
+using WinScreen.Settings;
 
 namespace WinScreen.Windows;
 
@@ -7,6 +8,13 @@ public sealed class PinBorders : IDisposable
 {
     private readonly Dictionary<nint, PinBorder> _borders = [];
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 33 };
+    private PinBorderPreferences _preferences = new();
+
+    public void Configure(PinBorderPreferences preferences)
+    {
+        _preferences = preferences.Validated();
+        foreach (PinBorder border in _borders.Values) border.Configure(_preferences);
+    }
 
     public PinBorders()
     {
@@ -28,7 +36,11 @@ public sealed class PinBorders : IDisposable
         foreach (nint window in windows)
         {
             if (!_borders.ContainsKey(window))
-                _borders[window] = new PinBorder(window);
+            {
+                var border = new PinBorder(window);
+                border.Configure(_preferences);
+                _borders[window] = border;
+            }
         }
 
         _timer.Enabled = _borders.Count > 0;
@@ -50,7 +62,8 @@ public sealed class PinBorders : IDisposable
 /// <summary>Click-through and never active, so to everything but the eye it isn't there.</summary>
 internal sealed class PinBorder : Form
 {
-    private const int Thickness = 3;
+    private PinBorderPreferences _preferences = new();
+    private int _lastDpi;
 
     private readonly nint _target;
     private readonly WindowIdentity _identity;
@@ -96,8 +109,10 @@ internal sealed class PinBorder : Form
             return;
         }
 
-        if (Bounds != bounds)
+        int dpi = Dpi.Of(_target);
+        if (Bounds != bounds || dpi != _lastDpi)
         {
+            _lastDpi = dpi;
             Bounds = bounds;
             CutOutTheMiddle(bounds.Size);
         }
@@ -110,7 +125,7 @@ internal sealed class PinBorder : Form
 
     private void CutOutTheMiddle(Size size)
     {
-        int thickness = LogicalToDeviceUnits(Thickness);
+        int thickness = Dpi.Scale(_preferences.Thickness, _lastDpi == 0 ? 96 : _lastDpi);
         var whole = new Rectangle(Point.Empty, size);
         var frame = new Region(whole);
         frame.Exclude(Rectangle.Inflate(whole, -thickness, -thickness));
@@ -118,6 +133,14 @@ internal sealed class PinBorder : Form
         Region? previous = Region;
         Region = frame;
         previous?.Dispose();
+    }
+
+    internal void Configure(PinBorderPreferences preferences)
+    {
+        _preferences = preferences.Validated();
+        BackColor = _preferences.Color;
+        User32.SetLayeredWindowAttributes(Handle, 0, (byte)Math.Round(_preferences.OpacityPercent * 255 / 100.0), User32.LWA_ALPHA);
+        CutOutTheMiddle(Size);
     }
 
     /// <summary>Just above rather than above everything, so a pinned window under another one doesn't show through.</summary>

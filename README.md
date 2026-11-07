@@ -72,6 +72,10 @@ If WinScreen is useful to you, you can also [support it on Ko-fi](https://ko-fi.
 
 ## Build
 
+Settings include adjustable opacity steps and pin borders, optional Ctrl+Alt+wheel opacity, already-dark detection,
+and JSON import/export. Exported files contain program paths; the opacity wheel cannot control administrator apps.
+See the [User Guide](docs/USER_GUIDE.md) for controls and limits.
+
 Requires the .NET 10 SDK specified in `global.json`.
 
 ```powershell

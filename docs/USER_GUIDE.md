@@ -16,6 +16,15 @@ WinScreen leaves the desktop, taskbar, and excluded programs alone. Applications
 
 ## Window menu and appearance
 
+**Settings → Appearance and files** lets you choose opacity steps from 1–25%, and the pin border's colour, opacity,
+and thickness. The existing 20% minimum window opacity stays. Optional **Ctrl+Alt+wheel** adjusts the window under
+the pointer and pauses during full-screen apps and detected games. It cannot control administrator apps.
+Already-dark detection leaves dark windows alone and reports this when you request Dark mode; you can switch detection off.
+
+Use **Export saved settings** to move preferences to another PC. The JSON file includes saved program paths.
+**Import settings** loads a file for review; Save checks the hotkeys, keeps a dated backup beside the current settings,
+then applies it. Cancel discards the import. Startup on this PC and the first-run state stay local.
+
 Enable **Settings → Mouse gestures → Window menu** to use **Ctrl+right-click** on a window. Ctrl+Shift+right-click
 and Ctrl+middle-click are alternatives. Move/resize and the window menu have separate program exclusions; the main
 exclusion list applies to both. The menu is off by default, pauses during full-screen apps and detected games, and
@@ -176,7 +185,7 @@ Selecting text directly by dragging inside PiP is not implemented. Clicking PiP 
 
 ## Transparency and click-through
 
-Ctrl+Alt+Up/Down adjusts opacity in steps of about 10%, never below 20%. **Ctrl+Alt+O** toggles between your configured
+Ctrl+Alt+Up/Down adjusts opacity by the chosen step (10% by default), never below 20%. **Ctrl+Alt+O** toggles between your configured
 default opacity and a solid window. Configure the default in **Settings → General** (20–95% solid).
 
 **Ctrl+Alt+C** makes mouse clicks pass through to the window underneath. It also applies the default transparency

@@ -7,6 +7,9 @@ public static class ScreenColors
 {
     private const int Step = 8;
 
+    internal static double Brightness(Color color) =>
+        (.2126 * color.R + .7152 * color.G + .0722 * color.B) / 255;
+
     public static Color MostCommon(Rectangle area)
     {
         try

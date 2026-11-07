@@ -1,5 +1,8 @@
 # WinScreen
 
+設定支援調整不透明度幅度與置頂邊框、可選 Ctrl+Alt+滾輪不透明度控制、深色偵測及 JSON 匯入/匯出。
+匯出檔案包含程式路徑；滾輪不透明度控制不適用於系統管理員應用程式。詳見[使用指南](docs/USER_GUIDE.zh-TW.md)。
+
 [English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
 
 免費的 Windows 視窗工具，適用於 64 位元 Windows 11。無須帳號、試用期或啟用碼。

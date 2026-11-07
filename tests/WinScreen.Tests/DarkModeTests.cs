@@ -271,4 +271,27 @@ public class DarkModeTests
                 Color.FromArgb(32, 32, 32)), 3000, () => pump(20)));
         });
     }
+
+    [Theory]
+    [InlineData("101820", false)]
+    [InlineData("FFFFFF", true)]
+    public void Detection_leaves_dark_windows_alone_and_still_darkens_light_ones(string color, bool expected)
+    {
+        using var target = new TargetProcess(Spot, color);
+        OnUiThread(pump =>
+        {
+            Native.User32.SetWindowPos(target.Handle, Native.User32.HWND_TOPMOST, 0, 0, 0, 0,
+                Native.User32.SWP_NOMOVE | Native.User32.SWP_NOSIZE | Native.User32.SWP_NOACTIVATE);
+            Assert.True(Shows(target, ColorTranslator.FromHtml("#" + color), pump),
+                $"Expected #{color}; saw {Desktop.ColorOnScreen(Sample(target))}. Target {target.Handle:X}, top {Desktop.TopWindowAt(target.Center):X}, " +
+                $"top title {WindowInfo.Title(Desktop.TopWindowAt(target.Center))}, target bounds {Desktop.BoundsOf(target.Handle)}, style {Desktop.ExStyle(target.Handle):X}.");
+            using var dark = new DarkMode { DetectAlreadyDark = true };
+            var notices = new List<string>();
+            dark.Notice += notices.Add;
+            Assert.Equal(expected, dark.Toggle(target.Handle));
+            Assert.Equal(expected, dark.IsDark(target.Handle));
+            Assert.Equal(expected ? 0 : 1, notices.Count);
+            if (expected) Assert.True(Shows(target, Color.Black, pump));
+        });
+    }
 }

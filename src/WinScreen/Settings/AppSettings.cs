@@ -237,6 +237,12 @@ public sealed class AppSettings
 
     /// <summary>How solid a window is after the default see-through command, and after click-through.</summary>
     public int DefaultOpacityPercent { get; set; } = 80;
+    public int OpacityStepPercent { get; set; } = 10;
+    public bool OpacityWheel { get; set; }
+    public bool DetectAlreadyDark { get; set; } = true;
+    public PinBorderPreferences PinBorder { get; set; } = new();
+    [JsonIgnore]
+    internal bool Imported { get; set; }
 
     /// <summary>The default level as Windows wants it, whatever the settings file says.</summary>
     [JsonIgnore]
@@ -280,65 +286,71 @@ public sealed class AppSettings
             if (new FileInfo(path).Length > 1024 * 1024)
                 throw new JsonException("Settings file is too large.");
             string json = File.ReadAllText(path);
-            AppSettings loaded = JsonSerializer.Deserialize<AppSettings>(json) ?? defaults;
-            using var document = JsonDocument.Parse(json);
-            // Existing installations keep compositor-managed PiP until the person selects capture.
-            loaded.Pip = document.RootElement.ValueKind == JsonValueKind.Object &&
-                         document.RootElement.TryGetProperty(nameof(Pip), out var pip) && pip.ValueKind == JsonValueKind.Object
-                ? (loaded.Pip ?? new PipPreferences()).Validated()
-                : new PipPreferences { Backend = PipBackendPreference.Dwm };
-            if (loaded.Hotkeys is null || loaded.ExcludedPrograms is null || loaded.IncludedPrograms is null ||
-                loaded.SavedSetups is null || loaded.SavedSetups.Any(value => value is null) ||
-                loaded.Hotkeys.Any(pair => pair.Value is null))
-            {
-                try
-                {
-                    File.Copy(path, path + ".invalid-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"));
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                }
-            }
-
-            loaded.PipPresets ??= [];
-            loaded.ModifierExclusions = (loaded.ModifierExclusions ?? defaults.ModifierExclusions)
-                .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
-            loaded.ModifierKey = Enum.IsDefined(loaded.ModifierKey) ? loaded.ModifierKey : ModifierKey.Alt;
-            loaded.WindowMenuGesture = Enum.IsDefined(loaded.WindowMenuGesture) ? loaded.WindowMenuGesture : WindowMenuGesture.CtrlRightClick;
-            loaded.WindowMenuExclusions = (loaded.WindowMenuExclusions ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
-            loaded.Hotkeys ??= [];
-            loaded.ExcludedPrograms = (loaded.ExcludedPrograms ?? defaults.ExcludedPrograms)
-                .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
-            loaded.IncludedPrograms = (loaded.IncludedPrograms ?? []).Where(value => !string.IsNullOrWhiteSpace(value))
-                .ToList();
-            loaded.SavedSetups = (loaded.SavedSetups ?? [])
-                .Where(value => value is not null && !string.IsNullOrWhiteSpace(value.Program)).ToList();
-            loaded.Language = loaded.Language is "en" or "zh-Hans" or "zh-Hant" ? loaded.Language : "system";
-            loaded.DefaultOpacityPercent =
-                Math.Clamp(loaded.DefaultOpacityPercent, LowestOpacityPercent, HighestOpacityPercent);
-            foreach ((AppCommand command, string hotkey) in defaults.Hotkeys)
-            {
-                loaded.Hotkeys.TryAdd(command, hotkey);
-                if (loaded.Hotkeys[command] is null)
-                    loaded.Hotkeys[command] = hotkey;
-            }
-
-            foreach (AppCommand command in loaded.Hotkeys.Keys.Where(command => !Enum.IsDefined(command)).ToArray())
-                loaded.Hotkeys.Remove(command);
-            return loaded;
+            return Parse(json, () => BackupInvalid(path));
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {
-            try
-            {
-                File.Copy(path, path + ".invalid-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"));
-            }
-            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
-            {
-            }
-
+            BackupInvalid(path);
             return defaults;
         }
+    }
+
+    internal static AppSettings Parse(string json, Action? invalid = null)
+    {
+        var defaults = new AppSettings();
+        using var document = JsonDocument.Parse(json);
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+            throw new JsonException("Settings must be an object.");
+        AppSettings loaded = JsonSerializer.Deserialize<AppSettings>(json) ?? throw new JsonException("Missing settings.");
+        // Existing installations keep compositor-managed PiP until the person selects capture.
+        loaded.Pip = document.RootElement.ValueKind == JsonValueKind.Object &&
+                     document.RootElement.TryGetProperty(nameof(Pip), out var pip) && pip.ValueKind == JsonValueKind.Object
+            ? (loaded.Pip ?? new PipPreferences()).Validated()
+            : new PipPreferences { Backend = PipBackendPreference.Dwm };
+        if (loaded.Hotkeys is null || loaded.ExcludedPrograms is null || loaded.IncludedPrograms is null ||
+            loaded.SavedSetups is null || loaded.SavedSetups.Any(value => value is null) ||
+            loaded.Hotkeys.Any(pair => pair.Value is null))
+        {
+            invalid?.Invoke();
+        }
+
+        loaded.PipPresets ??= [];
+        loaded.OpacityStepPercent = Math.Clamp(loaded.OpacityStepPercent, 1, 25);
+        loaded.PinBorder = (loaded.PinBorder ?? new()).Validated();
+        loaded.ModifierExclusions = (loaded.ModifierExclusions ?? defaults.ModifierExclusions)
+            .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+        loaded.ModifierKey = Enum.IsDefined(loaded.ModifierKey) ? loaded.ModifierKey : ModifierKey.Alt;
+        loaded.WindowMenuGesture = Enum.IsDefined(loaded.WindowMenuGesture) ? loaded.WindowMenuGesture : WindowMenuGesture.CtrlRightClick;
+        loaded.WindowMenuExclusions = (loaded.WindowMenuExclusions ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+        loaded.Hotkeys ??= [];
+        loaded.ExcludedPrograms = (loaded.ExcludedPrograms ?? defaults.ExcludedPrograms)
+            .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+        loaded.IncludedPrograms = (loaded.IncludedPrograms ?? []).Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToList();
+        loaded.SavedSetups = (loaded.SavedSetups ?? [])
+            .Where(value => value is not null && !string.IsNullOrWhiteSpace(value.Program)).ToList();
+        loaded.Language = loaded.Language is "en" or "zh-Hans" or "zh-Hant" ? loaded.Language : "system";
+        loaded.DefaultOpacityPercent =
+            Math.Clamp(loaded.DefaultOpacityPercent, LowestOpacityPercent, HighestOpacityPercent);
+        foreach ((AppCommand command, string hotkey) in defaults.Hotkeys)
+        {
+            loaded.Hotkeys.TryAdd(command, hotkey);
+            if (loaded.Hotkeys[command] is null)
+                loaded.Hotkeys[command] = hotkey;
+        }
+
+        foreach (AppCommand command in loaded.Hotkeys.Keys.Where(command => !Enum.IsDefined(command)).ToArray())
+            loaded.Hotkeys.Remove(command);
+        return loaded;
+    }
+
+    private static void BackupInvalid(string path)
+    {
+        try
+        {
+            File.Copy(path, path + ".invalid-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"));
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { }
     }
 
     public void Save(string path)

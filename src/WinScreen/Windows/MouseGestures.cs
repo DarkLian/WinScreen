@@ -34,6 +34,7 @@ internal sealed class MouseGestures : IDisposable
     private const int WM_MOUSEMOVE = 0x0200, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205;
     private const int HC_ACTION = 0;
     private const int WM_MBUTTONDOWN = 0x0207, WM_MBUTTONUP = 0x0208;
+    private const int WM_MOUSEWHEEL = 0x020A;
     private const int VK_MENU = 0x12, VK_LWIN = 0x5B, VK_RWIN = 0x5C, VK_ESCAPE = 0x1B;
     private const int MaskKey = 0xE8; // Unassigned: tapping it stops a held Alt or Win opening a menu or Start.
     private const int ClaimEscape = WM_APP + 1, ReleaseEscape = WM_APP + 2;
@@ -67,6 +68,11 @@ internal sealed class MouseGestures : IDisposable
     public Func<nint, bool>? MenuEligible { get; set; }
     public Action<nint, Point>? MenuRequested { get; set; }
     public Action<Point>? OutsidePressed { get; set; }
+    public bool OpacityWheelEnabled { get; set; }
+    public Func<nint, bool>? OpacityEligible { get; set; }
+    public Action<nint, int>? OpacityRequested { get; set; }
+    private nint _wheelWindow;
+    private int _wheelRemainder;
     public bool MenuVisible { get => _menuVisible; set => _menuVisible = value; }
     private long _lastCallback;
     private long _longestCallbackTicks;
@@ -226,6 +232,9 @@ internal sealed class MouseGestures : IDisposable
             OutsidePressed?.Invoke(new Point(info.X, info.Y));
         switch ((int)message)
         {
+            case WM_MOUSEWHEEL:
+                swallow = ChangeOpacity(new Point(info.X, info.Y), (short)(info.MouseData >> 16));
+                break;
             case WM_MOUSEMOVE:
                 if (_gesture is not null)
                 {
@@ -275,6 +284,32 @@ internal sealed class MouseGestures : IDisposable
         PostThreadMessage(_hookThreadId, ClaimEscape, 0, 0);
         _moved.Set();
         return true;
+    }
+
+    private bool ChangeOpacity(Point point, int delta)
+    {
+        if (!_accepting || !OpacityWheelEnabled || _gesture is not null || _swallowRelease ||
+            GetAsyncKeyState(0x11) >= 0 || GetAsyncKeyState(VK_MENU) >= 0 || GetAsyncKeyState(0x10) < 0 ||
+            GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0)
+        {
+            _wheelWindow = 0;
+            _wheelRemainder = 0;
+            return false;
+        }
+        nint window = User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y }), User32.GA_ROOT);
+        if (window == 0 || OpacityEligible?.Invoke(window) != true) return false;
+        if (_wheelWindow != window) { _wheelWindow = window; _wheelRemainder = 0; }
+        int steps = TakeWheelSteps(ref _wheelRemainder, delta);
+        if (steps != 0) OpacityRequested?.Invoke(window, steps);
+        return true;
+    }
+
+    internal static int TakeWheelSteps(ref int remainder, int delta)
+    {
+        remainder += delta;
+        int steps = remainder / 120;
+        remainder %= 120;
+        return steps;
     }
 
     /// <summary>The press went to WinScreen, so its release must too, or the app sees a release it never pressed.</summary>

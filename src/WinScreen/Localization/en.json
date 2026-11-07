@@ -286,5 +286,22 @@
   "window.rollUp": "Roll up",
   "window.sendToBottom": "Send to bottom",
   "window.show": "Show window",
-  "window.shrink": "Shrink"
+  "window.shrink": "Shrink",
+  "dark.alreadyDark": "This window is already dark; no filter was added.",
+  "settings.customization": "Appearance and files",
+  "settings.opacity.wheel": "Ctrl+Alt+wheel changes opacity under the pointer",
+  "settings.dark.detect": "Leave already-dark windows unchanged",
+  "settings.opacity.title": "Opacity",
+  "settings.opacity.step": "Step (%)",
+  "settings.pin.border": "Pin border",
+  "settings.pin.color": "Colour (#RRGGBB)",
+  "settings.pin.opacity": "Opacity (%)",
+  "settings.pin.thickness": "Thickness",
+  "settings.transfer.title": "Settings file",
+  "settings.transfer.export": "Export saved settings?",
+  "settings.transfer.import": "Import settings?",
+  "settings.transfer.paths": "Exported files include program paths. Startup on this PC is kept when importing.",
+  "settings.transfer.invalid": "This is not a supported WinScreen settings file.",
+  "settings.transfer.review": "Settings loaded for review. Save applies them and keeps a backup.",
+  "settings.transfer.exported": "Saved settings exported."
 }

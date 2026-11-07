@@ -11,6 +11,13 @@ public sealed class SettingsWindow : Form
     private const int ContentWidth = 490;
 
     private readonly AppSettings _settings;
+    private AppSettings? _pendingImport;
+    private readonly NumericUpDown _opacityStep = new() { Minimum = 1, Maximum = 25, Width = 70 };
+    private readonly CheckBox _opacityWheel = new() { Text = T("settings.opacity.wheel"), AutoSize = true };
+    private readonly CheckBox _detectDark = new() { Text = T("settings.dark.detect"), AutoSize = true };
+    private readonly TextBox _borderColor = new() { Width = 90 };
+    private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _borderThickness = new() { Minimum = 1, Maximum = 12, Width = 70 };
     private readonly ComboBox _pipBackend = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private readonly ComboBox _pipRate = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
     private readonly ComboBox _pipScaling = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
@@ -124,6 +131,7 @@ public sealed class SettingsWindow : Form
         tabs.TabPages.Add(Tab(T("settings.savedSetups"), BuildSetups()));
         tabs.TabPages.Add(Tab(T("pip.open"), BuildPip()));
         tabs.TabPages.Add(Tab(T("gestures.title"), BuildModifierDrag()));
+        tabs.TabPages.Add(Tab(T("settings.customization"), BuildCustomization()));
 
         var page = new FlowLayoutPanel
             { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Dock = DockStyle.Fill };
@@ -168,7 +176,8 @@ public sealed class SettingsWindow : Form
     /// <summary>Applies and saves what is on screen. Returns false if a hotkey couldn't be claimed.</summary>
     internal bool SaveChanges()
     {
-        var draft = _settings.Clone();
+        var draft = (_pendingImport ?? _settings).Clone();
+        draft.Imported = _pendingImport is not null;
         foreach ((AppCommand command, TextBox box) in _hotkeys)
         {
             draft.Hotkeys[command] = box.Text;
@@ -202,6 +211,15 @@ public sealed class SettingsWindow : Form
         draft.HighlightPinned = _highlightPinned.Checked;
         draft.PipAutoMove = _pipAutoMove.Checked;
         draft.DefaultOpacityPercent = (int)_defaultOpacity.Value;
+        draft.OpacityStepPercent = (int)_opacityStep.Value;
+        draft.OpacityWheel = _opacityWheel.Checked;
+        draft.DetectAlreadyDark = _detectDark.Checked;
+        draft.PinBorder = new PinBorderPreferences
+        {
+            ColorHex = _borderColor.Text,
+            OpacityPercent = (int)_borderOpacity.Value,
+            Thickness = (int)_borderThickness.Value,
+        }.Validated();
         draft.Pip.Backend = (PipBackendPreference)Math.Max(0, _pipBackend.SelectedIndex);
         draft.Pip.FrameRate = _pipRates[Math.Max(0, _pipRate.SelectedIndex)];
         draft.Pip.Scaling = (PipScaling)Math.Max(0, _pipScaling.SelectedIndex);
@@ -316,31 +334,38 @@ public sealed class SettingsWindow : Form
 
     private void LoadValues()
     {
+        AppSettings values = _pendingImport ?? _settings;
+        _excluded.Items.Clear();
+        _included.Items.Clear();
+        _setups.Items.Clear();
+        _newExcluded.Text = "";
+        _newIncluded.Text = "";
+        _errors.Clear();
         foreach ((AppCommand command, TextBox box) in _hotkeys)
-            box.Text = _settings.Hotkeys.GetValueOrDefault(command, "");
-        _excluded.Items.AddRange(_settings.ExcludedPrograms.Cast<object>().ToArray());
-        _included.Items.AddRange(_settings.IncludedPrograms.Cast<object>().ToArray());
-        _setups.Items.AddRange(_settings.SavedSetups.Cast<object>().ToArray());
+            box.Text = values.Hotkeys.GetValueOrDefault(command, "");
+        _excluded.Items.AddRange(values.ExcludedPrograms.Cast<object>().ToArray());
+        _included.Items.AddRange(values.IncludedPrograms.Cast<object>().ToArray());
+        _setups.Items.AddRange(values.SavedSetups.Cast<object>().ToArray());
         _startWithWindows.Checked = _startup.IsOn;
-        _showToolbar.Checked = _settings.ShowToolbar;
-        _showNotifications.Checked = _settings.ShowNotifications;
-        _automaticUpdates.Checked = _settings.AutomaticUpdates;
-        _experimental.Checked = _settings.ExperimentalFeatures;
-        _pipInput.Checked = _settings.PipClickForwarding;
-        _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, _settings.Language));
-        _pauseInFullScreen.Checked = _settings.PauseInFullScreen;
-        _allowPip.Checked = _settings.AllowPipInFullScreen;
-        _modifierDrag.Checked = _settings.ModifierDrag;
-        _modifierKey.SelectedIndex = (int)_settings.ModifierKey;
-        _windowMenu.Checked = _settings.WindowMenu;
-        _windowMenuGesture.SelectedIndex = (int)_settings.WindowMenuGesture;
-        _windowMenuExclusions.Text = string.Join(", ", _settings.WindowMenuExclusions);
-        _modifierExclusions.Text = string.Join(", ", _settings.ModifierExclusions);
-        _pausePin.Checked = _settings.PausePinWhenMaximized;
-        _opaqueOnHover.Checked = _settings.OpaqueOnHover;
-        _highlightPinned.Checked = _settings.HighlightPinned;
-        _pipAutoMove.Checked = _settings.PipAutoMove;
-        PipPreferences pip = _settings.Pip.Validated();
+        _showToolbar.Checked = values.ShowToolbar;
+        _showNotifications.Checked = values.ShowNotifications;
+        _automaticUpdates.Checked = values.AutomaticUpdates;
+        _experimental.Checked = values.ExperimentalFeatures;
+        _pipInput.Checked = values.PipClickForwarding;
+        _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, values.Language));
+        _pauseInFullScreen.Checked = values.PauseInFullScreen;
+        _allowPip.Checked = values.AllowPipInFullScreen;
+        _modifierDrag.Checked = values.ModifierDrag;
+        _modifierKey.SelectedIndex = (int)values.ModifierKey;
+        _windowMenu.Checked = values.WindowMenu;
+        _windowMenuGesture.SelectedIndex = (int)values.WindowMenuGesture;
+        _windowMenuExclusions.Text = string.Join(", ", values.WindowMenuExclusions);
+        _modifierExclusions.Text = string.Join(", ", values.ModifierExclusions);
+        _pausePin.Checked = values.PausePinWhenMaximized;
+        _opaqueOnHover.Checked = values.OpaqueOnHover;
+        _highlightPinned.Checked = values.HighlightPinned;
+        _pipAutoMove.Checked = values.PipAutoMove;
+        PipPreferences pip = values.Pip.Validated();
         if (!_pipRates.Contains(pip.FrameRate)) _pipRates.Add(pip.FrameRate);
         int refresh = Pip.PipDisplay.CachedRefresh(Handle);
         if (!_pipRates.Contains(refresh)) _pipRates.Add(refresh);
@@ -352,7 +377,14 @@ public sealed class SettingsWindow : Form
         _pipScaling.SelectedIndex = (int)pip.Scaling;
         _pipOpacity.Value = pip.OpacityPercent;
         _pipDiagnostics.Checked = pip.ShowDiagnostics;
-        _defaultOpacity.Value = Math.Clamp(_settings.DefaultOpacityPercent, AppSettings.LowestOpacityPercent,
+        _opacityStep.Value = Math.Clamp(values.OpacityStepPercent, 1, 25);
+        _opacityWheel.Checked = values.OpacityWheel;
+        _detectDark.Checked = values.DetectAlreadyDark;
+        PinBorderPreferences border = values.PinBorder.Validated();
+        _borderColor.Text = border.ColorHex;
+        _borderOpacity.Value = border.OpacityPercent;
+        _borderThickness.Value = border.Thickness;
+        _defaultOpacity.Value = Math.Clamp(values.DefaultOpacityPercent, AppSettings.LowestOpacityPercent,
             AppSettings.HighestOpacityPercent);
     }
 
@@ -610,6 +642,48 @@ public sealed class SettingsWindow : Form
         var row = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 8, 0, 0) };
         row.Controls.Add(save);
         row.Controls.Add(cancel);
+        return row;
+    }
+
+    private FlowLayoutPanel BuildCustomization()
+    {
+        var export = new Button { Text = T("settings.transfer.export"), AutoSize = true };
+        export.Click += (_, _) =>
+        {
+            using var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", DefaultExt = "json", FileName = "WinScreen-settings.json" };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            try { SettingsTransfer.Export(_settings, dialog.FileName); _status.Text = T("settings.transfer.exported"); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _status.Text = e.Message; }
+        };
+        var import = new Button { Text = T("settings.transfer.import"), AutoSize = true };
+        import.Click += (_, _) =>
+        {
+            using var dialog = new OpenFileDialog { Filter = "JSON (*.json)|*.json" };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            try
+            {
+                _pendingImport = SettingsTransfer.Import(dialog.FileName, _settings);
+                _removedSetups.Clear();
+                LoadValues();
+                _status.Text = T("settings.transfer.review");
+            }
+            catch (Exception e) when (e is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
+            { _status.Text = e.Message; }
+        };
+        var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true };
+        page.Controls.Add(Section(T("settings.opacity.title"), SettingRow(T("settings.opacity.step"), _opacityStep), _opacityWheel));
+        page.Controls.Add(Section(T("settings.pin.border"), SettingRow(T("settings.pin.color"), _borderColor),
+            SettingRow(T("settings.pin.opacity"), _borderOpacity), SettingRow(T("settings.pin.thickness"), _borderThickness)));
+        page.Controls.Add(_detectDark);
+        page.Controls.Add(Section(T("settings.transfer.title"), Note(T("settings.transfer.paths")), export, import));
+        return page;
+    }
+
+    private static Control SettingRow(string text, Control control)
+    {
+        var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
+        row.Controls.Add(new Label { Text = text, AutoSize = true, Margin = new Padding(3, 6, 8, 0) });
+        row.Controls.Add(control);
         return row;
     }
 }
