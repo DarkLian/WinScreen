@@ -30,7 +30,7 @@ Ctrl+Alt. WinScreen skips that hotkey and tells you, so you can choose another.
 | Increase opacity | Ctrl+Alt+Up |
 | Decrease opacity | Ctrl+Alt+Down |
 | Toggle click-through | Ctrl+Alt+C |
-| Open Picture-in-Picture | Ctrl+Alt+P |
+| Open / close Picture-in-Picture | Ctrl+Alt+P |
 | Restore all changed windows | Ctrl+Alt+R |
 | Restore only this window (also works for excluded targets) | Ctrl+Alt+U |
 | Toggle dark mode | Ctrl+Alt+D |

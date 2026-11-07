@@ -27,7 +27,7 @@ Windows 將 AltGr 視為 Ctrl+Alt，因此在您的鍵盤上會輸入字元的 C
 | 增加不透明度 | Ctrl+Alt+Up |
 | 減少不透明度 | Ctrl+Alt+Down |
 | 開啟／關閉滑鼠穿透 | Ctrl+Alt+C |
-| 開啟子母畫面 | Ctrl+Alt+P |
+| 開啟／關閉子母畫面 | Ctrl+Alt+P |
 | 還原所有已變更的視窗 | Ctrl+Alt+R |
 | 僅還原此視窗（排除目標也可使用） | Ctrl+Alt+U |
 | 切換深色模式 | Ctrl+Alt+D |

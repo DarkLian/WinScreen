@@ -36,7 +36,7 @@ A toolbar also appears when the pointer rests on the middle of the active window
 | Feature | Default shortcut |
 | --- | --- |
 | Pin / unpin the actual window | Ctrl+Alt+T |
-| Open a small live Picture-in-Picture view | Ctrl+Alt+P |
+| Open / close a small live Picture-in-Picture view | Ctrl+Alt+P |
 | Add / remove a floating Anchor | Ctrl+Alt+A |
 | Toggle default transparency | Ctrl+Alt+O |
 | Increase / decrease opacity | Ctrl+Alt+Up / Down |

@@ -27,7 +27,7 @@ Windows 将 AltGr 视为 Ctrl+Alt，因此在你的键盘上会输入字符的 C
 | 增加不透明度 | Ctrl+Alt+Up |
 | 减少不透明度 | Ctrl+Alt+Down |
 | 开启／关闭鼠标穿透 | Ctrl+Alt+C |
-| 打开画中画 | Ctrl+Alt+P |
+| 打开／关闭画中画 | Ctrl+Alt+P |
 | 还原所有已更改的窗口 | Ctrl+Alt+R |
 | 仅还原此窗口（排除目标也可使用） | Ctrl+Alt+U |
 | 切换深色模式 | Ctrl+Alt+D |
