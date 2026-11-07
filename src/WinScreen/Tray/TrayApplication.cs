@@ -331,6 +331,7 @@ public sealed class TrayApplication : ApplicationContext
             AppCommand.SaveWindowSetup => _settings.SetupForWindow(window) is not null,
             AppCommand.ToggleShrink => _shrunk.ContainsKey(window),
             AppCommand.ToggleCrop => _windows.IsCropped(window),
+            AppCommand.ToggleRollUp => _windows.IsRolledUp(window),
             _ => false,
         };
     }
@@ -671,6 +672,9 @@ public sealed class TrayApplication : ApplicationContext
                     break;
                 case AppCommand.ShowWindowInfo:
                     ShowWindowInfo(window);
+                    break;
+                case AppCommand.ToggleRollUp:
+                    _windows.ToggleRollUp(window);
                     break;
                 case AppCommand.ToggleDark:
                     _dark.Toggle(window);

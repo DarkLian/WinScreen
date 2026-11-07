@@ -47,6 +47,8 @@ internal struct MouseInput
 internal static partial class User32
 {
     public const int GWL_EXSTYLE = -20;
+    public const int GWL_STYLE = -16;
+    public const long WS_CAPTION = 0xC00000;
 
     public const long WS_EX_TOPMOST = 0x8;
     public const long WS_EX_TRANSPARENT = 0x20;
@@ -235,6 +237,9 @@ internal static partial class User32
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetWindowDisplayAffinity(nint hWnd, out uint affinity);
+
+    [LibraryImport("user32.dll")]
+    public static partial int GetSystemMetricsForDpi(int index, uint dpi);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

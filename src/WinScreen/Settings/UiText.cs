@@ -287,5 +287,9 @@ public static class UiText
                                    Runs as administrator|以管理员身份运行|以系統管理員身分執行
                                    Yes|是|是
                                    No|否|否
+                                   Roll up|卷起|捲起
+                                   Show this window normally first, then try again.|请先正常显示此窗口，然后重试。|請先正常顯示此視窗，然後再試一次。
+                                   "{0}" has no standard title bar, so it can't be rolled up.|“{0}”没有标准标题栏，无法卷起。|「{0}」沒有標準標題列，無法捲起。
+                                   "{0}" keeps its own minimum height, so it can't be rolled up.|“{0}”有自己的最小高度，无法卷起。|「{0}」有自己的最小高度，無法捲起。
                                    """;
 }

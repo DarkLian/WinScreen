@@ -18,6 +18,9 @@ public sealed record WindowRecord(
     public long ProcessStartTicks { get; init; }
     public uint ThreadId { get; init; }
     public long OwnedStyles { get; init; }
+
+    /// <summary>Where a rolled-up window came from. Only its height is used, so moves made since are kept.</summary>
+    public int[]? RollUpPlacement { get; init; }
 }
 
 /// <summary>
@@ -98,11 +101,7 @@ public sealed class ChangeJournal(string path)
                                                (record.OwnedStyles & ~(Native.User32.WS_EX_TOPMOST |
                                                                        Native.User32.WS_EX_LAYERED |
                                                                        Native.User32.WS_EX_TRANSPARENT)) == 0 &&
-                                               (record.Placement is null ||
-                                                (record.Placement.Length == 10 &&
-                                                 record.Placement[1] is >= 0 and <= 11 &&
-                                                 record.Placement[8] > record.Placement[6] &&
-                                                 record.Placement[9] > record.Placement[7])))
+                                               IsPlacement(record.Placement) && IsPlacement(record.RollUpPlacement))
                 .Cast<WindowRecord>().ToArray();
             if ((valid.Length != loaded.Length || valid.Any(record => record.IdentityToken == 0)) && !CopyDamaged())
             {
@@ -118,6 +117,10 @@ public sealed class ChangeJournal(string path)
             return [];
         }
     }
+
+    private static bool IsPlacement(int[]? placement) =>
+        placement is null || (placement.Length == 10 && placement[1] is >= 0 and <= 11 &&
+                              placement[8] > placement[6] && placement[9] > placement[7]);
 
     private string NewBackupPath() => path + ".invalid-" + Guid.NewGuid().ToString("N");
 

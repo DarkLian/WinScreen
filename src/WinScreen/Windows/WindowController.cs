@@ -23,6 +23,8 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
     private const int PinAttempts = 5;
     private const int PinRetryMilliseconds = 10;
     private const uint ResponsiveMilliseconds = 400;
+    private const int CaptionMetric = 4, FrameMetric = 33, PaddingMetric = 92;
+    private const int RollUpSlack = 24;
 
     /// <summary>Parts of Windows itself that can hold the focus but aren't windows a person would change.</summary>
     private static readonly HashSet<string> ShellClasses = new(StringComparer.Ordinal)
@@ -61,6 +63,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         public byte AlphaBeforeHiding { get; set; } = 255;
         public byte? AlphaFromClickThrough { get; set; }
         public WindowPlacement? PlacementBeforePeek { get; set; }
+        public WindowPlacement? PlacementBeforeRollUp { get; set; }
     }
 
     private HashSet<string> _excluded = new(excludedProcesses, StringComparer.OrdinalIgnoreCase);
@@ -229,6 +232,75 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         if (User32.SetWindowRgn(window, 0, true) == 0)
             throw Failure(T("uncrop"), window);
         state.Cropped = false;
+    }
+
+    public bool IsRolledUp(nint window)
+    {
+        lock (_gate)
+            return _changed.TryGetValue(window, out ChangedWindow? state) && state.Identity.Matches() &&
+                   state.PlacementBeforeRollUp is not null;
+    }
+
+    /// <summary>
+    /// Shrinks a window to its title bar, or brings its height back. Returns the new state. It's journaled
+    /// because a crash would otherwise leave the window that small. Windows that draw their own title bar or
+    /// enforce a minimum height can refuse, which is read back and reported rather than left half done.
+    /// </summary>
+    public bool ToggleRollUp(nint window)
+    {
+        lock (_gate)
+        {
+            ChangedWindow state = Track(window);
+            if (state.PlacementBeforeRollUp is not null)
+            {
+                Prepare(window, state);
+                RollDown(window, state);
+                SaveJournal();
+                return false;
+            }
+
+            if (state.Hidden || state.PlacementBeforePeek is not null || state.Cropped ||
+                User32.IsIconic(window) || User32.IsZoomed(window))
+                throw new WindowOperationException(T("Show this window normally first, then try again."));
+            if ((User32.GetWindowLongPtr(window, User32.GWL_STYLE) & User32.WS_CAPTION) != User32.WS_CAPTION)
+                throw new WindowOperationException(
+                    string.Format(T("\"{0}\" has no standard title bar, so it can't be rolled up."), WindowInfo.Title(window)));
+
+            state.PlacementBeforeRollUp = ReadPlacement(window);
+            Prepare(window, state); // Journals where it came from before anything changes.
+            uint dpi = (uint)Dpi.Of(window);
+            int height = User32.GetSystemMetricsForDpi(CaptionMetric, dpi) +
+                         2 * (User32.GetSystemMetricsForDpi(FrameMetric, dpi) + User32.GetSystemMetricsForDpi(PaddingMetric, dpi));
+            if (!User32.GetWindowRect(window, out Rect before))
+                throw Failure(T("read the position of"), window);
+            const uint flags = User32.SWP_NOMOVE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE;
+            state.Identity.Require();
+            bool moved = User32.SetWindowPos(window, 0, 0, 0, before.Right - before.Left, height, flags);
+            if (!moved || !User32.GetWindowRect(window, out Rect after) ||
+                after.Bottom - after.Top > height + Dpi.Scale(RollUpSlack, (int)dpi))
+            {
+                RollDown(window, state);
+                SaveJournal();
+                throw new WindowOperationException(
+                    string.Format(T("\"{0}\" keeps its own minimum height, so it can't be rolled up."), WindowInfo.Title(window)));
+            }
+
+            SaveJournal();
+            return true;
+        }
+    }
+
+    /// <summary>Gives a window its height back and nothing else, so wherever it was moved since is kept.</summary>
+    private void RollDown(nint window, ChangedWindow state)
+    {
+        if (state.PlacementBeforeRollUp is not { } before)
+            return;
+        WindowPlacement placement = ReadPlacement(window);
+        Rect normal = placement.NormalPosition;
+        placement.NormalPosition = new Rect(normal.Left, normal.Top, normal.Right,
+            normal.Top + before.NormalPosition.Bottom - before.NormalPosition.Top);
+        WritePlacement(window, placement);
+        state.PlacementBeforeRollUp = null;
     }
 
     /// <summary>The windows that are pinned right now and can be seen, for the highlight.</summary>
@@ -659,6 +731,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
                     Pinned = true,
                     Cropped = record.Cropped,
                     PlacementBeforePeek = record.Placement is null ? null : ToPlacement(record.Placement),
+                    PlacementBeforeRollUp = record.RollUpPlacement is null ? null : ToPlacement(record.RollUpPlacement),
                 };
                 _changed[(nint)record.Window] = state;
             }
@@ -711,6 +784,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         {
             IdentityToken = state.Identity.Token, ProcessStartTicks = state.Identity.ProcessStartTicks,
             ThreadId = state.Identity.ThreadId, OwnedStyles = state.OwnedStyles,
+            RollUpPlacement = state.PlacementBeforeRollUp is { } rolled ? FromPlacement(rolled) : null,
         };
     }
 
@@ -867,6 +941,8 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         state.Hidden = false;
         if (state.PlacementBeforePeek is not null)
             Attempt("restore-placement", () => FinishPeek(window, state));
+        if (state.PlacementBeforeRollUp is not null)
+            Attempt("restore-rollup", () => RollDown(window, state));
         if (state.Cropped)
             Attempt("restore-crop", () => ClearCrop(window, state));
         bool restoredAttributes = !state.HadLayeredAttributes;
@@ -956,6 +1032,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
                 try
                 {
                     if (state.Cropped) ClearCrop(window, state);
+                    if (state.PlacementBeforeRollUp is not null) RollDown(window, state);
                     if (state.GlassColor is not null)
                     {
                         Prepare(window, state, User32.WS_EX_LAYERED);

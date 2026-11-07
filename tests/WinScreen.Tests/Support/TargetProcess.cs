@@ -53,6 +53,15 @@ internal sealed class TargetProcess : IDisposable
         _process.StandardInput.Flush();
     }
 
+    /// <summary>Gives the window a real title bar and borders, which the plain target doesn't have.</summary>
+    internal void UseFrame()
+    {
+        _process.StandardInput.WriteLine("frame");
+        _process.StandardInput.Flush();
+        if (NextReport() != "framed")
+            throw new InvalidOperationException("Test target didn't take a frame.");
+    }
+
     internal void Animate(int rate)
     {
         _process.StandardInput.WriteLine("animate " + rate);

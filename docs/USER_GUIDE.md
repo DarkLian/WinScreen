@@ -185,6 +185,7 @@ The toolbar's **Arrange window** button lists everything that moves a window, an
 - **Exact position and size:** enter the visible frame's position and size in screen pixels.
 - **Restore prior position:** steps back through recent moves. This is forgotten when WinScreen exits.
 - **Send to bottom:** puts the window behind all others. Unpin it first.
+- **Roll up:** an experimental effect that shrinks the window to its title bar. Choose it again to bring the height back. Restore commands and exiting also bring it back, and so does the next start after a crash.
 - **Window information:** shows the window's handle, process, program file, class, position, and display.
 
 A minimized or maximized window stays that way and gets a new place to come back to. **Restore all windows** doesn't undo
@@ -279,3 +280,4 @@ These are limits of the current version, listed so you can decide before you rel
 - **Presets:** a saved crop is in pixels, so it may not fit a differently sized window.
 - **Click-through views:** they can't be clicked, so use the tray menu or **Restore all windows** to reach them.
 - **Arranging windows:** some apps enforce their own minimum size or position, and multiple displays and mixed scaling are unverified.
+- **Roll up:** it needs a standard title bar, and apps that draw their own or enforce a minimum height may refuse.

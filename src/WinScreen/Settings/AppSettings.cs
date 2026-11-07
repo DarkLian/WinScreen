@@ -37,6 +37,7 @@ public enum AppCommand
     RestorePlacement,
     SendToBottom,
     ShowWindowInfo,
+    ToggleRollUp,
 }
 
 /// <summary>What a program's windows get automatically. Click-through and Glass are left out on purpose:
@@ -87,7 +88,7 @@ public static class CommandCatalog
         AppCommand.PickPipSource, AppCommand.AlignTopLeft, AppCommand.AlignTop, AppCommand.AlignTopRight,
         AppCommand.AlignLeft, AppCommand.AlignCenter, AppCommand.AlignRight, AppCommand.AlignBottomLeft,
         AppCommand.AlignBottom, AppCommand.AlignBottomRight, AppCommand.MoveToNextDisplay, AppCommand.PlaceExactly,
-        AppCommand.RestorePlacement, AppCommand.SendToBottom, AppCommand.ShowWindowInfo,
+        AppCommand.RestorePlacement, AppCommand.SendToBottom, AppCommand.ShowWindowInfo, AppCommand.ToggleRollUp,
     ];
 
     /// <summary>What the Arrange menu offers, in order, with null where a divider goes.</summary>
@@ -96,7 +97,7 @@ public static class CommandCatalog
         AppCommand.AlignTopLeft, AppCommand.AlignTop, AppCommand.AlignTopRight, AppCommand.AlignLeft,
         AppCommand.AlignCenter, AppCommand.AlignRight, AppCommand.AlignBottomLeft, AppCommand.AlignBottom,
         AppCommand.AlignBottomRight, null, AppCommand.MoveToNextDisplay, AppCommand.PlaceExactly,
-        AppCommand.RestorePlacement, null, AppCommand.SendToBottom, null, AppCommand.ShowWindowInfo,
+        AppCommand.RestorePlacement, null, AppCommand.ToggleRollUp, AppCommand.SendToBottom, null, AppCommand.ShowWindowInfo,
     ];
 
     /// <summary>The corner or edge an alignment command goes to, or null for any other command.</summary>
@@ -113,7 +114,8 @@ public static class CommandCatalog
         command is AppCommand.ToggleClickThrough or AppCommand.ToggleCrop or AppCommand.SaveWindowSetup;
 
     public static bool IsExperimental(AppCommand command) =>
-        command is AppCommand.ToggleDark or AppCommand.ToggleGlass or AppCommand.ToggleShrink or AppCommand.ToggleCrop;
+        command is AppCommand.ToggleDark or AppCommand.ToggleGlass or AppCommand.ToggleShrink or AppCommand.ToggleCrop
+            or AppCommand.ToggleRollUp;
 
     public static string Name(AppCommand command) => T(command switch
     {
@@ -147,6 +149,7 @@ public static class CommandCatalog
         AppCommand.RestorePlacement => "Restore prior position",
         AppCommand.SendToBottom => "Send to bottom",
         AppCommand.ShowWindowInfo => "Window information",
+        AppCommand.ToggleRollUp => "Roll up",
         _ => command.ToString(),
     });
 }

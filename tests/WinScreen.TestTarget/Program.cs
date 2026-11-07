@@ -48,6 +48,13 @@ internal static class Program
                         });
                     if (parts[0] == "layered")
                         window.BeginInvoke(window.CreateUnattributedLayeredWindow);
+                    if (parts[0] == "frame")
+                        window.BeginInvoke(() =>
+                        {
+                            window.FormBorderStyle = FormBorderStyle.Sizable;
+                            Console.WriteLine("framed");
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "titlebar")
                         window.BeginInvoke(window.UseTitleBar);
                     if (parts[0] == "hang")
