@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using System.Diagnostics;
+using Microsoft.Win32.SafeHandles;
 
 namespace WinScreen.TestTarget;
 
@@ -36,6 +38,14 @@ internal static class Program
                         break;
                     if (parts[0] == "color")
                         window.BeginInvoke(() => window.SetColors(parts[1]));
+                    if (parts[0] == "animate")
+                        window.BeginInvoke(() => window.Animate(int.Parse(parts[1])));
+                    if (parts[0] == "size")
+                        window.BeginInvoke(() =>
+                        {
+                            string[] dimensions = parts[1].Split(' ');
+                            window.Size = new Size(int.Parse(dimensions[0]), int.Parse(dimensions[1]));
+                        });
                     if (parts[0] == "layered")
                         window.BeginInvoke(window.CreateUnattributedLayeredWindow);
                     if (parts[0] == "titlebar")
@@ -60,6 +70,43 @@ internal static class Program
 
 internal sealed partial class TargetForm : Form
 {
+    [LibraryImport("kernel32.dll", EntryPoint = "CreateWaitableTimerExW")]
+    private static partial nint CreateWaitableTimerEx(nint attributes, nint name, uint flags, uint access);
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetWaitableTimerEx(SafeWaitHandle timer, in long due, int period,
+        nint callback, nint argument, nint context, uint tolerance);
+    [LibraryImport("user32.dll", EntryPoint = "PostMessageW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool PostMessage(nint hwnd, int message, nint wparam, nint lparam);
+    private readonly ManualResetEvent _animationStop = new(false);
+    private bool _animating;
+    private int _animationPending, _phase;
+
+    public void Animate(int rate)
+    {
+        if (_animating) return;
+        _animating = true;
+        nint hwnd = Handle;
+        FormClosed += (_, _) => _animationStop.Set();
+        var worker = new Thread(() =>
+        {
+            using var timer = new EventWaitHandle(false, EventResetMode.AutoReset);
+            nint native = CreateWaitableTimerEx(0, 0, 2, 0x1F0003);
+            if (native == 0) return;
+            timer.SafeWaitHandle = new SafeWaitHandle(native, true);
+            WaitHandle[] waits = [timer, _animationStop];
+            double deadline = Stopwatch.GetTimestamp();
+            while (!_animationStop.WaitOne(0))
+            {
+                deadline = Math.Max(deadline + Stopwatch.Frequency / (double)Math.Clamp(rate, 1, 480), Stopwatch.GetTimestamp());
+                long due = -Math.Max(1, (long)((deadline - Stopwatch.GetTimestamp()) * 10_000_000.0 / Stopwatch.Frequency));
+                if (!SetWaitableTimerEx(timer.SafeWaitHandle, in due, 0, 0, 0, 0, 0) || WaitHandle.WaitAny(waits) == 1) return;
+                if (Interlocked.Exchange(ref _animationPending, 1) == 0) PostMessage(hwnd, 0x8001, 0, 0);
+            }
+        }) { IsBackground = true, Name = "Pattern fixture" };
+        worker.Start();
+    }
     [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW", StringMarshalling = StringMarshalling.Utf16)]
     private static partial nint CreateWindowEx(uint exStyle, string className, string title, uint style,
         int x, int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
@@ -128,6 +175,13 @@ internal sealed partial class TargetForm : Form
 
     protected override void WndProc(ref Message m)
     {
+        if (m.Msg == 0x8001)
+        {
+            Interlocked.Exchange(ref _animationPending, 0);
+            _phase++;
+            Invalidate();
+            return;
+        }
         if (m.Msg == WM_INPUT)
             _lastRawInput = DateTime.UtcNow;
         base.WndProc(ref m);
@@ -172,6 +226,12 @@ internal sealed partial class TargetForm : Form
             using var brush = new SolidBrush(_colors[i]);
             int span = i == _colors.Length - 1 ? ClientSize.Width - i * width : width;
             e.Graphics.FillRectangle(brush, i * width, 0, span, ClientSize.Height);
+        }
+        if (_animating)
+        {
+            using var brush = new SolidBrush(Color.FromArgb(_phase % 256, (_phase * 17) % 256, (_phase * 37) % 256));
+            e.Graphics.FillRectangle(brush, 0, 0, ClientSize.Width, ClientSize.Height);
+            for (int x = 0; x < ClientSize.Width; x += 32) e.Graphics.DrawLine(Pens.White, x + _phase % 32, 0, x, ClientSize.Height);
         }
     }
 }

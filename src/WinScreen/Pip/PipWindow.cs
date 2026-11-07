@@ -2,6 +2,7 @@ using static WinScreen.Settings.UiText;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using WinScreen.Native;
+using WinScreen.Settings;
 using WinScreen.Windows;
 
 namespace WinScreen.Pip;
@@ -17,7 +18,6 @@ public sealed class PipWindow : Form
     private const int WheelStep = 40;
     private const int DragThreshold = 4;
     private const int LeaveMargin = 8;
-    private const byte DimmedOpacity = 90;
     private const int WheelNotch = 120;
     private const int StartLongSide = 480;
     private const int ScreenMargin = 20;
@@ -25,6 +25,7 @@ public sealed class PipWindow : Form
     private const int EscapeHotkey = 0x5750;
     private const int WM_MOUSEACTIVATE = 0x0021;
     private const int MA_NOACTIVATE = 3;
+    private const int WM_DISPLAYCHANGE = 0x007E;
 
     private static readonly Color Accent = Color.FromArgb(79, 140, 255);
 
@@ -39,8 +40,9 @@ public sealed class PipWindow : Form
     private readonly ContextMenuStrip _menu = new();
     private readonly ToolTip _tips = new() { ShowAlways = true };
     private PipCloseButton? _closeButton;
-    private DwmThumbnail? _thumbnail;
-    private DwmThumbnail? _selectionView;
+    private PipBackendSelector? _thumbnail;
+    private PipPreferences _preferences = new() { Backend = PipBackendPreference.Dwm };
+    private ToolStripMenuItem _retryItem = null!;
     private Rectangle _crop = Rectangle.Empty;
     private Rectangle _whole = Rectangle.Empty;
     private Rectangle _lastShown = Rectangle.Empty;
@@ -53,6 +55,7 @@ public sealed class PipWindow : Form
     private bool _selecting;
     private bool _interacting;
     private Rectangle _selection;
+    private bool _cleaned;
 
     [System.ComponentModel.DefaultValue(false)]
     public bool AllowClickForwarding { get; set; }
@@ -85,9 +88,13 @@ public sealed class PipWindow : Form
         _menu.Items.Add(T("&Go to original window"), null, (_, _) => GoToSource());
         _removeCropItem = new ToolStripMenuItem(T("&Remove crop"), null, (_, _) => SetCrop(Rectangle.Empty));
         _menu.Items.Add(_removeCropItem);
+        _menu.Items.Add(T("PiP diagnostics"), null, (_, _) => ShowDiagnostics());
+        _retryItem = new ToolStripMenuItem(T("Retry advanced backend"), null, (_, _) => _thumbnail?.Retry());
+        _menu.Items.Add(_retryItem);
         _menu.Items.Add(T("&Close PiP"), null, (_, _) => Close());
         _menu.Opening += (_, _) =>
         {
+            _retryItem.Visible = _thumbnail?.CanRetry == true;
             _autoMoveItem.Visible = AllowAutoMove;
             _removeCropItem.Enabled = !_crop.IsEmpty;
             // A menu only closes on an outside click while its program has the focus.
@@ -131,14 +138,8 @@ public sealed class PipWindow : Form
             User32.ShowWindow(_source, User32.SW_RESTORE);
         try
         {
-            _thumbnail = DwmThumbnail.TryCreate(Handle, _source);
-            if (_thumbnail is null)
-            {
-                Problem?.Invoke(T("This window can't be shown in Picture-in-Picture."));
-                Close();
-                return;
-            }
-
+            _thumbnail = new PipBackendSelector(_identity, Handle, _preferences);
+            _thumbnail.Problem += text => Problem?.Invoke(text);
             OpenInFreeSpot(_thumbnail);
             Show();
             StayOnTop();
@@ -151,6 +152,31 @@ public sealed class PipWindow : Form
             Close();
             throw;
         }
+    }
+
+    public void ApplyPipPreferences(PipPreferences preferences)
+    {
+        _preferences = preferences.Validated();
+        _thumbnail?.Configure(_preferences);
+    }
+
+    internal PipBackendKind BackendKind => _thumbnail?.Kind ?? PipBackendKind.DwmThumbnail;
+    internal PipSessionState BackendState => _thumbnail?.State ?? PipSessionState.Stopped;
+    internal string DiagnosticSnapshot => _thumbnail?.Snapshot() ?? "Stopped";
+
+    private void ShowDiagnostics()
+    {
+        var dialog = new Form { Text = T("PiP diagnostics"), Size = new Size(700, 380), StartPosition = FormStartPosition.CenterParent };
+        var text = new TextBox { Multiline = true, ReadOnly = true, Dock = DockStyle.Fill,
+            ScrollBars = ScrollBars.Both, Text = DiagnosticSnapshot.Replace("\n", Environment.NewLine) };
+        var copy = new Button { Text = T("Copy diagnostics"), Dock = DockStyle.Bottom };
+        copy.Click += (_, _) =>
+        {
+            try { Clipboard.SetText(text.Text); }
+            catch (ExternalException) { Problem?.Invoke(T("The clipboard is busy. Try copying diagnostics again.")); }
+        };
+        dialog.Controls.Add(text); dialog.Controls.Add(copy);
+        using (dialog) dialog.ShowDialog();
     }
 
     /// <summary>Crops the view to a part of the source window, or shows all of it when empty.</summary>
@@ -221,6 +247,11 @@ public sealed class PipWindow : Form
 
     protected override void WndProc(ref Message m)
     {
+        if (m.Msg == WM_DISPLAYCHANGE || (m.Msg == 0x0218 && (m.WParam == 7 || m.WParam == 18)))
+        {
+            PipDisplay.InvalidateRefresh();
+            _thumbnail?.DisplayChanged();
+        }
         if (m.Msg == WM_MOUSEACTIVATE)
         {
             m.Result = MA_NOACTIVATE;
@@ -284,7 +315,7 @@ public sealed class PipWindow : Form
         _dragged = false;
         if ((ModifierKeys & Keys.Control) != 0 && _thumbnail is not null)
         {
-            DwmThumbnail view = _thumbnail;
+            IPipRenderBackend view = _thumbnail;
             Attempt(() => BeginSelection(view));
         }
     }
@@ -348,19 +379,33 @@ public sealed class PipWindow : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        Cleanup();
+        base.OnFormClosed(e);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) Cleanup();
+        base.Dispose(disposing);
+    }
+
+    private void Cleanup()
+    {
+        if (_cleaned) return;
+        _cleaned = true;
         _watch.Dispose();
         _autoMove.Dispose();
         ClaimEscape(false);
-        EndSelection();
+        // Teardown must never submit another draw: the source or destination HWND may already be gone.
+        _selecting = false;
+        _thumbnail?.Dispose();
+        _thumbnail = null;
         EndInteraction();
         if (_hideItem.Checked && _identity.Matches())
             SetOriginalHidden(false);
-        _thumbnail?.Dispose();
-        _thumbnail = null;
         _tips.Dispose();
         _closeButton?.Dispose();
         _menu.Dispose();
-        base.OnFormClosed(e);
     }
 
     /// <summary>
@@ -444,35 +489,23 @@ public sealed class PipWindow : Form
     }
 
     /// <summary>
-    /// DWM draws thumbnails above everything in this window, so nothing can be painted over the view.
-    /// Instead the view dims and a second thumbnail keeps the selected part at full brightness.
+    /// Dims the picture while keeping the selected region bright. DWM uses a second thumbnail;
+    /// native capture renders the corresponding mask over its cached source texture.
     /// </summary>
-    private void BeginSelection(DwmThumbnail view)
+    private void BeginSelection(IPipRenderBackend view)
     {
         _selecting = true;
         _selection = Rectangle.Empty;
-        _selectionView = DwmThumbnail.TryCreate(Handle, _source);
         BackColor = Color.Black;
-        view.Show(PipGeometry.ViewArea(ClientSize), ShownPart(view.SourceSize), DimmedOpacity);
+        view.SetSelection(Rectangle.Empty);
     }
 
-    private void ShowSelection()
-    {
-        // Rectangle.IsEmpty also wants a zero position, so it doesn't catch a drag that hasn't moved yet.
-        if (_selectionView is null || _thumbnail is null || _selection.Width <= 0 || _selection.Height <= 0)
-            return;
-
-        Rectangle part = PipGeometry.SelectionToSource(_selection, PipGeometry.ViewArea(ClientSize),
-            ShownPart(_thumbnail.SourceSize));
-        if (part.Width > 0 && part.Height > 0)
-            _selectionView.Show(_selection, part);
-    }
+    private void ShowSelection() => _thumbnail?.SetSelection(_selection);
 
     private void EndSelection()
     {
         _selecting = false;
-        _selectionView?.Dispose();
-        _selectionView = null;
+        Attempt(() => _thumbnail?.SetSelection(null));
     }
 
     /// <summary>Drops a press whose release never arrived, or that Esc called off, and undoes its effects.</summary>
@@ -547,7 +580,7 @@ public sealed class PipWindow : Form
         return cropped.Width > 0 && cropped.Height > 0 ? cropped : _whole;
     }
 
-    private void OpenInFreeSpot(DwmThumbnail view)
+    private void OpenInFreeSpot(IPipRenderBackend view)
     {
         Rectangle shown = ShownPart(view.SourceSize);
         if (shown.Width <= 0 || shown.Height <= 0)
@@ -562,7 +595,7 @@ public sealed class PipWindow : Form
             .Select(other => other.Bounds);
         Bounds = new Rectangle(PipGeometry.FreeSpot(wanted, others, area, margin), size);
         _lastShown = shown;
-        view.Show(PipGeometry.ViewArea(ClientSize), shown);
+        view.SetViewport(PipGeometry.ViewArea(ClientSize), shown);
     }
 
     /// <param name="pointer">Keeps this screen point on the same spot of the view; otherwise it holds its corner.</param>
@@ -582,7 +615,7 @@ public sealed class PipWindow : Form
             : PipGeometry.KeepCorner(Bounds, size, area);
         Bounds = new Rectangle(PipGeometry.KeepInside(new Rectangle(place, size), area), size);
         _lastShown = shown;
-        _thumbnail.Show(PipGeometry.ViewArea(ClientSize), shown);
+        _thumbnail.SetViewport(PipGeometry.ViewArea(ClientSize), shown);
     }
 
     private void FollowSource()
@@ -593,6 +626,18 @@ public sealed class PipWindow : Form
             return;
         }
 
+        try
+        {
+            _thumbnail?.Poll(ClientSize);
+        }
+        catch (WindowOperationException failure)
+        {
+            // If even the independent compatibility surface fails, close through normal restoration.
+            // Repeating the same draw from this timer would spam the tray and strand a hidden source.
+            Problem?.Invoke(failure.Message);
+            Close();
+            return;
+        }
         if (_hideItem.Checked && !_windows.IsHidden(_source))
             _hideItem.Checked = false;
         if (_pressed && MouseButtons == MouseButtons.None)

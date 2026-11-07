@@ -208,6 +208,7 @@ public sealed class TrayApplication : ApplicationContext
         _updateTimer.Interval = 30_000;
         foreach (var pip in _pips.Values)
         {
+            pip.ApplyPipPreferences(_settings.Pip);
             pip.AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding;
             pip.AllowAutoMove = _settings.ExperimentalFeatures;
             if (!_settings.ExperimentalFeatures) pip.SetAutoMove(false);
@@ -591,6 +592,7 @@ public sealed class TrayApplication : ApplicationContext
                     _pips[window] = pip;
                     pip.FormClosed += (_, _) => _pips.Remove(window);
                     pip.Problem += text => Alert(T("WinScreen couldn't do that"), text);
+                    pip.ApplyPipPreferences(_settings.Pip);
                     pip.ShowOnTop();
                     if (pip.IsDisposed) break;
                     _dark.Ignore(pip.Handle);

@@ -32,6 +32,26 @@ public static class UiText
         .Select(line => line.TrimEnd('\r').Split('|')).ToDictionary(parts => parts[0], parts => parts[1..]);
 
     private const string Catalog = """
+                                   Auto|自动|自動
+                                   Compatibility (DWM)|兼容模式（DWM）|相容模式（DWM）
+                                   Advanced (WGC)|高级模式（WGC）|進階模式（WGC）
+                                   Auto (area filtering)|自动（面积滤波）|自動（面積濾波）
+                                   Crisp (nearest texel)|清晰（最近纹素）|清晰（最近紋素）
+                                   Smooth (linear)|平滑（线性）|平滑（線性）
+                                   Match Monitor|匹配显示器|符合顯示器
+                                   Include hardware in PiP diagnostics|在画中画诊断中包含硬件信息|在子母畫面診斷中包含硬體資訊
+                                   PiP rendering|画中画渲染|子母畫面繪製
+                                   Frame limit|帧率上限|影格率上限
+                                   Scaling|缩放|縮放
+                                   PiP opacity (%)|画中画不透明度（%）|子母畫面不透明度（%）
+                                   DWM cadence and scaling are managed by Windows. Frame limits and filters apply to WGC only.|DWM 的帧率与缩放由 Windows 管理。帧率上限与滤镜仅适用于 WGC。|DWM 的影格率與縮放由 Windows 管理。影格率上限與濾鏡僅適用於 WGC。
+                                   Advanced capture keeps the Windows capture indicator. If unavailable, PiP uses DWM.|高级捕获保留 Windows 捕获指示器。不可用时，画中画将使用 DWM。|進階擷取會保留 Windows 擷取指示器。無法使用時，子母畫面會使用 DWM。
+                                   Right-click a view for diagnostics and Retry advanced backend. Retry is available after a 10-second cooldown.|右键点击画中画可查看诊断或重试高级后端。重试需等待 10 秒。|以滑鼠右鍵點選子母畫面可檢視診斷或重試進階後端。重試需等候 10 秒。
+                                   PiP diagnostics|画中画诊断|子母畫面診斷
+                                   Copy diagnostics|复制诊断|複製診斷
+                                   The clipboard is busy. Try copying diagnostics again.|剪贴板正忙，请重试复制诊断。|剪貼簿忙碌中，請重試複製診斷。
+                                   Retry advanced backend|重试高级后端|重試進階後端
+                                   Advanced PiP unavailable; using Compatibility (DWM).|高级画中画不可用；正在使用兼容模式（DWM）。|進階子母畫面無法使用；正在使用相容模式（DWM）。
                                    Restore this window|还原此窗口|還原此視窗
                                    Enable experimental effects (Dark, Glass, Crop, Shrink, auto-move)|启用实验性效果（深色、玻璃、裁剪、缩小、自动避让）|啟用實驗性效果（深色、玻璃、裁切、縮小、自動避讓）
                                    Target: |目标： |目標： |

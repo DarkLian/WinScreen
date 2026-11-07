@@ -70,6 +70,23 @@ Anchors are also removed when their target window is destroyed, when restoring a
 
 Press **Ctrl+Alt+P** to open a live view. The original window keeps its real size.
 
+In Settings → **Picture-in-Picture**, choose **Auto**, **Compatibility (DWM)** or **Advanced (WGC)**.
+Existing settings keep Compatibility until you change it. New installations use Auto, which shows DWM first and
+switches only after advanced capture has presented a frame. Advanced capture keeps Windows' capture indicator;
+availability depends on Windows, the source and the graphics device. A failure returns to DWM with a tray result.
+
+The advanced backend supports a frame limit (Match Monitor or 15–480 FPS), area downscaling, nearest-texel and
+linear filtering. These controls do not change DWM's compositor-managed cadence or filtering. A cap is an upper
+limit, not a promise that the source produces that many frames. PiP opacity affects the picture independently of
+the original window; it fades toward the view's black background, keeping the close button usable. Output is SDR;
+HDR and protected content can have limitations. Minimized or idle sources retain their last frame.
+
+Right-click a view for **PiP diagnostics** and, after fallback, **Retry advanced backend** (10-second cooldown).
+Diagnostics distinguish the actual backend, requested and observed FPS, drops and capture-to-Present return time;
+this is not physical display latency. Enable hardware details in Settings to include the adapter and feature level
+when copying diagnostics. DWM has no application-owned capture timing. Software capture, when it passes a real
+start-to-present probe, is limited to 30 FPS. Shrink continues to use DWM.
+
 | Input on PiP | Result |
 | --- | --- |
 | Click | Go to the original window; no synthetic click is sent by default |

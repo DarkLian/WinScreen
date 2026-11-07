@@ -138,6 +138,8 @@ public sealed class AppSettings
     public bool PipAutoMove { get; set; }
     public bool ExperimentalFeatures { get; set; }
     public bool PipClickForwarding { get; set; }
+    [JsonConverter(typeof(PipPreferencesConverter))]
+    public PipPreferences Pip { get; set; } = new();
     public bool? StartWithWindows { get; set; }
 
     /// <summary>True once the first-run hint has been shown, so it doesn't return at every sign-in.</summary>
@@ -181,12 +183,20 @@ public sealed class AppSettings
         var defaults = new AppSettings();
         if (!File.Exists(path))
             return defaults;
+        defaults.Pip.Backend = PipBackendPreference.Dwm;
 
         try
         {
             if (new FileInfo(path).Length > 1024 * 1024)
                 throw new JsonException("Settings file is too large.");
-            AppSettings loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path)) ?? defaults;
+            string json = File.ReadAllText(path);
+            AppSettings loaded = JsonSerializer.Deserialize<AppSettings>(json) ?? defaults;
+            using var document = JsonDocument.Parse(json);
+            // Existing installations keep compositor-managed PiP until the person selects capture.
+            loaded.Pip = document.RootElement.ValueKind == JsonValueKind.Object &&
+                         document.RootElement.TryGetProperty(nameof(Pip), out var pip) && pip.ValueKind == JsonValueKind.Object
+                ? (loaded.Pip ?? new PipPreferences()).Validated()
+                : new PipPreferences { Backend = PipBackendPreference.Dwm };
             if (loaded.Hotkeys is null || loaded.ExcludedPrograms is null || loaded.IncludedPrograms is null ||
                 loaded.SavedSetups is null || loaded.SavedSetups.Any(value => value is null) ||
                 loaded.Hotkeys.Any(pair => pair.Value is null))

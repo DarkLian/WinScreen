@@ -53,6 +53,18 @@ internal sealed class TargetProcess : IDisposable
         _process.StandardInput.Flush();
     }
 
+    internal void Animate(int rate)
+    {
+        _process.StandardInput.WriteLine("animate " + rate);
+        _process.StandardInput.Flush();
+    }
+
+    internal void Resize(Size size)
+    {
+        _process.StandardInput.WriteLine($"size {size.Width} {size.Height}");
+        _process.StandardInput.Flush();
+    }
+
     /// <summary>Makes the top of this borderless window answer as a title bar.</summary>
     public void UseTitleBar()
     {

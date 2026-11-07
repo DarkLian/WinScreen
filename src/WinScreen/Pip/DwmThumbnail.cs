@@ -30,7 +30,7 @@ internal sealed class DwmThumbnail : IDisposable
         }
     }
 
-    public void Show(Rectangle destination, Rectangle source, byte opacity = 255)
+    public void Show(Rectangle destination, Rectangle source, byte opacity = 255, bool visible = true)
     {
         var properties = new DwmThumbnailProperties
         {
@@ -39,7 +39,7 @@ internal sealed class DwmThumbnail : IDisposable
             Destination = ToRect(destination),
             Source = ToRect(source),
             Opacity = opacity,
-            Visible = 1,
+            Visible = visible ? 1 : 0,
         };
         if (destination.Width <= 0 || destination.Height <= 0 || source.Width <= 0 || source.Height <= 0 ||
             Dwmapi.DwmUpdateThumbnailProperties(_handle, ref properties) != 0)

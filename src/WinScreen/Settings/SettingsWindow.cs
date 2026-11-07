@@ -11,6 +11,12 @@ public sealed class SettingsWindow : Form
     private const int ContentWidth = 490;
 
     private readonly AppSettings _settings;
+    private readonly ComboBox _pipBackend = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
+    private readonly ComboBox _pipRate = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+    private readonly ComboBox _pipScaling = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
+    private readonly NumericUpDown _pipOpacity = new() { Minimum = 10, Maximum = 100, Width = 75 };
+    private readonly CheckBox _pipDiagnostics = new() { Text = T("Include hardware in PiP diagnostics"), AutoSize = true };
+    private readonly List<int> _pipRates = [.. PipPreferences.FrameRates];
 
     private readonly CheckBox _showNotifications = new()
         { Text = T("Show confirmations (problems always appear)"), AutoSize = true };
@@ -103,6 +109,7 @@ public sealed class SettingsWindow : Form
         tabs.TabPages.Add(Tab(T("Hotkeys"), BuildHotkeys()));
         tabs.TabPages.Add(Tab(T("Programs"), BuildPrograms()));
         tabs.TabPages.Add(Tab(T("Saved setups"), BuildSetups()));
+        tabs.TabPages.Add(Tab(T("Picture-in-Picture"), BuildPip()));
 
         var page = new FlowLayoutPanel
             { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Dock = DockStyle.Fill };
@@ -174,6 +181,11 @@ public sealed class SettingsWindow : Form
         draft.HighlightPinned = _highlightPinned.Checked;
         draft.PipAutoMove = _pipAutoMove.Checked;
         draft.DefaultOpacityPercent = (int)_defaultOpacity.Value;
+        draft.Pip.Backend = (PipBackendPreference)Math.Max(0, _pipBackend.SelectedIndex);
+        draft.Pip.FrameRate = _pipRates[Math.Max(0, _pipRate.SelectedIndex)];
+        draft.Pip.Scaling = (PipScaling)Math.Max(0, _pipScaling.SelectedIndex);
+        draft.Pip.OpacityPercent = (int)_pipOpacity.Value;
+        draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
         try
         {
             IReadOnlyList<HotkeyProblem> problems = _apply(draft);
@@ -298,6 +310,18 @@ public sealed class SettingsWindow : Form
         _opaqueOnHover.Checked = _settings.OpaqueOnHover;
         _highlightPinned.Checked = _settings.HighlightPinned;
         _pipAutoMove.Checked = _settings.PipAutoMove;
+        PipPreferences pip = _settings.Pip.Validated();
+        if (!_pipRates.Contains(pip.FrameRate)) _pipRates.Add(pip.FrameRate);
+        int refresh = Pip.PipDisplay.CachedRefresh(Handle);
+        if (!_pipRates.Contains(refresh)) _pipRates.Add(refresh);
+        _pipRates.Sort();
+        _pipRate.Items.Clear();
+        foreach (int rate in _pipRates) _pipRate.Items.Add(rate == 0 ? T("Match Monitor") : rate + " FPS");
+        _pipBackend.SelectedIndex = (int)pip.Backend;
+        _pipRate.SelectedIndex = _pipRates.IndexOf(pip.FrameRate);
+        _pipScaling.SelectedIndex = (int)pip.Scaling;
+        _pipOpacity.Value = pip.OpacityPercent;
+        _pipDiagnostics.Checked = pip.ShowDiagnostics;
         _defaultOpacity.Value = Math.Clamp(_settings.DefaultOpacityPercent, AppSettings.LowestOpacityPercent,
             AppSettings.HighestOpacityPercent);
     }
@@ -376,6 +400,41 @@ public sealed class SettingsWindow : Form
             Text = string.Format(T("WinScreen version {0}"), AppInfo.Version), AutoSize = true,
             ForeColor = SystemColors.GrayText, Margin = new Padding(3, 2, 3, 0),
         });
+        return page;
+    }
+
+    private FlowLayoutPanel BuildPip()
+    {
+        _pipBackend.Items.AddRange([T("Auto"), T("Compatibility (DWM)"), T("Advanced (WGC)")]);
+        _pipScaling.Items.AddRange([T("Auto (area filtering)"), T("Crisp (nearest texel)"), T("Smooth (linear)")]);
+        _pipBackend.SelectedIndexChanged += (_, _) =>
+        {
+            _pipRate.Enabled = _pipScaling.Enabled = _pipBackend.SelectedIndex != (int)PipBackendPreference.Dwm;
+        };
+        _pipRate.DropDown += (_, _) =>
+        {
+            int refresh = Pip.PipDisplay.CachedRefresh(Handle);
+            if (_pipRates.Contains(refresh)) return;
+            int chosen = _pipRates[Math.Max(0, _pipRate.SelectedIndex)];
+            _pipRates.Add(refresh); _pipRates.Sort();
+            _pipRate.Items.Clear();
+            foreach (int rate in _pipRates) _pipRate.Items.Add(rate == 0 ? T("Match Monitor") : rate + " FPS");
+            _pipRate.SelectedIndex = _pipRates.IndexOf(chosen);
+        };
+        static Control Row(string label, Control control)
+        {
+            var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
+            row.Controls.Add(new Label { Text = T(label), Width = 145, AutoSize = false, Height = 26, TextAlign = ContentAlignment.MiddleLeft });
+            row.Controls.Add(control);
+            return row;
+        }
+        var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false,
+            Dock = DockStyle.Fill, AutoScroll = true };
+        page.Controls.Add(Section(T("Picture-in-Picture"), Row("PiP rendering", _pipBackend), Row("Frame limit", _pipRate),
+            Row("Scaling", _pipScaling), Row("PiP opacity (%)", _pipOpacity), _pipDiagnostics));
+        page.Controls.Add(Note(T("DWM cadence and scaling are managed by Windows. Frame limits and filters apply to WGC only.")));
+        page.Controls.Add(Note(T("Advanced capture keeps the Windows capture indicator. If unavailable, PiP uses DWM.")));
+        page.Controls.Add(Note(T("Right-click a view for diagnostics and Retry advanced backend. Retry is available after a 10-second cooldown.")));
         return page;
     }
 
