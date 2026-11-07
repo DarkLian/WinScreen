@@ -1,3 +1,5 @@
+using WinScreen.Localization;
+
 namespace WinScreen.Windows;
 
 /// <summary>Finds a window's background colour from what is on screen.</summary>
@@ -29,7 +31,7 @@ public static class ScreenColors
                                       or InvalidOperationException)
         {
             throw new WindowOperationException(
-                Settings.UiText.T("The screen could not be sampled for Glass. The window was not changed: ") + e.Message);
+                UiText.T("errors.glass.sampleFailedPrefix") + e.Message);
         }
     }
 }

@@ -543,6 +543,108 @@ public sealed class AppEndToEndTests : IDisposable
             "The window wasn't put back at the next start.");
     }
 
+    [Theory]
+    [InlineData(AppCommand.ToggleBorderless)]
+    [InlineData(AppCommand.ToggleDarkTitleBar)]
+    public void Starting_after_a_forced_kill_recovers_window_appearance(AppCommand command)
+    {
+        var settings = new AppSettings();
+        settings.Hotkeys[command] = "Ctrl+Alt+F21";
+        RestartWith(settings);
+        using var target = new TargetProcess(Spot);
+        target.UseFrame();
+        long style = User32.GetWindowLongPtr(target.Handle, User32.GWL_STYLE);
+        bool dark = new WinScreen.Windows.WindowController([]).IsDarkTitleBar(target.Handle);
+        Focus(target);
+        Hotkey(Keys.F21, target);
+        Assert.True(Desktop.WaitFor(() => command == AppCommand.ToggleBorderless
+            ? (User32.GetWindowLongPtr(target.Handle, User32.GWL_STYLE) & User32.WS_CAPTION) == 0
+            : new WinScreen.Windows.WindowController([]).IsDarkTitleBar(target.Handle) != dark));
+        _app.Kill();
+        Assert.True(_app.WaitForExit(4000));
+        _app.Dispose();
+        _app = Start();
+        _appWindow = WaitForAppWindow();
+        Assert.True(Desktop.WaitFor(() =>
+            (long)User32.GetWindowLongPtr(target.Handle, User32.GWL_STYLE) == style &&
+            new WinScreen.Windows.WindowController([]).IsDarkTitleBar(target.Handle) == dark));
+    }
+
+    [Fact]
+    public void Window_menu_hotkey_works_without_enabling_mouse_gestures()
+    {
+        var settings = new AppSettings();
+        settings.Hotkeys[AppCommand.ShowWindowMenu] = "Ctrl+Alt+F21";
+        RestartWith(settings);
+        using var target = new TargetProcess(Spot);
+        Focus(target);
+        Desktop.MoveMouse(target.Center);
+        Hotkey(Keys.F21, target);
+        Assert.True(Desktop.WaitFor(() => Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen.WindowMenu") != 0));
+        Desktop.Press(Keys.Escape);
+        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle));
+    }
+
+    [Theory]
+    [InlineData(WindowMenuGesture.CtrlRightClick)]
+    [InlineData(WindowMenuGesture.CtrlShiftRightClick)]
+    [InlineData(WindowMenuGesture.CtrlMiddleClick)]
+    public void Window_menu_gesture_earns_focus_from_input_in_another_process(WindowMenuGesture gesture)
+    {
+        RestartWith(new AppSettings { WindowMenu = true, WindowMenuGesture = gesture });
+        using var target = new TargetProcess(Spot);
+        Focus(target);
+        Thread.Sleep(350); // Foreground policy runs every 250 ms.
+        try
+        {
+            Desktop.Key(Keys.ControlKey, true);
+            if (gesture == WindowMenuGesture.CtrlShiftRightClick) Desktop.Key(Keys.ShiftKey, true);
+            if (gesture == WindowMenuGesture.CtrlMiddleClick) Desktop.MiddleClickOn(target.Center, target.Handle);
+            else Desktop.RightClickOn(target.Center, target.Handle);
+        }
+        finally { Desktop.Key(Keys.ControlKey, false); Desktop.Key(Keys.ShiftKey, false); }
+        nint host = 0;
+        Assert.True(Desktop.WaitFor(() =>
+        {
+            host = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen.WindowMenu");
+            return host != 0 && User32.GetForegroundWindow() == host;
+        }, 1000), "The pointer menu did not receive focus.");
+        Assert.Null(target.NextReport(100));
+        Desktop.Press(Keys.Down);
+        Desktop.Press(Keys.Escape);
+        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle));
+    }
+
+    [Fact]
+    public void Starting_after_a_forced_kill_restores_a_source_hidden_from_the_switcher()
+    {
+        using var target = new TargetProcess(Spot, "C81E1E", "WinScreen switcher recovery source");
+        long original = Desktop.ExStyle(target.Handle);
+        Focus(target);
+        Hotkey(Keys.P, target);
+        nint pip = WaitForPip();
+        Rectangle view = Desktop.BoundsOf(pip);
+        Point point = new(view.Left + 60, view.Top + 60);
+        Desktop.RightClickOn(point, pip);
+        Assert.True(Desktop.WaitFor(ForegroundIsApp));
+        Desktop.Press(Keys.K); // &Keep updating
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 1));
+        Desktop.RightClickOn(point, pip);
+        Assert.True(Desktop.WaitFor(ForegroundIsApp));
+        Desktop.Press(Keys.Home);
+        Desktop.Press(Keys.Down);
+        Desktop.Press(Keys.Down); // View options, Keep updating, then switcher hiding.
+        Desktop.Press(Keys.Enter);
+        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOOLWINDOW) != 0));
+        _app.Kill();
+        Assert.True(_app.WaitForExit(4000));
+        _app.Dispose();
+        _app = Start();
+        _appWindow = WaitForAppWindow();
+        Assert.True(Desktop.WaitFor(() => Desktop.ExStyle(target.Handle) == original));
+        Assert.NotEqual((byte?)1, Desktop.Alpha(target.Handle));
+    }
+
     [Fact]
     public void Clicking_and_typing_in_the_view_reach_the_real_window_as_real_input()
     {
@@ -629,7 +731,7 @@ public sealed class AppEndToEndTests : IDisposable
         Rectangle view = Desktop.BoundsOf(pip);
         Desktop.RightClickOn(new Point(view.Left + 60, view.Top + 60), pip);
         Assert.True(Desktop.WaitFor(() => ForegroundIsApp()), "The view's menu didn't open.");
-        Desktop.Press(Keys.H);
+        Desktop.Press(Keys.K);
 
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 1), "The original wasn't hidden.");
     }

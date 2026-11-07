@@ -1,0 +1,107 @@
+using System.Reflection;
+using WinScreen.Native;
+using WinScreen.Pip;
+using WinScreen.Settings;
+using WinScreen.Tests.Support;
+using WinScreen.Windows;
+using Xunit;
+
+namespace WinScreen.Tests;
+
+[Trait("Category", "RealWindows")]
+public sealed class SwitcherPipTests
+{
+    [Fact]
+    public void Compatibility_view_stays_live_and_closing_restores_switcher() => CheckView(PipBackendPreference.Dwm);
+
+    [WgcFact]
+    public void Advanced_view_stays_live_and_closing_restores_switcher() => CheckView(PipBackendPreference.Wgc);
+
+    [Fact]
+    public void A_failed_reveal_keeps_the_view_open_as_a_recovery_surface()
+    {
+        using var source = new TargetProcess(new Rectangle(240, 160, 400, 300));
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var pip = new PipWindow(source.Handle, windows) { AllowSwitcherHiding = true };
+            pip.ShowOnTop();
+            Pump(200);
+            pip.SetOriginalHidden(true);
+            pip.SetSwitcherHidden(true);
+            Assert.True(windows.IsOutOfSwitcher(source.Handle));
+            source.Hang();
+            pip.Close();
+            Assert.False(pip.IsDisposed);
+            Assert.True(windows.IsHidden(source.Handle));
+            Assert.True(windows.IsOutOfSwitcher(source.Handle));
+        });
+    }
+
+    private static void Pump(int milliseconds)
+    {
+        long end = Environment.TickCount64 + milliseconds;
+        while (Environment.TickCount64 < end) { Application.DoEvents(); Thread.Sleep(2); }
+    }
+
+    private static void CheckView(PipBackendPreference preference)
+    {
+        using var source = new TargetProcess(new Rectangle(240, 160, 400, 300));
+        long before = Desktop.ExStyle(source.Handle);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var pip = new PipWindow(source.Handle, windows) { AllowSwitcherHiding = true };
+            pip.ApplyPipPreferences(new PipPreferences { Backend = preference, FrameRate = 30 });
+            var problems = new List<string>();
+            pip.Problem += problems.Add;
+            try
+            {
+                pip.ShowOnTop();
+                pip.Location = new Point(800, 140);
+                Pump(600);
+                if (preference == PipBackendPreference.Wgc)
+                    Assert.True(Desktop.WaitFor(() => pip.BackendKind != PipBackendKind.DwmThumbnail, 10000, () => Pump(20)), pip.DiagnosticSnapshot);
+                pip.SetOriginalHidden(true);
+                Assert.True(windows.IsHidden(source.Handle));
+                source.Animate(60);
+                var selector = (PipBackendSelector)typeof(PipWindow).GetField("_thumbnail", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(pip)!;
+                var advanced = (IPipCaptureBackend?)typeof(PipBackendSelector).GetField("_advanced", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(selector);
+                long Frames() => advanced is null ? 0 : Interlocked.Read(ref advanced.Diagnostics.Received);
+                Pump(400);
+                long start = Frames();
+                Pump(2000);
+                long baseline = Frames() - start;
+                pip.SetSwitcherHidden(true);
+                Assert.True(windows.IsOutOfSwitcher(source.Handle));
+                Pump(400);
+                start = Frames();
+                Pump(2000);
+                long hidden = Frames() - start;
+                if (advanced is not null)
+                {
+                    Assert.True(baseline >= 40, pip.DiagnosticSnapshot);
+                    Assert.True(hidden >= baseline * .9, $"Baseline {baseline}; switcher hidden {hidden}\n{pip.DiagnosticSnapshot}");
+                }
+                else
+                {
+                    var samples = new HashSet<int>();
+                    for (int i = 0; i < 12; i++)
+                    {
+                        Pump(115);
+                        Rectangle b = pip.Bounds;
+                        samples.Add(Desktop.ColorOnScreen(new Rectangle(b.Left + b.Width / 2, b.Top + b.Height / 2, 8, 8)).ToArgb());
+                    }
+                    Assert.True(samples.Count >= 4, $"Only {samples.Count} distinct compositor samples.");
+                }
+                Assert.Empty(problems);
+                pip.Close();
+                Assert.False(windows.IsHidden(source.Handle));
+                Assert.False(windows.IsOutOfSwitcher(source.Handle));
+                Assert.Equal(before & WindowController.SwitcherMask, Desktop.ExStyle(source.Handle) & WindowController.SwitcherMask);
+                Assert.NotEqual(source.Handle, User32.GetForegroundWindow());
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
+}

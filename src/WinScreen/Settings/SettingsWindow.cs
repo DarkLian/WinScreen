@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using System.Diagnostics;
 using WinScreen.Tray;
 using WinScreen.Updates;
@@ -15,20 +15,20 @@ public sealed class SettingsWindow : Form
     private readonly ComboBox _pipRate = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
     private readonly ComboBox _pipScaling = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private readonly NumericUpDown _pipOpacity = new() { Minimum = 10, Maximum = 100, Width = 75 };
-    private readonly CheckBox _pipDiagnostics = new() { Text = T("Include hardware in PiP diagnostics"), AutoSize = true };
+    private readonly CheckBox _pipDiagnostics = new() { Text = T("pip.diagnostics.includeHardware"), AutoSize = true };
     private readonly List<int> _pipRates = [.. PipPreferences.FrameRates];
 
     private readonly CheckBox _showNotifications = new()
-        { Text = T("Show confirmations (problems always appear)"), AutoSize = true };
+        { Text = T("settings.notifications.enable"), AutoSize = true };
 
     private readonly CheckBox _automaticUpdates = new()
-        { Text = T("Download updates automatically; install when WinScreen exits"), AutoSize = true };
+        { Text = T("updates.enable"), AutoSize = true };
 
     private readonly CheckBox _experimental = new()
-        { Text = T("Enable experimental effects (Dark, Glass, Crop, Shrink, auto-move)"), AutoSize = true };
+        { Text = T("settings.experimental.enable"), AutoSize = true };
 
     private readonly CheckBox _pipInput = new()
-        { Text = T("Send clicks on a Picture-in-Picture view to the original window"), AutoSize = true };
+        { Text = T("settings.pip.forwardClicks"), AutoSize = true };
 
     private readonly ErrorProvider _errors = new();
     private readonly ComboBox _language = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
@@ -52,35 +52,38 @@ public sealed class SettingsWindow : Form
         Width = 70,
     };
 
-    private readonly CheckBox _startWithWindows = new() { Text = T("Start WinScreen when I sign in"), AutoSize = true };
+    private readonly CheckBox _startWithWindows = new() { Text = T("settings.startWithWindows"), AutoSize = true };
 
     private readonly CheckBox _showToolbar = new()
-        { Text = T("Show the toolbar when the mouse rests on a title bar"), AutoSize = true };
+        { Text = T("settings.toolbar.enable"), AutoSize = true };
 
     private readonly CheckBox _pauseInFullScreen =
-        new() { Text = T("Pause new commands during games and full-screen apps"), AutoSize = true };
+        new() { Text = T("settings.fullScreen.pause"), AutoSize = true };
 
     private readonly CheckBox _allowPip =
-        new() { Text = T("Still allow opening Picture-in-Picture in full-screen apps"), AutoSize = true };
+        new() { Text = T("settings.fullScreen.allowPip"), AutoSize = true };
 
     private readonly CheckBox _modifierDrag = new()
-        { Text = T("Move and resize windows by holding a key and dragging"), AutoSize = true };
+        { Text = T("gestures.moveResize.enable"), AutoSize = true };
 
     private readonly ComboBox _modifierKey = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
 
     private readonly TextBox _modifierExclusions = new() { Width = 455 };
+    private readonly CheckBox _windowMenu = new() { Text = T("gestures.menu.enable"), AutoSize = true };
+    private readonly ComboBox _windowMenuGesture = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
+    private readonly TextBox _windowMenuExclusions = new() { Width = 455 };
 
     private readonly CheckBox _pausePin = new()
-        { Text = T("Pause pinning while a pinned window is maximized"), AutoSize = true };
+        { Text = T("settings.pin.pauseMaximized"), AutoSize = true };
 
     private readonly CheckBox _opaqueOnHover = new()
-        { Text = T("Make see-through windows solid while the mouse is over them"), AutoSize = true };
+        { Text = T("settings.opacity.solidOnHover"), AutoSize = true };
 
     private readonly CheckBox _highlightPinned = new()
-        { Text = T("Put a red border around pinned windows"), AutoSize = true };
+        { Text = T("settings.pin.highlight"), AutoSize = true };
 
     private readonly CheckBox _pipAutoMove = new()
-        { Text = T("Move Picture-in-Picture views away from text and images"), AutoSize = true };
+        { Text = T("settings.pip.autoMove"), AutoSize = true };
 
     private readonly HashSet<ProgramSetup> _removedSetups = [];
 
@@ -102,9 +105,9 @@ public sealed class SettingsWindow : Form
             _pipInput.Enabled = _experimental.Checked;
             _pipAutoMove.Enabled = _experimental.Checked;
         };
-        _language.Items.AddRange([T("System default"), "English", "简体中文", "繁體中文"]);
+        _language.Items.AddRange([T("settings.language.system"), "English", "简体中文", "繁體中文"]);
 
-        Text = T("WinScreen Settings");
+        Text = T("settings.window.title");
         Icon = TrayApplication.LoadIcon();
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -115,12 +118,12 @@ public sealed class SettingsWindow : Form
         Padding = new Padding(12);
 
         var tabs = new TabControl { Size = new Size(540, 520) };
-        tabs.TabPages.Add(Tab(T("General"), BuildGeneral()));
-        tabs.TabPages.Add(Tab(T("Hotkeys"), BuildHotkeys()));
-        tabs.TabPages.Add(Tab(T("Programs"), BuildPrograms()));
-        tabs.TabPages.Add(Tab(T("Saved setups"), BuildSetups()));
-        tabs.TabPages.Add(Tab(T("Picture-in-Picture"), BuildPip()));
-        tabs.TabPages.Add(Tab(T("Move and resize"), BuildModifierDrag()));
+        tabs.TabPages.Add(Tab(T("settings.general"), BuildGeneral()));
+        tabs.TabPages.Add(Tab(T("settings.hotkeys"), BuildHotkeys()));
+        tabs.TabPages.Add(Tab(T("settings.programs"), BuildPrograms()));
+        tabs.TabPages.Add(Tab(T("settings.savedSetups"), BuildSetups()));
+        tabs.TabPages.Add(Tab(T("pip.open"), BuildPip()));
+        tabs.TabPages.Add(Tab(T("gestures.title"), BuildModifierDrag()));
 
         var page = new FlowLayoutPanel
             { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Dock = DockStyle.Fill };
@@ -159,7 +162,7 @@ public sealed class SettingsWindow : Form
         bool usable = win || (keyData & (Keys.Control | Keys.Alt)) != 0 || HotkeyText.IsFunctionKey(key);
         if (usable)
             _hotkeys[command].Text = HotkeyText.Format(keyData, win);
-        _status.Text = usable ? "" : T("Hold Ctrl, Alt or Win with that key. Function keys also work on their own.");
+        _status.Text = usable ? "" : T("hotkeys.modifierRequired");
     }
 
     /// <summary>Applies and saves what is on screen. Returns false if a hotkey couldn't be claimed.</summary>
@@ -190,6 +193,9 @@ public sealed class SettingsWindow : Form
         draft.AllowPipInFullScreen = _allowPip.Checked;
         draft.ModifierDrag = _modifierDrag.Checked;
         draft.ModifierKey = (ModifierKey)Math.Max(0, _modifierKey.SelectedIndex);
+        draft.WindowMenu = _windowMenu.Checked;
+        draft.WindowMenuGesture = (WindowMenuGesture)Math.Max(0, _windowMenuGesture.SelectedIndex);
+        draft.WindowMenuExclusions = _windowMenuExclusions.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
         draft.ModifierExclusions = _modifierExclusions.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
         draft.PausePinWhenMaximized = _pausePin.Checked;
         draft.OpaqueOnHover = _opaqueOnHover.Checked;
@@ -255,7 +261,7 @@ public sealed class SettingsWindow : Form
         var picker = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDown };
         picker.HandleCreated += (_, _) =>
             Native.User32.SendTextMessage(picker.Handle, Native.User32.CB_SETCUEBANNER, 0,
-                T("Type a program name or choose a running one"));
+                T("programs.nameHint"));
         picker.DropDown += (_, _) =>
         {
             picker.Items.Clear();
@@ -326,6 +332,9 @@ public sealed class SettingsWindow : Form
         _allowPip.Checked = _settings.AllowPipInFullScreen;
         _modifierDrag.Checked = _settings.ModifierDrag;
         _modifierKey.SelectedIndex = (int)_settings.ModifierKey;
+        _windowMenu.Checked = _settings.WindowMenu;
+        _windowMenuGesture.SelectedIndex = (int)_settings.WindowMenuGesture;
+        _windowMenuExclusions.Text = string.Join(", ", _settings.WindowMenuExclusions);
         _modifierExclusions.Text = string.Join(", ", _settings.ModifierExclusions);
         _pausePin.Checked = _settings.PausePinWhenMaximized;
         _opaqueOnHover.Checked = _settings.OpaqueOnHover;
@@ -337,7 +346,7 @@ public sealed class SettingsWindow : Form
         if (!_pipRates.Contains(refresh)) _pipRates.Add(refresh);
         _pipRates.Sort();
         _pipRate.Items.Clear();
-        foreach (int rate in _pipRates) _pipRate.Items.Add(rate == 0 ? T("Match Monitor") : rate + " FPS");
+        foreach (int rate in _pipRates) _pipRate.Items.Add(rate == 0 ? T("pip.frameRate.matchMonitor") : rate + " FPS");
         _pipBackend.SelectedIndex = (int)pip.Backend;
         _pipRate.SelectedIndex = _pipRates.IndexOf(pip.FrameRate);
         _pipScaling.SelectedIndex = (int)pip.Scaling;
@@ -391,7 +400,7 @@ public sealed class SettingsWindow : Form
     {
         var language = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
         language.Controls.Add(new Label
-            { Text = T("Language (restart WinScreen to apply)"), AutoSize = true, Margin = new Padding(3, 6, 8, 0) });
+            { Text = T("settings.language"), AutoSize = true, Margin = new Padding(3, 6, 8, 0) });
         _language.Width = 150;
         language.Controls.Add(_language);
 
@@ -399,26 +408,26 @@ public sealed class SettingsWindow : Form
         bool updatesWork = VelopackUpdateSession.IsConfigured && VelopackUpdateSession.IsInstalled;
         _automaticUpdates.Enabled = updatesWork;
         if (!VelopackUpdateSession.IsConfigured)
-            startup.Add(Note(T("Automatic updates need a release repository configured in this build.")));
+            startup.Add(Note(T("updates.repositoryRequired")));
         else if (!VelopackUpdateSession.IsInstalled)
-            startup.Add(Note(T("Updates only work in an installed copy of WinScreen.")));
+            startup.Add(Note(T("updates.installedOnly")));
 
         var opacity = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 2, 0, 0) };
         opacity.Controls.Add(new Label
-            { Text = T("Default opacity:"), AutoSize = true, Margin = new Padding(3, 6, 4, 0) });
+            { Text = T("settings.opacity.default"), AutoSize = true, Margin = new Padding(3, 6, 4, 0) });
         opacity.Controls.Add(_defaultOpacity);
         opacity.Controls.Add(new Label { Text = "%", AutoSize = true, Margin = new Padding(4, 6, 0, 0) });
 
         var page = new FlowLayoutPanel
             { FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true };
-        page.Controls.Add(Section(T("Startup and updates"), startup.ToArray()));
-        page.Controls.Add(Section(T("Windows"), _showToolbar, _pauseInFullScreen, _allowPip, _pausePin, _opaqueOnHover,
+        page.Controls.Add(Section(T("settings.startupAndUpdates"), startup.ToArray()));
+        page.Controls.Add(Section(T("settings.windows"), _showToolbar, _pauseInFullScreen, _allowPip, _pausePin, _opaqueOnHover,
             _highlightPinned, opacity));
-        page.Controls.Add(Section(T("Experimental"), _experimental, _pipInput, _pipAutoMove,
-            Note(T("Views that move themselves don't appear in screenshots or screen sharing."))));
+        page.Controls.Add(Section(T("settings.experimental"), _experimental, _pipInput, _pipAutoMove,
+            Note(T("settings.pip.autoMoveHelp"))));
         page.Controls.Add(new Label
         {
-            Text = string.Format(T("WinScreen version {0}"), AppInfo.Version), AutoSize = true,
+            Text = string.Format(T("app.version"), AppInfo.Version), AutoSize = true,
             ForeColor = SystemColors.GrayText, Margin = new Padding(3, 2, 3, 0),
         });
         return page;
@@ -428,22 +437,26 @@ public sealed class SettingsWindow : Form
     {
         _modifierKey.Items.AddRange(["Alt", "Win"]);
         var key = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
-        key.Controls.Add(new Label { Text = T("Key to hold"), Width = 145, Height = 26, TextAlign = ContentAlignment.MiddleLeft });
+        key.Controls.Add(new Label { Text = T("gestures.moveResize.modifier"), Width = 145, Height = 26, TextAlign = ContentAlignment.MiddleLeft });
         key.Controls.Add(_modifierKey);
         var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false,
             Dock = DockStyle.Fill, AutoScroll = true };
-        page.Controls.Add(Section(T("Move and resize"), _modifierDrag, key,
-            new Label { Text = T("Leave these programs alone (separate names with commas):"), AutoSize = true },
+        page.Controls.Add(Section(T("gestures.moveResize.title"), _modifierDrag, key,
+            new Label { Text = T("gestures.exclusions"), AutoSize = true },
             _modifierExclusions));
-        page.Controls.Add(Note(T("Hold the key and drag with the left button to move a window, or the right button to resize it from the nearest edge. Esc cancels.")));
-        page.Controls.Add(Note(T("This watches the mouse with a system hook. The hook only exists while this is on, and is removed during games, full-screen apps, excluded programs and when the PC is locked. WinScreen never watches the keyboard for this.")));
+        page.Controls.Add(Note(T("gestures.moveResize.help")));
+        _windowMenuGesture.Items.AddRange([T("gestures.menu.ctrlRight"), T("gestures.menu.ctrlShiftRight"), T("gestures.menu.ctrlMiddle")]);
+        page.Controls.Add(Section(T("window.menu"), _windowMenu, _windowMenuGesture,
+            new Label { Text = T("gestures.exclusions"), AutoSize = true }, _windowMenuExclusions));
+        page.Controls.Add(Note(T("gestures.menu.help")));
+        page.Controls.Add(Note(T("gestures.hookHelp")));
         return page;
     }
 
     private FlowLayoutPanel BuildPip()
     {
-        _pipBackend.Items.AddRange([T("Auto"), T("Compatibility (DWM)"), T("Advanced (WGC)")]);
-        _pipScaling.Items.AddRange([T("Auto (area filtering)"), T("Crisp (nearest texel)"), T("Smooth (linear)")]);
+        _pipBackend.Items.AddRange([T("common.auto"), T("pip.backend.compatibility"), T("pip.backend.advanced")]);
+        _pipScaling.Items.AddRange([T("pip.scaling.auto"), T("pip.scaling.crisp"), T("pip.scaling.smooth")]);
         _pipBackend.SelectedIndexChanged += (_, _) =>
         {
             _pipRate.Enabled = _pipScaling.Enabled = _pipBackend.SelectedIndex != (int)PipBackendPreference.Dwm;
@@ -455,23 +468,23 @@ public sealed class SettingsWindow : Form
             int chosen = _pipRates[Math.Max(0, _pipRate.SelectedIndex)];
             _pipRates.Add(refresh); _pipRates.Sort();
             _pipRate.Items.Clear();
-            foreach (int rate in _pipRates) _pipRate.Items.Add(rate == 0 ? T("Match Monitor") : rate + " FPS");
+            foreach (int rate in _pipRates) _pipRate.Items.Add(rate == 0 ? T("pip.frameRate.matchMonitor") : rate + " FPS");
             _pipRate.SelectedIndex = _pipRates.IndexOf(chosen);
         };
         static Control Row(string label, Control control)
         {
             var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
-            row.Controls.Add(new Label { Text = T(label), Width = 145, AutoSize = false, Height = 26, TextAlign = ContentAlignment.MiddleLeft });
+            row.Controls.Add(new Label { Text = label, Width = 145, AutoSize = false, Height = 26, TextAlign = ContentAlignment.MiddleLeft });
             row.Controls.Add(control);
             return row;
         }
         var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false,
             Dock = DockStyle.Fill, AutoScroll = true };
-        page.Controls.Add(Section(T("Picture-in-Picture"), Row("PiP rendering", _pipBackend), Row("Frame limit", _pipRate),
-            Row("Scaling", _pipScaling), Row("PiP opacity (%)", _pipOpacity), _pipDiagnostics));
-        page.Controls.Add(Note(T("DWM cadence and scaling are managed by Windows. Frame limits and filters apply to WGC only.")));
-        page.Controls.Add(Note(T("Advanced capture keeps the Windows capture indicator. If unavailable, PiP uses DWM.")));
-        page.Controls.Add(Note(T("Right-click a view for diagnostics and Retry advanced backend. Retry is available after a 10-second cooldown.")));
+        page.Controls.Add(Section(T("pip.open"), Row(T("pip.rendering"), _pipBackend), Row(T("pip.frameRate"), _pipRate),
+            Row(T("pip.scaling"), _pipScaling), Row(T("pip.opacityPercent"), _pipOpacity), _pipDiagnostics));
+        page.Controls.Add(Note(T("pip.rendering.compatibilityHelp")));
+        page.Controls.Add(Note(T("pip.rendering.captureIndicatorHelp")));
+        page.Controls.Add(Note(T("pip.diagnostics.retryHelp")));
         return page;
     }
 
@@ -499,7 +512,7 @@ public sealed class SettingsWindow : Form
 
         table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var group = new GroupBox
-            { Text = T("Click a box and press the keys, or Delete to clear"), Dock = DockStyle.Fill };
+            { Text = T("settings.hotkeys.captureHelp"), Dock = DockStyle.Fill };
         group.Controls.Add(table);
         return group;
     }
@@ -509,16 +522,16 @@ public sealed class SettingsWindow : Form
         var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 2, Dock = DockStyle.Fill };
         page.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         page.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        page.Controls.Add(BuildProgramList(T("Programs WinScreen leaves alone"), _excluded, _newExcluded), 0, 0);
+        page.Controls.Add(BuildProgramList(T("programs.exclusions"), _excluded, _newExcluded), 0, 0);
         page.Controls.Add(
-            BuildProgramList(T("Only work on these programs (leave empty for all programs)"), _included, _newIncluded),
+            BuildProgramList(T("programs.inclusions"), _included, _newIncluded),
             0, 1);
         return page;
     }
 
     private static GroupBox BuildProgramList(string title, ListBox list, ComboBox newProgram)
     {
-        var add = new Button { Text = T("&Add"), AutoSize = true };
+        var add = new Button { Text = T("common.add"), AutoSize = true };
         add.Click += (_, _) => AddTyped(list, newProgram);
         newProgram.KeyDown += (_, e) =>
         {
@@ -527,7 +540,7 @@ public sealed class SettingsWindow : Form
             e.SuppressKeyPress = true;
             AddTyped(list, newProgram);
         };
-        var remove = new Button { Text = T("&Remove"), AutoSize = true };
+        var remove = new Button { Text = T("common.remove"), AutoSize = true };
         remove.Click += (_, _) =>
         {
             if (list.SelectedItem is { } selected)
@@ -551,7 +564,7 @@ public sealed class SettingsWindow : Form
 
     private GroupBox BuildSetups()
     {
-        var remove = new Button { Text = T("&Remove"), AutoSize = true };
+        var remove = new Button { Text = T("common.remove"), AutoSize = true };
         remove.Click += (_, _) =>
         {
             if (_setups.SelectedItem is ProgramSetup selected)
@@ -561,7 +574,7 @@ public sealed class SettingsWindow : Form
         var hint = new Label
         {
             Text = T(
-                "Set a window up the way you like it and press the Remember setup hotkey. Its program's windows then start that way: pinned, see-through and dark. Click-through, Glass, Crop and Shrink aren't remembered."),
+                "settings.setups.help"),
             AutoSize = true,
             MaximumSize = new Size(ContentWidth, 0),
             Margin = new Padding(0, 0, 0, 8),
@@ -577,20 +590,20 @@ public sealed class SettingsWindow : Form
         table.Controls.Add(_setups, 0, 1);
         table.Controls.Add(remove, 1, 1);
 
-        var group = new GroupBox { Text = T("Saved setups"), Dock = DockStyle.Fill };
+        var group = new GroupBox { Text = T("settings.savedSetups"), Dock = DockStyle.Fill };
         group.Controls.Add(table);
         return group;
     }
 
     private FlowLayoutPanel BuildButtons()
     {
-        var save = new Button { Text = T("&Save"), AutoSize = true };
+        var save = new Button { Text = T("settings.save"), AutoSize = true };
         save.Click += (_, _) =>
         {
             if (SaveChanges())
                 Close();
         };
-        var cancel = new Button { Text = T("Cancel"), AutoSize = true, DialogResult = DialogResult.Cancel };
+        var cancel = new Button { Text = T("common.cancel"), AutoSize = true, DialogResult = DialogResult.Cancel };
         cancel.Click += (_, _) => Close();
         CancelButton = cancel;
 

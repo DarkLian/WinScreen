@@ -1,6 +1,7 @@
 using System.Reflection;
 using Velopack;
 using Velopack.Locators;
+using WinScreen.Localization;
 using WinScreen.Settings;
 
 namespace WinScreen.Updates;
@@ -70,7 +71,7 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
             {
                 _pending = session;
                 session = null;
-                status(UiText.T("Update ready; it will install when WinScreen exits."));
+                status(UiText.T("updates.ready"));
             }
         }
         catch (OperationCanceledException) when (generation.IsCancellationRequested)
@@ -80,7 +81,7 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         {
             _lastCheckFailed = true;
             if (_enabled == generation && !_disposed)
-                status(UiText.T("Update check failed. The current version will keep running."));
+                status(UiText.T("updates.checkFailed"));
         }
         finally
         {
@@ -93,13 +94,13 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
     internal async Task<string> CheckNow()
     {
         if (_busy)
-            return UiText.T("Already checking for updates.");
+            return UiText.T("updates.alreadyChecking");
         await Check();
         if (_pending is not null)
-            return UiText.T("Update ready; it will install when WinScreen exits.");
+            return UiText.T("updates.ready");
         return _lastCheckFailed
-            ? UiText.T("Update check failed. The current version will keep running.")
-            : UiText.T("WinScreen is up to date.");
+            ? UiText.T("updates.checkFailed")
+            : UiText.T("updates.upToDate");
     }
 
     internal async Task ApplyOnExit()

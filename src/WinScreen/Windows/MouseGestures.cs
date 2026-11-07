@@ -12,6 +12,10 @@ namespace WinScreen.Windows;
 /// </summary>
 internal static class ModifierHookPolicy
 {
+    public static bool ShouldRun(bool moveOn, bool menuOn, FullScreenState state, bool fills,
+        bool moveExcluded, bool menuExcluded, bool away) =>
+        ShouldRun((moveOn && !moveExcluded) || (menuOn && !menuExcluded), state, fills, false, away);
+
     public static bool ShouldRun(bool turnedOn, FullScreenState fullScreen, bool foregroundFillsMonitor,
         bool foregroundExcluded, bool away) =>
         turnedOn && fullScreen == FullScreenState.None && !foregroundFillsMonitor && !foregroundExcluded && !away;
@@ -23,12 +27,13 @@ internal static class ModifierHookPolicy
 /// low-level mouse hook. That hook and its threads exist only while <see cref="Active"/> is on, and there is
 /// no keyboard hook: the modifier is only read at the moment a mouse button goes down.
 /// </summary>
-internal sealed class ModifierDrag : IDisposable
+internal sealed class MouseGestures : IDisposable
 {
     private const int WH_MOUSE_LL = 14;
     private const int WM_QUIT = 0x0012, WM_HOTKEY = 0x0312, WM_APP = 0x8000;
     private const int WM_MOUSEMOVE = 0x0200, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205;
     private const int HC_ACTION = 0;
+    private const int WM_MBUTTONDOWN = 0x0207, WM_MBUTTONUP = 0x0208;
     private const int VK_MENU = 0x12, VK_LWIN = 0x5B, VK_RWIN = 0x5C, VK_ESCAPE = 0x1B;
     private const int MaskKey = 0xE8; // Unassigned: tapping it stops a held Alt or Win opening a menu or Start.
     private const int ClaimEscape = WM_APP + 1, ReleaseEscape = WM_APP + 2;
@@ -47,15 +52,28 @@ internal sealed class ModifierDrag : IDisposable
     private uint _hookThreadId;
     private volatile Gesture? _gesture;
     private volatile bool _swallowRelease;
+    private bool _dragClaimed;
     private int _pendingRelease;
     private long _point;
     private volatile bool _stopping;
+    private volatile bool _moveStopping;
+    private volatile bool _accepting;
+    private volatile bool _moveEnabled = true, _menuEnabled, _menuVisible;
+    private volatile WindowMenuGesture _menuGesture;
+
+    public bool MoveEnabled { get => _moveEnabled; set => _moveEnabled = value; }
+    public bool MenuEnabled { get => _menuEnabled; set => _menuEnabled = value; }
+    public WindowMenuGesture MenuGesture { get => _menuGesture; set => _menuGesture = value; }
+    public Func<nint, bool>? MenuEligible { get; set; }
+    public Action<nint, Point>? MenuRequested { get; set; }
+    public Action<Point>? OutsidePressed { get; set; }
+    public bool MenuVisible { get => _menuVisible; set => _menuVisible = value; }
     private long _lastCallback;
     private long _longestCallbackTicks;
 
     /// <param name="eligible">Whether a window may be moved. Called inside the hook, so it must be quick.</param>
     /// <param name="began">Told once when a gesture starts, off the hook, so the move can be undone.</param>
-    public ModifierDrag(Func<nint, bool> eligible, Action<nint> began)
+    public MouseGestures(Func<nint, bool> eligible, Action<nint> began)
     {
         _eligible = eligible;
         _began = began;
@@ -76,8 +94,13 @@ internal sealed class ModifierDrag : IDisposable
     /// <exception cref="Win32Exception">Windows wouldn't install the hook.</exception>
     public void SetActive(bool on)
     {
+        _accepting = on;
+        if (!on && _swallowRelease) return; // Finish a claimed pair before removing the hook.
         if (on == Active)
+        {
+            if (on) FollowMover();
             return;
+        }
         if (on) Start();
         else Stop();
     }
@@ -99,6 +122,7 @@ internal sealed class ModifierDrag : IDisposable
             nint hook = SetWindowsHookEx(WH_MOUSE_LL, _proc, GetModuleHandle(0), 0);
             if (hook == 0)
                 failure = new Win32Exception(Marshal.GetLastWin32Error());
+            PeekMessage(out _, 0, 0, 0, 0); // Make the thread-message queue before publishing readiness.
             ready.Set();
             if (hook == 0)
                 return;
@@ -129,8 +153,7 @@ internal sealed class ModifierDrag : IDisposable
             throw failure;
         }
 
-        _mover = new Thread(MoveWindows) { IsBackground = true, Name = "WinScreen modifier mover" };
-        _mover.Start();
+        FollowMover();
         Interlocked.Exchange(ref _lastCallback, Stopwatch.GetTimestamp());
         Active = true;
     }
@@ -143,7 +166,7 @@ internal sealed class ModifierDrag : IDisposable
         _stopping = true;
         _gesture = null;
         _swallowRelease = false;
-        _moved.Set();
+        if (_mover is not null) _moved.Set();
         PostThreadMessage(_hookThreadId, WM_QUIT, 0, 0);
         _hookThread?.Join(ThreadExit);
         _mover?.Join(ThreadExit);
@@ -154,6 +177,42 @@ internal sealed class ModifierDrag : IDisposable
         ? GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0
         : GetAsyncKeyState(VK_MENU) < 0;
 
+    private void FollowMover()
+    {
+        if (MoveEnabled && _mover is null)
+        {
+            _moveStopping = false;
+            _mover = new Thread(MoveWindows) { IsBackground = true, Name = "WinScreen modifier mover" };
+            _mover.Start();
+        }
+        else if (!MoveEnabled && _mover is not null)
+        {
+            _gesture = null;
+            _moveStopping = true;
+            _moved.Set();
+            _mover.Join(ThreadExit);
+            _mover = null;
+        }
+    }
+
+    internal static bool MatchesMenu(WindowMenuGesture gesture, bool control, bool shift, bool alt, bool win, bool middle) =>
+        control && !alt && !win && shift == (gesture == WindowMenuGesture.CtrlShiftRightClick) &&
+        middle == (gesture == WindowMenuGesture.CtrlMiddleClick);
+
+    private bool BeginMenu(Point point, bool middle)
+    {
+        if (!_accepting || !MenuEnabled || MenuVisible || !MatchesMenu(MenuGesture, GetAsyncKeyState(0x11) < 0,
+                GetAsyncKeyState(0x10) < 0, GetAsyncKeyState(VK_MENU) < 0,
+                GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0, middle)) return false;
+        nint window = User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y }), User32.GA_ROOT);
+        if (window == 0 || MenuEligible?.Invoke(window) != true) return false;
+        _pendingRelease = middle ? WM_MBUTTONUP : WM_RBUTTONUP;
+        _dragClaimed = false;
+        _swallowRelease = true;
+        MenuRequested?.Invoke(window, point); // Posts only; it must never wait for the UI.
+        return true;
+    }
+
     private nint Callback(int code, nint message, nint data)
     {
         long started = Stopwatch.GetTimestamp();
@@ -163,6 +222,8 @@ internal sealed class ModifierDrag : IDisposable
 
         var info = Marshal.PtrToStructure<MouseHookInfo>(data);
         bool swallow = false;
+        if (MenuVisible && (int)message is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN)
+            OutsidePressed?.Invoke(new Point(info.X, info.Y));
         switch ((int)message)
         {
             case WM_MOUSEMOVE:
@@ -177,10 +238,15 @@ internal sealed class ModifierDrag : IDisposable
                 swallow = _gesture is null && !_swallowRelease && Begin(new Point(info.X, info.Y), false);
                 break;
             case WM_RBUTTONDOWN:
-                swallow = _gesture is null && !_swallowRelease && Begin(new Point(info.X, info.Y), true);
+                swallow = _gesture is null && !_swallowRelease &&
+                          (BeginMenu(new Point(info.X, info.Y), false) || Begin(new Point(info.X, info.Y), true));
+                break;
+            case WM_MBUTTONDOWN:
+                swallow = _gesture is null && !_swallowRelease && BeginMenu(new Point(info.X, info.Y), true);
                 break;
             case WM_LBUTTONUP:
             case WM_RBUTTONUP:
+            case WM_MBUTTONUP:
                 swallow = End((int)message);
                 break;
         }
@@ -193,7 +259,7 @@ internal sealed class ModifierDrag : IDisposable
 
     private bool Begin(Point point, bool resizing)
     {
-        if (!ModifierHeld())
+        if (!_accepting || !MoveEnabled || !ModifierHeld())
             return false;
         nint window = User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y }), User32.GA_ROOT);
         if (window == 0 || !_eligible(window) || !User32.GetWindowRect(window, out Rect r))
@@ -202,6 +268,7 @@ internal sealed class ModifierDrag : IDisposable
         var original = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
         Interlocked.Exchange(ref _point, Pack(point.X, point.Y));
         _pendingRelease = resizing ? WM_RBUTTONUP : WM_LBUTTONUP;
+        _dragClaimed = true;
         _gesture = new Gesture(window, resizing, point, original,
             resizing ? PlacementGeometry.EdgesAt(point, original) : ResizeEdges.None, _pendingRelease);
         _swallowRelease = true;
@@ -216,9 +283,11 @@ internal sealed class ModifierDrag : IDisposable
         if (!_swallowRelease || message != _pendingRelease)
             return false;
         _swallowRelease = false;
+        bool dragged = _dragClaimed;
+        _dragClaimed = false;
         _gesture = null;
         PostThreadMessage(_hookThreadId, ReleaseEscape, 0, 0);
-        MaskModifier();
+        if (dragged) MaskModifier();
         return true;
     }
 
@@ -246,9 +315,10 @@ internal sealed class ModifierDrag : IDisposable
     private void MoveWindows()
     {
         Gesture? noted = null;
-        while (!_stopping)
+        while (!_stopping && !_moveStopping)
         {
             _moved.WaitOne();
+            if (_moveStopping) return;
             if (_stopping || _gesture is not { } gesture)
             {
                 noted = null;
@@ -305,6 +375,10 @@ internal sealed class ModifierDrag : IDisposable
 
     [DllImport("user32.dll", EntryPoint = "GetMessageW")]
     private static extern int GetMessage(out Msg message, nint window, uint first, uint last);
+
+    [DllImport("user32.dll", EntryPoint = "PeekMessageW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PeekMessage(out Msg message, nint window, uint first, uint last, uint remove);
 
     [DllImport("user32.dll", EntryPoint = "PostThreadMessageW")]
     [return: MarshalAs(UnmanagedType.Bool)]

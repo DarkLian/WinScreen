@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using WinScreen.Native;
 using WinScreen.Windows;
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Pip;
 
@@ -37,7 +37,7 @@ internal static class PipSourceList
 
     internal static List<PipChoice> Screens() => Screen.AllScreens
         .Select(screen => new PipChoice(new ScreenPipSource(screen.DeviceName, null).Title,
-            $"{screen.Bounds.Width}×{screen.Bounds.Height}" + (screen.Primary ? " " + T("(main)") : ""), 0,
+            $"{screen.Bounds.Width}×{screen.Bounds.Height}" + (screen.Primary ? " " + T("pip.sources.mainDisplay") : ""), 0,
             screen.DeviceName, false))
         .ToList();
 

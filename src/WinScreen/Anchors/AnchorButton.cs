@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using WinScreen.Native;
 using WinScreen.Windows;
 
@@ -43,18 +43,18 @@ internal sealed class AnchorButton : Form
             Dpi.Scale(IconSize, dpi));
         AllowDrop = true;
         DoubleBuffered = true;
-        Text = T("WinScreen anchor - ") + WindowInfo.Title(target);
+        Text = T("anchor.titlePrefix") + WindowInfo.Title(target);
         _tip.SetToolTip(this, WindowInfo.Title(target) + Environment.NewLine +
-                              T("Left: show • Right: menu • Middle: close • Drag: move"));
-        _menu.Items.Add(T("Show window"), null, (_, _) => BringForward());
-        _menu.Items.Add(T("Minimize window"), null, (_, _) =>
+                              T("anchor.controls"));
+        _menu.Items.Add(T("window.show"), null, (_, _) => BringForward());
+        _menu.Items.Add(T("window.minimize"), null, (_, _) =>
         {
             if (_identity.Matches()) User32.ShowWindow(_target, SW_MINIMIZE);
             else Close();
         });
-        _menu.Items.Add(T("Close window and remove Anchor"), null, (_, _) => CloseTarget());
+        _menu.Items.Add(T("anchor.closeWindow"), null, (_, _) => CloseTarget());
         _menu.Items.Add(new ToolStripSeparator());
-        _menu.Items.Add(T("Remove Anchor only"), null, (_, _) => Close());
+        _menu.Items.Add(T("anchor.remove"), null, (_, _) => Close());
         ContextMenuStrip = _menu;
     }
 

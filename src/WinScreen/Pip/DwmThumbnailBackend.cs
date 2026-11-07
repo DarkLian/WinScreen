@@ -1,5 +1,5 @@
 using WinScreen.Windows;
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Pip;
 
@@ -19,7 +19,7 @@ internal sealed class DwmThumbnailBackend : IPipRenderBackend
         _source = source;
         _destination = destination;
         _thumbnail = DwmThumbnail.TryCreate(destination, source) ??
-            throw new WindowOperationException(T("This window can't be shown in Picture-in-Picture."));
+            throw new WindowOperationException(T("errors.pip.windowUnavailable"));
     }
 
     public PipBackendKind Kind => PipBackendKind.DwmThumbnail;

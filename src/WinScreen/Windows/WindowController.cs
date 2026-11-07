@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -13,7 +13,7 @@ public sealed class WindowOperationException(string message) : Exception(message
 /// Changes other programs' windows (pin, opacity, click-through) and remembers how each one
 /// looked first, so every change can be undone.
 /// </summary>
-public sealed class WindowController(IEnumerable<string> excludedProcesses, ChangeJournal? journal = null)
+public sealed partial class WindowController(IEnumerable<string> excludedProcesses, ChangeJournal? journal = null)
 {
     public const byte OpacityStep = 26;
     public const byte MinimumOpacity = 51;
@@ -64,6 +64,12 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         public byte? AlphaFromClickThrough { get; set; }
         public WindowPlacement? PlacementBeforePeek { get; set; }
         public WindowPlacement? PlacementBeforeRollUp { get; set; }
+        public long BorderlessBits { get; set; }
+        public WindowPlacement? PlacementBeforeBorderless { get; set; }
+        public Point? BorderlessOrigin { get; set; }
+        public bool BorderlessFilled { get; set; }
+        public long? SwitcherBits { get; set; }
+        public int? OriginalDarkTitleBar { get; set; }
     }
 
     private HashSet<string> _excluded = new(excludedProcesses, StringComparer.OrdinalIgnoreCase);
@@ -132,7 +138,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
             if (before is null)
             {
                 if (!User32.GetWindowRect(window, out Rect r))
-                    throw Failure(T("read the position of"), window);
+                    throw Failure(T("actions.readPosition"), window);
                 after = ScreenColors.MostCommon(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom));
             }
 
@@ -182,12 +188,14 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         lock (_gate)
         {
             ChangedWindow state = Track(window);
+            if (state.PlacementBeforeBorderless is not null)
+                throw new WindowOperationException(T("errors.borderless.disableFirst"));
             if (!state.Cropped && WindowInfo.ShapeOf(window) is not null)
                 throw new WindowOperationException(
-                    string.Format(T("\"{0}\" draws its own shape, so it can't be cropped."), WindowInfo.Title(window)));
+                    string.Format(T("errors.crop.customShape"), WindowInfo.Title(window)));
 
             if (part.Width <= 0 || part.Height <= 0)
-                throw new WindowOperationException(T("Choose a nonempty crop."));
+                throw new WindowOperationException(T("errors.crop.empty"));
             bool croppedBefore = state.Cropped;
             state.Cropped = true; // Recorded first, so a crash during the change can still be undone.
             try
@@ -198,7 +206,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
                 if (User32.SetWindowRgn(window, region, true) == 0)
                 {
                     User32.DeleteObject(region);
-                    throw Failure(T("crop"), window);
+                    throw Failure(T("actions.crop"), window);
                 }
             }
             catch (WindowOperationException)
@@ -230,7 +238,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         EnsureResponsive(window);
         state.Identity.Require();
         if (User32.SetWindowRgn(window, 0, true) == 0)
-            throw Failure(T("uncrop"), window);
+            throw Failure(T("actions.uncrop"), window);
         state.Cropped = false;
     }
 
@@ -259,12 +267,12 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
                 return false;
             }
 
-            if (state.Hidden || state.PlacementBeforePeek is not null || state.Cropped ||
+            if (state.Hidden || state.PlacementBeforePeek is not null || state.Cropped || state.PlacementBeforeBorderless is not null ||
                 User32.IsIconic(window) || User32.IsZoomed(window))
-                throw new WindowOperationException(T("Show this window normally first, then try again."));
+                throw new WindowOperationException(T("errors.window.showNormally"));
             if ((User32.GetWindowLongPtr(window, User32.GWL_STYLE) & User32.WS_CAPTION) != User32.WS_CAPTION)
                 throw new WindowOperationException(
-                    string.Format(T("\"{0}\" has no standard title bar, so it can't be rolled up."), WindowInfo.Title(window)));
+                    string.Format(T("errors.rollUp.noCaption"), WindowInfo.Title(window)));
 
             state.PlacementBeforeRollUp = ReadPlacement(window);
             try
@@ -282,7 +290,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
             int height = User32.GetSystemMetricsForDpi(CaptionMetric, dpi) +
                          2 * (User32.GetSystemMetricsForDpi(FrameMetric, dpi) + User32.GetSystemMetricsForDpi(PaddingMetric, dpi));
             if (!User32.GetWindowRect(window, out Rect before))
-                throw Failure(T("read the position of"), window);
+                throw Failure(T("actions.readPosition"), window);
             const uint flags = User32.SWP_NOMOVE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE;
             state.Identity.Require();
             bool moved = User32.SetWindowPos(window, 0, 0, 0, before.Right - before.Left, height, flags);
@@ -292,7 +300,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
                 RollDown(window, state);
                 SaveJournal();
                 throw new WindowOperationException(
-                    string.Format(T("\"{0}\" keeps its own minimum height, so it can't be rolled up."), WindowInfo.Title(window)));
+                    string.Format(T("errors.rollUp.minimumHeight"), WindowInfo.Title(window)));
             }
 
             SaveJournal();
@@ -405,24 +413,24 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
     public string? Refusal(nint window)
     {
         if (window == 0 || !User32.IsWindow(window))
-            return T("No window is selected. Click the window you want, then try again.");
+            return T("errors.window.noSelection");
         if (window == User32.GetShellWindow() || window == User32.GetDesktopWindow() ||
             ShellClasses.Contains(WindowInfo.ClassName(window)))
-            return T("The desktop, taskbar and other parts of Windows can't be changed.");
+            return T("errors.window.shell");
 
         User32.GetWindowThreadProcessId(window, out uint processId);
         if (processId == Environment.ProcessId)
-            return T("Use this on the original window, not on a WinScreen window.");
+            return T("errors.window.ownProcess");
 
         string program = WindowInfo.ProcessName(processId);
         if (ShellPrograms.Contains(program))
-            return T("The desktop, taskbar and other parts of Windows can't be changed.");
+            return T("errors.window.shell");
         if (_excluded.Contains(program))
             return string.Format(
-                T("{0} is on your list of programs WinScreen leaves alone. You can change this in Settings."), program);
+                T("errors.program.excluded"), program);
         if (_included.Count > 0 && !_included.Contains(program))
             return string.Format(
-                T("{0} isn't on your list of programs WinScreen works on. You can change this in Settings."), program);
+                T("errors.program.notIncluded"), program);
         return null;
     }
 
@@ -492,13 +500,13 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         if (Refusal(window) is { } refusal)
             throw new WindowOperationException(refusal);
         if (IsHidden(window) || IsPeeking(window))
-            throw new WindowOperationException(T("Show this window first, then try again."));
+            throw new WindowOperationException(T("errors.window.showFirst"));
         if ((User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0)
-            throw new WindowOperationException(T("Unpin this window first, then send it to the bottom."));
+            throw new WindowOperationException(T("errors.window.unpinFirst"));
         EnsureResponsive(window);
         const uint flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
         if (!User32.SetWindowPos(window, User32.HWND_BOTTOM, 0, 0, 0, 0, flags))
-            throw Failure(T("move"), window);
+            throw Failure(T("actions.move"), window);
     }
 
     /// <summary>Makes a solid window as see-through as the default level, or a see-through one solid.</summary>
@@ -561,6 +569,8 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
             ChangedWindow state = Track(window);
             if (state.Hidden)
                 return;
+            if (state.PlacementBeforeBorderless is not null)
+                throw new WindowOperationException(T("errors.borderless.disableFirst"));
             EnsureLayeringSafe(state);
             state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
             state.Hidden = true;
@@ -578,6 +588,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
             if (!_changed.TryGetValue(window, out ChangedWindow? state) || !state.Hidden)
                 return;
 
+            RestoreSwitcher(window, state);
             Reveal(window, state);
             state.Hidden = false;
             SaveJournal();
@@ -594,6 +605,8 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         lock (_gate)
         {
             ChangedWindow state = Track(window);
+            if (state.PlacementBeforeBorderless is not null)
+                throw new WindowOperationException(T("errors.borderless.disableFirst"));
             bool maximized = User32.IsZoomed(window);
             if (state.PlacementBeforePeek is null)
             {
@@ -607,7 +620,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
                     {
                         User32.SetForegroundWindow(window);
                         if (User32.GetForegroundWindow() != window)
-                            throw new WindowOperationException(T("The source window could not be activated."));
+                            throw new WindowOperationException(T("errors.window.activationFailed"));
                     }
                     else
                     {
@@ -633,7 +646,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
             }
 
             if (!User32.GetWindowRect(window, out Rect r))
-                throw Failure(T("read the position of"), window);
+                throw Failure(T("actions.readPosition"), window);
             return new Point(r.Left, r.Top);
         }
     }
@@ -712,7 +725,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
             {
                 RecoveryWarning = string.Format(
                     T(
-                        "WinScreen can't read its recovery file, so new changes are paused. Make sure {0} isn't open in another program, then choose Restore all windows to try again."),
+                        "errors.recovery.readFailed"),
                     journal.FilePath);
                 return;
             }
@@ -720,7 +733,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
             RecoveryWarning = journal.DamagedBackup is { } backup
                 ? string.Format(
                     T(
-                        "WinScreen's recovery file was damaged, so a copy was kept at {0}. A window changed before WinScreen stopped may stay that way until you close and reopen it."),
+                        "errors.recovery.damaged"),
                     backup)
                 : null;
 
@@ -746,6 +759,12 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
                     Cropped = record.Cropped,
                     PlacementBeforePeek = record.Placement is null ? null : ToPlacement(record.Placement),
                     PlacementBeforeRollUp = record.RollUpPlacement is null ? null : ToPlacement(record.RollUpPlacement),
+                    BorderlessBits = record.StyleBits,
+                    PlacementBeforeBorderless = record.BorderlessPlacement is null ? null : ToPlacement(record.BorderlessPlacement),
+                    BorderlessOrigin = record.BorderlessOrigin is { } origin ? new Point(origin[0], origin[1]) : null,
+                    BorderlessFilled = record.BorderlessFilled,
+                    SwitcherBits = record.SwitcherBits,
+                    OriginalDarkTitleBar = record.OriginalDarkTitleBar,
                 };
                 _changed[(nint)record.Window] = state;
             }
@@ -754,7 +773,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
             if (failed > 0)
                 RecoveryWarning =
                     string.Format(
-                        T("{0} window(s) couldn't be recovered yet. Choose Restore all windows to try again."),
+                        T("errors.recovery.pendingCount"),
                         failed) +
                     Environment.NewLine + string.Join(Environment.NewLine, RestoreFailures);
         }
@@ -762,6 +781,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
 
     private void SaveJournal()
     {
+        PublishGestureState();
         if (_recoveryBlocked)
             throw new WindowOperationException(RecoveryWarning!);
         try
@@ -772,7 +792,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             throw new WindowOperationException(
-                T("WinScreen couldn't save its recovery data, so this change wasn't made: ") + e.Message);
+                T("errors.recovery.saveFailedPrefix") + e.Message);
         }
     }
 
@@ -799,6 +819,12 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
             IdentityToken = state.Identity.Token, ProcessStartTicks = state.Identity.ProcessStartTicks,
             ThreadId = state.Identity.ThreadId, OwnedStyles = state.OwnedStyles,
             RollUpPlacement = state.PlacementBeforeRollUp is { } rolled ? FromPlacement(rolled) : null,
+            StyleBits = state.BorderlessBits,
+            BorderlessPlacement = state.PlacementBeforeBorderless is { } borderless ? FromPlacement(borderless) : null,
+            BorderlessOrigin = state.BorderlessOrigin is { } origin ? [origin.X, origin.Y] : null,
+            BorderlessFilled = state.BorderlessFilled,
+            SwitcherBits = state.SwitcherBits,
+            OriginalDarkTitleBar = state.OriginalDarkTitleBar,
         };
     }
 
@@ -926,14 +952,14 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         _changed[window].Identity.Require();
         const uint flags = User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE;
         if (!User32.SetWindowPos(window, 0, position.X, position.Y, 0, 0, flags))
-            throw Failure(T("move"), window);
+            throw Failure(T("actions.move"), window);
     }
 
     private static WindowPlacement ReadPlacement(nint window)
     {
         var placement = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() };
         if (!User32.GetWindowPlacement(window, ref placement))
-            throw Failure(T("read the position of"), window);
+            throw Failure(T("actions.readPosition"), window);
         return placement;
     }
 
@@ -945,7 +971,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         if (placement.ShowCommand == showNormal)
             placement.ShowCommand = User32.SW_SHOWNOACTIVATE;
         if (!User32.SetWindowPlacement(window, ref placement))
-            throw Failure(T("put back"), window);
+            throw Failure(T("actions.restorePosition"), window);
     }
 
     private void Restore(nint window, ChangedWindow state)
@@ -959,6 +985,12 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
             Attempt("restore-rollup", () => RollDown(window, state));
         if (state.Cropped)
             Attempt("restore-crop", () => ClearCrop(window, state));
+        if (state.PlacementBeforeBorderless is not null)
+            Attempt("restore-borderless", () => RemoveBorderless(window, state));
+        if (state.SwitcherBits is not null)
+            Attempt("restore-switcher", () => RestoreSwitcher(window, state));
+        if (state.OriginalDarkTitleBar is not null)
+            Attempt("restore-titlebar", () => RestoreTitleBar(window, state));
         bool restoredAttributes = !state.HadLayeredAttributes;
         if ((state.OwnedStyles & User32.WS_EX_LAYERED) != 0 && state.HadLayeredAttributes)
             Attempt("restore-alpha", () =>
@@ -966,7 +998,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
                 state.Identity.Require();
                 if (!User32.SetLayeredWindowAttributes(window, state.OriginalColorKey, state.OriginalAlpha,
                         state.OriginalLayeredFlags))
-                    throw Failure(T("restore the transparency of"), window);
+                    throw Failure(T("actions.restoreOpacity"), window);
                 restoredAttributes = true;
             });
         Attempt("restore-styles", () =>
@@ -1046,6 +1078,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
                 try
                 {
                     if (state.Cropped) ClearCrop(window, state);
+                    if (state.SwitcherBits is not null) RestoreSwitcher(window, state);
                     if (state.PlacementBeforeRollUp is not null) RollDown(window, state);
                     if (state.GlassColor is not null)
                     {
@@ -1142,7 +1175,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
     {
         if ((state.OriginalExStyle & User32.WS_EX_LAYERED) != 0 && !state.HadLayeredAttributes)
             throw new WindowOperationException(
-                T("This window draws its own transparency, so WinScreen can't change it."));
+                T("errors.opacity.customTransparency"));
     }
 
     private void WriteLayered(nint window, ChangedWindow state, byte alpha)
@@ -1157,7 +1190,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         }
 
         if (!User32.SetLayeredWindowAttributes(window, key, alpha, flags))
-            throw Failure(T("change the transparency of"), window);
+            throw Failure(T("actions.changeOpacity"), window);
     }
 
     /// <summary>
@@ -1188,7 +1221,7 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         }
 
         throw new WindowOperationException(string.Format(
-            T("Windows wouldn't bring \"{0}\" forward to pin it. Click the window and try the pin command again."),
+            T("errors.pin.foregroundDenied"),
             WindowInfo.Title(window)));
     }
 
@@ -1201,17 +1234,17 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         const uint flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
         nint after = topmost ? User32.HWND_TOPMOST : User32.HWND_NOTOPMOST;
         if (!User32.SetWindowPos(window, after, 0, 0, 0, 0, flags))
-            throw Failure(topmost ? T("pin") : T("unpin"), window);
+            throw Failure(topmost ? T("actions.pin") : T("actions.unpin"), window);
         if (IsTopmost(window) != topmost)
-            throw new WindowOperationException(string.Format(T("Windows ignored the request to {0} \"{1}\"."),
-                topmost ? T("pin") : T("unpin"), WindowInfo.Title(window)));
+            throw new WindowOperationException(string.Format(T("errors.window.changeIgnored"),
+                topmost ? T("actions.pin") : T("actions.unpin"), WindowInfo.Title(window)));
     }
 
     private static long ReadExStyle(nint window)
     {
         nint style = User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE);
         if (style == 0 && Marshal.GetLastPInvokeError() != 0)
-            throw Failure(T("read"), window);
+            throw Failure(T("actions.read"), window);
         return style;
     }
 
@@ -1221,25 +1254,25 @@ public sealed class WindowController(IEnumerable<string> excludedProcesses, Chan
         _changed[window].Identity.Require();
         nint previous = User32.SetWindowLongPtr(window, User32.GWL_EXSTYLE, (nint)style);
         if (previous == 0 && Marshal.GetLastPInvokeError() != 0)
-            throw Failure(T("change"), window);
+            throw Failure(T("actions.change"), window);
 
         const uint flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE | User32.SWP_FRAMECHANGED;
         _changed[window].Identity.Require();
         if (!User32.SetWindowPos(window, 0, 0, 0, 0, 0, flags | User32.SWP_NOZORDER))
-            throw Failure(T("refresh the frame of"), window);
+            throw Failure(T("actions.refreshFrame"), window);
     }
 
     private static WindowOperationException Failure(string action, nint window)
     {
         string reason = new Win32Exception(Marshal.GetLastPInvokeError()).Message;
-        return new WindowOperationException(string.Format(T("Couldn't {0} \"{1}\": {2}"), T(action),
+        return new WindowOperationException(string.Format(T("errors.window.operationFailed"), action,
             WindowInfo.Title(window), reason));
     }
 
     private static void EnsureResponsive(nint window)
     {
         if (User32.SendMessageTimeout(window, 0, 0, 0, 0x3, ResponsiveMilliseconds, out _) == 0)
-            throw new WindowOperationException(T("The window isn't responding right now. Try again in a moment."));
+            throw new WindowOperationException(T("errors.window.unresponsive"));
     }
 }
 
@@ -1266,22 +1299,22 @@ public static class WindowInfo
         uint thread = User32.GetWindowThreadProcessId(window, out uint processId);
         string frame = TryGetFrameBounds(window, out Rectangle bounds, out _)
             ? $"{bounds.Width}×{bounds.Height} @ {bounds.Left}, {bounds.Top}"
-            : T("Unavailable");
+            : T("common.unavailable");
         string path = ExecutablePath(window);
         Screen screen = Screen.FromHandle(window);
         return
         [
-            (T("Title"), Title(window)),
-            (T("Program"), ProcessName(processId)),
-            (T("Program file"), path.Length > 0 ? path : T("Unavailable")),
+            (T("window.info.title"), Title(window)),
+            (T("window.info.program"), ProcessName(processId)),
+            (T("window.info.path"), path.Length > 0 ? path : T("common.unavailable")),
             ("HWND", $"0x{window:X}"),
-            (T("Process ID"), processId.ToString()),
-            (T("Thread ID"), thread.ToString()),
-            (T("Window class"), ClassName(window)),
-            (T("Visible frame"), frame),
-            (T("Display"), $"{screen.DeviceName} ({screen.Bounds.Width}×{screen.Bounds.Height})"),
-            (T("Scaling"), $"{Dpi.Of(window) * 100 / Dpi.Default}%"),
-            (T("Runs as administrator"), ProcessInfo.IsElevated(processId) ? T("Yes") : T("No")),
+            (T("window.info.processId"), processId.ToString()),
+            (T("window.info.threadId"), thread.ToString()),
+            (T("window.info.class"), ClassName(window)),
+            (T("window.info.frame"), frame),
+            (T("window.info.display"), $"{screen.DeviceName} ({screen.Bounds.Width}×{screen.Bounds.Height})"),
+            (T("pip.scaling"), $"{Dpi.Of(window) * 100 / Dpi.Default}%"),
+            (T("window.info.elevated"), ProcessInfo.IsElevated(processId) ? T("common.yes") : T("common.no")),
         ];
     }
 

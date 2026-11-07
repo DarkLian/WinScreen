@@ -30,3 +30,31 @@ Include whatever you can. A short report is still better than none.
 5. The app whose window was involved, and a screenshot or short recording if one would help.
 
 Check that a screenshot doesn't show anything private before you post it.
+
+## Editing translations
+
+The catalogs are in `src/WinScreen/Localization/en.json`, `zh-Hans.json`, and `zh-Hant.json`.
+They are embedded in the application; changes take effect after rebuilding and restarting WinScreen.
+`Localization.cs` keeps the `UiText.Initialize(...)` and `UiText.T(...)` API. A missing translation falls back to English.
+
+Use descriptive keys such as `settings.title`, `pip.open`, or `window.restore`. Keep a key stable when its wording changes.
+For a new label, add the same key to all three files and call `T("stable.key")` where the label is created.
+Helpers and label tables should receive the translated text, so all lookups remain visible to validation.
+Keep program names, paths, hotkeys, and other user data outside the catalogs.
+
+Preserve format arguments such as `{0}` and `{1}` (their order may change), intentional leading/trailing spaces,
+punctuation, and menu accelerator markers such as `&Save`. Escape quotes and backslashes using standard JSON syntax.
+Use UTF-8 and keep entries sorted by key. Each catalog must contain unique keys and nonempty string values.
+Remove a key from all three files when its last lookup is removed.
+
+Run the checks after editing:
+
+```powershell
+dotnet test WinScreen.slnx -c Release --filter 'FullyQualifiedName~LocalizationTests|FullyQualifiedName~LocalizationSurfaceTests'
+dotnet test WinScreen.slnx -c Release --filter 'Category!=RealWindows&Category!=Interactive'
+```
+
+The first command includes isolated test windows to check Settings, menus, PiP, Anchors, and error text in all three
+languages. Validation rejects missing or unused keys, duplicate keys, invalid JSON, empty translations, and changed
+format arguments. The legacy-output digest test records the migration's exact output, including spaces and accelerators.
+For an intentional wording change, review the catalog diff and update the affected expected digest in `LocalizationTests.cs`.

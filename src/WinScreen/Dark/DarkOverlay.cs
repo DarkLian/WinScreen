@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using WinScreen.Native;
 
 namespace WinScreen.Dark;
@@ -44,7 +44,7 @@ internal sealed class DarkOverlay : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
         BackColor = Color.Black;
-        Text = T("WinScreen dark overlay");
+        Text = T("dark.title");
     }
 
     /// <summary>False once the target has been pinned or unpinned and this overlay is in the wrong group.</summary>
@@ -83,7 +83,7 @@ internal sealed class DarkOverlay : Form
             Height, Handle, 0, 0, 0);
         if (_magnifier == 0)
             throw new Windows.WindowOperationException(
-                T("Windows didn't provide the screen filter that dark mode needs."));
+                T("errors.dark.filterUnavailable"));
 
         unsafe
         {

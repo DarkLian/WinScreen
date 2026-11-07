@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using WinScreen.Native;
@@ -38,10 +38,15 @@ public enum AppCommand
     SendToBottom,
     ShowWindowInfo,
     ToggleRollUp,
+    ShowWindowMenu,
+    ToggleBorderless,
+    ToggleBorderlessFill,
+    ToggleDarkTitleBar,
 }
 
 /// <summary>The key to hold for modifier move and resize.</summary>
 public enum ModifierKey { Alt, Win }
+public enum WindowMenuGesture { CtrlRightClick, CtrlShiftRightClick, CtrlMiddleClick }
 
 /// <summary>What a program's windows get automatically. Click-through and Glass are left out on purpose:
 /// a window that opens unreachable, or with its colours removed, is never what someone wants.</summary>
@@ -60,11 +65,11 @@ public sealed class ProgramSetup
     {
         var parts = new List<string>();
         if (Pinned)
-            parts.Add(T("pinned"));
+            parts.Add(T("setups.pinned"));
         if (Alpha < 255)
-            parts.Add(string.Format(T("{0}% solid"), (int)Math.Round(Alpha * 100.0 / 255)));
+            parts.Add(string.Format(T("window.opacity.percent"), (int)Math.Round(Alpha * 100.0 / 255)));
         if (Dark)
-            parts.Add(T("dark"));
+            parts.Add(T("setups.dark"));
         string location = string.IsNullOrWhiteSpace(ExecutablePath) ? "" : $" ({ExecutablePath})";
         return $"{Program}: {string.Join(", ", parts)}{location}";
     }
@@ -92,6 +97,7 @@ public static class CommandCatalog
         AppCommand.AlignLeft, AppCommand.AlignCenter, AppCommand.AlignRight, AppCommand.AlignBottomLeft,
         AppCommand.AlignBottom, AppCommand.AlignBottomRight, AppCommand.MoveToNextDisplay, AppCommand.PlaceExactly,
         AppCommand.RestorePlacement, AppCommand.SendToBottom, AppCommand.ShowWindowInfo, AppCommand.ToggleRollUp,
+        AppCommand.ShowWindowMenu, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.ToggleDarkTitleBar,
     ];
 
     /// <summary>What the Arrange menu offers, in order, with null where a divider goes.</summary>
@@ -120,41 +126,45 @@ public static class CommandCatalog
         command is AppCommand.ToggleDark or AppCommand.ToggleGlass or AppCommand.ToggleShrink or AppCommand.ToggleCrop
             or AppCommand.ToggleRollUp;
 
-    public static string Name(AppCommand command) => T(command switch
+    public static string Name(AppCommand command) => command switch
     {
-        AppCommand.TogglePin => "Pin on top",
-        AppCommand.OpacityDown => "More see-through",
-        AppCommand.ToggleDefaultOpacity => "Use default opacity",
-        AppCommand.OpacityUp => "More opaque",
-        AppCommand.ToggleClickThrough => "Click-through",
-        AppCommand.OpenPip => "Picture-in-Picture",
-        AppCommand.ToggleAnchor => "Anchor",
-        AppCommand.ToggleDark => "Dark mode",
-        AppCommand.ToggleGlass => "Glass mode",
-        AppCommand.ToggleShrink => "Shrink",
-        AppCommand.ToggleCrop => "Crop",
-        AppCommand.SaveWindowSetup => "Remember setup",
-        AppCommand.RestoreWindow => "Restore this window",
-        AppCommand.RestoreAll => "Restore all windows",
-        AppCommand.PickPipSource => "Choose what to show",
-        AppCommand.Arrange => "Arrange window",
-        AppCommand.AlignTopLeft => "Top left",
-        AppCommand.AlignTop => "Top center",
-        AppCommand.AlignTopRight => "Top right",
-        AppCommand.AlignLeft => "Middle left",
-        AppCommand.AlignCenter => "Center",
-        AppCommand.AlignRight => "Middle right",
-        AppCommand.AlignBottomLeft => "Bottom left",
-        AppCommand.AlignBottom => "Bottom center",
-        AppCommand.AlignBottomRight => "Bottom right",
-        AppCommand.MoveToNextDisplay => "Move to next display",
-        AppCommand.PlaceExactly => "Exact position and size...",
-        AppCommand.RestorePlacement => "Restore prior position",
-        AppCommand.SendToBottom => "Send to bottom",
-        AppCommand.ShowWindowInfo => "Window information",
-        AppCommand.ToggleRollUp => "Roll up",
+        AppCommand.TogglePin => T("window.pin"),
+        AppCommand.OpacityDown => T("window.opacity.decrease"),
+        AppCommand.ToggleDefaultOpacity => T("window.opacity.toggleDefault"),
+        AppCommand.OpacityUp => T("window.opacity.increase"),
+        AppCommand.ToggleClickThrough => T("window.clickThrough"),
+        AppCommand.OpenPip => T("pip.open"),
+        AppCommand.ToggleAnchor => T("anchor.toggle"),
+        AppCommand.ToggleDark => T("window.dark"),
+        AppCommand.ToggleGlass => T("window.glass"),
+        AppCommand.ToggleShrink => T("window.shrink"),
+        AppCommand.ToggleCrop => T("window.crop"),
+        AppCommand.SaveWindowSetup => T("setups.remember"),
+        AppCommand.RestoreWindow => T("window.restore"),
+        AppCommand.RestoreAll => T("window.restoreAll"),
+        AppCommand.PickPipSource => T("pip.chooseSource"),
+        AppCommand.Arrange => T("window.arrange"),
+        AppCommand.AlignTopLeft => T("placement.topLeft"),
+        AppCommand.AlignTop => T("placement.top"),
+        AppCommand.AlignTopRight => T("placement.topRight"),
+        AppCommand.AlignLeft => T("placement.left"),
+        AppCommand.AlignCenter => T("placement.center"),
+        AppCommand.AlignRight => T("placement.right"),
+        AppCommand.AlignBottomLeft => T("placement.bottomLeft"),
+        AppCommand.AlignBottom => T("placement.bottom"),
+        AppCommand.AlignBottomRight => T("placement.bottomRight"),
+        AppCommand.MoveToNextDisplay => T("placement.nextDisplay"),
+        AppCommand.PlaceExactly => T("placement.exact"),
+        AppCommand.RestorePlacement => T("placement.restore"),
+        AppCommand.SendToBottom => T("window.sendToBottom"),
+        AppCommand.ShowWindowInfo => T("window.info"),
+        AppCommand.ToggleRollUp => T("window.rollUp"),
+        AppCommand.ShowWindowMenu => T("window.menu"),
+        AppCommand.ToggleBorderless => T("window.borderless"),
+        AppCommand.ToggleBorderlessFill => T("window.fillDisplay"),
+        AppCommand.ToggleDarkTitleBar => T("window.darkTitleBar"),
         _ => command.ToString(),
-    });
+    };
 }
 
 /// <summary>Everything a person can choose, stored as JSON in their app data folder.</summary>
@@ -208,6 +218,9 @@ public sealed class AppSettings
     public bool ModifierDrag { get; set; }
 
     public ModifierKey ModifierKey { get; set; }
+    public bool WindowMenu { get; set; }
+    public WindowMenuGesture WindowMenuGesture { get; set; }
+    public List<string> WindowMenuExclusions { get; set; } = [];
 
     /// <summary>Programs that use the modifier and a drag themselves, such as drawing and 3D apps.</summary>
     public List<string> ModifierExclusions { get; set; } = ["blender", "maya", "3dsmax", "Photoshop", "krita", "gimp"];
@@ -291,6 +304,8 @@ public sealed class AppSettings
             loaded.ModifierExclusions = (loaded.ModifierExclusions ?? defaults.ModifierExclusions)
                 .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
             loaded.ModifierKey = Enum.IsDefined(loaded.ModifierKey) ? loaded.ModifierKey : ModifierKey.Alt;
+            loaded.WindowMenuGesture = Enum.IsDefined(loaded.WindowMenuGesture) ? loaded.WindowMenuGesture : WindowMenuGesture.CtrlRightClick;
+            loaded.WindowMenuExclusions = (loaded.WindowMenuExclusions ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
             loaded.Hotkeys ??= [];
             loaded.ExcludedPrograms = (loaded.ExcludedPrograms ?? defaults.ExcludedPrograms)
                 .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();

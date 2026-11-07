@@ -47,8 +47,13 @@ public static class FullScreenPolicy
     /// <param name="targetHasView">The command would take away a view of the window it was aimed at.</param>
     /// <param name="anyViewOpen">A view is open somewhere. A hotkey pressed in a game is aimed at the game, not at the view.</param>
     public static FullScreenAction Decide(AppCommand command, FullScreenState state, bool pause, bool allowPip,
-        bool targetHasView, bool anyViewOpen)
+        bool targetHasView, bool anyViewOpen, bool targetIsBorderless = false)
     {
+        if (command is AppCommand.RestoreAll or AppCommand.RestoreWindow ||
+            (targetIsBorderless && command is AppCommand.ToggleBorderless or AppCommand.ToggleBorderlessFill))
+            return FullScreenAction.Run;
+        if (state == FullScreenState.Exclusive && command is AppCommand.ToggleBorderless or AppCommand.ToggleBorderlessFill)
+            return FullScreenAction.Refuse;
         if (state == FullScreenState.None || !pause || targetHasView)
             return FullScreenAction.Run;
         if (command == AppCommand.PickPipSource)

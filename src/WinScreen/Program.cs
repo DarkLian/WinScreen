@@ -1,6 +1,7 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using Velopack;
 using WinScreen.Hotkeys;
+using WinScreen.Localization;
 using WinScreen.Settings;
 using WinScreen.Tray;
 using WinScreen.Windows;
@@ -34,7 +35,7 @@ internal static class Program
         using var singleInstance = new Mutex(true, RunningInstance.MutexName, out bool isFirstCopy);
         if (!isFirstCopy)
         {
-            MessageBox.Show(T("WinScreen is already running. Look for its icon in the system tray."), "WinScreen");
+            MessageBox.Show(T("errors.app.alreadyRunning"), "WinScreen");
             return;
         }
 
@@ -48,7 +49,7 @@ internal static class Program
         Application.ThreadException += (_, e) =>
         {
             windows.RestoreAll();
-            MessageBox.Show(e.Exception.Message, T("WinScreen stopped unexpectedly"), MessageBoxButtons.OK,
+            MessageBox.Show(e.Exception.Message, T("errors.app.unexpectedStop"), MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             Application.Exit();
         };

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using WinScreen.Localization;
 
 namespace WinScreen.Native;
 
@@ -49,12 +50,29 @@ internal static partial class User32
     public const int GWL_EXSTYLE = -20;
     public const int GWL_STYLE = -16;
     public const long WS_CAPTION = 0xC00000;
+    public const long WS_THICKFRAME = 0x40000;
+    public const long WS_EX_APPWINDOW = 0x40000;
 
     public const long WS_EX_TOPMOST = 0x8;
     public const long WS_EX_TRANSPARENT = 0x20;
     public const long WS_EX_LAYERED = 0x80000;
     public const long WS_EX_NOACTIVATE = 0x08000000;
     public const long WS_EX_TOOLWINDOW = 0x80;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetClientRect(nint window, out Rect rect);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ClientToScreen(nint window, ref NativePoint point);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AdjustWindowRectExForDpi(ref Rect rect, uint style, [MarshalAs(UnmanagedType.Bool)] bool menu, uint exStyle, uint dpi);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint GetMenu(nint window);
 
     public const uint LWA_COLORKEY = 0x1;
     public const uint LWA_ALPHA = 0x2;
@@ -68,6 +86,7 @@ internal static partial class User32
 
     public const int SW_SHOWNOACTIVATE = 4;
     public const int SW_RESTORE = 9;
+    public const int SW_MAXIMIZE = 3;
 
     public const uint GA_ROOT = 2;
     public const uint GW_HWNDPREV = 3;
@@ -199,7 +218,7 @@ internal static partial class User32
         {
             if (sent == 1)
                 SendInput(1, inputs + 1, sizeof(MouseInput)); // Do not leave the mouse button held down.
-            throw new Windows.WindowOperationException(Settings.UiText.T("Windows refused the forwarded click."));
+            throw new Windows.WindowOperationException(UiText.T("errors.input.clickRefused"));
         }
     }
 

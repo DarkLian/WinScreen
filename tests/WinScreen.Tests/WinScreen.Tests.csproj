@@ -15,4 +15,10 @@
     <ProjectReference Include="..\..\src\WinScreen\WinScreen.csproj" />
     <ProjectReference Include="..\WinScreen.TestTarget\WinScreen.TestTarget.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Validate the exact sources built with this test assembly, including on packaged test runs. -->
+    <EmbeddedResource Include="..\..\src\WinScreen\**\*.cs"
+                      Exclude="..\..\src\WinScreen\bin\**;..\..\src\WinScreen\obj\**"
+                      WithCulture="false" LogicalName="LocalizationSource.%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

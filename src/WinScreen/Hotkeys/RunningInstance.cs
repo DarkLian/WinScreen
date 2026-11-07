@@ -1,3 +1,4 @@
+using WinScreen.Localization;
 using WinScreen.Native;
 
 namespace WinScreen.Hotkeys;
@@ -21,19 +22,19 @@ internal static class RunningInstance
         string targetPath = Windows.WindowInfo.ExecutablePath(window);
         if (!string.Equals(targetPath, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(
-                Settings.UiText.T(
-                    "Another copy of WinScreen is running from a different folder. Exit it, then try again."));
+                UiText.T(
+                    "errors.app.otherFolder"));
         var identity = Windows.WindowIdentity.Capture(window);
         using var process = System.Diagnostics.Process.GetProcessById((int)identity.ProcessId);
         identity.Require();
         if (!User32.PostMessage(window, User32.WM_CLOSE, 0, 0))
-            throw new InvalidOperationException(Settings.UiText.T("Windows refused WinScreen's shutdown request."));
+            throw new InvalidOperationException(UiText.T("errors.app.shutdownRefused"));
         DateTime end = DateTime.UtcNow.AddMilliseconds(CloseTimeoutMilliseconds);
         while (DateTime.UtcNow < end && !process.HasExited)
             Thread.Sleep(50);
         if (!process.HasExited)
             throw new TimeoutException(
-                Settings.UiText.T(
-                    "WinScreen did not confirm shutdown. Restore its windows and exit it before updating or uninstalling."));
+                UiText.T(
+                    "errors.app.shutdownUnconfirmed"));
     }
 }

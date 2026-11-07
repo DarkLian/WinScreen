@@ -1,4 +1,5 @@
 using System.Drawing;
+using WinScreen.Localization;
 using WinScreen.Native;
 
 namespace WinScreen.Pip;
@@ -44,7 +45,7 @@ internal sealed class DwmThumbnail : IDisposable
         if (destination.Width <= 0 || destination.Height <= 0 || source.Width <= 0 || source.Height <= 0 ||
             Dwmapi.DwmUpdateThumbnailProperties(_handle, ref properties) != 0)
             throw new Windows.WindowOperationException(
-                Settings.UiText.T("Windows could not render the live preview. The original will remain available."));
+                UiText.T("errors.pip.renderFailed"));
     }
 
     public void Dispose()

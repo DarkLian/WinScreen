@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using WinScreen.Native;
 using WinScreen.Windows;
 
@@ -39,12 +39,12 @@ public sealed class ShrinkTile : Form
         ShowInTaskbar = false;
         BackColor = Accent;
         StartPosition = FormStartPosition.Manual;
-        Text = T("Shrunk - ") + WindowInfo.Title(source);
+        Text = T("shrink.titlePrefix") + WindowInfo.Title(source);
         int dpi = Dpi.Of(source);
         _width = Dpi.Scale(TileWidth, dpi);
         Size = new Size(_width, Dpi.Scale(TileHeight, dpi));
-        _tip.SetToolTip(this, T("Click: show the window • Drag: move • Right-click: menu"));
-        _menu.Items.Add(T("Show window"), null, (_, _) => Close());
+        _tip.SetToolTip(this, T("shrink.controls"));
+        _menu.Items.Add(T("window.show"), null, (_, _) => Close());
         ContextMenuStrip = _menu;
         _watch.Tick += (_, _) => FollowSource();
 
@@ -79,7 +79,7 @@ public sealed class ShrinkTile : Form
         _ = Handle;
         if (!ShowLiveView())
         {
-            Problem?.Invoke(T("This window can't be shrunk."));
+            Problem?.Invoke(T("errors.shrink.unavailable"));
             Close();
             return;
         }

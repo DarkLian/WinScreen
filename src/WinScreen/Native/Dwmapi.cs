@@ -27,6 +27,10 @@ internal static partial class Dwmapi
     public const uint DWM_TNP_OPACITY = 0x4;
     public const uint DWM_TNP_VISIBLE = 0x8;
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+    public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmSetWindowAttribute(nint window, int attribute, in int value, int size);
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmRegisterThumbnail(nint hwndDestination, nint hwndSource, out nint thumbnail);

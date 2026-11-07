@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using WinScreen.Native;
 using WinScreen.Settings;
 using WinScreen.Windows;
@@ -56,7 +56,7 @@ public sealed class WindowToolbar : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
         BackColor = Background;
-        Text = T("WinScreen toolbar");
+        Text = T("toolbar.title");
 
         foreach (AppCommand command in CommandCatalog.Ordered.Where(command => command != AppCommand.RestoreAll))
         {

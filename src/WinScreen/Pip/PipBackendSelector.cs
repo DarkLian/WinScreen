@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using WinScreen.Settings;
 using WinScreen.Windows;
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Pip;
 
@@ -114,7 +114,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     {
         PollCapture(client);
         if (_dwm is null && _policy.Pinned)
-            throw new WindowOperationException(T("Screen capture stopped, so this view closed.") +
+            throw new WindowOperationException(T("errors.pip.captureStopped") +
                                                (_lastDiagnostics.Failure is { } failure ? " " + failure : ""));
     }
 
@@ -152,7 +152,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
             _lastDiagnostics.Failure = "Capture/render worker exceeded its progress deadline.";
             // A hung driver cannot be forcibly disposed. Keep one retiring worker and never allocate another beside it.
             _policy.Pin(Stopwatch.GetTimestamp());
-            if (!_warned && _dwm is not null) { _warned = true; Problem?.Invoke(T("Advanced PiP unavailable; using Compatibility (DWM).")); }
+            if (!_warned && _dwm is not null) { _warned = true; Problem?.Invoke(T("errors.pip.advancedUnavailable")); }
             return;
         }
         if (advanced.State == PipSessionState.Failed && advanced.Completion.IsCompleted)
@@ -175,7 +175,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
                 if (!_warned && _dwm is not null)
                 {
                     _warned = true;
-                    Problem?.Invoke(T("Advanced PiP unavailable; using Compatibility (DWM).") + " " + _lastDiagnostics.Failure);
+                    Problem?.Invoke(T("errors.pip.advancedUnavailable") + " " + _lastDiagnostics.Failure);
                 }
             }
         }
@@ -211,7 +211,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         {
             _policy.Pin(Stopwatch.GetTimestamp());
             _lastDiagnostics.Failure = $"{e.GetType().Name} 0x{e.HResult:X8}";
-            if (!_warned && _dwm is not null) { _warned = true; Problem?.Invoke(T("Advanced PiP unavailable; using Compatibility (DWM).")); }
+            if (!_warned && _dwm is not null) { _warned = true; Problem?.Invoke(T("errors.pip.advancedUnavailable")); }
         }
         UpdateAdvanced();
     }

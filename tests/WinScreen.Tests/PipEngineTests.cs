@@ -1,4 +1,5 @@
 using System.Text.Json;
+using WinScreen.Localization;
 using WinScreen.Pip;
 using WinScreen.Settings;
 using Xunit;
@@ -130,10 +131,10 @@ public sealed class PipEngineTests
         try
         {
             UiText.Initialize(language);
-            foreach (string label in new[] { "PiP rendering", "Frame limit", "Scaling", "Compatibility (DWM)",
-                         "Advanced (WGC)", "PiP diagnostics", "Retry advanced backend" })
+            foreach (string label in new[] { "pip.rendering", "pip.frameRate", "pip.scaling", "pip.backend.compatibility",
+                         "pip.backend.advanced", "pip.diagnostics.title", "pip.backend.retry" })
             {
-                Assert.NotEqual(label, UiText.T(label));
+                Assert.NotEqual(UiText.GetCatalog("en")[label], UiText.T(label));
                 Assert.DoesNotContain("?", UiText.T(label));
             }
         }

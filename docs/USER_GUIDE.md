@@ -14,6 +14,36 @@ active eligible window.
 Rest the pointer on the middle of a window's title bar to show the toolbar. You can disable the toolbar in Settings.
 WinScreen leaves the desktop, taskbar, and excluded programs alone. Applications running as administrator may refuse changes.
 
+## Window menu and appearance
+
+Enable **Settings → Mouse gestures → Window menu** to use **Ctrl+right-click** on a window. Ctrl+Shift+right-click
+and Ctrl+middle-click are alternatives. Move/resize and the window menu have separate program exclusions; the main
+exclusion list applies to both. The menu is off by default, pauses during full-screen apps and detected games, and
+leaves administrator apps and WinScreen's own views alone. You can assign **Window menu** a hotkey to open it for
+the window under the pointer without enabling the mouse gesture. Esc or an outside click closes it. If Windows
+refuses menu activation, Esc and outside clicks still close it, but arrow navigation is unavailable.
+
+The tray and window menus offer **Copy** (title, HWND, process ID, program path, or all window information),
+**Open file location**, **Dark title bar**, and **Borderless**. These new commands have no default hotkeys.
+Dark title bar changes only a title bar drawn by Windows; the active window may still use your Windows accent colour.
+Apps can change the colour back. Restore this window, Restore all windows, exit, and startup recovery undo the change.
+
+**Borderless → Borderless** removes the standard frame while preserving the client size. **Fill display** fills the
+chosen display; it also accepts maximized windows and restores their maximized state on undo. Keep-size mode requires
+a normal window. Hidden, cropped, rolled-up, minimized, peeking, or unresponsive windows cannot enter borderless mode.
+Apps drawing their own title bars, including most browsers and terminals, are refused. Exclusive full-screen mode is
+unsupported. Toggle either borderless command again to undo it. A deliberate move in keep-size mode is preserved.
+While a filled window is in front, gestures pause: use the tray or an assigned hotkey to undo, or **Ctrl+Alt+R** to restore all.
+Windowed games can react differently to a frame change; WinScreen does not inject into games.
+
+With experimental effects enabled, a window's PiP menu offers **Also hide from Alt+Tab and taskbar** while
+**Keep updating (hide original)** is on. Both entries are hidden together; some Windows-managed apps, including
+Calculator, are refused. The source stays accessible through **Go to original window** and the tray's Views list.
+Ending Keep updating, closing the view, restoring, and exiting bring the entries back. Their taskbar position can change,
+and a hidden app cannot flash its taskbar button for attention. If WinScreen is force-closed, the source remains invisible
+and absent from the switcher until WinScreen starts again. Restart WinScreen to recover it.
+This option remains experimental; older Windows builds, mixed DPI, and multiple displays need broader validation.
+
 ## Default shortcuts
 
 Activate the intended window before pressing a shortcut. All shortcuts can be changed or cleared in **Settings → Hotkeys**.
@@ -130,7 +160,8 @@ Browsers and apps built on them, such as Chrome, Edge and Discord, stop drawing 
 Choose **Keep updating (hide original)** from the view's menu to keep them live: a hidden original stays above other windows,
 invisible and click-through, so it keeps drawing. Minimized apps show their last frame. The view then says **Source minimized**; click that note to keep it updating, or restore the app yourself.
 WinScreen never restores a window on its own while a view is open. Opening a view on a minimized window does restore it, and says so.
-A hidden original still appears in Alt-Tab and the taskbar; use **Keep updating (hide original)** again to show it.
+A hidden original still appears in Alt-Tab and the taskbar unless the experimental switcher option is enabled;
+use **Keep updating (hide original)** again to show it.
 
 **Move away from text and images** looks for an emptier screen area about once per second. It stays still while the pointer
 is over the view and when no better spot exists. It estimates content by contrast rather than understanding text.
@@ -194,7 +225,7 @@ these moves, because you chose them.
 
 ### Move and resize from anywhere in a window
 
-Turn this on in **Settings → Move and resize**; it's off by default. Hold Alt, or Win if you prefer, and drag anywhere in
+Turn this on in **Settings → Mouse gestures → Move and resize**; it's off by default. Hold Alt, or Win if you prefer, and drag anywhere in
 a window with the left button to move it, or the right button to resize it from the nearest edge or corner. Esc while
 dragging puts the window back, and **Restore prior position** undoes a drag afterwards.
 
@@ -275,7 +306,7 @@ These are limits of the current version, listed so you can decide before you rel
 - **Administrator apps:** WinScreen can't change windows running as administrator.
 - **Minimized apps:** a minimized app stops drawing, so its view shows the last picture. Windows gives WinScreen no new frames.
 - **Browsers and apps built on them:** these can stop drawing when another window fully covers them. **Keep updating (hide original)** keeps them updating.
-- **Keep updating (hide original):** the original keeps running, stays in Alt-Tab and the taskbar, and appears above other windows when shown again.
+- **Keep updating (hide original):** the original keeps running and stays in Alt-Tab and the taskbar unless you enable the experimental option to hide both. It appears above other windows when shown again.
 - **Exclusive full-screen games:** views can't reliably appear over them, and WinScreen will not hook into games to do so. Use borderless or windowed mode.
 - **Picture quality:** output is SDR. Protected video may appear black.
 - **PiP opacity:** a view fades toward black. It only becomes see-through while click-through.

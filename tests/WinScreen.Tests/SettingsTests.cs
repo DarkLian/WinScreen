@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using WinScreen.Localization;
 using WinScreen.Native;
 using WinScreen.Settings;
 using WinScreen.Tray;

@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using WinScreen.Pip;
 
 namespace WinScreen.Windows;
@@ -32,7 +32,7 @@ public sealed class CropOverlay : Form
         Opacity = 0.55;
         DoubleBuffered = true;
         Cursor = Cursors.Cross;
-        Text = T("WinScreen crop");
+        Text = T("crop.title");
         Bounds = window;
     }
 
@@ -88,7 +88,7 @@ public sealed class CropOverlay : Form
 
         const TextFormatFlags centred = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
                                         TextFormatFlags.WordBreak;
-        TextRenderer.DrawText(e.Graphics, T("Drag over the part to keep, or click a highlighted part. Esc cancels."), Font, ClientRectangle,
+        TextRenderer.DrawText(e.Graphics, T("crop.instructions"), Font, ClientRectangle,
             ForeColor, centred);
     }
 

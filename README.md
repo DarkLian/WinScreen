@@ -34,6 +34,10 @@ Problems always appear as a notification and stay in the tray's **Last result** 
 
 A toolbar also appears when the pointer rests on the middle of the active window's title bar.
 
+Enable **Settings → Mouse gestures → Window menu** for Ctrl+right-click commands on the window under the pointer.
+The tray and window menus also offer borderless mode, display fill, a native dark title bar, Copy, and Open file location.
+Hiding a PiP source from Alt+Tab and the taskbar is an experimental per-view option. See the guide for recovery and app limitations.
+
 | Feature | Default shortcut |
 | --- | --- |
 | Pin / unpin the actual window | Ctrl+Alt+T |

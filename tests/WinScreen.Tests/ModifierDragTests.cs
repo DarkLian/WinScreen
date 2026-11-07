@@ -62,9 +62,31 @@ public sealed class ModifierHookLifetimeTests
     private static int HookThreads() => Process.GetCurrentProcess().Threads.Count;
 
     [Fact]
+    public void Menu_only_uses_no_mover_and_can_enable_and_disable_moving_without_another_hook()
+    {
+        using var gestures = new MouseGestures(_ => false, _ => { }) { MoveEnabled = false, MenuEnabled = true };
+        var mover = typeof(MouseGestures).GetField("_mover", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var hook = typeof(MouseGestures).GetField("_hookThread", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        gestures.SetActive(true);
+        object? originalHook = hook.GetValue(gestures);
+        Assert.NotNull(originalHook);
+        Assert.Null(mover.GetValue(gestures));
+        gestures.MoveEnabled = true;
+        gestures.SetActive(true);
+        Assert.Same(originalHook, hook.GetValue(gestures));
+        Assert.NotNull(mover.GetValue(gestures));
+        gestures.MoveEnabled = false;
+        gestures.SetActive(true);
+        Assert.Same(originalHook, hook.GetValue(gestures));
+        Assert.Null(mover.GetValue(gestures));
+        gestures.SetActive(false);
+        Assert.Null(hook.GetValue(gestures));
+    }
+
+    [Fact]
     public void Turning_it_off_removes_the_hook_threads_and_it_can_come_back()
     {
-        using var drag = new ModifierDrag(_ => false, _ => { });
+        using var drag = new MouseGestures(_ => false, _ => { });
         int before = HookThreads();
         Assert.False(drag.Active);
         drag.SetActive(true);
@@ -154,7 +176,7 @@ public sealed class ModifierGestureTests
         Desktop.Activate(target.Handle);
         int began = 0;
         // Only ever the test's own window, so a stray press can't drag anything of the person's.
-        using var drag = new ModifierDrag(window => window == target.Handle, _ => began++);
+        using var drag = new MouseGestures(window => window == target.Handle, _ => began++);
         Point original = Cursor.Position;
         drag.SetActive(true);
         Pump(150);
@@ -184,7 +206,7 @@ public sealed class ModifierGestureTests
         Desktop.GainForegroundRights();
         using var target = new TargetProcess(new(300, 200, 400, 300));
         Desktop.Activate(target.Handle);
-        using var drag = new ModifierDrag(window => window == target.Handle, _ => { });
+        using var drag = new MouseGestures(window => window == target.Handle, _ => { });
         Point original = Cursor.Position;
         drag.SetActive(true);
         Pump(150);

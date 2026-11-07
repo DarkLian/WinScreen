@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using WinScreen.Native;
@@ -45,7 +45,7 @@ public sealed class WindowPlacer(WindowController windows)
         Screen from = Screen.FromHandle(window);
         int next = PlacementGeometry.NextDisplay(Array.FindIndex(screens, screen => screen.DeviceName == from.DeviceName), screens.Length);
         if (next < 0)
-            throw new WindowOperationException(T("There is only one display."));
+            throw new WindowOperationException(T("errors.placement.singleDisplay"));
 
         Remember(window);
         Screen to = screens[next];
@@ -76,7 +76,7 @@ public sealed class WindowPlacer(WindowController windows)
         if (placement.ShowCommand == 1)
             placement.ShowCommand = User32.SW_SHOWNOACTIVATE;
         if (!User32.SetWindowPlacement(window, ref placement))
-            throw new WindowOperationException(string.Format(T("\"{0}\" didn't go where it was asked."), WindowInfo.Title(window)));
+            throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
         return true;
     }
 
@@ -103,7 +103,7 @@ public sealed class WindowPlacer(WindowController windows)
         if (windows.Refusal(window) is { } refusal)
             throw new WindowOperationException(refusal);
         if (windows.IsHidden(window) || windows.IsPeeking(window))
-            throw new WindowOperationException(T("Show this window first, then try again."));
+            throw new WindowOperationException(T("errors.window.showFirst"));
     }
 
     private static bool IsPlainlyOnScreen(nint window) => !User32.IsIconic(window) && !User32.IsZoomed(window);
@@ -115,7 +115,7 @@ public sealed class WindowPlacer(WindowController windows)
         {
             if (WindowInfo.TryGetFrameBounds(window, out Rectangle frame, out _))
                 return frame;
-            throw new WindowOperationException(string.Format(T("Couldn't {0} \"{1}\": {2}"), T("read the position of"), WindowInfo.Title(window), ""));
+            throw new WindowOperationException(string.Format(T("errors.window.operationFailed"), T("actions.readPosition"), WindowInfo.Title(window), ""));
         }
 
         var placement = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() };
@@ -140,7 +140,7 @@ public sealed class WindowPlacer(WindowController windows)
             Move(window, target, 0); // Scaling changed on the way, so the invisible margins did too.
         if (!WindowInfo.TryGetFrameBounds(window, out frame, out _) ||
             Math.Abs(frame.Left - target.Left) > Tolerance || Math.Abs(frame.Top - target.Top) > Tolerance)
-            throw new WindowOperationException(string.Format(T("\"{0}\" didn't go where it was asked."), WindowInfo.Title(window)));
+            throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
     }
 
     private static void Move(nint window, Rectangle target, uint extra)
@@ -149,7 +149,7 @@ public sealed class WindowPlacer(WindowController windows)
             return;
         Rectangle wanted = PlacementGeometry.OuterFor(target, frame, outer);
         if (!User32.SetWindowPos(window, 0, wanted.X, wanted.Y, wanted.Width, wanted.Height, Flags | extra))
-            throw new WindowOperationException(string.Format(T("\"{0}\" didn't go where it was asked."), WindowInfo.Title(window)));
+            throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
     }
 
     /// <summary>A minimized or maximized window stays that way, and is given a new place to come back to.</summary>
@@ -157,12 +157,12 @@ public sealed class WindowPlacer(WindowController windows)
     {
         var placement = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() };
         if (!User32.GetWindowPlacement(window, ref placement))
-            throw new WindowOperationException(string.Format(T("\"{0}\" didn't go where it was asked."), WindowInfo.Title(window)));
+            throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
         Rectangle area = screen.WorkingArea, all = screen.Bounds;
         int x = area.Left - all.Left, y = area.Top - all.Top;
         placement.NormalPosition = new Rect(target.Left - x, target.Top - y, target.Right - x, target.Bottom - y);
         if (!User32.SetWindowPlacement(window, ref placement))
-            throw new WindowOperationException(string.Format(T("\"{0}\" didn't go where it was asked."), WindowInfo.Title(window)));
+            throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
     }
 
     /// <summary>Waits briefly for an app to finish reacting to a move, in case it resizes itself.</summary>

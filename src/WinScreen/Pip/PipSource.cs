@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using Windows.Graphics.Capture;
 using WinScreen.Native;
 using WinScreen.Windows;
@@ -69,8 +69,8 @@ internal sealed class ScreenPipSource(string device, Rectangle? region) : PipSou
     private Screen? Display => Screen.AllScreens.FirstOrDefault(screen => screen.DeviceName == device);
 
     public override string Title => region is null
-        ? string.Format(T("Display {0}"), Number)
-        : string.Format(T("Display {0} region"), Number);
+        ? string.Format(T("pip.source.display"), Number)
+        : string.Format(T("pip.source.region"), Number);
 
     private string Number => new(device.Where(char.IsAsciiDigit).ToArray());
 
@@ -90,7 +90,7 @@ internal sealed class ScreenPipSource(string device, Rectangle? region) : PipSou
     public override void Require()
     {
         if (!IsAvailable)
-            throw new WindowOperationException(T("That display is no longer available."));
+            throw new WindowOperationException(T("errors.pip.displayUnavailable"));
     }
 
     /// <summary>What's left of the region on a display of this size; a region off the display is empty.</summary>

@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using WinScreen.Tray;
 using WinScreen.Windows;
 
@@ -14,9 +14,9 @@ internal sealed class PipSourcePicker : Form
         HeaderStyle = ColumnHeaderStyle.None, HideSelection = false, ShowItemToolTips = true,
     };
 
-    private readonly ListViewGroup _windowsGroup = new(T("Windows"));
-    private readonly ListViewGroup _screensGroup = new(T("Displays"));
-    private readonly Button _open = new() { Text = T("Open"), AutoSize = true, Enabled = false };
+    private readonly ListViewGroup _windowsGroup = new(T("settings.windows"));
+    private readonly ListViewGroup _screensGroup = new(T("pip.sources.displays"));
+    private readonly Button _open = new() { Text = T("common.open"), AutoSize = true, Enabled = false };
     private readonly ImageList _icons = new() { ColorDepth = ColorDepth.Depth32Bit, ImageSize = new Size(16, 16) };
     private readonly List<PipChoice> _windows;
     private readonly List<PipChoice> _screens = PipSourceList.Screens();
@@ -26,7 +26,7 @@ internal sealed class PipSourcePicker : Form
         SuspendLayout();
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
-        Text = T("Choose what to show");
+        Text = T("pip.chooseSource");
         Icon = TrayApplication.LoadIcon();
         ClientSize = new Size(460, 420);
         MinimumSize = new Size(320, 280);
@@ -38,7 +38,7 @@ internal sealed class PipSourcePicker : Form
         MinimizeBox = false;
         _windows = PipSourceList.Windows(allowed);
 
-        Native.User32.SendTextMessage(_search.Handle, EM_SETCUEBANNER, 1, T("Search by title or program"));
+        Native.User32.SendTextMessage(_search.Handle, EM_SETCUEBANNER, 1, T("pip.sources.search"));
         _list.SmallImageList = _icons;
         _list.Columns.Add("", 420);
         _list.Groups.AddRange([_windowsGroup, _screensGroup]);
@@ -54,10 +54,10 @@ internal sealed class PipSourcePicker : Form
             _list.Items[0].Selected = true;
         };
 
-        var region = new Button { Text = T("Select a region..."), AutoSize = true };
+        var region = new Button { Text = T("pip.sources.selectRegion"), AutoSize = true };
         region.Click += (_, _) => AskForRegion();
         _open.Click += (_, _) => Choose();
-        var cancel = new Button { Text = T("Cancel"), AutoSize = true };
+        var cancel = new Button { Text = T("common.cancel"), AutoSize = true };
         cancel.Click += (_, _) => Close();
         var buttons = new FlowLayoutPanel
         {
@@ -125,7 +125,7 @@ internal sealed class PipSourcePicker : Form
 
     private ListViewItem Row(PipChoice choice, ListViewGroup group)
     {
-        string note = choice.Minimized ? " " + T("(minimized, will be restored)") : "";
+        string note = choice.Minimized ? " " + T("pip.sources.minimized") : "";
         return new ListViewItem($"{choice.Title} ({choice.Program}){note}", group)
         {
             Tag = choice, ToolTipText = choice.Title, ImageKey = IconFor(choice),

@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using WinScreen.Native;
@@ -18,7 +18,7 @@ internal sealed record WindowIdentity(nint Window, uint ProcessId, uint ThreadId
     {
         uint thread = User32.GetWindowThreadProcessId(window, out uint pid);
         if (thread == 0 || !User32.IsWindow(window))
-            throw new WindowOperationException(T("The target window no longer exists."));
+            throw new WindowOperationException(T("errors.identity.windowGone"));
         return new WindowIdentity(window, pid, thread, StartTicks(pid), 0);
     }
 
@@ -31,12 +31,12 @@ internal sealed record WindowIdentity(nint Window, uint ProcessId, uint ThreadId
             token = BitConverter.ToInt64(RandomNumberGenerator.GetBytes(8)) | 1;
             if (!User32.SetProp(window, PropertyName, (nint)token))
                 throw new WindowOperationException(
-                    T("The target window cannot be safely identified; it may run as administrator."));
+                    T("errors.identity.accessDenied"));
         }
 
         var identity = observed with { Token = token };
         if (!identity.Matches())
-            throw new WindowOperationException(T("The target window changed while it was being selected."));
+            throw new WindowOperationException(T("errors.identity.windowChanged"));
         return identity;
     }
 
@@ -50,7 +50,7 @@ internal sealed record WindowIdentity(nint Window, uint ProcessId, uint ThreadId
         catch (Exception e) when (e is ArgumentException or InvalidOperationException
                                       or System.ComponentModel.Win32Exception)
         {
-            throw new WindowOperationException(T("The target window's process cannot be verified."));
+            throw new WindowOperationException(T("errors.identity.processUnverifiable"));
         }
     }
 
@@ -89,6 +89,6 @@ internal sealed record WindowIdentity(nint Window, uint ProcessId, uint ThreadId
     internal void Require()
     {
         if (!Matches())
-            throw new WindowOperationException(T("The original target window is no longer available."));
+            throw new WindowOperationException(T("errors.identity.originalGone"));
     }
 }

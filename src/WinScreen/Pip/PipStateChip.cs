@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 using WinScreen.Native;
 
 namespace WinScreen.Pip;
@@ -41,8 +41,8 @@ internal sealed class PipStateChip : Form
 
     internal static string Words(PipChipState state) => state switch
     {
-        PipChipState.SourceMinimized => T("Source minimized. Click to keep updating"),
-        PipChipState.NoNewPicture => T("No new picture"),
+        PipChipState.SourceMinimized => T("pip.state.sourceMinimized"),
+        PipChipState.NoNewPicture => T("pip.state.noNewPicture"),
         _ => "",
     };
 

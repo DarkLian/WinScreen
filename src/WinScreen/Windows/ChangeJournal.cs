@@ -18,6 +18,13 @@ public sealed record WindowRecord(
     public long ProcessStartTicks { get; init; }
     public uint ThreadId { get; init; }
     public long OwnedStyles { get; init; }
+    public long StyleBits { get; init; }
+    // Nullable: zero is a valid original value and still needs restoring.
+    public long? SwitcherBits { get; init; }
+    public int[]? BorderlessPlacement { get; init; }
+    public int[]? BorderlessOrigin { get; init; }
+    public bool BorderlessFilled { get; init; }
+    public int? OriginalDarkTitleBar { get; init; }
 
     /// <summary>Where a rolled-up window came from. Only its height is used, so moves made since are kept.</summary>
     public int[]? RollUpPlacement { get; init; }
@@ -101,7 +108,14 @@ public sealed class ChangeJournal(string path)
                                                (record.OwnedStyles & ~(Native.User32.WS_EX_TOPMOST |
                                                                        Native.User32.WS_EX_LAYERED |
                                                                        Native.User32.WS_EX_TRANSPARENT)) == 0 &&
-                                               IsPlacement(record.Placement) && IsPlacement(record.RollUpPlacement))
+                                               (record.StyleBits & ~(Native.User32.WS_CAPTION | Native.User32.WS_THICKFRAME)) == 0 &&
+                                               (record.SwitcherBits.GetValueOrDefault() & ~(Native.User32.WS_EX_TOOLWINDOW | Native.User32.WS_EX_APPWINDOW)) == 0 &&
+                                               record.OriginalDarkTitleBar is null or 0 or 1 &&
+                                               IsPlacement(record.Placement) && IsPlacement(record.RollUpPlacement) &&
+                                               IsPlacement(record.BorderlessPlacement) &&
+                                               (record.BorderlessOrigin is null or { Length: 2 }) &&
+                                               (record.StyleBits == 0 || record.BorderlessPlacement is not null) &&
+                                               (!record.BorderlessFilled || record.BorderlessPlacement is not null))
                 .Cast<WindowRecord>().ToArray();
             if ((valid.Length != loaded.Length || valid.Any(record => record.IdentityToken == 0)) && !CopyDamaged())
             {

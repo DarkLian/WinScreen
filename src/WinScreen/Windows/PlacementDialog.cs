@@ -1,4 +1,4 @@
-using static WinScreen.Settings.UiText;
+using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Windows;
 
@@ -27,16 +27,16 @@ internal sealed class PlacementDialog : Form
         var table = new TableLayoutPanel { ColumnCount = 2, AutoSize = true };
         void Row(string label, Control control)
         {
-            table.Controls.Add(new Label { Text = T(label), AutoSize = true, Anchor = AnchorStyles.Left });
+            table.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left });
             table.Controls.Add(control);
         }
 
-        Row("Left", _left);
-        Row("Top", _top);
-        Row("Width", _width);
-        Row("Height", _height);
-        var apply = new Button { Text = T("Apply"), DialogResult = DialogResult.OK, AutoSize = true };
-        var cancel = new Button { Text = T("Cancel"), DialogResult = DialogResult.Cancel, AutoSize = true };
+        Row(T("placement.field.left"), _left);
+        Row(T("placement.field.top"), _top);
+        Row(T("placement.field.width"), _width);
+        Row(T("placement.field.height"), _height);
+        var apply = new Button { Text = T("common.apply"), DialogResult = DialogResult.OK, AutoSize = true };
+        var cancel = new Button { Text = T("common.cancel"), DialogResult = DialogResult.Cancel, AutoSize = true };
         table.Controls.Add(apply);
         table.Controls.Add(cancel);
         AcceptButton = apply;
