@@ -75,7 +75,6 @@ WinScreen 由作者 DarkLian 與 AI 代理程式共同維護，因此最好的�
 ```
 
 輸出檔案：`dist\release\WinScreen-win-Setup.exe`。
-測試、專案結構、發行簽章與已知限制請參閱 **[開發指南（英文）](docs/DEVELOPMENT.md)**。
 
 ## 授權條款
 

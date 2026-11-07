@@ -4,7 +4,7 @@
 
 A free window helper for 64-bit Windows 11. No account, trial, or activation key.
 Locally tested on Windows 11 Pro build 26300, one 1920×1080 display at 100% scaling. Other Windows editions, Windows 10,
-mixed DPI, and multiple monitors remain unverified; see the [validation matrix](docs/AUDIT_IMPLEMENTATION.md).
+mixed DPI, and multiple monitors remain unverified.
 
 Keep a window on top, adjust its transparency, open a live Picture-in-Picture view, or jump to it with a floating Anchor.
 The interface supports English, 简体中文, and 繁體中文.
@@ -73,7 +73,6 @@ Requires the .NET 10 SDK specified in `global.json`.
 ```
 
 Output: `dist\release\WinScreen-win-Setup.exe`.
-See the **[Development Guide](docs/DEVELOPMENT.md)** for tests, architecture, release signing, and known limitations.
 
 ## License
 

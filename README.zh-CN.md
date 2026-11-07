@@ -75,7 +75,6 @@ WinScreen 由作者 DarkLian 与 AI 智能体共同维护，因此最好的帮�
 ```
 
 输出文件：`dist\release\WinScreen-win-Setup.exe`。
-测试、项目结构、发布签名和已知限制请参阅 **[开发指南（英文）](docs/DEVELOPMENT.md)**。
 
 ## 许可证
 

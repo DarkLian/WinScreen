@@ -204,5 +204,3 @@ has it open, new changes pause until **Restore all windows** can read it. Exitin
 - If a PiP view freezes, choose **Hide original window** from its menu. Apps can stop drawing while covered or minimized.
 - If Settings looks unchanged after choosing a language, save, exit WinScreen, and reopen it.
 - Display scaling above 100%, multiple monitors, Windows 10, and real installed-version upgrades still need broader validation.
-
-For build instructions and the full validation limits, see the [Development Guide](DEVELOPMENT.md).
