@@ -9,6 +9,8 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\WinScreen.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The languages WinScreen is translated into. The rest of .NET's translations would never be seen. -->
+    <SatelliteResourceLanguages>en;zh-Hans;zh-Hant</SatelliteResourceLanguages>
   </PropertyGroup>
   <ItemGroup>
     <AssemblyMetadata Include="UpdateRepository" Value="$(UpdateRepository)" />
@@ -21,4 +23,11 @@
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
     <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
   </ItemGroup>
+  <!-- Visual Studio designer support and a debugger helper: installed apps use neither. -->
+  <Target Name="DropUnusedRuntimeFiles" AfterTargets="ResolveRuntimePackAssets">
+    <ItemGroup>
+      <RuntimePackAsset Remove="@(RuntimePackAsset)" Condition="'%(Filename)' == 'System.Windows.Forms.Design' Or '%(Filename)' == 'Microsoft.DiaSymReader.Native.amd64'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'System.Windows.Forms.Design' Or '%(Filename)' == 'Microsoft.DiaSymReader.Native.amd64'" />
+    </ItemGroup>
+  </Target>
 </Project>
