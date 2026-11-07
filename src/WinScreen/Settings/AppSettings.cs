@@ -149,6 +149,8 @@ public sealed class AppSettings
     public bool PipClickForwarding { get; set; }
     [JsonConverter(typeof(PipPreferencesConverter))]
     public PipPreferences Pip { get; set; } = new();
+    [JsonConverter(typeof(PipPresetListConverter))]
+    public List<PipPreset> PipPresets { get; set; } = [];
     public bool? StartWithWindows { get; set; }
 
     /// <summary>True once the first-run hint has been shown, so it doesn't return at every sign-in.</summary>
@@ -219,6 +221,7 @@ public sealed class AppSettings
                 }
             }
 
+            loaded.PipPresets ??= [];
             loaded.Hotkeys ??= [];
             loaded.ExcludedPrograms = (loaded.ExcludedPrograms ?? defaults.ExcludedPrograms)
                 .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();

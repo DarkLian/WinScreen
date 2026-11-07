@@ -99,10 +99,18 @@ start-to-present probe, is limited to 30 FPS. Shrink continues to use DWM.
 | Click | Go to the original window; no synthetic click is sent by default |
 | Drag | Move the view |
 | Mouse wheel | Resize the view |
+| Ctrl+mouse wheel | Zoom into the picture, up to 8×; Ctrl+double-click resets it |
+| Middle-button drag | Move around a zoomed picture |
 | Ctrl+drag | Select a crop |
 | Ctrl+double-click | Remove the crop |
 | Right-click | Hide/show the original, go to it, remove crop, or close PiP |
 | The ✕ button shown while the pointer is on the view | Close PiP |
+
+Right-click a view for **View options**. Each view can have its own frame limit, scaling, and opacity, can lock its
+position, and can become click-through. These last only as long as the view unless you save them. **Size** offers
+Small, Medium, Large, and Fit to source. **Presets** saves the crop, size, position, and options under a name so you
+can apply them to any view later. A click-through view can't be clicked, so turn it off from the tray's
+**Picture-in-Picture views** list; its opacity is then real see-through.
 
 By default, clicking PiP shows/activates the original so you can interact with it normally. This does not move the
 system pointer or inject a click. Only one PiP or Shrink tile is kept per source; opening one replaces the other.
@@ -243,7 +251,7 @@ These are limits of the current version, listed so you can decide before you rel
 - **Keep updating (hide original):** the original keeps running, stays in Alt-Tab and the taskbar, and appears above other windows when shown again.
 - **Exclusive full-screen games:** views can't reliably appear over them, and WinScreen will not hook into games to do so. Use borderless or windowed mode.
 - **Picture quality:** output is SDR. Protected video may appear black.
-- **PiP opacity:** a view fades toward black. It does not become see-through.
+- **PiP opacity:** a view fades toward black. It only becomes see-through while click-through.
 - **Audio:** PiP shows the picture only.
 - **Text in PiP:** you can't select text inside a view.
 - **Click forwarding:** experimental, because focus and real input can't be made atomic with other apps. Leave it off for sensitive or unsaved work.
@@ -253,3 +261,5 @@ These are limits of the current version, listed so you can decide before you rel
 - **Display and region views:** they need Advanced capture and have no Compatibility fallback, and Windows shows its capture border. If capture stops, the view closes.
 - **Screen sharing:** display and region views don't appear in your own screenshots or screen sharing, because otherwise a view would capture itself.
 - **Regions:** a region stays on one display.
+- **Presets:** a saved crop is in pixels, so it may not fit a differently sized window.
+- **Click-through views:** they can't be clicked, so use the tray menu or **Restore all windows** to reach them.

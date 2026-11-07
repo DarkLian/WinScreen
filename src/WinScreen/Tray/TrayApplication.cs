@@ -160,7 +160,14 @@ public sealed class TrayApplication : ApplicationContext
             if (_viewsInOrder.Count > 0)
                 views.DropDownItems.Add(new ToolStripSeparator());
             foreach (PipWindow view in _viewsInOrder)
-                views.DropDownItems.Add(T("Close") + ": " + MenuText(view.Text), null, (_, _) => view.Close());
+            {
+                var item = new ToolStripMenuItem(MenuText(view.Text));
+                item.DropDownItems.Add(new ToolStripMenuItem(T("Click-through"), null,
+                    (_, _) => view.Overrides = view.Overrides with { ClickThrough = !view.Overrides.ClickThrough })
+                    { Checked = view.Overrides.ClickThrough });
+                item.DropDownItems.Add(T("Close"), null, (_, _) => view.Close());
+                views.DropDownItems.Add(item);
+            }
         };
         return views;
     }
@@ -705,12 +712,34 @@ public sealed class TrayApplication : ApplicationContext
         pip.FormClosed += (_, _) => _viewsInOrder.Remove(pip);
         pip.Problem += text => Alert(T("WinScreen couldn't do that"), text);
         pip.Notice += text => Alert(T("Picture-in-Picture"), text, ToolTipIcon.Info);
+        pip.Presets = () => _settings.PipPresets;
+        pip.PresetSaved += preset => ChangePresets(presets =>
+        {
+            presets.RemoveAll(saved => saved.Name == preset.Name);
+            presets.Add(preset);
+        });
+        pip.PresetRemoved += name => ChangePresets(presets => presets.RemoveAll(saved => saved.Name == name));
         pip.ApplyPipPreferences(_settings.Pip);
         pip.ShowOnTop();
         if (pip.IsDisposed) return;
         _dark.Ignore(pip.Handle);
         if (_settings.ExperimentalFeatures && _settings.PipAutoMove)
             pip.SetAutoMove(true);
+    }
+
+    private void ChangePresets(Action<List<PipPreset>> change)
+    {
+        List<PipPreset> before = _settings.PipPresets.ToList();
+        change(_settings.PipPresets);
+        try
+        {
+            _settings.Save(_settingsPath);
+        }
+        catch (Exception failure) when (IsExpected(failure))
+        {
+            _settings.PipPresets = before;
+            Alert(T("WinScreen couldn't save its settings"), failure.Message);
+        }
     }
 
     private void OpenScreenView(ScreenPipSource source)

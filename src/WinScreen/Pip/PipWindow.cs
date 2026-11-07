@@ -27,6 +27,10 @@ public sealed class PipWindow : Form
     private const int MA_NOACTIVATE = 3;
     private const int WM_DISPLAYCHANGE = 0x007E;
     private const int MinimumExclusionBuild = 19041;
+    private const double ZoomStep = 1.25;
+    private const int SmallLongSide = 320;
+    private const int MediumLongSide = StartLongSide;
+    private const int LargeLongSide = 720;
 
     private static readonly Color Accent = Color.FromArgb(79, 140, 255);
 
@@ -45,6 +49,11 @@ public sealed class PipWindow : Form
     private PipStateChip? _chip;
     private PipBackendSelector? _thumbnail;
     private PipPreferences _preferences = new() { Backend = PipBackendPreference.Dwm };
+    private PipPreferences _global = new() { Backend = PipBackendPreference.Dwm };
+    private PipOverrides _overrides = new();
+    private RectangleF _zoom = PipGeometry.WholeView;
+    private bool _panning;
+    private Point _panFrom;
     private ToolStripMenuItem _retryItem = null!;
     private Rectangle _crop = Rectangle.Empty;
     private Rectangle _whole = Rectangle.Empty;
@@ -92,6 +101,10 @@ public sealed class PipWindow : Form
             (_, _) => SetOriginalHidden(!_hideItem!.Checked));
         _autoMoveItem = new ToolStripMenuItem(T("&Move away from text and images"), null,
             (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
+        var options = new ToolStripMenuItem(T("View &options"));
+        options.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
+        options.DropDownOpening += (_, _) => FillOptions(options);
+        _menu.Items.Add(options);
         _menu.Items.Add(_hideItem);
         _menu.Items.Add(_autoMoveItem);
         _goToItem = _menu.Items.Add(T("&Go to original window"), null, (_, _) => GoToSource());
@@ -157,6 +170,7 @@ public sealed class PipWindow : Form
             _thumbnail = new PipBackendSelector(_origin, Handle, _preferences);
             _thumbnail.Problem += text => Problem?.Invoke(text);
             OpenInFreeSpot(_thumbnail);
+            ApplyClickThrough();
             Show();
             StayOnTop();
             if ((User32.GetWindowLongPtr(Handle, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) == 0)
@@ -173,10 +187,166 @@ public sealed class PipWindow : Form
         }
     }
 
+    /// <summary>Takes new values from Settings. What this view was told to do differently stays.</summary>
     public void ApplyPipPreferences(PipPreferences preferences)
     {
-        _preferences = preferences.Validated();
-        _thumbnail?.Configure(_preferences);
+        _global = preferences.Validated();
+        Reconfigure();
+    }
+
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal PipOverrides Overrides
+    {
+        get => _overrides;
+        set
+        {
+            _overrides = value;
+            Reconfigure();
+        }
+    }
+
+    internal PipPreferences EffectivePreferences => _preferences;
+
+    /// <summary>The saved presets to offer, and where a new or removed one goes. Set by the owner of the settings.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<IReadOnlyList<PipPreset>>? Presets { get; set; }
+    public event Action<PipPreset>? PresetSaved;
+    public event Action<string>? PresetRemoved;
+
+    private void Reconfigure()
+    {
+        _preferences = _global.With(_overrides);
+        // A view clicks can pass through is an overlay, so its opacity is real see-through, not a fade to black.
+        _thumbnail?.Configure(_overrides.ClickThrough ? _preferences.With(new PipOverrides(OpacityPercent: 100)) : _preferences);
+        ApplyClickThrough();
+    }
+
+    /// <summary>Click-through needs the layered style too, or Windows still gives this window the clicks.</summary>
+    private void ApplyClickThrough()
+    {
+        if (!IsHandleCreated)
+            return;
+        const long both = User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT;
+        long style = User32.GetWindowLongPtr(Handle, User32.GWL_EXSTYLE);
+        long wanted = _overrides.ClickThrough ? style | both : style & ~both;
+        if (wanted != style)
+            User32.SetWindowLongPtr(Handle, User32.GWL_EXSTYLE, (nint)wanted);
+        if (_overrides.ClickThrough)
+            User32.SetLayeredWindowAttributes(Handle, 0, _preferences.Alpha, User32.LWA_ALPHA);
+    }
+
+    private void FillOptions(ToolStripMenuItem options)
+    {
+        options.DropDownItems.Clear();
+        bool capture = BackendKind != PipBackendKind.DwmThumbnail;
+        ToolStripMenuItem rate = Choices(T("Frame limit"), _overrides.FrameRate,
+            [(T("Use Settings"), null), (T("Match Monitor"), 0), ("15 FPS", 15), ("30 FPS", 30), ("60 FPS", 60), ("120 FPS", 120)],
+            value => Overrides = _overrides with { FrameRate = value });
+        ToolStripMenuItem scaling = Choices(T("Scaling"), _overrides.Scaling,
+            [(T("Use Settings"), null), (T("Auto (area filtering)"), PipScaling.Auto), (T("Crisp (nearest texel)"), PipScaling.Crisp),
+                (T("Smooth (linear)"), PipScaling.Smooth)],
+            value => Overrides = _overrides with { Scaling = value });
+        rate.Enabled = scaling.Enabled = capture;
+        options.DropDownItems.Add(rate);
+        options.DropDownItems.Add(scaling);
+        options.DropDownItems.Add(Choices(T("Opacity"), _overrides.OpacityPercent,
+            [(T("Use Settings"), null), ("100%", 100), ("75%", 75), ("50%", 50), ("25%", 25)],
+            value => Overrides = _overrides with { OpacityPercent = value }));
+        options.DropDownItems.Add(new ToolStripMenuItem(T("Lock position"), null,
+            (_, _) => Overrides = _overrides with { PositionLocked = !_overrides.PositionLocked })
+            { Checked = _overrides.PositionLocked });
+        options.DropDownItems.Add(new ToolStripMenuItem(T("Click-through (use the tray to turn off)"), null,
+            (_, _) => Overrides = _overrides with { ClickThrough = true }));
+        options.DropDownItems.Add(new ToolStripSeparator());
+        var size = new ToolStripMenuItem(T("Size"));
+        size.DropDownItems.Add(T("Small"), null, (_, _) => ResizeTo(Dpi.Scale(SmallLongSide, DeviceDpi)));
+        size.DropDownItems.Add(T("Medium"), null, (_, _) => ResizeTo(Dpi.Scale(MediumLongSide, DeviceDpi)));
+        size.DropDownItems.Add(T("Large"), null, (_, _) => ResizeTo(Dpi.Scale(LargeLongSide, DeviceDpi)));
+        size.DropDownItems.Add(T("Fit to source"), null, (_, _) => FitToSourceSize());
+        options.DropDownItems.Add(size);
+        var presets = new ToolStripMenuItem(T("Presets"));
+        IReadOnlyList<PipPreset> saved = Presets?.Invoke() ?? [];
+        foreach (PipPreset preset in saved)
+            presets.DropDownItems.Add(preset.Name.Replace("&", "&&"), null, (_, _) => ApplyPreset(preset));
+        if (saved.Count > 0)
+            presets.DropDownItems.Add(new ToolStripSeparator());
+        presets.DropDownItems.Add(T("Save as preset..."), null, (_, _) => SavePreset());
+        if (saved.Count > 0)
+        {
+            var remove = new ToolStripMenuItem(T("Remove preset"));
+            foreach (PipPreset preset in saved)
+                remove.DropDownItems.Add(preset.Name.Replace("&", "&&"), null, (_, _) => PresetRemoved?.Invoke(preset.Name));
+            presets.DropDownItems.Add(remove);
+        }
+
+        options.DropDownItems.Add(presets);
+    }
+
+    private static ToolStripMenuItem Choices<T1>(string title, T1 current, (string Label, T1 Value)[] choices, Action<T1> choose)
+    {
+        var menu = new ToolStripMenuItem(title);
+        foreach ((string label, T1 value) in choices)
+            menu.DropDownItems.Add(new ToolStripMenuItem(label, null, (_, _) => choose(value))
+                { Checked = EqualityComparer<T1>.Default.Equals(value, current) });
+        return menu;
+    }
+
+    private void ResizeTo(int longSide)
+    {
+        _longSide = longSide;
+        Attempt(() => FitToSource());
+    }
+
+    /// <summary>One view pixel for each source pixel, as far as the screen allows.</summary>
+    private void FitToSourceSize()
+    {
+        if (_thumbnail is null) return;
+        Rectangle part = CroppedPart(_thumbnail.SourceSize);
+        ResizeTo(Math.Max(part.Width, part.Height) + 2 * PipGeometry.Border);
+    }
+
+    internal PipPreset CurrentPreset(string name)
+    {
+        (double left, double top) = PipGeometry.ToShares(Bounds, Screen.FromControl(this).WorkingArea);
+        return new PipPreset
+        {
+            Name = name, CropX = _crop.X, CropY = _crop.Y, CropWidth = _crop.Width, CropHeight = _crop.Height,
+            LongSide = _longSide, Device = Screen.FromControl(this).DeviceName, Left = left, Top = top,
+            FrameRate = _overrides.FrameRate, OpacityPercent = _overrides.OpacityPercent, Scaling = _overrides.Scaling,
+        };
+    }
+
+    internal void ApplyPreset(PipPreset preset)
+    {
+        Overrides = _overrides with
+        {
+            FrameRate = preset.FrameRate, OpacityPercent = preset.OpacityPercent, Scaling = preset.Scaling,
+        };
+        _crop = preset.Crop;
+        _zoom = PipGeometry.WholeView;
+        if (preset.LongSide > 0)
+            _longSide = preset.LongSide;
+        Attempt(() => FitToSource());
+        if (preset.Device is null)
+            return;
+        Screen screen = Screen.AllScreens.FirstOrDefault(each => each.DeviceName == preset.Device) ?? Screen.FromControl(this);
+        Location = PipGeometry.KeepInside(
+            new Rectangle(PipGeometry.FromShares(preset.Left, preset.Top, Size, screen.WorkingArea), Size), screen.WorkingArea);
+    }
+
+    private void SavePreset()
+    {
+        using var dialog = new Form
+        {
+            Text = T("Save as preset..."), FormBorderStyle = FormBorderStyle.FixedDialog, MinimizeBox = false, MaximizeBox = false,
+            StartPosition = FormStartPosition.CenterScreen, TopMost = true, ClientSize = new Size(320, 72), ShowInTaskbar = false,
+        };
+        var name = new TextBox { Left = 10, Top = 10, Width = 300, MaxLength = PipPreset.NameLimit };
+        var save = new Button { Text = T("Save"), Left = 235, Top = 40, Width = 75, DialogResult = DialogResult.OK };
+        dialog.Controls.AddRange([name, save]);
+        dialog.AcceptButton = save;
+        if (dialog.ShowDialog() == DialogResult.OK && name.Text.Trim().Length > 0)
+            PresetSaved?.Invoke(CurrentPreset(name.Text.Trim()));
     }
 
     internal PipBackendKind BackendKind => _thumbnail?.Kind ?? PipBackendKind.DwmThumbnail;
@@ -221,6 +391,8 @@ public sealed class PipWindow : Form
     /// <param name="crop">The part to show, measured from the window's visible top-left corner.</param>
     public void SetCrop(Rectangle crop)
     {
+        if (crop != _crop)
+            _zoom = PipGeometry.WholeView;
         _crop = crop;
         Attempt(() => FitToSource());
     }
@@ -327,6 +499,14 @@ public sealed class PipWindow : Form
         if (_pressed || _lastShown.IsEmpty)
             return;
 
+        if ((ModifierKeys & Keys.Control) != 0)
+        {
+            Rectangle shown = PipGeometry.ViewArea(ClientSize);
+            ZoomAt(new PointF((e.X - shown.Left) / (float)shown.Width, (e.Y - shown.Top) / (float)shown.Height),
+                Math.Pow(ZoomStep, e.Delta / (double)WheelNotch));
+            return;
+        }
+
         // Touchpads send many tiny steps, so the size follows how far the wheel really moved.
         int step = (int)Math.Round(Dpi.Scale(WheelStep, DeviceDpi) * (e.Delta / (double)WheelNotch));
         if (step == 0)
@@ -340,13 +520,19 @@ public sealed class PipWindow : Form
             return; // Any smaller and there would be nothing left to grab.
 
         _longSide = Math.Max(size.Width, size.Height);
-        Point pointer = PointToScreen(e.Location);
+        Point? pointer = _overrides.PositionLocked ? null : PointToScreen(e.Location);
         Attempt(() => FitToSource(pointer));
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
+        if (e.Button == MouseButtons.Middle && _zoom != PipGeometry.WholeView)
+        {
+            _panning = true;
+            _panFrom = e.Location;
+        }
+
         if (e.Button != MouseButtons.Left)
             return;
 
@@ -363,6 +549,16 @@ public sealed class PipWindow : Form
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
+        if (_panning && e.Button == MouseButtons.Middle)
+        {
+            Rectangle area = PipGeometry.ViewArea(ClientSize);
+            _zoom = PipGeometry.Pan(_zoom, (_panFrom.X - e.X) * _zoom.Width / area.Width,
+                (_panFrom.Y - e.Y) * _zoom.Height / area.Height);
+            _panFrom = e.Location;
+            Attempt(() => FitToSource());
+            return;
+        }
+
         if (e.Button != MouseButtons.Left || !_pressed)
             return;
 
@@ -376,6 +572,8 @@ public sealed class PipWindow : Form
                  Math.Abs(e.Y - _dragStart.Y) >= DragThreshold)
         {
             _dragged = true;
+            if (_overrides.PositionLocked)
+                return;
             Location = PipGeometry.KeepInside(
                 new Rectangle(new Point(Left + e.X - _dragStart.X, Top + e.Y - _dragStart.Y), Size),
                 Screen.FromPoint(Cursor.Position).WorkingArea);
@@ -385,6 +583,8 @@ public sealed class PipWindow : Form
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
+        if (e.Button == MouseButtons.Middle)
+            _panning = false;
         if (e.Button != MouseButtons.Left || !_pressed)
             return;
 
@@ -413,8 +613,27 @@ public sealed class PipWindow : Form
     protected override void OnMouseDoubleClick(MouseEventArgs e)
     {
         base.OnMouseDoubleClick(e);
-        if ((ModifierKeys & Keys.Control) != 0)
+        if ((ModifierKeys & Keys.Control) == 0)
+            return;
+        if (!ResetZoom())
             SetCrop(Rectangle.Empty);
+    }
+
+    /// <param name="spot">The point to hold still, as a share of the view.</param>
+    internal void ZoomAt(PointF spot, double factor)
+    {
+        _zoom = PipGeometry.ZoomAround(_zoom, spot, factor);
+        Attempt(() => FitToSource());
+    }
+
+    /// <returns>False when the view wasn't zoomed.</returns>
+    internal bool ResetZoom()
+    {
+        if (_zoom == PipGeometry.WholeView)
+            return false;
+        _zoom = PipGeometry.WholeView;
+        Attempt(() => FitToSource());
+        return true;
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -554,6 +773,7 @@ public sealed class PipWindow : Form
     {
         _pressed = false;
         _dragged = false;
+        _panning = false;
         if (!_selecting)
             return;
         EndSelection();
@@ -609,7 +829,10 @@ public sealed class PipWindow : Form
     /// so it keeps its last shape. The crop itself is left alone, so it comes back whole when a source
     /// that shrank past it grows again.
     /// </summary>
-    private Rectangle ShownPart(Size sourceSize)
+    private Rectangle ShownPart(Size sourceSize) => PipGeometry.ZoomedPart(CroppedPart(sourceSize), _zoom);
+
+    /// <summary>The part the view stands for before any zoom, which is what sets the view's shape.</summary>
+    private Rectangle CroppedPart(Size sourceSize)
     {
         if (_whole.IsEmpty || !_origin.IsMinimized)
             _whole = _origin.Whole(sourceSize);
@@ -650,7 +873,7 @@ public sealed class PipWindow : Form
             throw new WindowOperationException(T("The source has no drawable preview surface."));
 
         Rectangle area = Screen.FromControl(this).WorkingArea;
-        Size size = PipGeometry.FitLongSide(_longSide, shown, area.Size);
+        Size size = PipGeometry.FitLongSide(_longSide, CroppedPart(_thumbnail.SourceSize), area.Size);
         Point place = pointer is { } spot
             ? PipGeometry.KeepUnderPointer(Bounds, size, spot)
             : PipGeometry.KeepCorner(Bounds, size, area);
@@ -707,7 +930,7 @@ public sealed class PipWindow : Form
     {
         bool over = Bounds.Contains(Cursor.Position);
         ClaimEscape(_selecting);
-        if (!over || _interacting || _selecting || _pressed)
+        if (!over || _interacting || _selecting || _pressed || _overrides.ClickThrough)
         {
             _closeButton?.Hide();
             return;
@@ -764,7 +987,7 @@ public sealed class PipWindow : Form
     /// <summary>Leaves the view alone while it's being used; the mouse over it means it's wanted there.</summary>
     private void MoveAwayFromContent()
     {
-        if (_pressed || _interacting || _selecting || MouseButtons != MouseButtons.None ||
+        if (_pressed || _interacting || _selecting || _overrides.PositionLocked || MouseButtons != MouseButtons.None ||
             Bounds.Contains(Cursor.Position))
             return;
 

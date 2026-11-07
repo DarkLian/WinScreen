@@ -33,6 +33,7 @@ internal sealed class D3D11Renderer : IDisposable
     private long _workStarted;
     private Size _bufferSize;
     internal Size SourceSize { get; private set; }
+    internal PipScaling ViewScaling { get; set; }
     private readonly PipPreferences _preferences;
     private readonly PipDiagnostics _diagnostics;
     private bool _disposed;
@@ -51,6 +52,7 @@ internal sealed class D3D11Renderer : IDisposable
         bool preferCompute = true)
     {
         _preferences = preferences;
+        ViewScaling = preferences.Scaling;
         _diagnostics = diagnostics;
         try
         {
@@ -217,12 +219,12 @@ internal sealed class D3D11Renderer : IDisposable
             Viewport = new(destination.X, destination.Y, destination.Width, destination.Height),
             Surface = new(SourceSize.Width, SourceSize.Height, client.Width, client.Height),
             Selection = selection is { } s ? new(s.X, s.Y, s.Width, s.Height) : Vector4.Zero,
-            Options = new(opacity / 255f, (int)_preferences.Scaling, 0, selection.HasValue ? 1 : 0),
+            Options = new(opacity / 255f, (int)ViewScaling, 0, selection.HasValue ? 1 : 0),
         };
-        bool compute = _compute is not null && _preferences.Scaling == PipScaling.Auto &&
+        bool compute = _compute is not null && ViewScaling == PipScaling.Auto &&
             crop.Width >= destination.Width && crop.Height >= destination.Height;
-        _diagnostics.FilterMode = _preferences.Scaling == PipScaling.Crisp ? "Nearest texel" :
-            _preferences.Scaling == PipScaling.Smooth || crop.Width < destination.Width || crop.Height < destination.Height ? "Linear" :
+        _diagnostics.FilterMode = ViewScaling == PipScaling.Crisp ? "Nearest texel" :
+            ViewScaling == PipScaling.Smooth || crop.Width < destination.Width || crop.Height < destination.Height ? "Linear" :
             crop.Size == destination.Size ? "Exact texel" : compute ? "Compute area (16x16)" : "Raster area (PS4)";
         _context.UpdateSubresource(in constants, _constants!);
         if (compute)

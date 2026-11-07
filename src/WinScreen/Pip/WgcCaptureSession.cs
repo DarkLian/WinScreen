@@ -21,7 +21,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         public void Dispose() => Interlocked.Exchange(ref _value, null)?.Dispose();
     }
     private sealed record View(Size Client, Rectangle Destination, Rectangle Crop, byte Opacity,
-        Rectangle? Selection, bool Visible, int SourceHz, int TargetHz);
+        Rectangle? Selection, bool Visible, int SourceHz, int TargetHz, int FrameRate, PipScaling Scaling);
     private readonly object _captureGate = new(), _viewGate = new();
     private readonly LatestFrame<Frame> _frames = new();
     private readonly PipWorkerSignal _wake = new();
@@ -58,7 +58,8 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         _monitor = monitor;
         _preferences = preferences;
         _software = software;
-        _view = new(client, Rectangle.Empty, Rectangle.Empty, preferences.Alpha, null, true, sourceHz, targetHz);
+        _view = new(client, Rectangle.Empty, Rectangle.Empty, preferences.Alpha, null, true, sourceHz, targetHz,
+            preferences.FrameRate, preferences.Scaling);
         _worker = new Thread(Run) { IsBackground = true, Name = "WinScreen PiP capture" };
         _worker.SetApartmentState(ApartmentState.MTA);
         _worker.Start();
@@ -79,6 +80,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     }
     public void SetClient(Size size) => Change(v => v with { Client = size });
     public void SetRefresh(int source, int target) => Change(v => v with { SourceHz = source, TargetHz = target });
+    public void SetPacing(int frameRate, PipScaling scaling) => Change(v => v with { FrameRate = frameRate, Scaling = scaling });
     public void SetViewport(Rectangle destination, Rectangle source) => Change(v => v with { Destination = destination, Crop = source });
     public void SetOpacity(byte opacity) => Change(v => v with { Opacity = opacity });
     public void SetVisible(bool visible) => Change(v => v with { Visible = visible });
@@ -170,7 +172,8 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                 View view;
                 bool dirty;
                 lock (_viewGate) { view = _view; dirty = _dirty; _dirty = false; }
-                int rate = _preferences.FrameRate == 0 ? view.TargetHz : _preferences.FrameRate;
+                int rate = view.FrameRate == 0 ? view.TargetHz : view.FrameRate;
+                renderer.ViewScaling = view.Scaling;
                 if (_software) rate = Math.Min(rate, 30);
                 if (rate != previousRate || view.SourceHz != previousSourceHz)
                 {

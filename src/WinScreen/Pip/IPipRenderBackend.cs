@@ -27,4 +27,7 @@ internal interface IPipCaptureBackend : IPipRenderBackend
     long LastProgress { get; }
     void SetClient(Size client);
     void SetRefresh(int source, int target);
+
+    /// <summary>Changes the frame limit and filter without restarting capture.</summary>
+    void SetPacing(int frameRate, Settings.PipScaling scaling) { }
 }

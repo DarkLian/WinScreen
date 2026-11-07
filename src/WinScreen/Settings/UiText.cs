@@ -234,5 +234,19 @@ public static class UiText
                                    Screen capture stopped, so this view closed.|屏幕捕获已停止，因此此预览已关闭。|螢幕擷取已停止，因此此預覽已關閉。
                                    This version of Windows can't show a view of the screen.|此版本的 Windows 无法显示屏幕预览。|此版本的 Windows 無法顯示螢幕預覽。
                                    Drag: move • Wheel: resize • Ctrl+drag: crop • Right-click: menu|拖动：移动 • 滚轮：调整大小 • Ctrl+拖动：裁剪 • 右键：菜单|拖曳：移動 • 滾輪：調整大小 • Ctrl+拖曳：裁切 • 右鍵：選單
+                                   View &options|预览选项(&O)|預覽選項(&O)
+                                   Use Settings|使用设置|使用設定
+                                   Opacity|不透明度|不透明度
+                                   Lock position|锁定位置|鎖定位置
+                                   Click-through (use the tray to turn off)|点击穿透（从托盘关闭）|滑鼠穿透（從系統匣關閉）
+                                   Size|大小|大小
+                                   Small|小|小
+                                   Medium|中|中
+                                   Large|大|大
+                                   Fit to source|适应原始大小|符合原始大小
+                                   Presets|预设|預設組合
+                                   Save as preset...|保存为预设...|儲存為預設組合...
+                                   Remove preset|移除预设|移除預設組合
+                                   Save|保存|儲存
                                    """;
 }

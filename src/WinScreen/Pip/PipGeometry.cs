@@ -12,6 +12,8 @@ public static class PipGeometry
     /// <summary>The size in pixels of the squares the screen is judged in.</summary>
     public const int ContentCell = 16;
 
+    private const double MaximumZoom = 8;
+
     private const double BusyShare = 0.12;
     private const double ClearGain = 0.08;
     private const double DistanceCost = 0.0001;
@@ -195,6 +197,51 @@ public static class PipGeometry
             Math.Min(area.Left + best.Column * ContentCell, area.Right - view.Width),
             Math.Min(area.Top + best.Row * ContentCell, area.Bottom - view.Height));
     }
+
+    /// <summary>All of a view's picture, as a share of its width and height.</summary>
+    public static readonly RectangleF WholeView = new(0, 0, 1, 1);
+
+    /// <summary>
+    /// A closer or wider look, keeping <paramref name="spot"/>, a share of the visible part, where it is.
+    /// Zoom never goes past 8x, and never shows more than the whole picture or anything outside it.
+    /// </summary>
+    public static RectangleF ZoomAround(RectangleF view, PointF spot, double factor)
+    {
+        float side = (float)Math.Clamp(view.Width / factor, 1.0 / MaximumZoom, 1);
+        float x = view.X + spot.X * (view.Width - side);
+        float y = view.Y + spot.Y * (view.Height - side);
+        return KeepInPicture(new RectangleF(x, y, side, side));
+    }
+
+    /// <summary>Slides a zoomed view by this share of the picture, stopping at its edges.</summary>
+    public static RectangleF Pan(RectangleF view, float across, float down) =>
+        KeepInPicture(new RectangleF(view.X + across, view.Y + down, view.Width, view.Height));
+
+    /// <summary>The pixels of <paramref name="part"/> that <paramref name="view"/> covers.</summary>
+    public static Rectangle ZoomedPart(Rectangle part, RectangleF view)
+    {
+        if (view == WholeView)
+            return part;
+        var zoomed = Rectangle.FromLTRB(
+            part.Left + (int)Math.Round(view.Left * part.Width),
+            part.Top + (int)Math.Round(view.Top * part.Height),
+            part.Left + (int)Math.Round(view.Right * part.Width),
+            part.Top + (int)Math.Round(view.Bottom * part.Height));
+        return zoomed.Width > 0 && zoomed.Height > 0 ? zoomed : part;
+    }
+
+    private static RectangleF KeepInPicture(RectangleF view) => new(
+        Math.Clamp(view.X, 0, 1 - view.Width), Math.Clamp(view.Y, 0, 1 - view.Height), view.Width, view.Height);
+
+    /// <summary>Where a window of this size goes for a position saved as shares of the free space.</summary>
+    public static Point FromShares(double left, double top, Size size, Rectangle area) => new(
+        area.Left + (int)Math.Round(left * Math.Max(0, area.Width - size.Width)),
+        area.Top + (int)Math.Round(top * Math.Max(0, area.Height - size.Height)));
+
+    /// <summary>A position as shares of the free space, so it survives a change of screen size.</summary>
+    public static (double Left, double Top) ToShares(Rectangle bounds, Rectangle area) => (
+        area.Width > bounds.Width ? Math.Clamp((bounds.Left - area.Left) / (double)(area.Width - bounds.Width), 0, 1) : 0,
+        area.Height > bounds.Height ? Math.Clamp((bounds.Top - area.Top) / (double)(area.Height - bounds.Height), 0, 1) : 0);
 
     /// <summary>The rectangle between two points, whichever way the mouse was dragged.</summary>
     public static Rectangle Between(Point a, Point b)

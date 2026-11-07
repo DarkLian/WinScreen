@@ -94,6 +94,31 @@ public sealed class WgcPipTests(ITestOutputHelper output)
         public void Dispose() { DisposeCount++; State = PipSessionState.Stopped; _completion.TrySetResult(); }
     }
 
+    [Fact]
+    public void Changing_the_frame_limit_or_scaling_keeps_capture_running()
+    {
+        using var source = new TargetProcess(new(200, 160, 400, 300));
+        OnUiThread(pump =>
+        {
+            using var destination = new PipWindow(source.Handle, new WindowController([])) { Bounds = new(800, 120, 404, 304) };
+            destination.Show();
+            var created = new List<FaultCapture>();
+            using var selector = new PipBackendSelector(WindowIdentity.Capture(source.Handle), destination.Handle,
+                new() { Backend = PipBackendPreference.Wgc }, start =>
+                {
+                    var capture = new FaultCapture(start.Software); created.Add(capture); return capture;
+                });
+            selector.SetViewport(new(2, 2, 400, 300), new(0, 0, 400, 300));
+            selector.Poll(destination.ClientSize);
+            created[0].Live(); selector.Poll(destination.ClientSize);
+            selector.Configure(new() { Backend = PipBackendPreference.Wgc, FrameRate = 30, Scaling = PipScaling.Crisp });
+            selector.Poll(destination.ClientSize);
+            Assert.Single(created);
+            Assert.Equal(0, created[0].DisposeCount);
+            Assert.Equal(PipBackendKind.WgcHardware, selector.Kind);
+        });
+    }
+
     [Theory]
     [InlineData(PipBackendPreference.Auto, 2)]
     [InlineData(PipBackendPreference.Wgc, 3)]

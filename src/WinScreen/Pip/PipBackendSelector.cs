@@ -86,12 +86,12 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     internal void Configure(PipPreferences preferences)
     {
         PipPreferences next = Effective(preferences);
-        bool restart = next.Backend != _preferences.Backend || next.FrameRate != _preferences.FrameRate ||
-            next.Scaling != _preferences.Scaling || next.PixelBudget != _preferences.PixelBudget;
+        bool restart = next.Backend != _preferences.Backend || next.PixelBudget != _preferences.PixelBudget;
         _preferences = next;
         if (!restart)
         {
             if (_opacity != next.Alpha) SetOpacity(next.Alpha);
+            _advanced?.SetPacing(next.FrameRate, next.Scaling);
             return;
         }
         UseDwm();

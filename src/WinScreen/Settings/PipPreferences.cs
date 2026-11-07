@@ -30,6 +30,95 @@ public sealed class PipPreferences
     };
 
     internal byte Alpha => (byte)Math.Round(OpacityPercent * 255.0 / 100);
+
+    /// <summary>These preferences as one view uses them. The originals are left alone.</summary>
+    internal PipPreferences With(PipOverrides overrides)
+    {
+        PipPreferences result = Validated();
+        result.FrameRate = overrides.FrameRate ?? result.FrameRate;
+        result.OpacityPercent = overrides.OpacityPercent ?? result.OpacityPercent;
+        result.Scaling = overrides.Scaling ?? result.Scaling;
+        return result.Validated();
+    }
+}
+
+/// <summary>What one view does differently from Settings. It ends with the view unless saved as a preset.</summary>
+internal sealed record PipOverrides(int? FrameRate = null, int? OpacityPercent = null, PipScaling? Scaling = null,
+    bool PositionLocked = false, bool ClickThrough = false);
+
+/// <summary>A named view setup. Null values follow Settings. A crop is in pixels of the source.</summary>
+public sealed class PipPreset
+{
+    public const int NameLimit = 60;
+
+    public string Name { get; set; } = "";
+    public int CropX { get; set; }
+    public int CropY { get; set; }
+    public int CropWidth { get; set; }
+    public int CropHeight { get; set; }
+    public int LongSide { get; set; }
+    public string? Device { get; set; }
+    public double Left { get; set; }
+    public double Top { get; set; }
+    public int? FrameRate { get; set; }
+    public int? OpacityPercent { get; set; }
+    public PipScaling? Scaling { get; set; }
+
+    [JsonIgnore]
+    public Rectangle Crop => CropWidth > 0 && CropHeight > 0
+        ? new Rectangle(CropX, CropY, CropWidth, CropHeight)
+        : Rectangle.Empty;
+
+    /// <summary>This preset with its numbers in range, or null when it has no usable name.</summary>
+    internal PipPreset? Validated()
+    {
+        string name = (Name ?? "").Trim();
+        if (name.Length == 0) return null;
+        return new PipPreset
+        {
+            Name = name.Length > NameLimit ? name[..NameLimit] : name,
+            CropX = CropX, CropY = CropY, CropWidth = Math.Max(0, CropWidth), CropHeight = Math.Max(0, CropHeight),
+            LongSide = Math.Clamp(LongSide, 0, 16384),
+            Device = Device,
+            Left = double.IsFinite(Left) ? Math.Clamp(Left, 0, 1) : 0,
+            Top = double.IsFinite(Top) ? Math.Clamp(Top, 0, 1) : 0,
+            FrameRate = FrameRate is { } rate ? (rate == 0 ? 0 : Math.Clamp(rate, 15, 480)) : null,
+            OpacityPercent = OpacityPercent is { } opacity ? Math.Clamp(opacity, 10, 100) : null,
+            Scaling = Scaling is { } scaling && Enum.IsDefined(scaling) ? scaling : null,
+        };
+    }
+}
+
+/// <summary>One damaged preset is skipped. It must never cost the rest of the settings.</summary>
+internal sealed class PipPresetListConverter : JsonConverter<List<PipPreset>>
+{
+    public override List<PipPreset> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        var presets = new List<PipPreset>();
+        if (document.RootElement.ValueKind != JsonValueKind.Array) return presets;
+        foreach (JsonElement element in document.RootElement.EnumerateArray())
+        {
+            try
+            {
+                if (element.Deserialize<PipPreset>()?.Validated() is { } preset)
+                    presets.Add(preset);
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return presets;
+    }
+
+    public override void Write(Utf8JsonWriter writer, List<PipPreset> value, JsonSerializerOptions options)
+    {
+        writer.WriteStartArray();
+        foreach (PipPreset preset in value)
+            JsonSerializer.Serialize(writer, preset);
+        writer.WriteEndArray();
+    }
 }
 
 /// <summary>An unknown choice must not discard unrelated settings or opt a previous install into capture.</summary>
