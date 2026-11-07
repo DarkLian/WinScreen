@@ -18,6 +18,8 @@ public sealed class CropOverlay : Form
     private bool _finished;
     private Rectangle _selection;
     private readonly Rectangle _covers;
+    private ElementFinder? _finder;
+    private Rectangle _hint;
 
     public CropOverlay(Rectangle window)
     {
@@ -40,6 +42,25 @@ public sealed class CropOverlay : Form
     {
         Show();
         WindowController.Pin(Handle);
+        _finder = new ElementFinder(Handle);
+        _finder.Found += ShowHint;
+    }
+
+    /// <summary>Marks the control under the pointer, so a click can take it without any dragging.</summary>
+    private void ShowHint(Rectangle? found)
+    {
+        if (IsDisposed || !IsHandleCreated)
+            return;
+        BeginInvoke(() =>
+        {
+            Rectangle hint = found is { } rectangle
+                ? Rectangle.Intersect(new Rectangle(rectangle.Location - (Size)_covers.Location, rectangle.Size), ClientRectangle)
+                : Rectangle.Empty;
+            if (hint == _hint || _pressed)
+                return;
+            _hint = hint;
+            Invalidate();
+        });
     }
 
     /// <summary>Moving onto a monitor with other scaling must not change what's covered.</summary>
@@ -59,9 +80,15 @@ public sealed class CropOverlay : Form
             return;
         }
 
+        if (_hint.Width > 0 && _hint.Height > 0)
+        {
+            using var pen = new Pen(Accent, 2) { Alignment = System.Drawing.Drawing2D.PenAlignment.Inset };
+            e.Graphics.DrawRectangle(pen, _hint);
+        }
+
         const TextFormatFlags centred = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
                                         TextFormatFlags.WordBreak;
-        TextRenderer.DrawText(e.Graphics, T("Drag over the part to keep. Esc cancels."), Font, ClientRectangle,
+        TextRenderer.DrawText(e.Graphics, T("Drag over the part to keep, or click a highlighted part. Esc cancels."), Font, ClientRectangle,
             ForeColor, centred);
     }
 
@@ -85,7 +112,10 @@ public sealed class CropOverlay : Form
     {
         base.OnMouseMove(e);
         if (!_pressed)
+        {
+            _finder?.Ask(PointToScreen(e.Location));
             return;
+        }
 
         _selection = Rectangle.Intersect(PipGeometry.Between(_dragStart, e.Location), ClientRectangle);
         Invalidate();
@@ -98,8 +128,11 @@ public sealed class CropOverlay : Form
             return;
 
         _pressed = false;
-        bool bigEnough = _selection.Width >= SmallestSide && _selection.Height >= SmallestSide;
         Rectangle part = _selection;
+        // A press and release with no real drag takes the highlighted control.
+        if (part.Width < SmallestSide && part.Height < SmallestSide && _hint.Width > 0 && _hint.Height > 0)
+            part = _hint;
+        bool bigEnough = part.Width >= SmallestSide && part.Height >= SmallestSide;
         Finish();
         if (bigEnough)
             Chosen?.Invoke(part);
@@ -124,6 +157,8 @@ public sealed class CropOverlay : Form
             return;
 
         _finished = true;
+        _finder?.Dispose();
+        _finder = null;
         Close();
     }
 }

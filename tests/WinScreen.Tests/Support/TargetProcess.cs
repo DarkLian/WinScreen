@@ -62,6 +62,15 @@ internal sealed class TargetProcess : IDisposable
             throw new InvalidOperationException("Test target didn't take a frame.");
     }
 
+    /// <summary>Adds a real control at (20, 30), 140 by 50, for anything that looks inside a window.</summary>
+    internal void AddButton()
+    {
+        _process.StandardInput.WriteLine("button");
+        _process.StandardInput.Flush();
+        if (NextReport() != "button")
+            throw new InvalidOperationException("Test target didn't add a button.");
+    }
+
     internal void Animate(int rate)
     {
         _process.StandardInput.WriteLine("animate " + rate);

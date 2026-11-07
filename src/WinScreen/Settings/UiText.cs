@@ -72,7 +72,6 @@ public static class UiText
                                    WinScreen update|WinScreen 更新|WinScreen 更新
                                    This window can't be shrunk.|无法缩小此窗口。|無法縮小此視窗。
                                    WinScreen crop|WinScreen 裁剪|WinScreen 裁切
-                                   Drag over the part to keep. Esc cancels.|拖动以选择保留区域。按 Esc 取消。|拖曳以選取保留區域。按 Esc 取消。
                                    WinScreen dark overlay|WinScreen 深色覆盖层|WinScreen 深色覆蓋層
                                    Windows didn't provide the screen filter that dark mode needs.|Windows 未提供深色模式所需的屏幕滤镜。|Windows 未提供深色模式所需的螢幕濾鏡。
                                    read the position of|读取位置|讀取位置
@@ -297,5 +296,6 @@ public static class UiText
                                    Leave these programs alone (separate names with commas):|不对以下程序生效（用逗号分隔名称）：|不對下列程式生效（以逗號分隔名稱）：
                                    Hold the key and drag with the left button to move a window, or the right button to resize it from the nearest edge. Esc cancels.|按住按键，用左键拖动可移动窗口，用右键拖动可从最近的边缘调整大小。按 Esc 取消。|按住按鍵，以左鍵拖曳可移動視窗，以右鍵拖曳可從最近的邊緣調整大小。按 Esc 取消。
                                    This watches the mouse with a system hook. The hook only exists while this is on, and is removed during games, full-screen apps, excluded programs and when the PC is locked. WinScreen never watches the keyboard for this.|此功能通过系统挂钩监视鼠标。挂钩仅在此功能开启时存在，并在游戏、全屏应用、排除的程序以及电脑锁定时移除。WinScreen 不会为此监视键盘。|此功能透過系統掛鉤監看滑鼠。掛鉤僅在此功能開啟時存在，並在遊戲、全螢幕應用程式、排除的程式以及電腦鎖定時移除。WinScreen 不會為此監看鍵盤。
+                                   Drag over the part to keep, or click a highlighted part. Esc cancels.|拖动选择要保留的部分，或点击高亮的部分。按 Esc 取消。|拖曳選取要保留的部分，或點選醒目提示的部分。按 Esc 取消。
                                    """;
 }

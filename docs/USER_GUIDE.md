@@ -71,7 +71,8 @@ Anchors are also removed when their target window is destroyed, when restoring a
 Press **Ctrl+Alt+P** to open a live view. The original window keeps its real size.
 
 To show something else, right-click the tray icon and choose **Picture-in-Picture views → Choose what to show**.
-You can search for a window, pick a whole display, or use **Select a region** and drag out part of a display.
+You can search for a window, pick a whole display, or use **Select a region** and drag out part of a display, or
+click a highlighted part of an app.
 Select a display first to choose which one; otherwise the region comes from the display under the pointer.
 You can give this command a hotkey in Settings. Views of a display or region use Advanced capture, whatever
 the rendering setting says, and show the pointer. Windows shows its capture border while they are open.
@@ -168,7 +169,7 @@ remains visible and retryable. Glass samples visible screen content and can be a
 - **Dark mode** swaps light and dark while preserving colors through an overlay. It changes the appearance on screen;
   a PiP view keeps the original colors.
 - **Glass** removes the window's most common color. It works best with a flat background and depends on how the app draws.
-- **Crop** dims the window so you can drag over the part to keep; Esc cancels. The rest disappears and clicks there
+- **Crop** dims the window so you can drag over the part to keep, or click a highlighted part; Esc cancels. The rest disappears and clicks there
   reach what is behind. The app is not resized. If you remove its title bar, uncrop before moving it. Apps that draw
   their own shape may reject cropping or redraw their region.
 - **Shrink** replaces the window with a small live tile while retaining the window's actual size. Click the tile,
@@ -293,3 +294,4 @@ These are limits of the current version, listed so you can decide before you rel
 - **Roll up:** it needs a standard title bar, and apps that draw their own or enforce a minimum height may refuse.
 - **Move and resize:** off by default. It doesn't apply to administrator apps or maximized windows, and pauses in full-screen apps, detected games, and excluded programs.
 - **Windowed games:** a game running in a normal window can't always be detected, so add it to the exclusions. Some touchpads may not work reliably with move and resize.
+- **Highlighted parts:** selection hints work only where an app reports its controls to Windows; otherwise drag by hand.

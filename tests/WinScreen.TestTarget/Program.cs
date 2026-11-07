@@ -55,6 +55,13 @@ internal static class Program
                             Console.WriteLine("framed");
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "button")
+                        window.BeginInvoke(() =>
+                        {
+                            window.Controls.Add(new Button { Text = "Test control", Bounds = new Rectangle(20, 30, 140, 50) });
+                            Console.WriteLine("button");
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "titlebar")
                         window.BeginInvoke(window.UseTitleBar);
                     if (parts[0] == "hang")
