@@ -44,7 +44,8 @@ A toolbar also appears when the pointer rests on the middle of the active window
 | Restore all changed windows | Ctrl+Alt+R |
 | Restore only the active window | Ctrl+Alt+U |
 
-See the **[User Guide](docs/USER_GUIDE.md)** for every shortcut, Anchor controls, PiP interaction, settings, and troubleshooting.
+See the **[User Guide](docs/USER_GUIDE.md)** for every shortcut, Anchor controls, PiP interaction, settings, and troubleshooting, and see its
+**[Known limitations](docs/USER_GUIDE.md#known-limitations)** before relying on a feature.
 
 ## Updates
 

@@ -221,3 +221,21 @@ has it open, new changes pause until **Restore all windows** can read it. Exitin
 - If a PiP view freezes, choose **Hide original window** from its menu. Apps can stop drawing while covered or minimized.
 - If Settings looks unchanged after choosing a language, save, exit WinScreen, and reopen it.
 - Display scaling above 100%, multiple monitors, Windows 10, and real installed-version upgrades still need broader validation.
+
+## Known limitations
+
+These are limits of the current version, listed so you can decide before you rely on a feature.
+
+- **Windows:** WinScreen supports 64-bit Windows 11. Windows 10 is not supported or tested.
+- **Testing so far:** one 1920×1080 display at 100% scaling. Multiple monitors, mixed scaling, and other Windows editions are unverified.
+- **Administrator apps:** WinScreen can't change windows running as administrator.
+- **Minimized apps:** a minimized app stops drawing, so its view shows the last picture. Windows gives WinScreen no new frames.
+- **Browsers and apps built on them:** these can stop drawing when another window fully covers them. **Hide original window** keeps them updating.
+- **Hide original window:** the original keeps running, stays in Alt-Tab and the taskbar, and appears above other windows when shown again.
+- **Exclusive full-screen games:** views can't reliably appear over them, and WinScreen will not hook into games to do so. Use borderless or windowed mode.
+- **Picture quality:** output is SDR. Protected video may appear black.
+- **PiP opacity:** a view fades toward black. It does not become see-through.
+- **Audio:** PiP shows the picture only.
+- **Text in PiP:** you can't select text inside a view.
+- **Click forwarding:** experimental, because focus and real input can't be made atomic with other apps. Leave it off for sensitive or unsaved work.
+- **Dark, Glass, and Crop:** results depend on how each app draws.
