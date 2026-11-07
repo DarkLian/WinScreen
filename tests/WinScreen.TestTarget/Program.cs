@@ -219,6 +219,12 @@ internal sealed partial class TargetForm : Form
         Report($"key {e.KeyChar} real={InputIsReal}");
     }
 
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        Report($"wheel {e.Delta} real={InputIsReal}");
+    }
+
     private static void Report(string line)
     {
         Console.Out.WriteLine(line);

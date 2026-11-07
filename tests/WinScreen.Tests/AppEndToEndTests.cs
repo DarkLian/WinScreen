@@ -848,4 +848,61 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Near(Desktop.BoundsOf(pip), 1)), Red)),
             "Ctrl+double-click didn't remove the crop.");
     }
+
+    [Fact]
+    public void Opacity_wheel_changes_the_pointed_window_and_passes_ordinary_scrolling_through()
+    {
+        var settings = new AppSettings { OpacityWheel = true, OpacityStepPercent = 3 };
+        RestartWith(settings);
+        using var target = new TargetProcess(Spot);
+        Focus(target);
+        Thread.Sleep(500); // The existing foreground watch installs the shared hook.
+        Desktop.Key(Keys.ControlKey, true);
+        Desktop.Key(Keys.Menu, true);
+        try { Desktop.Wheel(target.Center, -1, target.Handle); }
+        finally { Desktop.Key(Keys.Menu, false); Desktop.Key(Keys.ControlKey, false); }
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 247), "The opacity wheel didn't apply the configured 3% step.");
+        Assert.Null(target.NextReport(150));
+        Desktop.Wheel(target.Center, -1, target.Handle);
+        Assert.StartsWith("wheel -120", target.NextReport() ?? "no wheel report");
+    }
+
+    [Fact]
+    public void Compact_title_bar_drag_and_minimize_work_with_real_mouse_input()
+    {
+        using var target = new TargetProcess(Spot);
+        Focus(target);
+        Hotkey(Keys.P, target);
+        nint pip = 0;
+        Assert.True(Desktop.WaitFor(() =>
+        {
+            pip = Desktop.FindProcessWindow(_app.Id, title => title.StartsWith("PiP - ", StringComparison.Ordinal));
+            return pip != 0;
+        }));
+        Rectangle bounds = Desktop.BoundsOf(pip);
+        Desktop.MoveMouse(new Point(bounds.Left + 60, bounds.Top + 60));
+        Point grip = new(bounds.Left + 60, bounds.Top + 14);
+        nint bar = 0;
+        Assert.True(Desktop.WaitFor(() =>
+        {
+            bar = User32.GetAncestor(Desktop.TopWindowAt(grip), User32.GA_ROOT);
+            User32.GetWindowThreadProcessId(bar, out uint pid);
+            return bar != pip && pid == _app.Id && (Desktop.ExStyle(bar) & User32.WS_EX_NOACTIVATE) != 0;
+        }), "The title bar did not appear.");
+        Point goal = new(800, 180);
+        Desktop.Drag(grip, goal, bar);
+        Assert.True(Desktop.WaitFor(() =>
+        {
+            Rectangle moved = Desktop.BoundsOf(pip);
+            return Math.Abs(moved.Left - (goal.X - 60)) <= 2 && Math.Abs(moved.Top - (goal.Y - 14)) <= 2;
+        }), Desktop.BoundsOf(pip).ToString());
+        Assert.Equal(target.Handle, User32.GetForegroundWindow());
+        Rectangle title = Desktop.BoundsOf(bar);
+        Desktop.ClickOn(new Point(title.Right - 42, title.Top + 14), bar);
+        Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(pip)), "Minimize did not hide the view.");
+        Assert.True(User32.IsWindow(pip));
+        Assert.Equal(target.Handle, User32.GetForegroundWindow());
+        Hotkey(Keys.P, target);
+        Assert.True(Desktop.WaitFor(() => !User32.IsWindow(pip)), "The hotkey could not close a suspended view.");
+    }
 }

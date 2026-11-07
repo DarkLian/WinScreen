@@ -37,6 +37,23 @@ public sealed class PipPreviewGeometryTests
 public sealed class PipComfortTests
 {
     [Fact]
+    public void Ctrl_double_click_keeps_the_modifiers_from_the_press_after_Ctrl_is_released()
+    {
+        using var source = new TargetProcess(new Rectangle(240, 160, 400, 300));
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var view = new PipWindow(source.Handle, new WindowController([]));
+            view.ShowOnTop();
+            view.SetCrop(new Rectangle(200, 50, 100, 150));
+            nint point = (nint)((100 << 16) | 100);
+            // Native modifier bits reproduce queued input without holding the actual key during dispatch.
+            User32.SendMessageTimeout(view.Handle, 0x0203, 0x0009, point, 2, 100, out _);
+            User32.SendMessageTimeout(view.Handle, 0x0202, 0, point, 2, 100, out _);
+            Assert.Equal(Rectangle.Empty, view.Crop);
+        });
+    }
+
+    [Fact]
     public void Click_through_opacity_is_not_applied_twice_on_open_or_restore()
     {
         using var source = new TargetProcess(new Rectangle(240, 160, 400, 300), "C81E1E");

@@ -71,6 +71,7 @@ public sealed class PipWindow : Form
     private bool _escapeClaimed;
     private Point _dragStart;
     private bool _pressed;
+    private bool _controlAtPress;
     private bool _dragged;
     private bool _selecting;
     private bool _interacting;
@@ -559,6 +560,9 @@ public sealed class PipWindow : Form
 
     protected override void WndProc(ref Message m)
     {
+        // Keep the modifiers carried by the press. This inactive view may process it after Ctrl is released.
+        if (m.Msg is 0x0201 or 0x0203)
+            _controlAtPress = (m.WParam.ToInt64() & 0x0008) != 0; // MK_CONTROL
         if (m.Msg == WM_DISPLAYCHANGE || (m.Msg == 0x0218 && (m.WParam == 7 || m.WParam == 18)))
         {
             PipDisplay.InvalidateRefresh();
@@ -639,7 +643,7 @@ public sealed class PipWindow : Form
         _dragStart = e.Location;
         _pressed = true;
         _dragged = false;
-        if ((ModifierKeys & Keys.Control) != 0 && _thumbnail is not null)
+        if (_controlAtPress && _thumbnail is not null)
         {
             IPipRenderBackend view = _thumbnail;
             Attempt(() => BeginSelection(view));
@@ -704,7 +708,7 @@ public sealed class PipWindow : Form
                 SetCrop(part);
             }
         }
-        else if (!_dragged && (ModifierKeys & Keys.Control) == 0)
+        else if (!_dragged && !_controlAtPress)
         {
             Interact(e.Location);
         }
@@ -713,7 +717,7 @@ public sealed class PipWindow : Form
     protected override void OnMouseDoubleClick(MouseEventArgs e)
     {
         base.OnMouseDoubleClick(e);
-        if ((ModifierKeys & Keys.Control) == 0)
+        if (e.Button != MouseButtons.Left || !_controlAtPress)
             return;
         if (!ResetZoom())
             SetCrop(Rectangle.Empty);
