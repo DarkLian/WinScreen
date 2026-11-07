@@ -36,4 +36,14 @@ public sealed class LocalizationTests : IDisposable
         Assert.DoesNotContain("{0}", string.Format(UiText.T("{0} window(s) refused the change."), 3));
         Assert.NotEqual("Another app already uses: ", UiText.T("Another app already uses: "));
     }
+
+    [Theory]
+    [InlineData("zh-Hans", "其他应用已占用： ", "WinScreen 浮动锚点 - ")]
+    [InlineData("zh-Hant", "其他應用程式已占用： ", "WinScreen 浮動錨點 - ")]
+    public void Translated_prefixes_preserve_the_spaces_before_dynamic_content(string language, string conflictPrefix, string anchorPrefix)
+    {
+        UiText.Initialize(language);
+        Assert.Equal(conflictPrefix + "Ctrl+Alt+T", UiText.T("Another app already uses: ") + "Ctrl+Alt+T");
+        Assert.Equal(anchorPrefix + "ExampleProgram", UiText.T("WinScreen anchor - ") + "ExampleProgram");
+    }
 }

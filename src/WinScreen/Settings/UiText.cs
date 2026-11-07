@@ -23,7 +23,8 @@ public static class UiText
         ? Language switch { "zh-Hans" => pair[0], "zh-Hant" => pair[1], _ => text } : text;
 
     private static readonly Dictionary<string, string[]> Translations = Catalog.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-        .Select(line => line.Split('|')).ToDictionary(parts => parts[0], parts => parts[1..]);
+        // Raw string literals retain checkout line endings. Remove CR without trimming intentional label spaces.
+        .Select(line => line.TrimEnd('\r').Split('|')).ToDictionary(parts => parts[0], parts => parts[1..]);
 
     private const string Catalog = """
 Left: show • Right: minimize • Middle: close • Shift+right: menu|左键：显示 • 右键：最小化 • 中键：关闭 • Shift+右键：菜单|左鍵：顯示 • 右鍵：最小化 • 中鍵：關閉 • Shift+右鍵：選單
