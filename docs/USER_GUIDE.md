@@ -111,9 +111,10 @@ input cannot be made atomic with other applications; leave it off for sensitive 
 
 PiP usually keeps updating while its original is covered or hidden and closes when the original is destroyed.
 Browsers and apps built on them, such as Chrome, Edge and Discord, stop drawing while fully covered, so their view freezes.
-Choose **Hide original window** from the view's menu to keep them live: a hidden original stays above other windows,
-invisible and click-through, so it keeps drawing. Minimized apps show their last frame.
-A hidden original still appears in Alt-Tab and the taskbar; use **Hide original window** again to show it.
+Choose **Keep updating (hide original)** from the view's menu to keep them live: a hidden original stays above other windows,
+invisible and click-through, so it keeps drawing. Minimized apps show their last frame. The view then says **Source minimized**; click that note to keep it updating, or restore the app yourself.
+WinScreen never restores a window on its own while a view is open. Opening a view on a minimized window does restore it, and says so.
+A hidden original still appears in Alt-Tab and the taskbar; use **Keep updating (hide original)** again to show it.
 
 **Move away from text and images** looks for an emptier screen area about once per second. It stays still while the pointer
 is over the view and when no better spot exists. It estimates content by contrast rather than understanding text.
@@ -180,7 +181,8 @@ Press the shortcut on a window with no such changes to forget its program's save
 | General → Automatic updates | Opt-in download and install-on-exit behavior described below |
 | General → Experimental effects / Forward PiP clicks | Opt-in controls for effects still under validation |
 | General → Start when signing in | Starts WinScreen for your Windows user |
-| General → Pause new commands during games and full-screen apps | Stops new commands. Existing effects and hotkey assignments stay, and restoring windows still works |
+| General → Pause new commands during games and full-screen apps | Stops new commands. Existing effects and hotkey assignments stay, and restoring windows still works. Ctrl+Alt+P still closes the latest view |
+| General → Still allow opening Picture-in-Picture in full-screen apps | Lets Ctrl+Alt+P open views during borderless full-screen apps. Exclusive full-screen stays refused |
 | General → Pause pinning when maximized | Temporarily suspends pinning for maximized windows |
 | General → Solid on hover | Makes transparent windows solid while the pointer is over them |
 | General → Red border | Highlights pinned windows |
@@ -218,7 +220,7 @@ has it open, new changes pause until **Restore all windows** can read it. Exitin
 - Exiting WinScreen restores changed windows. After a forced termination or crash, the next start uses its recovery journal.
 - If a shortcut does nothing, check for conflicts in Settings, exclusions/inclusions, full-screen pause, or an elevated target app.
 - If an Anchor disappears but the app remains, it may have cancelled closing or hidden itself. Find the app on the taskbar or in Alt-Tab.
-- If a PiP view freezes, choose **Hide original window** from its menu. Apps can stop drawing while covered or minimized.
+- If a PiP view freezes, choose **Keep updating (hide original)** from its menu. Apps can stop drawing while covered or minimized.
 - If Settings looks unchanged after choosing a language, save, exit WinScreen, and reopen it.
 - Display scaling above 100%, multiple monitors, Windows 10, and real installed-version upgrades still need broader validation.
 
@@ -230,8 +232,8 @@ These are limits of the current version, listed so you can decide before you rel
 - **Testing so far:** one 1920×1080 display at 100% scaling. Multiple monitors, mixed scaling, and other Windows editions are unverified.
 - **Administrator apps:** WinScreen can't change windows running as administrator.
 - **Minimized apps:** a minimized app stops drawing, so its view shows the last picture. Windows gives WinScreen no new frames.
-- **Browsers and apps built on them:** these can stop drawing when another window fully covers them. **Hide original window** keeps them updating.
-- **Hide original window:** the original keeps running, stays in Alt-Tab and the taskbar, and appears above other windows when shown again.
+- **Browsers and apps built on them:** these can stop drawing when another window fully covers them. **Keep updating (hide original)** keeps them updating.
+- **Keep updating (hide original):** the original keeps running, stays in Alt-Tab and the taskbar, and appears above other windows when shown again.
 - **Exclusive full-screen games:** views can't reliably appear over them, and WinScreen will not hook into games to do so. Use borderless or windowed mode.
 - **Picture quality:** output is SDR. Protected video may appear black.
 - **PiP opacity:** a view fades toward black. It does not become see-through.
@@ -239,3 +241,5 @@ These are limits of the current version, listed so you can decide before you rel
 - **Text in PiP:** you can't select text inside a view.
 - **Click forwarding:** experimental, because focus and real input can't be made atomic with other apps. Leave it off for sensitive or unsaved work.
 - **Dark, Glass, and Crop:** results depend on how each app draws.
+- **Compatibility mode:** WinScreen can only tell that a source is minimized, not that it has otherwise stopped updating. In Advanced mode, **No new picture** can also mean the source is simply idle.
+- **Full-screen apps:** commands stay paused unless you opt in, but views can always be closed.

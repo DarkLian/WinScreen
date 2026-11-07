@@ -61,7 +61,7 @@ internal sealed class PipDiagnostics
             string Arrival(double p) => arrivals.Length == 0 ? "unavailable" : $"{arrivals[(int)((arrivals.Length - 1) * p)]:F2} ms";
             string result = $"Backend: {backend}; state: {state}; SDR\nSource: {Source}; target: {Target}\n";
             if (backend == PipBackendKind.DwmThumbnail)
-                result += "OS-managed cadence — capture timings unavailable\n";
+                result += "OS-managed cadence — capture timings unavailable; WinScreen can't tell whether the picture is current\n";
             else
                 result += $"Requested: {(requested == 0 ? "Match Monitor" : requested)}; source Hz: {sourceHz}; destination Hz: {targetHz}\n" +
                     $"Callback/accepted/presented FPS: {Received / seconds:F2}/{Accepted / seconds:F2}/{Presented / seconds:F2}; dropped: {Dropped + QueueDrops}\n" +

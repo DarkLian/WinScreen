@@ -23,7 +23,7 @@ internal sealed class DwmThumbnailBackend : IPipRenderBackend
     }
 
     public PipBackendKind Kind => PipBackendKind.DwmThumbnail;
-    public PipSessionState State => _disposed ? PipSessionState.Stopped : PipSessionState.Live;
+    public PipSessionState State => _disposed ? PipSessionState.Stopped : PipSessionState.Compositor;
     public Size SourceSize => _disposed ? Size.Empty : _thumbnail.SourceSize;
     public void SetViewport(Rectangle destination, Rectangle source)
     {

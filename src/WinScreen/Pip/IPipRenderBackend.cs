@@ -1,7 +1,8 @@
 namespace WinScreen.Pip;
 
 internal enum PipBackendKind { DwmThumbnail, WgcHardware, WgcSoftware }
-internal enum PipSessionState { Starting, Live, SourcePaused, Recovering, Fallback, Stopped, Failed }
+/// <summary><see cref="Compositor"/> means Windows owns the picture, so WinScreen can't say whether it's current.</summary>
+internal enum PipSessionState { Starting, Live, SourcePaused, Recovering, Fallback, Stopped, Failed, Compositor }
 
 /// <summary>Owns rendering only. Source identity, journal, input and HWND ownership stay in PipWindow.</summary>
 internal interface IPipRenderBackend : IDisposable

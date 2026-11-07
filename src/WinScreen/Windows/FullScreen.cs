@@ -1,6 +1,12 @@
 using System.Runtime.InteropServices;
+using WinScreen.Settings;
 
 namespace WinScreen.Windows;
+
+public enum FullScreenState { None, Busy, Exclusive, Presentation }
+
+/// <summary>What a command should do while a full-screen app is running.</summary>
+public enum FullScreenAction { Run, CloseLatestView, Refuse, ExplainExclusive }
 
 /// <summary>Tells when a game or other full-screen app is running.</summary>
 public static partial class FullScreen
@@ -12,9 +18,41 @@ public static partial class FullScreen
     [LibraryImport("shell32.dll")]
     private static partial int SHQueryUserNotificationState(out int state);
 
-    public static bool IsActive()
+    public static FullScreenState Current()
     {
-        return SHQueryUserNotificationState(out int state) == 0
-               && state is Busy or RunningFullScreenGame or PresentationMode;
+        if (SHQueryUserNotificationState(out int state) != 0)
+            return FullScreenState.None;
+        return state switch
+        {
+            Busy => FullScreenState.Busy,
+            RunningFullScreenGame => FullScreenState.Exclusive,
+            PresentationMode => FullScreenState.Presentation,
+            _ => FullScreenState.None,
+        };
+    }
+
+    public static bool IsActive() => Current() != FullScreenState.None;
+}
+
+/// <summary>
+/// Which commands go ahead during a full-screen app. Pausing stops new changes, but anything that only
+/// removes one of WinScreen's own views always works, so a view can never be left stuck over a game.
+/// </summary>
+public static class FullScreenPolicy
+{
+    /// <param name="targetHasView">The command would take away a view of the window it was aimed at.</param>
+    /// <param name="anyViewOpen">A view is open somewhere. A hotkey pressed in a game is aimed at the game, not at the view.</param>
+    public static FullScreenAction Decide(AppCommand command, FullScreenState state, bool pause, bool allowPip,
+        bool targetHasView, bool anyViewOpen)
+    {
+        if (state == FullScreenState.None || !pause || targetHasView)
+            return FullScreenAction.Run;
+        if (command != AppCommand.OpenPip)
+            return FullScreenAction.Refuse;
+        if (allowPip && state == FullScreenState.Busy)
+            return FullScreenAction.Run;
+        if (anyViewOpen)
+            return FullScreenAction.CloseLatestView;
+        return state == FullScreenState.Exclusive ? FullScreenAction.ExplainExclusive : FullScreenAction.Refuse;
     }
 }

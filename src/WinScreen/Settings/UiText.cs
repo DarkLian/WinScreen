@@ -134,7 +134,6 @@ public static class UiText
                                    Click-through off|已关闭鼠标穿透|已關閉滑鼠穿透
                                    Some windows couldn't be restored|部分窗口无法还原|部分視窗無法還原
                                    {0} window(s) refused the change.|{0} 个窗口拒绝了更改。|{0} 個視窗拒絕了變更。
-                                   &Hide original window|隐藏原窗口(&H)|隱藏原視窗(&H)
                                    &Move away from text and images|避开文字和图像(&M)|避開文字和影像(&M)
                                    &Go to original window|切换到原窗口(&G)|切換到原視窗(&G)
                                    &Remove crop|取消裁剪(&R)|取消裁切(&R)
@@ -214,5 +213,11 @@ public static class UiText
                                    The source has no drawable preview surface.|原窗口没有可显示的预览内容。|原視窗沒有可顯示的預覽內容。
                                    Click: go to the original • Drag: move • Wheel: resize • Ctrl+drag: crop • Right-click: menu|点击：转到原窗口 • 拖动：移动 • 滚轮：调整大小 • Ctrl+拖动：裁剪 • 右键：菜单|點選：前往原視窗 • 拖曳：移動 • 滾輪：調整大小 • Ctrl+拖曳：裁切 • 右鍵：選單
                                    Click: show the window • Drag: move • Right-click: menu|点击：显示窗口 • 拖动：移动 • 右键：菜单|點選：顯示視窗 • 拖曳：移動 • 右鍵：選單
+                                   &Keep updating (hide original)|保持更新（隐藏原窗口）(&K)|保持更新（隱藏原視窗）(&K)
+                                   Source minimized. Click to keep updating|原窗口已最小化。点击以保持更新|原視窗已最小化。點選以保持更新
+                                   No new picture|没有新画面|沒有新畫面
+                                   "{0}" was minimized, so it was restored to start its view.|“{0}”已最小化，因此已将其还原以开始预览。|「{0}」已最小化，因此已將其還原以開始預覽。
+                                   Still allow opening Picture-in-Picture in full-screen apps|仍允许在全屏应用中打开画中画|仍允許在全螢幕應用程式中開啟子母畫面
+                                   Views can't reliably appear over exclusive full-screen apps. Use borderless or windowed mode.|预览无法可靠地显示在独占全屏应用上方。请使用无边框或窗口模式。|預覽無法可靠地顯示在獨占全螢幕應用程式上方。請使用無邊框或視窗模式。
                                    """;
 }

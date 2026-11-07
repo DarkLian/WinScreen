@@ -34,7 +34,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     internal event Action<string>? Problem;
     public PipBackendKind Kind => _active ? _advanced!.Kind : PipBackendKind.DwmThumbnail;
     public PipSessionState State => _disposed ? PipSessionState.Stopped : _active ? _advanced!.State :
-        _policy.Pinned ? PipSessionState.Fallback : _advanced is not null ? PipSessionState.Starting : PipSessionState.Live;
+        _policy.Pinned ? PipSessionState.Fallback : _advanced is not null ? PipSessionState.Starting : PipSessionState.Compositor;
     // Existing UI uses DWM window-surface coordinates. WGC coordinates are translated at the boundary below.
     public Size SourceSize => _dwm.SourceSize;
     internal bool CanRetry => _policy.Pinned && _preferences.Backend != PipBackendPreference.Dwm &&

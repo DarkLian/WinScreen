@@ -60,6 +60,9 @@ public sealed class SettingsWindow : Form
     private readonly CheckBox _pauseInFullScreen =
         new() { Text = T("Pause new commands during games and full-screen apps"), AutoSize = true };
 
+    private readonly CheckBox _allowPip =
+        new() { Text = T("Still allow opening Picture-in-Picture in full-screen apps"), AutoSize = true };
+
     private readonly CheckBox _pausePin = new()
         { Text = T("Pause pinning while a pinned window is maximized"), AutoSize = true };
 
@@ -176,6 +179,7 @@ public sealed class SettingsWindow : Form
         draft.StartWithWindows = _startWithWindows.Checked;
         draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
         draft.PauseInFullScreen = _pauseInFullScreen.Checked;
+        draft.AllowPipInFullScreen = _allowPip.Checked;
         draft.PausePinWhenMaximized = _pausePin.Checked;
         draft.OpaqueOnHover = _opaqueOnHover.Checked;
         draft.HighlightPinned = _highlightPinned.Checked;
@@ -282,6 +286,7 @@ public sealed class SettingsWindow : Form
             nameof(AppSettings.ExperimentalFeatures) => _experimental,
             nameof(AppSettings.PipClickForwarding) => _pipInput,
             nameof(AppSettings.PauseInFullScreen) => _pauseInFullScreen,
+            nameof(AppSettings.AllowPipInFullScreen) => _allowPip,
             nameof(AppSettings.PausePinWhenMaximized) => _pausePin,
             nameof(AppSettings.OpaqueOnHover) => _opaqueOnHover,
             nameof(AppSettings.HighlightPinned) => _highlightPinned,
@@ -306,6 +311,7 @@ public sealed class SettingsWindow : Form
         _pipInput.Checked = _settings.PipClickForwarding;
         _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, _settings.Language));
         _pauseInFullScreen.Checked = _settings.PauseInFullScreen;
+        _allowPip.Checked = _settings.AllowPipInFullScreen;
         _pausePin.Checked = _settings.PausePinWhenMaximized;
         _opaqueOnHover.Checked = _settings.OpaqueOnHover;
         _highlightPinned.Checked = _settings.HighlightPinned;
@@ -391,7 +397,7 @@ public sealed class SettingsWindow : Form
         var page = new FlowLayoutPanel
             { FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true };
         page.Controls.Add(Section(T("Startup and updates"), startup.ToArray()));
-        page.Controls.Add(Section(T("Windows"), _showToolbar, _pauseInFullScreen, _pausePin, _opaqueOnHover,
+        page.Controls.Add(Section(T("Windows"), _showToolbar, _pauseInFullScreen, _allowPip, _pausePin, _opaqueOnHover,
             _highlightPinned, opacity));
         page.Controls.Add(Section(T("Experimental"), _experimental, _pipInput, _pipAutoMove,
             Note(T("Views that move themselves don't appear in screenshots or screen sharing."))));

@@ -29,6 +29,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly ActionFlash _flash = new();
     private readonly Dictionary<nint, ShrinkTile> _shrunk = [];
     private readonly Dictionary<nint, PipWindow> _pips = [];
+    private readonly List<PipWindow> _viewsInOrder = [];
     private readonly Dictionary<nint, WindowIdentity> _setupDone = [];
     private readonly Dictionary<nint, long> _setupRetryAt = [];
     private readonly ToolStripMenuItem _targetTitle = new() { Enabled = false };
@@ -137,7 +138,8 @@ public sealed class TrayApplication : ApplicationContext
                     continue;
                 item.Checked = _menuWindow != 0 && IsOn(action, _menuWindow);
                 item.Enabled = _menuWindow != 0 && (action == AppCommand.RestoreWindow ||
-                                                    (!Paused && _windows.CanControl(_menuWindow)));
+                                                    (FullScreenDecision(action, _menuWindow) == FullScreenAction.Run &&
+                                                     _windows.CanControl(_menuWindow)));
             }
         };
         return menu;
@@ -264,6 +266,19 @@ public sealed class TrayApplication : ApplicationContext
         string.Join(Environment.NewLine, problems.Select(problem => problem.Message));
 
     private bool Paused => _settings.PauseInFullScreen && FullScreen.IsActive();
+
+    private FullScreenAction FullScreenDecision(AppCommand command, nint window)
+    {
+        bool targetHasView = command switch
+        {
+            AppCommand.OpenPip => _pips.ContainsKey(window),
+            AppCommand.ToggleShrink => _shrunk.ContainsKey(window),
+            AppCommand.ToggleAnchor => _anchors.Has(window),
+            _ => false,
+        };
+        return FullScreenPolicy.Decide(command, FullScreen.Current(), _settings.PauseInFullScreen,
+            _settings.AllowPipInFullScreen, targetHasView, _viewsInOrder.Count > 0);
+    }
 
     private bool CanUseToolbar(nint window)
     {
@@ -534,10 +549,18 @@ public sealed class TrayApplication : ApplicationContext
         }
 
         bool recovery = command is AppCommand.RestoreAll or AppCommand.RestoreWindow;
-        if (!recovery && Paused)
+        switch (recovery ? FullScreenAction.Run : FullScreenDecision(command, window))
         {
-            Alert(T("WinScreen couldn't do that"), T("Commands are paused while a full-screen app is running."));
-            return;
+            case FullScreenAction.CloseLatestView:
+                _viewsInOrder[^1].Close();
+                return;
+            case FullScreenAction.ExplainExclusive:
+                Alert(T("WinScreen couldn't do that"),
+                    T("Views can't reliably appear over exclusive full-screen apps. Use borderless or windowed mode."));
+                return;
+            case FullScreenAction.Refuse:
+                Alert(T("WinScreen couldn't do that"), T("Commands are paused while a full-screen app is running."));
+                return;
         }
 
         if (!recovery && _windows.Refusal(window) is { } refusal)
@@ -590,8 +613,14 @@ public sealed class TrayApplication : ApplicationContext
                         AllowAutoMove = _settings.ExperimentalFeatures,
                     };
                     _pips[window] = pip;
-                    pip.FormClosed += (_, _) => _pips.Remove(window);
+                    _viewsInOrder.Add(pip);
+                    pip.FormClosed += (_, _) =>
+                    {
+                        _pips.Remove(window);
+                        _viewsInOrder.Remove(pip);
+                    };
                     pip.Problem += text => Alert(T("WinScreen couldn't do that"), text);
+                    pip.Notice += text => Alert(T("Picture-in-Picture"), text, ToolTipIcon.Info);
                     pip.ApplyPipPreferences(_settings.Pip);
                     pip.ShowOnTop();
                     if (pip.IsDisposed) break;

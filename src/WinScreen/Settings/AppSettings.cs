@@ -132,6 +132,7 @@ public sealed class AppSettings
     public bool AutomaticUpdates { get; set; }
     public string Language { get; set; } = "system";
     public bool PauseInFullScreen { get; set; } = true;
+    public bool AllowPipInFullScreen { get; set; }
     public bool PausePinWhenMaximized { get; set; }
     public bool OpaqueOnHover { get; set; }
     public bool HighlightPinned { get; set; }

@@ -40,6 +40,7 @@ public sealed class PipWindow : Form
     private readonly ContextMenuStrip _menu = new();
     private readonly ToolTip _tips = new() { ShowAlways = true };
     private PipCloseButton? _closeButton;
+    private PipStateChip? _chip;
     private PipBackendSelector? _thumbnail;
     private PipPreferences _preferences = new() { Backend = PipBackendPreference.Dwm };
     private ToolStripMenuItem _retryItem = null!;
@@ -79,7 +80,7 @@ public sealed class PipWindow : Form
         _tips.SetToolTip(this,
             T("Click: go to the original • Drag: move • Wheel: resize • Ctrl+drag: crop • Right-click: menu"));
 
-        _hideItem = new ToolStripMenuItem(T("&Hide original window"), null,
+        _hideItem = new ToolStripMenuItem(T("&Keep updating (hide original)"), null,
             (_, _) => SetOriginalHidden(!_hideItem!.Checked));
         _autoMoveItem = new ToolStripMenuItem(T("&Move away from text and images"), null,
             (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
@@ -111,6 +112,9 @@ public sealed class PipWindow : Form
     /// <summary>Raised when Windows refuses something, with a message for the person.</summary>
     public event Action<string>? Problem;
 
+    /// <summary>Raised for something the person should know that isn't a failure.</summary>
+    public event Action<string>? Notice;
+
     /// <summary>The part of the source window being shown; empty means all of it.</summary>
     public Rectangle Crop => _crop;
 
@@ -134,8 +138,10 @@ public sealed class PipWindow : Form
     public void ShowOnTop()
     {
         _identity.Require();
-        if (User32.IsIconic(_source))
-            User32.ShowWindow(_source, User32.SW_RESTORE);
+        // A minimized window has no shape or picture to show, so opening a view needs it back, and says so.
+        bool restored = User32.IsIconic(_source);
+        if (restored)
+            User32.ShowWindow(_source, User32.SW_SHOWNOACTIVATE);
         try
         {
             _thumbnail = new PipBackendSelector(_identity, Handle, _preferences);
@@ -146,6 +152,9 @@ public sealed class PipWindow : Form
             if ((User32.GetWindowLongPtr(Handle, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) == 0)
                 WindowController.Pin(Handle);
             _watch.Start();
+            if (restored)
+                Notice?.Invoke(string.Format(T("\"{0}\" was minimized, so it was restored to start its view."),
+                    WindowInfo.Title(_source)));
         }
         catch
         {
@@ -405,6 +414,7 @@ public sealed class PipWindow : Form
             SetOriginalHidden(false);
         _tips.Dispose();
         _closeButton?.Dispose();
+        _chip?.Dispose();
         _menu.Dispose();
     }
 
@@ -643,6 +653,7 @@ public sealed class PipWindow : Form
         if (_pressed && MouseButtons == MouseButtons.None)
             CancelPress();
         FollowPointer();
+        ShowState();
 
         if (_interacting && ShouldEndInteraction())
             EndInteraction();
@@ -679,6 +690,38 @@ public sealed class PipWindow : Form
         _closeButton.Show();
         User32.SetWindowPos(_closeButton.Handle, User32.HWND_TOPMOST, 0, 0, 0, 0,
             User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+    }
+
+    /// <summary>Says when the picture may be out of date, without claiming more than WinScreen can tell.</summary>
+    private void ShowState()
+    {
+        PipChipState state = PipStateChip.Decide(User32.IsIconic(_source), BackendState,
+            Bounds.Contains(Cursor.Position), _interacting || _selecting || _pressed);
+        if (state == PipChipState.None)
+        {
+            _chip?.Hide();
+            return;
+        }
+
+        if (_chip is null)
+        {
+            _chip = new PipStateChip(this);
+            _chip.Chosen += KeepUpdating;
+        }
+
+        _chip.Show(state, new Point(Left + PipGeometry.Border, Bottom - PipGeometry.Border));
+    }
+
+    /// <summary>
+    /// The person's way out of a minimized source: conceal it first so it never flashes up, then bring it
+    /// back without taking the focus. Only a click on the chip does this, never WinScreen by itself.
+    /// </summary>
+    internal void KeepUpdating()
+    {
+        SetOriginalHidden(true);
+        if (_hideItem.Checked && User32.IsIconic(_source))
+            User32.ShowWindow(_source, User32.SW_SHOWNOACTIVATE);
+        StayOnTop();
     }
 
     /// <summary>Leaves the view alone while it's being used; the mouse over it means it's wanted there.</summary>
