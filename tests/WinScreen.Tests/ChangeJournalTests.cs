@@ -47,7 +47,8 @@ public class ChangeJournalTests
     {
         string path = MissingFolder();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, "[{\"Window\":1,\"ProcessId\":2,\"ExStyle\":3,\"HadLayeredAttributes\":false,\"ColorKey\":0,\"Alpha\":255,\"LayeredFlags\":0,\"Placement\":null}]");
+        File.WriteAllText(path,
+            "[{\"Window\":1,\"ProcessId\":2,\"ExStyle\":3,\"HadLayeredAttributes\":false,\"ColorKey\":0,\"Alpha\":255,\"LayeredFlags\":0,\"Placement\":null}]");
 
         Assert.False(Assert.Single(new ChangeJournal(path).Load()).Cropped);
         new ChangeJournal(path).Save([]);
@@ -59,8 +60,30 @@ public class ChangeJournalTests
         string path = MissingFolder();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, "not json");
+        var journal = new ChangeJournal(path);
 
-        Assert.Empty(new ChangeJournal(path).Load());
+        Assert.Empty(journal.Load());
+        Assert.False(journal.ReadFailed);
+        Assert.False(File.Exists(path));
+        Assert.Equal("not json", File.ReadAllText(journal.DamagedBackup!));
+    }
+
+    [Fact]
+    public void A_file_locked_for_a_moment_is_left_in_place_for_a_retry()
+    {
+        string path = MissingFolder();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "[]");
+        var journal = new ChangeJournal(path);
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Empty(journal.Load());
+            Assert.True(journal.ReadFailed);
+        }
+
+        Assert.Empty(journal.Load());
+        Assert.False(journal.ReadFailed);
+        Assert.Null(journal.DamagedBackup);
     }
 
     [Fact]
@@ -68,7 +91,8 @@ public class ChangeJournalTests
     {
         string path = MissingFolder();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, "[null,{\"Window\":\"bad\",\"ProcessId\":2},{\"Window\":1,\"ProcessId\":2,\"Placement\":[1,2]}," +
+        File.WriteAllText(path,
+            "[null,{\"Window\":\"bad\",\"ProcessId\":2},{\"Window\":1,\"ProcessId\":2,\"Placement\":[1,2]}," +
             "{\"Window\":3,\"ProcessId\":4,\"Placement\":null}]");
         var valid = Assert.Single(new ChangeJournal(path).Load());
         Assert.Equal(3, valid.Window);

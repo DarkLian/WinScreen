@@ -13,13 +13,22 @@ public sealed class UpdateSecurityTests
     private static VelopackAsset Asset(byte[] bytes) => new()
     {
         PackageId = "WinScreen", Version = SemanticVersion.Parse("0.4.2"), Type = VelopackAssetType.Full,
-        FileName = "WinScreen-0.4.2-full.nupkg", Size = bytes.Length, SHA256 = Convert.ToHexString(SHA256.HashData(bytes)),
+        FileName = "WinScreen-0.4.2-full.nupkg", Size = bytes.Length,
+        SHA256 = Convert.ToHexString(SHA256.HashData(bytes)),
     };
 
-    private static byte[] Feed(VelopackAsset asset) => Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new
-    {
-        Assets = new[] { new { asset.PackageId, Version = asset.Version.ToString(), Type = asset.Type.ToString(), asset.FileName, asset.Size, asset.SHA256 } },
-    }));
+    private static byte[] Feed(VelopackAsset asset) => Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(
+        new
+        {
+            Assets = new[]
+            {
+                new
+                {
+                    asset.PackageId, Version = asset.Version.ToString(), Type = asset.Type.ToString(), asset.FileName,
+                    asset.Size, asset.SHA256
+                }
+            },
+        }));
 
     [Fact]
     public void Authentic_feed_passes_but_tampering_wrong_key_and_missing_signatures_fail()
@@ -30,7 +39,8 @@ public sealed class UpdateSecurityTests
         byte[] signature = key.SignData(feed, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
         string publicKey = key.ExportSubjectPublicKeyInfoPem();
         Assert.Single(UpdateSecurity.VerifyFeed(feed, signature, publicKey).Assets);
-        Assert.Throws<CryptographicException>(() => UpdateSecurity.VerifyFeed(feed, signature, impostor.ExportSubjectPublicKeyInfoPem()));
+        Assert.Throws<CryptographicException>(() =>
+            UpdateSecurity.VerifyFeed(feed, signature, impostor.ExportSubjectPublicKeyInfoPem()));
         signature[0] ^= 1;
         Assert.Throws<CryptographicException>(() => UpdateSecurity.VerifyFeed(feed, signature, publicKey));
         Assert.Throws<InvalidDataException>(() => UpdateSecurity.VerifyFeed(feed, [], publicKey));
@@ -83,11 +93,16 @@ public sealed class UpdateSecurityTests
             await File.WriteAllBytesAsync(path, bytes);
             await UpdateSecurity.VerifyPackage(path, asset, CancellationToken.None);
             await File.WriteAllBytesAsync(path, [3, 2, 1]);
-            await Assert.ThrowsAsync<CryptographicException>(() => UpdateSecurity.VerifyPackage(path, asset, CancellationToken.None));
+            await Assert.ThrowsAsync<CryptographicException>(() =>
+                UpdateSecurity.VerifyPackage(path, asset, CancellationToken.None));
             await File.WriteAllBytesAsync(path, [1]);
-            await Assert.ThrowsAsync<InvalidDataException>(() => UpdateSecurity.VerifyPackage(path, asset, CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                UpdateSecurity.VerifyPackage(path, asset, CancellationToken.None));
         }
-        finally { File.Delete(path); }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Theory]
@@ -108,7 +123,9 @@ public sealed class UpdateSecurityTests
     private sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
         internal int Requests;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
         {
             Requests++;
             return Task.FromResult(respond(request));
@@ -130,7 +147,8 @@ public sealed class UpdateSecurityTests
             return response;
         });
         using var transport = new UpdateTransport("owner/repo", handler);
-        await Assert.ThrowsAsync<InvalidDataException>(() => transport.Read(new Uri("https://github.com/owner/repo/releases/feed"), 100, CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            transport.Read(new Uri("https://github.com/owner/repo/releases/feed"), 100, CancellationToken.None));
         Assert.Equal(1, handler.Requests);
     }
 
@@ -142,7 +160,19 @@ public sealed class UpdateSecurityTests
             Content = new StreamContent(new UnknownLengthStream(new byte[101])),
         });
         using var transport = new UpdateTransport("owner/repo", handler);
-        await Assert.ThrowsAsync<InvalidDataException>(() => transport.Read(new Uri("https://github.com/owner/repo/releases/feed"), 100, CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            transport.Read(new Uri("https://github.com/owner/repo/releases/feed"), 100, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_repository_with_no_releases_yet_means_no_update_rather_than_a_failure()
+    {
+        using var key = RSA.Create(3072);
+        var handler = new Handler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        using var transport = new UpdateTransport("owner/repo", handler);
+        var source = new SignedUpdateSource("owner/repo", key.ExportSubjectPublicKeyInfoPem(), transport,
+            CancellationToken.None);
+        Assert.Empty((await source.GetReleaseFeed(null!, "WinScreen", "win")).Assets);
     }
 
     [Fact]
@@ -164,20 +194,24 @@ public sealed class UpdateSecurityTests
                 redirect.Headers.Location = new Uri("https://github.com/owner/repo/releases/tag/v0.4.2");
                 return redirect;
             }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(request.RequestUri.AbsolutePath.EndsWith(".sig") ? signature :
-                    request.RequestUri.AbsolutePath.EndsWith(".json") ? feed : corrupt ? [3, 2, 1] : package),
+                    request.RequestUri.AbsolutePath.EndsWith(".json") ? feed :
+                    corrupt ? [3, 2, 1] : package),
             };
         });
         using var transport = new UpdateTransport("owner/repo", handler);
-        var source = new SignedUpdateSource("owner/repo", key.ExportSubjectPublicKeyInfoPem(), transport, CancellationToken.None);
+        var source = new SignedUpdateSource("owner/repo", key.ExportSubjectPublicKeyInfoPem(), transport,
+            CancellationToken.None);
         await Assert.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, "WrongApp", "win"));
         await Assert.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, "WinScreen", "beta"));
         string path = Path.GetTempFileName();
         try
         {
-            await Assert.ThrowsAsync<InvalidDataException>(() => source.DownloadReleaseEntry(null!, asset, path, _ => { }, CancellationToken.None));
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                source.DownloadReleaseEntry(null!, asset, path, _ => { }, CancellationToken.None));
             var verified = await source.GetReleaseFeed(null!, "WinScreen", "win");
             Assert.Contains("/owner/repo/releases/download/v0.4.2/releases.win.json", requested);
             Assert.Contains("/owner/repo/releases/download/v0.4.2/releases.win.json.sig", requested);
@@ -186,10 +220,14 @@ public sealed class UpdateSecurityTests
             await source.DownloadReleaseEntry(null!, asset, path, _ => { }, CancellationToken.None);
             Assert.Equal(package, await File.ReadAllBytesAsync(path));
             corrupt = true;
-            await Assert.ThrowsAsync<CryptographicException>(() => source.DownloadReleaseEntry(null!, asset, path, _ => { }, CancellationToken.None));
+            await Assert.ThrowsAsync<CryptographicException>(() =>
+                source.DownloadReleaseEntry(null!, asset, path, _ => { }, CancellationToken.None));
             Assert.False(File.Exists(path));
         }
-        finally { File.Delete(path); }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Theory]
@@ -211,8 +249,9 @@ public sealed class UpdateSecurityTests
                 redirect.Headers.Location = new Uri("https://github.com/owner/repo/releases/tag/v" + version);
                 return redirect;
             }
+
             return new HttpResponseMessage(HttpStatusCode.OK)
-            { Content = new ByteArrayContent(request.RequestUri.AbsolutePath.EndsWith(".sig") ? signature : feed) };
+                { Content = new ByteArrayContent(request.RequestUri.AbsolutePath.EndsWith(".sig") ? signature : feed) };
         });
         using var transport = new UpdateTransport("owner/repo", handler);
         string directory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
@@ -220,10 +259,15 @@ public sealed class UpdateSecurityTests
         try
         {
             var locator = new TestVelopackLocator("WinScreen", "0.4.1", directory);
-            var manager = new UpdateManager(new SignedUpdateSource("owner/repo", key.ExportSubjectPublicKeyInfoPem(), transport, CancellationToken.None),
+            var manager = new UpdateManager(
+                new SignedUpdateSource("owner/repo", key.ExportSubjectPublicKeyInfoPem(), transport,
+                    CancellationToken.None),
                 new UpdateOptions { AllowVersionDowngrade = false, ExplicitChannel = "win" }, locator);
             Assert.Equal(available, await manager.CheckForUpdatesAsync() is not null);
         }
-        finally { Directory.Delete(directory, true); }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
     }
 }

@@ -17,7 +17,8 @@ public sealed class LocalizationTests : IDisposable
     [InlineData("system", "zh-MO", "zh-Hant", "設定")]
     [InlineData("en", "zh-TW", "en", "Settings")]
     [InlineData("unknown", "zh-TW", "en", "Settings")]
-    public void Language_choice_overrides_system_and_falls_back_to_English(string choice, string system, string expected, string settings)
+    public void Language_choice_overrides_system_and_falls_back_to_English(string choice, string system,
+        string expected, string settings)
     {
         UiText.Initialize(choice, system);
         Assert.Equal(expected, UiText.Language);
@@ -40,7 +41,8 @@ public sealed class LocalizationTests : IDisposable
     [Theory]
     [InlineData("zh-Hans", "其他应用已占用： ", "WinScreen 浮动锚点 - ")]
     [InlineData("zh-Hant", "其他應用程式已占用： ", "WinScreen 浮動錨點 - ")]
-    public void Translated_prefixes_preserve_the_spaces_before_dynamic_content(string language, string conflictPrefix, string anchorPrefix)
+    public void Translated_prefixes_preserve_the_spaces_before_dynamic_content(string language, string conflictPrefix,
+        string anchorPrefix)
     {
         UiText.Initialize(language);
         Assert.Equal(conflictPrefix + "Ctrl+Alt+T", UiText.T("Another app already uses: ") + "Ctrl+Alt+T");

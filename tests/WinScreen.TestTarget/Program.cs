@@ -19,7 +19,7 @@ internal static class Program
 
         var window = new TargetForm(
             new Rectangle(int.Parse(Get("--left", "200")), int.Parse(Get("--top", "200")),
-                          int.Parse(Get("--width", "400")), int.Parse(Get("--height", "300"))),
+                int.Parse(Get("--width", "400")), int.Parse(Get("--height", "300"))),
             Get("--title", "WinScreen test target"),
             Get("--colors", "C81E1E"));
 
@@ -38,8 +38,15 @@ internal static class Program
                         window.BeginInvoke(() => window.SetColors(parts[1]));
                     if (parts[0] == "layered")
                         window.BeginInvoke(window.CreateUnattributedLayeredWindow);
+                    if (parts[0] == "titlebar")
+                        window.BeginInvoke(window.UseTitleBar);
                     if (parts[0] == "hang")
-                        window.BeginInvoke(() => { Console.WriteLine("hung"); Console.Out.Flush(); Thread.Sleep(10000); });
+                        window.BeginInvoke(() =>
+                        {
+                            Console.WriteLine("hung");
+                            Console.Out.Flush();
+                            Thread.Sleep(10000);
+                        });
                 }
 
                 window.BeginInvoke(window.Close);
@@ -57,6 +64,13 @@ internal sealed partial class TargetForm : Form
     private static partial nint CreateWindowEx(uint exStyle, string className, string title, uint style,
         int x, int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
 
+    /// <summary>A borderless window has no title bar to ask about, so the top strip claims to be one.</summary>
+    public void UseTitleBar()
+    {
+        _hasTitleBar = true;
+        Report("titlebar");
+    }
+
     public void CreateUnattributedLayeredWindow()
     {
         // Native STATIC avoids WinForms automatically calling SetLayeredWindowAttributes on style changes.
@@ -64,11 +78,16 @@ internal sealed partial class TargetForm : Form
             700, 200, 100, 100, 0, 0, 0, 0);
         Report("layered " + layered.ToInt64());
     }
+
     private const int WM_INPUT = 0x00FF;
+    private const int WM_NCHITTEST = 0x0084;
+    private const int HTCAPTION = 2;
+    private const int TitleBarHeight = 34;
     private const int RealInputWindowMilliseconds = 250;
 
     private Color[] _colors = [];
     private DateTime _lastRawInput = DateTime.MinValue;
+    private bool _hasTitleBar;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RawInputDevice
@@ -101,10 +120,10 @@ internal sealed partial class TargetForm : Form
         base.OnHandleCreated(e);
         const ushort desktopControls = 1, mouse = 2, keyboard = 6;
         RegisterRawInputDevices(
-            [
-                new RawInputDevice { UsagePage = desktopControls, Usage = mouse, Target = Handle },
-                new RawInputDevice { UsagePage = desktopControls, Usage = keyboard, Target = Handle },
-            ], 2, (uint)Marshal.SizeOf<RawInputDevice>());
+        [
+            new RawInputDevice { UsagePage = desktopControls, Usage = mouse, Target = Handle },
+            new RawInputDevice { UsagePage = desktopControls, Usage = keyboard, Target = Handle },
+        ], 2, (uint)Marshal.SizeOf<RawInputDevice>());
     }
 
     protected override void WndProc(ref Message m)
@@ -112,6 +131,12 @@ internal sealed partial class TargetForm : Form
         if (m.Msg == WM_INPUT)
             _lastRawInput = DateTime.UtcNow;
         base.WndProc(ref m);
+        if (m.Msg == WM_NCHITTEST && _hasTitleBar)
+        {
+            int y = (short)(m.LParam.ToInt64() >> 16);
+            if (y - Top < TitleBarHeight)
+                m.Result = HTCAPTION;
+        }
     }
 
     protected override void OnMouseDown(MouseEventArgs e)

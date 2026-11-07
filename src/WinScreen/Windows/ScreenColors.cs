@@ -9,25 +9,27 @@ public static class ScreenColors
     {
         try
         {
-        using var bitmap = new Bitmap(area.Width, area.Height);
-        using (Graphics graphics = Graphics.FromImage(bitmap))
-            graphics.CopyFromScreen(area.Location, Point.Empty, area.Size);
+            using var bitmap = new Bitmap(area.Width, area.Height);
+            using (Graphics graphics = Graphics.FromImage(bitmap))
+                graphics.CopyFromScreen(area.Location, Point.Empty, area.Size);
 
-        var counts = new Dictionary<int, int>();
-        for (int y = 0; y < bitmap.Height; y += Step)
-        {
-            for (int x = 0; x < bitmap.Width; x += Step)
+            var counts = new Dictionary<int, int>();
+            for (int y = 0; y < bitmap.Height; y += Step)
             {
-                int color = bitmap.GetPixel(x, y).ToArgb();
-                counts[color] = counts.GetValueOrDefault(color) + 1;
+                for (int x = 0; x < bitmap.Width; x += Step)
+                {
+                    int color = bitmap.GetPixel(x, y).ToArgb();
+                    counts[color] = counts.GetValueOrDefault(color) + 1;
+                }
             }
-        }
 
-        return Color.FromArgb(counts.MaxBy(pair => pair.Value).Key);
+            return Color.FromArgb(counts.MaxBy(pair => pair.Value).Key);
         }
-        catch (Exception e) when (e is System.Runtime.InteropServices.ExternalException or ArgumentException or InvalidOperationException)
+        catch (Exception e) when (e is System.Runtime.InteropServices.ExternalException or ArgumentException
+                                      or InvalidOperationException)
         {
-            throw new WindowOperationException("The screen could not be sampled for Glass. The window was not changed: " + e.Message);
+            throw new WindowOperationException(
+                Settings.UiText.T("The screen could not be sampled for Glass. The window was not changed: ") + e.Message);
         }
     }
 }

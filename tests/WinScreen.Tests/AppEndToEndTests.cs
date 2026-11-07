@@ -36,8 +36,11 @@ public sealed class AppEndToEndTests : IDisposable
 
     public AppEndToEndTests()
     {
-        Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0, "Close the running WinScreen before these tests.");
-        new AppSettings { ExperimentalFeatures = true, PipClickForwarding = true }.Save(Path.Combine(_data, "settings.json"));
+        Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0,
+            "Close the running WinScreen before these tests.");
+        var settings = new AppSettings { ExperimentalFeatures = true, PipClickForwarding = true };
+        settings.Hotkeys[AppCommand.SaveWindowSetup] = "Ctrl+Alt+S"; // The Hotkey helper presses Ctrl+Alt+key.
+        settings.Save(Path.Combine(_data, "settings.json"));
         _app = Start();
         nint window = 0;
         Assert.True(Desktop.WaitFor(() =>
@@ -105,7 +108,8 @@ public sealed class AppEndToEndTests : IDisposable
 
     private static Rectangle Near(Rectangle window, int partsOfFour)
     {
-        return new Rectangle(window.Left + window.Width * partsOfFour / 4 - 10, window.Top + window.Height / 2 - 10, 20, 20);
+        return new Rectangle(window.Left + window.Width * partsOfFour / 4 - 10, window.Top + window.Height / 2 - 10, 20,
+            20);
     }
 
     [Fact]
@@ -116,7 +120,8 @@ public sealed class AppEndToEndTests : IDisposable
         Focus(target);
 
         Hotkey(Keys.T, target);
-        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST) != 0), "Ctrl+Alt+T didn't pin.");
+        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST) != 0),
+            "Ctrl+Alt+T didn't pin.");
 
         Hotkey(Keys.Down, target);
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 229), "Ctrl+Alt+Down didn't lower opacity.");
@@ -125,10 +130,12 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 255), "Ctrl+Alt+Up didn't raise opacity.");
 
         Hotkey(Keys.C, target);
-        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TRANSPARENT) != 0), "Ctrl+Alt+C didn't set click-through.");
+        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TRANSPARENT) != 0),
+            "Ctrl+Alt+C didn't set click-through.");
 
         Hotkey(Keys.R, target);
-        Assert.True(Desktop.WaitFor(() => Desktop.ExStyle(target.Handle) == before), "Ctrl+Alt+R didn't restore the window.");
+        Assert.True(Desktop.WaitFor(() => Desktop.ExStyle(target.Handle) == before),
+            "Ctrl+Alt+R didn't restore the window.");
     }
 
     [Fact]
@@ -142,7 +149,8 @@ public sealed class AppEndToEndTests : IDisposable
         Focus(target);
         Hotkey(Keys.F21, target);
 
-        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST) != 0), "The new hotkey didn't pin.");
+        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST) != 0),
+            "The new hotkey didn't pin.");
     }
 
     [Fact]
@@ -154,31 +162,39 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)));
 
         Hotkey(Keys.D, target);
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.Black)), $"Dark mode showed {Desktop.ColorOnScreen(sample)}.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.Black)),
+            $"Dark mode showed {Desktop.ColorOnScreen(sample)}.");
 
         target.SetColors("000000");
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)), "Dark mode didn't follow the window.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)),
+            "Dark mode didn't follow the window.");
         target.SetColors("FFFFFF");
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.Black)), "Dark mode didn't follow the window back.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.Black)),
+            "Dark mode didn't follow the window back.");
 
         // Off and on again in the same run, as a person would.
         Hotkey(Keys.D, target);
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)), "Dark mode didn't turn off.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)),
+            "Dark mode didn't turn off.");
         Hotkey(Keys.D, target);
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.Black)), "Dark mode didn't turn on again.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.Black)),
+            "Dark mode didn't turn on again.");
         target.SetColors("000000");
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)), "The second dark mode didn't follow the window.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)),
+            "The second dark mode didn't follow the window.");
         target.SetColors("FFFFFF");
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.Black)));
 
         Hotkey(Keys.R, target);
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)), "Restore didn't end dark mode.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)),
+            "Restore didn't end dark mode.");
     }
 
     [Fact]
     public void The_toolbar_appears_on_the_title_bar_and_its_buttons_work()
     {
         using var target = new TargetProcess(Spot);
+        target.UseTitleBar();
         Focus(target);
 
         // Rest the mouse at the top middle of the window, where a title bar is.
@@ -197,7 +213,8 @@ public sealed class AppEndToEndTests : IDisposable
         // First button: pin. The window it acts on must stay active.
         Rectangle bar = Desktop.BoundsOf(toolbar);
         Desktop.ClickOn(new Point(bar.Left + bar.Height / 2, bar.Top + bar.Height / 2), toolbar);
-        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST) != 0), "The pin button didn't pin.");
+        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST) != 0),
+            "The pin button didn't pin.");
         Assert.Equal(target.Handle, User32.GetForegroundWindow());
 
         // Moving away hides it.
@@ -225,7 +242,8 @@ public sealed class AppEndToEndTests : IDisposable
         // Left-click from another window brings it forward.
         Desktop.Activate(other.Handle);
         Desktop.ClickOn(middle, anchor);
-        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle), "Left-click didn't bring the window forward.");
+        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle),
+            "Left-click didn't bring the window forward.");
 
         // Right-click opens the standard menu; choose its second (Minimize) action with the keyboard.
         Desktop.RightClickOn(middle, anchor);
@@ -235,12 +253,15 @@ public sealed class AppEndToEndTests : IDisposable
         Desktop.Press(Keys.Enter);
         Assert.True(Desktop.WaitFor(() => User32.IsIconic(target.Handle)), "The Anchor menu didn't minimize.");
         Desktop.ClickOn(middle, anchor);
-        Assert.True(Desktop.WaitFor(() => !User32.IsIconic(target.Handle) && User32.GetForegroundWindow() == target.Handle), "Left-click didn't restore.");
+        Assert.True(
+            Desktop.WaitFor(() => !User32.IsIconic(target.Handle) && User32.GetForegroundWindow() == target.Handle),
+            "Left-click didn't restore.");
 
         // Dragging moves the anchor and acts on nothing.
         var moved = new Point(middle.X - 120, middle.Y + 80);
         Desktop.Drag(middle, moved, anchor);
-        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(anchor).Left == button.Left - 120), "Dragging didn't move the anchor.");
+        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(anchor).Left == button.Left - 120),
+            "Dragging didn't move the anchor.");
 
         // Middle-click closes the window and the anchor goes with it.
         Desktop.MiddleClickOn(moved, anchor);
@@ -260,7 +281,8 @@ public sealed class AppEndToEndTests : IDisposable
 
         Hotkey(Keys.G, target);
 
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(background), Blue)), $"Glass showed {Desktop.ColorOnScreen(background)}.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(background), Blue)),
+            $"Glass showed {Desktop.ColorOnScreen(background)}.");
     }
 
     /// <summary>A strip along a window's left edge, a little way down so a title or corner doesn't matter.</summary>
@@ -276,7 +298,8 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(LeftEdge(Spot)), Blue)));
 
         Hotkey(Keys.T, target);
-        Assert.True(Desktop.WaitFor(() => Desktop.ColorOnScreen(LeftEdge(Spot)).R > 180), $"The edge showed {Desktop.ColorOnScreen(LeftEdge(Spot))}.");
+        Assert.True(Desktop.WaitFor(() => Desktop.ColorOnScreen(LeftEdge(Spot)).R > 180),
+            $"The edge showed {Desktop.ColorOnScreen(LeftEdge(Spot))}.");
         Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(Near(Spot, 2)), Blue), "The border covered the window.");
 
         var edge = new Point(Spot.Left + 1, Spot.Top + 60);
@@ -284,7 +307,8 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.Equal(target.Handle, User32.GetForegroundWindow());
 
         Hotkey(Keys.T, target);
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(LeftEdge(Spot)), Blue)), "The border stayed after unpinning.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(LeftEdge(Spot)), Blue)),
+            "The border stayed after unpinning.");
     }
 
     [Fact]
@@ -309,7 +333,8 @@ public sealed class AppEndToEndTests : IDisposable
         Focus(target);
 
         Hotkey(Keys.O, target);
-        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 128), $"Ctrl+Alt+O gave {Desktop.Alpha(target.Handle)}.");
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 128),
+            $"Ctrl+Alt+O gave {Desktop.Alpha(target.Handle)}.");
 
         Hotkey(Keys.O, target);
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 255), "Ctrl+Alt+O didn't turn it off.");
@@ -341,14 +366,17 @@ public sealed class AppEndToEndTests : IDisposable
 
             Hotkey(Keys.S, first);
             string path = Path.Combine(_data, "settings.json");
-            Assert.True(Desktop.WaitFor(() => AppSettings.Load(path).SetupFor("WinScreen.TestTarget") is not null), "Ctrl+Alt+S saved nothing.");
+            Assert.True(Desktop.WaitFor(() => AppSettings.Load(path).SetupFor("WinScreen.TestTarget") is not null),
+                "Ctrl+Alt+S saved nothing.");
         }
 
         using (var second = new TargetProcess(new Rectangle(560, 120, 300, 300)))
         {
             Focus(second);
-            Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(second.Handle) & User32.WS_EX_TOPMOST) != 0), "The next window wasn't pinned.");
-            Assert.True(Desktop.WaitFor(() => Desktop.Alpha(second.Handle) == 229), "The next window wasn't see-through.");
+            Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(second.Handle) & User32.WS_EX_TOPMOST) != 0),
+                "The next window wasn't pinned.");
+            Assert.True(Desktop.WaitFor(() => Desktop.Alpha(second.Handle) == 229),
+                "The next window wasn't see-through.");
 
             // What the person undoes stays undone.
             Hotkey(Keys.R, second);
@@ -366,7 +394,10 @@ public sealed class AppEndToEndTests : IDisposable
         Hotkey(Keys.R, third);
         Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(third.Handle) & User32.WS_EX_TOPMOST) == 0));
         Hotkey(Keys.S, third);
-        Assert.True(Desktop.WaitFor(() => AppSettings.Load(Path.Combine(_data, "settings.json")).SetupFor("WinScreen.TestTarget") is null), "The setup wasn't forgotten.");
+        Assert.True(
+            Desktop.WaitFor(() =>
+                AppSettings.Load(Path.Combine(_data, "settings.json")).SetupFor("WinScreen.TestTarget") is null),
+            "The setup wasn't forgotten.");
     }
 
     [Fact]
@@ -389,7 +420,10 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.Equal(Spot.Location, small.Location);
         Assert.Equal(Spot, Desktop.BoundsOf(target.Handle));
         var middle = new Point(small.Left + small.Width / 2, small.Top + small.Height / 2);
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(new Rectangle(middle.X - 10, middle.Y - 10, 20, 20)), Red)), "The tile doesn't show the window.");
+        Assert.True(
+            Desktop.WaitFor(() =>
+                Desktop.IsNear(Desktop.ColorOnScreen(new Rectangle(middle.X - 10, middle.Y - 10, 20, 20)), Red)),
+            "The tile doesn't show the window.");
 
         // Dragging moves the tile and leaves the window hidden.
         var moved = new Point(middle.X + 300, middle.Y + 60);
@@ -400,7 +434,8 @@ public sealed class AppEndToEndTests : IDisposable
         Desktop.ClickOn(moved, tile);
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 255), "The window didn't come back.");
         Assert.True(Desktop.WaitFor(() => !User32.IsWindow(tile)), "The tile stayed.");
-        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle), "The window didn't come forward.");
+        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle),
+            "The window didn't come forward.");
         Assert.Equal(0, Desktop.ExStyle(target.Handle) & User32.WS_EX_TRANSPARENT);
     }
 
@@ -441,10 +476,12 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.ShapeOf(target.Handle) == new Rectangle(20, 30, 200, 150)),
             $"The crop came out as {Windows.WindowInfo.ShapeOf(target.Handle)}.");
         Assert.True(Desktop.WaitFor(() => !User32.IsWindow(overlay)), "The crop overlay stayed.");
-        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle), "The window didn't get the keyboard back.");
+        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle),
+            "The window didn't get the keyboard back.");
 
         Hotkey(Keys.X, target);
-        Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.ShapeOf(target.Handle) is null), "The hotkey didn't uncrop.");
+        Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.ShapeOf(target.Handle) is null),
+            "The hotkey didn't uncrop.");
     }
 
     [Fact]
@@ -502,7 +539,8 @@ public sealed class AppEndToEndTests : IDisposable
         _app = Start();
         _appWindow = WaitForAppWindow();
 
-        Assert.True(Desktop.WaitFor(() => Desktop.ExStyle(target.Handle) == before), "The window wasn't put back at the next start.");
+        Assert.True(Desktop.WaitFor(() => Desktop.ExStyle(target.Handle) == before),
+            "The window wasn't put back at the next start.");
     }
 
     [Fact]
@@ -515,7 +553,8 @@ public sealed class AppEndToEndTests : IDisposable
 
         Rectangle start = Desktop.BoundsOf(pip);
         Desktop.Drag(new Point(start.Left + 60, start.Top + 60), new Point(700, 160), pip);
-        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(pip).Left == 640), $"The drag left the view at {Desktop.BoundsOf(pip)}.");
+        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(pip).Left == 640),
+            $"The drag left the view at {Desktop.BoundsOf(pip)}.");
         Rectangle view = Desktop.BoundsOf(pip);
 
         // A click at three quarters across and half way down lands on that spot of the real window.
@@ -529,7 +568,8 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.Equal("real=True", parts[3]);
 
         // The real window now has the keyboard too.
-        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle), "The real window didn't get the keyboard.");
+        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle),
+            "The real window didn't get the keyboard.");
         Desktop.Press(Keys.Q);
         Assert.Equal("key q real=True", target.NextReport());
 
@@ -650,10 +690,10 @@ public sealed class AppEndToEndTests : IDisposable
         Desktop.Drag(grab, goal, pip);
         Rectangle moved = Rectangle.Empty;
         Assert.True(Desktop.WaitFor(() =>
-        {
-            moved = Desktop.BoundsOf(pip);
-            return Math.Abs(moved.Left - (goal.X - 60)) <= 2 && Math.Abs(moved.Top - (goal.Y - 60)) <= 2;
-        }), $"Dragging moved it to {moved}.");
+            {
+                moved = Desktop.BoundsOf(pip);
+                return Math.Abs(moved.Left - (goal.X - 60)) <= 2 && Math.Abs(moved.Top - (goal.Y - 60)) <= 2;
+            }), $"Dragging moved it to {moved}.");
 
         // Wheel: one notch makes it 40 pixels wider.
         int width = moved.Width;
@@ -662,8 +702,10 @@ public sealed class AppEndToEndTests : IDisposable
         moved = Desktop.BoundsOf(pip);
 
         // Both halves of the source are visible.
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Near(moved, 1)), Red)), $"Left half showed {Desktop.ColorOnScreen(Near(moved, 1))}.");
-        Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(Near(moved, 3)), Blue), $"Right half showed {Desktop.ColorOnScreen(Near(moved, 3))}.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Near(moved, 1)), Red)),
+            $"Left half showed {Desktop.ColorOnScreen(Near(moved, 1))}.");
+        Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(Near(moved, 3)), Blue),
+            $"Right half showed {Desktop.ColorOnScreen(Near(moved, 3))}.");
 
         // Ctrl+drag over the right half: the view dims except the selection, then the crop leaves only blue.
         var from = new Point(moved.Left + moved.Width * 6 / 10, moved.Top + moved.Height / 4);
@@ -672,10 +714,13 @@ public sealed class AppEndToEndTests : IDisposable
         try
         {
             Desktop.PressAndDrag(from, to, pip);
-            var outside = new Rectangle(moved.Left + moved.Width * 3 / 4 - 10, moved.Top + moved.Height / 8 - 5, 20, 10);
+            var outside = new Rectangle(moved.Left + moved.Width * 3 / 4 - 10, moved.Top + moved.Height / 8 - 5, 20,
+                10);
             var inside = new Rectangle((from.X + to.X) / 2 - 10, (from.Y + to.Y) / 2 - 10, 20, 20);
-            Assert.True(Desktop.WaitFor(() => !Desktop.IsNear(Desktop.ColorOnScreen(outside), Blue, 40)), $"The view didn't dim while selecting: {Desktop.ColorOnScreen(outside)}.");
-            Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(inside), Blue), $"The selection didn't stay bright: {Desktop.ColorOnScreen(inside)}.");
+            Assert.True(Desktop.WaitFor(() => !Desktop.IsNear(Desktop.ColorOnScreen(outside), Blue, 40)),
+                $"The view didn't dim while selecting: {Desktop.ColorOnScreen(outside)}.");
+            Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(inside), Blue),
+                $"The selection didn't stay bright: {Desktop.ColorOnScreen(inside)}.");
         }
         finally
         {
@@ -683,7 +728,8 @@ public sealed class AppEndToEndTests : IDisposable
             Desktop.Key(Keys.ControlKey, false);
         }
 
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Near(Desktop.BoundsOf(pip), 1)), Blue)), "Ctrl+drag didn't crop.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Near(Desktop.BoundsOf(pip), 1)), Blue)),
+            "Ctrl+drag didn't crop.");
 
         // Ctrl+double-click brings the whole source back.
         Rectangle cropped = Desktop.BoundsOf(pip);
@@ -697,6 +743,7 @@ public sealed class AppEndToEndTests : IDisposable
             Desktop.Key(Keys.ControlKey, false);
         }
 
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Near(Desktop.BoundsOf(pip), 1)), Red)), "Ctrl+double-click didn't remove the crop.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Near(Desktop.BoundsOf(pip), 1)), Red)),
+            "Ctrl+double-click didn't remove the crop.");
     }
 }

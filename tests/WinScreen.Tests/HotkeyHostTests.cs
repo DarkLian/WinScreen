@@ -63,6 +63,25 @@ public class HotkeyHostTests
     }
 
     [Fact]
+    public void One_taken_hotkey_at_startup_leaves_the_others_working()
+    {
+        OnUiThread(() =>
+        {
+            using var host = new HotkeyHost();
+            using var blocker = new HotkeyHost();
+            using var probe = new HotkeyHost();
+            Assert.True(blocker.TryRegister(2, Modifiers, Keys.F23, out _));
+            var conflicts = host.RegisterAvailable(new Dictionary<int, (uint, Keys)>
+            {
+                [1] = (Modifiers, Keys.F23),
+                [3] = (Modifiers, Keys.F22),
+            });
+            Assert.Equal([1], conflicts);
+            Assert.False(probe.TryRegister(5, Modifiers, Keys.F22, out _)); // Held by the host, as hoped.
+        });
+    }
+
+    [Fact]
     public void Replacement_conflicts_and_failed_persistence_leave_the_previous_recovery_binding_active()
     {
         OnUiThread(() =>
@@ -78,7 +97,8 @@ public class HotkeyHostTests
             Assert.Equal([1], conflicts);
             Assert.False(persisted);
             Assert.False(probe.TryRegister(3, Modifiers, Keys.F24, out _));
-            Assert.Throws<IOException>(() => host.TryReplaceBindings(new Dictionary<int, (uint, Keys)> { [1] = (Modifiers, Keys.F22) },
+            Assert.Throws<IOException>(() => host.TryReplaceBindings(
+                new Dictionary<int, (uint, Keys)> { [1] = (Modifiers, Keys.F22) },
                 () => throw new IOException("Injected write failure"), out _));
             Assert.False(probe.TryRegister(3, Modifiers, Keys.F24, out _));
             Assert.True(probe.TryRegister(4, Modifiers, Keys.F22, out _));

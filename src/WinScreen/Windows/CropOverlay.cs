@@ -50,8 +50,10 @@ public sealed class CropOverlay : Form
             return;
         }
 
-        const TextFormatFlags centred = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak;
-        TextRenderer.DrawText(e.Graphics, T("Drag over the part to keep. Esc cancels."), Font, ClientRectangle, ForeColor, centred);
+        const TextFormatFlags centred = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                                        TextFormatFlags.WordBreak;
+        TextRenderer.DrawText(e.Graphics, T("Drag over the part to keep. Esc cancels."), Font, ClientRectangle,
+            ForeColor, centred);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)

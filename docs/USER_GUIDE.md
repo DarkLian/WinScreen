@@ -7,8 +7,9 @@
 ## First use
 
 Install and start WinScreen. Look for its icon in the Windows system tray; expand the hidden icons if needed.
-Right-click the icon to open Settings, restore windows, or exit. Commands normally act on the active window;
-the tray commands marked “last window” act on the most recently active eligible window.
+Click the icon to open Settings. Right-click it for every command, including restoring windows and exiting.
+Hotkeys act on the active window. The tray menu acts on the target named at its top, which is the most recently
+active eligible window.
 
 Rest the pointer on the middle of a window's title bar to show the toolbar. You can disable the toolbar in Settings.
 WinScreen leaves the desktop, taskbar, and excluded programs alone. Applications running as administrator may refuse changes.
@@ -16,7 +17,12 @@ WinScreen leaves the desktop, taskbar, and excluded programs alone. Applications
 ## Default shortcuts
 
 Activate the intended window before pressing a shortcut. All shortcuts can be changed or cleared in **Settings → Hotkeys**.
-Click a hotkey field and press a combination; press Delete to clear it. Save applies changes and reports combinations another app already uses.
+Click a hotkey field and press a combination; press Delete to clear it. Combinations need Ctrl, Alt or Win, though
+function keys also work on their own. Save applies changes and reports combinations that are taken or used twice.
+
+If another app holds a hotkey when WinScreen starts, WinScreen tells you which one and the others keep working.
+A Ctrl+Alt combination that types a character on your keyboard can't be used, because Windows treats AltGr as
+Ctrl+Alt. WinScreen skips that hotkey and tells you, so you can choose another.
 
 | Action | Shortcut |
 | --- | --- |
@@ -33,7 +39,7 @@ Click a hotkey field and press a combination; press Delete to clear it. Save app
 | Toggle default transparency | Ctrl+Alt+O |
 | Shrink to a live tile | Ctrl+Alt+W |
 | Crop / remove crop | Ctrl+Alt+X |
-| Remember / forget this program's setup | Ctrl+Alt+S |
+| Remember / forget this program's setup | Ctrl+Alt+Shift+S |
 
 ## Pin, Picture-in-Picture, or Anchor?
 
@@ -71,7 +77,8 @@ Press **Ctrl+Alt+P** to open a live view. The original window keeps its real siz
 | Mouse wheel | Resize the view |
 | Ctrl+drag | Select a crop |
 | Ctrl+double-click | Remove the crop |
-| Right-click | Hide/show the original, go to it, remove crop, enable automatic movement, or close PiP |
+| Right-click | Hide/show the original, go to it, remove crop, or close PiP |
+| Esc, or the ✕ button shown while the pointer is on the view | Close PiP |
 
 By default, clicking PiP shows/activates the original so you can interact with it normally. This does not move the
 system pointer or inject a click. Only one PiP or Shrink tile is kept per source; opening one replaces the other.
@@ -90,7 +97,8 @@ use PiP's **Hide original window** menu item again to show it.
 **Move away from text and images** looks for an emptier screen area about once per second. It stays still while the pointer
 is over the view and when no better spot exists. It estimates content by contrast rather than understanding text.
 While enabled, PiP is excluded from screenshots and screen sharing so it can inspect the area underneath itself.
-The General setting enables this for newly opened views; each view also has its own menu toggle.
+The General setting enables this for newly opened views. While experimental effects are on, each view also has its
+own menu toggle.
 
 Selecting text directly by dragging inside PiP is not implemented. Clicking PiP first lets you interact with the original.
 
@@ -100,11 +108,12 @@ Ctrl+Alt+Up/Down adjusts opacity in steps of about 10%, never below 20%. **Ctrl+
 default opacity and a solid window. Configure the default in **Settings → General** (20–95% solid).
 
 **Ctrl+Alt+C** makes mouse clicks pass through to the window underneath. It also applies the default transparency
-when the window does not already have WinScreen transparency.
+when the window does not already have WinScreen transparency, and removes it again when you turn click-through off.
+A click-through window stays see-through while the pointer is over it, even with solid-on-hover enabled.
 
 ### Make a click-through window clickable again
 
-1. For one window, select it with **Alt-Tab**, then press **Ctrl+Alt+C** again. Its transparency may remain.
+1. For one window, select it with **Alt-Tab**, then press **Ctrl+Alt+C** again.
 2. For full recovery, press **Ctrl+Alt+R**, or right-click WinScreen's tray icon and choose **Restore all windows**.
    This undoes all WinScreen window changes, not only click-through.
 3. If hotkeys are disabled, reassigned, or paused by a full-screen app, use the tray restore action.
@@ -115,6 +124,7 @@ Click-through cannot be saved as a program's automatic setup.
 ## Dark mode, Glass, Crop, and Shrink
 
 These effects and PiP auto-move are **experimental, disabled by default**. Enable them explicitly in General settings.
+Their toolbar buttons and tray commands appear only while they are enabled.
 Disabling experimental effects cancels crop selection and removes those effects where cleanup succeeds. Any failure
 remains visible and retryable. Glass samples visible screen content and can be affected by overlapping windows.
 
@@ -125,11 +135,12 @@ remains visible and retryable. Glass samples visible screen content and can be a
   reach what is behind. The app is not resized. If you remove its title bar, uncrop before moving it. Apps that draw
   their own shape may reject cropping or redraw their region.
 - **Shrink** replaces the window with a small live tile while retaining the window's actual size. Click the tile,
-  select the window in Alt-Tab, or select it on the taskbar to restore it. Drag the tile to move it.
+  select the window in Alt-Tab, select it on the taskbar, or press the Shrink hotkey again to restore it.
+  Drag the tile to move it, or right-click it for its menu.
 
 ## Remember a program's setup
 
-Adjust pinning, opacity, and dark mode, then press **Ctrl+Alt+S**. Windows belonging to that program receive the setup
+Adjust pinning, opacity, and dark mode, then press **Ctrl+Alt+Shift+S**. Windows belonging to that program receive the setup
 the first time they come forward, including after a restart. Later manual changes stay changed.
 
 New setups are matched by executable path, which is displayed in Saved setups. Older name-only entries remain
@@ -144,11 +155,11 @@ Press the shortcut on a window with no such changes to forget its program's save
 | Tab / option | Behavior |
 | --- | --- |
 | General → Language | System default, English, 简体中文, or 繁體中文; save and restart to apply |
-| General → Show notifications | Controls startup notices, action confirmations, and operation-error balloons immediately after saving |
+| General → Show confirmations | Controls messages for actions that worked. Problems always appear |
 | General → Automatic updates | Opt-in download and install-on-exit behavior described below |
 | General → Experimental effects / Forward PiP clicks | Opt-in controls for effects still under validation |
 | General → Start when signing in | Starts WinScreen for your Windows user |
-| General → Pause during games / full-screen apps | Pauses ordinary commands; tray Restore all remains available |
+| General → Pause new commands during games and full-screen apps | Stops new commands. Existing effects and hotkey assignments stay, and restoring windows still works |
 | General → Pause pinning when maximized | Temporarily suspends pinning for maximized windows |
 | General → Solid on hover | Makes transparent windows solid while the pointer is over them |
 | General → Red border | Highlights pinned windows |
@@ -156,8 +167,8 @@ Press the shortcut on a window with no such changes to forget its program's save
 | Programs → Inclusions | Restricts control to these programs; leave empty for all eligible programs |
 | Saved setups | Lists and removes remembered program setups |
 
-Program lists accept names such as `ExampleProgram` or `ExampleProgram.exe`. Turning notifications off does not hide
-hotkey conflicts inside Settings or unexpected-failure dialogs.
+Program lists accept names such as `ExampleProgram` or `ExampleProgram.exe`, or you can choose a running program from
+the list. Press Enter or Add, or just Save, to include what you typed.
 
 ### Automatic updates
 
@@ -167,7 +178,8 @@ the background; installation is scheduled when you exit normally, after window r
 
 Turning this option off cancels in-flight work and prevents installation of a downloaded update. The current app keeps
 running if the network is unavailable or verification fails. Update notices obey the notification toggle.
-Local development/portable runs do not update. A build without a configured source shows a notice in Settings.
+Use **Check for updates** in the tray menu to check right away. Local development/portable runs do not update, and
+Settings explains why when the option isn't available.
 The repository must have correctly signed releases before updates are available; see [security details](../SECURITY.md).
 
 For a manual upgrade, exit WinScreen and run the newer installer. No uninstall is normally required. Settings are
@@ -178,7 +190,8 @@ kept in `%APPDATA%\WinScreen`, separately from the installed program.
 Failed restoration steps keep their recovery records for retry. If cleanup fails on exit, WinScreen stays running
 and does not schedule an update. Open the tray's **Last result** for details, then retry the per-window or all-window
 restore action when the target responds. Damaged or unverifiable legacy recovery data is preserved in `.invalid-*`
-backups; unreadable recovery data blocks new changes so it cannot be overwritten.
+backups, and WinScreen tells you where. If the recovery file can't be read at all, for example because another program
+has it open, new changes pause until **Restore all windows** can read it. Exiting still works.
 
 - **Restore all windows** removes pinning, transparency, click-through, hiding, crops, dark overlays, and Anchors.
 - Exiting WinScreen restores changed windows. After a forced termination or crash, the next start uses its recovery journal.

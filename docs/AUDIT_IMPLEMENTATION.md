@@ -2,8 +2,7 @@
 
 [README](../README.md) · [User Guide](USER_GUIDE.md) · [Development](DEVELOPMENT.md) · [Security](../SECURITY.md)
 
-This implements the review of commit `ce715662` supplied in the external Audit Improvement plan. The original local
-audit file is not copied into the public source tree.
+This records the hardening work that followed a review of commit `ce715662`.
 
 ## Implemented safeguards
 
@@ -12,7 +11,7 @@ audit file is not copied into the public source tree.
 | Recovery ordering and lost failed entries | Write-through, flushed journal replacement precedes native mutations; save failures reject the change. Failed entries remain retryable, and independent cleanup steps continue after a failure. Successful cleanup steps retire their ownership bits. Fault-injection tests inspect the on-disk record before mutation and recover a failed crop across restart. |
 | Unrelated style changes overwritten | Restore only the style bits owned by WinScreen, preserving independently added bits. Native test adds WS_EX_NOACTIVATE and verifies per-window recovery preserves it even after exclusions change. |
 | Reused HWND / PID | Acquire a random native window property plus PID, thread ID and process creation time. The property disappears on window destruction. Mutation, restoration, previews, dark overlays and Anchor close requests validate identity. A replaced-token test verifies an old snapshot is not written. Legacy unverifiable records are archived rather than applied to another window. |
-| Malformed preferences or journal | Normalize null collections/entries, bound settings size, skip malformed journal entries individually, preserve originals in `.invalid-*` backups, and keep unreadable recovery data from being overwritten by new mutations. Recovery can start with default preferences. Tests cover nulls, invalid record types, short placement arrays and backup preservation. |
+| Malformed preferences or journal | Normalize null collections/entries, bound settings size, skip malformed journal entries individually, and preserve originals in `.invalid-*` backups. A file with nothing usable moves aside so work can continue; one that cannot be read pauses new changes until a retry succeeds, and never prevents exit. Recovery can start with default preferences. Tests cover nulls, invalid record types, short placement arrays and backup preservation. |
 | PiP misdelivery | Default click action is Go to original, with no injection. Experimental forwarding requires identity, foreground, visibility, non-click-through style and root hit-test agreement. Mapping clamps to exclusive source bounds; SendInput results are checked. Refused steps fall back safely; failed peeks roll back placement and retain failed cleanup. Tests cover safe defaults, click-through refusal and failed movement. |
 | Shared hide state | Tray enforces one PiP per source and mutual exclusion with Shrink. Restore closes views/tiles before restoring the original and cancels an in-progress crop selection. |
 | Settings transaction | Stage edits on a clone, reserve new hotkeys while old keys remain active, persist preferences before retiring old registrations, and show conflicts beside fields. A failed save retains live preferences/startup choices. Tests cover conflicts, failed persistence and recovery binding retention. |

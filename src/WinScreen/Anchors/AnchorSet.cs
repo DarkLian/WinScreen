@@ -2,7 +2,10 @@ using WinScreen.Native;
 
 namespace WinScreen.Anchors;
 
-/// <summary>The anchors on screen, stacked down the right edge until someone moves them.</summary>
+/// <summary>
+/// The anchors on screen, stacked in columns from the right edge until someone moves them. They start
+/// below the top of the screen, which is where a maximized window keeps its close button.
+/// </summary>
 public sealed class AnchorSet : IDisposable
 {
     private const int Margin = 16;
@@ -32,7 +35,7 @@ public sealed class AnchorSet : IDisposable
         Rectangle area = Screen.FromHandle(window).WorkingArea;
         var anchor = new AnchorButton(window)
         {
-            Location = FreePosition(area),
+            Location = FreePosition(area, Dpi.Of(window)),
         };
         _anchors[window] = anchor;
         anchor.FormClosed += (_, _) =>
@@ -60,15 +63,18 @@ public sealed class AnchorSet : IDisposable
         _watch.Dispose();
     }
 
-    private Point FreePosition(Rectangle area)
+    private Point FreePosition(Rectangle area, int dpi)
     {
-        for (int left = area.Right - AnchorButton.ButtonSize - Margin; left >= area.Left; left -= AnchorButton.ButtonSize + Gap)
-            for (int top = area.Top + Margin; top + AnchorButton.ButtonSize <= area.Bottom; top += AnchorButton.ButtonSize + Gap)
-            {
-                var candidate = new Rectangle(left, top, AnchorButton.ButtonSize, AnchorButton.ButtonSize);
-                if (!_anchors.Values.Any(anchor => anchor.Bounds.IntersectsWith(candidate))) return candidate.Location;
-            }
-        return new Point(Math.Max(area.Left, area.Right - AnchorButton.ButtonSize), Math.Max(area.Top, area.Bottom - AnchorButton.ButtonSize));
+        int size = Dpi.Scale(AnchorButton.ButtonSize, dpi);
+        int step = size + Dpi.Scale(Gap, dpi);
+        for (int left = area.Right - size - Dpi.Scale(Margin, dpi); left >= area.Left; left -= step)
+        for (int top = area.Top + Dpi.Scale(FirstTop, dpi); top + size <= area.Bottom; top += step)
+        {
+            var candidate = new Rectangle(left, top, size, size);
+            if (!_anchors.Values.Any(anchor => anchor.Bounds.IntersectsWith(candidate))) return candidate.Location;
+        }
+
+        return new Point(Math.Max(area.Left, area.Right - size), Math.Max(area.Top, area.Bottom - size));
     }
 
     private void DropClosedWindows()

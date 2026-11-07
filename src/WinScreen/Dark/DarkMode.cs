@@ -72,10 +72,20 @@ public sealed class DarkMode : IDisposable
                 UpdateFilters();
                 continue;
             }
+
             if (Native.User32.IsWindow(window) && !overlay.MatchesTarget)
             {
+                _overlays.Remove(window);
                 overlay.Dispose();
-                overlay = Add(window);
+                try
+                {
+                    overlay = Add(window);
+                }
+                catch (Windows.WindowOperationException)
+                {
+                    UpdateFilters(); // The window went away mid-swap, so there is nothing left to cover.
+                    continue;
+                }
             }
 
             if (!overlay.Follow())

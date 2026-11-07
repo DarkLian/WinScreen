@@ -12,6 +12,7 @@ namespace WinScreen.Pip;
 public sealed class ShrinkTile : Form
 {
     private const int TileWidth = 240;
+    private const int TileHeight = 150;
     private const int DragThreshold = 4;
 
     private static readonly Color Accent = Color.FromArgb(79, 140, 255);
@@ -20,6 +21,9 @@ public sealed class ShrinkTile : Form
     private readonly WindowIdentity _identity;
     private readonly WindowController _windows;
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 100 };
+    private readonly ToolTip _tip = new() { ShowAlways = true };
+    private readonly ContextMenuStrip _menu = new();
+    private readonly int _width;
     private DwmThumbnail? _thumbnail;
     private Point _dragStart;
     private bool _pressed;
@@ -36,7 +40,12 @@ public sealed class ShrinkTile : Form
         BackColor = Accent;
         StartPosition = FormStartPosition.Manual;
         Text = T("Shrunk - ") + WindowInfo.Title(source);
-        Size = new Size(TileWidth, 150);
+        int dpi = Dpi.Of(source);
+        _width = Dpi.Scale(TileWidth, dpi);
+        Size = new Size(_width, Dpi.Scale(TileHeight, dpi));
+        _tip.SetToolTip(this, T("Click: show the window • Drag: move • Right-click: menu"));
+        _menu.Items.Add(T("Show window"), null, (_, _) => Close());
+        ContextMenuStrip = _menu;
         _watch.Tick += (_, _) => FollowSource();
 
         if (WindowInfo.TryGetVisibleBounds(source, out Rectangle bounds))
@@ -83,12 +92,19 @@ public sealed class ShrinkTile : Form
         if (_thumbnail is null || sourceSize.Width <= 0 || sourceSize.Height <= 0)
             return false;
 
-        var shown = new Rectangle(Point.Empty, sourceSize);
-        Width = Math.Clamp(sourceSize.Width / 2, PipGeometry.MinimumWidth, TileWidth);
+        Rectangle shown = WindowInfo.VisiblePart(_source, sourceSize);
+        Width = Math.Clamp(shown.Width / 2, PipGeometry.MinimumWidth, _width);
         Size = PipGeometry.FitWithin(Width, shown, Screen.FromHandle(_source).WorkingArea.Size);
         Location = KeptOnScreen(Bounds);
-        try { _thumbnail.Show(PipGeometry.ViewArea(ClientSize), shown); }
-        catch (WindowOperationException) { return false; }
+        try
+        {
+            _thumbnail.Show(PipGeometry.ViewArea(ClientSize), shown);
+        }
+        catch (WindowOperationException)
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -112,7 +128,9 @@ public sealed class ShrinkTile : Form
         if (_dragged || Math.Abs(e.X - _dragStart.X) >= DragThreshold || Math.Abs(e.Y - _dragStart.Y) >= DragThreshold)
         {
             _dragged = true;
-            Location = new Point(Left + e.X - _dragStart.X, Top + e.Y - _dragStart.Y);
+            Location = PipGeometry.KeepInside(
+                new Rectangle(new Point(Left + e.X - _dragStart.X, Top + e.Y - _dragStart.Y), Size),
+                Screen.FromPoint(Cursor.Position).WorkingArea);
         }
     }
 
@@ -129,6 +147,8 @@ public sealed class ShrinkTile : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        _tip.Dispose();
+        _menu.Dispose();
         _watch.Dispose();
         _thumbnail?.Dispose();
         _thumbnail = null;

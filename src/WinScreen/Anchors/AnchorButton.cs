@@ -5,21 +5,24 @@ using WinScreen.Windows;
 namespace WinScreen.Anchors;
 
 /// <summary>
-/// A small floating button for one window. Left-click brings it forward, right-click minimizes it,
-/// middle-click closes it, and dragging a file over it brings it forward so the file can be dropped there.
-/// The button itself can be dragged anywhere.
+/// A small floating button for one window. Left-click brings it forward, right-click opens its menu,
+/// middle-click closes the window, and dragging a file over it brings the window forward so the file can
+/// be dropped there. The button itself can be dragged anywhere.
 /// </summary>
 internal sealed class AnchorButton : Form
 {
     public const int ButtonSize = 48;
 
+    private const int IconInset = 8;
+    private const int IconSize = 32;
     private const int DragThreshold = 4;
     private const int SW_MINIMIZE = 6;
 
     private readonly nint _target;
     private readonly WindowIdentity _identity;
     private readonly Icon? _icon;
-    private readonly ToolTip _tip = new();
+    private readonly ToolTip _tip = new() { ShowAlways = true };
+    private readonly Rectangle _iconBounds;
     private readonly ContextMenuStrip _menu = new();
     private Point _pressedAt;
     private bool _pressed;
@@ -34,14 +37,21 @@ internal sealed class AnchorButton : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
         BackColor = Color.FromArgb(32, 32, 32);
-        ClientSize = new Size(ButtonSize, ButtonSize);
+        int dpi = Dpi.Of(target);
+        ClientSize = new Size(Dpi.Scale(ButtonSize, dpi), Dpi.Scale(ButtonSize, dpi));
+        _iconBounds = new Rectangle(Dpi.Scale(IconInset, dpi), Dpi.Scale(IconInset, dpi), Dpi.Scale(IconSize, dpi),
+            Dpi.Scale(IconSize, dpi));
         AllowDrop = true;
         DoubleBuffered = true;
         Text = T("WinScreen anchor - ") + WindowInfo.Title(target);
         _tip.SetToolTip(this, WindowInfo.Title(target) + Environment.NewLine +
-            T("Left: show • Right: menu • Middle: close • Drag: move"));
+                              T("Left: show • Right: menu • Middle: close • Drag: move"));
         _menu.Items.Add(T("Show window"), null, (_, _) => BringForward());
-        _menu.Items.Add(T("Minimize window"), null, (_, _) => { if (_identity.Matches()) User32.ShowWindow(_target, SW_MINIMIZE); else Close(); });
+        _menu.Items.Add(T("Minimize window"), null, (_, _) =>
+        {
+            if (_identity.Matches()) User32.ShowWindow(_target, SW_MINIMIZE);
+            else Close();
+        });
         _menu.Items.Add(T("Close window and remove Anchor"), null, (_, _) => CloseTarget());
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(T("Remove Anchor only"), null, (_, _) => Close());
@@ -66,10 +76,7 @@ internal sealed class AnchorButton : Form
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        if (_icon is not null)
-            e.Graphics.DrawIcon(_icon, new Rectangle(8, 8, 32, 32));
-        else
-            e.Graphics.DrawIcon(SystemIcons.Application, new Rectangle(8, 8, 32, 32));
+        e.Graphics.DrawIcon(_icon ?? SystemIcons.Application, _iconBounds);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -90,7 +97,8 @@ internal sealed class AnchorButton : Form
         {
             _dragged = true;
             var area = Screen.FromPoint(Cursor.Position).WorkingArea;
-            Location = new Point(Math.Clamp(Left + e.X - _pressedAt.X, area.Left, Math.Max(area.Left, area.Right - Width)),
+            Location = new Point(
+                Math.Clamp(Left + e.X - _pressedAt.X, area.Left, Math.Max(area.Left, area.Right - Width)),
                 Math.Clamp(Top + e.Y - _pressedAt.Y, area.Top, Math.Max(area.Top, area.Bottom - Height)));
         }
     }
@@ -142,12 +150,18 @@ internal sealed class AnchorButton : Form
             _tip.Dispose();
             _menu.Dispose();
         }
+
         base.Dispose(disposing);
     }
 
     private void BringForward()
     {
-        if (!_identity.Matches()) { Close(); return; }
+        if (!_identity.Matches())
+        {
+            Close();
+            return;
+        }
+
         if (User32.IsIconic(_target))
             User32.ShowWindow(_target, User32.SW_RESTORE);
         User32.SetForegroundWindow(_target);
@@ -162,7 +176,8 @@ internal sealed class AnchorButton : Form
             string? path = process.MainModule?.FileName;
             return path is null ? null : Icon.ExtractAssociatedIcon(path);
         }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException
+                                      or System.ComponentModel.Win32Exception)
         {
             return null;
         }

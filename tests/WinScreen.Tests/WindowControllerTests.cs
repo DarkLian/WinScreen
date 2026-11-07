@@ -146,7 +146,8 @@ public class WindowControllerTests
         using var target = new TargetProcess(Spot);
         User32.SetWindowRgn(target.Handle, User32.CreateRectRgn(0, 0, 50, 50), true);
 
-        Assert.Throws<WindowOperationException>(() => NewController().Crop(target.Handle, new Rectangle(10, 10, 100, 100)));
+        Assert.Throws<WindowOperationException>(() =>
+            NewController().Crop(target.Handle, new Rectangle(10, 10, 100, 100)));
 
         Assert.Equal(new Rectangle(0, 0, 50, 50), WindowInfo.ShapeOf(target.Handle));
     }
@@ -367,19 +368,24 @@ public class WindowControllerTests
         Desktop.Activate(front.Handle);
         var background = new Rectangle(Spot.Left + 40, Spot.Top + 80, 30, 30);
         var content = new Rectangle(Spot.Right - 60, Spot.Top + 80, 30, 30);
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(background), Color.FromArgb(0x20, 0x20, 0x20))));
+        Assert.True(Desktop.WaitFor(() =>
+            Desktop.IsNear(Desktop.ColorOnScreen(background), Color.FromArgb(0x20, 0x20, 0x20))));
 
         var windows = NewController();
         Assert.True(windows.ToggleGlass(front.Handle));
 
         Color blue = Color.FromArgb(0x1E, 0x64, 0xC8);
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(background), blue)), $"Background showed {Desktop.ColorOnScreen(background)}.");
-        Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(content), Color.White), $"Content showed {Desktop.ColorOnScreen(content)}.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(background), blue)),
+            $"Background showed {Desktop.ColorOnScreen(background)}.");
+        Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(content), Color.White),
+            $"Content showed {Desktop.ColorOnScreen(content)}.");
         Assert.Equal(back.Handle, Desktop.TopWindowAt(new Point(background.X + 10, background.Y + 10)));
         Assert.Equal(front.Handle, Desktop.TopWindowAt(new Point(content.X + 10, content.Y + 10)));
 
         Assert.False(windows.ToggleGlass(front.Handle));
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(background), Color.FromArgb(0x20, 0x20, 0x20))), "Background didn't come back.");
+        Assert.True(
+            Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(background), Color.FromArgb(0x20, 0x20, 0x20))),
+            "Background didn't come back.");
     }
 
     [Fact]

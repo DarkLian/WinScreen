@@ -38,7 +38,8 @@ internal static class Program
             return;
         }
 
-        var windows = new WindowController(settings.ExcludedPrograms, new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")));
+        var windows = new WindowController(settings.ExcludedPrograms,
+            new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")));
         windows.RecoverFromJournal();
 
         // A crash must not leave someone's window see-through and impossible to click.
@@ -47,7 +48,8 @@ internal static class Program
         Application.ThreadException += (_, e) =>
         {
             windows.RestoreAll();
-            MessageBox.Show(e.Exception.Message, T("WinScreen stopped unexpectedly"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(e.Exception.Message, T("WinScreen stopped unexpectedly"), MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
             Application.Exit();
         };
 

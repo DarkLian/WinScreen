@@ -30,7 +30,8 @@ internal sealed class TargetProcess : IDisposable
         }
 
         _process = Process.Start(start) ?? throw new InvalidOperationException("Test target didn't start.");
-        Handle = (nint)long.Parse(_process.StandardOutput.ReadLine() ?? throw new InvalidOperationException("Test target gave no handle."));
+        Handle = (nint)long.Parse(_process.StandardOutput.ReadLine() ??
+                                  throw new InvalidOperationException("Test target gave no handle."));
         new Thread(() =>
         {
             while (_process.StandardOutput.ReadLine() is { } line)
@@ -43,12 +44,21 @@ internal sealed class TargetProcess : IDisposable
     public Point Center => new(Bounds.Left + Bounds.Width / 2, Bounds.Top + Bounds.Height / 2);
 
     /// <summary>Waits for what the window itself says happened to it, such as "click 300 150 real=True".</summary>
-    public string? NextReport(int milliseconds = 3000) => _reports.TryTake(out string? line, milliseconds) ? line : null;
+    public string? NextReport(int milliseconds = 3000) =>
+        _reports.TryTake(out string? line, milliseconds) ? line : null;
 
     public void SetColors(string colors)
     {
         _process.StandardInput.WriteLine("color " + colors);
         _process.StandardInput.Flush();
+    }
+
+    /// <summary>Makes the top of this borderless window answer as a title bar.</summary>
+    public void UseTitleBar()
+    {
+        _process.StandardInput.WriteLine("titlebar");
+        _process.StandardInput.Flush();
+        if (NextReport() != "titlebar") throw new InvalidOperationException("The target has no title bar.");
     }
 
     public nint CreateUnattributedLayeredWindow()

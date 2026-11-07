@@ -9,7 +9,8 @@ public class PipGeometryTests
     [InlineData(400, 300)]
     [InlineData(300, 1600)]
     [InlineData(3840, 2160)]
-    public void Initial_preview_fits_both_work_area_dimensions_and_its_click_never_maps_outside_the_source(int width, int height)
+    public void Initial_preview_fits_both_work_area_dimensions_and_its_click_never_maps_outside_the_source(int width,
+        int height)
     {
         var source = new Rectangle(20, 30, width, height);
         var available = new Size(640, 480);
@@ -20,6 +21,7 @@ public class PipGeometryTests
         var point = PipGeometry.PointToSource(new Point(view.Right - 1, view.Bottom - 1), view, source);
         Assert.True(source.Contains(point));
     }
+
     private static readonly Rectangle Screen = new(0, 0, 320, 320);
 
     /// <summary>A 320x320 screen in 16 pixel cells, busy wherever the rectangles say.</summary>
@@ -143,28 +145,32 @@ public class PipGeometryTests
     public void A_point_in_the_view_maps_to_the_same_spot_in_the_source()
     {
         Assert.Equal(new Point(600, 200),
-            PipGeometry.PointToSource(new Point(302, 102), new Rectangle(2, 2, 400, 200), new Rectangle(0, 0, 800, 400)));
+            PipGeometry.PointToSource(new Point(302, 102), new Rectangle(2, 2, 400, 200),
+                new Rectangle(0, 0, 800, 400)));
     }
 
     [Fact]
     public void A_point_in_a_crop_maps_inside_that_crop()
     {
         Assert.Equal(new Point(200, 100),
-            PipGeometry.PointToSource(new Point(102, 52), new Rectangle(2, 2, 200, 100), new Rectangle(100, 50, 200, 100)));
+            PipGeometry.PointToSource(new Point(102, 52), new Rectangle(2, 2, 200, 100),
+                new Rectangle(100, 50, 200, 100)));
     }
 
     [Fact]
     public void The_real_window_lands_with_the_clicked_spot_under_the_cursor()
     {
         var area = new Rectangle(0, 0, 1920, 1040);
-        Assert.Equal(new Point(500, 300), PipGeometry.PeekPosition(new Point(800, 450), new Point(300, 150), new Size(800, 600), area));
+        Assert.Equal(new Point(500, 300),
+            PipGeometry.PeekPosition(new Point(800, 450), new Point(300, 150), new Size(800, 600), area));
     }
 
     [Fact]
     public void The_real_window_stays_on_screen_near_an_edge()
     {
         var area = new Rectangle(0, 0, 1920, 1040);
-        Assert.Equal(new Point(1120, 440), PipGeometry.PeekPosition(new Point(1900, 1030), new Point(300, 150), new Size(800, 600), area));
+        Assert.Equal(new Point(1120, 440),
+            PipGeometry.PeekPosition(new Point(1900, 1030), new Point(300, 150), new Size(800, 600), area));
     }
 
     [Fact]

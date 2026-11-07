@@ -11,8 +11,20 @@ public sealed class AutomaticUpdatesTests
         internal int Applications;
         internal bool Disposed;
         internal Func<CancellationToken, Task<bool>> Fetch = _ => Task.FromResult(true);
-        public Task<bool> Download(CancellationToken cancellation) { Downloads++; return Fetch(cancellation); }
-        public Task ApplyOnExit(CancellationToken cancellation) { cancellation.ThrowIfCancellationRequested(); Applications++; return Task.CompletedTask; }
+
+        public Task<bool> Download(CancellationToken cancellation)
+        {
+            Downloads++;
+            return Fetch(cancellation);
+        }
+
+        public Task ApplyOnExit(CancellationToken cancellation)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            Applications++;
+            return Task.CompletedTask;
+        }
+
         public void Dispose() => Disposed = true;
     }
 
@@ -21,7 +33,11 @@ public sealed class AutomaticUpdatesTests
     {
         int sources = 0;
         var session = new Session();
-        using var updates = new AutomaticUpdates(_ => { sources++; return session; }, _ => { });
+        using var updates = new AutomaticUpdates(_ =>
+        {
+            sources++;
+            return session;
+        }, _ => { });
         await updates.Check();
         Assert.Equal(0, sources);
         updates.SetEnabled(true);
@@ -52,7 +68,14 @@ public sealed class AutomaticUpdatesTests
     {
         var completed = new TaskCompletionSource<bool>();
         CancellationToken observed = default;
-        var session = new Session { Fetch = cancellation => { observed = cancellation; return completed.Task; } };
+        var session = new Session
+        {
+            Fetch = cancellation =>
+            {
+                observed = cancellation;
+                return completed.Task;
+            }
+        };
         using var updates = new AutomaticUpdates(_ => session, _ => { });
         updates.SetEnabled(true);
         Task checking = updates.Check();
@@ -66,6 +89,19 @@ public sealed class AutomaticUpdatesTests
         await updates.ApplyOnExit();
         Assert.Equal(0, session.Applications);
         Assert.True(session.Disposed);
+    }
+
+    [Fact]
+    public async Task A_requested_check_says_how_it_went()
+    {
+        var session = new Session { Fetch = _ => Task.FromResult(false) };
+        using var updates = new AutomaticUpdates(_ => session, _ => { });
+        updates.SetEnabled(true);
+        Assert.Equal("WinScreen is up to date.", await updates.CheckNow());
+        session.Fetch = _ => throw new InvalidDataException("bad signature");
+        Assert.StartsWith("Update check failed", await updates.CheckNow());
+        session.Fetch = _ => Task.FromResult(true);
+        Assert.StartsWith("Update ready", await updates.CheckNow());
     }
 
     [Fact]

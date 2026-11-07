@@ -27,9 +27,8 @@ WinScreen adds a signed update source and an opt-in lifecycle around it.
 
 ## Trust and limits
 
-The private update-signing key is outside the repository and restricted to the generating Windows user by an explicit
-Windows ACL. Only its public key ships in the app. CI requires the matching private key in the repository's protected
-Actions secret. A compromised release host alone cannot forge a new signed feed; compromise of the signing key or
+The private update-signing key is kept outside the repository. Only its public key ships in the app. CI requires the
+matching private key in the repository's protected Actions secret. A compromised release host alone cannot forge a new signed feed; compromise of the signing key or
 the release build/signing workflow can authorize malicious updates. Protect the repository, release workflow and key.
 
 The installer and executable are still **not Authenticode signed**. Signed update metadata authenticates subsequent

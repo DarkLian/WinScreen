@@ -1,6 +1,6 @@
 # Development and releases
 
-[README](../README.md) · [User Guide](USER_GUIDE.md) · [Security](../SECURITY.md) · [Public files](PUBLIC_FILES.md)
+[README](../README.md) · [User Guide](USER_GUIDE.md) · [Security](../SECURITY.md)
 
 ## Build
 
@@ -42,9 +42,7 @@ Before publishing a release, configure its Actions secret **WINSCREEN_UPDATE_SIG
 Without it the release workflow fails before publication. Never put this key in a commit, issue, release asset, or workflow log.
 
 The public verification key is committed at `src/WinScreen/Updates/update-public-key.pem` and embedded in the app.
-The initial private key was generated outside the workspace at
-`%LOCALAPPDATA%\WinScreenSigning\update-private-key.pem`, with an ACL granting only its Windows user access.
-Back it up securely. The local signing tool reads that file; CI reads the repository secret. A mismatched key is rejected.
+Keep the private key outside the repository and back it up securely. CI reads the repository secret. A mismatched key is rejected.
 
 Push a stable version tag such as **v0.4.3**, using a higher version for each release. The Release workflow:
 
@@ -88,7 +86,7 @@ See [Security](../SECURITY.md) for verification requirements and remaining risks
 | `tests/WinScreen.Tests` | Logic, UI, native window, security, and app tests |
 | `tests/WinScreen.TestTarget` | Disposable external window used by tests |
 | `tools/WinScreen.UpdateSigning` | Feed-signing helper; contains no private key |
-| `docs` | User/developer guides and publication manifest |
+| `docs` | User and developer guides |
 
 PiP uses DWM thumbnails rather than a pixel-copy capture loop. A second thumbnail shows crop selection because
 nothing can be painted above a thumbnail in the same window. Pinning first raises the target and reads back the
@@ -106,8 +104,7 @@ topmost state because Windows may report success without actually pinning a back
 - Testing has mainly used one 1920×1080 display at 100% scaling on Windows 11 Pro build 26300. More monitor/DPI/Windows 10 testing is needed.
 - See the repository's Actions page for current CI results; local checks do not establish that hosted workflows pass.
 
-Source commits exclude generated builds, installers, private keys, IDE settings, runtime preferences, and local development records.
-The exact intended source list is in [PUBLIC_FILES.md](PUBLIC_FILES.md). Installer packages belong in GitHub Releases.
+Installer packages belong in GitHub Releases.
 
 ## Audit remediation and release gates (0.5)
 

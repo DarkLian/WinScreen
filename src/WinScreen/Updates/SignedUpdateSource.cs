@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http;
 using Velopack;
 using Velopack.Logging;
 using Velopack.Sources;
@@ -5,7 +7,10 @@ using Velopack.Sources;
 namespace WinScreen.Updates;
 
 /// <summary>Only a signed stable Windows feed and full packages from the built-in repository are accepted.</summary>
-internal sealed class SignedUpdateSource(string repository, string publicKey, UpdateTransport transport,
+internal sealed class SignedUpdateSource(
+    string repository,
+    string publicKey,
+    UpdateTransport transport,
     CancellationToken cancellation) : IUpdateSource
 {
     private readonly string _repository = UpdateSecurity.ValidateRepository(repository);
@@ -17,12 +22,24 @@ internal sealed class SignedUpdateSource(string repository, string publicKey, Up
     {
         if (appId != "WinScreen" || channel != "win")
             throw new InvalidDataException("Unexpected update identity or channel.");
-        var release = await transport.ResolveRelease(new Uri($"https://github.com/{_repository}/releases/latest"), cancellation);
+        Uri release;
+        try
+        {
+            release = await transport.ResolveRelease(new Uri($"https://github.com/{_repository}/releases/latest"),
+                cancellation);
+        }
+        catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.NotFound)
+        {
+            return new VelopackAssetFeed(); // Nothing has been published yet, which isn't a failure.
+        }
+
         string prefix = $"/{_repository}/releases/tag/";
-        if (release.Host != "github.com" || !release.AbsolutePath.StartsWith(prefix, StringComparison.Ordinal) || release.Query.Length != 0)
+        if (release.Host != "github.com" || !release.AbsolutePath.StartsWith(prefix, StringComparison.Ordinal) ||
+            release.Query.Length != 0)
             throw new InvalidDataException("The latest release did not resolve to this repository's stable tag.");
         string tag = Uri.UnescapeDataString(release.AbsolutePath[prefix.Length..]);
-        if (!System.Text.RegularExpressions.Regex.IsMatch(tag, @"\Av(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\z"))
+        if (!System.Text.RegularExpressions.Regex.IsMatch(tag,
+                @"\Av(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\z"))
             throw new InvalidDataException("Only stable vMAJOR.MINOR.PATCH release tags are accepted.");
         string baseUrl = $"https://github.com/{_repository}/releases/download/{tag}/";
         byte[] feedBytes = await transport.Read(new Uri(baseUrl + "releases.win.json"), 1048576, cancellation);
@@ -42,10 +59,12 @@ internal sealed class SignedUpdateSource(string repository, string publicKey, Up
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellation, cancelToken);
         if (!_verified.TryGetValue(releaseEntry.FileName, out var trusted) ||
-            trusted.SHA256 != releaseEntry.SHA256 || trusted.Size != releaseEntry.Size || trusted.Version != releaseEntry.Version)
+            trusted.SHA256 != releaseEntry.SHA256 || trusted.Size != releaseEntry.Size ||
+            trusted.Version != releaseEntry.Version)
             throw new InvalidDataException("The update was not in the verified feed.");
         UpdateSecurity.ValidateAsset(releaseEntry);
-        var uri = new Uri((_releaseBase ?? throw new InvalidDataException("No verified release.")) + releaseEntry.FileName);
+        var uri = new Uri((_releaseBase ?? throw new InvalidDataException("No verified release.")) +
+                          releaseEntry.FileName);
         try
         {
             await using (var output = new FileStream(localFile, FileMode.Create, FileAccess.Write, FileShare.None))

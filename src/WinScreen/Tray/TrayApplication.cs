@@ -1,4 +1,5 @@
 using static WinScreen.Settings.UiText;
+using System.Runtime.InteropServices;
 using WinScreen.Anchors;
 using WinScreen.Dark;
 using WinScreen.Hotkeys;
@@ -13,6 +14,9 @@ namespace WinScreen.Tray;
 /// <summary>The running app: a tray icon, the global hotkeys, the toolbar, and what each command does.</summary>
 public sealed class TrayApplication : ApplicationContext
 {
+    private const int MenuTextLimit = 60;
+    private const int BalloonMilliseconds = 3000;
+
     private readonly WindowController _windows;
     private readonly AppSettings _settings;
     private readonly string _settingsPath;
@@ -22,13 +26,14 @@ public sealed class TrayApplication : ApplicationContext
     private readonly DarkMode _dark = new();
     private readonly AnchorSet _anchors = new();
     private readonly PinBorders _borders = new();
+    private readonly ActionFlash _flash = new();
     private readonly Dictionary<nint, ShrinkTile> _shrunk = [];
     private readonly Dictionary<nint, PipWindow> _pips = [];
     private readonly Dictionary<nint, WindowIdentity> _setupDone = [];
     private readonly Dictionary<nint, long> _setupRetryAt = [];
     private readonly ToolStripMenuItem _targetTitle = new() { Enabled = false };
     private readonly ToolStripMenuItem _statusItem = new();
-    private string _lastStatus = "Ready";
+    private string _lastStatus = T("No actions yet");
     private WindowIdentity? _lastIdentity;
     private nint _menuWindow;
     private WindowIdentity? _menuIdentity;
@@ -37,7 +42,6 @@ public sealed class TrayApplication : ApplicationContext
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 250 };
     private readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = 30_000 };
     private readonly AutomaticUpdates _updates;
-    private nint _lastWindow;
     private SettingsWindow? _settingsWindow;
     private CropOverlay? _cropping;
 
@@ -46,60 +50,41 @@ public sealed class TrayApplication : ApplicationContext
         _windows = windows;
         _settings = settings;
         _settingsPath = settingsPath;
-        _updates = new AutomaticUpdates(VelopackUpdateSession.Create, message => Notify(T("WinScreen update"), message));
-        _toolbar = new WindowToolbar(CanUseToolbar, IsOn, Run);
+        // Update news stays out of Last result, where it could replace a failure someone needs to read.
+        _updates = new AutomaticUpdates(VelopackUpdateSession.Create, message =>
+        {
+            if (_settings.ShowNotifications)
+                Balloon(T("WinScreen update"), message, ToolTipIcon.None);
+        });
+        _toolbar = new WindowToolbar(CanUseToolbar, IsOn, IsAvailable, Run);
         _ = _toolbar.Handle;
         _dark.Ignore(_toolbar.Handle);
+        _ = _flash.Handle;
+        _dark.Ignore(_flash.Handle);
 
-        _hotkeys.Pressed += id => Run((AppCommand)id, User32.GetForegroundWindow());
+        _hotkeys.Pressed += id => Run((AppCommand)id, TargetOf(User32.GetForegroundWindow()));
         _hotkeys.CloseRequested += ExitThread;
-
-        var menu = new ContextMenuStrip();
-        menu.Items.Add(_targetTitle);
-        menu.Items.Add(_statusItem);
-        _statusItem.Click += (_, _) => MessageBox.Show(_lastStatus, "WinScreen", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Opening += (_, _) =>
-        {
-            _menuIdentity = _lastIdentity?.Matches() == true ? _lastIdentity : null;
-            _menuWindow = _menuIdentity?.Window ?? 0;
-            _targetTitle.Text = T("Target: ") + (_menuWindow == 0 ? T("No eligible window") : WindowInfo.Title(_menuWindow));
-            foreach (ToolStripMenuItem item in menu.Items.OfType<ToolStripMenuItem>())
-                if (item.Tag is AppCommand action)
-                {
-                    item.Checked = _menuWindow != 0 && IsOn(action, _menuWindow);
-                    item.Enabled = _menuWindow != 0 && (action == AppCommand.RestoreWindow || (!Paused && _windows.CanControl(_menuWindow)));
-                }
-        };
-        menu.Items.Add(T("Pin or unpin last window"), null, (_, _) => RunFromMenu(AppCommand.TogglePin)).Tag = AppCommand.TogglePin;
-        menu.Items.Add(T("See-through at the default level"), null, (_, _) => RunFromMenu(AppCommand.ToggleDefaultOpacity)).Tag = AppCommand.ToggleDefaultOpacity;
-        menu.Items.Add(T("Click-through"), null, (_, _) => RunFromMenu(AppCommand.ToggleClickThrough)).Tag = AppCommand.ToggleClickThrough;
-        menu.Items.Add(T("Picture-in-Picture of last window"), null, (_, _) => RunFromMenu(AppCommand.OpenPip)).Tag = AppCommand.OpenPip;
-        menu.Items.Add(T("Dark mode for last window"), null, (_, _) => RunFromMenu(AppCommand.ToggleDark)).Tag = AppCommand.ToggleDark;
-        menu.Items.Add(T("Anchor for last window"), null, (_, _) => RunFromMenu(AppCommand.ToggleAnchor)).Tag = AppCommand.ToggleAnchor;
-        menu.Items.Add(T("Shrink last window"), null, (_, _) => RunFromMenu(AppCommand.ToggleShrink)).Tag = AppCommand.ToggleShrink;
-        menu.Items.Add(T("Crop last window"), null, (_, _) => RunFromMenu(AppCommand.ToggleCrop)).Tag = AppCommand.ToggleCrop;
-        menu.Items.Add(T("Remember last window's setup"), null, (_, _) => RunFromMenu(AppCommand.SaveWindowSetup)).Tag = AppCommand.SaveWindowSetup;
-        menu.Items.Add(T("Restore all windows"), null, (_, _) => Run(AppCommand.RestoreAll, 0));
-        menu.Items.Add(T("Restore this window"), null, (_, _) => RunFromMenu(AppCommand.RestoreWindow)).Tag = AppCommand.RestoreWindow;
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(T("Settings"), null, (_, _) => OpenSettings());
-        menu.Items.Add(T("Exit"), null, (_, _) => ExitThread());
 
         _tray.Icon = LoadIcon();
         _tray.Text = "WinScreen";
-        _tray.ContextMenuStrip = menu;
+        _tray.ContextMenuStrip = BuildMenu();
+        _tray.MouseClick += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left)
+                OpenSettings();
+        };
         _tray.Visible = true;
+        ShowStatus();
 
-        IReadOnlyList<string> taken;
-        try { taken = Apply(settings); }
-        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or System.Security.SecurityException) { taken = [failure.Message]; }
-        Notify(T("WinScreen is running"), taken.Count == 0
-            ? T("Right-click this icon for more.")
-            : T("Some hotkeys are taken by another app: ") + string.Join(", ", taken));
-        _statusItem.Text = T("Last result: ") + _lastStatus;
+        bool firstRun = !_settings.WelcomeShown;
+        IReadOnlyList<HotkeyProblem> problems = StartUp();
+        if (problems.Count > 0)
+            Alert(T("Some hotkeys aren't available. The others work."), Describe(problems));
+        else if (firstRun)
+            Balloon(T("WinScreen is running"), T("Click this icon for Settings, or right-click it for more."),
+                ToolTipIcon.None);
         if (_windows.RecoveryWarning is { } warning)
-            Notify(T("Recovery needs attention"), warning);
+            Alert(T("Recovery needs attention"), warning);
 
         _watch.Tick += (_, _) => Watch();
         _watch.Start();
@@ -111,21 +96,87 @@ public sealed class TrayApplication : ApplicationContext
         _updateTimer.Start();
     }
 
-    /// <summary>Puts settings into effect and saves them. Returns the hotkeys another app already holds.</summary>
-    private IReadOnlyList<string> Apply(AppSettings settings)
+    private ContextMenuStrip BuildMenu()
+    {
+        var menu = new ContextMenuStrip();
+        menu.Items.Add(_targetTitle);
+        menu.Items.Add(_statusItem);
+        _statusItem.Click += (_, _) =>
+            MessageBox.Show(_lastStatus, "WinScreen", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        menu.Items.Add(new ToolStripSeparator());
+        foreach (AppCommand command in CommandCatalog.Ordered)
+        {
+            EventHandler click = command == AppCommand.RestoreAll
+                ? (_, _) => Run(AppCommand.RestoreAll, 0)
+                : (_, _) => RunFromMenu(command);
+            menu.Items.Add(CommandCatalog.Name(command), null, click).Tag = command;
+            if (CommandCatalog.EndsGroup(command))
+                menu.Items.Add(new ToolStripSeparator());
+        }
+
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(T("Settings"), null, (_, _) => OpenSettings());
+        menu.Items.Add(T("Check for updates"), null, async (_, _) => await CheckForUpdates());
+        menu.Items.Add(T("About WinScreen"), null, (_, _) => MessageBox.Show(
+            string.Format(T("WinScreen version {0}"), AppInfo.Version), "WinScreen", MessageBoxButtons.OK,
+            MessageBoxIcon.Information));
+        menu.Items.Add(T("Exit"), null, (_, _) => ExitThread());
+
+        menu.Opening += (_, _) =>
+        {
+            _menuIdentity = _lastIdentity?.IsSameWindow() == true ? _lastIdentity : null;
+            _menuWindow = _menuIdentity?.Window ?? 0;
+            _targetTitle.Text = T("Target: ") +
+                                (_menuWindow == 0 ? T("No eligible window") : MenuText(WindowInfo.Title(_menuWindow)));
+            foreach (ToolStripMenuItem item in menu.Items.OfType<ToolStripMenuItem>())
+            {
+                if (item.Tag is not AppCommand action)
+                    continue;
+                item.Visible = IsAvailable(action);
+                if (action == AppCommand.RestoreAll)
+                    continue;
+                item.Checked = _menuWindow != 0 && IsOn(action, _menuWindow);
+                item.Enabled = _menuWindow != 0 && (action == AppCommand.RestoreWindow ||
+                                                    (!Paused && _windows.CanControl(_menuWindow)));
+            }
+        };
+        return menu;
+    }
+
+    /// <summary>
+    /// Puts saved settings into effect when WinScreen starts. A hotkey that can't be used is reported and
+    /// the rest of the app carries on, because at startup nothing is running that a refusal could protect.
+    /// </summary>
+    private IReadOnlyList<HotkeyProblem> StartUp()
+    {
+        List<HotkeyProblem> problems = ReadHotkeys(_settings, out var desired);
+        foreach (AppCommand command in _hotkeys.RegisterAvailable(desired).Cast<AppCommand>())
+            problems.Add(Taken(command, _settings));
+
+        try
+        {
+            if (_settings.StartWithWindows is { } startup) _startup.IsOn = startup;
+            _settings.WelcomeShown = true;
+            _settings.Save(_settingsPath);
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException
+                                            or System.Security.SecurityException)
+        {
+            Alert(T("WinScreen couldn't save its settings"), failure.Message);
+        }
+
+        ApplyPreferences(_settings.ExperimentalFeatures);
+        return problems;
+    }
+
+    /// <summary>Puts changes from Settings into effect and saves them, or changes nothing and says why.</summary>
+    private IReadOnlyList<HotkeyProblem> Apply(AppSettings settings)
     {
         bool experimentalBefore = _settings.ExperimentalFeatures;
-        var desired = new Dictionary<int, (uint Modifiers, Keys Key)>();
-        var invalid = new List<string>();
-        foreach (var (command, value) in settings.Hotkeys)
-        {
-            if (string.IsNullOrEmpty(value)) continue;
-            if (!HotkeyText.TryParse(value, out uint modifiers, out Keys key))
-                invalid.Add(command + ": " + value);
-            else
-                desired[(int)command] = (modifiers, key);
-        }
-        if (invalid.Count > 0) return invalid;
+        List<HotkeyProblem> problems = ReadHotkeys(settings, out var desired);
+        if (problems.Count > 0)
+            return problems;
+
         bool startupBefore = _startup.IsOn;
         if (!_hotkeys.TryReplaceBindings(desired, () =>
             {
@@ -140,8 +191,15 @@ public sealed class TrayApplication : ApplicationContext
                     throw;
                 }
             }, out var conflicts))
-            return conflicts.Select(id => ((AppCommand)id) + ": " + settings.Hotkeys[(AppCommand)id]).ToArray();
+            return conflicts.Cast<AppCommand>().Select(command => Taken(command, settings)).ToArray();
+
         _settings.CopyFrom(settings);
+        ApplyPreferences(experimentalBefore);
+        return [];
+    }
+
+    private void ApplyPreferences(bool experimentalBefore)
+    {
         _windows.SetExcluded(_settings.ExcludedPrograms);
         _windows.SetIncluded(_settings.IncludedPrograms);
         _windows.DefaultOpacity = _settings.DefaultAlpha;
@@ -151,18 +209,59 @@ public sealed class TrayApplication : ApplicationContext
         foreach (var pip in _pips.Values)
         {
             pip.AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding;
+            pip.AllowAutoMove = _settings.ExperimentalFeatures;
             if (!_settings.ExperimentalFeatures) pip.SetAutoMove(false);
         }
+
         if (experimentalBefore && !_settings.ExperimentalFeatures)
         {
             CancelCrop();
             _dark.TurnAllOff();
             foreach (var tile in _shrunk.Values.ToArray()) tile.Close();
             if (_windows.EndExperimentalEffects() > 0)
-                Notify(T("Recovery needs attention"), T("Some windows couldn't be restored"));
+                Alert(T("Recovery needs attention"), T("Some windows couldn't be restored"));
         }
-        return [];
     }
+
+    private static List<HotkeyProblem> ReadHotkeys(AppSettings settings,
+        out Dictionary<int, (uint Modifiers, Keys Key)> desired)
+    {
+        desired = [];
+        var problems = new List<HotkeyProblem>();
+        var used = new Dictionary<(uint, Keys), AppCommand>();
+        foreach (AppCommand command in CommandCatalog.Ordered)
+        {
+            string value = settings.Hotkeys.GetValueOrDefault(command, "");
+            if (value.Length == 0)
+                continue;
+
+            string name = CommandCatalog.Name(command);
+            if (!HotkeyText.TryParse(value, out uint modifiers, out Keys key))
+                problems.Add(new HotkeyProblem(command,
+                    string.Format(T("{0}: \"{1}\" isn't a valid hotkey."), name, value)));
+            else if (used.TryGetValue((modifiers, key), out AppCommand first))
+                problems.Add(new HotkeyProblem(command,
+                    string.Format(T("{0} and {1} both use {2}."), CommandCatalog.Name(first), name, value)));
+            else if (HotkeyText.TypedText(modifiers, key) is { } typed)
+                problems.Add(new HotkeyProblem(command,
+                    string.Format(T("{0}: {1} types \"{2}\" on your keyboard, so it can't be a hotkey."), name, value,
+                        typed)));
+            else
+            {
+                used[(modifiers, key)] = command;
+                desired[(int)command] = (modifiers, key);
+            }
+        }
+
+        return problems;
+    }
+
+    private static HotkeyProblem Taken(AppCommand command, AppSettings settings) => new(command,
+        T("Another app already uses: ") + $"{settings.Hotkeys[command]} ({CommandCatalog.Name(command)})");
+
+    private static string Describe(IEnumerable<HotkeyProblem> problems) =>
+        string.Join(Environment.NewLine, problems.Select(problem => problem.Message));
+
     private bool Paused => _settings.PauseInFullScreen && FullScreen.IsActive();
 
     private bool CanUseToolbar(nint window)
@@ -170,20 +269,37 @@ public sealed class TrayApplication : ApplicationContext
         return !Paused && _windows.CanControl(window);
     }
 
+    private bool IsAvailable(AppCommand command) =>
+        _settings.ExperimentalFeatures || !CommandCatalog.IsExperimental(command);
+
     private bool IsOn(AppCommand command, nint window)
     {
         return command switch
         {
             AppCommand.TogglePin => _windows.IsPinned(window),
             AppCommand.ToggleClickThrough => _windows.IsClickThrough(window),
+            AppCommand.OpenPip => _pips.ContainsKey(window),
             AppCommand.ToggleDark => _dark.IsDark(window),
             AppCommand.ToggleGlass => _windows.IsGlass(window),
             AppCommand.ToggleAnchor => _anchors.Has(window),
             AppCommand.ToggleDefaultOpacity => _windows.OpacityOf(window) < 255,
             AppCommand.SaveWindowSetup => _settings.SetupForWindow(window) is not null,
+            AppCommand.ToggleShrink => _shrunk.ContainsKey(window),
             AppCommand.ToggleCrop => _windows.IsCropped(window),
             _ => false,
         };
+    }
+
+    /// <summary>A hotkey pressed on a PiP view or Shrink tile means the window that view stands for.</summary>
+    private nint TargetOf(nint foreground)
+    {
+        foreach ((nint source, PipWindow view) in _pips)
+            if (view.IsHandleCreated && view.Handle == foreground)
+                return source;
+        foreach ((nint source, ShrinkTile tile) in _shrunk)
+            if (tile.IsHandleCreated && tile.Handle == foreground)
+                return source;
+        return foreground;
     }
 
     private void Watch()
@@ -191,12 +307,18 @@ public sealed class TrayApplication : ApplicationContext
         nint foreground = User32.GetForegroundWindow();
         if (_windows.CanControl(foreground))
         {
-            _lastWindow = foreground;
-            if (_lastIdentity is null || _lastIdentity.Window != foreground || !_lastIdentity.Matches())
+            if (_lastIdentity is null || _lastIdentity.Window != foreground || !_lastIdentity.IsSameWindow())
             {
-                try { _lastIdentity = WindowIdentity.Capture(foreground); }
-                catch (WindowOperationException) { _lastIdentity = null; }
+                try
+                {
+                    _lastIdentity = WindowIdentity.Observe(foreground);
+                }
+                catch (WindowOperationException)
+                {
+                    _lastIdentity = null;
+                }
             }
+
             ApplySavedSetup(foreground);
         }
 
@@ -210,12 +332,17 @@ public sealed class TrayApplication : ApplicationContext
     /// </summary>
     private void ApplySavedSetup(nint window)
     {
-        if (Paused || !WindowInfo.IsMainWindow(window) || _setupRetryAt.GetValueOrDefault(window) > Environment.TickCount64)
+        if (Paused || !WindowInfo.IsMainWindow(window) ||
+            _setupRetryAt.GetValueOrDefault(window) > Environment.TickCount64)
             return;
         if (_setupDone.TryGetValue(window, out var prior) && prior.Matches())
             return;
         foreach (var stale in _setupDone.Where(pair => !pair.Value.Matches()).Select(pair => pair.Key).ToArray())
-        { _setupDone.Remove(stale); _setupRetryAt.Remove(stale); }
+        {
+            _setupDone.Remove(stale);
+            _setupRetryAt.Remove(stale);
+        }
+
         if (_settings.SetupForWindow(window) is not { } setup)
             return;
         try
@@ -229,12 +356,13 @@ public sealed class TrayApplication : ApplicationContext
             _setupDone[window] = identity;
             _setupRetryAt.Remove(window);
         }
-        catch (WindowOperationException failure)
+        catch (Exception failure) when (IsExpected(failure))
         {
             _setupRetryAt[window] = Environment.TickCount64 + 5000;
-            Notify(T("WinScreen couldn't do that"), failure.Message);
+            Alert(T("WinScreen couldn't do that"), failure.Message);
         }
     }
+
     /// <summary>Saves how this window is now for its program, or forgets the program's setup if it has none.</summary>
     private void SaveSetup(nint window)
     {
@@ -248,24 +376,48 @@ public sealed class TrayApplication : ApplicationContext
             Dark = _dark.IsDark(window),
         };
 
-        _settings.SavedSetups.RemoveAll(saved => (!string.IsNullOrEmpty(setup.ExecutablePath) && string.Equals(saved.ExecutablePath, setup.ExecutablePath, StringComparison.OrdinalIgnoreCase)) || (string.IsNullOrEmpty(saved.ExecutablePath) && string.Equals(saved.Program, program, StringComparison.OrdinalIgnoreCase)));
+        List<ProgramSetup> before = _settings.SavedSetups.ToList();
+        bool hadSetup = _settings.SavedSetups.RemoveAll(saved =>
+            (!string.IsNullOrEmpty(setup.ExecutablePath) && string.Equals(saved.ExecutablePath, setup.ExecutablePath,
+                StringComparison.OrdinalIgnoreCase)) || (string.IsNullOrEmpty(saved.ExecutablePath) &&
+                                                         string.Equals(saved.Program, program,
+                                                             StringComparison.OrdinalIgnoreCase))) > 0;
+        if (!setup.ChangesAnything && !hadSetup)
+        {
+            Alert(T("Nothing to remember"), T("Pin this window or change its opacity first."), ToolTipIcon.Info);
+            return;
+        }
+
         if (setup.ChangesAnything)
             _settings.SavedSetups.Add(setup);
-        _settings.Save(_settingsPath);
+        try
+        {
+            _settings.Save(_settingsPath);
+        }
+        catch
+        {
+            _settings.SavedSetups = before;
+            throw;
+        }
+
         _setupDone[window] = WindowIdentity.Capture(window);
-        Notify(setup.ChangesAnything ? T("Setup saved") : T("Saved setup removed"), setup.ChangesAnything ? setup.ToString() : program);
+        Confirm(setup.ChangesAnything ? T("Setup saved") : T("Saved setup removed"),
+            setup.ChangesAnything ? setup.ToString() : program);
     }
 
     private void Shrink(nint window)
     {
-        if (_pips.Remove(window, out var preview)) preview.Close();
-        if (_shrunk.ContainsKey(window))
+        if (_shrunk.TryGetValue(window, out var existing))
+        {
+            existing.Close();
             return;
+        }
 
+        if (_pips.Remove(window, out var preview)) preview.Close();
         var tile = new ShrinkTile(window, _windows);
         _shrunk[window] = tile;
         tile.FormClosed += (_, _) => _shrunk.Remove(window);
-        tile.Problem += text => Notify(T("WinScreen couldn't do that"), text);
+        tile.Problem += text => Alert(T("WinScreen couldn't do that"), text);
         tile.ShowOnTop();
         if (!tile.IsDisposed)
             _dark.Ignore(tile.Handle);
@@ -286,21 +438,32 @@ public sealed class TrayApplication : ApplicationContext
         var identity = WindowIdentity.Capture(window);
         overlay.Chosen += part =>
         {
-            if (_cropping != overlay || overlay.IsDisposed) return;
+            // The overlay has already closed by now; only a cancelled selection has stopped being current.
+            if (_cropping != overlay) return;
+            _cropping = null;
+            _croppingWindow = 0;
             try
             {
                 identity.Require();
                 _windows.Crop(window, part);
                 User32.SetForegroundWindow(window);
             }
-            catch (WindowOperationException failure)
+            catch (Exception failure) when (IsExpected(failure))
             {
-                Notify(T("WinScreen couldn't do that"), failure.Message);
+                Alert(T("WinScreen couldn't do that"), failure.Message);
             }
         };
         _cropping = overlay;
         _croppingWindow = window;
-        overlay.ShowOnTop();
+        try
+        {
+            overlay.ShowOnTop();
+        }
+        catch
+        {
+            CancelCrop();
+            throw;
+        }
     }
 
     private void OpenSettings()
@@ -316,18 +479,33 @@ public sealed class TrayApplication : ApplicationContext
         _settingsWindow.Activate();
     }
 
+    private async Task CheckForUpdates()
+    {
+        string result = !VelopackUpdateSession.IsInstalled
+            ? T("Updates only work in an installed copy of WinScreen.")
+            : !_settings.AutomaticUpdates
+                ? T("Turn on automatic updates in Settings first.")
+                : await _updates.CheckNow();
+        Balloon(T("WinScreen update"), result, ToolTipIcon.Info);
+    }
+
     protected override void ExitThreadCore()
     {
+        // Windows go back first: if that fails WinScreen stays running, with its views still in place.
         CancelCrop();
+        if (_windows.RestoreAll() != 0)
+        {
+            Alert(T("Recovery needs attention"),
+                T(
+                    "WinScreen didn't exit because some windows couldn't be restored. Choose Restore all windows to try again.") +
+                Environment.NewLine + string.Join(Environment.NewLine, _windows.RestoreFailures));
+            return;
+        }
+
         foreach (var preview in _pips.Values.ToArray()) preview.Close();
         foreach (var tile in _shrunk.Values.ToArray()) tile.Close();
         _dark.TurnAllOff();
         _anchors.RemoveAll();
-        if (_windows.RestoreAll() != 0)
-        {
-            Notify(T("Recovery needs attention"), "Exit was cancelled because some windows could not be restored. Use Restore all windows to retry; no update was scheduled. " + string.Join(Environment.NewLine, _windows.RestoreFailures));
-            return;
-        }
         _updateTimer.Dispose();
         _watch.Dispose();
         _borders.Dispose();
@@ -336,6 +514,7 @@ public sealed class TrayApplication : ApplicationContext
         foreach (Form form in Application.OpenForms.Cast<Form>().ToArray())
             form.Close();
         _toolbar.Dispose();
+        _flash.Dispose();
         Task.Run(_updates.ApplyOnExit).GetAwaiter().GetResult();
         _updates.Dispose();
         _hotkeys.Dispose();
@@ -347,20 +526,28 @@ public sealed class TrayApplication : ApplicationContext
     private void Run(AppCommand command, nint window)
     {
         if (command == AppCommand.RestoreWindow &&
-            (window == 0 || !_windows.CanControl(window)) && _lastIdentity?.Matches() == true)
+            (window == 0 || !_windows.CanControl(window)) && _lastIdentity?.IsSameWindow() == true)
         {
             User32.GetWindowThreadProcessId(window, out uint pid);
             if (window == 0 || pid == Environment.ProcessId) window = _lastIdentity.Window;
         }
+
         bool recovery = command is AppCommand.RestoreAll or AppCommand.RestoreWindow;
-        if (!recovery && (Paused || !_windows.CanControl(window)))
+        if (!recovery && Paused)
         {
-            Notify(T("WinScreen couldn't do that"), Paused ? T("Commands are paused for the full-screen app.") : T("The target is unavailable or excluded. Recovery is still available from the tray."));
+            Alert(T("WinScreen couldn't do that"), T("Commands are paused while a full-screen app is running."));
             return;
         }
-        if (!recovery && !_settings.ExperimentalFeatures && command is AppCommand.ToggleDark or AppCommand.ToggleGlass or AppCommand.ToggleShrink or AppCommand.ToggleCrop)
+
+        if (!recovery && _windows.Refusal(window) is { } refusal)
         {
-            Notify(T("WinScreen couldn't do that"), T("Enable experimental effects in Settings to use this action."));
+            Alert(T("WinScreen couldn't do that"), refusal);
+            return;
+        }
+
+        if (!recovery && !IsAvailable(command))
+        {
+            Alert(T("WinScreen couldn't do that"), T("Enable experimental effects in Settings to use this action."));
             return;
         }
 
@@ -369,29 +556,41 @@ public sealed class TrayApplication : ApplicationContext
             switch (command)
             {
                 case AppCommand.TogglePin:
-                    Notify(_windows.TogglePin(window) ? T("Pinned on top") : T("Unpinned"), WindowInfo.Title(window));
+                    Confirm(_windows.TogglePin(window) ? T("Pinned on top") : T("Unpinned"), WindowInfo.Title(window));
                     break;
                 case AppCommand.OpacityUp:
-                    _windows.ChangeOpacity(window, WindowController.OpacityStep);
+                    ShowOpacity(window, _windows.ChangeOpacity(window, WindowController.OpacityStep));
                     break;
                 case AppCommand.OpacityDown:
-                    _windows.ChangeOpacity(window, -WindowController.OpacityStep);
+                    ShowOpacity(window, _windows.ChangeOpacity(window, -WindowController.OpacityStep));
                     break;
                 case AppCommand.ToggleDefaultOpacity:
-                    _windows.ToggleDefaultOpacity(window);
+                    ShowOpacity(window, _windows.ToggleDefaultOpacity(window));
                     break;
                 case AppCommand.ToggleClickThrough:
-                    Notify(_windows.ToggleClickThrough(window) ? T("Click-through on") : T("Click-through off"),
-                        T("Restore all windows from the tray icon if you can't reach it."));
+                    if (_windows.ToggleClickThrough(window))
+                        Alert(T("Click-through on"),
+                            T("If you can't reach this window, use Restore all windows from the tray icon."),
+                            ToolTipIcon.Info);
+                    else
+                        Confirm(T("Click-through off"), WindowInfo.Title(window));
                     break;
                 case AppCommand.OpenPip:
-                    if (_pips.TryGetValue(window, out var existing)) { existing.Activate(); break; }
+                    if (_pips.TryGetValue(window, out var existing))
+                    {
+                        existing.Activate();
+                        break;
+                    }
+
                     if (_shrunk.Remove(window, out var tile)) tile.Close();
-                    var pip = new PipWindow(window, _windows);
-                    pip.AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding;
+                    var pip = new PipWindow(window, _windows)
+                    {
+                        AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding,
+                        AllowAutoMove = _settings.ExperimentalFeatures,
+                    };
                     _pips[window] = pip;
                     pip.FormClosed += (_, _) => _pips.Remove(window);
-                    pip.Problem += text => Notify(T("WinScreen couldn't do that"), text);
+                    pip.Problem += text => Alert(T("WinScreen couldn't do that"), text);
                     pip.ShowOnTop();
                     if (pip.IsDisposed) break;
                     _dark.Ignore(pip.Handle);
@@ -424,33 +623,90 @@ public sealed class TrayApplication : ApplicationContext
                     _anchors.RemoveAll();
                     int failed = _windows.RestoreAll();
                     if (failed > 0)
-                        Notify(T("Some windows couldn't be restored"), string.Format(T("{0} window(s) refused the change."), failed) + Environment.NewLine + string.Join(Environment.NewLine, _windows.RestoreFailures));
+                        Alert(T("Some windows couldn't be restored"),
+                            string.Format(T("{0} window(s) refused the change."), failed) + Environment.NewLine +
+                            string.Join(Environment.NewLine, _windows.RestoreFailures));
+                    else if (_windows.RecoveryBlocked)
+                        Alert(T("Recovery needs attention"), _windows.RecoveryWarning!);
                     else
-                        Notify(T("Restore all windows"), T("All changes restored."));
+                        Confirm(T("Restore all windows"), T("All changes restored."));
                     break;
                 case AppCommand.RestoreWindow:
+                    if (!HasAnythingToRestore(window))
+                    {
+                        Alert(T("Restore this window"), T("WinScreen hasn't changed this window."), ToolTipIcon.Info);
+                        break;
+                    }
+
                     if (_croppingWindow == window) CancelCrop();
                     if (_pips.Remove(window, out var view)) view.Close();
                     if (_shrunk.Remove(window, out var shrunkTile)) shrunkTile.Close();
                     if (_dark.IsDark(window)) _dark.Toggle(window);
                     if (_anchors.Has(window)) _anchors.Toggle(window);
-                    Notify(T("Restore this window"), _windows.RestoreWindow(window) ? T("All changes restored.") : string.Join(Environment.NewLine, _windows.RestoreFailures));
+                    if (_windows.RestoreWindow(window))
+                        Confirm(T("Restore this window"), T("All changes restored."));
+                    else
+                        Alert(T("Restore this window"), string.Join(Environment.NewLine, _windows.RestoreFailures));
                     break;
             }
         }
-        catch (WindowOperationException failure)
+        catch (Exception failure) when (IsExpected(failure))
         {
-            Notify(T("WinScreen couldn't do that"), failure.Message);
+            Alert(T("WinScreen couldn't do that"), failure.Message);
         }
     }
 
-    private void Notify(string title, string text)
+    /// <summary>Failures a command can meet in normal use, such as a locked settings file or a refused screen capture.</summary>
+    private static bool IsExpected(Exception failure) => failure is WindowOperationException or IOException
+        or UnauthorizedAccessException or System.Security.SecurityException or ExternalException;
+
+    private bool HasAnythingToRestore(nint window) =>
+        _windows.HasChanges(window) || _pips.ContainsKey(window) || _shrunk.ContainsKey(window) ||
+        _dark.IsDark(window) || _anchors.Has(window) || _croppingWindow == window;
+
+    private void ShowOpacity(nint window, byte alpha)
+    {
+        if (WindowInfo.TryGetVisibleBounds(window, out Rectangle bounds))
+            _flash.ShowOver(bounds, string.Format(T("{0}% solid"), (int)Math.Round(alpha * 100.0 / 255)));
+    }
+
+    /// <summary>Reports a routine success, which someone can choose not to be told about.</summary>
+    private void Confirm(string title, string text)
+    {
+        Remember(title, text);
+        if (_settings.ShowNotifications)
+            Balloon(title, text, ToolTipIcon.None);
+    }
+
+    /// <summary>Reports something that didn't happen or needs a decision. It's always shown, or it would look like nothing happened.</summary>
+    private void Alert(string title, string text, ToolTipIcon icon = ToolTipIcon.Warning)
+    {
+        Remember(title, text);
+        Balloon(title, text, icon);
+    }
+
+    private void Remember(string title, string text)
     {
         _lastStatus = title + ": " + text;
-        _statusItem.Text = T("Last result: ") + (_lastStatus.Length > 120 ? _lastStatus[..120] + "…" : _lastStatus);
-        if (!_settings.ShowNotifications)
-            return;
-        _tray.ShowBalloonTip(1500, title, string.IsNullOrEmpty(text) ? " " : text, ToolTipIcon.None);
+        ShowStatus();
+    }
+
+    private void ShowStatus() => _statusItem.Text = T("Last result: ") + MenuText(_lastStatus);
+
+    private void Balloon(string title, string text, ToolTipIcon icon) =>
+        _tray.ShowBalloonTip(BalloonMilliseconds, title, string.IsNullOrEmpty(text) ? " " : text, icon);
+
+    /// <summary>Keeps the tray menu a sensible width whatever a window calls itself. "&amp;" would otherwise vanish as a shortcut mark.</summary>
+    private static string MenuText(string text)
+    {
+        string flat = text.ReplaceLineEndings(" ");
+        if (flat.Length > MenuTextLimit)
+        {
+            int end = char.IsHighSurrogate(flat[MenuTextLimit - 1]) ? MenuTextLimit - 1 : MenuTextLimit;
+            flat = flat[..end] + "…";
+        }
+
+        return flat.Replace("&", "&&");
     }
 
     private void CancelCrop()
@@ -463,15 +719,17 @@ public sealed class TrayApplication : ApplicationContext
 
     private void RunFromMenu(AppCommand command)
     {
-        if (_menuIdentity?.Matches() != true)
+        if (_menuIdentity?.IsSameWindow() != true)
         {
-            Notify(T("WinScreen couldn't do that"), T("The target is unavailable or excluded. Recovery is still available from the tray."));
+            Alert(T("WinScreen couldn't do that"),
+                T("That window is no longer available. Click the window you want, then try again."));
             return;
         }
+
         Run(command, _menuIdentity.Window);
     }
 
-    private static Icon LoadIcon()
+    internal static Icon LoadIcon()
     {
         string? path = Environment.ProcessPath;
         return (path is null ? null : Icon.ExtractAssociatedIcon(path)) ?? SystemIcons.Application;

@@ -14,64 +14,59 @@ public sealed class WindowToolbar : Form
     private const int WM_MOUSEACTIVATE = 0x0021;
     private const int MA_NOACTIVATE = 3;
     private const int ButtonSize = 34;
-    private const int TitleBarHeight = 34;
-    private const int HoverDelayMilliseconds = 350;
+    private const int GroupGap = 8;
+    private const int GlyphSize = 15;
+    private const int CaptionHeight = 34;
+    private const int CaptionButtonsWidth = 150;
+    private const int KeepOpenMargin = 12;
+    private const int StillPixels = 4;
+    private const int HoverDelayMilliseconds = 500;
     private const int Interval = 60;
+    private const uint AbortIfHung = 0x2;
+    private const uint CaptionCheckMilliseconds = 100;
 
     private static readonly Color Background = Color.FromArgb(32, 32, 32);
     private static readonly Color Hover = Color.FromArgb(70, 70, 70);
     private static readonly Color On = Color.FromArgb(79, 140, 255);
 
-    private readonly (AppCommand Command, string Glyph, string Name)[] Items =
-    [
-        (AppCommand.TogglePin, "", T("Pin on top")),
-        (AppCommand.OpenPip, "", T("Picture-in-Picture")),
-        (AppCommand.OpacityDown, "\uEC8A", T("More see-through")),
-        (AppCommand.OpacityUp, "\uE706", T("More opaque")),
-        (AppCommand.ToggleClickThrough, "", T("Click-through")),
-        (AppCommand.ToggleDark, "", T("Dark mode")),
-        (AppCommand.ToggleGlass, "\uE790", T("Glass mode")),
-        (AppCommand.ToggleAnchor, "\uE8B7", T("Anchor")),
-        (AppCommand.ToggleDefaultOpacity, "\uE7B3", T("See-through at the default level")),
-        (AppCommand.ToggleShrink, "\uE73F", T("Shrink")),
-        (AppCommand.ToggleCrop, "\uE7A8", T("Crop")),
-        (AppCommand.SaveWindowSetup, "\uE74E", T("Remember this setup for the program")),
-    ];
-
     private readonly Func<nint, bool> _canUse;
     private readonly Func<AppCommand, nint, bool> _isOn;
+    private readonly Func<AppCommand, bool> _isAvailable;
     private readonly Action<AppCommand, nint> _run;
     private readonly Dictionary<AppCommand, Button> _buttons = [];
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = Interval };
+    private readonly ToolTip _tips = new() { ShowAlways = true };
     private nint _window;
     private WindowIdentity? _identity;
     private int _hoverTime;
+    private Point _hoverPoint;
     private Rectangle _targetBounds;
-    private readonly ToolTip _tips = new();
+    private Rectangle _hoverZone;
+    private Font? _glyphs;
+    private string _arrangement = "";
 
-    public WindowToolbar(Func<nint, bool> canUse, Func<AppCommand, nint, bool> isOn, Action<AppCommand, nint> run)
+    public WindowToolbar(Func<nint, bool> canUse, Func<AppCommand, nint, bool> isOn, Func<AppCommand, bool> isAvailable,
+        Action<AppCommand, nint> run)
     {
         _canUse = canUse;
         _isOn = isOn;
+        _isAvailable = isAvailable;
         _run = run;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
         BackColor = Background;
         Text = T("WinScreen toolbar");
-        ClientSize = new Size(ButtonSize * Items.Length, ButtonSize);
 
-        for (int i = 0; i < Items.Length; i++)
+        foreach (AppCommand command in CommandCatalog.Ordered.Where(command => command != AppCommand.RestoreAll))
         {
-            (AppCommand command, string glyph, string name) = Items[i];
+            string name = CommandCatalog.Name(command);
             var button = new Button
             {
-                Text = glyph,
-                Font = new Font("Segoe MDL2 Assets", 12),
+                Text = Glyph(command),
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = Color.White,
                 BackColor = Background,
-                Bounds = new Rectangle(i * ButtonSize, 0, ButtonSize, ButtonSize),
                 TabStop = false,
                 AccessibleName = name,
             };
@@ -79,7 +74,12 @@ public sealed class WindowToolbar : Form
             button.FlatAppearance.MouseOverBackColor = Hover;
             button.Click += (_, _) =>
             {
-                if (!TargetIsCurrent()) { Hide(); return; }
+                if (!TargetIsCurrent())
+                {
+                    Hide();
+                    return;
+                }
+
                 _run(command, _window);
                 ShowStates();
             };
@@ -88,6 +88,7 @@ public sealed class WindowToolbar : Form
             Controls.Add(button);
         }
 
+        Arrange(Dpi.Default);
         _watch.Tick += (_, _) => Watch();
     }
 
@@ -130,8 +131,63 @@ public sealed class WindowToolbar : Form
         {
             _watch.Dispose();
             _tips.Dispose();
+            _glyphs?.Dispose();
         }
+
         base.Dispose(disposing);
+    }
+
+    private static string Glyph(AppCommand command) => command switch
+    {
+        AppCommand.TogglePin => "",
+        AppCommand.OpacityDown => "",
+        AppCommand.ToggleDefaultOpacity => "",
+        AppCommand.OpacityUp => "",
+        AppCommand.ToggleClickThrough => "",
+        AppCommand.OpenPip => "",
+        AppCommand.ToggleAnchor => "",
+        AppCommand.ToggleDark => "",
+        AppCommand.ToggleGlass => "",
+        AppCommand.ToggleShrink => "",
+        AppCommand.ToggleCrop => "",
+        AppCommand.SaveWindowSetup => "",
+        AppCommand.RestoreWindow => "",
+        _ => "",
+    };
+
+    /// <summary>Sizes the buttons for this monitor and lays out the ones currently available.</summary>
+    private void Arrange(int dpi)
+    {
+        AppCommand[] available = _buttons.Keys.Where(_isAvailable).ToArray();
+        string arrangement = dpi + ":" + string.Join(",", available);
+        if (arrangement == _arrangement)
+            return;
+
+        _arrangement = arrangement;
+        Font? previous = _glyphs;
+        _glyphs = new Font("Segoe MDL2 Assets", Dpi.Scale(GlyphSize, dpi), GraphicsUnit.Pixel);
+        int size = Dpi.Scale(ButtonSize, dpi);
+        int gap = Dpi.Scale(GroupGap, dpi);
+        int left = 0, right = 0;
+        foreach ((AppCommand command, Button button) in _buttons)
+        {
+            // Read from the list: a button reports itself as hidden until the toolbar is on screen.
+            bool shown = available.Contains(command);
+            button.Font = _glyphs;
+            button.Visible = shown;
+            if (shown)
+            {
+                button.Bounds = new Rectangle(left, 0, size, size);
+                left += size;
+                right = left;
+            }
+
+            if (CommandCatalog.EndsGroup(command))
+                left += gap;
+        }
+
+        ClientSize = new Size(right, size);
+        previous?.Dispose();
     }
 
     private void Watch()
@@ -139,22 +195,34 @@ public sealed class WindowToolbar : Form
         Point cursor = Cursor.Position;
         if (Visible)
         {
-            bool overToolbar = Rectangle.Inflate(Bounds, 12, 12).Contains(cursor);
-            if (!overToolbar || !TargetIsCurrent())
+            bool nearby = Rectangle.Inflate(Rectangle.Union(Bounds, _hoverZone), KeepOpenMargin, KeepOpenMargin)
+                .Contains(cursor);
+            if (!nearby || !TargetIsCurrent())
                 Hide();
             return;
         }
 
         nint foreground = User32.GetForegroundWindow();
-        if (!_canUse(foreground) || !User32.GetWindowRect(foreground, out Rect r))
+        if (MouseButtons != MouseButtons.None || !_canUse(foreground) ||
+            !User32.GetWindowRect(foreground, out Rect r))
         {
             _hoverTime = 0;
             return;
         }
 
-        var bounds = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
-        if (!TitleBarMiddle(bounds).Contains(cursor))
+        int dpi = Dpi.Of(foreground);
+        Arrange(dpi);
+        var window = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
+        Rectangle area = Screen.FromRectangle(window).WorkingArea;
+        int reserved = Dpi.Scale(CaptionButtonsWidth, dpi);
+        int caption = Dpi.Scale(CaptionHeight, dpi);
+        var bar = new Rectangle(ToolbarGeometry.Place(window, Size, area, reserved, caption), Size);
+        Rectangle zone = ToolbarGeometry.HoverZone(window, bar, area, reserved, caption);
+        bool moved = Math.Abs(cursor.X - _hoverPoint.X) > StillPixels ||
+                     Math.Abs(cursor.Y - _hoverPoint.Y) > StillPixels;
+        if (!zone.Contains(cursor) || moved)
         {
+            _hoverPoint = cursor;
             _hoverTime = 0;
             return;
         }
@@ -164,19 +232,38 @@ public sealed class WindowToolbar : Form
             return;
 
         _hoverTime = 0;
-        try { _identity = WindowIdentity.Capture(foreground); }
-        catch (WindowOperationException) { return; }
+        if (!IsTitleBar(foreground, cursor))
+            return;
+
+        try
+        {
+            _identity = WindowIdentity.Observe(foreground);
+        }
+        catch (WindowOperationException)
+        {
+            return;
+        }
+
         _window = foreground;
-        _targetBounds = bounds;
-        Location = new Point(bounds.Left + (bounds.Width - Width) / 2, bounds.Top);
+        _targetBounds = window;
+        _hoverZone = zone;
+        Location = bar.Location;
         ShowStates();
         Show();
+        // A pinned target is in the topmost group too, and Show alone can leave the bar underneath it.
+        User32.SetWindowPos(Handle, User32.HWND_TOPMOST, 0, 0, 0, 0,
+            User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
     }
 
-    /// <summary>The middle of the title bar, away from the tabs and the window buttons.</summary>
-    private static Rectangle TitleBarMiddle(Rectangle window)
+    /// <summary>
+    /// Asks the window itself, so tabs, menus and other content drawn at the top of an app
+    /// don't count as its title bar.
+    /// </summary>
+    private static bool IsTitleBar(nint window, Point cursor)
     {
-        return new Rectangle(window.Left + window.Width / 4, window.Top, window.Width / 2, TitleBarHeight);
+        nint position = (nint)((cursor.Y << 16) | (cursor.X & 0xFFFF));
+        return User32.SendMessageTimeout(window, User32.WM_NCHITTEST, 0, position, AbortIfHung,
+            CaptionCheckMilliseconds, out nint hit) != 0 && hit == User32.HTCAPTION;
     }
 
     private void ShowStates()
@@ -185,8 +272,9 @@ public sealed class WindowToolbar : Form
             button.ForeColor = _isOn(command, _window) ? On : Color.White;
     }
 
-    private bool TargetIsCurrent() => _identity?.Matches() == true &&
-        User32.GetForegroundWindow() == _window && _canUse(_window) &&
-        User32.GetWindowRect(_window, out var current) &&
-        Rectangle.FromLTRB(current.Left, current.Top, current.Right, current.Bottom) == _targetBounds;
+    private bool TargetIsCurrent() => _identity?.IsSameWindow() == true &&
+                                      User32.GetForegroundWindow() == _window && _canUse(_window) &&
+                                      User32.GetWindowRect(_window, out var current) &&
+                                      Rectangle.FromLTRB(current.Left, current.Top, current.Right, current.Bottom) ==
+                                      _targetBounds;
 }

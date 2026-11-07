@@ -79,6 +79,8 @@ internal static partial class User32
     public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
 
     public const int WM_CLOSE = 0x0010;
+    public const int WM_NCHITTEST = 0x0084;
+    public const int HTCAPTION = 2;
     public const int WM_HOTKEY = 0x0312;
 
     public static readonly nint HWND_TOPMOST = -1;
@@ -105,7 +107,8 @@ internal static partial class User32
     [LibraryImport("user32.dll", EntryPoint = "GetPropW", StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint GetProp(nint window, string name);
 
-    [LibraryImport("user32.dll", EntryPoint = "SetPropW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [LibraryImport("user32.dll", EntryPoint = "SetPropW", SetLastError = true,
+        StringMarshalling = StringMarshalling.Utf16)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetProp(nint window, string name, nint value);
 
@@ -113,7 +116,8 @@ internal static partial class User32
     public static partial nint WindowFromPoint(NativePoint point);
 
     [LibraryImport("user32.dll", EntryPoint = "SendMessageTimeoutW", SetLastError = true)]
-    public static partial nint SendMessageTimeout(nint window, uint message, nint wParam, nint lParam, uint flags, uint timeout, out nint result);
+    public static partial nint SendMessageTimeout(nint window, uint message, nint wParam, nint lParam, uint flags,
+        uint timeout, out nint result);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -192,15 +196,17 @@ internal static partial class User32
         {
             if (sent == 1)
                 SendInput(1, inputs + 1, sizeof(MouseInput)); // Do not leave the mouse button held down.
-            throw new Windows.WindowOperationException("Windows refused the forwarded click.");
+            throw new Windows.WindowOperationException(Settings.UiText.T("Windows refused the forwarded click."));
         }
     }
 
     [LibraryImport("user32.dll")]
     public static partial nint GetWindow(nint hWnd, uint command);
 
-    [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    public static partial nint CreateWindowEx(uint exStyle, string className, string windowName, int style, int x, int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
+    [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW", SetLastError = true,
+        StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint CreateWindowEx(uint exStyle, string className, string windowName, int style, int x,
+        int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -228,6 +234,17 @@ internal static partial class User32
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsWindowVisible(nint hWnd);
+
+    public const uint CB_SETCUEBANNER = 0x1703;
+
+    [LibraryImport("user32.dll", EntryPoint = "SendMessageW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint SendTextMessage(nint window, uint message, nint wParam, string text);
+
+    [LibraryImport("user32.dll")]
+    public static partial uint GetDpiForWindow(nint hWnd);
+
+    [LibraryImport("user32.dll")]
+    public static partial short GetKeyState(int virtualKey);
 
     [LibraryImport("user32.dll")]
     public static partial nint GetShellWindow();

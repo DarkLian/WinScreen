@@ -16,6 +16,10 @@ public sealed class PipWindow : Form
     private const int DragThreshold = 4;
     private const int LeaveMargin = 8;
     private const byte DimmedOpacity = 90;
+    private const int StartWidth = 480;
+    private const int StartHeight = 300;
+    private const int ScreenMargin = 20;
+    private const int CloseButtonSize = 28;
 
     private static readonly Color Accent = Color.FromArgb(79, 140, 255);
 
@@ -26,6 +30,9 @@ public sealed class PipWindow : Form
     private readonly System.Windows.Forms.Timer _autoMove = new() { Interval = 1000 };
     private readonly ToolStripMenuItem _hideItem;
     private readonly ToolStripMenuItem _autoMoveItem;
+    private readonly ToolStripMenuItem _removeCropItem;
+    private readonly ToolTip _tips = new() { ShowAlways = true };
+    private PipCloseButton? _closeButton;
     private DwmThumbnail? _thumbnail;
     private DwmThumbnail? _selectionView;
     private Rectangle _crop = Rectangle.Empty;
@@ -38,8 +45,13 @@ public sealed class PipWindow : Form
     private Rectangle _selection;
     private bool _initialPlacement = true;
     private readonly Point _initialLocation;
+
     [System.ComponentModel.DefaultValue(false)]
     public bool AllowClickForwarding { get; set; }
+
+    /// <summary>Whether this view offers to move itself, which is an experimental effect.</summary>
+    [System.ComponentModel.DefaultValue(false)]
+    public bool AllowAutoMove { get; set; }
 
     public PipWindow(nint source, WindowController windows)
     {
@@ -53,18 +65,31 @@ public sealed class PipWindow : Form
         Text = T("PiP - ") + WindowInfo.Title(source);
 
         Rectangle area = Screen.FromHandle(source).WorkingArea;
-        Size = new Size(480, 300);
-        Location = new Point(area.Right - 500, area.Bottom - 320);
+        int dpi = Dpi.Of(source);
+        Size = new Size(Dpi.Scale(StartWidth, dpi), Dpi.Scale(StartHeight, dpi));
+        Location = new Point(area.Right - Width - Dpi.Scale(ScreenMargin, dpi),
+            area.Bottom - Height - Dpi.Scale(ScreenMargin, dpi));
         _initialLocation = Location;
+        _tips.SetToolTip(this,
+            T(
+                "Click: go to the original • Drag: move • Wheel: resize • Ctrl+drag: crop • Right-click: menu • Esc: close"));
 
-        _hideItem = new ToolStripMenuItem(T("&Hide original window"), null, (_, _) => SetOriginalHidden(!_hideItem!.Checked));
-        _autoMoveItem = new ToolStripMenuItem(T("&Move away from text and images"), null, (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
+        _hideItem = new ToolStripMenuItem(T("&Hide original window"), null,
+            (_, _) => SetOriginalHidden(!_hideItem!.Checked));
+        _autoMoveItem = new ToolStripMenuItem(T("&Move away from text and images"), null,
+            (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
         var menu = new ContextMenuStrip();
         menu.Items.Add(_hideItem);
         menu.Items.Add(_autoMoveItem);
         menu.Items.Add(T("&Go to original window"), null, (_, _) => GoToSource());
-        menu.Items.Add(T("&Remove crop"), null, (_, _) => SetCrop(Rectangle.Empty));
+        _removeCropItem = new ToolStripMenuItem(T("&Remove crop"), null, (_, _) => SetCrop(Rectangle.Empty));
+        menu.Items.Add(_removeCropItem);
         menu.Items.Add(T("&Close PiP"), null, (_, _) => Close());
+        menu.Opening += (_, _) =>
+        {
+            _autoMoveItem.Visible = AllowAutoMove;
+            _removeCropItem.Enabled = !_crop.IsEmpty;
+        };
         ContextMenuStrip = menu;
 
         _watch.Tick += (_, _) => FollowSource();
@@ -89,17 +114,31 @@ public sealed class PipWindow : Form
         try
         {
             Show();
-            if (!IsDisposed) WindowController.Pin(Handle);
+            if (IsDisposed)
+                return;
+            WindowController.Pin(Handle);
+            User32.SetForegroundWindow(_source); // Pinning needed the focus; the person was working in the source.
         }
-        catch { Close(); throw; }
+        catch
+        {
+            Close();
+            throw;
+        }
     }
 
     /// <summary>Crops the view to a part of the source window, or shows all of it when empty.</summary>
     public void SetCrop(Rectangle crop)
     {
         _crop = crop;
-        try { FitToSource(); }
-        catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); Close(); }
+        try
+        {
+            FitToSource();
+        }
+        catch (WindowOperationException failure)
+        {
+            Problem?.Invoke(failure.Message);
+            Close();
+        }
     }
 
     /// <summary>
@@ -126,7 +165,8 @@ public sealed class PipWindow : Form
         {
             _identity.Require();
             if (hidden && _thumbnail is null)
-                throw new WindowOperationException("The preview is not ready; its original window will not be hidden.");
+                throw new WindowOperationException(
+                    T("The preview is not ready; its original window will not be hidden."));
             if (hidden)
                 _windows.Hide(_source);
             else
@@ -137,9 +177,15 @@ public sealed class PipWindow : Form
         {
             if (hidden && _identity.Matches() && _windows.IsHidden(_source))
             {
-                try { _windows.Show(_source); }
-                catch (WindowOperationException) { }
+                try
+                {
+                    _windows.Show(_source);
+                }
+                catch (WindowOperationException)
+                {
+                }
             }
+
             _hideItem.Checked = _identity.Matches() && _windows.IsHidden(_source);
             Problem?.Invoke(failure.Message);
         }
@@ -156,18 +202,42 @@ public sealed class PipWindow : Form
             return;
         }
 
-        try { FitToSource(); }
-        catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); Close(); return; }
+        try
+        {
+            FitToSource();
+        }
+        catch (WindowOperationException failure)
+        {
+            Problem?.Invoke(failure.Message);
+            Close();
+            return;
+        }
+
         _watch.Start();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.KeyCode == Keys.Escape)
+            Close();
     }
 
     protected override void OnMouseWheel(MouseEventArgs e)
     {
         base.OnMouseWheel(e);
         int widest = Screen.FromControl(this).WorkingArea.Width;
-        Width = Math.Clamp(Width + (e.Delta > 0 ? WheelStep : -WheelStep), Math.Min(PipGeometry.MinimumWidth, widest), widest);
-        try { FitToSource(); }
-        catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); Close(); }
+        Width = Math.Clamp(Width + (e.Delta > 0 ? WheelStep : -WheelStep), Math.Min(PipGeometry.MinimumWidth, widest),
+            widest);
+        try
+        {
+            FitToSource();
+        }
+        catch (WindowOperationException failure)
+        {
+            Problem?.Invoke(failure.Message);
+            Close();
+        }
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -181,8 +251,15 @@ public sealed class PipWindow : Form
         _dragged = false;
         if ((ModifierKeys & Keys.Control) != 0 && _thumbnail is not null)
         {
-            try { BeginSelection(_thumbnail); }
-            catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); Close(); }
+            try
+            {
+                BeginSelection(_thumbnail);
+            }
+            catch (WindowOperationException failure)
+            {
+                Problem?.Invoke(failure.Message);
+                Close();
+            }
         }
     }
 
@@ -194,14 +271,25 @@ public sealed class PipWindow : Form
 
         if (_selecting)
         {
-            _selection = Rectangle.Intersect(PipGeometry.Between(_dragStart, e.Location), PipGeometry.ViewArea(ClientSize));
-            try { ShowSelection(); }
-            catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); Close(); }
+            _selection = Rectangle.Intersect(PipGeometry.Between(_dragStart, e.Location),
+                PipGeometry.ViewArea(ClientSize));
+            try
+            {
+                ShowSelection();
+            }
+            catch (WindowOperationException failure)
+            {
+                Problem?.Invoke(failure.Message);
+                Close();
+            }
         }
-        else if (_dragged || Math.Abs(e.X - _dragStart.X) >= DragThreshold || Math.Abs(e.Y - _dragStart.Y) >= DragThreshold)
+        else if (_dragged || Math.Abs(e.X - _dragStart.X) >= DragThreshold ||
+                 Math.Abs(e.Y - _dragStart.Y) >= DragThreshold)
         {
             _dragged = true;
-            Location = PipGeometry.KeepInside(new Rectangle(new Point(Left + e.X - _dragStart.X, Top + e.Y - _dragStart.Y), Size), Screen.FromPoint(Cursor.Position).WorkingArea);
+            Location = PipGeometry.KeepInside(
+                new Rectangle(new Point(Left + e.X - _dragStart.X, Top + e.Y - _dragStart.Y), Size),
+                Screen.FromPoint(Cursor.Position).WorkingArea);
         }
     }
 
@@ -218,7 +306,8 @@ public sealed class PipWindow : Form
             if (_selection.Width < 10 || _selection.Height < 10 || _thumbnail is null)
                 SetCrop(_crop);
             else
-                SetCrop(PipGeometry.SelectionToSource(_selection, PipGeometry.ViewArea(ClientSize), ShownPart(_thumbnail.SourceSize)));
+                SetCrop(PipGeometry.SelectionToSource(_selection, PipGeometry.ViewArea(ClientSize),
+                    ShownPart(_thumbnail.SourceSize)));
         }
         else if (!_dragged && (ModifierKeys & Keys.Control) == 0)
         {
@@ -235,6 +324,7 @@ public sealed class PipWindow : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        _tips.Dispose();
         _watch.Dispose();
         _autoMove.Dispose();
         EndSelection();
@@ -266,7 +356,12 @@ public sealed class PipWindow : Form
             return;
 
         Size sourceSize = _thumbnail.SourceSize;
-        if (sourceSize.Width <= 0 || sourceSize.Height <= 0) { GoToSource(); return; }
+        if (sourceSize.Width <= 0 || sourceSize.Height <= 0)
+        {
+            GoToSource();
+            return;
+        }
+
         Point spot = PipGeometry.PointToSource(point, view, ShownPart(sourceSize));
         Point cursor = PointToScreen(point);
         Point position = PipGeometry.PeekPosition(cursor, spot, sourceSize, Screen.FromPoint(cursor).WorkingArea);
@@ -279,6 +374,7 @@ public sealed class PipWindow : Form
                 GoToSource();
                 return;
             }
+
             position = _windows.BeginPeek(_source, position);
             _interacting = true;
             var target = new Point(position.X + spot.X, position.Y + spot.Y);
@@ -287,8 +383,11 @@ public sealed class PipWindow : Form
             Cursor.Position = target;
             if (!_identity.Matches() || User32.GetForegroundWindow() != _source || !WindowInfo.IsAvailable(_source) ||
                 (User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE) & User32.WS_EX_TRANSPARENT) != 0 ||
-                User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = target.X, Y = target.Y }), User32.GA_ROOT) != _source)
-                throw new WindowOperationException("The PiP click was cancelled because its target could not be verified. Use Go to original window.");
+                User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = target.X, Y = target.Y }),
+                    User32.GA_ROOT) != _source)
+                throw new WindowOperationException(
+                    T(
+                        "The PiP click was cancelled because its target could not be verified. Use Go to original window."));
             User32.ClickLeftButton();
         }
         catch (WindowOperationException failure)
@@ -335,7 +434,8 @@ public sealed class PipWindow : Form
         if (_selectionView is null || _thumbnail is null || _selection.IsEmpty)
             return;
 
-        Rectangle part = PipGeometry.SelectionToSource(_selection, PipGeometry.ViewArea(ClientSize), ShownPart(_thumbnail.SourceSize));
+        Rectangle part = PipGeometry.SelectionToSource(_selection, PipGeometry.ViewArea(ClientSize),
+            ShownPart(_thumbnail.SourceSize));
         if (!part.IsEmpty)
             _selectionView.Show(_selection, part);
     }
@@ -350,7 +450,7 @@ public sealed class PipWindow : Form
 
     private Rectangle ShownPart(Size sourceSize)
     {
-        var whole = new Rectangle(Point.Empty, sourceSize);
+        Rectangle whole = WindowInfo.VisiblePart(_source, sourceSize);
         if (!_crop.IsEmpty)
             _crop = Rectangle.Intersect(_crop, whole);
         return _crop.IsEmpty ? whole : _crop;
@@ -364,7 +464,7 @@ public sealed class PipWindow : Form
         Size sourceSize = _thumbnail.SourceSize;
         Rectangle shown = ShownPart(sourceSize);
         if (shown.Width <= 0 || shown.Height <= 0)
-            throw new WindowOperationException("The source has no drawable preview surface.");
+            throw new WindowOperationException(T("The source has no drawable preview surface."));
 
         _lastSourceSize = sourceSize;
         if (_selecting)
@@ -380,8 +480,10 @@ public sealed class PipWindow : Form
                 Size = PipGeometry.FitWithin(Width, shown, area.Size);
                 Location = new Point(area.Right - Width - 16, area.Bottom - Height - 16);
             }
+
             _initialPlacement = false;
         }
+
         Location = PipGeometry.KeepInside(Bounds, area);
         _thumbnail.Show(PipGeometry.ViewArea(ClientSize), shown);
     }
@@ -396,6 +498,7 @@ public sealed class PipWindow : Form
 
         if (_hideItem.Checked && !_windows.IsHidden(_source))
             _hideItem.Checked = false;
+        FollowPointer();
 
         if (_interacting && ShouldEndInteraction())
         {
@@ -405,15 +508,40 @@ public sealed class PipWindow : Form
 
         if (!_interacting && _thumbnail is not null && _thumbnail.SourceSize != _lastSourceSize)
         {
-            try { FitToSource(); }
-            catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); Close(); }
+            try
+            {
+                FitToSource();
+            }
+            catch (WindowOperationException failure)
+            {
+                Problem?.Invoke(failure.Message);
+                Close();
+            }
         }
+    }
+
+    /// <summary>Shows the close button while the pointer is on the view, and keeps it in the corner.</summary>
+    private void FollowPointer()
+    {
+        bool wanted = !_interacting && !_selecting && Bounds.Contains(Cursor.Position);
+        if (!wanted)
+        {
+            _closeButton?.Hide();
+            return;
+        }
+
+        int size = Dpi.Scale(CloseButtonSize, DeviceDpi);
+        _closeButton ??= new PipCloseButton(this, T("&Close PiP").Replace("&", ""), size);
+        _closeButton.Location = new Point(Right - size - PipGeometry.Border, Top + PipGeometry.Border);
+        if (!_closeButton.Visible)
+            _closeButton.Show();
     }
 
     /// <summary>Leaves the view alone while it's being used; the mouse over it means it's wanted there.</summary>
     private void MoveAwayFromContent()
     {
-        if (_pressed || _interacting || _selecting || MouseButtons != MouseButtons.None || Bounds.Contains(Cursor.Position))
+        if (_pressed || _interacting || _selecting || MouseButtons != MouseButtons.None ||
+            Bounds.Contains(Cursor.Position))
             return;
 
         Rectangle area = Screen.FromControl(this).WorkingArea;
@@ -444,7 +572,8 @@ public sealed class PipWindow : Form
             return Bounds.Contains(Cursor.Position);
 
         return !User32.GetWindowRect(_source, out Rect r)
-               || !Rectangle.Inflate(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom), LeaveMargin, LeaveMargin).Contains(Cursor.Position);
+               || !Rectangle.Inflate(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom), LeaveMargin, LeaveMargin)
+                   .Contains(Cursor.Position);
     }
 
     private void GoToSource()
@@ -454,6 +583,7 @@ public sealed class PipWindow : Form
             Close();
             return;
         }
+
         if (_hideItem.Checked)
             SetOriginalHidden(false);
         if (User32.IsIconic(_source))

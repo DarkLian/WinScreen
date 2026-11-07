@@ -22,13 +22,13 @@ Uninstall through **Windows Settings → Apps → Installed apps**.
 PiP clicks bring the original window forward by default. Click forwarding, Dark, Glass, Crop, Shrink, and auto-move
 are experimental and must be explicitly enabled in Settings. Anchor right-click opens a normal context menu.
 Use **Ctrl+Alt+U** to restore one window or **Ctrl+Alt+R** to restore all. Recovery remains available for excluded windows.
-Failures stay visible in the tray's **Last result** item even when notification balloons are off.
+Problems always appear as a notification and stay in the tray's **Last result** item, even with confirmations turned off.
 
 ## Quick start
 
 1. Activate the window you want to change.
 2. Press **Ctrl+Alt+T** to pin it on top, **Ctrl+Alt+P** for Picture-in-Picture, or **Ctrl+Alt+A** for an Anchor.
-3. Right-click WinScreen's tray icon and open **Settings** to change hotkeys, language, notifications, and other options.
+3. Click WinScreen's tray icon to open **Settings** and change hotkeys, language, notifications, and other options. Right-click it for every command.
 4. Press **Ctrl+Alt+R**, or choose **Restore all windows** from the tray menu, to undo WinScreen's window changes.
 
 A toolbar also appears when the pointer rests on the middle of the active window's title bar.
@@ -56,7 +56,15 @@ Automatic updates need signed releases hosted in this repository. Release signin
 
 Local installers remain unsigned even though update metadata is signed. See **[Security](SECURITY.md)** for the trust model and limits.
 
-## Build and contribute
+## Share your experience
+
+WinScreen is maintained by AI agents, so the best way to help isn't a pull request. It's telling us how WinScreen works
+for you. Please [open an issue](https://github.com/DarkLian/WinScreen/issues) to share your experience, suggest an idea,
+or report a problem. Small annoyances count too. See **[Contributing](CONTRIBUTING.md)** for what helps most.
+
+If WinScreen is useful to you, you can also [support it on Ko-fi](https://ko-fi.com/darklian).
+
+## Build
 
 Requires the .NET 10 SDK specified in `global.json`.
 
@@ -66,7 +74,6 @@ Requires the .NET 10 SDK specified in `global.json`.
 
 Output: `dist\release\WinScreen-win-Setup.exe`.
 See the **[Development Guide](docs/DEVELOPMENT.md)** for tests, architecture, release signing, and known limitations.
-The **[public file manifest](docs/PUBLIC_FILES.md)** lists files intended for GitHub; installers are release assets rather than source commits.
 
 ## License
 

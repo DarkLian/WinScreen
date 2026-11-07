@@ -49,6 +49,7 @@ internal sealed class DarkOverlay : Form
 
     /// <summary>False once the target has been pinned or unpinned and this overlay is in the wrong group.</summary>
     public bool MatchesTarget => IsPinned(_target) == _pinned;
+
     public bool TargetAlive => _identity.Matches();
 
     public static bool IsPinned(nint window)
@@ -63,7 +64,8 @@ internal sealed class DarkOverlay : Form
         get
         {
             CreateParams parameters = base.CreateParams;
-            parameters.ExStyle |= (int)(User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT | User32.WS_EX_NOACTIVATE | User32.WS_EX_TOOLWINDOW);
+            parameters.ExStyle |= (int)(User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT | User32.WS_EX_NOACTIVATE |
+                                        User32.WS_EX_TOOLWINDOW);
             if (_pinned)
                 parameters.ExStyle |= (int)User32.WS_EX_TOPMOST;
             return parameters;
@@ -77,9 +79,11 @@ internal sealed class DarkOverlay : Form
             _initialized = Magnification.MagInitialize();
 
         User32.SetLayeredWindowAttributes(Handle, 0, 255, User32.LWA_ALPHA);
-        _magnifier = User32.CreateWindowEx(0, Magnification.ControlClass, "", WS_CHILD | WS_VISIBLE, 0, 0, Width, Height, Handle, 0, 0, 0);
+        _magnifier = User32.CreateWindowEx(0, Magnification.ControlClass, "", WS_CHILD | WS_VISIBLE, 0, 0, Width,
+            Height, Handle, 0, 0, 0);
         if (_magnifier == 0)
-            throw new Windows.WindowOperationException(T("Windows didn't provide the screen filter that dark mode needs."));
+            throw new Windows.WindowOperationException(
+                T("Windows didn't provide the screen filter that dark mode needs."));
 
         unsafe
         {
@@ -101,33 +105,41 @@ internal sealed class DarkOverlay : Form
         if (!_identity.Matches())
             return false;
 
-        if (!Windows.WindowInfo.IsAvailable(_target) || Windows.WindowInfo.IsConcealed(_target) || !User32.GetWindowRect(_target, out Rect r))
+        // The frame rather than the window rectangle, whose invisible margins would invert the screen around it.
+        if (!Windows.WindowInfo.IsAvailable(_target) || Windows.WindowInfo.IsConcealed(_target) ||
+            !Windows.WindowInfo.TryGetFrameBounds(_target, out Rectangle bounds, out Rectangle whole))
         {
             Hide();
             return true;
         }
 
-        var bounds = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
         if (Bounds != bounds)
         {
             Bounds = bounds;
-            User32.SetWindowPos(_magnifier, 0, 0, 0, bounds.Width, bounds.Height, User32.SWP_NOACTIVATE | User32.SWP_NOZORDER);
+            User32.SetWindowPos(_magnifier, 0, 0, 0, bounds.Width, bounds.Height,
+                User32.SWP_NOACTIVATE | User32.SWP_NOZORDER);
         }
 
-        FollowShape();
+        FollowShape(whole.Left - bounds.Left, whole.Top - bounds.Top);
         if (!Visible)
             Show();
 
         StayJustAboveTarget();
-        Magnification.MagSetWindowSource(_magnifier, r);
+        Magnification.MagSetWindowSource(_magnifier, new Rect(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom));
         User32.InvalidateRect(_magnifier, 0, true);
         return true;
     }
 
     /// <summary>A cropped window shows nothing outside the crop, so neither does its overlay.</summary>
-    private void FollowShape()
+    private void FollowShape(int offsetX, int offsetY)
     {
         Rectangle? shape = Windows.WindowInfo.ShapeOf(_target);
+        if (shape is { } window)
+        {
+            window.Offset(offsetX, offsetY);
+            shape = window;
+        }
+
         if (shape == _shape)
             return;
 
@@ -144,6 +156,7 @@ internal sealed class DarkOverlay : Form
             return;
 
         nint insertAfter = above;
-        User32.SetWindowPos(Handle, insertAfter, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        User32.SetWindowPos(Handle, insertAfter, 0, 0, 0, 0,
+            User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
     }
 }

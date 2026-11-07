@@ -34,7 +34,8 @@ internal sealed class DwmThumbnail : IDisposable
     {
         var properties = new DwmThumbnailProperties
         {
-            Flags = Dwmapi.DWM_TNP_RECTDESTINATION | Dwmapi.DWM_TNP_RECTSOURCE | Dwmapi.DWM_TNP_OPACITY | Dwmapi.DWM_TNP_VISIBLE,
+            Flags = Dwmapi.DWM_TNP_RECTDESTINATION | Dwmapi.DWM_TNP_RECTSOURCE | Dwmapi.DWM_TNP_OPACITY |
+                    Dwmapi.DWM_TNP_VISIBLE,
             Destination = ToRect(destination),
             Source = ToRect(source),
             Opacity = opacity,
@@ -42,7 +43,8 @@ internal sealed class DwmThumbnail : IDisposable
         };
         if (destination.Width <= 0 || destination.Height <= 0 || source.Width <= 0 || source.Height <= 0 ||
             Dwmapi.DwmUpdateThumbnailProperties(_handle, ref properties) != 0)
-            throw new Windows.WindowOperationException("Windows could not render the live preview. The original will remain available.");
+            throw new Windows.WindowOperationException(
+                Settings.UiText.T("Windows could not render the live preview. The original will remain available."));
     }
 
     public void Dispose()

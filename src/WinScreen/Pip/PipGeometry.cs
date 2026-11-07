@@ -54,8 +54,10 @@ public static class PipGeometry
         if (viewArea.Width <= 0 || viewArea.Height <= 0 || shown.Width <= 0 || shown.Height <= 0)
             throw new ArgumentException("Preview bounds must be nonempty.");
         return new Point(
-            Math.Clamp(shown.Left + (int)Math.Round((point.X - viewArea.Left) * (double)shown.Width / viewArea.Width), shown.Left, shown.Right - 1),
-            Math.Clamp(shown.Top + (int)Math.Round((point.Y - viewArea.Top) * (double)shown.Height / viewArea.Height), shown.Top, shown.Bottom - 1));
+            Math.Clamp(shown.Left + (int)Math.Round((point.X - viewArea.Left) * (double)shown.Width / viewArea.Width),
+                shown.Left, shown.Right - 1),
+            Math.Clamp(shown.Top + (int)Math.Round((point.Y - viewArea.Top) * (double)shown.Height / viewArea.Height),
+                shown.Top, shown.Bottom - 1));
     }
 
     public static Size FitWithin(int preferredWidth, Rectangle source, Size available)
@@ -102,12 +104,14 @@ public static class PipGeometry
         for (int row = 0; row < rows; row++)
         {
             for (int column = 0; column < columns; column++)
-                sums[row + 1, column + 1] = (busy[row, column] ? 1 : 0) + sums[row, column + 1] + sums[row + 1, column] - sums[row, column];
+                sums[row + 1, column + 1] = (busy[row, column] ? 1 : 0) + sums[row, column + 1] +
+                    sums[row + 1, column] - sums[row, column];
         }
 
         double Share(int row, int column)
         {
-            int count = sums[row + high, column + wide] - sums[row, column + wide] - sums[row + high, column] + sums[row, column];
+            int count = sums[row + high, column + wide] - sums[row, column + wide] - sums[row + high, column] +
+                        sums[row, column];
             return count / (double)(high * wide);
         }
 

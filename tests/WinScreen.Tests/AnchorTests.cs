@@ -13,8 +13,14 @@ public sealed class AnchorTests
         Exception? failure = null;
         var thread = new Thread(() =>
         {
-            try { test(); }
-            catch (Exception exception) { failure = exception; }
+            try
+            {
+                test();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
@@ -69,7 +75,8 @@ public sealed class AnchorTests
             using var anchors = new AnchorSet();
             anchors.Toggle(target.Handle);
             var anchor = Assert.Single(Application.OpenForms.OfType<AnchorButton>());
-            var menu = (ContextMenuStrip)typeof(AnchorButton).GetField("_menu", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(anchor)!;
+            var menu = (ContextMenuStrip)typeof(AnchorButton).GetField("_menu",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(anchor)!;
             ((ToolStripMenuItem)menu.Items[^1]).PerformClick();
             Assert.True(anchor.IsDisposed);
             Assert.False(anchors.Has(target.Handle));

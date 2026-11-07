@@ -50,7 +50,11 @@ public class SettingsTests
     public void Choices_survive_a_restart()
     {
         string path = NewPath();
-        var settings = new AppSettings { OpaqueOnHover = true, ExcludedPrograms = ["exampleprogram"], ShowNotifications = false, Language = "zh-Hant", AutomaticUpdates = true };
+        var settings = new AppSettings
+        {
+            OpaqueOnHover = true, ExcludedPrograms = ["exampleprogram"], ShowNotifications = false,
+            Language = "zh-Hant", AutomaticUpdates = true
+        };
         settings.Hotkeys[AppCommand.TogglePin] = "Ctrl+Shift+F9";
         settings.Save(path);
 
@@ -78,7 +82,10 @@ public class SettingsTests
     public void A_saved_setup_survives_a_restart_and_is_found_in_any_case()
     {
         string path = NewPath();
-        var settings = new AppSettings { SavedSetups = [new ProgramSetup { Program = "ExampleProgram", Pinned = true, Alpha = 128, Dark = true }] };
+        var settings = new AppSettings
+        {
+            SavedSetups = [new ProgramSetup { Program = "ExampleProgram", Pinned = true, Alpha = 128, Dark = true }]
+        };
         settings.Save(path);
 
         ProgramSetup? loaded = AppSettings.Load(path).SetupFor("exampleprogram");
@@ -123,6 +130,65 @@ public class SettingsTests
     }
 
     [Theory]
+    [InlineData(Keys.D1, "Ctrl+Alt+1")]
+    [InlineData(Keys.OemQuestion, "Ctrl+Alt+/")]
+    [InlineData(Keys.OemSemicolon, "Ctrl+Alt+;")]
+    [InlineData(Keys.Oemplus, "Ctrl+Alt+Plus")]
+    [InlineData(Keys.OemMinus, "Ctrl+Alt+-")]
+    [InlineData(Keys.PageDown, "Ctrl+Alt+PageDown")]
+    [InlineData(Keys.Capital, "Ctrl+Alt+CapsLock")]
+    [InlineData(Keys.Enter, "Ctrl+Alt+Enter")]
+    public void Keys_are_shown_by_the_names_people_use_and_read_back(Keys pressed, string shown)
+    {
+        Assert.Equal(shown, HotkeyText.Format(Keys.Control | Keys.Alt | pressed));
+        Assert.True(HotkeyText.TryParse(shown, out _, out Keys key));
+        Assert.Equal(pressed, key);
+    }
+
+    [Theory]
+    [InlineData("Ctrl+Alt+D1", Keys.D1)]
+    [InlineData("Ctrl+Alt+OemQuestion", Keys.OemQuestion)]
+    [InlineData("Ctrl+Alt+Next", Keys.PageDown)]
+    public void Hotkeys_saved_by_earlier_versions_still_load(string saved, Keys expected)
+    {
+        Assert.True(HotkeyText.TryParse(saved, out _, out Keys key));
+        Assert.Equal(expected, key);
+    }
+
+    [Fact]
+    public void Win_combinations_and_lone_function_keys_are_accepted()
+    {
+        Assert.Equal("Ctrl+Win+K", HotkeyText.Format(Keys.Control | Keys.K, win: true));
+        Assert.True(HotkeyText.TryParse("Ctrl+Win+K", out uint modifiers, out _));
+        Assert.Equal(User32.MOD_CONTROL | 0x8u, modifiers);
+        Assert.True(HotkeyText.TryParse("F9", out _, out Keys key));
+        Assert.Equal(Keys.F9, key);
+        Assert.False(HotkeyText.TryParse("65", out _, out _));
+    }
+
+    [Fact]
+    public void New_installs_leave_the_common_ide_shortcut_free()
+    {
+        Assert.Equal("Ctrl+Alt+Shift+S", new AppSettings().Hotkeys[AppCommand.SaveWindowSetup]);
+    }
+
+    [Fact]
+    public void Saved_setups_show_their_effects_before_a_long_path()
+    {
+        var setup = new ProgramSetup
+            { Program = "Example", ExecutablePath = @"C:\\Long\\Path\\Example.exe", Pinned = true };
+        Assert.Equal(@"Example: pinned (C:\\Long\\Path\\Example.exe)", setup.ToString());
+    }
+
+    [Fact]
+    public void Every_command_has_one_place_and_a_name()
+    {
+        Assert.Equal(Enum.GetValues<AppCommand>().Length, CommandCatalog.Ordered.Distinct().Count());
+        Assert.All(CommandCatalog.Ordered,
+            command => Assert.NotEqual(command.ToString(), CommandCatalog.Name(command)));
+    }
+
+    [Theory]
     [InlineData("T")]
     [InlineData("Ctrl+Alt")]
     [InlineData("Ctrl+Nonsense")]
@@ -146,15 +212,22 @@ public sealed class SettingsWindowTests : IDisposable
 {
     private readonly string _key = @"Software\WinScreenTests\" + Path.GetRandomFileName();
 
-    public void Dispose() => Registry.CurrentUser.DeleteSubKeyTree(@"Software\WinScreenTests", throwOnMissingSubKey: false);
+    public void Dispose() =>
+        Registry.CurrentUser.DeleteSubKeyTree(@"Software\WinScreenTests", throwOnMissingSubKey: false);
 
     private void OnUiThread(Action test)
     {
         Exception? failure = null;
         var thread = new Thread(() =>
         {
-            try { test(); }
-            catch (Exception e) { failure = e; }
+            try
+            {
+                test();
+            }
+            catch (Exception e)
+            {
+                failure = e;
+            }
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
@@ -171,7 +244,11 @@ public sealed class SettingsWindowTests : IDisposable
             var settings = new AppSettings();
             AppSettings? applied = null;
             var startup = new StartWithWindows(_key);
-            using var window = new SettingsWindow(settings, startup, chosen => { applied = chosen; return []; });
+            using var window = new SettingsWindow(settings, startup, chosen =>
+            {
+                applied = chosen;
+                return [];
+            });
             _ = window.Handle;
 
             window.CaptureHotkey(AppCommand.OpenPip, Keys.Control | Keys.Shift | Keys.F9);
@@ -231,7 +308,8 @@ public sealed class SettingsWindowTests : IDisposable
     [Theory]
     [InlineData("zh-Hans", "WinScreen 设置", "置顶", 2)]
     [InlineData("zh-Hant", "WinScreen 設定", "置頂", 3)]
-    public void Chinese_settings_display_translations_and_preserve_the_language_choice(string language, string title, string pin, int index)
+    public void Chinese_settings_display_translations_and_preserve_the_language_choice(string language, string title,
+        string pin, int index)
     {
         OnUiThread(() =>
         {
@@ -244,7 +322,7 @@ public sealed class SettingsWindowTests : IDisposable
                 Control[] controls = Descendants(window).ToArray();
                 Assert.Equal(title, window.Text);
                 Assert.Contains(controls, control => control.Text == pin);
-                var languages = Assert.Single(controls.OfType<ComboBox>());
+                var languages = controls.OfType<ComboBox>().First();
                 Assert.Equal(index, languages.SelectedIndex);
                 Assert.True(window.SaveChanges());
                 Assert.Equal(language, settings.Language);
@@ -253,7 +331,10 @@ public sealed class SettingsWindowTests : IDisposable
                 Assert.True(window.SaveChanges());
                 Assert.Equal("en", settings.Language);
             }
-            finally { UiText.Initialize("en"); }
+            finally
+            {
+                UiText.Initialize("en");
+            }
         });
     }
 
@@ -272,9 +353,55 @@ public sealed class SettingsWindowTests : IDisposable
     {
         OnUiThread(() =>
         {
-            using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key), _ => ["Ctrl+Alt+T"]);
+            using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key),
+                _ => [new HotkeyProblem(AppCommand.TogglePin, "Ctrl+Alt+T")]);
             _ = window.Handle;
             Assert.False(window.SaveChanges());
+        });
+    }
+
+    [Fact]
+    public void A_name_typed_but_not_added_is_still_saved()
+    {
+        OnUiThread(() =>
+        {
+            AppSettings? applied = null;
+            using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key), chosen =>
+            {
+                applied = chosen;
+                return [];
+            });
+            _ = window.Handle;
+            Descendants(window).OfType<ComboBox>().Skip(1).First().Text = "Typed.exe";
+            Assert.True(window.SaveChanges());
+            Assert.Contains("Typed", applied!.ExcludedPrograms);
+        });
+    }
+
+    [Fact]
+    public void A_key_that_cant_be_a_hotkey_is_explained_and_keys_with_modifiers_are_not_clears()
+    {
+        OnUiThread(() =>
+        {
+            using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key), _ => []);
+            _ = window.Handle;
+            window.CaptureHotkey(AppCommand.RestoreAll, Keys.K);
+            Assert.Contains(Descendants(window),
+                control => control.Text.StartsWith("Hold Ctrl", StringComparison.Ordinal));
+            window.CaptureHotkey(AppCommand.RestoreAll, Keys.F9);
+            window.CaptureHotkey(AppCommand.TogglePin, Keys.Control | Keys.Alt | Keys.Back);
+            AppSettings? applied = null;
+            using var second = new SettingsWindow(new AppSettings(), new StartWithWindows(_key), chosen =>
+            {
+                applied = chosen;
+                return [];
+            });
+            _ = second.Handle;
+            second.CaptureHotkey(AppCommand.TogglePin, Keys.Control | Keys.Alt | Keys.Back);
+            second.CaptureHotkey(AppCommand.RestoreAll, Keys.F9);
+            Assert.True(second.SaveChanges());
+            Assert.Equal("Ctrl+Alt+Backspace", applied!.Hotkeys[AppCommand.TogglePin]);
+            Assert.Equal("F9", applied.Hotkeys[AppCommand.RestoreAll]);
         });
     }
 
@@ -285,7 +412,8 @@ public sealed class SettingsWindowTests : IDisposable
         {
             var settings = new AppSettings();
             var startup = new StartWithWindows(_key);
-            using var window = new SettingsWindow(settings, startup, _ => ["Ctrl+Alt+F21"]);
+            using var window = new SettingsWindow(settings, startup, _ =>
+                [new HotkeyProblem(AppCommand.RestoreAll, "Ctrl+Alt+F21")]);
             window.CaptureHotkey(AppCommand.RestoreAll, Keys.Control | Keys.Alt | Keys.F21);
             window.SetOption("StartWithWindows", true);
             window.SetOption(nameof(AppSettings.ShowNotifications), false);

@@ -31,7 +31,8 @@ internal static class ScreenContent
     {
         int cell = PipGeometry.ContentCell;
         var busy = new bool[bitmap.Height / cell, bitmap.Width / cell];
-        BitmapData data = bitmap.LockBits(new Rectangle(Point.Empty, bitmap.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        BitmapData data = bitmap.LockBits(new Rectangle(Point.Empty, bitmap.Size), ImageLockMode.ReadOnly,
+            PixelFormat.Format32bppArgb);
         try
         {
             for (int row = 0; row < busy.GetLength(0); row++)

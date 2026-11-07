@@ -5,6 +5,21 @@ using WinScreen.Settings;
 
 namespace WinScreen.Updates;
 
+/// <summary>Facts about this copy of WinScreen.</summary>
+internal static class AppInfo
+{
+    /// <summary>The version people see, without the build details added after a "+".</summary>
+    internal static string Version
+    {
+        get
+        {
+            string? version = typeof(AppInfo).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion;
+            return string.IsNullOrEmpty(version) ? "?" : version.Split('+')[0];
+        }
+    }
+}
+
 internal interface IUpdateSession : IDisposable
 {
     Task<bool> Download(CancellationToken cancellation);
@@ -12,12 +27,14 @@ internal interface IUpdateSession : IDisposable
 }
 
 /// <summary>One check at a time. Disabling invalidates the entire session, including downloaded updates.</summary>
-internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> createSession, Action<string> status) : IDisposable
+internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> createSession, Action<string> status)
+    : IDisposable
 {
     private CancellationTokenSource? _enabled;
     private IUpdateSession? _pending;
     private bool _busy;
     private bool _disposed;
+    private bool _lastCheckFailed;
 
     internal void SetEnabled(bool enabled)
     {
@@ -41,22 +58,27 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
             return;
         var generation = _enabled;
         _busy = true;
+        _lastCheckFailed = false;
         IUpdateSession? session = null;
         try
         {
             session = createSession(generation.Token);
             if (session is null)
                 return;
-            if (await session.Download(generation.Token) && _enabled == generation && !generation.IsCancellationRequested)
+            if (await session.Download(generation.Token) && _enabled == generation &&
+                !generation.IsCancellationRequested)
             {
                 _pending = session;
                 session = null;
                 status(UiText.T("Update ready; it will install when WinScreen exits."));
             }
         }
-        catch (OperationCanceledException) when (generation.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (generation.IsCancellationRequested)
+        {
+        }
         catch (Exception)
         {
+            _lastCheckFailed = true;
             if (_enabled == generation && !_disposed)
                 status(UiText.T("Update check failed. The current version will keep running."));
         }
@@ -67,12 +89,31 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         }
     }
 
+    /// <summary>Checks at the person's request, and says how it went.</summary>
+    internal async Task<string> CheckNow()
+    {
+        if (_busy)
+            return UiText.T("Already checking for updates.");
+        await Check();
+        if (_pending is not null)
+            return UiText.T("Update ready; it will install when WinScreen exits.");
+        return _lastCheckFailed
+            ? UiText.T("Update check failed. The current version will keep running.")
+            : UiText.T("WinScreen is up to date.");
+    }
+
     internal async Task ApplyOnExit()
     {
         if (!_disposed && _enabled is not null && _pending is not null)
         {
-            try { await _pending.ApplyOnExit(_enabled.Token); }
-            catch (Exception) { /* Never prevent window restoration or shutdown if an update fails. */ }
+            try
+            {
+                await _pending.ApplyOnExit(_enabled.Token);
+            }
+            catch (Exception)
+            {
+                /* Never prevent window restoration or shutdown if an update fails. */
+            }
         }
     }
 
@@ -86,8 +127,23 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
 internal sealed class VelopackUpdateSession : IUpdateSession
 {
     internal static bool IsConfigured => typeof(VelopackUpdateSession).Assembly
-        .GetCustomAttributes<AssemblyMetadataAttribute>().Any(metadata => metadata.Key == "UpdateRepository" && !string.IsNullOrWhiteSpace(metadata.Value)) &&
-        typeof(VelopackUpdateSession).Assembly.GetManifestResourceNames().Contains("WinScreen.UpdatePublicKey");
+                                             .GetCustomAttributes<AssemblyMetadataAttribute>().Any(metadata =>
+                                                 metadata.Key == "UpdateRepository" &&
+                                                 !string.IsNullOrWhiteSpace(metadata.Value)) &&
+                                         typeof(VelopackUpdateSession).Assembly.GetManifestResourceNames()
+                                             .Contains("WinScreen.UpdatePublicKey");
+
+    /// <summary>True for a copy put in place by the installer, the only kind that can update itself.</summary>
+    internal static bool IsInstalled
+    {
+        get
+        {
+            string folder = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+            return string.Equals(Path.GetFileName(folder), "current", StringComparison.OrdinalIgnoreCase) &&
+                   File.Exists(Path.Combine(Path.GetDirectoryName(folder) ?? "", "Update.exe"));
+        }
+    }
+
     private readonly UpdateTransport _transport;
     private readonly UpdateManager _manager;
     private VelopackAsset? _pending;

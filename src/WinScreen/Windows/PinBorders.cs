@@ -89,7 +89,8 @@ internal sealed class PinBorder : Form
 
     public void Follow()
     {
-        if (!_identity.Matches() || !WindowInfo.IsAvailable(_target) || !WindowInfo.TryGetVisibleBounds(_target, out Rectangle bounds))
+        if (!_identity.Matches() || !WindowInfo.IsAvailable(_target) ||
+            !WindowInfo.TryGetVisibleBounds(_target, out Rectangle bounds))
         {
             Hide();
             return;
@@ -127,6 +128,7 @@ internal sealed class PinBorder : Form
             return;
 
         nint insertAfter = above == 0 ? User32.HWND_TOPMOST : above;
-        User32.SetWindowPos(Handle, insertAfter, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        User32.SetWindowPos(Handle, insertAfter, 0, 0, 0, 0,
+            User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
     }
 }

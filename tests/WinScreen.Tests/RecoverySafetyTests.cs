@@ -48,6 +48,103 @@ public sealed class RecoverySafetyTests
     }
 
     [Fact]
+    public void Damaged_recovery_data_is_set_aside_once_and_nothing_stays_blocked()
+    {
+        string path = JournalPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "{ not json");
+
+        var first = new WindowController([], new ChangeJournal(path));
+        first.RecoverFromJournal();
+        Assert.False(first.RecoveryBlocked);
+        Assert.Contains(".invalid-", first.RecoveryWarning);
+        Assert.Equal(0, first.RestoreAll());
+
+        var second = new WindowController([], new ChangeJournal(path));
+        second.RecoverFromJournal();
+        Assert.Null(second.RecoveryWarning);
+        Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "*.invalid-*"));
+
+        using var target = new TargetProcess(Spot);
+        Assert.Equal((byte)128, second.SetOpacity(target.Handle, 128));
+        Assert.Equal(0, second.RestoreAll());
+    }
+
+    [Fact]
+    public void Unreadable_recovery_data_pauses_changes_but_never_exit_and_can_be_retried()
+    {
+        string path = JournalPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "[]");
+        using var target = new TargetProcess(Spot);
+        var windows = new WindowController([], new ChangeJournal(path));
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            windows.RecoverFromJournal();
+            Assert.True(windows.RecoveryBlocked);
+            Assert.Throws<WindowOperationException>(() => windows.SetOpacity(target.Handle, 128));
+            Assert.Equal(0, windows.RestoreAll());
+            Assert.True(windows.RecoveryBlocked);
+        }
+
+        Assert.Equal(0, windows.RestoreAll());
+        Assert.False(windows.RecoveryBlocked);
+        Assert.Equal((byte)128, windows.SetOpacity(target.Handle, 128));
+        windows.RestoreAll();
+    }
+
+    [Fact]
+    public void A_refused_crop_leaves_no_false_state()
+    {
+        using var target = new TargetProcess(Spot);
+        var windows = new WindowController([], new ChangeJournal(JournalPath()));
+        windows.Checkpoint = (step, _) =>
+        {
+            if (step == "before-mutation") throw new WindowOperationException("Injected failure");
+        };
+        Assert.Throws<WindowOperationException>(() => windows.Crop(target.Handle, new Rectangle(0, 0, 60, 60)));
+        Assert.False(windows.IsCropped(target.Handle));
+    }
+
+    [Fact]
+    public void Turning_click_through_off_removes_the_transparency_it_added_but_not_a_chosen_level()
+    {
+        using var target = new TargetProcess(Spot);
+        var windows = new WindowController([]);
+        Assert.True(windows.ToggleClickThrough(target.Handle));
+        Assert.True(windows.OpacityOf(target.Handle) < 255);
+        Assert.False(windows.ToggleClickThrough(target.Handle));
+        Assert.Equal(255, windows.OpacityOf(target.Handle));
+
+        windows.SetOpacity(target.Handle, 120);
+        windows.ToggleClickThrough(target.Handle);
+        windows.ToggleClickThrough(target.Handle);
+        Assert.Equal(120, windows.OpacityOf(target.Handle));
+        windows.RestoreAll();
+    }
+
+    [Fact]
+    public void Hovering_a_click_through_window_keeps_it_see_through()
+    {
+        using var target = new TargetProcess(Spot);
+        var windows = new WindowController([]);
+        windows.ToggleClickThrough(target.Handle);
+        byte? before = Desktop.Alpha(target.Handle);
+        windows.Refresh(target.Center, opaqueOnHover: true, pausePinWhenMaximized: false);
+        Assert.Equal(before, Desktop.Alpha(target.Handle));
+        windows.RestoreAll();
+    }
+
+    [Fact]
+    public void Watching_a_window_writes_nothing_to_it()
+    {
+        using var target = new TargetProcess(Spot);
+        WindowIdentity observed = WindowIdentity.Observe(target.Handle);
+        Assert.True(observed.IsSameWindow());
+        Assert.Equal(0, User32.GetProp(target.Handle, WindowIdentity.PropertyName));
+    }
+
+    [Fact]
     public void Journal_write_failure_prevents_native_mutation()
     {
         using var target = new TargetProcess(Spot);
@@ -83,7 +180,10 @@ public sealed class RecoverySafetyTests
         windows.SetOpacity(target.Handle, 128);
         windows.ToggleClickThrough(target.Handle);
         windows.Crop(target.Handle, new Rectangle(0, 0, 80, 80));
-        windows.Checkpoint = (step, _) => { if (step == "restore-crop") throw new WindowOperationException("Injected crop failure"); };
+        windows.Checkpoint = (step, _) =>
+        {
+            if (step == "restore-crop") throw new WindowOperationException("Injected crop failure");
+        };
         Assert.Equal(1, windows.RestoreAll());
         Assert.Equal(before, Desktop.ExStyle(target.Handle));
         Assert.True(Assert.Single(journal.Load()).Cropped);
@@ -128,7 +228,10 @@ public sealed class RecoverySafetyTests
         using var target = new TargetProcess(Spot);
         Desktop.GainForegroundRights();
         var windows = new WindowController([], new ChangeJournal(JournalPath()));
-        windows.Checkpoint = (step, _) => { if (step == "peek-moved") throw new WindowOperationException("Injected pin failure"); };
+        windows.Checkpoint = (step, _) =>
+        {
+            if (step == "peek-moved") throw new WindowOperationException("Injected pin failure");
+        };
         Assert.Throws<WindowOperationException>(() => windows.BeginPeek(target.Handle, new Point(600, 200)));
         Assert.Equal(Spot, Desktop.BoundsOf(target.Handle));
         Assert.False(windows.IsPeeking(target.Handle));

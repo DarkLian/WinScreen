@@ -62,7 +62,8 @@ public class PipWindowTests
 
     private static bool Shows(Form window, Color color, Action<int> pump)
     {
-        return Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Middle(window)), color), 3000, () => pump(20));
+        return Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Middle(window)), color), 3000,
+            () => pump(20));
     }
 
     [Fact]
@@ -269,7 +270,8 @@ public class PipWindowTests
             pip.SetOriginalHidden(true);
             Assert.Equal((byte?)1, Desktop.Alpha(source.Handle));
             Assert.NotEqual(0, Desktop.ExStyle(source.Handle) & User32.WS_EX_TRANSPARENT);
-            Assert.True(Shows(pip, Red, pump), $"PiP went blank when the original was hidden: {Desktop.ColorOnScreen(Middle(pip))}.");
+            Assert.True(Shows(pip, Red, pump),
+                $"PiP went blank when the original was hidden: {Desktop.ColorOnScreen(Middle(pip))}.");
             source.SetColors("1EB446");
             Assert.True(Shows(pip, Green, pump), $"PiP stopped updating: {Desktop.ColorOnScreen(Middle(pip))}.");
 
