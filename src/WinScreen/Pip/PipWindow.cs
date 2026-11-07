@@ -77,6 +77,7 @@ public sealed class PipWindow : Form
     private bool _interacting;
     private Rectangle _selection;
     private bool _cleaned;
+    private const uint PrintFullContent = 2; // PW_RENDERFULLCONTENT: includes content drawn with the GPU.
 
     [System.ComponentModel.DefaultValue(false)]
     public bool AllowClickForwarding { get; set; }
@@ -241,6 +242,52 @@ public sealed class PipWindow : Form
         _thumbnail?.Dispose();
         _thumbnail = null;
         Hide();
+        if (_viewPreferences.MinimizeToTaskbar && _sourceIcon is not null)
+            TaskbarProxy = new PipTaskbarProxy(_origin.Title, _sourceIcon, Bounds, TaskbarPreview, ResumeView, Close);
+    }
+
+    /// <summary>The taskbar button standing in for this view while it's minimized there.</summary>
+    internal PipTaskbarProxy? TaskbarProxy { get; private set; }
+
+    private void DropTaskbarProxy()
+    {
+        TaskbarProxy?.Dismiss();
+        TaskbarProxy = null;
+    }
+
+    /// <summary>
+    /// A still picture of what the view shows, made only when Windows asks. Views of a display or
+    /// region have no window to ask, so they show their icon.
+    /// </summary>
+    private Bitmap? TaskbarPreview(Size limit)
+    {
+        if (!_origin.IsWindow || !_origin.IsAvailable || User32.IsIconic(_source) ||
+            !User32.GetWindowRect(_source, out Rect bounds))
+            return null;
+        Size whole = Size.Round(new SizeF(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top));
+        if (whole.Width <= 0 || whole.Height <= 0)
+            return null;
+        using var full = new Bitmap(whole.Width, whole.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (Graphics graphics = Graphics.FromImage(full))
+        {
+            nint context = graphics.GetHdc();
+            try
+            {
+                if (!User32.PrintWindow(_source, context, PrintFullContent))
+                    return null;
+            }
+            finally { graphics.ReleaseHdc(context); }
+        }
+
+        Rectangle shown = _lastShown;
+        shown.Intersect(new Rectangle(Point.Empty, whole));
+        if (shown.Width <= 0 || shown.Height <= 0)
+            shown = new Rectangle(Point.Empty, whole);
+        Size size = PipGeometry.FitInside(shown.Size, limit);
+        var picture = new Bitmap(size.Width, size.Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using (Graphics graphics = Graphics.FromImage(picture))
+            graphics.DrawImage(full, new Rectangle(Point.Empty, size), shown, GraphicsUnit.Pixel);
+        return picture;
     }
 
     internal void ResumeView()
@@ -253,6 +300,7 @@ public sealed class PipWindow : Form
             _thumbnail.Problem += text => Problem?.Invoke(text);
             _thumbnail.SetViewport(PipGeometry.ViewArea(ClientSize), _lastShown);
             _suspended = false;
+            DropTaskbarProxy();
             ApplyClickThrough();
             Show();
             StayOnTop();
@@ -777,6 +825,7 @@ public sealed class PipWindow : Form
     {
         if (_cleaned) return;
         _cleaned = true;
+        DropTaskbarProxy();
         _watch.Dispose();
         _autoMove.Dispose();
         ClaimEscape(false);

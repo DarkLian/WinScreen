@@ -359,5 +359,6 @@
   "anchors.recency": "让最近的自动锚点最大、最不透明",
   "anchors.avoid": "将自动锚点移离文字和图片",
   "anchors.avoid.help": "开启后，锚点不会出现在屏幕截图或屏幕共享中。",
-  "anchors.controls.view": "此窗口有视图。"
+  "anchors.controls.view": "此窗口有视图。",
+  "pip.taskbar.enable": "将最小化的视图保留在任务栏上"
 }

@@ -115,6 +115,8 @@ The compact title bar appears on hover with the source title, icon, Minimize, an
 position lock also applies to title-bar dragging. Minimize suspends the picture and hides the view; restore it from the
 tray's **Picture-in-Picture views → [view] → Restore view**. Its crop, position, size and options are kept.
 
+Enable **Keep minimized views on the taskbar** in Settings → Picture-in-Picture to give a minimized view its own taskbar button with the program's icon and a still preview, made only when you hover it. Click the button to bring the view back where it was; closing the button closes the view. No capture or GPU work runs while it's minimized. The button groups with WinScreen, not the original app. Views of a display or region show an icon instead of a picture, and a minimized original shows the icon too. This has been tried on one 100% display only.
+
 In **Settings → Picture-in-Picture**, choose **Hover preview → Whole view** or **Reading lens** for a window view.
 Rest the pointer on the picture briefly to open the preview. The lens follows the pointer within the picture;
 leaving the view dismisses it. Preview takes no focus or clicks. Display and region views have no hover preview.

@@ -359,5 +359,6 @@
   "anchors.recency": "讓最近的自動錨點最大、最不透明",
   "anchors.avoid": "將自動錨點移離文字和圖片",
   "anchors.avoid.help": "開啟後，錨點不會出現在螢幕擷取畫面或螢幕分享中。",
-  "anchors.controls.view": "此視窗有檢視。"
+  "anchors.controls.view": "此視窗有檢視。",
+  "pip.taskbar.enable": "將最小化的檢視保留在工作列上"
 }

@@ -141,6 +141,16 @@ public static class PipGeometry
             Math.Clamp(cursor.Y - spot.Y, area.Top, Math.Max(area.Top, area.Bottom - sourceSize.Height)));
     }
 
+    /// <summary>The largest size of this shape that fits inside a limit, never empty.</summary>
+    public static Size FitInside(Size shape, Size limit)
+    {
+        if (shape.Width <= 0 || shape.Height <= 0 || limit.Width <= 0 || limit.Height <= 0)
+            return new Size(Math.Max(1, limit.Width), Math.Max(1, limit.Height));
+        double scale = Math.Min((double)limit.Width / shape.Width, (double)limit.Height / shape.Height);
+        return new Size(Math.Clamp((int)Math.Round(shape.Width * scale), 1, limit.Width),
+            Math.Clamp((int)Math.Round(shape.Height * scale), 1, limit.Height));
+    }
+
     /// <summary>
     /// Where a view should go to get off the text and images under it, or null when it's fine where it
     /// is or nowhere is clearly better. <paramref name="busy"/> marks the cells of

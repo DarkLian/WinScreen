@@ -104,6 +104,29 @@ internal static partial class User32
     public const int HTCAPTION = 2;
     public const int HTMINBUTTON = 8;
 
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool PrintWindow(nint window, nint deviceContext, uint flags);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct BitmapInfoHeader
+    {
+        public uint Size;
+        public int Width;
+        public int Height;
+        public ushort Planes;
+        public ushort BitCount;
+        public uint Compression;
+        public uint ImageSize;
+        public int XPixelsPerMeter;
+        public int YPixelsPerMeter;
+        public uint ColorsUsed;
+        public uint ColorsImportant;
+    }
+
+    [LibraryImport("gdi32.dll")]
+    public static partial nint CreateDIBSection(nint context, in BitmapInfoHeader header, uint usage, out nint bits, nint section, uint offset);
+
     public delegate void WinEventProc(nint hook, uint kind, nint window, int item, int child, uint thread, uint time);
 
     [LibraryImport("user32.dll")]

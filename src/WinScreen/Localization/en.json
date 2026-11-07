@@ -359,5 +359,6 @@
   "anchors.recency": "Make the most recent automatic Anchor largest and most solid",
   "anchors.avoid": "Move automatic Anchors off text and images",
   "anchors.avoid.help": "While this is on, Anchors don't appear in screenshots or screen sharing.",
-  "anchors.controls.view": "This window has a view."
+  "anchors.controls.view": "This window has a view.",
+  "pip.taskbar.enable": "Keep minimized views on the taskbar"
 }
