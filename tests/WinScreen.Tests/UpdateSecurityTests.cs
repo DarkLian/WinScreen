@@ -172,7 +172,7 @@ public sealed class UpdateSecurityTests
         using var transport = new UpdateTransport("owner/repo", handler);
         var source = new SignedUpdateSource("owner/repo", key.ExportSubjectPublicKeyInfoPem(), transport,
             CancellationToken.None);
-        Assert.Empty((await source.GetReleaseFeed(null!, "WinScreen", "win")).Assets);
+        Assert.Empty((await source.GetReleaseFeed(null!, "WinScreen", UpdateChannel.Current)).Assets);
     }
 
     [Fact]
@@ -205,16 +205,16 @@ public sealed class UpdateSecurityTests
         using var transport = new UpdateTransport("owner/repo", handler);
         var source = new SignedUpdateSource("owner/repo", key.ExportSubjectPublicKeyInfoPem(), transport,
             CancellationToken.None);
-        await Assert.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, "WrongApp", "win"));
+        await Assert.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, "WrongApp", UpdateChannel.Current));
         await Assert.ThrowsAsync<InvalidDataException>(() => source.GetReleaseFeed(null!, "WinScreen", "beta"));
         string path = Path.GetTempFileName();
         try
         {
             await Assert.ThrowsAsync<InvalidDataException>(() =>
                 source.DownloadReleaseEntry(null!, asset, path, _ => { }, CancellationToken.None));
-            var verified = await source.GetReleaseFeed(null!, "WinScreen", "win");
-            Assert.Contains("/owner/repo/releases/download/v0.4.2/releases.win.json", requested);
-            Assert.Contains("/owner/repo/releases/download/v0.4.2/releases.win.json.sig", requested);
+            var verified = await source.GetReleaseFeed(null!, "WinScreen", UpdateChannel.Current);
+            Assert.Contains($"/owner/repo/releases/download/v0.4.2/releases.{UpdateChannel.Current}.json", requested);
+            Assert.Contains($"/owner/repo/releases/download/v0.4.2/releases.{UpdateChannel.Current}.json.sig", requested);
             Assert.DoesNotContain(requested, path => path.Contains("latest/download"));
             asset = Assert.Single(verified.Assets);
             await source.DownloadReleaseEntry(null!, asset, path, _ => { }, CancellationToken.None);
@@ -262,7 +262,7 @@ public sealed class UpdateSecurityTests
             var manager = new UpdateManager(
                 new SignedUpdateSource("owner/repo", key.ExportSubjectPublicKeyInfoPem(), transport,
                     CancellationToken.None),
-                new UpdateOptions { AllowVersionDowngrade = false, ExplicitChannel = "win" }, locator);
+                new UpdateOptions { AllowVersionDowngrade = false, ExplicitChannel = UpdateChannel.Current }, locator);
             Assert.Equal(available, await manager.CheckForUpdatesAsync() is not null);
         }
         finally

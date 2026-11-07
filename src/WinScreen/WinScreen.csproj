@@ -27,8 +27,8 @@
   <!-- Visual Studio designer support and a debugger helper: installed apps use neither. -->
   <Target Name="DropUnusedRuntimeFiles" AfterTargets="ResolveRuntimePackAssets">
     <ItemGroup>
-      <RuntimePackAsset Remove="@(RuntimePackAsset)" Condition="'%(Filename)' == 'System.Windows.Forms.Design' Or '%(Filename)' == 'Microsoft.DiaSymReader.Native.amd64'" />
-      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'System.Windows.Forms.Design' Or '%(Filename)' == 'Microsoft.DiaSymReader.Native.amd64'" />
+      <RuntimePackAsset Remove="@(RuntimePackAsset)" Condition="'%(Filename)' == 'System.Windows.Forms.Design' Or '%(Filename)' == 'Microsoft.DiaSymReader.Native.amd64' Or '%(Filename)' == 'Microsoft.DiaSymReader.Native.arm64'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'System.Windows.Forms.Design' Or '%(Filename)' == 'Microsoft.DiaSymReader.Native.amd64' Or '%(Filename)' == 'Microsoft.DiaSymReader.Native.arm64'" />
     </ItemGroup>
   </Target>
 </Project>

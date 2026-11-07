@@ -20,7 +20,7 @@ internal sealed class SignedUpdateSource(
     public async Task<VelopackAssetFeed> GetReleaseFeed(IVelopackLogger logger, string? appId, string channel,
         Guid? stagingId = null, VelopackAsset? latestLocalRelease = null)
     {
-        if (appId != "WinScreen" || channel != "win")
+        if (appId != "WinScreen" || channel != UpdateChannel.Current)
             throw new InvalidDataException("Unexpected update identity or channel.");
         Uri release;
         try
@@ -42,8 +42,8 @@ internal sealed class SignedUpdateSource(
                 @"\Av(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\z"))
             throw new InvalidDataException("Only stable vMAJOR.MINOR.PATCH release tags are accepted.");
         string baseUrl = $"https://github.com/{_repository}/releases/download/{tag}/";
-        byte[] feedBytes = await transport.Read(new Uri(baseUrl + "releases.win.json"), 1048576, cancellation);
-        byte[] signature = await transport.Read(new Uri(baseUrl + "releases.win.json.sig"), 1024, cancellation);
+        byte[] feedBytes = await transport.Read(new Uri(baseUrl + $"releases.{channel}.json"), 1048576, cancellation);
+        byte[] signature = await transport.Read(new Uri(baseUrl + $"releases.{channel}.json.sig"), 1024, cancellation);
         var feed = UpdateSecurity.VerifyFeed(feedBytes, signature, publicKey);
         if (feed.Assets.Any(asset => asset.Version.ToString() != tag[1..]))
             throw new InvalidDataException("The signed feed does not match its release tag.");

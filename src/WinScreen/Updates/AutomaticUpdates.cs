@@ -153,7 +153,7 @@ internal sealed class VelopackUpdateSession : IUpdateSession
     {
         _transport = new UpdateTransport(repository);
         _manager = new UpdateManager(new SignedUpdateSource(repository, publicKey, _transport, cancellation),
-            new UpdateOptions { AllowVersionDowngrade = false, ExplicitChannel = "win" });
+            new UpdateOptions { AllowVersionDowngrade = false, ExplicitChannel = UpdateChannel.Current });
     }
 
     internal static IUpdateSession? Create(CancellationToken cancellation)

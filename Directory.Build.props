@@ -2,9 +2,11 @@
   <PropertyGroup>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.22000.0</SupportedOSPlatformVersion>
-    <Platforms>x64</Platforms>
-    <PlatformTarget>x64</PlatformTarget>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- Pass -p:WinScreenArchitecture=arm64 for a native ARM64 build. -->
+    <WinScreenArchitecture Condition="'$(WinScreenArchitecture)' == ''">x64</WinScreenArchitecture>
+    <Platforms>$(WinScreenArchitecture)</Platforms>
+    <PlatformTarget>$(WinScreenArchitecture)</PlatformTarget>
+    <RuntimeIdentifier>win-$(WinScreenArchitecture)</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
