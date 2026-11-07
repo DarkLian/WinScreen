@@ -20,7 +20,6 @@ public sealed class WindowToolbar : Form
     private const int CaptionButtonsWidth = 150;
     private const int KeepOpenMargin = 12;
     private const int StillPixels = 4;
-    private const int HoverDelayMilliseconds = 500;
     private const int Interval = 60;
     private const uint AbortIfHung = 0x2;
     private const uint CaptionCheckMilliseconds = 100;
@@ -44,6 +43,18 @@ public sealed class WindowToolbar : Form
     private Rectangle _hoverZone;
     private Font? _glyphs;
     private string _arrangement = "";
+    private ToolbarPreferences _preferences = new();
+    private bool _enabled;
+
+    public void Configure(ToolbarPreferences preferences)
+    {
+        _preferences = preferences.Validated();
+        _arrangement = "";
+        _hoverTime = 0;
+        Hide();
+        Arrange(DeviceDpi);
+        _watch.Enabled = _enabled && _preferences.Buttons.Count > 0;
+    }
 
     public WindowToolbar(Func<nint, bool> canUse, Func<AppCommand, nint, bool> isOn, Func<AppCommand, bool> isAvailable,
         Action<AppCommand, nint> run)
@@ -95,9 +106,13 @@ public sealed class WindowToolbar : Form
     /// <summary>The window the toolbar is showing for, or none.</summary>
     public nint Window => Visible ? _window : 0;
 
+    /// <summary>False when nothing would be on the bar, so it must not open.</summary>
+    internal bool HasButtons { get; private set; }
+
     public void Enable(bool on)
     {
-        _watch.Enabled = on;
+        _enabled = on;
+        _watch.Enabled = on && _preferences.Buttons.Count > 0;
         if (!on)
             Hide();
     }
@@ -159,17 +174,21 @@ public sealed class WindowToolbar : Form
     /// <summary>Sizes the buttons for this monitor and lays out the ones currently available.</summary>
     private void Arrange(int dpi)
     {
-        AppCommand[] available = _buttons.Keys.Where(_isAvailable).ToArray();
+        AppCommand[] available = _buttons.Keys.Where(command => _preferences.Buttons.Contains(command) && _isAvailable(command)).ToArray();
         string arrangement = dpi + ":" + string.Join(",", available);
         if (arrangement == _arrangement)
             return;
 
         _arrangement = arrangement;
-        Font? previous = _glyphs;
-        _glyphs = new Font("Segoe MDL2 Assets", Dpi.Scale(GlyphSize, dpi), GraphicsUnit.Pixel);
+        // An equal font doesn't replace the one a button holds, so disposing it would break the buttons.
+        int glyphPixels = Dpi.Scale(GlyphSize, dpi);
+        Font? previous = _glyphs is null || _glyphs.Size != glyphPixels ? _glyphs : null;
+        if (_glyphs is null || previous is not null)
+            _glyphs = new Font("Segoe MDL2 Assets", glyphPixels, GraphicsUnit.Pixel);
         int size = Dpi.Scale(ButtonSize, dpi);
         int gap = Dpi.Scale(GroupGap, dpi);
         int left = 0, right = 0;
+        bool groupVisible = false;
         foreach ((AppCommand command, Button button) in _buttons)
         {
             // Read from the list: a button reports itself as hidden until the toolbar is on screen.
@@ -178,16 +197,21 @@ public sealed class WindowToolbar : Form
             button.Visible = shown;
             if (shown)
             {
+                groupVisible = true;
                 button.Bounds = new Rectangle(left, 0, size, size);
                 left += size;
                 right = left;
             }
 
             if (CommandCatalog.EndsGroup(command))
-                left += gap;
+            {
+                if (groupVisible) left += gap;
+                groupVisible = false;
+            }
         }
 
-        ClientSize = new Size(right, size);
+        HasButtons = available.Length > 0;
+        ClientSize = new Size(Math.Max(1, right), size);
         previous?.Dispose();
     }
 
@@ -213,12 +237,23 @@ public sealed class WindowToolbar : Form
 
         int dpi = Dpi.Of(foreground);
         Arrange(dpi);
+        // The chosen buttons can all be unavailable, such as only effects with Experimental off.
+        if (!HasButtons)
+        {
+            _hoverTime = 0;
+            return;
+        }
+
         var window = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
         Rectangle area = Screen.FromRectangle(window).WorkingArea;
         int reserved = Dpi.Scale(CaptionButtonsWidth, dpi);
         int caption = Dpi.Scale(CaptionHeight, dpi);
-        var bar = new Rectangle(ToolbarGeometry.Place(window, Size, area, reserved, caption), Size);
-        Rectangle zone = ToolbarGeometry.HoverZone(window, bar, area, reserved, caption);
+        var bar = new Rectangle(ToolbarGeometry.PlaceAt(window, Size, area, reserved, caption, _preferences.Placement), Size);
+        bool minimizeTrigger = _preferences.Trigger == ToolbarTrigger.MinimizeButton;
+        if (minimizeTrigger) bar.Y = ToolbarGeometry.BelowCaption(window, Height, area, caption);
+        Rectangle zone = minimizeTrigger
+            ? ToolbarGeometry.CaptionButtonsZone(window, area, reserved, caption)
+            : ToolbarGeometry.HoverZone(window, bar, area, reserved, caption);
         bool moved = Math.Abs(cursor.X - _hoverPoint.X) > StillPixels ||
                      Math.Abs(cursor.Y - _hoverPoint.Y) > StillPixels;
         if (!zone.Contains(cursor) || moved)
@@ -229,11 +264,11 @@ public sealed class WindowToolbar : Form
         }
 
         _hoverTime += Interval;
-        if (_hoverTime < HoverDelayMilliseconds)
+        if (_hoverTime < _preferences.HoverDelayMilliseconds)
             return;
 
         _hoverTime = 0;
-        if (!IsTitleBar(foreground, cursor))
+        if (!MatchesTrigger(foreground, cursor, _preferences.Trigger))
             return;
 
         try
@@ -260,11 +295,12 @@ public sealed class WindowToolbar : Form
     /// Asks the window itself, so tabs, menus and other content drawn at the top of an app
     /// don't count as its title bar.
     /// </summary>
-    private static bool IsTitleBar(nint window, Point cursor)
+    internal static bool MatchesTrigger(nint window, Point cursor, ToolbarTrigger trigger)
     {
         nint position = (nint)((cursor.Y << 16) | (cursor.X & 0xFFFF));
         return User32.SendMessageTimeout(window, User32.WM_NCHITTEST, 0, position, AbortIfHung,
-            CaptionCheckMilliseconds, out nint hit) != 0 && hit == User32.HTCAPTION;
+            CaptionCheckMilliseconds, out nint hit) != 0 && hit ==
+            (trigger == ToolbarTrigger.MinimizeButton ? User32.HTMINBUTTON : User32.HTCAPTION);
     }
 
     private void ShowStates()

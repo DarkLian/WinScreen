@@ -242,6 +242,7 @@ public sealed class AppSettings
     public bool DetectAlreadyDark { get; set; } = true;
     public PinBorderPreferences PinBorder { get; set; } = new();
     public PipViewPreferences PipViews { get; set; } = new();
+    public ToolbarPreferences Toolbar { get; set; } = new();
     [JsonIgnore]
     internal bool Imported { get; set; }
 
@@ -319,6 +320,7 @@ public sealed class AppSettings
         loaded.OpacityStepPercent = Math.Clamp(loaded.OpacityStepPercent, 1, 25);
         loaded.PinBorder = (loaded.PinBorder ?? new()).Validated();
         loaded.PipViews = (loaded.PipViews ?? new()).Validated();
+        loaded.Toolbar = (loaded.Toolbar ?? new()).Validated();
         loaded.ModifierExclusions = (loaded.ModifierExclusions ?? defaults.ModifierExclusions)
             .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
         loaded.ModifierKey = Enum.IsDefined(loaded.ModifierKey) ? loaded.ModifierKey : ModifierKey.Alt;

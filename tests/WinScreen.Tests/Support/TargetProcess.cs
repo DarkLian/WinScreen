@@ -60,6 +60,17 @@ internal sealed class TargetProcess : IDisposable
         _process.StandardInput.Flush();
         if (NextReport() != "framed")
             throw new InvalidOperationException("Test target didn't take a frame.");
+
+        // A newly framed window can briefly hold a whole-window region, which reads as a shape of its own.
+        var clear = Stopwatch.StartNew();
+        bool settled = Desktop.WaitFor(() =>
+        {
+            if (Windows.WindowInfo.ShapeOf(Handle) is not null)
+                clear.Restart();
+            return clear.ElapsedMilliseconds >= 80;
+        });
+        if (!settled)
+            throw new InvalidOperationException("Test target's frame didn't settle.");
     }
 
     /// <summary>Adds a real control at (20, 30), 140 by 50, for anything that looks inside a window.</summary>

@@ -102,6 +102,7 @@ internal static partial class User32
     public const int WM_CLOSE = 0x0010;
     public const int WM_NCHITTEST = 0x0084;
     public const int HTCAPTION = 2;
+    public const int HTMINBUTTON = 8;
     public const int WM_HOTKEY = 0x0312;
 
     public static readonly nint HWND_TOPMOST = -1;

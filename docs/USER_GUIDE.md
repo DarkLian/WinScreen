@@ -11,7 +11,7 @@ Click the icon to open Settings. Right-click it for every command, including res
 Hotkeys act on the active window. The tray menu acts on the target named at its top, which is the most recently
 active eligible window.
 
-Rest the pointer on the middle of a window's title bar to show the toolbar. You can disable the toolbar in Settings.
+Rest the pointer on the middle of a window's title bar to show the toolbar. **Settings → Toolbar** changes its placement, hover delay, and buttons, and can open it from the Minimize button instead. You can disable the toolbar in General settings.
 WinScreen leaves the desktop, taskbar, and excluded programs alone. Applications running as administrator may refuse changes.
 
 ## Window menu and appearance
@@ -283,6 +283,8 @@ Press the shortcut on a window with no such changes to forget its program's save
 | Programs → Exclusions | Programs WinScreen should leave alone |
 | Programs → Inclusions | Restricts control to these programs; leave empty for all eligible programs |
 | Saved setups | Lists and removes remembered program setups |
+| Features | Lists each command and option with its shortcut and state, including changes you haven't saved. Double-click a row, or press Enter, to open its options |
+| Toolbar | Places the toolbar left, center, or right of the title bar, sets the hover delay (100–2000 ms), and chooses its buttons. Selecting no buttons turns it off. The Minimize button trigger opens the toolbar below the title bar and works only on title bars drawn by Windows |
 
 Program lists accept names such as `ExampleProgram` or `ExampleProgram.exe`, or you can choose a running program from
 the list. Press Enter or Add, or just Save, to include what you typed.

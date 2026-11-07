@@ -37,7 +37,7 @@ Problems always appear as a notification and stay in the tray's **Last result** 
 3. Click WinScreen's tray icon to open **Settings** and change hotkeys, language, notifications, and other options. Right-click it for every command.
 4. Press **Ctrl+Alt+R**, or choose **Restore all windows** from the tray menu, to undo WinScreen's window changes.
 
-A toolbar also appears when the pointer rests on the middle of the active window's title bar.
+A toolbar also appears when the pointer rests on the middle of the active window's title bar. **Settings → Toolbar** changes its placement, delay, and buttons; opening it from the Minimize button works only on title bars drawn by Windows. **Settings → Features** lists what's available and its shortcut.
 
 Enable **Settings → Mouse gestures → Window menu** for Ctrl+right-click commands on the window under the pointer.
 The tray and window menus also offer borderless mode, display fill, a native dark title bar, Copy, and Open file location.

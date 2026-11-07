@@ -18,6 +18,16 @@ public sealed class SettingsWindow : Form
     private readonly TextBox _borderColor = new() { Width = 90 };
     private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _borderThickness = new() { Minimum = 1, Maximum = 12, Width = 70 };
+    private readonly ComboBox _toolbarPlacement = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
+    private readonly ComboBox _toolbarTrigger = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
+    private readonly NumericUpDown _toolbarDelay = new() { Minimum = 100, Maximum = 2000, Increment = 100, Width = 90 };
+    private readonly CheckedListBox _toolbarButtons = new() { CheckOnClick = true, Width = 455, Height = 225, IntegralHeight = false };
+    private readonly ListView _features = new() { View = View.Details, FullRowSelect = true, MultiSelect = false, Dock = DockStyle.Fill };
+
+    private sealed record ToolbarChoice(AppCommand Command)
+    {
+        public override string ToString() => CommandCatalog.Name(Command).Replace("&", "");
+    }
     private readonly ComboBox _pipBackend = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private readonly ComboBox _pipRate = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
     private readonly ComboBox _pipScaling = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
@@ -127,13 +137,39 @@ public sealed class SettingsWindow : Form
         Padding = new Padding(12);
 
         var tabs = new TabControl { Size = new Size(540, 520) };
-        tabs.TabPages.Add(Tab(T("settings.general"), BuildGeneral()));
-        tabs.TabPages.Add(Tab(T("settings.hotkeys"), BuildHotkeys()));
+        var generalPage = Tab(T("settings.general"), BuildGeneral());
+        var featuresPage = Tab(T("features.title"), BuildFeatures());
+        var hotkeysPage = Tab(T("settings.hotkeys"), BuildHotkeys());
+        tabs.TabPages.Add(generalPage);
+        tabs.TabPages.Add(featuresPage);
+        tabs.TabPages.Add(hotkeysPage);
         tabs.TabPages.Add(Tab(T("settings.programs"), BuildPrograms()));
         tabs.TabPages.Add(Tab(T("settings.savedSetups"), BuildSetups()));
-        tabs.TabPages.Add(Tab(T("pip.open"), BuildPip()));
-        tabs.TabPages.Add(Tab(T("gestures.title"), BuildModifierDrag()));
-        tabs.TabPages.Add(Tab(T("settings.customization"), BuildCustomization()));
+        var pipPage = Tab(T("pip.open"), BuildPip());
+        var gesturePage = Tab(T("gestures.title"), BuildModifierDrag());
+        var appearancePage = Tab(T("settings.customization"), BuildCustomization());
+        var toolbarPage = Tab(T("toolbar.settings.title"), BuildToolbar());
+        tabs.TabPages.AddRange([pipPage, gesturePage, appearancePage, toolbarPage]);
+        tabs.Selected += (_, _) => { if (tabs.SelectedTab == featuresPage) RefreshFeatures(); };
+        _features.ItemActivate += (_, _) => // A double-click, or Enter from the keyboard.
+        {
+            if (_features.SelectedItems.Count == 0) return;
+            object? tag = _features.SelectedItems[0].Tag;
+            if (tag is AppCommand command)
+            {
+                tabs.SelectedTab = hotkeysPage;
+                _hotkeys[command].Focus();
+                return;
+            }
+            tabs.SelectedTab = (tag as string) switch
+            {
+                "toolbar" => toolbarPage,
+                "gestures" => gesturePage,
+                "pip" => pipPage,
+                "appearance" => appearancePage,
+                _ => generalPage,
+            };
+        };
 
         var page = new FlowLayoutPanel
             { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Dock = DockStyle.Fill };
@@ -194,6 +230,13 @@ public sealed class SettingsWindow : Form
         draft.SavedSetups.RemoveAll(setup => _removedSetups.Any(removed =>
             removed.Program == setup.Program && removed.ExecutablePath == setup.ExecutablePath));
         draft.ShowToolbar = _showToolbar.Checked;
+        draft.Toolbar = new ToolbarPreferences
+        {
+            Placement = (ToolbarPlacement)Math.Max(0, _toolbarPlacement.SelectedIndex),
+            Trigger = (ToolbarTrigger)Math.Max(0, _toolbarTrigger.SelectedIndex),
+            HoverDelayMilliseconds = (int)_toolbarDelay.Value,
+            Buttons = _toolbarButtons.CheckedItems.Cast<ToolbarChoice>().Select(choice => choice.Command).ToList(),
+        }.Validated();
         draft.ShowNotifications = _showNotifications.Checked;
         draft.AutomaticUpdates = _automaticUpdates.Checked;
         draft.ExperimentalFeatures = _experimental.Checked;
@@ -328,6 +371,7 @@ public sealed class SettingsWindow : Form
             nameof(AppSettings.PauseInFullScreen) => _pauseInFullScreen,
             nameof(AppSettings.AllowPipInFullScreen) => _allowPip,
             nameof(AppSettings.ModifierDrag) => _modifierDrag,
+            nameof(AppSettings.OpacityWheel) => _opacityWheel,
             nameof(AppSettings.PausePinWhenMaximized) => _pausePin,
             nameof(AppSettings.OpaqueOnHover) => _opaqueOnHover,
             nameof(AppSettings.HighlightPinned) => _highlightPinned,
@@ -353,6 +397,12 @@ public sealed class SettingsWindow : Form
         _setups.Items.AddRange(values.SavedSetups.Cast<object>().ToArray());
         _startWithWindows.Checked = _startup.IsOn;
         _showToolbar.Checked = values.ShowToolbar;
+        ToolbarPreferences toolbar = values.Toolbar.Validated();
+        _toolbarPlacement.SelectedIndex = (int)toolbar.Placement;
+        _toolbarTrigger.SelectedIndex = (int)toolbar.Trigger;
+        _toolbarDelay.Value = toolbar.HoverDelayMilliseconds;
+        for (int i = 0; i < _toolbarButtons.Items.Count; i++)
+            _toolbarButtons.SetItemChecked(i, toolbar.Buttons.Contains(((ToolbarChoice)_toolbarButtons.Items[i]).Command));
         _showNotifications.Checked = values.ShowNotifications;
         _automaticUpdates.Checked = values.AutomaticUpdates;
         _experimental.Checked = values.ExperimentalFeatures;
@@ -694,5 +744,62 @@ public sealed class SettingsWindow : Form
         row.Controls.Add(new Label { Text = text, AutoSize = true, Margin = new Padding(3, 6, 8, 0) });
         row.Controls.Add(control);
         return row;
+    }
+
+    private Control BuildToolbar()
+    {
+        _toolbarPlacement.Items.AddRange([T("toolbar.placement.left"), T("toolbar.placement.centre"), T("toolbar.placement.right")]);
+        _toolbarTrigger.Items.AddRange([T("toolbar.trigger.titleBar"), T("toolbar.trigger.minimize")]);
+        foreach (AppCommand command in ToolbarPreferences.DefaultButtons()) _toolbarButtons.Items.Add(new ToolbarChoice(command));
+        var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true };
+        page.Controls.Add(Section(T("toolbar.settings.title"), SettingRow(T("toolbar.placement.label"), _toolbarPlacement),
+            SettingRow(T("toolbar.trigger.label"), _toolbarTrigger), SettingRow(T("toolbar.delay.label"), _toolbarDelay),
+            Note(T("toolbar.trigger.help"))));
+        page.Controls.Add(Section(T("toolbar.buttons.label"), _toolbarButtons, Note(T("toolbar.buttons.help"))));
+        return page;
+    }
+
+    private Control BuildFeatures()
+    {
+        _features.Columns.Add(T("features.name"), 230);
+        _features.Columns.Add(T("features.shortcut"), 150);
+        _features.Columns.Add(T("features.state"), 100);
+        var page = new Panel { Dock = DockStyle.Fill };
+        var help = new Label { Text = T("features.help"), AutoSize = true, MaximumSize = new Size(ContentWidth, 0), Dock = DockStyle.Top };
+        page.Controls.Add(_features);
+        page.Controls.Add(help);
+        return page;
+    }
+
+    internal void RefreshFeatures()
+    {
+        _features.BeginUpdate();
+        _features.Items.Clear();
+        foreach (AppCommand command in CommandCatalog.All)
+        {
+            string hotkey = _hotkeys[command].Text;
+            _features.Items.Add(new ListViewItem([CommandCatalog.Name(command).Replace("&", ""),
+                hotkey.Length == 0 ? T("features.unassigned") : hotkey,
+                !CommandCatalog.IsExperimental(command) || _experimental.Checked ? T("features.available") : T("features.disabled")]) { Tag = command });
+        }
+        void Option(string name, string shortcut, bool enabled, string page) => _features.Items.Add(
+            new ListViewItem([name.Replace("&", ""), shortcut, enabled ? T("features.enabled") : T("features.disabled")]) { Tag = page });
+        string none = T("features.noShortcut");
+        bool toolbarHasButtons = _toolbarButtons.CheckedItems.Cast<ToolbarChoice>().Any(choice =>
+            !CommandCatalog.IsExperimental(choice.Command) || _experimental.Checked);
+        Option(T("toolbar.settings.title"), none, _showToolbar.Checked && toolbarHasButtons, "toolbar");
+        Option(T("features.moveResize"), string.Format(T("features.dragShortcut"), _modifierKey.SelectedIndex == (int)ModifierKey.Win ? "Win" : "Alt"), _modifierDrag.Checked, "gestures");
+        string gesture = _windowMenuGesture.SelectedIndex switch
+        {
+            (int)WindowMenuGesture.CtrlShiftRightClick => T("gestures.menu.ctrlShiftRight"),
+            (int)WindowMenuGesture.CtrlMiddleClick => T("gestures.menu.ctrlMiddle"),
+            _ => T("gestures.menu.ctrlRight"),
+        };
+        Option(T("features.windowMenu"), gesture, _windowMenu.Checked, "gestures");
+        Option(T("features.opacityWheel"), T("features.wheelShortcut"), _opacityWheel.Checked, "appearance");
+        Option(_detectDark.Text, none, _detectDark.Checked && _experimental.Checked, "appearance");
+        Option(_pipTitleBar.Text, none, _pipTitleBar.Checked, "pip");
+        Option(T("pip.hover.mode"), none, _pipPreview.SelectedIndex > 0, "pip");
+        _features.EndUpdate();
     }
 }

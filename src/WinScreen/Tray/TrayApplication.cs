@@ -289,6 +289,7 @@ public sealed class TrayApplication : ApplicationContext
         _borders.Configure(_settings.PinBorder);
         _dark.DetectAlreadyDark = _settings.DetectAlreadyDark;
         _toolbar.Enable(_settings.ShowToolbar);
+        _toolbar.Configure(_settings.Toolbar);
         _updates.SetEnabled(_settings.AutomaticUpdates);
         _updateTimer.Interval = 30_000;
         foreach (PipWindow pip in _viewsInOrder)
