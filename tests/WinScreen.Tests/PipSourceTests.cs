@@ -138,6 +138,33 @@ public sealed class PipScreenViewTests
     }
 
     [Fact]
+    public void The_region_overlay_opens_from_the_picker_and_the_picker_goes_away()
+    {
+        OnUiThread(pump =>
+        {
+            Desktop.GainForegroundRights();
+            using var picker = new PipSourcePicker(_ => false);
+            picker.Show();
+            picker.Activate();
+            Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == picker.Handle, 2000, () => pump(20)));
+            CropOverlay? overlay = null;
+            picker.RegionWanted += _ =>
+            {
+                overlay = new CropOverlay(Screen.PrimaryScreen!.Bounds);
+                overlay.ShowOnTop();
+            };
+            picker.AskForRegion();
+            pump(150);
+            Assert.NotNull(overlay);
+            Assert.True(picker.IsDisposed);
+            Assert.False(overlay.IsDisposed);
+            Assert.Equal(overlay.Handle, User32.GetForegroundWindow());
+            overlay.Close();
+            pump(100);
+        });
+    }
+
+    [Fact]
     public void A_screen_view_has_nothing_to_fall_back_on()
     {
         OnUiThread(_ =>

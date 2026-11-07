@@ -934,7 +934,7 @@ public sealed class TrayApplication : ApplicationContext
         var picker = new PipSourcePicker(window => _windows.CanControl(window) && !_pips.ContainsKey(window));
         picker.WindowChosen += window => Run(AppCommand.OpenPip, window);
         picker.ScreenChosen += device => OpenScreenView(new ScreenPipSource(device, null));
-        picker.RegionWanted += SelectRegion;
+        picker.RegionWanted += device => Attempt(() => SelectRegion(device));
         _picker = picker;
         picker.FormClosed += (_, _) => _picker = null;
         picker.Show();

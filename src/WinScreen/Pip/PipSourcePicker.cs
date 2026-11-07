@@ -55,12 +55,7 @@ internal sealed class PipSourcePicker : Form
         };
 
         var region = new Button { Text = T("Select a region..."), AutoSize = true };
-        region.Click += (_, _) =>
-        {
-            string device = Selected?.Device ?? Screen.FromPoint(Cursor.Position).DeviceName;
-            Close();
-            RegionWanted?.Invoke(device);
-        };
+        region.Click += (_, _) => AskForRegion();
         _open.Click += (_, _) => Choose();
         var cancel = new Button { Text = T("Cancel"), AutoSize = true };
         cancel.Click += (_, _) => Close();
@@ -107,6 +102,13 @@ internal sealed class PipSourcePicker : Form
                 _list.Items[0].Selected = true;
             Choose();
         }
+    }
+
+    /// <summary>Opens the selection before closing, while WinScreen still has the focus Windows wants to see.</summary>
+    internal void AskForRegion()
+    {
+        RegionWanted?.Invoke(Selected?.Device ?? Screen.FromPoint(Cursor.Position).DeviceName);
+        Close();
     }
 
     private void Fill()
