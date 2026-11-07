@@ -29,12 +29,13 @@ public sealed class PipWindow : Form
 
     private static readonly Color Accent = Color.FromArgb(79, 140, 255);
 
+    private readonly PipSource _origin;
     private readonly nint _source;
-    private readonly WindowIdentity _identity;
     private readonly WindowController _windows;
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 50 };
     private readonly System.Windows.Forms.Timer _autoMove = new() { Interval = 1000 };
     private readonly ToolStripMenuItem _hideItem;
+    private readonly ToolStripItem _goToItem;
     private readonly ToolStripMenuItem _autoMoveItem;
     private readonly ToolStripMenuItem _removeCropItem;
     private readonly ContextMenuStrip _menu = new();
@@ -66,17 +67,22 @@ public sealed class PipWindow : Form
     public bool AllowAutoMove { get; set; }
 
     public PipWindow(nint source, WindowController windows)
+        : this(new WindowPipSource(WindowIdentity.Capture(source)), windows)
     {
-        _source = source;
-        _identity = WindowIdentity.Capture(source);
+    }
+
+    internal PipWindow(PipSource source, WindowController windows)
+    {
+        _origin = source;
+        _source = source.Window;
         _windows = windows;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         BackColor = Color.Black; // Whatever briefly shows while resizing shouldn't flash.
         SetStyle(ControlStyles.ResizeRedraw, true);
         StartPosition = FormStartPosition.Manual;
-        Text = T("PiP - ") + WindowInfo.Title(source);
-        _longSide = Dpi.Scale(StartLongSide, Dpi.Of(source));
+        Text = T("PiP - ") + source.Title;
+        _longSide = Dpi.Scale(StartLongSide, source.Dpi);
         _tips.SetToolTip(this,
             T("Click: go to the original • Drag: move • Wheel: resize • Ctrl+drag: crop • Right-click: menu"));
 
@@ -86,7 +92,7 @@ public sealed class PipWindow : Form
             (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
         _menu.Items.Add(_hideItem);
         _menu.Items.Add(_autoMoveItem);
-        _menu.Items.Add(T("&Go to original window"), null, (_, _) => GoToSource());
+        _goToItem = _menu.Items.Add(T("&Go to original window"), null, (_, _) => GoToSource());
         _removeCropItem = new ToolStripMenuItem(T("&Remove crop"), null, (_, _) => SetCrop(Rectangle.Empty));
         _menu.Items.Add(_removeCropItem);
         _menu.Items.Add(T("PiP diagnostics"), null, (_, _) => ShowDiagnostics());
@@ -97,6 +103,7 @@ public sealed class PipWindow : Form
         {
             _retryItem.Visible = _thumbnail?.CanRetry == true;
             _autoMoveItem.Visible = AllowAutoMove;
+            _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
             _removeCropItem.Enabled = !_crop.IsEmpty;
             // A menu only closes on an outside click while its program has the focus.
             _foregroundBeforeMenu = User32.GetForegroundWindow();
@@ -137,14 +144,14 @@ public sealed class PipWindow : Form
     /// </summary>
     public void ShowOnTop()
     {
-        _identity.Require();
+        _origin.Require();
         // A minimized window has no shape or picture to show, so opening a view needs it back, and says so.
         bool restored = User32.IsIconic(_source);
         if (restored)
             User32.ShowWindow(_source, User32.SW_SHOWNOACTIVATE);
         try
         {
-            _thumbnail = new PipBackendSelector(_identity, Handle, _preferences);
+            _thumbnail = new PipBackendSelector(_origin, Handle, _preferences);
             _thumbnail.Problem += text => Problem?.Invoke(text);
             OpenInFreeSpot(_thumbnail);
             Show();
@@ -216,9 +223,11 @@ public sealed class PipWindow : Form
     /// <summary>Makes the original invisible, or brings it back. The view keeps updating either way.</summary>
     public void SetOriginalHidden(bool hidden)
     {
+        if (!_origin.IsWindow)
+            return;
         try
         {
-            _identity.Require();
+            _origin.Require();
             if (hidden && _thumbnail is null)
                 throw new WindowOperationException(
                     T("The preview is not ready; its original window will not be hidden."));
@@ -238,7 +247,7 @@ public sealed class PipWindow : Form
         }
         catch (WindowOperationException failure)
         {
-            if (hidden && _identity.Matches() && _windows.IsHidden(_source))
+            if (hidden && _origin.IsAvailable && _windows.IsHidden(_source))
             {
                 try
                 {
@@ -249,7 +258,7 @@ public sealed class PipWindow : Form
                 }
             }
 
-            _hideItem.Checked = _identity.Matches() && _windows.IsHidden(_source);
+            _hideItem.Checked = _origin.IsAvailable && _windows.IsHidden(_source);
             Problem?.Invoke(failure.Message);
         }
     }
@@ -410,7 +419,7 @@ public sealed class PipWindow : Form
         _thumbnail?.Dispose();
         _thumbnail = null;
         EndInteraction();
-        if (_hideItem.Checked && _identity.Matches())
+        if (_hideItem.Checked && _origin.IsAvailable)
             SetOriginalHidden(false);
         _tips.Dispose();
         _closeButton?.Dispose();
@@ -425,7 +434,7 @@ public sealed class PipWindow : Form
     /// </summary>
     private void Interact(Point point)
     {
-        if (_thumbnail is null || _interacting)
+        if (_thumbnail is null || _interacting || !_origin.IsWindow)
             return;
         if (!AllowClickForwarding)
         {
@@ -450,7 +459,7 @@ public sealed class PipWindow : Form
 
         try
         {
-            _identity.Require();
+            _origin.Require();
             if (_windows.IsClickThrough(_source))
             {
                 GoToSource();
@@ -463,7 +472,7 @@ public sealed class PipWindow : Form
             // Activation and hit-test must agree after repositioning; a transparent, covered, cloaked,
             // replaced, or refused source must never turn into a desktop click.
             Cursor.Position = target;
-            if (!_identity.Matches() || User32.GetForegroundWindow() != _source || !WindowInfo.IsAvailable(_source) ||
+            if (!_origin.IsAvailable || User32.GetForegroundWindow() != _source || !WindowInfo.IsAvailable(_source) ||
                 (User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE) & User32.WS_EX_TRANSPARENT) != 0 ||
                 User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = target.X, Y = target.Y }),
                     User32.GA_ROOT) != _source)
@@ -580,8 +589,8 @@ public sealed class PipWindow : Form
     /// </summary>
     private Rectangle ShownPart(Size sourceSize)
     {
-        if (_whole.IsEmpty || !User32.IsIconic(_source))
-            _whole = WindowInfo.VisiblePart(_source, sourceSize);
+        if (_whole.IsEmpty || !_origin.IsMinimized)
+            _whole = _origin.Whole(sourceSize);
         if (_crop.IsEmpty)
             return _whole;
 
@@ -596,8 +605,8 @@ public sealed class PipWindow : Form
         if (shown.Width <= 0 || shown.Height <= 0)
             throw new WindowOperationException(T("The source has no drawable preview surface."));
 
-        Rectangle area = Screen.FromHandle(_source).WorkingArea;
-        int margin = Dpi.Scale(ScreenMargin, Dpi.Of(_source));
+        Rectangle area = _origin.Screen.WorkingArea;
+        int margin = Dpi.Scale(ScreenMargin, _origin.Dpi);
         Size size = PipGeometry.FitLongSide(_longSide, shown, area.Size);
         var wanted = new Rectangle(area.Right - size.Width - margin, area.Bottom - size.Height - margin,
             size.Width, size.Height);
@@ -630,7 +639,7 @@ public sealed class PipWindow : Form
 
     private void FollowSource()
     {
-        if (!_identity.Matches())
+        if (!_origin.IsAvailable)
         {
             Close();
             return;
@@ -695,7 +704,7 @@ public sealed class PipWindow : Form
     /// <summary>Says when the picture may be out of date, without claiming more than WinScreen can tell.</summary>
     private void ShowState()
     {
-        PipChipState state = PipStateChip.Decide(User32.IsIconic(_source), BackendState,
+        PipChipState state = PipStateChip.Decide(_origin.IsMinimized, BackendState,
             Bounds.Contains(Cursor.Position), _interacting || _selecting || _pressed);
         if (state == PipChipState.None)
         {
@@ -765,7 +774,9 @@ public sealed class PipWindow : Form
 
     private void GoToSource()
     {
-        if (!_identity.Matches())
+        if (!_origin.IsWindow)
+            return;
+        if (!_origin.IsAvailable)
         {
             Close();
             return;

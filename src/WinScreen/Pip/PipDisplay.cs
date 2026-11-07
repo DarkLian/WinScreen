@@ -8,7 +8,11 @@ internal static partial class PipDisplay
     private static readonly ConcurrentDictionary<string, Task<int>> RefreshQueries = new();
     internal static int CachedRefresh(nint hwnd)
     {
-        string device = Screen.FromHandle(hwnd).DeviceName;
+        return CachedRefresh(Screen.FromHandle(hwnd).DeviceName);
+    }
+
+    internal static int CachedRefresh(string device)
+    {
         // Display-driver queries can block for seconds. Never issue them from a WinForms timer.
         var query = RefreshQueries.GetOrAdd(device, name => Task.Run(() => RefreshDevice(name)));
         return query.IsCompletedSuccessfully ? query.Result : 60;

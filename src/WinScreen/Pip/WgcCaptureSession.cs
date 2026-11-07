@@ -26,7 +26,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     private readonly LatestFrame<Frame> _frames = new();
     private readonly PipWorkerSignal _wake = new();
     private readonly PipPreferences _preferences;
-    private readonly WindowIdentity _identity;
+    private readonly PipSource _source;
     private readonly nint _destination, _monitor;
     private readonly bool _software;
     private readonly Thread _worker;
@@ -46,8 +46,14 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
 
     internal WgcCaptureSession(WindowIdentity identity, nint destination, Size client, nint monitor,
         PipPreferences preferences, int sourceHz, int targetHz, bool software)
+        : this(new WindowPipSource(identity), destination, client, monitor, preferences, sourceHz, targetHz, software)
     {
-        _identity = identity;
+    }
+
+    internal WgcCaptureSession(PipSource source, nint destination, Size client, nint monitor,
+        PipPreferences preferences, int sourceHz, int targetHz, bool software)
+    {
+        _source = source;
         _destination = destination;
         _monitor = monitor;
         _preferences = preferences;
@@ -134,20 +140,20 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         }
         try
         {
-            _identity.Require();
+            _source.Require();
             if (!ApiInformation.IsMethodPresent("Windows.Graphics.Capture.Direct3D11CaptureFramePool", "CreateFreeThreaded") ||
                 !GraphicsCaptureSession.IsSupported()) throw new NotSupportedException("Windows Graphics Capture unavailable.");
             renderer = new D3D11Renderer(_destination, _monitor, _preferences, Diagnostics, _software);
             winrtDevice = WgcInterop.Device(renderer.Device);
-            _identity.Require();
-            item = WgcInterop.Item(_identity.Window);
+            _source.Require();
+            item = _source.CreateItem();
             SizeInt32 size = item.Size;
             if (size.Width <= 0 || size.Height <= 0 || (long)size.Width * size.Height > 67_108_864)
                 throw new InvalidOperationException("Invalid capture item dimensions.");
             pool = Direct3D11CaptureFramePool.CreateFreeThreaded(winrtDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 3, size);
             session = pool.CreateCaptureSession(item);
             if (ApiInformation.IsPropertyPresent("Windows.Graphics.Capture.GraphicsCaptureSession", "IsCursorCaptureEnabled"))
-                session.IsCursorCaptureEnabled = false;
+                session.IsCursorCaptureEnabled = _source.ShowsCursor;
             // Keep the OS capture border and consent/protection behavior intact.
             item.Closed += Closed;
             pool.FrameArrived += Arrived;
@@ -173,7 +179,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                         session.MinUpdateInterval = TimeSpan.FromSeconds(Math.Clamp(0.5 / Math.Max(rate, view.SourceHz), .001, .016));
                     previousRate = rate; previousSourceHz = view.SourceHz;
                 }
-                bool sourcePaused = Native.User32.IsIconic(_identity.Window);
+                bool sourcePaused = _source.IsMinimized;
                 bool ready = renderer.ReadyForWork(), submitted = false;
                 // Retain the capture buffer until EndWork has flushed its copy commands.
                 using Frame? owned = ready ? _frames.Take() : null;

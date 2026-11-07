@@ -16,7 +16,7 @@ internal interface IPipRenderBackend : IDisposable
     void SetSelection(Rectangle? selection);
 }
 
-internal sealed record PipCaptureStart(Windows.WindowIdentity Identity, nint Destination, Size Client,
+internal sealed record PipCaptureStart(PipSource Source, nint Destination, Size Client,
     nint Monitor, Settings.PipPreferences Preferences, int SourceHz, int TargetHz, bool Software);
 
 /// <summary>Capture-only lifetime and scheduling. DWM never implements a fabricated frame stream.</summary>

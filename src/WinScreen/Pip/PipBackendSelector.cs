@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using WinScreen.Settings;
-using WinScreen.Native;
 using WinScreen.Windows;
 using static WinScreen.Settings.UiText;
 
@@ -10,8 +9,8 @@ namespace WinScreen.Pip;
 /// <summary>UI-thread coordinator. DWM stays registered while a separate worker proves first presentation.</summary>
 internal sealed class PipBackendSelector : IPipRenderBackend
 {
-    private readonly DwmThumbnailBackend _dwm;
-    private readonly WindowIdentity _identity;
+    private readonly DwmThumbnailBackend? _dwm;
+    private readonly PipSource _source;
     private readonly nint _hwnd;
     private PipPreferences _preferences;
     private readonly PipBackendPolicy _policy = new();
@@ -36,40 +35,57 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     public PipSessionState State => _disposed ? PipSessionState.Stopped : _active ? _advanced!.State :
         _policy.Pinned ? PipSessionState.Fallback : _advanced is not null ? PipSessionState.Starting : PipSessionState.Compositor;
     // Existing UI uses DWM window-surface coordinates. WGC coordinates are translated at the boundary below.
-    public Size SourceSize => _dwm.SourceSize;
-    internal bool CanRetry => _policy.Pinned && _preferences.Backend != PipBackendPreference.Dwm &&
+    public Size SourceSize => _dwm?.SourceSize ?? _source.SurfaceSize;
+    internal bool CanRetry => _dwm is not null && _policy.Pinned && _preferences.Backend != PipBackendPreference.Dwm &&
         (_advanced is null || _advanced.Completion.IsCompleted);
 
     internal PipBackendSelector(WindowIdentity identity, nint destination, PipPreferences preferences,
         Func<PipCaptureStart, IPipCaptureBackend>? createCapture = null)
+        : this(new WindowPipSource(identity), destination, preferences, createCapture)
     {
-        identity.Require();
-        _identity = identity; _hwnd = destination; _preferences = preferences.Validated();
-        _createCapture = createCapture ?? (start => new WgcCaptureSession(start.Identity, start.Destination,
+    }
+
+    internal PipBackendSelector(PipSource source, nint destination, PipPreferences preferences,
+        Func<PipCaptureStart, IPipCaptureBackend>? createCapture = null)
+    {
+        source.Require();
+        _source = source; _hwnd = destination; _preferences = Effective(preferences);
+        _createCapture = createCapture ?? (start => new WgcCaptureSession(start.Source, start.Destination,
             start.Client, start.Monitor, start.Preferences, start.SourceHz, start.TargetHz, start.Software));
         _opacity = _preferences.Alpha;
-        _dwm = new DwmThumbnailBackend(destination, identity.Window);
-        _dwm.SetOpacity(_opacity);
+        if (source.IsWindow)
+        {
+            _dwm = new DwmThumbnailBackend(destination, source.Window);
+            _dwm.SetOpacity(_opacity);
+        }
+    }
+
+    /// <summary>A part of the screen has no compositor view, so the only way to show it is capture.</summary>
+    private PipPreferences Effective(PipPreferences preferences)
+    {
+        PipPreferences valid = preferences.Validated();
+        if (!_source.IsWindow) valid.Backend = PipBackendPreference.Wgc;
+        return valid;
     }
 
     public void SetViewport(Rectangle destination, Rectangle source)
     {
         _viewport = destination; _crop = source;
-        _dwm.SetViewport(destination, source);
+        _dwm?.SetViewport(destination, source);
         UpdateAdvanced();
     }
-    public void SetOpacity(byte opacity) { _opacity = opacity; _dwm.SetOpacity(opacity); _advanced?.SetOpacity(opacity); }
-    public void SetVisible(bool visible) { _visible = visible; _dwm.SetVisible(visible && !_active); _advanced?.SetVisible(visible); }
+    public void SetOpacity(byte opacity) { _opacity = opacity; _dwm?.SetOpacity(opacity); _advanced?.SetOpacity(opacity); }
+    public void SetVisible(bool visible) { _visible = visible; _dwm?.SetVisible(visible && !_active); _advanced?.SetVisible(visible); }
     public void SetSelection(Rectangle? selection)
     {
         _selection = selection;
-        _dwm.SetSelection(_active ? null : selection);
+        _dwm?.SetSelection(_active ? null : selection);
         _advanced?.SetSelection(selection);
     }
 
     internal void Configure(PipPreferences preferences)
     {
-        PipPreferences next = preferences.Validated();
+        PipPreferences next = Effective(preferences);
         bool restart = next.Backend != _preferences.Backend || next.FrameRate != _preferences.FrameRate ||
             next.Scaling != _preferences.Scaling || next.PixelBudget != _preferences.PixelBudget;
         _preferences = next;
@@ -88,22 +104,22 @@ internal sealed class PipBackendSelector : IPipRenderBackend
 
     private void UseDwm()
     {
-        _dwm.SetVisible(_visible);
+        _dwm?.SetVisible(_visible);
         _active = false;
-        _dwm.SetSelection(_selection);
+        _dwm?.SetSelection(_selection);
     }
 
     internal void Poll(Size client)
     {
         if (_disposed) return;
-        _identity.Require();
+        _source.Require();
         _client = client;
         if (_preferences.Backend == PipBackendPreference.Dwm && _advanced is null) return;
         if (Stopwatch.GetElapsedTime(_lastDisplayCheck).TotalSeconds >= 1)
         {
             _lastDisplayCheck = Stopwatch.GetTimestamp();
             nint monitor = PipDisplay.MonitorFromWindow(_hwnd);
-            _sourceHz = PipDisplay.CachedRefresh(_identity.Window); _targetHz = PipDisplay.CachedRefresh(_hwnd);
+            _sourceHz = _source.RefreshRate; _targetHz = PipDisplay.CachedRefresh(_hwnd);
             if (_monitor != 0 && _monitor != monitor && _advanced is not null && !_policy.Pinned)
             {
                 UseDwm(); _advanced.Dispose(); _retiring = true; _restart = true;
@@ -163,8 +179,8 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         {
             if (!_active)
             {
-                _dwm.SetSelection(null);
-                _dwm.SetVisible(false);
+                _dwm?.SetSelection(null);
+                _dwm?.SetVisible(false);
                 _active = true;
             }
         }
@@ -175,11 +191,11 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     private void Start()
     {
         if (_disposed || _advanced is not null || _client.Width <= 0) return;
-        _identity.Require();
+        _source.Require();
         try
         {
-            _advanced = _createCapture(new(_identity, _hwnd, _client,
-                _trySourceAdapter ? PipDisplay.MonitorFromWindow(_identity.Window) : _monitor,
+            _advanced = _createCapture(new(_source, _hwnd, _client,
+                _trySourceAdapter ? _source.Monitor : _monitor,
                 _preferences, _sourceHz, _targetHz, _software));
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or ExternalException or NotSupportedException or InvalidOperationException)
@@ -201,10 +217,11 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         advanced.SetVisible(_visible);
         // WGC starts at the extended frame bounds; DWM's surface can include invisible resize borders.
         // Translate the shared DWM crop once, so click and crop geometry remain in their existing coordinate space.
-        if (_visibleSource.IsEmpty || !User32.IsIconic(_identity.Window))
-            _visibleSource = WindowInfo.VisiblePart(_identity.Window, SourceSize);
+        if (_visibleSource.IsEmpty || !_source.IsMinimized)
+            _visibleSource = _source.Whole(SourceSize);
+        Point origin = _source.CaptureOrigin(_visibleSource);
         Rectangle captureCrop = _crop;
-        captureCrop.Offset(-_visibleSource.X, -_visibleSource.Y);
+        captureCrop.Offset(-origin.X, -origin.Y);
         advanced.SetViewport(_viewport, captureCrop);
     }
 
@@ -239,6 +256,6 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         if (_disposed) return;
         _disposed = true;
         _advanced?.Dispose();
-        _dwm.Dispose();
+        _dwm?.Dispose();
     }
 }
