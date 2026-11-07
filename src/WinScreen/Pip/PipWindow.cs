@@ -661,7 +661,8 @@ public sealed class PipWindow : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         // Keep the recovery surface reachable if a concealed source is temporarily unresponsive.
-        if (_origin.IsWindow && _origin.IsAvailable && _windows.IsOutOfSwitcher(_source))
+        if (_origin.IsWindow && _origin.IsAvailable &&
+            (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source)))
         {
             SetOriginalHidden(false);
             if (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source)) e.Cancel = true;
@@ -923,6 +924,9 @@ public sealed class PipWindow : Form
             return;
         }
 
+        string title = T("pip.titlePrefix") + _origin.Title;
+        if (Text != title) Text = title;
+
         try
         {
             _thumbnail?.Poll(ClientSize);
@@ -1056,7 +1060,7 @@ public sealed class PipWindow : Form
                    .Contains(Cursor.Position);
     }
 
-    private void GoToSource()
+    internal void GoToSource()
     {
         if (!_origin.IsWindow)
             return;
@@ -1066,8 +1070,11 @@ public sealed class PipWindow : Form
             return;
         }
 
-        if (_hideItem.Checked)
+        EndInteraction();
+        if (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source))
             SetOriginalHidden(false);
+        if (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source))
+            return;
         if (User32.IsIconic(_source))
             User32.ShowWindow(_source, User32.SW_RESTORE);
         User32.SetForegroundWindow(_source);

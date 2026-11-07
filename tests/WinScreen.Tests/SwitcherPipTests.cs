@@ -17,8 +17,10 @@ public sealed class SwitcherPipTests
     [WgcFact]
     public void Advanced_view_stays_live_and_closing_restores_switcher() => CheckView(PipBackendPreference.Wgc);
 
-    [Fact]
-    public void A_failed_reveal_keeps_the_view_open_as_a_recovery_surface()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_failed_reveal_keeps_the_view_open_as_a_recovery_surface(bool hideSwitcher)
     {
         using var source = new TargetProcess(new Rectangle(240, 160, 400, 300));
         WindowMenuBuilderTests.OnUiThread(() =>
@@ -28,13 +30,13 @@ public sealed class SwitcherPipTests
             pip.ShowOnTop();
             Pump(200);
             pip.SetOriginalHidden(true);
-            pip.SetSwitcherHidden(true);
-            Assert.True(windows.IsOutOfSwitcher(source.Handle));
+            pip.SetSwitcherHidden(hideSwitcher);
+            Assert.Equal(hideSwitcher, windows.IsOutOfSwitcher(source.Handle));
             source.Hang();
             pip.Close();
             Assert.False(pip.IsDisposed);
             Assert.True(windows.IsHidden(source.Handle));
-            Assert.True(windows.IsOutOfSwitcher(source.Handle));
+            Assert.Equal(hideSwitcher, windows.IsOutOfSwitcher(source.Handle));
         });
     }
 

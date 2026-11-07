@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using WinScreen.Dark;
+using WinScreen.Anchors;
 using WinScreen.Tests.Support;
 using WinScreen.Windows;
 using Xunit;
@@ -240,6 +241,34 @@ public class DarkModeTests
             nint window = target.Handle;
             target.Dispose();
             Assert.True(Desktop.WaitFor(() => !dark.IsDark(window), 3000, () => pump(20)));
+        });
+    }
+
+    [Fact]
+    public void Anchors_are_excluded_before_they_appear_over_a_dark_window()
+    {
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        OnUiThread(pump =>
+        {
+            Desktop.Activate(target.Handle);
+            using var dark = new DarkMode();
+            using var anchors = new AnchorSet();
+            var created = new List<nint>();
+            anchors.Created += window =>
+            {
+                Assert.False(Native.User32.IsWindowVisible(window));
+                created.Add(window);
+                dark.Ignore(window);
+            };
+            dark.Toggle(target.Handle);
+            Assert.True(Shows(target, Color.Black, pump));
+            anchors.Toggle(target.Handle);
+            var anchor = Assert.Single(Application.OpenForms.OfType<AnchorButton>());
+            Assert.Equal(anchor.Handle, Assert.Single(created));
+            anchor.Location = new Point(Spot.Left + 30, Spot.Top + 30);
+            var edge = new Rectangle(anchor.Left + 2, anchor.Top + 2, 3, 3);
+            Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(edge),
+                Color.FromArgb(32, 32, 32)), 3000, () => pump(20)));
         });
     }
 }

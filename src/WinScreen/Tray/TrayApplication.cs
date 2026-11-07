@@ -76,6 +76,16 @@ public sealed class TrayApplication : ApplicationContext
         _dark.Ignore(_toolbar.Handle);
         _ = _flash.Handle;
         _dark.Ignore(_flash.Handle);
+        _anchors.Created += _dark.Ignore;
+        _anchors.ShowRequested += window =>
+        {
+            if (_pips.TryGetValue(window, out var pip)) pip.GoToSource();
+            else if (!WindowInfo.IsConcealed(window))
+            {
+                if (User32.IsIconic(window)) User32.ShowWindow(window, User32.SW_RESTORE);
+                User32.SetForegroundWindow(window);
+            }
+        };
 
         _hotkeys.Pressed += id => Run((AppCommand)id, TargetOf(User32.GetForegroundWindow()));
         _hotkeys.CloseRequested += ExitThread;

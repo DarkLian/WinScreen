@@ -127,6 +127,7 @@ public class PipWindowTests
     }
 
     [Fact]
+    [Trait("Category", "Interactive")]
     public void Auto_move_leaves_text_and_images_for_a_plain_spot()
     {
         Rectangle area = System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;
@@ -165,6 +166,7 @@ public class PipWindowTests
     }
 
     [Fact]
+    [Trait("Category", "Interactive")]
     public void Auto_move_stays_put_while_the_mouse_is_on_the_view()
     {
         Rectangle area = System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;
@@ -363,6 +365,7 @@ public class PipWindowTests
     }
 
     [Fact]
+    [Trait("Category", "Interactive")]
     public void The_close_button_is_really_there_to_click()
     {
         using var source = new TargetProcess(SourceSpot);

@@ -57,4 +57,17 @@ public sealed class ElementFinderTests
         finder.Ask(Cursor.Position);
         Assert.True(Desktop.WaitFor(() => System.Diagnostics.Process.GetCurrentProcess().Threads.Count <= threads, 3000));
     }
+
+    [Fact]
+    public void Concurrent_questions_and_repeated_disposal_are_harmless()
+    {
+        using var finder = new ElementFinder(0);
+        Parallel.Invoke(
+            () => { for (int i = 0; i < 1000; i++) finder.Ask(new Point(i, i)); },
+            () => { for (int i = 0; i < 100; i++) finder.Dispose(); });
+        // Let the worker dispose its wait handle before asking again.
+        Thread.Sleep(100);
+        finder.Ask(Point.Empty);
+        finder.Dispose();
+    }
 }

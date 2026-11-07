@@ -21,6 +21,7 @@ internal sealed unsafe class ElementFinder : IDisposable
 
     private readonly nint _overlay;
     private readonly AutoResetEvent _asked = new(false);
+    private readonly object _lifetime = new();
     private long _question = long.MinValue;
     private volatile bool _stopping;
 
@@ -38,15 +39,23 @@ internal sealed unsafe class ElementFinder : IDisposable
 
     public void Ask(Point screen)
     {
-        Interlocked.Exchange(ref _question, ((long)screen.X << 32) | (uint)screen.Y);
-        _asked.Set();
+        lock (_lifetime)
+        {
+            if (_stopping) return;
+            Interlocked.Exchange(ref _question, ((long)screen.X << 32) | (uint)screen.Y);
+            _asked.Set();
+        }
     }
 
     public void Dispose()
     {
-        _stopping = true;
-        Found = null;
-        _asked.Set();
+        lock (_lifetime)
+        {
+            if (_stopping) return;
+            _stopping = true;
+            Found = null;
+            _asked.Set();
+        }
     }
 
     private void Answer()
@@ -56,7 +65,7 @@ internal sealed unsafe class ElementFinder : IDisposable
             _asked.WaitOne();
             if (_stopping)
             {
-                _asked.Dispose();
+                lock (_lifetime) _asked.Dispose();
                 return;
             }
 

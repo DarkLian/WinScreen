@@ -22,6 +22,9 @@ public sealed class AnchorSet : IDisposable
 
     public bool Has(nint window) => _anchors.ContainsKey(window);
 
+    public event Action<nint>? Created;
+    public event Action<nint>? ShowRequested;
+
     /// <summary>Adds an anchor for a window, or removes the one it has. Returns the new state.</summary>
     public bool Toggle(nint window)
     {
@@ -36,6 +39,7 @@ public sealed class AnchorSet : IDisposable
         var anchor = new AnchorButton(window)
         {
             Location = FreePosition(area, Dpi.Of(window)),
+            ShowTarget = ShowRequested is null ? null : target => ShowRequested?.Invoke(target),
         };
         _anchors[window] = anchor;
         anchor.FormClosed += (_, _) =>
@@ -44,6 +48,7 @@ public sealed class AnchorSet : IDisposable
                 _anchors.Remove(window);
             _watch.Enabled = _anchors.Count > 0;
         };
+        Created?.Invoke(anchor.Handle);
         anchor.Show();
         _watch.Enabled = true;
         return true;

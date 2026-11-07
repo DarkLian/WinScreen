@@ -61,6 +61,9 @@ internal sealed class AnchorButton : Form
     public nint Target => _target;
     public bool TargetAlive => _identity.Matches();
 
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Action<nint>? ShowTarget { get; init; }
+
     protected override bool ShowWithoutActivation => true;
 
     protected override CreateParams CreateParams
@@ -161,6 +164,15 @@ internal sealed class AnchorButton : Form
             Close();
             return;
         }
+
+        if (ShowTarget is { } show)
+        {
+            show(_target);
+            return;
+        }
+
+        // A standalone Anchor cannot safely reveal a source owned by a view.
+        if (WindowInfo.IsConcealed(_target)) return;
 
         if (User32.IsIconic(_target))
             User32.ShowWindow(_target, User32.SW_RESTORE);

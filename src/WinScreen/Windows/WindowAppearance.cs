@@ -9,12 +9,11 @@ public sealed partial class WindowController
     internal const long BorderlessMask = User32.WS_CAPTION | User32.WS_THICKFRAME;
     internal const long SwitcherMask = User32.WS_EX_TOOLWINDOW | User32.WS_EX_APPWINDOW;
 
-    private sealed record GestureState(nint Window, bool Hidden, bool Peeking, bool Borderless);
+    private sealed record GestureState(nint Window, bool Hidden, bool Peeking);
     private volatile GestureState[] _gestureState = [];
 
     private void PublishGestureState() => _gestureState = _changed.Select(pair => new GestureState(pair.Key,
-        pair.Value.Hidden, pair.Value.PlacementBeforePeek is not null,
-        pair.Value.PlacementBeforeBorderless is not null)).ToArray();
+        pair.Value.Hidden, pair.Value.PlacementBeforePeek is not null)).ToArray();
 
     // The mouse hook must never wait for the controller's UI-thread lock.
     internal bool GestureBlocked(nint window) => _gestureState.Any(state =>

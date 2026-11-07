@@ -98,6 +98,9 @@ Anchors are also removed when their target window is destroyed, when restoring a
 
 ### Picture-in-Picture controls
 
+View titles follow the original window. Clicking an Anchor reveals a source hidden by its view before bringing it forward.
+If an original window is unresponsive and cannot be revealed, closing its view leaves the view open so it remains reachable.
+
 Press **Ctrl+Alt+P** to open a live view. The original window keeps its real size.
 
 To show something else, right-click the tray icon and choose **Picture-in-Picture views → Choose what to show**.
