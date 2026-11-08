@@ -54,6 +54,7 @@ live view, or bring a buried window back with one click. No account, no trial, n
 **Easy to use and safe to try**
 - A toolbar on title bars, a Features page, a mouse menu, and hotkeys you can change.
 - Undo everything with Ctrl+Alt+R. Windows come back on their own even if WinScreen stops unexpectedly.
+- Lightweight: about 16 MB of memory while it waits in the tray.
 - English, 简体中文 and 繁體中文.
 
 ## Install
