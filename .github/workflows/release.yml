@@ -1,6 +1,9 @@
 name: Release
 
-# Push a version tag to build the installer and publish it as a GitHub Release.
+# Push a version tag to build the installers and publish them as a GitHub Release.
+#   v1.2.3        a stable release. Needs desktop validation for the commit and the update signing key.
+#   v1.2.3-beta   a prerelease (also -alpha, -rc, with an optional .N). Installed copies never update to it.
+# Installers are code-signed only when a signing provider is configured; otherwise they are published unsigned.
 on:
   push:
     tags:
@@ -16,18 +19,33 @@ jobs:
     permissions:
       contents: write
       actions: read
+    env:
+      # Secrets can't be read in a step condition, so whether code signing is set up is worked out here.
+      SIGNED: ${{ secrets.WINSCREEN_AUTHENTICODE_SIGN_PARAMS != '' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Validate stable tag and desktop release gate
+      - name: Read the tag
+        id: tag
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_NAME -notmatch '\Av(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)(\.[1-9][0-9]*)?)?\z') {
+            throw 'Tags must look like v1.2.3, or v1.2.3-beta for a prerelease.'
+          }
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          $prerelease = $version.Contains('-')
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$($prerelease.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "title=WinScreen $($version.Replace('-', ' '))" >> $env:GITHUB_OUTPUT
+      - name: Check desktop validation (stable releases)
+        if: steps.tag.outputs.prerelease == 'false'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ($env:GITHUB_REF_NAME -notmatch '\Av(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\z') { throw 'Only stable vMAJOR.MINOR.PATCH tags can be published.' }
           $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/desktop.yml/runs?head_sha=$env:GITHUB_SHA&status=success" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0 -or -not ($runs.workflow_runs | Where-Object { $_.head_sha -eq $env:GITHUB_SHA -and $_.conclusion -eq 'success' -and $_.event -eq 'workflow_dispatch' })) { throw 'Run the desktop validation workflow successfully for this exact commit before releasing.' }
+          if ($LASTEXITCODE -ne 0 -or -not ($runs.workflow_runs | Where-Object { $_.head_sha -eq $env:GITHUB_SHA -and $_.conclusion -eq 'success' -and $_.event -eq 'workflow_dispatch' })) { throw 'Run the desktop validation workflow successfully for this exact commit before a stable release.' }
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
@@ -35,13 +53,16 @@ jobs:
         shell: pwsh
         env:
           WINSCREEN_AUTHENTICODE_SIGN_PARAMS: ${{ secrets.WINSCREEN_AUTHENTICODE_SIGN_PARAMS }}
+          VERSION: ${{ steps.tag.outputs.version }}
         run: |
-          if (-not $env:WINSCREEN_AUTHENTICODE_SIGN_PARAMS) { throw 'Production Authenticode signing must be configured before public release.' }
-          ./build.ps1 -CI -Version "$($env:GITHUB_REF_NAME.TrimStart('v'))" -UpdateRepository $env:GITHUB_REPOSITORY
+          if (-not $env:WINSCREEN_AUTHENTICODE_SIGN_PARAMS) { Write-Output '::warning::No code signing provider is configured, so the installers are unsigned.' }
+          ./build.ps1 -CI -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw 'The x64 build failed.' }
           # Windows 11 on ARM gets a native build with its own update channel. Its tests run in the Build workflow's ARM job.
-          ./build.ps1 -CI -Architecture arm64 -Version "$($env:GITHUB_REF_NAME.TrimStart('v'))" -UpdateRepository $env:GITHUB_REPOSITORY
+          ./build.ps1 -CI -Architecture arm64 -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'The ARM64 build failed.' }
       - name: Verify installer publisher
+        if: env.SIGNED == 'true'
         shell: pwsh
         env:
           EXPECTED_THUMBPRINT: ${{ vars.WINSCREEN_PUBLISHER_THUMBPRINT }}
@@ -54,8 +75,12 @@ jobs:
         shell: pwsh
         env:
           WINSCREEN_UPDATE_SIGNING_KEY: ${{ secrets.WINSCREEN_UPDATE_SIGNING_KEY }}
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
         run: |
-          if (-not $env:WINSCREEN_UPDATE_SIGNING_KEY) { throw 'The update signing secret is required for publishing.' }
+          if (-not $env:WINSCREEN_UPDATE_SIGNING_KEY) {
+            if ($env:PRERELEASE -eq 'true') { Write-Output '::warning::No update signing key. Prereleases are never offered as updates, so this one is published without a feed signature.'; exit 0 }
+            throw 'The update signing secret is required for a stable release.'
+          }
           foreach ($feed in 'dist/release/releases.win.json', 'dist/release-arm64/releases.win-arm64.json') {
             dotnet run --project tools/WinScreen.UpdateSigning/WinScreen.UpdateSigning.csproj -c Release -- sign $feed src/WinScreen/Updates/update-public-key.pem
             if ($LASTEXITCODE -ne 0) { throw "Update signing failed: $feed" }
@@ -64,4 +89,15 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME (Get-ChildItem dist/release, dist/release-arm64 -File).FullName --title "WinScreen $env:GITHUB_REF_NAME" --generate-notes
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+          TITLE: ${{ steps.tag.outputs.title }}
+        run: |
+          $notes = @()
+          if ($env:PRERELEASE -eq 'true') { $notes += 'This is a beta. Things may still change, and installed copies won''t update to betas automatically.' }
+          if ($env:SIGNED -ne 'true') { $notes += 'The installer isn''t code-signed yet, so Windows may say it doesn''t recognize it. Choose **More info**, then **Run anyway**.' }
+          $notes += '**Which file?** `WinScreen-win-Setup.exe` for most PCs, `WinScreen-win-arm64-Setup.exe` for Windows 11 on ARM.'
+          $arguments = @($env:GITHUB_REF_NAME) + (Get-ChildItem dist/release, dist/release-arm64 -File).FullName +
+            @('--title', $env:TITLE, '--notes', ($notes -join "`n`n"), '--generate-notes')
+          if ($env:PRERELEASE -eq 'true') { $arguments += '--prerelease' }
+          gh release create @arguments
+          if ($LASTEXITCODE -ne 0) { throw 'Publishing the release failed.' }
