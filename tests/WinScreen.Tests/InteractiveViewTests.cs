@@ -288,7 +288,8 @@ public sealed class InteractiveViewTests
             const int presses = 120;
             for (int i = 0; i < presses; i++)
             {
-                Desktop.MoveMouse(new Point(frame.Left + 3 + rng.Next(frame.Width - 6), frame.Top + 3 + rng.Next(frame.Height - 6)));
+                // Moved as input, as a real mouse is: the view stops a visit whose hook stops seeing the pointer.
+                Desktop.SlideMouse(new Point(frame.Left + 3 + rng.Next(frame.Width - 6), frame.Top + 3 + rng.Next(frame.Height - 6)));
                 Thread.Sleep(4);
                 Desktop.MouseButton(true);
                 Desktop.MouseButton(false);
@@ -297,7 +298,10 @@ public sealed class InteractiveViewTests
 
             Thread.Sleep(300);
             var log = live.Log;
-            Assert.Equal(presses, log.Count);
+            Assert.True(log.Count == presses,
+                $"{log.Count} of {presses} presses in the first visit; same visit still live: {ReferenceEquals(view.LiveInteraction, live)}; " +
+                $"presses over the view's life: {view.PressOutcomes.Count}; " +
+                string.Join(", ", view.PressOutcomes.GroupBy(outcome => outcome).Select(group => $"{group.Key}={group.Count()}")));
             int delivered = log.Count(press => press.Outcome == PressOutcome.Delivered);
             int arrived = 0;
             while (source.NextReport(100) is { } report)

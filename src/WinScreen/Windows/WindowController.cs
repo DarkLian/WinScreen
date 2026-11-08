@@ -1433,7 +1433,7 @@ public static class WindowInfo
             (T("window.info.title"), Title(window)),
             (T("window.info.program"), ProcessName(processId)),
             (T("window.info.path"), path.Length > 0 ? path : T("common.unavailable")),
-            ("HWND", $"0x{window:X}"),
+            (T("window.info.hwnd"), $"0x{window:X}"),
             (T("window.info.processId"), processId.ToString()),
             (T("window.info.threadId"), thread.ToString()),
             (T("window.info.class"), ClassName(window)),

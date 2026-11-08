@@ -114,6 +114,18 @@ public sealed class LocalizationTests : IDisposable
     }
 
     [Theory]
+    [InlineData("en")]
+    [InlineData("zh-Hans")]
+    [InlineData("zh-Hant")]
+    public void Catalog_files_keep_their_entries_sorted_by_key(string language)
+    {
+        using Stream resource = Resource(language);
+        using JsonDocument document = JsonDocument.Parse(resource);
+        string[] keys = document.RootElement.EnumerateObject().Select(entry => entry.Name).ToArray();
+        Assert.Equal(keys.Order(StringComparer.Ordinal), keys);
+    }
+
+    [Theory]
     [InlineData("{broken")]
     [InlineData("[]")]
     [InlineData("null")]
@@ -180,9 +192,9 @@ public sealed class LocalizationTests : IDisposable
     [Theory]
     // Reviewed catalog values, sorted by stable key with NUL separators.
     // Update deliberately when adding labels; existing values retain their migration output.
-    [InlineData("en", "9A4C1448EBE96DD004A0D54ECC672B0C7F2486132A3E2E923B5ED734FC7DA28D")]
-    [InlineData("zh-Hans", "902C2B8056ECA95014B0E65849858BB19025DC82EB3C779F4049207A6C733A81")]
-    [InlineData("zh-Hant", "E2FE45089BD492C1D535D43FA52A9C6F1B819BE06F1D9BE4A691E07BA716BD50")]
+    [InlineData("en", "AC45E26D863171F1958E107D57680B6F8C4D6D6E6A1F3010FC207173DAA830E8")]
+    [InlineData("zh-Hans", "6C2E50EB1807D1EC5EC1D9502C6DC1DBDA6B77D01FD4437DFAD86858228D2C8A")]
+    [InlineData("zh-Hant", "A055E3E4C59ABD01610C3DA4AFC99578086B81047CF756761A6D528982E4B2FA")]
     public void Every_translation_matches_the_reviewed_catalog(string language, string expectedDigest)
     {
         UiText.Initialize(language);
@@ -213,15 +225,17 @@ public sealed class LocalizationSurfaceTests
                 Assert.Equal(catalog["settings.window.title"], settings.Text);
                 var controls = Descendants(settings).ToArray();
                 Assert.Contains(controls, control => control.Text == catalog["settings.save"]);
-                foreach (string key in new[] { "settings.general", "settings.hotkeys", "settings.programs", "gestures.title", "pip.rendering", "pip.frameRate" })
+                foreach (string key in new[] { "settings.general", "features.title", "settings.programs", "gestures.title", "pip.rendering", "pip.frameRate" })
                     Assert.Contains(controls, control => control.Text == catalog[key]);
 
                 using var menu = new ContextMenuStrip();
                 var builder = new Tray.WindowMenuBuilder(() => null, (_, _) => { }, (_, _) => { }, _ => true,
                     (_, _) => true, (_, _) => false, () => { });
                 builder.Populate(menu.Items, false);
-                foreach (string key in new[] { "window.restore", "window.borderless", "pip.open", "common.copy", "window.openLocation", "window.info" })
+                foreach (string key in new[] { "window.restore", "window.borderless", "pip.open", "common.copy", "window.openLocation", "window.arrange" })
                     Assert.Contains(menu.Items.OfType<ToolStripMenuItem>(), item => item.Text == catalog[key]);
+                ToolStripMenuItem arrange = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == catalog["window.arrange"]);
+                Assert.Contains(arrange.DropDownItems.OfType<ToolStripMenuItem>(), item => item.Text == catalog["window.info"]);
 
                 var windows = new Windows.WindowController([]);
                 using var pip = new Pip.PipWindow(target.Handle, windows);

@@ -52,9 +52,9 @@ live view, or bring a buried window back with one click. No account, no trial, n
 - Crop a window to the part you need, or shrink it to a small live tile.
 
 **Easy to use and safe to try**
-- A toolbar on title bars, a Features page, a mouse menu, and hotkeys you can change.
-- Undo everything with Ctrl+Alt+R. Windows come back on their own even if WinScreen stops unexpectedly.
-- Lightweight: about 16 MB of memory while it waits in the tray.
+- A toolbar on title bars, a mouse menu, and shortcuts you can change.
+- Undo everything with Ctrl+Alt+R. If WinScreen stops unexpectedly, your windows go back the next time it starts.
+- Lightweight: about 20 MB of memory and almost no processor time while it waits in the tray.
 - English, 简体中文 and 繁體中文.
 
 ## Install
@@ -65,6 +65,8 @@ Download the installer from [Releases](https://github.com/DarkLian/WinScreen/rel
 - **WinScreen-win-arm64-Setup.exe** for Windows 11 on ARM.
 
 You don't need administrator rights or anything else installed. WinScreen lives in the system tray.
+
+The installer isn't signed yet, so Windows may say it doesn't recognize it. Choose **More info**, then **Run anyway**.
 To remove it, go to **Settings → Apps → Installed apps** in Windows.
 
 ## Quick start

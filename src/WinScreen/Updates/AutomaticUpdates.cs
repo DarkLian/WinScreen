@@ -27,11 +27,15 @@ internal interface IUpdateSession : IDisposable
     Task ApplyOnExit(CancellationToken cancellation);
 }
 
-/// <summary>One check at a time. Disabling invalidates the entire session, including downloaded updates.</summary>
+/// <summary>
+/// One check at a time. Automatic updates check on a timer; a check the person asks for works either way.
+/// Turning automatic updates off cancels a check in progress and discards a downloaded update.
+/// </summary>
 internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> createSession, Action<string> status)
     : IDisposable
 {
-    private CancellationTokenSource? _enabled;
+    private CancellationTokenSource? _generation;
+    private bool _automatic;
     private IUpdateSession? _pending;
     private bool _busy;
     private bool _disposed;
@@ -39,25 +43,32 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
 
     internal void SetEnabled(bool enabled)
     {
-        if (_disposed || enabled == (_enabled is not null))
+        if (_disposed || enabled == _automatic)
             return;
+        _automatic = enabled;
         if (enabled)
-            _enabled = new CancellationTokenSource();
+            _generation ??= new CancellationTokenSource();
         else
-        {
-            _enabled?.Cancel();
-            _enabled?.Dispose();
-            _enabled = null;
-            _pending?.Dispose();
-            _pending = null;
-        }
+            Discard();
     }
 
-    internal async Task Check()
+    private void Discard()
     {
-        if (_disposed || _enabled is null || _busy || _pending is not null)
+        _generation?.Cancel();
+        _generation?.Dispose();
+        _generation = null;
+        _pending?.Dispose();
+        _pending = null;
+    }
+
+    /// <summary>The timer's check, which does nothing while automatic updates are off.</summary>
+    internal Task Check() => _automatic ? Run(quiet: false) : Task.CompletedTask;
+
+    private async Task Run(bool quiet)
+    {
+        if (_disposed || _busy || _pending is not null)
             return;
-        var generation = _enabled;
+        var generation = _generation ??= new CancellationTokenSource();
         _busy = true;
         _lastCheckFailed = false;
         IUpdateSession? session = null;
@@ -66,12 +77,12 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
             session = createSession(generation.Token);
             if (session is null)
                 return;
-            if (await session.Download(generation.Token) && _enabled == generation &&
+            if (await session.Download(generation.Token) && _generation == generation &&
                 !generation.IsCancellationRequested)
             {
                 _pending = session;
                 session = null;
-                status(UiText.T("updates.ready"));
+                if (!quiet) status(UiText.T("updates.ready"));
             }
         }
         catch (OperationCanceledException) when (generation.IsCancellationRequested)
@@ -80,7 +91,7 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         catch (Exception)
         {
             _lastCheckFailed = true;
-            if (_enabled == generation && !_disposed)
+            if (_generation == generation && !_disposed && !quiet)
                 status(UiText.T("updates.checkFailed"));
         }
         finally
@@ -90,12 +101,12 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         }
     }
 
-    /// <summary>Checks at the person's request, and says how it went.</summary>
+    /// <summary>Checks at the person's request, whether or not automatic updates are on, and says how it went.</summary>
     internal async Task<string> CheckNow()
     {
         if (_busy)
             return UiText.T("updates.alreadyChecking");
-        await Check();
+        await Run(quiet: true);
         if (_pending is not null)
             return UiText.T("updates.ready");
         return _lastCheckFailed
@@ -105,11 +116,11 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
 
     internal async Task ApplyOnExit()
     {
-        if (!_disposed && _enabled is not null && _pending is not null)
+        if (!_disposed && _generation is not null && _pending is not null)
         {
             try
             {
-                await _pending.ApplyOnExit(_enabled.Token);
+                await _pending.ApplyOnExit(_generation.Token);
             }
             catch (Exception)
             {
@@ -120,7 +131,8 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
 
     public void Dispose()
     {
-        SetEnabled(false);
+        Discard();
+        _automatic = false;
         _disposed = true;
     }
 }

@@ -41,6 +41,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly Dictionary<nint, PipWindow> _pips = [];
     private readonly List<PipWindow> _viewsInOrder = [];
     private readonly Dictionary<nint, WindowIdentity> _setupDone = [];
+    private readonly Dictionary<nint, WindowIdentity> _setupNone = [];
     private readonly SavedViews _savedViews = new();
     private readonly Dictionary<nint, long> _setupRetryAt = [];
     private readonly ToolStripMenuItem _targetTitle = new();
@@ -54,6 +55,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 250 };
     private readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = 30_000 };
     private readonly AutomaticUpdates _updates;
+    private bool _updatesWereOn;
     private SettingsWindow? _settingsWindow;
     private PipSourcePicker? _picker;
     private CropOverlay? _cropping;
@@ -127,6 +129,9 @@ public sealed class TrayApplication : ApplicationContext
 
         bool firstRun = !_settings.WelcomeShown;
         IReadOnlyList<HotkeyProblem> problems = StartUp();
+        // A built-in shortcut that types a letter on this keyboard is explained once, not at every sign-in.
+        if (!firstRun)
+            problems = problems.Where(problem => !TypesTextByDefault(problem.Command)).ToArray();
         if (problems.Count > 0)
             Alert(T("hotkeys.someUnavailable"), Describe(problems));
         else if (firstRun)
@@ -242,8 +247,7 @@ public sealed class TrayApplication : ApplicationContext
             foreach (var (source, tile) in _shrunk)
             {
                 var item = new ToolStripMenuItem(MenuText(tile.Text) + " - " + T("pip.state.originalHidden"));
-                item.DropDownItems.Add(T("pip.goToOriginal"), null, (_, _) => tile.Close());
-                item.DropDownItems.Add(T("common.close"), null, (_, _) => tile.Close());
+                item.DropDownItems.Add(T("window.show"), null, (_, _) => tile.Close());
                 views.DropDownItems.Add(item);
             }
             foreach (nint source in _content.Sources)
@@ -306,7 +310,10 @@ public sealed class TrayApplication : ApplicationContext
                 try
                 {
                     if (settings.Imported && File.Exists(_settingsPath))
+                    {
                         File.Copy(_settingsPath, _settingsPath + ".before-import-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"));
+                        BackupFiles.Prune(_settingsPath, ".before-import-");
+                    }
                     if (startupChanged) _startup.IsOn = settings.StartWithWindows!.Value;
                     settings.Save(_settingsPath);
                 }
@@ -319,6 +326,7 @@ public sealed class TrayApplication : ApplicationContext
             return conflicts.Cast<AppCommand>().Select(command => Taken(command, settings)).ToArray();
 
         _settings.CopyFrom(settings);
+        _setupNone.Clear();
         ApplyPreferences(experimentalBefore);
         return [];
     }
@@ -336,8 +344,10 @@ public sealed class TrayApplication : ApplicationContext
         _anchors.Configure(_settings.Anchors);
         _automaticAnchors.Configure(_settings.Anchors.Automatic, _settings.Anchors.AvoidContent);
         _content.SetLevels(_settings.Effects.Levels);
+        if (_settings.AutomaticUpdates && !_updatesWereOn)
+            _updateTimer.Interval = 30_000; // Check soon after it's turned on, then every few hours.
+        _updatesWereOn = _settings.AutomaticUpdates;
         _updates.SetEnabled(_settings.AutomaticUpdates);
-        _updateTimer.Interval = 30_000;
         foreach (PipWindow pip in _viewsInOrder)
         {
             pip.ApplyPipPreferences(_settings.Pip);
@@ -395,6 +405,13 @@ public sealed class TrayApplication : ApplicationContext
         }
 
         return problems;
+    }
+
+    private bool TypesTextByDefault(AppCommand command)
+    {
+        string value = _settings.Hotkeys.GetValueOrDefault(command, "");
+        return value.Length > 0 && value == new AppSettings().Hotkeys.GetValueOrDefault(command) &&
+               HotkeyText.TryParse(value, out uint modifiers, out Keys key) && HotkeyText.TypedText(modifiers, key) is not null;
     }
 
     private static HotkeyProblem Taken(AppCommand command, AppSettings settings) => new(command,
@@ -519,8 +536,7 @@ public sealed class TrayApplication : ApplicationContext
         _modifierDrag.MenuGesture = _settings.WindowMenuGesture;
         _modifierDrag.OpacityWheelEnabled = _settings.OpacityWheel;
         string program = WindowInfo.ProgramOf(foreground);
-        bool programExcluded = _settings.ExcludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase) ||
-            (_settings.IncludedPrograms.Count > 0 && !_settings.IncludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase));
+        bool programExcluded = !_settings.Allows(program);
         bool menuExcluded = programExcluded ||
                             _settings.WindowMenuExclusions.Contains(program, StringComparer.OrdinalIgnoreCase);
         bool run = ModifierHookPolicy.ShouldRun(
@@ -551,8 +567,7 @@ public sealed class TrayApplication : ApplicationContext
     private bool IsDragExcluded(nint window)
     {
         string program = WindowInfo.ProgramOf(window);
-        return _settings.ExcludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase) ||
-               (_settings.IncludedPrograms.Count > 0 && !_settings.IncludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase)) ||
+        return !_settings.Allows(program) ||
                _settings.ModifierExclusions.Contains(program, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -562,9 +577,8 @@ public sealed class TrayApplication : ApplicationContext
         if (!CanGesture(window) ||
             User32.IsZoomed(window) || User32.IsIconic(window) || WindowInfo.FillsMonitor(window))
             return false;
-        User32.GetWindowThreadProcessId(window, out uint process);
-        return !ProcessInfo.IsElevated(process) && !_settings.ModifierExclusions.Contains(WindowInfo.ProcessName(process),
-            StringComparer.OrdinalIgnoreCase);
+        // CanGesture has already turned away administrator apps.
+        return !_settings.ModifierExclusions.Contains(WindowInfo.ProgramOf(window), StringComparer.OrdinalIgnoreCase);
     }
 
     private bool CanGesture(nint window)
@@ -587,19 +601,28 @@ public sealed class TrayApplication : ApplicationContext
     /// </summary>
     private void ApplySavedSetup(nint window)
     {
-        if (Paused || !WindowInfo.IsMainWindow(window) ||
+        // Runs four times a second, so a window already looked at, or no saved setups at all, costs nothing.
+        if (_settings.SavedSetups.Count == 0 || Paused || !WindowInfo.IsMainWindow(window) ||
             _setupRetryAt.GetValueOrDefault(window) > Environment.TickCount64)
             return;
-        if (_setupDone.TryGetValue(window, out var prior) && prior.Matches())
+        if ((_setupDone.TryGetValue(window, out var prior) || _setupNone.TryGetValue(window, out prior)) &&
+            prior.Matches())
             return;
         foreach (var stale in _setupDone.Where(pair => !pair.Value.Matches()).Select(pair => pair.Key).ToArray())
         {
             _setupDone.Remove(stale);
             _setupRetryAt.Remove(stale);
         }
+        foreach (var stale in _setupNone.Where(pair => !pair.Value.Matches()).Select(pair => pair.Key).ToArray())
+            _setupNone.Remove(stale);
 
         if (_settings.SetupForWindow(window) is not { } setup)
+        {
+            // Nothing saved for this program. Looked at again only when the saved setups change.
+            try { _setupNone[window] = WindowIdentity.Observe(window); }
+            catch (WindowOperationException) { }
             return;
+        }
         try
         {
             var identity = WindowIdentity.Capture(window);
@@ -628,8 +651,7 @@ public sealed class TrayApplication : ApplicationContext
     {
         if (!_savedViews.ShouldOpen(setup, _pips.ContainsKey(window)))
             return;
-        PipWindow pip = OpenViewOf(window);
-        if (pip.IsDisposed)
+        if (OpenViewOf(window) is not { IsDisposed: false } pip)
             return;
         pip.ApplyPreset(setup.View!);
         _savedViews.Opened(setup);
@@ -679,6 +701,7 @@ public sealed class TrayApplication : ApplicationContext
             throw;
         }
 
+        _setupNone.Clear();
         _setupDone[window] = WindowIdentity.Capture(window);
         Confirm(setup.ChangesAnything ? T("setups.saved") : T("setups.removed"),
             setup.ChangesAnything ? setup.ToString() : program);
@@ -768,9 +791,7 @@ public sealed class TrayApplication : ApplicationContext
     {
         string result = !VelopackUpdateSession.IsInstalled
             ? T("updates.installedOnly")
-            : !_settings.AutomaticUpdates
-                ? T("updates.enableFirst")
-                : await _updates.CheckNow();
+            : await _updates.CheckNow();
         Balloon(T("updates.title"), result, ToolTipIcon.Info);
     }
 
@@ -1061,7 +1082,8 @@ public sealed class TrayApplication : ApplicationContext
         dialog.ShowDialog();
     }
 
-    private PipWindow OpenViewOf(nint window)
+    /// <summary>Opens a view of a window, or returns null when the person chose not to restore a minimized one.</summary>
+    private PipWindow? OpenViewOf(nint window)
     {
         if (_shrunk.TryGetValue(window, out var tile))
         {
@@ -1073,11 +1095,7 @@ public sealed class TrayApplication : ApplicationContext
         WindowIdentity identity = WindowIdentity.Capture(window);
         if (User32.IsIconic(window) && MessageBox.Show(string.Format(T("pip.sources.restoreWarning"), WindowInfo.Title(window)),
             T("pip.open"), MessageBoxButtons.OKCancel, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) != DialogResult.OK)
-        {
-            var cancelled = new PipWindow(window, _windows);
-            cancelled.Dispose();
-            return cancelled;
-        }
+            return null;
         identity.Require();
         var pip = new PipWindow(window, _windows);
         _pips[window] = pip;
@@ -1099,10 +1117,11 @@ public sealed class TrayApplication : ApplicationContext
         pip.Presets = () => _settings.PipPresets;
         pip.PresetSaved += preset => ChangePresets(presets =>
         {
-            presets.RemoveAll(saved => saved.Name == preset.Name);
+            presets.RemoveAll(saved => string.Equals(saved.Name, preset.Name, StringComparison.CurrentCultureIgnoreCase));
             presets.Add(preset);
         });
-        pip.PresetRemoved += name => ChangePresets(presets => presets.RemoveAll(saved => saved.Name == name));
+        pip.PresetRemoved += name => ChangePresets(presets =>
+            presets.RemoveAll(saved => string.Equals(saved.Name, name, StringComparison.CurrentCultureIgnoreCase)));
         pip.SourceBookmarkSaved += bookmark => ChangeBookmarks(bookmarks =>
         {
             bookmarks.RemoveAll(saved => string.Equals(saved.Name, bookmark.Name, StringComparison.CurrentCultureIgnoreCase));
@@ -1200,7 +1219,8 @@ public sealed class TrayApplication : ApplicationContext
         picker.RegionChosen += (device, bounds) => OpenScreenView(new ScreenPipSource(device, bounds));
         picker.BookmarkChosen += bookmark => OpenBookmark(bookmark);
         picker.BookmarkPreviewRequested += bookmark => OpenBookmark(bookmark, previewOnly: true);
-        picker.BookmarkRemoved += name => ChangeBookmarks(bookmarks => bookmarks.RemoveAll(bookmark => bookmark.Name == name));
+        picker.BookmarkRemoved += name => ChangeBookmarks(bookmarks =>
+            bookmarks.RemoveAll(bookmark => string.Equals(bookmark.Name, name, StringComparison.CurrentCultureIgnoreCase)));
         _picker = picker;
         picker.FormClosed += (_, _) => _picker = null;
         picker.Show();

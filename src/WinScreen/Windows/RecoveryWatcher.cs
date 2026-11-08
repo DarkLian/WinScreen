@@ -99,10 +99,12 @@ internal sealed class RecoveryWatcher : IDisposable
     /// Waits for the parent to die or to say it no longer needs this. Runs in the watcher, and asks
     /// for recovery only after a real death with no new copy of WinScreen already in charge.
     /// </summary>
-    public static void Watch(int parent, Action recover)
-        => WatchUntilRecovered(parent, () => { recover(); return true; });
+    /// <param name="runningInstance">The lock a running WinScreen holds. Tests pass their own, so a copy of
+    /// WinScreen running on the same PC doesn't change the result.</param>
+    public static void Watch(int parent, Action recover, string runningInstance = RunningInstance.MutexName)
+        => WatchUntilRecovered(parent, () => { recover(); return true; }, runningInstance);
 
-    public static void WatchUntilRecovered(int parent, Func<bool> recover)
+    public static void WatchUntilRecovered(int parent, Func<bool> recover, string runningInstance = RunningInstance.MutexName)
     {
         using EventWaitHandle stop = new(false, EventResetMode.ManualReset, StopName(parent));
         Process? process = null;
@@ -130,7 +132,7 @@ internal sealed class RecoveryWatcher : IDisposable
             {
                 try
                 {
-                    if (Mutex.TryOpenExisting(RunningInstance.MutexName, out Mutex? running))
+                    if (Mutex.TryOpenExisting(runningInstance, out Mutex? running))
                     {
                         running.Dispose();
                         return;

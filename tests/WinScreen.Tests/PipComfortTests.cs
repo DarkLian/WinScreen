@@ -157,8 +157,9 @@ public sealed class PipComfortTests
             Assert.Equal("Stopped", view.DiagnosticSnapshot);
             Assert.False(view.Visible);
             view.ResumeView();
+            // A view comes back once its old capture has finished shutting down, which can take a moment.
+            Assert.True(Desktop.WaitFor(() => view.Visible, 5000, Application.DoEvents), view.DiagnosticSnapshot);
             Assert.Equal(before, view.Bounds);
-            Assert.True(view.Visible);
         });
     }
 

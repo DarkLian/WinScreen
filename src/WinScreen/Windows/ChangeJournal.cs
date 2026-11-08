@@ -147,6 +147,7 @@ public sealed class ChangeJournal(string path)
         {
             File.Move(path, backup);
             DamagedBackup = backup;
+            Settings.BackupFiles.Prune(path, ".invalid-");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -162,6 +163,7 @@ public sealed class ChangeJournal(string path)
         {
             File.Copy(path, backup, overwrite: false);
             DamagedBackup = backup;
+            Settings.BackupFiles.Prune(path, ".invalid-");
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

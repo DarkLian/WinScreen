@@ -209,7 +209,7 @@ internal sealed class PipInteraction : IDisposable
             WM_LBUTTONUP or WM_RBUTTONUP or WM_MBUTTONUP => OnRelease(point, ButtonOf((int)message - 1)),
             WM_XBUTTONDOWN => OnPress(point, (info.MouseData >> 16) == 1 ? MouseButtons.XButton1 : MouseButtons.XButton2),
             WM_XBUTTONUP => OnRelease(point, (info.MouseData >> 16) == 1 ? MouseButtons.XButton1 : MouseButtons.XButton2),
-            WM_MOUSEWHEEL or WM_MOUSEHWHEEL => _outside || !_identity.Matches() || ProcessOf(RootAt(point)) != _sourceProcess,
+            WM_MOUSEWHEEL or WM_MOUSEHWHEEL => _outside || !_identity.StillThere() || ProcessOf(RootAt(point)) != _sourceProcess,
             _ => false,
         };
         return swallow ? 1 : CallNextHookEx(0, code, message, data);
@@ -278,13 +278,13 @@ internal sealed class PipInteraction : IDisposable
 
         if (root != _source && ProcessOf(root) == _sourceProcess)
         {
-            if (!_identity.Matches()) { _heldSwallowed |= button; return true; }
+            if (!_identity.StillThere()) { _heldSwallowed |= button; return true; }
             Record(PressOutcome.Popup, point, 0);
             _heldDelivered |= button;
             return false;
         }
 
-        if (!_identity.Matches() || root != _source || !Align(point))
+        if (!_identity.StillThere() || root != _source || !Align(point))
         {
             Record(PressOutcome.Unconfirmed, point, 0);
             _heldSwallowed |= button;
@@ -294,7 +294,7 @@ internal sealed class PipInteraction : IDisposable
         nint position = (nint)((point.Y << 16) | (point.X & 0xFFFF));
         nint hit = -2;
         bool answered = User32.SendMessageTimeout(_source, User32.WM_NCHITTEST, 0, position, AbortIfHung, HitTestMilliseconds, out hit) != 0;
-        if (!answered || !_identity.Matches() || RootAt(point) != _source)
+        if (!answered || !_identity.StillThere() || RootAt(point) != _source)
         {
             Record(PressOutcome.Unconfirmed, point, 0);
             _heldSwallowed |= button;
@@ -325,7 +325,7 @@ internal sealed class PipInteraction : IDisposable
     private bool OnRelease(Point point, MouseButtons button)
     {
         bool swallow = (_heldSwallowed & button) != 0 ||
-            (_heldDelivered & button) != 0 && !_identity.Matches();
+            (_heldDelivered & button) != 0 && !_identity.StillThere();
         _heldSwallowed &= ~button;
         _heldDelivered &= ~button;
         if (button == MouseButtons.Left) _dragging = false;

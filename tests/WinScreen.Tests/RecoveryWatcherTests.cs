@@ -72,7 +72,7 @@ public sealed class RecoveryWatcherTests
     {
         using Process parent = Process.Start(new ProcessStartInfo("cmd.exe", "/c ping -n 2 127.0.0.1") { CreateNoWindow = true, UseShellExecute = false })!;
         bool recovered = false;
-        RecoveryWatcher.Watch(parent.Id, () => recovered = true);
+        RecoveryWatcher.Watch(parent.Id, () => recovered = true, @"Local\WinScreen.Tests." + Guid.NewGuid().ToString("N"));
         Assert.True(parent.HasExited);
         Assert.True(recovered);
     }

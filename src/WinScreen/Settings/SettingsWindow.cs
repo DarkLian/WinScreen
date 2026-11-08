@@ -348,7 +348,7 @@ public sealed class SettingsWindow : Form
         draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
         draft.PipViews = new PipViewPreferences { CompactTitleBar = _pipTitleBar.Checked, MinimizeToTaskbar = _pipTaskbar.Checked,
             HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
-            HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds };
+            HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds }.Validated();
         try
         {
             IReadOnlyList<HotkeyProblem> problems = _apply(draft);
@@ -641,7 +641,7 @@ public sealed class SettingsWindow : Form
             ProgramRules(T("gestures.exclusions"), _windowMenuExclusions, _newMenuExclusion)));
         page.Controls.Add(Note(T("gestures.menu.help")));
         page.Controls.Add(Note(T("gestures.hookHelp")));
-        page.Controls.Add(Note(T("programs.precedence")));
+        page.Controls.Add(Note(T("programs.alwaysLeftAlone")));
         return page;
     }
 
@@ -856,7 +856,7 @@ public sealed class SettingsWindow : Form
         GroupBox options = Section(T("anchors.settings.title"), _autoAnchors, Note(T("anchors.auto.help")),
             SettingRow(T("anchors.side.label"), _anchorSide), SettingRow(T("anchors.look.label"), _anchorLook),
             SettingRow(T("anchors.limit"), _anchorLimit), SettingRow(T("anchors.size"), _anchorSize),
-            _anchorRecency, _anchorAvoid, Note(T("anchors.avoid.help")), Note(T("programs.precedence")));
+            _anchorRecency, _anchorAvoid, Note(T("anchors.avoid.help")), Note(T("programs.alwaysLeftAlone")));
         page.Controls.Add(options, 0, 0);
         page.SetColumnSpan(options, 2);
         page.Controls.Add(BuildProgramList(T("anchors.auto.only"), _anchorOnly, _newAnchorOnly), 0, 1);

@@ -1030,12 +1030,19 @@ public sealed class AppEndToEndTests : IDisposable
         RestartWith(settings);
         using var target = new TargetProcess(Spot);
         Focus(target);
-        Thread.Sleep(500); // The existing foreground watch installs the shared hook.
-        Desktop.Key(Keys.ControlKey, true);
-        Desktop.Key(Keys.Menu, true);
-        try { Desktop.Wheel(target.Center, -1, target.Handle); }
-        finally { Desktop.Key(Keys.Menu, false); Desktop.Key(Keys.ControlKey, false); }
-        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 247), "The opacity wheel didn't apply the configured 3% step.");
+        // The foreground watch installs the shared hook within a tick or two of the window coming forward, which
+        // takes longer on a busy machine. Until then the wheel scrolls the window, so keep trying for a while.
+        bool applied = Desktop.WaitFor(() =>
+        {
+            Desktop.Key(Keys.ControlKey, true);
+            Desktop.Key(Keys.Menu, true);
+            try { Desktop.Wheel(target.Center, -1, target.Handle); }
+            finally { Desktop.Key(Keys.Menu, false); Desktop.Key(Keys.ControlKey, false); }
+            return Desktop.WaitFor(() => Desktop.Alpha(target.Handle) is not null, 400);
+        }, 5000);
+        Assert.True(applied && Desktop.Alpha(target.Handle) == 247,
+            $"The opacity wheel didn't apply the configured 3% step: alpha={Desktop.Alpha(target.Handle)}.");
+        while (target.NextReport(100) is not null) { } // Wheels sent before the hook was there.
         Assert.Null(target.NextReport(150));
         Desktop.Wheel(target.Center, -1, target.Handle);
         Assert.StartsWith("wheel -120", target.NextReport() ?? "no wheel report");

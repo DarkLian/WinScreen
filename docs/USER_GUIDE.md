@@ -11,11 +11,11 @@ After you install WinScreen, its icon sits in the system tray (look under the sm
 - **Hotkeys** work on the window you're using. The tray menu works on the window named at its top.
 - **Rest the pointer** on the middle of a window's title bar to show the toolbar.
 
-Some features are marked *experimental*. Turn them on in **Settings → General → Experimental effects**.
+Some features are marked *experimental*. Turn them on in **Settings → General → Experimental**.
 
 ## Shortcuts
 
-You can change or clear any of these in **Settings → Hotkeys**. Click a box, press the keys, or press Delete to clear it.
+You can change or clear any of these in **Settings → Actions and shortcuts**. Select an action, click its box and press the keys, or press Delete to clear it.
 
 | Do this | Shortcut |
 | --- | --- |
@@ -39,19 +39,19 @@ Other commands, like moving a window to a corner, have no shortcut until you giv
 
 - **Ctrl+Alt+T** keeps a window above the others.
 - **Ctrl+Alt+Up/Down** changes how solid it is. It never goes below 20%.
-- **Ctrl+Alt+O** switches between solid and your default see-through level, set in Settings → General.
+- **Ctrl+Alt+O** switches between solid and your default see-through level, set in Settings → Appearance.
 - **Ctrl+Alt+C** lets clicks pass through the window to whatever is behind it. Press it again to turn it off.
 
 If you can't reach a click-through window, press **Ctrl+Alt+R** to put every window back.
 
-In **Settings → Appearance and files** you can change the opacity step, give pinned windows a coloured border, and turn on
+In **Settings → Appearance** you can change the opacity step, give pinned windows a colored border, and turn on
 **Ctrl+Alt+wheel**, which changes the opacity of the window under the pointer.
 
 ## Picture-in-Picture views
 
 Press **Ctrl+Alt+P** to open a small live view of the window you're using. Press it again to close it.
-To show a whole display or part of the screen, right-click the tray icon and choose
-**Picture-in-Picture views → Choose what to show**.
+To show a whole display or part of the screen, right-click the tray icon and choose **Picture-in-Picture...**.
+You can save a display or area there and open it again later from **Picture-in-Picture views → Saved sources**.
 
 | On a view | What happens |
 | --- | --- |
@@ -111,9 +111,9 @@ The tray and window menus also have **Borderless**, **Fill display**, **Dark tit
 - **Crop** keeps just the part of a window you drag over. Clicks on the rest reach what's behind.
 - **Shrink** turns a window into a small live tile. Click the tile to bring the window back.
 
-In **Settings → Appearance and files** you can make Glass fade only the background while keeping text and pictures, and
+In **Settings → Appearance** you can make Glass fade only the background while keeping text and pictures, and
 make Dark mode leave pictures and video as they are. You can also choose how solid the background, text and pictures stay.
-Windows shows a coloured border around a window while these two options are working.
+Windows shows a colored border around a window while these two options are working.
 
 ## Remember a program's setup
 
@@ -125,14 +125,13 @@ Press it again on a plain window to forget the setup, or remove it in **Settings
 
 | Page | What you'll find |
 | --- | --- |
-| General | Language, notifications, starting with Windows, updates, experimental effects |
-| Features | Everything WinScreen can do, with its shortcut and whether it's on. Double-click to change it |
-| Hotkeys | Your shortcuts |
+| General | Language, notifications, starting with Windows, updates, experimental effects, and moving your settings to another PC |
+| Actions and shortcuts | Everything WinScreen can do, with its shortcut. Select an action to change its shortcut |
 | Programs | Programs WinScreen should leave alone, or the only ones it should work on |
 | Saved setups | Program setups you've remembered |
 | Picture-in-Picture | How views look and behave |
 | Mouse gestures | Move and resize with a key, and the mouse menu |
-| Appearance and files | Opacity, pin border, effects, and moving your settings to another PC |
+| Appearance | Opacity, pin border and effects |
 | Toolbar | Where the toolbar appears, how quickly, and which buttons it shows |
 | Anchors | Automatic Anchors and how Anchors look |
 
@@ -148,7 +147,7 @@ If something didn't work, the tray menu's **Last result** shows what happened.
 ## Updates
 
 Turn on automatic updates in **Settings → General**. WinScreen downloads new versions in the background and installs them
-when you close it. You can also choose **Check for updates** from the tray menu. To update by hand, close WinScreen and run
+when you close it. You can also choose **Check for updates** from the tray menu at any time. To update by hand, close WinScreen and run
 the newer installer. Your settings stay as they are.
 
 ## Good to know

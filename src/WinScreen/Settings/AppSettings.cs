@@ -263,6 +263,14 @@ public sealed class AppSettings
     public byte DefaultAlpha =>
         (byte)Math.Round(Math.Clamp(DefaultOpacityPercent, LowestOpacityPercent, HighestOpacityPercent) * 255 / 100.0);
 
+    /// <summary>
+    /// True when WinScreen may work on this program: it isn't left alone, and it's on the list of programs
+    /// to work on when there is one.
+    /// </summary>
+    public bool Allows(string program) =>
+        !ExcludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase) &&
+        (IncludedPrograms.Count == 0 || IncludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase));
+
     public ProgramSetup? SetupFor(string program)
     {
         return SavedSetups.Find(setup => string.Equals(setup.Program, program, StringComparison.OrdinalIgnoreCase));
@@ -368,6 +376,7 @@ public sealed class AppSettings
         try
         {
             File.Copy(path, path + ".invalid-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"));
+            BackupFiles.Prune(path, ".invalid-");
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { }
     }

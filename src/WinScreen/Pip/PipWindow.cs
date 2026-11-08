@@ -1412,7 +1412,7 @@ public sealed class PipWindow : Form
                 _titleBar = new PipTitleBar(this, () => _overrides.PositionLocked, SuspendView);
                 KeepPartOutOfScreenCapture(_titleBar);
             }
-            _titleBar.UpdateTitle(_origin.Title + " - " + InputDescription, _sourceIcon);
+            _titleBar.UpdateTitle(_origin.Title, _sourceIcon);
             _titleBar.Bounds = new Rectangle(Left + PipGeometry.Border, Top + PipGeometry.Border,
                 Width - 2 * PipGeometry.Border, Dpi.Scale(28, DeviceDpi));
             if (!_titleBar.Visible) _titleBar.Show();

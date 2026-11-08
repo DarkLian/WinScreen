@@ -120,4 +120,23 @@ public sealed class AutomaticUpdatesTests
         await updates.Check();
         Assert.Equal(2, session.Downloads);
     }
+
+    [Fact]
+    public async Task A_requested_check_works_with_automatic_updates_off_and_the_timer_stays_quiet()
+    {
+        int sources = 0;
+        var session = new Session();
+        var messages = new List<string>();
+        using var updates = new AutomaticUpdates(_ =>
+        {
+            sources++;
+            return session;
+        }, messages.Add);
+        await updates.Check();
+        Assert.Equal(0, sources);
+        Assert.StartsWith("Update ready", await updates.CheckNow());
+        Assert.Empty(messages);
+        await updates.ApplyOnExit();
+        Assert.Equal(1, session.Applications);
+    }
 }

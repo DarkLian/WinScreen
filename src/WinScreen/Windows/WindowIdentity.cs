@@ -86,6 +86,18 @@ internal sealed record WindowIdentity(nint Window, uint ProcessId, uint ThreadId
         }
     }
 
+    /// <summary>
+    /// The quick form of <see cref="Matches"/> for a mouse hook, which Windows drops if it answers slowly. The
+    /// marker WinScreen put on the window goes when the window does, so it tells a reused handle apart without
+    /// opening the process.
+    /// </summary>
+    internal bool StillThere()
+    {
+        uint thread = User32.GetWindowThreadProcessId(Window, out uint pid);
+        return Token != 0 && pid == ProcessId && (ThreadId == 0 || thread == ThreadId) && User32.IsWindow(Window) &&
+               (long)User32.GetProp(Window, PropertyName) == Token;
+    }
+
     internal void Require()
     {
         if (!Matches())

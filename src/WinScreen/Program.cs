@@ -31,8 +31,9 @@ internal static class Program
             .OnBeforeUpdateFastCallback(_ => RunningInstance.Close())
             .OnBeforeUninstallFastCallback(_ =>
             {
-                RunningInstance.Close();
+                // First, so WinScreen stops starting at sign-in even if the running copy won't close.
                 new StartWithWindows().IsOn = false;
+                RunningInstance.Close();
             })
             .Run();
 
