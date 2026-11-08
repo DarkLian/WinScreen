@@ -8,6 +8,15 @@ public enum ResizeEdges { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 }
 /// <summary>The arithmetic of placing a window, kept apart from Windows so it can be tested directly.</summary>
 public static class PlacementGeometry
 {
+    internal static Rectangle FrameOnDisplay(Rectangle original, Rectangle from, Rectangle to, Size destinationSize)
+    {
+        var size = new Size(Math.Min(destinationSize.Width, to.Width), Math.Min(destinationSize.Height, to.Height));
+        double left = from.Width > original.Width ? Math.Clamp((original.Left - from.Left) / (double)(from.Width - original.Width), 0, 1) : 0;
+        double top = from.Height > original.Height ? Math.Clamp((original.Top - from.Top) / (double)(from.Height - original.Height), 0, 1) : 0;
+        return new Rectangle(to.Left + (int)Math.Round(left * (to.Width - size.Width)),
+            to.Top + (int)Math.Round(top * (to.Height - size.Height)), size.Width, size.Height);
+    }
+
     /// <summary>Where a frame of this size sits at this anchor of the work area. A frame too big for it starts at the corner.</summary>
     public static Point Align(Size frame, Rectangle area, WindowAnchor anchor)
     {

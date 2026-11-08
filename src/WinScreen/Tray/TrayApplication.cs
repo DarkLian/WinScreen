@@ -170,6 +170,11 @@ public sealed class TrayApplication : ApplicationContext
         menu.Opening += (_, _) =>
         {
             _menuIdentity = _lastIdentity?.IsSameWindow() == true ? _lastIdentity : null;
+            if (_menuIdentity is { } selected)
+            {
+                try { _menuIdentity = WindowIdentity.Capture(selected.Window); }
+                catch (WindowOperationException) { _menuIdentity = null; }
+            }
             _menuWindow = _menuIdentity?.Window ?? 0;
             _targetTitle.Text = T("tray.targetPrefix") +
                 (_menuWindow == 0 ? T("tray.noTarget") : MenuText(WindowInfo.Title(_menuWindow))) +
@@ -185,7 +190,8 @@ public sealed class TrayApplication : ApplicationContext
         (command, window) => command == AppCommand.RestoreWindow ||
                              FullScreenDecision(command, window) == FullScreenAction.Run && _windows.CanControl(window),
         IsOn, () => Alert(T("errors.operation.title"),
-            T("errors.window.targetUnavailable")));
+            T("errors.window.targetUnavailable")))
+        { MoveToDisplay = (window, device) => Attempt(() => _placer.MoveToDisplay(window, device)) };
 
     private void ShowWindowMenu(nint window, Point point)
     {
@@ -193,7 +199,7 @@ public sealed class TrayApplication : ApplicationContext
             FullScreenDecision(AppCommand.ShowWindowMenu, window) != FullScreenAction.Run) return;
         Attempt(() =>
         {
-            WindowIdentity identity = WindowIdentity.Observe(window);
+            WindowIdentity identity = WindowIdentity.Capture(window);
             var menu = new ContextMenuStrip();
             menu.Items.Add(new ToolStripMenuItem(MenuText(WindowInfo.Title(window))) { Enabled = false });
             var builder = CreateWindowMenuBuilder(() => identity);
@@ -245,6 +251,13 @@ public sealed class TrayApplication : ApplicationContext
                 var item = new ToolStripMenuItem(MenuText(WindowInfo.Title(source)) + " - " + T("settings.effects.title"));
                 item.DropDownItems.Add(T("window.restore"), null, (_, _) => Run(AppCommand.RestoreWindow, source));
                 views.DropDownItems.Add(item);
+            }
+            if (_settings.PipBookmarks.Count > 0)
+            {
+                var saved = new ToolStripMenuItem(T("pip.bookmarks.title"));
+                foreach (PipSourceBookmark bookmark in _settings.PipBookmarks)
+                    saved.DropDownItems.Add(bookmark.Name.Replace("&", "&&"), null, (_, _) => OpenBookmark(bookmark));
+                views.DropDownItems.Add(saved);
             }
             if (views.DropDownItems.Count == 0)
                 views.DropDownItems.Add(new ToolStripMenuItem(T("pip.views.empty")) { Enabled = false });
@@ -997,7 +1010,7 @@ public sealed class TrayApplication : ApplicationContext
     private void ShowArrangeMenu(nint window)
     {
         var menu = new ContextMenuStrip();
-        WindowIdentity identity = WindowIdentity.Observe(window);
+        WindowIdentity identity = WindowIdentity.Capture(window);
         var builder = CreateWindowMenuBuilder(() => identity);
         builder.PopulateArrange(menu.Items);
         builder.Refresh(menu.Items);
@@ -1057,6 +1070,15 @@ public sealed class TrayApplication : ApplicationContext
         }
         _content.TurnOff(window);
         if (_content.Has(window)) throw new WindowOperationException(T("errors.window.showFirst"));
+        WindowIdentity identity = WindowIdentity.Capture(window);
+        if (User32.IsIconic(window) && MessageBox.Show(string.Format(T("pip.sources.restoreWarning"), WindowInfo.Title(window)),
+            T("pip.open"), MessageBoxButtons.OKCancel, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) != DialogResult.OK)
+        {
+            var cancelled = new PipWindow(window, _windows);
+            cancelled.Dispose();
+            return cancelled;
+        }
+        identity.Require();
         var pip = new PipWindow(window, _windows);
         _pips[window] = pip;
         pip.FormClosed += (_, _) => _pips.Remove(window);
@@ -1081,6 +1103,11 @@ public sealed class TrayApplication : ApplicationContext
             presets.Add(preset);
         });
         pip.PresetRemoved += name => ChangePresets(presets => presets.RemoveAll(saved => saved.Name == name));
+        pip.SourceBookmarkSaved += bookmark => ChangeBookmarks(bookmarks =>
+        {
+            bookmarks.RemoveAll(saved => string.Equals(saved.Name, bookmark.Name, StringComparison.CurrentCultureIgnoreCase));
+            bookmarks.Add(bookmark);
+        });
         pip.ApplyPipPreferences(_settings.Pip);
         pip.ApplyViewPreferences(_settings.PipViews);
         pip.ShowOnTop();
@@ -1117,6 +1144,42 @@ public sealed class TrayApplication : ApplicationContext
         }
     }
 
+    private void ChangeBookmarks(Action<List<PipSourceBookmark>> change)
+    {
+        var draft = _settings.Clone();
+        change(draft.PipBookmarks);
+        try { draft.Save(_settingsPath); _settings.CopyFrom(draft); }
+        catch (Exception failure) when (IsExpected(failure)) { Alert(T("errors.settings.saveFailed"), failure.Message); }
+    }
+
+    private void OpenBookmark(PipSourceBookmark bookmark, bool previewOnly = false)
+    {
+        if (FullScreenDecision(AppCommand.PickPipSource, 0) != FullScreenAction.Run)
+        {
+            Alert(T("errors.operation.title"), T("errors.fullScreen.paused"));
+            return;
+        }
+        Attempt(() =>
+        {
+            ResolvedBookmark resolved = bookmark.Resolve(Screen.AllScreens.Select(screen =>
+                new BookmarkDisplay(screen.DeviceName, screen.Bounds, screen.Primary)).ToArray())
+                ?? throw new WindowOperationException(T("errors.pip.displayUnavailable"));
+            if (resolved.NeedsPreview || previewOnly)
+            {
+                using var preview = new PipBookmarkPreview(bookmark);
+                if (preview.ShowDialog() != DialogResult.OK || preview.Selection is not { } selected) return;
+                resolved = selected;
+            }
+            var source = new ScreenPipSource(resolved.Display.Device, resolved.Region);
+            source.Require();
+            if (source.Screen.Bounds != resolved.Display.Bounds)
+                throw new WindowOperationException(T("errors.pip.displayUnavailable"));
+            var view = new PipWindow(source, _windows);
+            OpenView(view);
+            if (bookmark.View is { } preset && !view.IsDisposed) view.ApplyPreset(preset);
+        });
+    }
+
     private void ShowPicker()
     {
         if (_picker is { IsDisposed: false })
@@ -1125,10 +1188,19 @@ public sealed class TrayApplication : ApplicationContext
             return;
         }
 
-        var picker = new PipSourcePicker(window => _windows.CanControl(window) && !_pips.ContainsKey(window));
-        picker.WindowChosen += window => Run(AppCommand.OpenPip, window);
+        var picker = new PipSourcePicker(window => _windows.CanControl(window) && !_pips.ContainsKey(window))
+            { Bookmarks = () => _settings.PipBookmarks };
+        picker.WindowChosen += window =>
+        {
+            if (picker.ChosenWindowMatches) Run(AppCommand.OpenPip, window);
+            else Alert(T("errors.operation.title"), T("errors.window.targetUnavailable"));
+        };
         picker.ScreenChosen += device => OpenScreenView(new ScreenPipSource(device, null));
         picker.RegionWanted += device => Attempt(() => SelectRegion(device));
+        picker.RegionChosen += (device, bounds) => OpenScreenView(new ScreenPipSource(device, bounds));
+        picker.BookmarkChosen += bookmark => OpenBookmark(bookmark);
+        picker.BookmarkPreviewRequested += bookmark => OpenBookmark(bookmark, previewOnly: true);
+        picker.BookmarkRemoved += name => ChangeBookmarks(bookmarks => bookmarks.RemoveAll(bookmark => bookmark.Name == name));
         _picker = picker;
         picker.FormClosed += (_, _) => _picker = null;
         picker.Show();

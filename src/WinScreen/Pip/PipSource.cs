@@ -53,7 +53,11 @@ internal sealed class WindowPipSource(WindowIdentity identity) : PipSource
     public override Size SurfaceSize => Size.Empty;
     public override Rectangle Whole(Size surface) => WindowInfo.VisiblePart(identity.Window, surface);
     public override Point CaptureOrigin(Rectangle whole) => whole.Location;
-    public override GraphicsCaptureItem CreateItem() => WgcInterop.Item(identity.Window);
+    public override GraphicsCaptureItem CreateItem()
+    {
+        identity.Require();
+        return WgcInterop.Item(identity.Window);
+    }
     public override void Require() => identity.Require();
 }
 
@@ -79,13 +83,17 @@ internal sealed class ScreenPipSource(string device, Rectangle? region) : PipSou
     public override bool IsMinimized => false;
     public override bool ShowsCursor => true;
     public override Screen Screen => Display ?? Screen.PrimaryScreen!;
-    public override nint Monitor => PipDisplay.MonitorOf(Screen);
+    public override nint Monitor => Display is { } display ? PipDisplay.MonitorOf(display) : 0;
     public override int Dpi => Native.Dpi.Default * Native.Dpi.ScaleOf(Monitor) / 100;
     public override int RefreshRate => PipDisplay.CachedRefresh(device);
-    public override Size SurfaceSize => Screen.Bounds.Size;
+    public override Size SurfaceSize => Display?.Bounds.Size ?? Size.Empty;
     public override Rectangle Whole(Size surface) => Clamped(surface);
     public override Point CaptureOrigin(Rectangle whole) => Point.Empty;
-    public override GraphicsCaptureItem CreateItem() => WgcInterop.ItemForMonitor(Monitor);
+    public override GraphicsCaptureItem CreateItem()
+    {
+        Require();
+        return WgcInterop.ItemForMonitor(Monitor);
+    }
 
     public override void Require()
     {

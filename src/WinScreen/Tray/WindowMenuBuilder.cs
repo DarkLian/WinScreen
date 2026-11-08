@@ -12,6 +12,8 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     Func<AppCommand, nint, bool> isOn, Action staleTarget)
 {
     private sealed record Utility(bool NeedsPath);
+    private sealed record DisplayMove(string Device);
+    internal Action<nint, string>? MoveToDisplay { get; init; }
 
     public void Populate(ToolStripItemCollection items, bool tray)
     {
@@ -67,6 +69,17 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     {
         foreach (AppCommand? action in CommandCatalog.ArrangeMenu)
             items.Add(action is { } entry ? Command(entry) : new ToolStripSeparator());
+        if (MoveToDisplay is { } move)
+        {
+            var displays = new ToolStripMenuItem(T("placement.moveToDisplay"));
+            foreach (Screen screen in Screen.AllScreens)
+            {
+                string device = screen.DeviceName;
+                displays.DropDownItems.Add($"{device} ({screen.Bounds.Width}×{screen.Bounds.Height})", null,
+                    (_, _) => WithTarget(window => move(window, device))).Tag = new DisplayMove(device);
+            }
+            items.Insert(10, displays);
+        }
     }
 
     private ToolStripMenuItem Command(AppCommand command) => new(CommandCatalog.Name(command), null, (_, _) =>
@@ -77,7 +90,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
 
     private void WithTarget(Action<nint> action)
     {
-        if (target() is not { } identity || !identity.IsSameWindow()) { staleTarget(); return; }
+        if (target() is not { } identity || !(identity.Token == 0 ? identity.IsSameWindow() : identity.Matches())) { staleTarget(); return; }
         action(identity.Window);
     }
 
@@ -94,6 +107,9 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
             }
             else if (item.Tag is Utility utility)
                 item.Enabled = window != 0 && (!utility.NeedsPath || WindowInfo.ExecutablePath(window).Length > 0);
+            else if (item.Tag is DisplayMove display)
+                item.Enabled = window != 0 && enabled(AppCommand.MoveToNextDisplay, window) &&
+                    Screen.AllScreens.Any(screen => screen.DeviceName == display.Device);
             if (item.HasDropDownItems) Refresh(item.DropDownItems);
         }
     }

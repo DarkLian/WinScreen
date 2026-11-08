@@ -83,6 +83,8 @@ public sealed class PipWindow : Form
     private PipInteraction? _live;
     private readonly System.Collections.Concurrent.ConcurrentQueue<PressOutcome> _pressOutcomes = new();
     private nint _foregroundBeforeLive;
+    private bool _liveSawSourceFocus;
+    private long _unobservedSince;
     private readonly ToolStripMenuItem _interactiveItem;
 
 
@@ -246,6 +248,7 @@ public sealed class PipWindow : Form
     internal bool SourceIsWindow => _origin.IsWindow;
     internal bool CanRetryCapture => _suspended || _thumbnail?.CanRetry == true;
     internal string InputDescription => _overrides.ClickThrough ? T("pip.state.clickThrough") :
+        !_origin.IsWindow ? T("pip.input.viewOnly") :
         _interactiveItem.Checked ? T("pip.interactive") : AllowClickForwarding && _origin.IsWindow
             ? T("settings.pip.forwardClicks") : T("pip.input.activateOriginal");
     internal string StateDescription => string.Join(", ", new[]
@@ -384,6 +387,7 @@ public sealed class PipWindow : Form
     internal Func<IReadOnlyList<PipPreset>>? Presets { get; set; }
     public event Action<PipPreset>? PresetSaved;
     public event Action<string>? PresetRemoved;
+    public event Action<PipSourceBookmark>? SourceBookmarkSaved;
 
     private void Reconfigure()
     {
@@ -471,6 +475,41 @@ public sealed class PipWindow : Form
         }
 
         options.DropDownItems.Add(presets);
+        if (_origin is ScreenPipSource)
+            options.DropDownItems.Add(T("pip.bookmarks.save"), null, (_, _) => SaveSourceBookmark());
+    }
+
+    private void SaveSourceBookmark()
+    {
+        if (_origin is not ScreenPipSource source) return;
+        using var dialog = new Form { Text = T("pip.bookmarks.save"), AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink, StartPosition = FormStartPosition.CenterScreen,
+            FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false, TopMost = true };
+        var name = new TextBox { Width = 320, MaxLength = PipPreset.NameLimit, AccessibleName = T("pip.bookmarks.name") };
+        var layout = new CheckBox { Text = T("pip.bookmarks.includeLayout"), AutoSize = true };
+        var save = new Button { Text = T("common.save"), DialogResult = DialogResult.OK, AutoSize = true };
+        var cancel = new Button { Text = T("common.cancel"), DialogResult = DialogResult.Cancel, AutoSize = true };
+        var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Padding = new Padding(12) };
+        page.Controls.AddRange([new Label { Text = T("pip.bookmarks.name"), AutoSize = true }, name, layout, save, cancel]);
+        dialog.Controls.Add(page);
+        dialog.AcceptButton = save;
+        dialog.CancelButton = cancel;
+        if (dialog.ShowDialog() != DialogResult.OK || string.IsNullOrWhiteSpace(name.Text)) return;
+        Attempt(() =>
+        {
+            source.Require();
+            Rectangle display = source.Screen.Bounds;
+            PipPreset current = CurrentPreset(name.Text.Trim());
+            var bookmark = new PipSourceBookmark
+            {
+                Name = name.Text.Trim(), Device = source.Device,
+                DisplayX = display.X, DisplayY = display.Y, DisplayWidth = display.Width, DisplayHeight = display.Height,
+                Region = source.Region is { } region ? PipCropShares.Of(region, display.Size) : null,
+                View = layout.Checked ? new PipPreset { Name = current.Name, LongSide = current.LongSide,
+                    Device = current.Device, Left = current.Left, Top = current.Top, PositionLocked = current.PositionLocked } : null,
+            };
+            SourceBookmarkSaved?.Invoke(bookmark);
+        });
     }
 
     private string PresetChanges(PipPreset preset)
@@ -1046,6 +1085,8 @@ public sealed class PipWindow : Form
         if (!area.Contains(pointer))
             return;
         _foregroundBeforeLive = User32.GetForegroundWindow();
+        _liveSawSourceFocus = false;
+        _unobservedSince = 0;
         var live = new PipInteraction(_source, RectangleToScreen(area), ShownPart(_thumbnail.SourceSize));
         live.Left += () => BeginInvokeIfAlive(EndLive);
         live.Pressed += _pressOutcomes.Enqueue;
@@ -1318,8 +1359,17 @@ public sealed class PipWindow : Form
         if (_live is not null && _thumbnail is not null)
         {
             _live.Update(RectangleToScreen(PipGeometry.ViewArea(ClientSize)), ShownPart(_thumbnail.SourceSize));
+            nint foreground = User32.GetForegroundWindow();
+            User32.GetWindowThreadProcessId(foreground, out uint foregroundProcess);
+            User32.GetWindowThreadProcessId(_source, out uint sourceProcess);
+            if (foreground == _source) _liveSawSourceFocus = true;
+            bool switchedAway = foregroundProcess != sourceProcess && foregroundProcess != Environment.ProcessId &&
+                (_liveSawSourceFocus || foreground != _foregroundBeforeLive);
+            if (_live.ObservedPointer(Cursor.Position)) _unobservedSince = 0;
+            else if (_unobservedSince == 0) _unobservedSince = Environment.TickCount64;
+            bool hookLost = _unobservedSince != 0 && Environment.TickCount64 - _unobservedSince > 150;
             // Windows drops a hook it thinks is slow. The source must not stay clickable if that happens.
-            if (!Bounds.Contains(Cursor.Position) && MouseButtons == MouseButtons.None && !_live.InPopup)
+            if (switchedAway || hookLost || !Bounds.Contains(Cursor.Position) && MouseButtons == MouseButtons.None && !_live.InPopup)
                 EndLive();
         }
 

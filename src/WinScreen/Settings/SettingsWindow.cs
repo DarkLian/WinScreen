@@ -155,15 +155,16 @@ public sealed class SettingsWindow : Form
 
         Text = T("settings.window.title");
         Icon = TrayApplication.LoadIcon();
-        FormBorderStyle = FormBorderStyle.FixedDialog;
+        FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        AutoSize = true;
-        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        ClientSize = new Size(800, 610);
+        MinimumSize = new Size(580, 360);
         Padding = new Padding(12);
 
         var tabs = _tabs;
+        tabs.Dock = DockStyle.Fill;
         var generalPage = Tab(T("settings.general"), BuildGeneral());
         var featuresPage = Tab(T("features.title"), BuildFeatures());
         tabs.TabPages.Add(generalPage);
@@ -199,17 +200,39 @@ public sealed class SettingsWindow : Form
             };
         };
 
-        var page = new FlowLayoutPanel
-            { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Dock = DockStyle.Fill };
-        page.Controls.Add(tabs);
-        page.Controls.Add(_status);
-        page.Controls.Add(BuildButtons());
+        var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Dock = DockStyle.Fill };
+        page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        page.Controls.Add(tabs, 0, 0);
+        page.Controls.Add(_status, 0, 1);
+        page.Controls.Add(BuildButtons(), 0, 2);
         Controls.Add(page);
 
         LoadValues();
         _pipInput.Enabled = _experimental.Checked;
         _pipAutoMove.Enabled = _experimental.Checked;
         ResumeLayout(true);
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        FitWorkingArea();
+    }
+
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(e);
+        FitWorkingArea();
+    }
+
+    private void FitWorkingArea()
+    {
+        Rectangle area = Screen.FromControl(this).WorkingArea;
+        Size = new Size(Math.Min(Width, area.Width), Math.Min(Height, area.Height));
+        Location = new Point(Math.Clamp(Left, area.Left, Math.Max(area.Left, area.Right - Width)),
+            Math.Clamp(Top, area.Top, Math.Max(area.Top, area.Bottom - Height)));
     }
 
     protected override void Dispose(bool disposing)
@@ -893,8 +916,17 @@ public sealed class SettingsWindow : Form
         var page = new Panel { Dock = DockStyle.Fill };
         page.Controls.Add(_features);
         page.Controls.Add(editor);
-        page.Controls.Add(new Label { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top });
+        var help = new Label { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top };
+        page.Controls.Add(help);
         page.Controls.Add(_actionSearch);
+        page.Resize += (_, _) => help.MaximumSize = new Size(page.ClientSize.Width, 0);
+        _features.ShowItemToolTips = true;
+        _features.Resize += (_, _) =>
+        {
+            int width = Math.Max(200, _features.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 4);
+            double[] shares = [0.28, 0.15, 0.18, 0.18, 0.21];
+            for (int i = 0; i < shares.Length; i++) _features.Columns[i].Width = (int)(width * shares[i]);
+        };
         return page;
     }
 
@@ -926,7 +958,7 @@ public sealed class SettingsWindow : Form
             string[] values = [name, target, defaults.Hotkeys.GetValueOrDefault(command, ""), saved, state];
             if (!string.IsNullOrWhiteSpace(_actionSearch.Text) && !values.Any(value =>
                 value.Contains(_actionSearch.Text, StringComparison.CurrentCultureIgnoreCase))) continue;
-            var row = new ListViewItem(values) { Tag = command };
+            var row = new ListViewItem(values) { Tag = command, ToolTipText = string.Join(Environment.NewLine, values) };
             _features.Items.Add(row);
             if (Equals(selected, command)) row.Selected = true;
         }

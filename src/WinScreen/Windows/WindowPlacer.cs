@@ -1,4 +1,4 @@
-using static WinScreen.Localization.UiText;
+﻿using static WinScreen.Localization.UiText;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using WinScreen.Native;
@@ -47,21 +47,33 @@ public sealed class WindowPlacer(WindowController windows)
         if (next < 0)
             throw new WindowOperationException(T("errors.placement.singleDisplay"));
 
+        MoveToDisplay(window, screens[next].DeviceName);
+    }
+
+    public void MoveToDisplay(nint window, string device)
+    {
+        Check(window);
+        WindowIdentity identity = WindowIdentity.Capture(window);
+        Screen from = Screen.FromHandle(window);
+        Screen to = Screen.AllScreens.FirstOrDefault(screen => screen.DeviceName == device)
+            ?? throw new WindowOperationException(T("errors.pip.displayUnavailable"));
+        Rectangle original = FrameOf(window, from);
+        Rectangle target = PlacementGeometry.FrameOnDisplay(original, from.WorkingArea, to.WorkingArea, original.Size);
         Remember(window);
-        Screen to = screens[next];
-        Rectangle frame = FrameOf(window, from);
-        Point place = PlacementGeometry.SamePlaceOn(frame, from.WorkingArea, to.WorkingArea);
+        identity.Require();
         if (!IsPlainlyOnScreen(window))
         {
-            PlaceHidden(window, new Rectangle(place, frame.Size), to);
+            PlaceHidden(window, target, to);
             return;
         }
-
-        // Crossing onto other scaling makes the app resize itself, so its size is only known after the move.
-        Move(window, new Rectangle(place, frame.Size), User32.SWP_NOSIZE);
+        Move(window, target, User32.SWP_NOSIZE);
         Settle(window);
-        WindowInfo.TryGetFrameBounds(window, out frame, out _);
-        Place(window, new Rectangle(PlacementGeometry.SamePlaceOn(new Rectangle(place, frame.Size), to.WorkingArea, to.WorkingArea), frame.Size), to);
+        identity.Require();
+        Screen current = Screen.AllScreens.FirstOrDefault(screen => screen.DeviceName == device)
+            ?? throw new WindowOperationException(T("errors.pip.displayUnavailable"));
+        if (!WindowInfo.TryGetFrameBounds(window, out Rectangle moved, out _))
+            throw new WindowOperationException(T("errors.window.targetUnavailable"));
+        Place(window, PlacementGeometry.FrameOnDisplay(original, from.WorkingArea, current.WorkingArea, moved.Size), current);
     }
 
     /// <summary>Puts a window back where it was before the last placement. False when there's nothing to go back to.</summary>

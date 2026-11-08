@@ -113,6 +113,81 @@ public sealed class AppEndToEndTests : IDisposable
     }
 
     [Fact]
+    public void A_region_can_be_opened_using_only_the_keyboard()
+    {
+        var settings = new AppSettings { ShowToolbar = false, WelcomeShown = true };
+        settings.Hotkeys[AppCommand.PickPipSource] = "Ctrl+Alt+F21";
+        RestartWith(settings);
+        using var target = new TargetProcess(Spot);
+        Focus(target);
+        Hotkey(Keys.F21, target);
+        nint picker = 0;
+        Assert.True(Desktop.WaitFor(() => (picker = Desktop.FindProcessWindow(_app.Id,
+            title => title == Localization.UiText.T("pip.chooseSource"))) != 0));
+        Desktop.Activate(picker);
+        Desktop.Press(Keys.Tab, Keys.ShiftKey); // Search -> source type.
+        Desktop.Press(Keys.Home);
+        Desktop.Press(Keys.Down);
+        Desktop.Press(Keys.Down); // Region.
+        Desktop.Press(Keys.Tab); // Search.
+        Desktop.Press(Keys.Tab); // Display list.
+        Desktop.Press(Keys.Home);
+        Desktop.Press(Keys.Enter);
+        nint bounds = 0;
+        Assert.True(Desktop.WaitFor(() => (bounds = Desktop.FindProcessWindow(_app.Id,
+            title => title == Localization.UiText.T("pip.sources.regionBounds"))) != 0));
+        Desktop.Press(Keys.Tab);
+        Desktop.Press(Keys.Tab); // Width.
+        Desktop.Press(Keys.A, Keys.ControlKey);
+        Desktop.Press(Keys.D3); Desktop.Press(Keys.D2); Desktop.Press(Keys.D0);
+        Desktop.Press(Keys.Tab); // Height.
+        Desktop.Press(Keys.A, Keys.ControlKey);
+        Desktop.Press(Keys.D2); Desktop.Press(Keys.D4); Desktop.Press(Keys.D0);
+        Desktop.Press(Keys.Enter);
+        nint view = WaitForPip();
+        Assert.Contains("region", WindowTitle(view), StringComparison.OrdinalIgnoreCase);
+        Assert.InRange(Desktop.BoundsOf(view).Width / (double)Desktop.BoundsOf(view).Height, 1.30, 1.36);
+        Focus(target);
+        Hotkey(Keys.R, target);
+        Assert.True(Desktop.WaitFor(() => !User32.IsWindow(view)));
+    }
+
+    private static string WindowTitle(nint window) => WinScreen.Windows.WindowInfo.Title(window);
+
+    [Fact]
+    public void A_saved_region_reopens_from_the_picker_with_its_layout()
+    {
+        Screen display = Screen.PrimaryScreen!;
+        var settings = new AppSettings { WelcomeShown = true, ShowToolbar = false, PipBookmarks = [new()
+        {
+            Name = "Saved reference", Device = display.DeviceName, DisplayX = display.Bounds.X, DisplayY = display.Bounds.Y,
+            DisplayWidth = display.Bounds.Width, DisplayHeight = display.Bounds.Height,
+            Region = new PipCropShares(0, 0, 320.0 / display.Bounds.Width, 240.0 / display.Bounds.Height),
+            View = new PipPreset { Name = "Layout", LongSide = 320, PositionLocked = false },
+        }] };
+        settings.Hotkeys[AppCommand.PickPipSource] = "Ctrl+Alt+F21";
+        RestartWith(settings);
+        using var target = new TargetProcess(Spot);
+        Focus(target);
+        Hotkey(Keys.F21, target);
+        nint picker = 0;
+        Assert.True(Desktop.WaitFor(() => (picker = Desktop.FindProcessWindow(_app.Id,
+            title => title == Localization.UiText.T("pip.chooseSource"))) != 0));
+        Desktop.Activate(picker);
+        Desktop.Press(Keys.Tab, Keys.ShiftKey);
+        Desktop.Press(Keys.Home);
+        Desktop.Press(Keys.Down); Desktop.Press(Keys.Down); Desktop.Press(Keys.Down);
+        Desktop.Press(Keys.Tab); Desktop.Press(Keys.Tab);
+        Desktop.Press(Keys.Home); Desktop.Press(Keys.Enter);
+        nint view = WaitForPip();
+        Assert.Equal(320, Desktop.BoundsOf(view).Width);
+        Assert.Contains("region", WindowTitle(view), StringComparison.OrdinalIgnoreCase);
+        Focus(target);
+        Hotkey(Keys.R, target);
+        Assert.True(Desktop.WaitFor(() => !User32.IsWindow(view)));
+    }
+
+    [Fact]
     public void Hotkeys_change_the_window_in_use_and_restore_puts_it_back()
     {
         using var target = new TargetProcess(Spot);

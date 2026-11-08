@@ -23,7 +23,10 @@ public sealed class PipSourceLogicTests
     {
         var source = new ScreenPipSource(@"\\.\DISPLAY_GONE", null);
         Assert.False(source.IsAvailable);
+        Assert.Equal(0, source.Monitor);
+        Assert.Equal(Size.Empty, source.SurfaceSize);
         Assert.Throws<WindowOperationException>(source.Require);
+        Assert.Throws<WindowOperationException>(() => source.CreateItem());
     }
 
     [Fact]

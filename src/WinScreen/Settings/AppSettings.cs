@@ -238,6 +238,8 @@ public sealed class AppSettings
     public PipPreferences Pip { get; set; } = new();
     [JsonConverter(typeof(PipPresetListConverter))]
     public List<PipPreset> PipPresets { get; set; } = [];
+    [JsonConverter(typeof(PipBookmarkListConverter))]
+    public List<PipSourceBookmark> PipBookmarks { get; set; } = [];
     public bool? StartWithWindows { get; set; }
 
     /// <summary>True once the first-run hint has been shown, so it doesn't return at every sign-in.</summary>
@@ -327,6 +329,7 @@ public sealed class AppSettings
         }
 
         loaded.PipPresets ??= [];
+        loaded.PipBookmarks ??= [];
         loaded.OpacityStepPercent = Math.Clamp(loaded.OpacityStepPercent, 1, 25);
         loaded.PinBorder = (loaded.PinBorder ?? new()).Validated();
         loaded.PipViews = (loaded.PipViews ?? new()).Validated();

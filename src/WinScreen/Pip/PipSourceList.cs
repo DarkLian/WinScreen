@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using WinScreen.Native;
 using WinScreen.Windows;
 using static WinScreen.Localization.UiText;
@@ -6,7 +6,10 @@ using static WinScreen.Localization.UiText;
 namespace WinScreen.Pip;
 
 /// <summary>One thing a view could show: a window, or a display when <see cref="Device"/> is set.</summary>
-internal sealed record PipChoice(string Title, string Program, nint Window, string? Device, bool Minimized);
+internal sealed record PipChoice(string Title, string Program, nint Window, string? Device, bool Minimized)
+{
+    internal WindowIdentity? Identity { get; init; }
+}
 
 /// <summary>What's on offer in the source picker. Read once each time the list is opened or searched.</summary>
 internal static class PipSourceList
@@ -30,14 +33,23 @@ internal static class PipSourceList
         }, 0);
 
         return found.Where(window => IsOffered(window) && allowed(window))
-            .Select(window => new PipChoice(WindowInfo.Title(window), WindowInfo.ProgramOf(window), window, null,
-                User32.IsIconic(window)))
+            .Select(window => Choice(window)).OfType<PipChoice>()
             .ToList();
+    }
+
+    private static PipChoice? Choice(nint window)
+    {
+        try
+        {
+            return new PipChoice(WindowInfo.Title(window), WindowInfo.ProgramOf(window), window, null, User32.IsIconic(window))
+                { Identity = WindowIdentity.Observe(window) };
+        }
+        catch (WindowOperationException) { return null; }
     }
 
     internal static List<PipChoice> Screens() => Screen.AllScreens
         .Select(screen => new PipChoice(new ScreenPipSource(screen.DeviceName, null).Title,
-            $"{screen.Bounds.Width}×{screen.Bounds.Height}" + (screen.Primary ? " " + T("pip.sources.mainDisplay") : ""), 0,
+            $"{screen.DeviceName}: {screen.Bounds.Width}×{screen.Bounds.Height} @ {screen.Bounds.X},{screen.Bounds.Y}" + (screen.Primary ? " " + T("pip.sources.mainDisplay") : ""), 0,
             screen.DeviceName, false))
         .ToList();
 

@@ -1,4 +1,4 @@
-using static WinScreen.Localization.UiText;
+﻿using static WinScreen.Localization.UiText;
 using WinScreen.Pip;
 
 namespace WinScreen.Windows;
@@ -77,6 +77,8 @@ public sealed class CropOverlay : Form
         {
             using var brush = new SolidBrush(Accent);
             e.Graphics.FillRectangle(brush, _selection);
+            TextRenderer.DrawText(e.Graphics, $"{_selection.Width} × {_selection.Height} px", Font,
+                new Point(Math.Max(0, _selection.Left), Math.Max(0, _selection.Top - Font.Height - 4)), ForeColor, BackColor);
             return;
         }
 

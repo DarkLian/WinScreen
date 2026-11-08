@@ -114,9 +114,14 @@ public sealed class InteractiveViewTests
         {
             using var view = new PipWindow(source, new WindowController([])) { AllowInteractive = true };
             view.ApplyViewPreferences(new PipViewPreferences { CompactTitleBar = false });
+            var problems = new List<string>();
+            view.Problem += problems.Add;
+            view.Notice += problems.Add;
             view.ShowOnTop();
             view.Location = viewAt ?? new Point(1100, 500);
             view.SetInteractive(true);
+            Assert.True(view.KeepsUpdating,
+                $"Interactive source was not concealed: {string.Join("; ", problems)}; source=0x{source:X}; view={view.Bounds}");
             Application.DoEvents();
             bool Ui(Action action)
             {
@@ -150,7 +155,8 @@ public sealed class InteractiveViewTests
         Desktop.MoveMouse(new Point(point.X - 1, point.Y));
         Thread.Sleep(30);
         Desktop.MoveMouse(point);
-        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null, 2000), "The visit didn't start.");
+        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null, 2000),
+            $"The visit didn't start: pointer={Desktop.CursorPosition()}; view={view.Bounds}; visible={view.Visible}; {view.StateDescription}; {view.DiagnosticSnapshot}");
         Thread.Sleep(100);
     }
 
