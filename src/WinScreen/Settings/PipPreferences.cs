@@ -16,6 +16,7 @@ public sealed class PipPreferences
     public int OpacityPercent { get; set; } = 100;
     public PipScaling Scaling { get; set; }
     public bool ShowDiagnostics { get; set; }
+    internal bool RequireHiddenBorder { get; set; }
     public int PixelBudget { get; set; } = 8_294_400;
     public static readonly int[] FrameRates = [0, 15, 24, 30, 48, 60, 90, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480];
 
@@ -26,6 +27,7 @@ public sealed class PipPreferences
         OpacityPercent = Math.Clamp(OpacityPercent, 10, 100),
         Scaling = Enum.IsDefined(Scaling) ? Scaling : PipScaling.Auto,
         ShowDiagnostics = ShowDiagnostics,
+        RequireHiddenBorder = RequireHiddenBorder,
         PixelBudget = Math.Clamp(PixelBudget, 65_536, 33_177_600),
     };
 

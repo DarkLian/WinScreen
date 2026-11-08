@@ -31,6 +31,9 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     private PipDiagnostics _lastDiagnostics = new();
     private readonly Queue<string> _failures = new();
     internal event Action<string>? Problem;
+    internal bool CaptureBorderVisible => _active && _advanced is { } capture &&
+        Interlocked.Read(ref capture.Diagnostics.Received) > 0 && !capture.Diagnostics.CaptureBorderHidden;
+
     public PipBackendKind Kind => _active ? _advanced!.Kind : PipBackendKind.DwmThumbnail;
     public PipSessionState State => _disposed ? PipSessionState.Stopped : _active ? _advanced!.State :
         _policy.Pinned ? (_dwm is null ? PipSessionState.Failed : PipSessionState.Fallback) : _advanced is not null ? PipSessionState.Starting : PipSessionState.Compositor;
@@ -96,7 +99,8 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     internal void Configure(PipPreferences preferences)
     {
         PipPreferences next = Effective(preferences);
-        bool restart = next.Backend != _preferences.Backend || next.PixelBudget != _preferences.PixelBudget;
+        bool restart = next.Backend != _preferences.Backend || next.PixelBudget != _preferences.PixelBudget ||
+            next.RequireHiddenBorder != _preferences.RequireHiddenBorder;
         _preferences = next;
         if (!restart)
         {

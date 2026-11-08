@@ -58,6 +58,8 @@ public sealed class PipLiveBenchmarkTests(ITestOutputHelper output)
                     // Keep a long memory fixture away from the user's pointer and global desktop input.
                     // Warmup above proves real presentation; this phase measures capture/GPU-processing memory,
                     // with the host hidden. Occluded Present is not counted as a displayed new frame.
+                    // This fixture measures WGC itself, including on systems that cannot hide its border.
+                    pip.CompatibleInput = true;
                     pip.SetOriginalHidden(true);
                     pip.Location = new(-30000, -30000);
                     pip.Hide();

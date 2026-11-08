@@ -70,12 +70,14 @@ Every view has a title bar above the picture, or below it near the top of the sc
   so the view stays live. It also removes the original from the taskbar and Alt+Tab where supported. Showing the original or closing the view restores its entry.
 - **View options:** frame limit, opacity, size, position lock and click-through, just for this view.
 - **Presets:** save the crop, size and place under a name and use it again later.
-- **Use this view directly** *(experimental)*: click, select text and scroll right inside the view.
-  The original stays out of sight the whole time. Links don't light up as you point at them; turn on
-  **Show hover effects** for that, though the window may then show faintly around the view.
-  The original's title bar moves the view. Its minimize button minimizes the view, its maximize button takes you
-  to the original, and its close button closes the original and the view. If the app asks you something, the
-  original comes back so you can answer. Keys go back to your previous window when you leave.
+- **Use this view directly** *(experimental)* lets you point, click, select text, drag and scroll in the picture.
+  The original stays hidden. Drag the view's title bar to move it, or hold Alt and drag the picture.
+  Menus open near the pointer. If the app asks you something, the original comes back so you can answer.
+  Keys return to your previous window when you leave.
+- **Compatible input** helps apps whose controls do not respond normally. This choice is remembered for that app.
+  It may briefly show a faint outline around the view during a click.
+
+When Windows cannot hide the capture border, a hidden original uses Standard capture. Showing it restores your capture choice.
 
 **In Settings → Picture-in-Picture** you can choose a hover preview (for small views only) or reading lens, and keep minimized views on the taskbar.
 

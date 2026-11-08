@@ -50,6 +50,7 @@ public sealed class PipWindow : Form
     private long _hoverSince;
     private Icon? _sourceIcon;
     private bool _suspended;
+    private bool _parkedCaptureFallback;
     private Task _retiringCapture = Task.CompletedTask;
     private bool _resumeRequested;
     private Bitmap? _taskbarPicture;
@@ -82,7 +83,7 @@ public sealed class PipWindow : Form
     private bool _liveSawSourceFocus;
     private long _unobservedSince;
     private readonly ToolStripMenuItem _interactiveItem;
-    private readonly ToolStripMenuItem _hoverItem;
+    private readonly ToolStripMenuItem _compatibleItem;
     private SourcePopups? _popups;
     private int _popupTick;
     private bool _liveStartedZoomed;
@@ -128,10 +129,15 @@ public sealed class PipWindow : Form
             (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
         _interactiveItem = new ToolStripMenuItem(T("pip.interactive"), null,
             (_, _) => SetInteractive(!_interactiveItem!.Checked));
-        _hoverItem = new ToolStripMenuItem(T("pip.interactive.hover"), null, (_, _) =>
+        _compatibleItem = new ToolStripMenuItem(T("pip.interactive.compatible"), null, (_, _) =>
         {
-            EndLive(); // The next visit starts the other way.
-            _hoverItem!.Checked = !_hoverItem.Checked;
+            bool wanted = !_compatibleItem!.Checked;
+            if (wanted && !PressRules.SharedScaling(Screen.AllScreens.Select(ScreenDpi)))
+            {
+                Notice?.Invoke(T("pip.interactive.mixedDpi"));
+                return;
+            }
+            if (SaveCompatibleInput?.Invoke(wanted) != false) CompatibleInput = wanted;
         });
         var options = new ToolStripMenuItem(T("pip.options"));
         options.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
@@ -141,7 +147,7 @@ public sealed class PipWindow : Form
         _menu.Items.Add(_hideItem);
         _menu.Items.Add(_autoMoveItem);
         _menu.Items.Add(_interactiveItem);
-        _menu.Items.Add(_hoverItem);
+        _menu.Items.Add(_compatibleItem);
         _goToItem = _menu.Items.Add(T("pip.goToOriginal"), null, (_, _) => GoToSource());
         _removeCropItem = new ToolStripMenuItem(T("pip.removeCrop"), null, (_, _) => SetCrop(Rectangle.Empty));
         _menu.Items.Add(_removeCropItem);
@@ -156,8 +162,8 @@ public sealed class PipWindow : Form
             _menu.Items["inputStatus"]!.Text = InputDescription;
             _retryItem.Visible = CanRetryCapture;
             _autoMoveItem.Visible = AllowAutoMove;
-            _interactiveItem.Visible = _hoverItem.Visible = AllowInteractive && _origin.IsWindow;
-            _hoverItem.Enabled = _interactiveItem.Checked;
+            _interactiveItem.Visible = _compatibleItem.Visible = AllowInteractive && _origin.IsWindow;
+            _compatibleItem.Enabled = _interactiveItem.Checked;
             _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
             _removeCropItem.Enabled = !_crop.IsEmpty;
             // A menu only closes on an outside click while its program has the focus.
@@ -245,6 +251,7 @@ public sealed class PipWindow : Form
     }
 
     internal bool IsSuspended => _suspended;
+    internal nint SourceWindow => _source;
     internal bool SourceIsWindow => _origin.IsWindow;
     internal bool CanRetryCapture => _suspended || _thumbnail?.CanRetry == true;
     internal string InputDescription => _overrides.ClickThrough ? T("pip.state.clickThrough") :
@@ -402,8 +409,23 @@ public sealed class PipWindow : Form
         }
     }
 
-    private PipPreferences BackendPreferences() => _overrides.ClickThrough
-        ? _preferences.With(new PipOverrides(OpacityPercent: 100)) : _preferences;
+    private PipPreferences BackendPreferences()
+    {
+        PipPreferences result = _preferences.With(_overrides.ClickThrough ? new PipOverrides(OpacityPercent: 100) : new PipOverrides());
+        result.RequireHiddenBorder = _origin.IsWindow && !CompatibleInput && _windows.IsParked(_source);
+        if (_parkedCaptureFallback) result.Backend = PipBackendPreference.Dwm;
+        return result;
+    }
+
+    private void ConfigureParkedCapture()
+    {
+        bool fallback = !CompatibleInput && _windows.IsParked(_source) &&
+            (!CaptureBorder.TryHide(_ => { }, wait: 0) || _thumbnail?.CaptureBorderVisible == true);
+        _parkedCaptureFallback = fallback;
+        _thumbnail?.Configure(BackendPreferences());
+        if (fallback && _preferences.Backend != PipBackendPreference.Dwm)
+            Notice?.Invoke(T("pip.capture.hiddenStandard"));
+    }
 
     /// <summary>Click-through needs the layered style too, or Windows still gives this window the clicks.</summary>
     private void ApplyClickThrough()
@@ -425,7 +447,7 @@ public sealed class PipWindow : Form
         options.DropDownItems.Add(new ToolStripMenuItem(
             _overrides.FrameRate is null && _overrides.Scaling is null && _overrides.OpacityPercent is null
                 ? T("pip.defaults.inherited") : T("pip.defaults.overridden")) { Enabled = false });
-        options.DropDownItems.Add(new ToolStripMenuItem(T("pip.controls.help")) { Enabled = false });
+        options.DropDownItems.Add(new ToolStripMenuItem(_interactiveItem.Checked ? T("pip.controls.directHelp") : T("pip.controls.help")) { Enabled = false });
         options.DropDownItems.Add(T("pip.zoom.reset"), null, (_, _) => { ResetZoom(); SetCrop(Rectangle.Empty); });
         bool capture = BackendKind != PipBackendKind.DwmThumbnail;
         ToolStripMenuItem rate = Choices(T("pip.frameRate"), _overrides.FrameRate,
@@ -689,6 +711,8 @@ public sealed class PipWindow : Form
                 _windows.HideOwned(_source, this);
                 if (SwitcherHidingStopsView) Problem?.Invoke(T("errors.switcher.windows10"));
                 else _windows.SetOutOfSwitcher(_source, true);
+                if (!CompatibleInput) _windows.Park(_source);
+                ConfigureParkedCapture();
                 if (User32.GetForegroundWindow() == _source)
                     User32.SetForegroundWindow(Handle); // Keys mustn't go to a window that can't be seen.
                 StayOnTop();
@@ -696,6 +720,8 @@ public sealed class PipWindow : Form
             else
             {
                 _windows.ShowOwned(_source, this);
+                _parkedCaptureFallback = false;
+                _thumbnail?.Configure(BackendPreferences());
                 _popups?.ShowAll();
             }
 
@@ -1037,6 +1063,7 @@ public sealed class PipWindow : Form
                 return;
             }
 
+            _windows.Unpark(_source);
             position = _windows.BeginPeek(_source, position);
             _interacting = true;
             var target = new Point(position.X + spot.X, position.Y + spot.Y);
@@ -1059,13 +1086,13 @@ public sealed class PipWindow : Form
         }
     }
 
-    /// <summary>Turns direct use of this view on or off. It needs the original hidden: sliding a visible window around isn't acceptable.</summary>
+    /// <summary>Turns direct use on or off. The source stays hidden, parked by default or aligned for compatible input.</summary>
     internal void SetInteractive(bool on)
     {
         if (on && (!AllowInteractive || !_origin.IsWindow)) return;
         if (on)
         {
-            if (!PressRules.SharedScaling(Screen.AllScreens.Select(ScreenDpi)))
+            if (CompatibleInput && !PressRules.SharedScaling(Screen.AllScreens.Select(ScreenDpi)))
             {
                 Notice?.Invoke(T("pip.interactive.mixedDpi"));
                 return;
@@ -1095,12 +1122,25 @@ public sealed class PipWindow : Form
     /// <summary>Why the last visit ended, for tests and diagnostics.</summary>
     internal string LastVisitEnd { get; private set; } = "";
 
-    /// <summary>"Show hover effects" for direct use: the original takes input, hover included, wherever the pointer is on its content.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-    internal bool ShowsHoverEffects
+    internal Func<bool, bool>? SaveCompatibleInput { get; set; }
+
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal bool CompatibleInput
     {
-        get => _hoverItem.Checked;
-        set { EndLive(); _hoverItem.Checked = value; }
+        get => _compatibleItem.Checked;
+        set
+        {
+            if (_compatibleItem.Checked == value) return;
+            EndLive();
+            if (_origin.IsAvailable && _windows.IsHidden(_source))
+            {
+                if (value) _windows.Unpark(_source);
+                else _windows.Park(_source);
+            }
+            _compatibleItem.Checked = value;
+            if (_origin.IsAvailable && _windows.IsHidden(_source)) ConfigureParkedCapture();
+        }
     }
 
     /// <summary>Where the title bar is while it shows, for tests.</summary>
@@ -1120,10 +1160,10 @@ public sealed class PipWindow : Form
         _foregroundBeforeLive = User32.GetForegroundWindow();
         _liveSawSourceFocus = false;
         _unobservedSince = 0;
-        bool hover = _hoverItem.Checked;
+        bool messages = !CompatibleInput;
         _popups ??= new SourcePopups(_source);
         var live = new PipInteraction(_source, RectangleToScreen(area), ShownPart(_thumbnail.SourceSize), Handle,
-            replay: !hover, _popups);
+            messageInput: messages, _popups);
         live.Left += () => BeginInvokeIfAlive(() => { LastVisitEnd = "the pointer left"; EndLive(); });
         live.Pressed += _pressOutcomes.Enqueue;
         live.ViewDragged += moved => BeginInvokeIfAlive(() => DragLiveView(moved));
@@ -1133,7 +1173,8 @@ public sealed class PipWindow : Form
         try
         {
             // The original goes just above the view; at opacity 0 the pointer passes through it to the view.
-            _windows.BeginInteractive(_source, Handle, reachable: hover);
+            if (messages) _windows.Park(_source);
+            else _windows.BeginInteractive(_source, Handle, reachable: false);
             live.Start(PointToScreen(pointer));
             _live = live;
         }
@@ -1141,7 +1182,7 @@ public sealed class PipWindow : Form
         {
             live.Dispose();
             SetInputPassesThrough(false);
-            try { _windows.EndInteractive(_source); }
+            try { if (!messages) _windows.EndInteractive(_source); }
             catch (WindowOperationException) { }
             _interactiveItem.Checked = false;
             Problem?.Invoke(failure.Message);
@@ -1174,9 +1215,9 @@ public sealed class PipWindow : Form
         {
             if (_origin.IsAvailable)
             {
-                _windows.EndInteractive(_source);
+                if (!live.UsesMessages) _windows.EndInteractive(_source);
                 // Moves the app hadn't handled yet can still arrive after this; for a moment, undo any.
-                if (User32.GetWindowRect(_source, out Rect home))
+                if (!live.UsesMessages && User32.GetWindowRect(_source, out Rect home))
                 {
                     _settledAt = Rectangle.FromLTRB(home.Left, home.Top, home.Right, home.Bottom);
                     _settleUntil = Environment.TickCount64 + SettleMilliseconds;
@@ -1223,6 +1264,7 @@ public sealed class PipWindow : Form
         try
         {
             _windows.EndPeek(_source);
+            if (_windows.IsHidden(_source) && !CompatibleInput) { _windows.Park(_source); ConfigureParkedCapture(); }
         }
         catch (WindowOperationException failure)
         {
@@ -1462,6 +1504,8 @@ public sealed class PipWindow : Form
         try
         {
             _thumbnail?.Poll(ClientSize);
+            if (!_parkedCaptureFallback && _origin.IsWindow && _windows.IsParked(_source) && _thumbnail?.CaptureBorderVisible == true)
+                ConfigureParkedCapture();
         }
         catch (WindowOperationException failure)
         {

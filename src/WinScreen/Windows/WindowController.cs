@@ -75,6 +75,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public WindowPlacement? PlacementBeforeBorderless { get; set; }
         public Point? BorderlessOrigin { get; set; }
         public bool BorderlessFilled { get; set; }
+        public bool Parked { get; set; }
         public long? SwitcherBits { get; set; }
         public int? OriginalDarkTitleBar { get; set; }
         public bool BorderHidden { get; set; }
@@ -655,7 +656,20 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             if (!_changed.TryGetValue(window, out ChangedWindow? state) || !state.Hidden)
                 return;
 
+            bool parked = state.Parked;
+            if (parked) Unpark(window);
             RestoreSwitcher(window, state);
+            if (parked)
+            {
+                // Let the app repaint at its restored placement while it remains fully transparent.
+                User32.SendMessageTimeout(window, 0x000F, 0, 0, 2, 100, out _);
+                Thread.Sleep(50);
+                for (int step = 1; step < 8; step++)
+                {
+                    ApplyAlpha(window, state, (byte)(state.AlphaBeforeHiding * step / 8));
+                    Thread.Sleep(10);
+                }
+            }
             Reveal(window, state);
             state.Hidden = false;
             SaveJournal();
@@ -889,6 +903,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                     PlacementBeforeBorderless = record.BorderlessPlacement is null ? null : ToPlacement(record.BorderlessPlacement),
                     BorderlessOrigin = record.BorderlessOrigin is { } origin ? new Point(origin[0], origin[1]) : null,
                     BorderlessFilled = record.BorderlessFilled,
+                    Parked = record.Parked,
                     SwitcherBits = record.SwitcherBits,
                     OriginalDarkTitleBar = record.OriginalDarkTitleBar,
                     BorderHidden = record.BorderHidden,
@@ -964,6 +979,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             BorderlessPlacement = state.PlacementBeforeBorderless is { } borderless ? FromPlacement(borderless) : null,
             BorderlessOrigin = state.BorderlessOrigin is { } origin ? [origin.X, origin.Y] : null,
             BorderlessFilled = state.BorderlessFilled,
+            Parked = state.Parked,
             SwitcherBits = state.SwitcherBits,
             OriginalDarkTitleBar = state.OriginalDarkTitleBar,
             BorderHidden = state.BorderHidden,
@@ -994,6 +1010,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
 
         state.Identity.Require();
         var failures = new List<string>();
+        if (state.Parked)
+            User32.SendMessageTimeout(window, 0x001F /* WM_CANCELMODE */, 0, 0, 2, 30, out _);
         Attempt("peek-pin", () => SetTopmost(window, state.Pinned, state.Identity));
         Attempt("peek-placement", () => WritePlacement(window, placement));
         if (state.Hidden)
@@ -1005,6 +1023,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         if (failures.Count > 0)
             throw new WindowOperationException(string.Join(Environment.NewLine, failures));
         state.PlacementBeforePeek = null;
+        state.Parked = false;
 
         void Attempt(string step, Action action)
         {

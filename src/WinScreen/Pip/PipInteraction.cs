@@ -70,9 +70,8 @@ internal static class PressRules
 }
 
 /// <summary>
-/// One pointer visit to an interactive view: the hidden source slides so that the point under the pointer
-/// is the point the view shows there, and real input reaches the real window. A low-level hook and one
-/// mover thread exist only for this visit.
+/// One pointer visit to an interactive view. Message input maps to a stationary parked source; compatible
+/// input aligns the source and replays presses. The hook and worker exist only for this visit.
 /// </summary>
 internal sealed class PipInteraction : IDisposable
 {
@@ -110,6 +109,7 @@ internal sealed class PipInteraction : IDisposable
     private readonly SourcePopups _popups;
     private readonly nint _viewWindow;
     private readonly bool _replay;
+    private readonly PipMessageInput? _messages;
     private readonly object _reach = new(), _applying = new();
     private readonly List<string> _misses = [];
 
@@ -125,12 +125,8 @@ internal sealed class PipInteraction : IDisposable
     private const int SettleMilliseconds = 40;
 
     /// <param name="viewWindow">The view itself: under the pointer when the original can't take input.</param>
-    /// <param name="replay">
-    /// True: the original stays fully invisible, and each press is replayed to it after it is briefly made able
-    /// to take it. False: it takes input directly wherever the pointer is on content, hover included, and
-    /// shows faintly while it does.
-    /// </param>
-    public PipInteraction(nint source, Rectangle view, Rectangle shown, nint viewWindow = 0, bool replay = false,
+    /// <param name="messageInput">Send messages to a stationary parked source; otherwise replay real input.</param>
+    public PipInteraction(nint source, Rectangle view, Rectangle shown, nint viewWindow = 0, bool messageInput = false,
         SourcePopups? popups = null)
     {
         _source = source;
@@ -139,9 +135,10 @@ internal sealed class PipInteraction : IDisposable
         _shown = shown;
         _hook = Callback;
         _viewWindow = viewWindow;
-        _replay = replay;
+        _replay = !messageInput;
+        _messages = messageInput ? new PipMessageInput(source, _identity) : null;
         _popups = popups ?? new SourcePopups(source);
-        _reachable = !replay;
+        _reachable = false;
         User32.GetWindowThreadProcessId(source, out _sourceProcess);
     }
 
@@ -152,11 +149,12 @@ internal sealed class PipInteraction : IDisposable
     public event Action? QuestionShown;
 
     /// <summary>Whether the original can take input at the pointer right now, for tests.</summary>
+    internal bool UsesMessages => _messages is not null;
+
     internal bool Reachable { get { lock (_reach) return _reachable; } }
 
     /// <summary>
-    /// Makes the original able to take input, or not, at once: faint (alpha 1) and the view passing input
-    /// through, or invisible (alpha 0) and the view solid, so the pointer and hover stay on the view.
+    /// Enables a compatible-input replay briefly at alpha 1, then returns the source to alpha 0.
     /// </summary>
     private void SetReachable(bool on)
     {
@@ -347,9 +345,18 @@ internal sealed class PipInteraction : IDisposable
     public void Start(Point pointer)
     {
         Interlocked.Exchange(ref _observedPointer, Pack(pointer));
-        Point place = PlaceFor(pointer);
-        User32.SetWindowPos(_source, 0, place.X, place.Y, 0, 0, Move);
+        if (_messages is null)
+        {
+            Point place = PlaceFor(pointer);
+            User32.SetWindowPos(_source, 0, place.X, place.Y, 0, 0, Move);
+        }
         Publish(pointer);
+        if (_messages is not null)
+        {
+            Rectangle view, shown;
+            lock (_moved) { view = _view; shown = _shown; }
+            _messages.Move(pointer, view, shown);
+        }
         using var ready = new ManualResetEventSlim();
         nint hook = 0;
         _hookThread = new Thread(() =>
@@ -366,7 +373,7 @@ internal sealed class PipInteraction : IDisposable
         ready.Wait();
         if (hook == 0)
             throw new Windows.WindowOperationException(Localization.UiText.T("errors.pip.clickUnverified"));
-        _mover = new Thread(MoveWindow) { IsBackground = true, Name = "WinScreen interaction mover" };
+        _mover = new Thread(_messages is null ? MoveWindow : FollowMessagePopups) { IsBackground = true, Name = "WinScreen interaction mover" };
         _mover.Start();
         if (_replay)
         {
@@ -410,8 +417,6 @@ internal sealed class PipInteraction : IDisposable
                 var pointer = new Point((int)(packed >> 32), (int)packed);
                 Point place = PlaceFor(pointer);
                 User32.SetWindowPos(_source, 0, place.X, place.Y, 0, 0, Move | User32.SWP_ASYNCWINDOWPOS);
-                if (!_replay && _heldDelivered == MouseButtons.None)
-                    FollowContent(pointer);
             }
         }
         finally
@@ -420,16 +425,73 @@ internal sealed class PipInteraction : IDisposable
         }
     }
 
-    /// <summary>
-    /// With hover effects, the original takes input only where the pointer is on its content. Over its title bar,
-    /// frame or caption buttons it stays invisible, and the view has the pointer: no hover there, so Windows'
-    /// snap layouts never open over a window nobody can see.
-    /// </summary>
-    private void FollowContent(Point pointer)
+    private void FollowMessagePopups()
     {
-        nint position = (nint)((pointer.Y << 16) | (pointer.X & 0xFFFF));
-        if (User32.SendMessageTimeout(_source, User32.WM_NCHITTEST, 0, position, AbortIfHung, 15, out nint hit) != 0)
-            SetReachable(!AtViewBorder(pointer) && PressRules.ReachesContent(hit));
+        try
+        {
+            while (!_stopping)
+            {
+                _moved.WaitOne(30);
+                if (_stopping || !_identity.StillThere()) return;
+                Rectangle view, shown;
+                lock (_moved) { view = _view; shown = _shown; }
+                long packed = Interlocked.Read(ref _pointer);
+                var pointer = new Point((int)(packed >> 32), (int)packed);
+                if (_popups.SweepMapped(view, pointer, _messages!.MappedScreen(pointer, view, shown), _viewWindow))
+                {
+                    QuestionShown?.Invoke();
+                    return;
+                }
+            }
+        }
+        catch (Windows.WindowOperationException) { Left?.Invoke(); }
+    }
+
+    private bool MessagePress(Point point, MouseButtons button)
+    {
+        nint root = RootAt(point);
+        if (root != _viewWindow)
+        {
+            if (ProcessOf(root) == _sourceProcess && root != _source)
+            {
+                _inPopup = true;
+                Record(PressOutcome.Popup, point, 0);
+                return false;
+            }
+            Record(PressOutcome.ViewControl, point, 0);
+            return false;
+        }
+        Rectangle view, shown;
+        lock (_moved) { view = _view; shown = _shown; }
+        nint hit = _messages!.Hit(point, view, shown);
+        bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        if (!alt && PressRules.CaptionActionFor(hit, button) is { } action)
+        {
+            _heldSwallowed |= button;
+            Record(PressOutcome.CaptionButton, point, hit);
+            CaptionPressed?.Invoke(action);
+            return true;
+        }
+        if (hit == 2 || alt)
+        {
+            _heldSwallowed |= button;
+            _dragging = button == MouseButtons.Left;
+            _dragFrom = point;
+            Record(PressOutcome.MovedView, point, hit);
+            return true;
+        }
+        if (!PressRules.ReachesContent(hit))
+        {
+            _heldSwallowed |= button;
+            Record(PressOutcome.Unconfirmed, point, hit);
+            return true;
+        }
+        User32.SetForegroundWindow(_source);
+        bool delivered = _messages.Press(point, button, view, shown);
+        if (delivered) _heldDelivered |= button;
+        else _heldSwallowed |= button;
+        Record(delivered ? PressOutcome.Delivered : PressOutcome.Unconfirmed, point, hit);
+        return true;
     }
 
     private void Record(PressOutcome outcome, Point at, nint hit)
@@ -453,8 +515,11 @@ internal sealed class PipInteraction : IDisposable
             return CallNextHookEx(0, code, message, data); // WinScreen's own replay of a press it already decided on.
         var point = new Point(info.X, info.Y);
         Interlocked.Exchange(ref _observedPointer, Pack(point));
-        bool swallow = (int)message switch
+        bool swallow;
+        try
         {
+            swallow = (int)message switch
+            {
             WM_MOUSEMOVE => OnMove(point),
             WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN => OnPress(point, ButtonOf((int)message)),
             WM_LBUTTONUP or WM_RBUTTONUP or WM_MBUTTONUP => OnRelease(point, ButtonOf((int)message - 1)),
@@ -463,11 +528,33 @@ internal sealed class PipInteraction : IDisposable
             WM_MOUSEWHEEL or WM_MOUSEHWHEEL => OnWheel(point, (int)message == WM_MOUSEHWHEEL, info.MouseData),
             _ => false,
         };
+        }
+        catch (Windows.WindowOperationException)
+        {
+            _outside = true;
+            Left?.Invoke();
+            swallow = (int)message != WM_MOUSEMOVE;
+        }
         return swallow ? 1 : CallNextHookEx(0, code, message, data);
     }
 
     private bool OnMove(Point point)
     {
+        if (_messages is not null && !_outside && RootAt(point) is var popup && popup != _source &&
+            ProcessOf(popup) == _sourceProcess)
+        {
+            _inPopup = true;
+            return false;
+        }
+        if (_messages is not null && !_dragging && !_outside && (InView(point) || _heldDelivered != MouseButtons.None))
+        {
+            Rectangle view, shown;
+            lock (_moved) { view = _view; shown = _shown; }
+            Publish(point);
+            if (!AtViewBorder(point) || _heldDelivered != MouseButtons.None) _messages.Move(point, view, shown);
+            _inPopup = false;
+            return false;
+        }
         if (_dragging)
         {
             var moved = new Size(point.X - _dragFrom.X, point.Y - _dragFrom.Y);
@@ -520,6 +607,7 @@ internal sealed class PipInteraction : IDisposable
             Record(PressOutcome.ViewControl, point, 0);
             return false;
         }
+        if (_messages is not null && !_outside && (InView(point) || _inPopup)) return MessagePress(point, button);
         if (_outside || (!InView(point) && !_inPopup))
         {
             Record(PressOutcome.Outside, point, 0);
@@ -609,6 +697,13 @@ internal sealed class PipInteraction : IDisposable
 
     private bool OnWheel(Point point, bool horizontal, uint mouseData)
     {
+        if (_messages is not null && !_outside && InView(point))
+        {
+            Rectangle view, shown;
+            lock (_moved) { view = _view; shown = _shown; }
+            _messages.Wheel(point, horizontal, mouseData, view, shown);
+            return true;
+        }
         if (_outside || !_identity.StillThere())
             return true;
         nint root = RootAt(point);
@@ -631,7 +726,15 @@ internal sealed class PipInteraction : IDisposable
 
     private bool OnRelease(Point point, MouseButtons button)
     {
-        bool swallow = (_heldSwallowed & button) != 0 ||
+        bool posted = false;
+        if (_messages is not null && (_heldDelivered & button) != 0)
+        {
+            Rectangle view, shown;
+            lock (_moved) { view = _view; shown = _shown; }
+            _messages.Release(point, button, view, shown);
+            posted = true;
+        }
+        bool swallow = posted || (_heldSwallowed & button) != 0 ||
             (_heldDelivered & button) != 0 && !_identity.StillThere();
         if ((Volatile.Read(ref _replayedButtons) & (int)button) != 0)
         {
@@ -694,6 +797,12 @@ internal sealed class PipInteraction : IDisposable
         }
 
         _mover?.Join();
+        if (_messages is not null)
+        {
+            Rectangle view, shown;
+            lock (_moved) { view = _view; shown = _shown; }
+            try { _messages.ReleaseAll(view, shown); } catch (Windows.WindowOperationException) { }
+        }
         if (_mover is not null)
             Active--;
         _replays.CompleteAdding();

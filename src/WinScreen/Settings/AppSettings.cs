@@ -261,6 +261,7 @@ public sealed class AppSettings
     public bool HideCaptureBorder { get; set; } = true;
     public bool DetectAlreadyDark { get; set; } = true;
     public PinBorderPreferences PinBorder { get; set; } = new();
+    public List<string> PipCompatibleInputPrograms { get; set; } = [];
     public PipViewPreferences PipViews { get; set; } = new();
     public ToolbarPreferences Toolbar { get; set; } = new();
     public AnchorPreferences Anchors { get; set; } = new();
@@ -346,6 +347,7 @@ public sealed class AppSettings
             invalid?.Invoke();
         }
 
+        loaded.PipCompatibleInputPrograms = (loaded.PipCompatibleInputPrograms ?? []).Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         loaded.PipPresets ??= [];
         loaded.PipBookmarks ??= [];
         loaded.OpacityStepPercent = Math.Clamp(loaded.OpacityStepPercent, 1, 25);

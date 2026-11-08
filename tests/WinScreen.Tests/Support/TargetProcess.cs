@@ -136,6 +136,13 @@ internal sealed class TargetProcess : IDisposable
     }
 
     /// <summary>Makes the top of this borderless window answer as a title bar.</summary>
+    internal void RecordMessages()
+    {
+        _process.StandardInput.WriteLine("recordmessages");
+        _process.StandardInput.Flush();
+        if (NextReport() != "recordmessages") throw new InvalidOperationException("Message recording did not start.");
+    }
+
     internal void UseCaptionButton(int hit)
     {
         _process.StandardInput.WriteLine("captionhit " + hit);

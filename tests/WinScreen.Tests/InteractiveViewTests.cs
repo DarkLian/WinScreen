@@ -138,6 +138,7 @@ public sealed class InteractiveViewTests
             var problems = new List<string>();
             view.Problem += problems.Add;
             view.Notice += problems.Add;
+            view.CompatibleInput = true;
             view.ShowOnTop();
             view.Location = viewAt ?? new Point(1100, 500);
             view.SetInteractive(true);
@@ -495,21 +496,23 @@ public sealed class InteractiveViewTests
     }
 
     [Fact]
-    public void With_hover_effects_the_original_takes_the_pointer_only_over_its_content()
+    public void Message_input_keeps_the_original_parked_while_the_pointer_moves_over_content()
     {
         using var source = new TargetProcess(SourceSpot);
         source.UseFrame();
         Size original = Desktop.BoundsOf(source.Handle).Size;
         Drive(source, (view, ui) =>
         {
-            ui(() => view.ShowsHoverEffects = true);
+            ui(() => view.CompatibleInput = false);
             Hover(InView(view, original, new Point(original.Width / 2, original.Height / 2)), view);
-            Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Reachable == true, 1000), "Content didn't take the pointer.");
-            Assert.Equal((byte)1, Desktop.Alpha(source.Handle));
+            Assert.False(view.LiveInteraction!.Reachable);
+            Assert.Equal((byte)0, Desktop.Alpha(source.Handle));
+            Rectangle parked = Desktop.BoundsOf(source.Handle);
 
             Slide(InView(view, original, new Point(original.Width / 3, 12))); // The original's title bar.
             Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Reachable == false, 1000), "The title bar took the pointer.");
             Assert.Equal((byte)0, Desktop.Alpha(source.Handle));
+            Assert.Equal(parked, Desktop.BoundsOf(source.Handle));
         });
     }
 

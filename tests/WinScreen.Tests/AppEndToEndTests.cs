@@ -702,6 +702,7 @@ public sealed class AppEndToEndTests : IDisposable
         }
         using var target = new TargetProcess(Spot, "C81E1E", "WinScreen switcher recovery source");
         long original = Desktop.ExStyle(target.Handle);
+        Rectangle originalBounds = Desktop.BoundsOf(target.Handle);
         Focus(target);
         Hotkey(Keys.P, target);
         nint pip = WaitForPip();
@@ -712,6 +713,7 @@ public sealed class AppEndToEndTests : IDisposable
         Desktop.Press(Keys.K); // &Keep updating
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0));
         Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOOLWINDOW) != 0));
+        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(target.Handle) != originalBounds));
         _app.Kill();
         Assert.True(_app.WaitForExit(4000));
         _app.Dispose();
@@ -719,6 +721,7 @@ public sealed class AppEndToEndTests : IDisposable
         _appWindow = WaitForAppWindow();
         Assert.True(Desktop.WaitFor(() => Desktop.ExStyle(target.Handle) == original));
         Assert.True(Desktop.Alpha(target.Handle) is null or > 1, "The window is still hidden.");
+        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(target.Handle) == originalBounds));
     }
 
     [Fact]

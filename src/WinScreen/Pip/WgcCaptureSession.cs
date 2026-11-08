@@ -158,6 +158,8 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                 session.IsCursorCaptureEnabled = _source.ShowsCursor;
             // Windows' yellow capture border goes only if the person wants that and Windows allows it.
             Diagnostics.CaptureBorderHidden = CaptureBorder.TryHide(session);
+            if (_preferences.RequireHiddenBorder && !Diagnostics.CaptureBorderHidden)
+                throw new InvalidOperationException("A concealed source requires borderless capture.");
             item.Closed += Closed;
             pool.FrameArrived += Arrived;
             var pacer = new PipFramePacer(Stopwatch.Frequency, 60);

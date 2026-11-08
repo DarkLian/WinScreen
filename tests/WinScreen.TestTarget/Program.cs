@@ -69,7 +69,9 @@ internal static class Program
                     if (parts[0] == "button")
                         window.BeginInvoke(() =>
                         {
-                            window.Controls.Add(new Button { Text = "Test control", Bounds = new Rectangle(20, 30, 140, 50) });
+                            var button = new TargetForm.RecordingButton { Text = "Test control", Bounds = new Rectangle(20, 30, 140, 50) };
+                            button.Click += (_, _) => { Console.WriteLine("control-click"); Console.Out.Flush(); };
+                            window.Controls.Add(button);
                             Console.WriteLine("button");
                             Console.Out.Flush();
                         });
@@ -116,6 +118,8 @@ internal static class Program
                             Console.WriteLine("slow");
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "recordmessages")
+                        window.BeginInvoke(window.RecordMessages);
                     if (parts[0] == "captionhit")
                         window.BeginInvoke(() => window.UseCaptionHit(int.Parse(parts[1])));
                     if (parts[0] == "titlebar")
@@ -208,6 +212,12 @@ internal sealed partial class TargetForm : Form
         int x, int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
 
     /// <summary>A borderless window has no title bar to ask about, so the top strip claims to be one.</summary>
+    public void RecordMessages()
+    {
+        _recordMessages = true;
+        Report("recordmessages");
+    }
+
     public void UseCaptionHit(int hit)
     {
         _hasTitleBar = true;
@@ -249,6 +259,7 @@ internal sealed partial class TargetForm : Form
 
     private Color[] _colors = [];
     private DateTime _lastRawInput = DateTime.MinValue;
+    private bool _recordMessages;
     private bool _hasTitleBar;
     private int _captionHit = HTCAPTION;
 
@@ -295,6 +306,8 @@ internal sealed partial class TargetForm : Form
 
     protected override void WndProc(ref Message m)
     {
+        if (_recordMessages && m.Msg is >= 0x200 and <= 0x20e)
+            Report($"mouse {m.Msg:X} {(short)m.LParam.ToInt64()} {(short)(m.LParam.ToInt64() >> 16)} {m.WParam.ToInt64()}");
         if (m.Msg == 0x0047 && SlowMilliseconds > 0) // WM_WINDOWPOSCHANGED
             Thread.Sleep(SlowMilliseconds);
         if (m.Msg == 0x8001)
@@ -331,6 +344,16 @@ internal sealed partial class TargetForm : Form
     {
         base.OnMouseWheel(e);
         Report($"wheel {e.Delta} real={InputIsReal}");
+    }
+
+    internal sealed class RecordingButton : Button
+    {
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg is 0x201 or 0x202)
+                Report($"child {m.Msg:X} {(short)m.LParam.ToInt64()} {(short)(m.LParam.ToInt64() >> 16)}");
+            base.WndProc(ref m);
+        }
     }
 
     private static void Report(string line)

@@ -76,7 +76,7 @@ public sealed class SourceConcealmentTests
     private const int Ring = 12;
 
     /// <summary>The pixels in a band around <paramref name="window"/>, inside and out, that aren't under the view.</summary>
-    private static string? Leak(Rectangle window, Rectangle view)
+    private static string? Leak(Rectangle window, Rectangle view, Bitmap? baseline = null)
     {
         Rectangle outer = Rectangle.Inflate(window, Ring, Ring), inner = Rectangle.Inflate(window, -Ring, -Ring);
         Rectangle keepOut = Rectangle.Inflate(view, 24, 24); // The view's own frame and shadow.
@@ -93,8 +93,10 @@ public sealed class SourceConcealmentTests
                 var point = new Point(outer.Left + x, outer.Top + y);
                 if (inner.Contains(point) || keepOut.Contains(point)) continue;
                 Color pixel = bitmap.GetPixel(x, y);
-                int difference = Math.Max(Math.Abs(pixel.R - Backdrop.R),
-                    Math.Max(Math.Abs(pixel.G - Backdrop.G), Math.Abs(pixel.B - Backdrop.B)));
+                Color expected = baseline?.GetPixel(point.X - Screen.PrimaryScreen!.Bounds.Left,
+                    point.Y - Screen.PrimaryScreen!.Bounds.Top) ?? Backdrop;
+                int difference = Math.Max(Math.Abs(pixel.R - expected.R),
+                    Math.Max(Math.Abs(pixel.G - expected.G), Math.Abs(pixel.B - expected.B)));
                 if (difference > worst) { worst = difference; at = point; }
             }
         }
@@ -104,7 +106,7 @@ public sealed class SourceConcealmentTests
     [Theory]
     [InlineData(PipBackendPreference.Dwm)]
     [InlineData(PipBackendPreference.Wgc)]
-    public void Nothing_of_a_hidden_original_shows_at_rest_or_while_it_follows_the_pointer(PipBackendPreference backend)
+    public void Nothing_of_a_parked_original_shows_at_rest_or_during_a_pointer_visit(PipBackendPreference backend)
     {
         Rectangle screen = Screen.PrimaryScreen!.WorkingArea;
         using var backdrop = new TargetProcess(screen, "E0E0E0", "WinScreen test backdrop");
@@ -118,19 +120,21 @@ public sealed class SourceConcealmentTests
             view.ApplyPipPreferences(new PipPreferences { Backend = backend });
             view.ShowOnTop();
             view.Location = new Point(screen.Right - view.Width - 80, screen.Bottom - view.Height - 80);
+            Rectangle originalHome = Desktop.BoundsOf(source.Handle);
+            using var baseline = new Bitmap(Screen.PrimaryScreen!.Bounds.Width, Screen.PrimaryScreen.Bounds.Height);
+            using (Graphics graphics = Graphics.FromImage(baseline))
+                graphics.CopyFromScreen(Screen.PrimaryScreen.Bounds.Location, Point.Empty, baseline.Size);
             view.SetInteractive(true);
             Assert.True(view.KeepsUpdating);
-            Assert.True(Desktop.WaitFor(() => { Application.DoEvents(); return backend == PipBackendPreference.Dwm || view.DiagnosticSnapshot.Contains("state: Live"); }, 6000),
-                view.DiagnosticSnapshot);
-            Assert.Equal(backend == PipBackendPreference.Dwm, view.BackendKind == PipBackendKind.DwmThumbnail);
+            Assert.True(Desktop.WaitFor(() => { Application.DoEvents(); return view.BackendKind == PipBackendKind.DwmThumbnail || view.DiagnosticSnapshot.Contains("Capture border: off"); }, 6000), view.DiagnosticSnapshot);
+            Assert.True(view.BackendKind == PipBackendKind.DwmThumbnail || view.DiagnosticSnapshot.Contains("Capture border: off"), view.DiagnosticSnapshot);
             Pump(400);
-            // Where Windows keeps its capture border, the probe has to see it: that proves it would see an outline.
-            bool borderOff = backend == PipBackendPreference.Dwm || view.DiagnosticSnapshot.Contains("Capture border: off");
-            void Check(string when, bool expectBorder = true)
+            void Check(string when)
             {
-                string? leak = Leak(Desktop.BoundsOf(source.Handle), view.Bounds);
-                if (borderOff) Assert.True(leak is null, when + ": " + leak);
-                else if (expectBorder) Assert.True(leak is not null, when + ": the capture border wasn't seen. " + view.DiagnosticSnapshot);
+                string? leak = Leak(Desktop.BoundsOf(source.Handle), view.Bounds, baseline);
+                Assert.True(leak is null, when + ": " + leak);
+                leak = Leak(originalHome, view.Bounds);
+                Assert.True(leak is null, when + " at the original place: " + leak);
             }
             Check("At rest");
 
@@ -146,7 +150,7 @@ public sealed class SourceConcealmentTests
                     "The visit didn't start.");
                 Desktop.SlideMouse(new Point(inside.X + 40, inside.Y + 30));
                 Pump(300);
-                Check("Following the pointer", expectBorder: false); // Mostly under the view by then.
+                Check("During the pointer visit");
             }
             finally
             {

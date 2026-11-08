@@ -8,8 +8,8 @@ namespace WinScreen.Pip;
 /// <list type="bullet">
 /// <item>display-only ones (click-through: link text, tooltips, loading bubbles) are moved off the screen while
 /// the original is hidden;</item>
-/// <item>menus and lists stay where the app puts them, by the pointer during a visit, but are moved off the
-/// screen if they end up wholly away from the view;</item>
+/// <item>message input relocates menus and lists to the view pointer; compatible input keeps those already
+/// by the pointer and conceals ones wholly away from the view;</item>
 /// <item>dialogs are never moved; one showing, or the original being disabled, is reported, so the visit can
 /// end and the question be seen.</item>
 /// </list>
@@ -20,6 +20,7 @@ internal sealed class SourcePopups
     private const uint Move = User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_ASYNCWINDOWPOS;
     private const long WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x80;
     private readonly nint _source;
+    private readonly Dictionary<nint, (Point Original, Point Placed)> _placed = [];
     private readonly Dictionary<nint, Point> _hidden = []; // Popup, and where it was.
 
     public SourcePopups(nint source) => _source = source;
@@ -29,7 +30,11 @@ internal sealed class SourcePopups
     /// null at rest, when only display-only popups are moved.
     /// </summary>
     /// <returns>True if the original is asking something.</returns>
-    public bool Sweep(Rectangle? view)
+    public bool Sweep(Rectangle? view) => SweepCore(view, null, null);
+
+    internal bool SweepMapped(Rectangle view, Point pointer, Point mapped, nint viewWindow) => SweepCore(view, pointer, mapped, viewWindow);
+
+    private bool SweepCore(Rectangle? view, Point? pointer, Point? mapped, nint viewWindow = 0)
     {
         lock (_hidden)
         {
@@ -38,7 +43,7 @@ internal sealed class SourcePopups
             if (thread != 0)
                 EnumThreadWindows(thread, (window, _) =>
                 {
-                    if (window != _source && User32.IsWindowVisible(window) && Windows.WindowInfo.IsOwnedBy(window, _source))
+                    if (window != _source && User32.IsWindowVisible(window) && (Windows.WindowInfo.IsOwnedBy(window, _source) || Windows.WindowInfo.ClassName(window) == "#32768"))
                         seen.Add(window);
                     return true;
                 }, 0);
@@ -53,12 +58,31 @@ internal sealed class SourcePopups
                     question = true;
                     continue;
                 }
+                if (kind == Kind.Interactive && pointer is { } at && mapped is { } sourcePoint)
+                {
+                    Point current = new(r.Left, r.Top);
+                    if (!_placed.TryGetValue(popup, out var previous) || current != previous.Placed)
+                    {
+                        int width = r.Right - r.Left, height = r.Bottom - r.Top;
+                        int dx = r.Left - sourcePoint.X, dy = r.Top - sourcePoint.Y;
+                        if (Math.Abs(dx) > width) dx = 0;
+                        if (Math.Abs(dy) > height) dy = 0;
+                        Rectangle desired = new(at.X + dx, at.Y + dy, width, height);
+                        Point place = PipGeometry.KeepInside(desired, Screen.FromPoint(at).WorkingArea);
+                        _placed[popup] = (current, place);
+                        User32.SetWindowPos(popup, 0, place.X, place.Y, 0, 0, Move);
+                        Windows.TopLayer.Raise(popup);
+                    }
+                    if (BehindView(popup, viewWindow)) Windows.TopLayer.Raise(popup);
+                    continue;
+                }
                 bool away = kind == Kind.DisplayOnly ||
                             view is { } area && !Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).IntersectsWith(area);
                 // Sent off before but put back by its app: send it off again.
                 if (away && (!_hidden.ContainsKey(popup) || r.Right > SystemInformation.VirtualScreen.Left)) Hide(popup, r);
                 else if (!away && _hidden.ContainsKey(popup)) Show(popup);
             }
+            foreach (nint gone in _placed.Keys.Where(popup => !seen.Contains(popup)).ToArray()) _placed.Remove(gone);
             foreach (nint gone in _hidden.Keys.Where(popup => !seen.Contains(popup)).ToArray())
                 Show(gone); // Closed, or hidden by its app: put back as it was for next time.
             return question;
@@ -69,8 +93,13 @@ internal sealed class SourcePopups
     public void ShowAll()
     {
         lock (_hidden)
-            foreach (nint popup in _hidden.Keys.ToArray())
-                Show(popup);
+        {
+            foreach (var (popup, location) in _placed)
+                if (User32.GetWindowRect(popup, out Rect bounds) && new Point(bounds.Left, bounds.Top) == location.Placed)
+                    User32.SetWindowPos(popup, 0, location.Original.X, location.Original.Y, 0, 0, Move);
+            _placed.Clear();
+            foreach (nint popup in _hidden.Keys.ToArray()) Show(popup);
+        }
     }
 
     internal enum Kind { DisplayOnly, Interactive, Dialog }
@@ -86,6 +115,18 @@ internal sealed class SourcePopups
         if (activatable && (style & User32.WS_CAPTION) == User32.WS_CAPTION)
             return Kind.Dialog;
         return Kind.Interactive;
+    }
+
+    private static bool BehindView(nint popup, nint view)
+    {
+        if (view == 0) return false;
+        nint window = User32.GetWindow(User32.GetDesktopWindow(), 5);
+        for (int count = 0; window != 0 && count < 4096; count++, window = User32.GetWindow(window, 2))
+        {
+            if (window == popup) return false;
+            if (window == view) return true;
+        }
+        return false;
     }
 
     private void Hide(nint popup, Rect r)

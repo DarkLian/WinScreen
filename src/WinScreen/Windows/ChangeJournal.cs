@@ -14,6 +14,7 @@ public sealed record WindowRecord(
     int[]? Placement,
     bool Cropped = false)
 {
+    public bool Parked { get; init; }
     public long IdentityToken { get; init; }
     public long ProcessStartTicks { get; init; }
     public uint ThreadId { get; init; }
@@ -115,7 +116,7 @@ public sealed class ChangeJournal(string path)
                                                (record.StyleBits & ~(Native.User32.WS_CAPTION | Native.User32.WS_THICKFRAME)) == 0 &&
                                                (record.SwitcherBits.GetValueOrDefault() & ~(Native.User32.WS_EX_TOOLWINDOW | Native.User32.WS_EX_APPWINDOW)) == 0 &&
                                                record.OriginalDarkTitleBar is null or 0 or 1 &&
-                                               IsPlacement(record.Placement) && IsPlacement(record.RollUpPlacement) &&
+                                               (!record.Parked || record.Placement is not null) && IsPlacement(record.Placement) && IsPlacement(record.RollUpPlacement) &&
                                                IsPlacement(record.BorderlessPlacement) &&
                                                (record.BorderlessOrigin is null or { Length: 2 }) &&
                                                (record.StyleBits == 0 || record.BorderlessPlacement is not null) &&
