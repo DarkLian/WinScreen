@@ -618,6 +618,13 @@ public sealed class AppEndToEndTests : IDisposable
     [Fact]
     public void Starting_after_a_forced_kill_restores_a_source_hidden_from_the_switcher()
     {
+        if (Environment.OSVersion.Version.Build < 22000)
+        {
+            // Windows 10 refuses switcher hiding for smooth capture, so this uses standard views there.
+            AppSettings standard = AppSettings.Load(Path.Combine(_data, "settings.json"));
+            standard.Pip.Backend = PipBackendPreference.Dwm;
+            RestartWith(standard);
+        }
         using var target = new TargetProcess(Spot, "C81E1E", "WinScreen switcher recovery source");
         long original = Desktop.ExStyle(target.Handle);
         Focus(target);

@@ -372,5 +372,6 @@
   "settings.effects.pictureSafeDark": "深色模式不改变图片和视频",
   "settings.effects.help": "窗口变化时会使用显卡处理。处理期间，Windows 会在窗口周围显示彩色边框。",
   "errors.glass.unavailable": "无法处理此窗口。请改用普通的玻璃或深色模式。",
-  "errors.glass.stopped": "效果已停止，窗口已恢复正常。"
+  "errors.glass.stopped": "效果已停止，窗口已恢复正常。",
+  "errors.switcher.windows10": "在 Windows 10 上，这会让视图停止更新。如需使用，请在 设置 → 画中画 中将“画中画渲染”设为“标准”。"
 }

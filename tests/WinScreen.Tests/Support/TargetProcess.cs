@@ -110,6 +110,15 @@ internal sealed class TargetProcess : IDisposable
         return (nint)long.Parse(report.Split(' ')[1]);
     }
 
+    /// <summary>A plain native window in this process, which acts like an ordinary app window.</summary>
+    public nint CreatePlainWindow(Rectangle bounds)
+    {
+        _process.StandardInput.WriteLine($"plain {bounds.X} {bounds.Y} {bounds.Width} {bounds.Height}");
+        _process.StandardInput.Flush();
+        string report = NextReport() ?? throw new InvalidOperationException("No plain window was created.");
+        return (nint)long.Parse(report.Split(' ')[1]);
+    }
+
     public void Hang()
     {
         _process.StandardInput.WriteLine("hang");

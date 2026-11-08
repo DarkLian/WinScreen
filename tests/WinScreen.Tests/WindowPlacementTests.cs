@@ -121,15 +121,17 @@ public sealed class WindowPlacementTests
     [Fact]
     public void A_minimized_window_stays_minimized_with_a_new_place_to_return_to()
     {
-        using var target = new TargetProcess(Spot);
+        using var target = new TargetProcess(new Rectangle(900, 600, 200, 150));
+        // Not the form itself: on Windows 10, WinForms puts a restored form back where its own code placed it.
+        nint window = target.CreatePlainWindow(Spot);
         var placer = new WindowPlacer(new WindowController([]));
-        User32.ShowWindow(target.Handle, 6);
-        Assert.True(Desktop.WaitFor(() => User32.IsIconic(target.Handle), 2000));
-        placer.SetFrame(target.Handle, new Rectangle(500, 300, 400, 300));
-        Assert.True(User32.IsIconic(target.Handle));
-        User32.ShowWindow(target.Handle, User32.SW_SHOWNOACTIVATE);
-        Assert.True(Desktop.WaitFor(() => !User32.IsIconic(target.Handle), 2000));
-        Rectangle frame = FrameOf(target.Handle);
+        User32.ShowWindow(window, 6);
+        Assert.True(Desktop.WaitFor(() => User32.IsIconic(window), 2000));
+        placer.SetFrame(window, new Rectangle(500, 300, 400, 300));
+        Assert.True(User32.IsIconic(window));
+        User32.ShowWindow(window, User32.SW_SHOWNOACTIVATE);
+        Assert.True(Desktop.WaitFor(() => !User32.IsIconic(window), 2000));
+        Rectangle frame = FrameOf(window);
         Assert.InRange(Math.Abs(frame.X - 500), 0, 12);
         Assert.InRange(Math.Abs(frame.Y - 300), 0, 12);
     }

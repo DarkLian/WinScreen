@@ -363,6 +363,12 @@ public sealed class PipWindow : Form
         // A view clicks can pass through is an overlay, so its opacity is real see-through, not a fade to black.
         _thumbnail?.Configure(BackendPreferences());
         ApplyClickThrough();
+        // Switching to smooth capture on Windows 10 brings a hidden switcher entry back, or the view would stop.
+        if (_thumbnail is not null && _origin.IsWindow && SwitcherHidingStopsView && _windows.IsOutOfSwitcher(_source))
+        {
+            SetSwitcherHidden(false);
+            Problem?.Invoke(T("errors.switcher.windows10"));
+        }
     }
 
     private PipPreferences BackendPreferences() => _overrides.ClickThrough
@@ -615,9 +621,23 @@ public sealed class PipWindow : Form
         }
     }
 
+    /// <summary>
+    /// Windows 10 can't capture a window once it is out of Alt+Tab and the taskbar, so a view that may use
+    /// smooth capture would stop updating. Windows 11 can.
+    /// </summary>
+    private bool SwitcherHidingStopsView =>
+        Environment.OSVersion.Version.Build < FirstBuildCapturingSwitcherHiddenWindows && _preferences.Backend != PipBackendPreference.Dwm;
+
+    private const int FirstBuildCapturingSwitcherHiddenWindows = 22000;
+
     public void SetSwitcherHidden(bool hidden)
     {
         if (!_origin.IsWindow || hidden && !AllowSwitcherHiding) return;
+        if (hidden && SwitcherHidingStopsView)
+        {
+            Problem?.Invoke(T("errors.switcher.windows10"));
+            return;
+        }
         try
         {
             _origin.Require();

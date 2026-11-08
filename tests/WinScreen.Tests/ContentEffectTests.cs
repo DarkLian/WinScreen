@@ -114,7 +114,7 @@ public sealed class ContentEffectTests
     private static Color Middle(Rectangle bounds) =>
         Desktop.ColorOnScreen(new Rectangle(bounds.Left + bounds.Width / 2 - 5, bounds.Top + bounds.Height / 2 - 5, 10, 10));
 
-    [Fact]
+    [GraphicsCardFact]
     public void Glass_shows_what_is_behind_through_the_page_and_turning_it_off_restores_the_window()
     {
         using var behind = new TargetProcess(new Rectangle(250, 180, 520, 400), "1E64C8");
@@ -148,7 +148,7 @@ public sealed class ContentEffectTests
         });
     }
 
-    [Fact]
+    [GraphicsCardFact]
     public void Picture_safe_Dark_turns_a_light_page_dark_and_follows_the_window()
     {
         using var target = new TargetProcess(Spot, "F0F0F0");
@@ -185,7 +185,7 @@ public sealed class ContentEffectTests
         });
     }
 
-    [Fact]
+    [GraphicsCardFact]
     public void A_window_that_closes_takes_its_effect_with_it()
     {
         var target = new TargetProcess(Spot);

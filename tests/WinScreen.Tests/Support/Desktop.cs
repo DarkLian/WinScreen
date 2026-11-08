@@ -367,6 +367,9 @@ internal static partial class Desktop
     public static void Drag(Point from, Point to, nint window)
     {
         PressAndDrag(from, to, window);
+        // Setting the position reaches the window only once its queue is otherwise empty, but the release is
+        // real input and can overtake the last moves on a slow machine. Give them time to land first.
+        Thread.Sleep(150);
         MouseButton(false);
     }
 

@@ -26,6 +26,7 @@ internal readonly record struct ContentLevels(float Background, float Text, floa
 internal sealed unsafe class ContentOverlay : Form
 {
     private const long NoRedirectionBitmap = 0x200000;
+    internal const uint SoftwareRendererVendor = 0x1414; // Microsoft: the Basic Render Driver.
     private const uint OutOfContext = 0, LocationChange = 0x800B, Foreground = 0x0003, Reorder = 0x8004;
     private const uint MinimizeStart = 0x0016, MinimizeEnd = 0x0017;
 
@@ -148,6 +149,12 @@ internal sealed unsafe class ContentOverlay : Form
     {
         D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.BgraSupport, [FeatureLevel.Level_11_0],
             out _device, out _, out _context).CheckError();
+        // Without a graphics card, Windows offers its software renderer as hardware. The effect starts on it but
+        // shows nothing, so refuse instead.
+        using (IDXGIDevice graphics = _device!.QueryInterface<IDXGIDevice>())
+        using (IDXGIAdapter adapter = graphics.GetAdapter())
+            if (adapter.Description.VendorId == SoftwareRendererVendor)
+                throw new NotSupportedException();
         _stats = _device!.CreateComputeShader(Compiler.Compile(ContentShaders.Stats, "Stats", "stats", "cs_5_0").Span);
         _composite = _device.CreateComputeShader(Compiler.Compile(ContentShaders.Composite, "Composite", "composite", "cs_5_0").Span);
         _options = _device.CreateBuffer(new BufferDescription(48, BindFlags.ConstantBuffer, ResourceUsage.Default));

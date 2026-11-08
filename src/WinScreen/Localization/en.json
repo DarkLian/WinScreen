@@ -372,5 +372,6 @@
   "settings.effects.pictureSafeDark": "Dark mode leaves pictures and video as they are",
   "settings.effects.help": "These use your graphics card while the window changes. Windows shows a coloured border around a window while it's being redrawn.",
   "errors.glass.unavailable": "This window can't be processed. Try the simple Glass or Dark instead.",
-  "errors.glass.stopped": "The effect stopped, so the window is back to normal."
+  "errors.glass.stopped": "The effect stopped, so the window is back to normal.",
+  "errors.switcher.windows10": "On Windows 10, this would stop the view updating. To use it, set PiP rendering to Standard in Settings → Picture-in-Picture."
 }

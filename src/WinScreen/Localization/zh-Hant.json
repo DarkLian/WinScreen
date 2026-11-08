@@ -372,5 +372,6 @@
   "settings.effects.pictureSafeDark": "深色模式不改變圖片與影片",
   "settings.effects.help": "視窗變化時會使用顯示卡處理。處理期間，Windows 會在視窗周圍顯示彩色外框。",
   "errors.glass.unavailable": "無法處理此視窗。請改用一般的玻璃或深色模式。",
-  "errors.glass.stopped": "效果已停止，視窗已恢復正常。"
+  "errors.glass.stopped": "效果已停止，視窗已恢復正常。",
+  "errors.switcher.windows10": "在 Windows 10 上，這會讓檢視停止更新。如需使用，請在 設定 → 子母畫面 中將「子母畫面繪製」設為「標準」。"
 }

@@ -48,6 +48,8 @@ internal static class Program
                         });
                     if (parts[0] == "layered")
                         window.BeginInvoke(window.CreateUnattributedLayeredWindow);
+                    if (parts[0] == "plain")
+                        window.BeginInvoke(() => window.CreatePlainWindow(parts[1]));
                     if (parts[0] == "frame")
                         window.BeginInvoke(() =>
                         {
@@ -138,6 +140,18 @@ internal sealed partial class TargetForm : Form
         nint layered = CreateWindowEx(0x80000, "STATIC", "Unattributed layered test", 0,
             700, 200, 100, 100, 0, 0, 0, 0);
         Report("layered " + layered.ToInt64());
+    }
+
+    /// <summary>
+    /// A plain native window, for tests where WinForms itself gets in the way: on Windows 10 it puts a form
+    /// back where its code placed it when the form is restored from minimized.
+    /// </summary>
+    public void CreatePlainWindow(string bounds)
+    {
+        int[] b = [.. bounds.Split(' ').Select(int.Parse)];
+        const uint popup = 0x80000000, visible = 0x10000000;
+        nint plain = CreateWindowEx(0, "STATIC", "Plain test window", popup | visible, b[0], b[1], b[2], b[3], 0, 0, 0, 0);
+        Report("plain " + plain.ToInt64());
     }
 
     private const int WM_INPUT = 0x00FF;

@@ -4,7 +4,9 @@ namespace WinScreen.Dark;
 public sealed class DarkMode : IDisposable
 {
     private readonly Dictionary<nint, DarkOverlay> _overlays = [];
-    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 33 };
+    private const int FollowInterval = 33;
+    private const int SlowestFollowInterval = 300;
+    private readonly System.Windows.Forms.Timer _timer = new() { Interval = FollowInterval };
     private readonly HashSet<nint> _ignored = [];
     public bool DetectAlreadyDark { get; set; }
     public event Action<string>? Notice;
@@ -70,6 +72,7 @@ public sealed class DarkMode : IDisposable
 
     private void FollowAll()
     {
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
         foreach ((nint window, DarkOverlay current) in _overlays.ToArray())
         {
             DarkOverlay overlay = current;
@@ -105,6 +108,11 @@ public sealed class DarkMode : IDisposable
         }
 
         _timer.Enabled = _overlays.Count > 0;
+
+        // Where redrawing is slow (no graphics card, for example), an update can take longer than the
+        // interval, and the next one would always be waiting. Leave room for the redraw and everything else.
+        double took = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        _timer.Interval = Math.Clamp((int)(took * 3), FollowInterval, SlowestFollowInterval);
     }
 
     private void UpdateFilters()
