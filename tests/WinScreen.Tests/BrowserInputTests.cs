@@ -11,7 +11,7 @@ namespace WinScreen.Tests;
 
 /// <summary>A Chromium browser used through a view: pointer shapes, clicks, selecting, typing and its tab strip.</summary>
 [Trait("Category", "Interactive")]
-public sealed class BrowserInputTests
+public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private const string EdgePath = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
     [StructLayout(LayoutKind.Sequential)]
@@ -24,21 +24,21 @@ public sealed class BrowserInputTests
         cursor == LoadCursor(0, 32512) ? "arrow" : cursor == LoadCursor(0, 32513) ? "ibeam" :
         cursor == LoadCursor(0, 32649) ? "hand" : cursor == 0 ? "none" : $"0x{cursor:X}";
 
-    private static (Process Browser, nint Window, string Root) Open(string html, string title, bool app)
+    private static (Process Browser, nint Window, string Root) Open(string html, string title, bool app, string? path = null, double scale = 1)
     {
         string root = Directory.CreateTempSubdirectory("winscreen-browser").FullName;
         string page = Path.Combine(root, "page.html");
         File.WriteAllText(page, html);
-        var browser = new Process { StartInfo = new ProcessStartInfo(EdgePath) { UseShellExecute = false } };
+        var browser = new Process { StartInfo = new ProcessStartInfo(path ?? EdgePath) { UseShellExecute = false } };
         foreach (string arg in new[] { "--user-data-dir=" + Path.Combine(root, "profile"), "--no-first-run", "--no-default-browser-check",
-            "--disable-sync", "--window-size=900,700", "--window-position=160,100", app ? "--app=" + new Uri(page).AbsoluteUri : new Uri(page).AbsoluteUri })
+            "--force-device-scale-factor=" + scale.ToString(System.Globalization.CultureInfo.InvariantCulture), "--force-renderer-accessibility", "--disable-sync", "--window-size=900,700", "--window-position=160,100", app ? "--app=" + new Uri(page).AbsoluteUri : new Uri(page).AbsoluteUri })
             browser.StartInfo.ArgumentList.Add(arg);
         browser.Start();
         nint window = 0;
         Desktop.WaitFor(() =>
         {
             window = 0;
-            foreach (Process p in Process.GetProcessesByName("msedge"))
+            foreach (Process p in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(path ?? EdgePath)))
                 if (p.MainWindowHandle != 0 && WindowInfo.Title(p.MainWindowHandle).StartsWith(title)) window = p.MainWindowHandle;
             return window != 0;
         }, 20000);
@@ -48,7 +48,7 @@ public sealed class BrowserInputTests
 
     private static void Close(Process browser, string root)
     {
-        try { foreach (Process p in Process.GetProcessesByName("msedge")) p.Kill(true); } catch (Exception) { }
+        try { if (!browser.HasExited) browser.Kill(true); } catch (InvalidOperationException) { }
         browser.WaitForExit(5000);
         try { Directory.Delete(root, true); } catch (IOException) { }
     }
@@ -67,7 +67,7 @@ public sealed class BrowserInputTests
                 try
                 {
                     Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
-                    if (!Desktop.WaitFor(() => view.LiveInteraction is not null)) { log.AppendLine("no visit"); return; }
+                    if (!Desktop.WaitFor(() => view.LiveInteraction is not null)) throw new InvalidOperationException("No direct-input visit started.");
                     Rectangle window = Desktop.BoundsOf(source);
                     Point ToView(Point offset)
                     {
@@ -79,7 +79,7 @@ public sealed class BrowserInputTests
                     steps(view, ToView, log);
                     log.AppendLine("outcomes " + string.Join(",", view.PressOutcomes) + " ended '" + view.LastVisitEnd + "'");
                 }
-                catch (Exception e) { log.AppendLine("EXC " + e.Message); }
+                catch (Exception e) { log.AppendLine("EXC " + e); }
                 finally { Desktop.MouseButton(false); Desktop.MoveMouse(home); }
             });
             driver.Start();
@@ -103,10 +103,12 @@ public sealed class BrowserInputTests
         return string.Join(">", seen);
     }
 
-    [Fact]
-    public void A_browser_used_through_a_view_shows_its_own_pointer_and_takes_clicks_selection_and_keys()
+    public static IEnumerable<object[]> BrowserCases() => ToolbarCases().Select(c => (string)c[0]).Distinct().Select(path => new object[] { path });
+
+    [Theory]
+    [MemberData(nameof(BrowserCases))]
+    public void A_browser_used_through_a_view_shows_its_own_pointer_and_takes_clicks_selection_and_keys(string path)
     {
-        if (!File.Exists(EdgePath)) return;
         var log = new StringBuilder();
         const string page = """
             <!doctype html><title>Probe c=0 sel=0 val=</title>
@@ -119,7 +121,7 @@ public sealed class BrowserInputTests
             """;
         foreach (bool share in new[] { true })
         {
-            var (browser, window, root) = Open(page, "Probe", app: true);
+            var (browser, window, root) = Open(page, "Probe", app: true, path);
             try
             {
                 PipInteraction.ShareInput = share;
@@ -128,7 +130,7 @@ public sealed class BrowserInputTests
                 {
                     Rectangle client = Desktop.BoundsOf(window);
                     // Offsets are window-relative; the page starts under the app window's title bar.
-                    int top = 40;
+                    int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - client.Top;
                     foreach (var (name, spot) in new[] { ("text", new Point(120, top + 40)), ("link", new Point(560, top + 50)),
                         ("plain", new Point(300, top + 450)), ("button", new Point(600, top + 230)), ("text2", new Point(200, top + 60)) })
                     {
@@ -162,43 +164,8 @@ public sealed class BrowserInputTests
             finally { Close(browser, root); PipInteraction.ShareInput = true; }
         }
 
-        // The tab strip of a normal browser window.
-        var (tabs, tabWindow, tabRoot) = Open("<!doctype html><title>TabProbe</title><p>tabs</p>", "TabProbe", app: false);
-        try
-        {
-            Rectangle r = Desktop.BoundsOf(tabWindow);
-            var runs = new StringBuilder();
-            int lastHit = -99, runStart = 0;
-            var clientRuns = new List<(int From, int To)>();
-            for (int x = 0; x < r.Width / 2; x += 2)
-            {
-                var screen = new Point(r.Left + x, r.Top + 22);
-                User32.SendMessageTimeout(tabWindow, User32.WM_NCHITTEST, 0, (nint)((screen.Y << 16) | (screen.X & 0xFFFF)), 2, 200, out nint hit);
-                if ((int)hit != lastHit)
-                {
-                    if (lastHit == 1) clientRuns.Add((runStart, x - 2));
-                    runs.Append($" {x}:{hit}");
-                    lastHit = (int)hit; runStart = x;
-                }
-            }
-            log.AppendLine($"tab window 0x{tabWindow:X} {r} title '{WindowInfo.Title(tabWindow)}' hits at y=22:{runs}");
-            if (clientRuns.Count > 0)
-            {
-                var plus = clientRuns[^1];
-                var spot = new Point((plus.From + plus.To) / 2, 22);
-                log.AppendLine($"clicking new-tab candidate at {spot}");
-                Visit(tabWindow, (view, at, l) =>
-                {
-                    Desktop.SlideMouse(at(spot));
-                    Thread.Sleep(300);
-                    Desktop.MouseButton(true); Thread.Sleep(50); Desktop.MouseButton(false);
-                    Thread.Sleep(1500);
-                    l.AppendLine("after click: " + WindowInfo.Title(tabWindow));
-                }, log);
-            }
-        }
-        finally { Close(tabs, tabRoot); }
         string report = log.ToString();
+        output.WriteLine(report);
         Assert.True(report.Contains("text: ibeam") && report.Contains("text2: ibeam"), report);
         Assert.Contains("link: hand", report);
         Assert.Contains("plain: arrow", report);
@@ -206,7 +173,148 @@ public sealed class BrowserInputTests
         var selected = System.Text.RegularExpressions.Regex.Match(report, @"after drag select: Probe c=3 sel=(\d+)");
         Assert.True(selected.Success && int.Parse(selected.Groups[1].Value) > 50, report);
         Assert.Contains("val=abc fg=True", report);
-        Assert.Contains("after click: New tab", report); // The new-tab button in the tab strip, near the view's top edge.
         Assert.DoesNotContain("EXC ", report);
     }
+
+    public static IEnumerable<object[]> ToolbarCases()
+    {
+        string bundled = Path.Combine(AppContext.BaseDirectory, "chrome-user", "chrome.exe");
+        if (!File.Exists(bundled)) bundled = Path.Combine(AppContext.BaseDirectory, "chrome-win64", "chrome.exe");
+        string chrome = new[] { bundled, @"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" }.FirstOrDefault(File.Exists) ?? bundled;
+        foreach (string path in new[] { EdgePath, chrome }.Where(File.Exists))
+        foreach (bool maximized in new[] { false, true })
+        foreach (double scale in new[] { 1.0, 1.5 }) yield return [path, maximized, scale];
+    }
+
+    [Theory]
+    [MemberData(nameof(ToolbarCases))]
+    public void Normal_browser_toolbar_takes_mapped_clicks(string path, bool maximized, double scale)
+    {
+        var (browser, window, root) = Open("<!doctype html><title>ToolbarProbe</title><script>document.title='ToolbarProbe '+(sessionStorage.loads=+(sessionStorage.loads||0)+1)</script>", "ToolbarProbe", app: false, path, scale);
+        var log = new StringBuilder();
+        PipInteraction.DiagnoseInput = true;
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "next.html"), "<!doctype html><title>NextProbe</title>");
+            if (maximized) { User32.ShowWindow(window, 3); Thread.Sleep(500); }
+            Rectangle original = Desktop.BoundsOf(window);
+            Visit(window, (view, at, l) =>
+            {
+                Rectangle parked = Desktop.BoundsOf(window);
+                Point Spot(Func<BrowserAccessibility.Control, bool> match)
+                {
+                    var controls = BrowserAccessibility.Read(window);
+                    if (!controls.Any(c => match(c))) foreach (var item in controls.Where(c => c.Type == 50000)) l.AppendLine("available " + item);
+                    var control = Assert.Single(controls, c => match(c));
+                    Assert.True(control.Bounds.Width > 0 && control.Bounds.Height > 0, control.ToString());
+                    log.AppendLine("target " + control);
+                    return at(new Point(control.Bounds.Left + control.Bounds.Width / 2 - parked.Left,
+                        control.Bounds.Top + control.Bounds.Height / 2 - parked.Top));
+                }
+                bool Omnibox(BrowserAccessibility.Control c) => c.Type == 50004 && c.Name.Contains("address", StringComparison.OrdinalIgnoreCase);
+                void Click(Point point, bool right = false)
+                {
+                    Desktop.SlideMouse(point); Thread.Sleep(120);
+                    mouse_event(right ? 8u : 2u, 0, 0, 0, 0); Thread.Sleep(50);
+                    mouse_event(right ? 16u : 4u, 0, 0, 0, 0); Thread.Sleep(250);
+                }
+                void Button(params string[] names) => Click(Spot(c => c.Type == 50000 && names.Any(name => c.Name.StartsWith(name, StringComparison.Ordinal))));
+                void Check(bool condition, string effect)
+                {
+                    l.AppendLine(effect + "=" + condition);
+                    Assert.True(condition, effect);
+                    Assert.Equal(parked, Desktop.BoundsOf(window));
+                    Assert.NotNull(view.LiveInteraction);
+                }
+                try
+                {
+                    Click(Spot(Omnibox));
+                    Check(Desktop.WaitFor(() => BrowserAccessibility.Read(window).Any(c => Omnibox(c) && c.Focused)), "omnibox focus");
+                    Desktop.Press(Keys.A, Keys.ControlKey); Thread.Sleep(200);
+                    Desktop.Press(Keys.A); Desktop.Press(Keys.B); Desktop.Press(Keys.C); Thread.Sleep(200);
+                    Desktop.Press(Keys.A, Keys.ControlKey); Desktop.Press(Keys.C, Keys.ControlKey); Thread.Sleep(200);
+                    string typed = (string)view.Invoke(() => Clipboard.GetText());
+                    Check(typed == "abc", "omnibox physical keyboard");
+                    // Enter a controlled local URL using the real keyboard after mouse focus, without Ctrl+L.
+                    Desktop.Press(Keys.A, Keys.ControlKey);
+                    Thread.Sleep(300); // Let physical key input finish before posting the URL characters.
+                    foreach (char ch in new Uri(Path.Combine(root, "next.html")).AbsoluteUri)
+                        SendCharacter(window, ch);
+                    Thread.Sleep(300);
+                    Desktop.Press(Keys.Enter);
+                    Check(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith("NextProbe")), "omnibox typing and navigation");
+                    Button("Back");
+                    l.AppendLine("after back title=" + WindowInfo.Title(window));
+                    Check(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith("ToolbarProbe")), "back");
+                    Button("Forward");
+                    Check(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith("NextProbe")), "forward");
+                    Button("Back");
+                    Check(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith("ToolbarProbe")), "back again");
+                    string beforeReload = WindowInfo.Title(window);
+                    Button("Reload", "Refresh");
+                    Check(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith("ToolbarProbe") && WindowInfo.Title(window) != beforeReload), "reload");
+                    Button("New Tab");
+                    Check(Desktop.WaitFor(() => BrowserAccessibility.Read(window).Count(c => c.Type == 50019) == 2), "new tab");
+                    Click(Spot(c => c.Type == 50019 && c.Name.StartsWith("ToolbarProbe")));
+                    Check(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith("ToolbarProbe")), "existing tab");
+                    foreach (bool tab in new[] { true, false })
+                    {
+                        Click(Spot(c => tab ? c.Type == 50019 && c.Name.StartsWith("ToolbarProbe") : Omnibox(c)), right: true);
+                        Check(Desktop.WaitFor(() => BrowserAccessibility.Read(window).Any(c => c.Type == 50009) || HasMenu(window)), tab ? "tab context menu" : "omnibox context menu");
+                        Desktop.Press(Keys.Escape); Thread.Sleep(300);
+                    }
+                    // A toolbar menu is observable independently of message queuing.
+                    Button("Chromium", "Customize and control Google Chrome", "Settings and more (Alt+F)", "Google Chrome", "Chrome");
+                    Check(Desktop.WaitFor(() => HasMenu(window)), "toolbar menu");
+                    Desktop.Press(Keys.Escape); Thread.Sleep(300);
+                    var buttons = BrowserAccessibility.Read(window);
+                    var minimize = Assert.Single(buttons, c => c.Type == 50000 && c.Name == "Minimize");
+                    var tabControl = buttons.First(c => c.Type == 50019);
+                    int y = tabControl.Bounds.Top + tabControl.Bounds.Height / 2;
+                    Point caption = default;
+                    for (int x = minimize.Bounds.Left - 12; x > parked.Left; x -= 4)
+                    {
+                        User32.SendMessageTimeout(window, User32.WM_NCHITTEST, 0, (nint)((y << 16) | (x & 0xffff)), 2, 30, out nint hit);
+                        if (hit == 2) { caption = new Point(x, y); break; }
+                    }
+                    Assert.NotEqual(default, caption);
+                    Click(at(new Point(caption.X - parked.Left, caption.Y - parked.Top)));
+                    Check(view.PressOutcomes.Last() == PressOutcome.MovedView, "blank caption manages view");
+                }
+                finally
+                {
+                    if (view.LiveInteraction is { } live)
+                        foreach (string entry in live.InputDiagnostics) l.AppendLine(entry);
+                }
+            }, log);
+            Assert.Equal(original, Desktop.BoundsOf(window));
+            Assert.Equal(maximized, User32.IsZoomed(window));
+            Assert.True(Desktop.Alpha(window) is null or 255);
+            Assert.DoesNotContain("EXC ", log.ToString());
+        }
+        finally
+        {
+            output.WriteLine(log.ToString());
+            PipInteraction.DiagnoseInput = false;
+            Close(browser, root);
+        }
+    }
+
+    private static void SendCharacter(nint window, char ch) => User32.PostMessage(window, 0x102, ch, 0);
+    private static bool HasMenu(nint owner)
+    {
+        bool found = false;
+        uint thread = User32.GetWindowThreadProcessId(owner, out _);
+        EnumThreadWindows(thread, (window, _) =>
+        {
+            if (window != owner && User32.IsWindowVisible(window) &&
+                (WindowInfo.ClassName(window) == "#32768" ||
+                 WindowInfo.IsOwnedBy(window, owner) && SourcePopups.KindOf(window) == SourcePopups.Kind.Interactive)) found = true;
+            return true;
+        }, 0);
+        return found;
+    }
+    private delegate bool WindowVisitor(nint window, nint data);
+    [DllImport("user32.dll")] private static extern bool EnumThreadWindows(uint thread, WindowVisitor visitor, nint data);
 }

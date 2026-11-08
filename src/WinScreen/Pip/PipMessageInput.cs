@@ -9,6 +9,7 @@ namespace WinScreen.Pip;
 internal sealed class PipMessageInput(nint source, WindowIdentity identity)
 {
     private MouseButtons _held;
+    internal nint PressTarget { get; private set; }
     private nint _dragTarget;
     private Point _lastPointer;
     private readonly Dictionary<MouseButtons, (long Time, Point At, nint Target)> _clicks = [];
@@ -83,6 +84,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         _lastPointer = pointer;
         Point mapped = MappedScreen(pointer, view, shown);
         nint target = _held != MouseButtons.None ? _dragTarget : TargetAt(mapped);
+        PressTarget = target;
         int down = DownMessage(button);
         long now = Environment.TickCount64;
         bool doubleClick = _clicks.TryGetValue(button, out var previous) && previous.Target == target &&

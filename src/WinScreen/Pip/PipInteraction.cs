@@ -72,6 +72,11 @@ internal static class PressRules
 /// </summary>
 internal sealed class PipInteraction : IDisposable
 {
+    // Opt-in, per-visit and bounded. Contains geometry and window classes only, never UI text or keys.
+    internal static bool DiagnoseInput { get; set; } = Environment.GetEnvironmentVariable("WINSCREEN_PIP_INPUT_DIAGNOSTICS") == "1";
+    private readonly Queue<string> _diagnostics = new();
+    internal string[] InputDiagnostics { get { lock (_diagnostics) return _diagnostics.ToArray(); } }
+
     private const int WH_MOUSE_LL = 14;
     private const int WM_QUIT = 0x12, WM_MOUSEMOVE = 0x200, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202,
         WM_RBUTTONDOWN = 0x204, WM_RBUTTONUP = 0x205, WM_MBUTTONDOWN = 0x207, WM_MBUTTONUP = 0x208, WM_MOUSEWHEEL = 0x20A,
@@ -251,7 +256,7 @@ internal sealed class PipInteraction : IDisposable
         catch (Windows.WindowOperationException) { Left?.Invoke(); }
     }
 
-    private void Record(PressOutcome outcome, Point at, nint hit)
+    private void Record(PressOutcome outcome, Point at, nint hit, nint queuedTarget = 0, bool? queued = null)
     {
         lock (_log)
         {
@@ -260,8 +265,42 @@ internal sealed class PipInteraction : IDisposable
                 _log.Dequeue();
         }
 
+        if (DiagnoseInput)
+        {
+            try
+            {
+                var (view, shown) = Geometry();
+                Point mapped = _messages.MappedScreen(at, view, shown);
+                nint target = queuedTarget != 0 ? queuedTarget : _messages.TargetAt(mapped), root = RootAt(at);
+                User32.GetWindowRect(_source, out Rect sourceBounds);
+                User32.GetWindowRect(target, out Rect targetBounds);
+                User32.GetWindowRect(_viewWindow, out Rect viewBounds);
+                string entry = $"time={Environment.TickCount64} viewBounds={viewBounds.Left},{viewBounds.Top},{viewBounds.Right},{viewBounds.Bottom} " +
+                    $"physical={at} image={view} shown={shown} source={sourceBounds.Left},{sourceBounds.Top},{sourceBounds.Right},{sourceBounds.Bottom} " +
+                    $"mapped={mapped} hit={hit}({HitName(hit)}) viewHwnd=0x{_viewWindow:X} sourceHwnd=0x{_source:X} target=0x{target:X} " +
+                    $"class={Windows.WindowInfo.ClassName(target)} targetBounds={targetBounds.Left},{targetBounds.Top},{targetBounds.Right},{targetBounds.Bottom} " +
+                    $"visible={User32.IsWindowVisible(target)} pid={ProcessOf(target)} physicalRoot=0x{root:X} physicalClass={Windows.WindowInfo.ClassName(root)} " +
+                    $"foreground=0x{User32.GetForegroundWindow():X} sharing={SharesInput} sourceExStyle=0x{User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE):X} " +
+                    $"border={AtViewBorder(at)} outcome={outcome} queued={queued?.ToString() ?? "not-attempted"} effect=unobserved";
+                lock (_diagnostics)
+                {
+                    _diagnostics.Enqueue(entry);
+                    if (_diagnostics.Count > Keep) _diagnostics.Dequeue();
+                }
+            }
+            catch (Windows.WindowOperationException) { }
+        }
         Pressed?.Invoke(outcome);
     }
+
+    internal static string HitName(nint hit) => (int)hit switch
+    {
+        -2 => "HTERROR", -1 => "HTTRANSPARENT", 0 => "HTNOWHERE", 1 => "HTCLIENT", 2 => "HTCAPTION",
+        3 => "HTSYSMENU", 4 => "HTGROWBOX", 5 => "HTMENU", 6 => "HTHSCROLL", 7 => "HTVSCROLL",
+        8 => "HTMINBUTTON", 9 => "HTMAXBUTTON", 10 => "HTLEFT", 11 => "HTRIGHT", 12 => "HTTOP",
+        13 => "HTTOPLEFT", 14 => "HTTOPRIGHT", 15 => "HTBOTTOM", 16 => "HTBOTTOMLEFT", 17 => "HTBOTTOMRIGHT",
+        18 => "HTBORDER", 19 => "HTOBJECT", 20 => "HTCLOSE", 21 => "HTHELP", _ => "unknown",
+    };
 
     /// <summary>
     /// Asks the window under the mapped pointer to set its cursor, as Windows would ask it if the pointer were
@@ -421,7 +460,7 @@ internal sealed class PipInteraction : IDisposable
         bool delivered = _messages.Press(point, button, view, shown);
         if (delivered) _heldDelivered |= button;
         else _heldSwallowed |= button;
-        Record(delivered ? PressOutcome.Delivered : PressOutcome.Unconfirmed, point, hit);
+        Record(delivered ? PressOutcome.Delivered : PressOutcome.Unconfirmed, point, hit, _messages.PressTarget, delivered);
         return true;
     }
 
@@ -494,6 +533,18 @@ internal sealed class PipInteraction : IDisposable
         if (_watcher is not null)
             Active--;
         _moved.Dispose();
+        if (DiagnoseInput && InputDiagnostics.Length > 0)
+        {
+            // One bounded file, written after the hook has stopped, never from its callback.
+            try
+            {
+                string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WinScreen");
+                Directory.CreateDirectory(directory);
+                File.WriteAllLines(Path.Combine(directory, "pip-input-last.log"), InputDiagnostics);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
     }
 
     private delegate nint HookProc(int code, nint message, nint data);
