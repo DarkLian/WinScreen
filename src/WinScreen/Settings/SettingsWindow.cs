@@ -57,6 +57,7 @@ public sealed class SettingsWindow : Form
     private readonly CheckBox _pipTitleBar = new() { Text = T("pip.titleBar.enable"), AutoSize = true };
     private readonly CheckBox _pipTaskbar = new() { Text = T("pip.taskbar.enable"), AutoSize = true };
     private readonly ComboBox _pipPreview = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
+    private readonly CheckBox _pipCaptureBorder = new() { Text = T("pip.captureBorder.hide"), AutoSize = true };
     private readonly CheckBox _pipDiagnostics = new() { Text = T("pip.diagnostics.includeHardware"), AutoSize = true };
     private readonly List<int> _pipRates = [.. PipPreferences.FrameRates];
 
@@ -463,6 +464,7 @@ public sealed class SettingsWindow : Form
         draft.Pip.Scaling = (PipScaling)Math.Max(0, _pipScaling.SelectedIndex);
         draft.Pip.OpacityPercent = Number(_pipOpacity);
         draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
+        draft.HideCaptureBorder = _pipCaptureBorder.Checked;
         draft.PipViews = new PipViewPreferences { CompactTitleBar = _pipTitleBar.Checked, MinimizeToTaskbar = _pipTaskbar.Checked,
             HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
             HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds }.Validated();
@@ -553,6 +555,7 @@ public sealed class SettingsWindow : Form
             nameof(AppSettings.ModifierDrag) => _modifierDrag,
             nameof(AppSettings.SnapWhileDragging) => _snapWhileDragging,
             nameof(AppSettings.OpacityWheel) => _opacityWheel,
+            nameof(AppSettings.HideCaptureBorder) => _pipCaptureBorder,
             nameof(AnchorPreferences.Automatic) => _autoAnchors,
             nameof(AppSettings.PausePinWhenMaximized) => _pausePin,
             nameof(AppSettings.OpaqueOnHover) => _opaqueOnHover,
@@ -629,6 +632,7 @@ public sealed class SettingsWindow : Form
         _pipScaling.SelectedIndex = (int)pip.Scaling;
         _pipOpacity.Value = pip.OpacityPercent;
         _pipDiagnostics.Checked = pip.ShowDiagnostics;
+        _pipCaptureBorder.Checked = values.HideCaptureBorder;
         _pipTitleBar.Checked = values.PipViews.CompactTitleBar;
         _pipTaskbar.Checked = values.PipViews.MinimizeToTaskbar;
         _pipPreview.SelectedIndex = (int)values.PipViews.Validated().HoverPreview;
@@ -769,7 +773,7 @@ public sealed class SettingsWindow : Form
         var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false,
             Dock = DockStyle.Fill, AutoScroll = true };
         page.Controls.Add(Section(T("pip.open"), Row(T("pip.rendering"), _pipBackend), Row(T("pip.frameRate"), _pipRate),
-            Row(T("pip.scaling"), _pipScaling), Row(T("pip.opacityPercent"), _pipOpacity), _pipDiagnostics));
+            Row(T("pip.scaling"), _pipScaling), Row(T("pip.opacityPercent"), _pipOpacity), _pipCaptureBorder, _pipDiagnostics));
         page.Controls.Add(Note(T("pip.rendering.compatibilityHelp")));
         page.Controls.Add(Note(T("pip.rendering.captureIndicatorHelp")));
         page.Controls.Add(Note(T("pip.diagnostics.retryHelp")));

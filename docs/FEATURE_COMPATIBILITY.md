@@ -1,7 +1,7 @@
 # WinScreen feature compatibility
 
-What each WinScreen feature does with each kind of window, as the code behaves today (checked against `main` after
-commit `1112c27`, 2026-11-08). Where the code and its tests don't settle a case, it says
+What each WinScreen feature does with each kind of window, as the code behaves today (last checked
+2026-11-08). Where the code and its tests don't settle a case, it says
 **Unverified** rather than guessing.
 
 Paths are relative to `app/src/WinScreen/` unless they start with `tests/`.
@@ -146,7 +146,9 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 | Click through to the original | 🧪 ⚠️ | Experimental **and** "Forward clicks" on. A click that can't be confirmed is cancelled (`errors.pip.clickUnverified`). |
 | Move away from the pointer | 🧪 ⚠️ | Experimental **and** "Move out of the way" on. Needs a recent Windows (`errors.pip.autoMoveUnsupported`). |
 | Interactive view, hide from Alt+Tab | 🧪 | Hiding from the taskbar is refused for apps whose taskbar button Windows controls, and on Windows 10 when views use smooth capture. |
-| Rendering | ⚠️ | Auto, Standard (compositor thumbnail) or Smooth (screen capture). Smooth falls back to Standard when it isn't available. Frame rate and scaling only apply to Smooth. |
+| Rendering | ⚠️ | Auto, Standard (compositor thumbnail) or Smooth (screen capture). Auto tries Smooth first. Smooth falls back to Standard when it isn't available. Frame rate and scaling only apply to Smooth. |
+| Yellow capture border (Smooth, and Glass) | ⚠️ | Windows draws it around a window being captured, as a separate overlay, so hiding the original doesn't hide it. With **Hide the yellow border…** on (default), WinScreen asks Windows once to leave it off (`GraphicsCaptureSession.IsBorderRequired`, `Pip/CaptureBorder.cs`). It stays when: the Windows version lacks the API (all of Windows 10), the person refused under Privacy & security → Screenshot borders, the answer takes over a second (that view only), or anything fails. The view's diagnostics say "Capture border: off" or "shown". The setting applies to views opened after it changes. Windows 11 behavior is **Unverified** by tests (the test VM is Windows 10). |
+| Hidden original showing through (Keep updating, Use this view directly) | ✅ Standard / ⚠️ Smooth | The original is held at 1/255 opacity and click-through. A screen-pixel test (`tests/WinScreen.Tests/SourceConcealmentTests.cs`) finds nothing of it around its edges on Windows 10, at rest or while it follows the pointer, in Standard mode. In Smooth mode the only thing that shows is the capture border above. Windows 11's own window border and shadow are **Unverified**. |
 
 ## Anchors, toolbar, window menu, Ctrl+Alt+wheel and saved setups
 

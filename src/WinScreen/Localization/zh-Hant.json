@@ -182,6 +182,7 @@
   "pip.bookmarks.resolvedRegion": "要顯示的區域",
   "pip.bookmarks.save": "儲存此來源...",
   "pip.bookmarks.title": "已儲存的來源",
+  "pip.captureBorder.hide": "隱藏 Windows 在被擷取視窗周圍顯示的黃色邊框",
   "pip.chooseSource": "選擇顯示內容",
   "pip.clickThrough": "滑鼠穿透（從系統匣關閉）",
   "pip.close": "關閉子母畫面(&C)",

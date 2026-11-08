@@ -25,6 +25,7 @@ internal sealed class PipDiagnostics
     internal string? Failure;
     internal Exception? Exception;
     internal string FilterMode = "OS-managed";
+    internal bool CaptureBorderHidden;
 
     internal void PresentedFrame(long captureTimestamp, long arrivalTimestamp, double presentMs)
     {
@@ -71,6 +72,8 @@ internal sealed class PipDiagnostics
                     $"Last Present: {LastPresentMilliseconds:F2} ms; resizes: {Resizes}; pending capacity: 1\nGPU duration: unavailable (no GPU timestamp query)\n";
             if (backend != PipBackendKind.DwmThumbnail && LastArrival != 0)
                 result += $"Frame arrival age: {Stopwatch.GetElapsedTime(LastArrival).TotalMilliseconds:F1} ms; GPU in-flight capacity: 1; filter: {FilterMode}\n";
+            if (backend != PipBackendKind.DwmThumbnail)
+                result += $"Capture border: {(CaptureBorderHidden ? "off" : "shown")}\n";
             if (backend == PipBackendKind.WgcSoftware)
                 result += $"Software effective cap: {Math.Min(30, requested == 0 ? targetHz : requested)} FPS\n";
             if (includeHardware && Capabilities is { } c)

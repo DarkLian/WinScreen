@@ -189,6 +189,7 @@ internal sealed unsafe class ContentOverlay : Form
         _session = _pool.CreateCaptureSession(item);
         if (global::Windows.Foundation.Metadata.ApiInformation.IsPropertyPresent("Windows.Graphics.Capture.GraphicsCaptureSession", "IsCursorCaptureEnabled"))
             _session.IsCursorCaptureEnabled = false;
+        Pip.CaptureBorder.TryHide(_session, wait: 0); // The effect sits on the window, so a border would frame it.
         _session.StartCapture();
     }
 

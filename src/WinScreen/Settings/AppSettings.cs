@@ -253,6 +253,9 @@ public sealed class AppSettings
     public int DefaultOpacityPercent { get; set; } = 80;
     public int OpacityStepPercent { get; set; } = 10;
     public bool OpacityWheel { get; set; }
+
+    /// <summary>Asks Windows to leave off the yellow border it draws around a window being captured.</summary>
+    public bool HideCaptureBorder { get; set; } = true;
     public bool DetectAlreadyDark { get; set; } = true;
     public PinBorderPreferences PinBorder { get; set; } = new();
     public PipViewPreferences PipViews { get; set; } = new();

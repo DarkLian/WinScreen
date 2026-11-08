@@ -348,6 +348,9 @@ public sealed class TrayApplication : ApplicationContext
         _anchors.Configure(_settings.Anchors);
         _automaticAnchors.Configure(_settings.Anchors.Automatic, _settings.Anchors.AvoidContent);
         _content.SetLevels(_settings.Effects.Levels);
+        if (_settings.HideCaptureBorder && !Pip.CaptureBorder.Wanted) Pip.CaptureBorder.Forget(); // Ask again: the Windows setting may have changed.
+        Pip.CaptureBorder.Wanted = _settings.HideCaptureBorder;
+        if (Pip.CaptureBorder.Wanted && Pip.CaptureBorder.Supported()) _ = Pip.CaptureBorder.Prepare();
         if (_settings.AutomaticUpdates && !_updatesWereOn)
             _updateTimer.Interval = 30_000; // Check soon after it's turned on, then every few hours.
         _updatesWereOn = _settings.AutomaticUpdates;

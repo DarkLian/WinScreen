@@ -156,7 +156,8 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
             session = pool.CreateCaptureSession(item);
             if (ApiInformation.IsPropertyPresent("Windows.Graphics.Capture.GraphicsCaptureSession", "IsCursorCaptureEnabled"))
                 session.IsCursorCaptureEnabled = _source.ShowsCursor;
-            // Keep the OS capture border and consent/protection behavior intact.
+            // Windows' yellow capture border goes only if the person wants that and Windows allows it.
+            Diagnostics.CaptureBorderHidden = CaptureBorder.TryHide(session);
             item.Closed += Closed;
             pool.FrameArrived += Arrived;
             var pacer = new PipFramePacer(Stopwatch.Frequency, 60);

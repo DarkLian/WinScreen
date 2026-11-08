@@ -182,6 +182,7 @@
   "pip.bookmarks.resolvedRegion": "Area to show",
   "pip.bookmarks.save": "Save this source...",
   "pip.bookmarks.title": "Saved sources",
+  "pip.captureBorder.hide": "Hide the yellow border Windows draws around a captured window",
   "pip.chooseSource": "Choose what to show",
   "pip.clickThrough": "Click-through (turn off from the tray)",
   "pip.close": "&Close view",

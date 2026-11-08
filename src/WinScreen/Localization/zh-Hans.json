@@ -182,6 +182,7 @@
   "pip.bookmarks.resolvedRegion": "要显示的区域",
   "pip.bookmarks.save": "保存此来源...",
   "pip.bookmarks.title": "已保存的来源",
+  "pip.captureBorder.hide": "隐藏 Windows 在被捕获窗口周围显示的黄色边框",
   "pip.chooseSource": "选择显示内容",
   "pip.clickThrough": "鼠标穿透（从托盘关闭）",
   "pip.close": "关闭画中画(&C)",
