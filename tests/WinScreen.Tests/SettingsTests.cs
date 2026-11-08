@@ -363,6 +363,64 @@ public sealed class SettingsWindowTests : IDisposable
     }
 
     [Fact]
+    public void Apply_is_offered_only_for_real_changes_and_keeps_the_window_open()
+    {
+        OnUiThread(() =>
+        {
+            var settings = new AppSettings { ShowToolbar = true };
+            int applied = 0;
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key), draft =>
+            {
+                applied++;
+                settings.CopyFrom(draft);
+                return [];
+            });
+            _ = window.Handle;
+            window.RefreshApply();
+            Assert.False(window.HasChanges);
+
+            window.SetOption(nameof(AppSettings.ShowToolbar), false);
+            window.RefreshApply();
+            Assert.True(window.HasChanges);
+            window.SetOption(nameof(AppSettings.ShowToolbar), true);
+            window.RefreshApply();
+            Assert.False(window.HasChanges); // Changed and changed back: nothing to apply.
+
+            window.SetDefaultOpacity(60);
+            window.AddExcluded("notepad");
+            window.RefreshApply();
+            Assert.True(window.HasChanges);
+            Assert.True(window.ApplyChanges());
+            Assert.Equal(1, applied);
+            Assert.False(window.HasChanges);
+            Assert.False(window.IsDisposed);
+            Assert.Equal(60, settings.DefaultOpacityPercent);
+            Assert.Contains("notepad", settings.ExcludedPrograms);
+
+            Descendants(window).OfType<ComboBox>().Skip(1).First().Text = "Typed.exe";
+            window.RefreshApply();
+            Assert.True(window.HasChanges); // A name typed but not added counts, as it does for Save.
+        });
+    }
+
+    [Fact]
+    public void Apply_stays_available_when_a_hotkey_is_taken()
+    {
+        OnUiThread(() =>
+        {
+            var settings = new AppSettings();
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key),
+                _ => [new HotkeyProblem(AppCommand.TogglePin, "Ctrl+Alt+T")]);
+            _ = window.Handle;
+            window.SetDefaultOpacity(60);
+            window.RefreshApply();
+            Assert.False(window.ApplyChanges());
+            window.RefreshApply();
+            Assert.True(window.HasChanges);
+        });
+    }
+
+    [Fact]
     public void A_name_typed_but_not_added_is_still_saved()
     {
         OnUiThread(() =>

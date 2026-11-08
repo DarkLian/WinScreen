@@ -289,6 +289,7 @@
   "programs.precedence": "If a program is on both lists, WinScreen leaves it alone.",
   "recovery.attention": "Recovery needs attention",
   "recovery.restored": "All changes restored.",
+  "settings.apply": "A&pply",
   "settings.customization": "Appearance",
   "settings.dark.detect": "Leave already-dark windows unchanged",
   "settings.effects.background": "Background (%)",

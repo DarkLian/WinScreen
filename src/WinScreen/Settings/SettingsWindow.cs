@@ -5,7 +5,7 @@ using WinScreen.Updates;
 
 namespace WinScreen.Settings;
 
-/// <summary>The settings window. Saving applies the changes straight away.</summary>
+/// <summary>The settings window. Apply puts the changes into effect and keeps it open; Save does that and closes it.</summary>
 public sealed class SettingsWindow : Form
 {
     private const int ContentWidth = 490;
@@ -130,6 +130,9 @@ public sealed class SettingsWindow : Form
         { Text = T("settings.pip.autoMove"), AutoSize = true };
 
     private readonly HashSet<ProgramSetup> _removedSetups = [];
+    private readonly Button _applyButton = new() { Text = T("settings.apply"), AutoSize = true, Enabled = false };
+    private string _savedState = "";
+    private bool _refreshQueued;
 
     private readonly Label _status = new()
         { AutoSize = true, ForeColor = SystemColors.WindowText, MaximumSize = new Size(500, 0) };
@@ -212,7 +215,71 @@ public sealed class SettingsWindow : Form
         LoadValues();
         _pipInput.Enabled = _experimental.Checked;
         _pipAutoMove.Enabled = _experimental.Checked;
+        WatchForChanges(this);
+        foreach (TextBox box in _hotkeys.Values) box.TextChanged += (_, _) => QueueApplyRefresh();
+        MarkSaved();
         ResumeLayout(true);
+    }
+
+    /// <summary>True when what's on screen differs from what's in effect, so Apply has something to do.</summary>
+    internal bool HasChanges => _applyButton.Enabled;
+
+    /// <summary>Applies the changes and keeps the window open, the way the Apply button does.</summary>
+    internal bool ApplyChanges()
+    {
+        if (!SaveChanges()) return false;
+        MarkSaved();
+        return true;
+    }
+
+    private void MarkSaved()
+    {
+        _savedState = CurrentState();
+        _applyButton.Enabled = false;
+    }
+
+    /// <summary>Rechecks whether there's anything to apply. Changing something and changing it back leaves nothing.</summary>
+    internal void RefreshApply()
+    {
+        _refreshQueued = false;
+        if (!IsDisposed) _applyButton.Enabled = _pendingImport is not null || CurrentState() != _savedState;
+    }
+
+    // Some controls report a change before it happens, so the check waits for the change to land.
+    private void QueueApplyRefresh()
+    {
+        if (!IsHandleCreated) { RefreshApply(); return; }
+        if (_refreshQueued) return;
+        _refreshQueued = true;
+        BeginInvoke(RefreshApply);
+    }
+
+    private void WatchForChanges(Control parent)
+    {
+        foreach (Control control in parent.Controls)
+        {
+            switch (control)
+            {
+                case CheckBox box: box.CheckedChanged += (_, _) => QueueApplyRefresh(); break;
+                case NumericUpDown number: number.TextChanged += (_, _) => QueueApplyRefresh(); break;
+                case CheckedListBox list: list.ItemCheck += (_, _) => QueueApplyRefresh(); break;
+                case ComboBox combo:
+                    combo.SelectedIndexChanged += (_, _) => QueueApplyRefresh();
+                    combo.TextChanged += (_, _) => QueueApplyRefresh();
+                    break;
+                case TextBox text when text != _actionSearch: text.TextChanged += (_, _) => QueueApplyRefresh(); break;
+                case Button button when button != _applyButton: button.Click += (_, _) => QueueApplyRefresh(); break;
+            }
+            WatchForChanges(control);
+        }
+    }
+
+    /// <summary>Everything the window would save, written out so two moments can be compared.</summary>
+    private string CurrentState()
+    {
+        AppSettings draft = Draft(new AppSettings(), commitTyped: false);
+        draft.SavedSetups = _setups.Items.Cast<ProgramSetup>().ToList();
+        return System.Text.Json.JsonSerializer.Serialize(draft);
     }
 
     protected override void OnShown(EventArgs e)
@@ -269,86 +336,8 @@ public sealed class SettingsWindow : Form
     /// <summary>Applies and saves what is on screen. Returns false if a hotkey couldn't be claimed.</summary>
     internal bool SaveChanges()
     {
-        var draft = (_pendingImport ?? _settings).Clone();
+        AppSettings draft = Draft((_pendingImport ?? _settings).Clone(), commitTyped: true);
         draft.Imported = _pendingImport is not null;
-        foreach ((AppCommand command, TextBox box) in _hotkeys)
-        {
-            draft.Hotkeys[command] = box.Text;
-            _errors.SetError(box, "");
-        }
-
-        // A name typed but not yet added is still what the person meant.
-        AddTyped(_excluded, _newExcluded);
-        AddTyped(_included, _newIncluded);
-        draft.ExcludedPrograms = _excluded.Items.Cast<string>().ToList();
-        draft.IncludedPrograms = _included.Items.Cast<string>().ToList();
-        draft.SavedSetups.RemoveAll(setup => _removedSetups.Any(removed =>
-            removed.Program == setup.Program && removed.ExecutablePath == setup.ExecutablePath));
-        draft.ShowToolbar = _showToolbar.Checked;
-        draft.Toolbar = new ToolbarPreferences
-        {
-            Placement = (ToolbarPlacement)Math.Max(0, _toolbarPlacement.SelectedIndex),
-            Trigger = (ToolbarTrigger)Math.Max(0, _toolbarTrigger.SelectedIndex),
-            HoverDelayMilliseconds = (int)_toolbarDelay.Value,
-            Buttons = _toolbarButtons.CheckedItems.Cast<ToolbarChoice>().Select(choice => choice.Command).ToList(),
-        }.Validated();
-        AddTyped(_anchorOnly, _newAnchorOnly);
-        AddTyped(_anchorExcluded, _newAnchorExcluded);
-        draft.Anchors = new AnchorPreferences
-        {
-            Automatic = _autoAnchors.Checked,
-            OnlyPrograms = _anchorOnly.Items.Cast<string>().ToList(),
-            ExcludedPrograms = _anchorExcluded.Items.Cast<string>().ToList(),
-            Side = (AnchorSide)Math.Max(0, _anchorSide.SelectedIndex),
-            Style = (AnchorLook)Math.Max(0, _anchorLook.SelectedIndex),
-            MaxAutomatic = (int)_anchorLimit.Value,
-            Size = (int)_anchorSize.Value,
-            RecencyEmphasis = _anchorRecency.Checked,
-            AvoidContent = _anchorAvoid.Checked,
-        }.Validated();
-        draft.ShowNotifications = _showNotifications.Checked;
-        draft.AutomaticUpdates = _automaticUpdates.Checked;
-        draft.ExperimentalFeatures = _experimental.Checked;
-        draft.PipClickForwarding = _pipInput.Checked;
-        draft.StartWithWindows = _startWithWindows.Checked;
-        draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
-        draft.PauseInFullScreen = _pauseInFullScreen.Checked;
-        draft.AllowPipInFullScreen = _allowPip.Checked;
-        draft.ModifierDrag = _modifierDrag.Checked;
-        draft.ModifierKey = (ModifierKey)Math.Max(0, _modifierKey.SelectedIndex);
-        draft.WindowMenu = _windowMenu.Checked;
-        draft.WindowMenuGesture = (WindowMenuGesture)Math.Max(0, _windowMenuGesture.SelectedIndex);
-        AddTyped(_windowMenuExclusions, _newMenuExclusion);
-        AddTyped(_modifierExclusions, _newModifierExclusion);
-        draft.WindowMenuExclusions = _windowMenuExclusions.Items.Cast<string>().ToList();
-        draft.ModifierExclusions = _modifierExclusions.Items.Cast<string>().ToList();
-        draft.PausePinWhenMaximized = _pausePin.Checked;
-        draft.OpaqueOnHover = _opaqueOnHover.Checked;
-        draft.HighlightPinned = _highlightPinned.Checked;
-        draft.PipAutoMove = _pipAutoMove.Checked;
-        draft.DefaultOpacityPercent = (int)_defaultOpacity.Value;
-        draft.OpacityStepPercent = (int)_opacityStep.Value;
-        draft.OpacityWheel = _opacityWheel.Checked;
-        draft.DetectAlreadyDark = _detectDark.Checked;
-        draft.Effects = new EffectPreferences
-        {
-            LayeredGlass = _layeredGlass.Checked, PictureSafeDark = _pictureSafeDark.Checked,
-            BackgroundPercent = (int)_glassBackground.Value, TextPercent = (int)_glassText.Value, PicturePercent = (int)_glassPictures.Value,
-        }.Validated();
-        draft.PinBorder = new PinBorderPreferences
-        {
-            ColorHex = _borderColor.Text,
-            OpacityPercent = (int)_borderOpacity.Value,
-            Thickness = (int)_borderThickness.Value,
-        }.Validated();
-        draft.Pip.Backend = (PipBackendPreference)Math.Max(0, _pipBackend.SelectedIndex);
-        draft.Pip.FrameRate = _pipRates[Math.Max(0, _pipRate.SelectedIndex)];
-        draft.Pip.Scaling = (PipScaling)Math.Max(0, _pipScaling.SelectedIndex);
-        draft.Pip.OpacityPercent = (int)_pipOpacity.Value;
-        draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
-        draft.PipViews = new PipViewPreferences { CompactTitleBar = _pipTitleBar.Checked, MinimizeToTaskbar = _pipTaskbar.Checked,
-            HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
-            HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds }.Validated();
         try
         {
             IReadOnlyList<HotkeyProblem> problems = _apply(draft);
@@ -381,9 +370,106 @@ public sealed class SettingsWindow : Form
         }
     }
 
-    internal void AddExcluded(string program) => AddProgram(_excluded, program);
+    /// <summary>
+    /// What's on screen, on top of <paramref name="draft"/>. With <paramref name="commitTyped"/>, program names typed
+    /// but not yet added go into their lists, the way saving treats them; otherwise they're only counted.
+    /// </summary>
+    private AppSettings Draft(AppSettings draft, bool commitTyped)
+    {
+        List<string> Programs(ListBox list, ComboBox typed)
+        {
+            if (commitTyped) AddTyped(list, typed);
+            List<string> names = list.Items.Cast<string>().ToList();
+            string name = ProgramName(typed.Text);
+            if (name.Length > 0 && !names.Contains(name)) names.Add(name);
+            return names;
+        }
+        int Number(NumericUpDown box)
+        {
+            // Reading Value would tidy up a number that's still being typed, so the text is read instead.
+            if (commitTyped || !decimal.TryParse(box.Text, out decimal typed)) return (int)box.Value;
+            return (int)Math.Clamp(typed, box.Minimum, box.Maximum);
+        }
+        foreach ((AppCommand command, TextBox box) in _hotkeys)
+        {
+            draft.Hotkeys[command] = box.Text;
+            if (commitTyped) _errors.SetError(box, "");
+        }
 
-    internal void AddIncluded(string program) => AddProgram(_included, program);
+        // A name typed but not yet added is still what the person meant.
+        draft.ExcludedPrograms = Programs(_excluded, _newExcluded);
+        draft.IncludedPrograms = Programs(_included, _newIncluded);
+        if (commitTyped) draft.SavedSetups.RemoveAll(setup => _removedSetups.Any(removed =>
+            removed.Program == setup.Program && removed.ExecutablePath == setup.ExecutablePath));
+        draft.ShowToolbar = _showToolbar.Checked;
+        draft.Toolbar = new ToolbarPreferences
+        {
+            Placement = (ToolbarPlacement)Math.Max(0, _toolbarPlacement.SelectedIndex),
+            Trigger = (ToolbarTrigger)Math.Max(0, _toolbarTrigger.SelectedIndex),
+            HoverDelayMilliseconds = Number(_toolbarDelay),
+            Buttons = _toolbarButtons.CheckedItems.Cast<ToolbarChoice>().Select(choice => choice.Command).ToList(),
+        }.Validated();
+        List<string> anchorOnly = Programs(_anchorOnly, _newAnchorOnly);
+        List<string> anchorExcluded = Programs(_anchorExcluded, _newAnchorExcluded);
+        draft.Anchors = new AnchorPreferences
+        {
+            Automatic = _autoAnchors.Checked,
+            OnlyPrograms = anchorOnly,
+            ExcludedPrograms = anchorExcluded,
+            Side = (AnchorSide)Math.Max(0, _anchorSide.SelectedIndex),
+            Style = (AnchorLook)Math.Max(0, _anchorLook.SelectedIndex),
+            MaxAutomatic = Number(_anchorLimit),
+            Size = Number(_anchorSize),
+            RecencyEmphasis = _anchorRecency.Checked,
+            AvoidContent = _anchorAvoid.Checked,
+        }.Validated();
+        draft.ShowNotifications = _showNotifications.Checked;
+        draft.AutomaticUpdates = _automaticUpdates.Checked;
+        draft.ExperimentalFeatures = _experimental.Checked;
+        draft.PipClickForwarding = _pipInput.Checked;
+        draft.StartWithWindows = _startWithWindows.Checked;
+        draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
+        draft.PauseInFullScreen = _pauseInFullScreen.Checked;
+        draft.AllowPipInFullScreen = _allowPip.Checked;
+        draft.ModifierDrag = _modifierDrag.Checked;
+        draft.ModifierKey = (ModifierKey)Math.Max(0, _modifierKey.SelectedIndex);
+        draft.WindowMenu = _windowMenu.Checked;
+        draft.WindowMenuGesture = (WindowMenuGesture)Math.Max(0, _windowMenuGesture.SelectedIndex);
+        draft.WindowMenuExclusions = Programs(_windowMenuExclusions, _newMenuExclusion);
+        draft.ModifierExclusions = Programs(_modifierExclusions, _newModifierExclusion);
+        draft.PausePinWhenMaximized = _pausePin.Checked;
+        draft.OpaqueOnHover = _opaqueOnHover.Checked;
+        draft.HighlightPinned = _highlightPinned.Checked;
+        draft.PipAutoMove = _pipAutoMove.Checked;
+        draft.DefaultOpacityPercent = Number(_defaultOpacity);
+        draft.OpacityStepPercent = Number(_opacityStep);
+        draft.OpacityWheel = _opacityWheel.Checked;
+        draft.DetectAlreadyDark = _detectDark.Checked;
+        draft.Effects = new EffectPreferences
+        {
+            LayeredGlass = _layeredGlass.Checked, PictureSafeDark = _pictureSafeDark.Checked,
+            BackgroundPercent = Number(_glassBackground), TextPercent = Number(_glassText), PicturePercent = Number(_glassPictures),
+        }.Validated();
+        draft.PinBorder = new PinBorderPreferences
+        {
+            ColorHex = _borderColor.Text,
+            OpacityPercent = Number(_borderOpacity),
+            Thickness = Number(_borderThickness),
+        }.Validated();
+        draft.Pip.Backend = (PipBackendPreference)Math.Max(0, _pipBackend.SelectedIndex);
+        draft.Pip.FrameRate = _pipRates[Math.Max(0, _pipRate.SelectedIndex)];
+        draft.Pip.Scaling = (PipScaling)Math.Max(0, _pipScaling.SelectedIndex);
+        draft.Pip.OpacityPercent = Number(_pipOpacity);
+        draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
+        draft.PipViews = new PipViewPreferences { CompactTitleBar = _pipTitleBar.Checked, MinimizeToTaskbar = _pipTaskbar.Checked,
+            HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
+            HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds }.Validated();
+        return draft;
+    }
+
+    internal void AddExcluded(string program) { AddProgram(_excluded, program); QueueApplyRefresh(); }
+
+    internal void AddIncluded(string program) { AddProgram(_included, program); QueueApplyRefresh(); }
 
     internal void SetDefaultOpacity(int percent) => _defaultOpacity.Value = percent;
 
@@ -392,15 +478,20 @@ public sealed class SettingsWindow : Form
     {
         _setups.Items.Remove(setup);
         _removedSetups.Add(setup);
+        QueueApplyRefresh();
     }
 
     private static void AddProgram(ListBox list, string program)
     {
-        string name = program.Trim();
-        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-            name = name[..^4];
+        string name = ProgramName(program);
         if (name.Length > 0 && !list.Items.Contains(name))
             list.Items.Add(name);
+    }
+
+    private static string ProgramName(string program)
+    {
+        string name = program.Trim();
+        return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
     }
 
     private static void AddTyped(ListBox list, ComboBox newProgram)
@@ -774,10 +865,12 @@ public sealed class SettingsWindow : Form
         var cancel = new Button { Text = T("common.cancel"), AutoSize = true, DialogResult = DialogResult.Cancel };
         cancel.Click += (_, _) => Close();
         CancelButton = cancel;
+        _applyButton.Click += (_, _) => ApplyChanges();
 
         var row = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 8, 0, 0) };
         row.Controls.Add(save);
         row.Controls.Add(cancel);
+        row.Controls.Add(_applyButton);
         return row;
     }
 
