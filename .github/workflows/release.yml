@@ -38,23 +38,30 @@ jobs:
         run: |
           if (-not $env:WINSCREEN_AUTHENTICODE_SIGN_PARAMS) { throw 'Production Authenticode signing must be configured before public release.' }
           ./build.ps1 -CI -Version "$($env:GITHUB_REF_NAME.TrimStart('v'))" -UpdateRepository $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'The x64 build failed.' }
+          # Windows 11 on ARM gets a native build with its own update channel. Its tests run in the Build workflow's ARM job.
+          ./build.ps1 -CI -Architecture arm64 -Version "$($env:GITHUB_REF_NAME.TrimStart('v'))" -UpdateRepository $env:GITHUB_REPOSITORY
       - name: Verify installer publisher
         shell: pwsh
         env:
           EXPECTED_THUMBPRINT: ${{ vars.WINSCREEN_PUBLISHER_THUMBPRINT }}
         run: |
-          $signature = Get-AuthenticodeSignature dist/release/WinScreen-win-Setup.exe
-          if (-not $env:EXPECTED_THUMBPRINT -or $signature.Status -ne 'Valid' -or $signature.SignerCertificate.Thumbprint -ne $env:EXPECTED_THUMBPRINT) { throw 'Installer publisher signature verification failed.' }
+          foreach ($installer in 'dist/release/WinScreen-win-Setup.exe', 'dist/release-arm64/WinScreen-win-arm64-Setup.exe') {
+            $signature = Get-AuthenticodeSignature $installer
+            if (-not $env:EXPECTED_THUMBPRINT -or $signature.Status -ne 'Valid' -or $signature.SignerCertificate.Thumbprint -ne $env:EXPECTED_THUMBPRINT) { throw "Installer publisher signature verification failed: $installer" }
+          }
       - name: Sign update feed
         shell: pwsh
         env:
           WINSCREEN_UPDATE_SIGNING_KEY: ${{ secrets.WINSCREEN_UPDATE_SIGNING_KEY }}
         run: |
           if (-not $env:WINSCREEN_UPDATE_SIGNING_KEY) { throw 'The update signing secret is required for publishing.' }
-          dotnet run --project tools/WinScreen.UpdateSigning/WinScreen.UpdateSigning.csproj -c Release -- sign dist/release/releases.win.json src/WinScreen/Updates/update-public-key.pem
-          if ($LASTEXITCODE -ne 0) { throw 'Update signing failed.' }
+          foreach ($feed in 'dist/release/releases.win.json', 'dist/release-arm64/releases.win-arm64.json') {
+            dotnet run --project tools/WinScreen.UpdateSigning/WinScreen.UpdateSigning.csproj -c Release -- sign $feed src/WinScreen/Updates/update-public-key.pem
+            if ($LASTEXITCODE -ne 0) { throw "Update signing failed: $feed" }
+          }
       - name: Publish the release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME (Get-ChildItem dist/release -File).FullName --title "WinScreen $env:GITHUB_REF_NAME" --generate-notes
+        run: gh release create $env:GITHUB_REF_NAME (Get-ChildItem dist/release, dist/release-arm64 -File).FullName --title "WinScreen $env:GITHUB_REF_NAME" --generate-notes

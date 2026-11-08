@@ -27,7 +27,7 @@ jobs:
           name: WinScreen-Setup
           path: dist/release/WinScreen-win-Setup.exe
 
-  # Native ARM64 stays out of releases until this has passed and the owner decides to ship it.
+  # Tests the native ARM64 build on ARM hardware. Releases build ARM64 too, so keep this passing.
   build-arm64:
     runs-on: windows-11-arm
     steps:
