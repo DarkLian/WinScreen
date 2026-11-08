@@ -35,7 +35,8 @@ public sealed class PipLayeringTests
             while (Environment.TickCount64 < end) { TopLayer.KeepAbove(); Pump(50); }
             Assert.Equal(before, TopLayer.LiftCount);
             Assert.Null(view.LiveInteraction);
-            Assert.NotEqual(0, Desktop.ExStyle(view.Handle) & User32.WS_EX_TRANSPARENT);
+            // A click on the view while its menu is open stays with the view: it closes the menu.
+            Assert.Equal(0, Desktop.ExStyle(view.Handle) & User32.WS_EX_TRANSPARENT);
             view.ContextMenuStrip.Close();
             Pump(100);
             Assert.Equal(0, Desktop.ExStyle(view.Handle) & User32.WS_EX_TRANSPARENT);

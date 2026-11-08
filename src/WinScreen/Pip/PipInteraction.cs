@@ -101,6 +101,14 @@ internal sealed class PipInteraction : IDisposable
     private readonly SourcePopups _popups;
     private readonly nint _viewWindow;
     private readonly PipMessageInput _messages;
+    private readonly uint _viewThread, _sourceThread;
+    private int _sharing; // 1 while the view's thread shares input state with the original's.
+
+    /// <summary>Whether visits share input state with the original, for tests.</summary>
+    internal static bool ShareInput { get; set; } = true;
+
+    /// <summary>Whether the view's thread shares input state with the original's right now.</summary>
+    internal bool SharesInput => Volatile.Read(ref _sharing) == 1;
 
     /// <param name="viewWindow">The view itself, which stays under the pointer for the whole visit.</param>
     public PipInteraction(nint source, Rectangle view, Rectangle shown, nint viewWindow = 0, SourcePopups? popups = null)
@@ -113,8 +121,31 @@ internal sealed class PipInteraction : IDisposable
         _viewWindow = viewWindow;
         _messages = new PipMessageInput(source, _identity);
         _popups = popups ?? new SourcePopups(source);
-        User32.GetWindowThreadProcessId(source, out _sourceProcess);
+        _sourceThread = User32.GetWindowThreadProcessId(source, out _sourceProcess);
+        _viewThread = viewWindow == 0 ? 0 : User32.GetWindowThreadProcessId(viewWindow, out _);
     }
+
+    /// <summary>
+    /// While the pointer is on the view, the view's thread and the original's share input state. The pointer's
+    /// shape then follows what the app sets as it handles the moves it is sent: a text cursor over text, a hand
+    /// over links. While a button is held it stops, or the app's hold on the mouse would take the real pointer's
+    /// moves, at the wrong place, as well as the ones sent to it.
+    /// </summary>
+    private void Share(bool on)
+    {
+        if (on)
+        {
+            if (!ShareInput || _stopping || _viewThread == 0 || _sourceThread == 0 || _viewThread == _sourceThread) return;
+            if (Interlocked.CompareExchange(ref _sharing, 1, 0) == 0 && !AttachThreadInput(_viewThread, _sourceThread, true))
+                Volatile.Write(ref _sharing, 0);
+        }
+        else if (Interlocked.Exchange(ref _sharing, 0) == 1)
+            AttachThreadInput(_viewThread, _sourceThread, false);
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AttachThreadInput(uint attach, uint attachTo, [MarshalAs(UnmanagedType.Bool)] bool on);
 
     /// <summary>Raised on the hook thread for a press on the original's caption buttons or icon.</summary>
     public event Action<CaptionAction>? CaptionPressed;
@@ -140,6 +171,7 @@ internal sealed class PipInteraction : IDisposable
     }
 
     internal bool InPopup => _inPopup;
+    internal (Rectangle View, Rectangle Shown) CurrentGeometry => Geometry();
     internal bool ObservedPointer(Point point) => Interlocked.Read(ref _observedPointer) == Pack(point);
     private static long Pack(Point point) => ((long)point.X << 32) | (uint)point.Y;
 
@@ -187,6 +219,7 @@ internal sealed class PipInteraction : IDisposable
             throw new Windows.WindowOperationException(Localization.UiText.T("errors.pip.clickUnverified"));
         _watcher = new Thread(FollowPopups) { IsBackground = true, Name = "WinScreen interaction popups" };
         _watcher.Start();
+        Share(true);
         Active++;
     }
 
@@ -228,6 +261,24 @@ internal sealed class PipInteraction : IDisposable
         }
 
         Pressed?.Invoke(outcome);
+    }
+
+    /// <summary>
+    /// Asks the window under the mapped pointer to set its cursor, as Windows would ask it if the pointer were
+    /// really there. It doesn't wait on a busy app.
+    /// </summary>
+    internal void AskForCursor()
+    {
+        try
+        {
+            var (view, shown) = Geometry();
+            long packed = Interlocked.Read(ref _pointer);
+            var pointer = new Point((int)(packed >> 32), (int)packed);
+            nint target = _messages.TargetAt(_messages.MappedScreen(pointer, view, shown));
+            if (target != 0)
+                User32.SendMessageTimeout(target, 0x0020 /* WM_SETCURSOR */, target, (nint)(1 | (0x0200 << 16)), 0x2, 20, out _);
+        }
+        catch (Windows.WindowOperationException) { }
     }
 
     private nint Callback(int code, nint message, nint data)
@@ -302,7 +353,7 @@ internal sealed class PipInteraction : IDisposable
     {
         if (_viewWindow == 0 || !User32.GetWindowRect(_viewWindow, out Rect bounds)) return false;
         return PipGeometry.SizingHit(point, Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom),
-            Dpi.Scale(6, Dpi.Of(_viewWindow))) != 0;
+            Dpi.Scale(PipGeometry.DirectEdgeBand, Dpi.Of(_viewWindow)), Dpi.Scale(PipGeometry.DirectCornerBand, Dpi.Of(_viewWindow))) != 0;
     }
 
     private bool OnPress(Point point, MouseButtons button)
@@ -365,6 +416,7 @@ internal sealed class PipInteraction : IDisposable
             Record(PressOutcome.Unconfirmed, point, hit);
             return true;
         }
+        Share(false);
         User32.SetForegroundWindow(_source);
         bool delivered = _messages.Press(point, button, view, shown);
         if (delivered) _heldDelivered |= button;
@@ -402,6 +454,7 @@ internal sealed class PipInteraction : IDisposable
         _heldSwallowed &= ~button;
         _heldDelivered &= ~button;
         if (button == MouseButtons.Left) _dragging = false;
+        if (_heldDelivered == MouseButtons.None && InView(point)) Share(true);
         nint root = RootAt(point);
         if (!_outside && !InView(point) && !_inPopup && root != 0 && ProcessOf(root) != _sourceProcess)
         {
@@ -426,6 +479,7 @@ internal sealed class PipInteraction : IDisposable
         if (_stopping)
             return;
         _stopping = true;
+        Share(false);
         _moved.Set();
         if (_hookThread is not null)
         {

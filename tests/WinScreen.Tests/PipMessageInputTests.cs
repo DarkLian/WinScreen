@@ -238,9 +238,10 @@ public sealed class PipMessageInputTests
     }
 
     [Fact]
-    public void The_view_leaves_the_pointer_shape_to_the_app_during_a_visit()
+    public void During_a_visit_the_pointer_takes_the_shape_the_app_sets()
     {
         using var source = new TargetProcess(new Rectangle(160, 120, 800, 600));
+        source.BehaveLikeBrowser(); // Sets a text cursor over its content.
         Drive(source, (view, ui, controller) =>
         {
             Hover(view);
@@ -249,12 +250,13 @@ public sealed class PipMessageInputTests
                 nint shown = 0;
                 ui(() =>
                 {
-                    Cursor.Current = Cursors.IBeam; // As the app would have set it.
+                    Cursor.Current = Cursors.Default;
                     User32.SendMessageTimeout(view.Handle, 0x0020, view.Handle, (nint)(1 | (0x200 << 16)), 0, 500, out _);
                     shown = Cursor.Current.Handle;
                 });
                 return shown;
             }
+            Assert.True(view.LiveInteraction!.SharesInput, "Input wasn't shared during the visit.");
             Assert.Equal(Cursors.IBeam.Handle, SetCursorOnView());
             Assert.True(windowsReachable(view, true), "The parked original wasn't reachable during the visit.");
             Desktop.SlideMouse(new Point(view.Left - 60, view.Top - 60));

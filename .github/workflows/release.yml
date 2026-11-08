@@ -178,6 +178,13 @@ jobs:
           if ($env:SIGNED -ne 'true') { $notes += 'The installer isn''t code-signed yet, so Windows may say it doesn''t recognize it. Choose **More info**, then **Run anyway**.' }
           else { $notes += 'Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).' }
           $notes += '**Which file?** `WinScreen-win-Setup.exe` for most PCs, `WinScreen-win-arm64-Setup.exe` for Windows 11 on ARM.'
+          # What's new: the body of an annotated tag's message, after its title line, goes first.
+          $ref = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$env:GITHUB_REF_NAME" | ConvertFrom-Json
+          if ($LASTEXITCODE -eq 0 -and $ref.object.type -eq 'tag') {
+            $annotation = gh api "repos/$env:GITHUB_REPOSITORY/git/tags/$($ref.object.sha)" | ConvertFrom-Json
+            $highlights = (($annotation.message -split "`n") | Select-Object -Skip 1) -join "`n"
+            if ($LASTEXITCODE -eq 0 -and $highlights.Trim()) { $notes = @($highlights.Trim()) + $notes }
+          }
           $arguments = @($env:GITHUB_REF_NAME) + (Get-ChildItem dist/release, dist/release-arm64 -File).FullName +
             @('--title', $env:TITLE, '--notes', ($notes -join "`n`n"), '--generate-notes')
           if ($env:PRERELEASE -eq 'true') { $arguments += '--prerelease' }

@@ -102,6 +102,18 @@ public class PipGeometryTests
         Assert.Equal(242, PipGeometry.FitHeight(484, new Rectangle(0, 0, 800, 400)));
     }
 
+    [Theory]
+    [InlineData(240, 1, 12)]   // The top edge itself.
+    [InlineData(240, 4, 0)]    // Just inside it: the app's own controls, a browser's tabs for one.
+    [InlineData(5, 5, 13)]     // Corners stay easy to grab.
+    [InlineData(474, 5, 14)]
+    [InlineData(5, 305, 16)]
+    [InlineData(470, 1, 12)]   // Past the corner, the top edge again.
+    [InlineData(1, 150, 10)]
+    [InlineData(10, 150, 0)]
+    public void A_view_used_directly_resizes_from_thin_edges_and_wide_corners(int x, int y, int expected) =>
+        Assert.Equal(expected, PipGeometry.SizingHit(new Point(x, y), new Rectangle(0, 0, 480, 310), PipGeometry.DirectEdgeBand, PipGeometry.DirectCornerBand));
+
     [Fact]
     public void Fit_height_never_goes_below_the_minimum()
     {

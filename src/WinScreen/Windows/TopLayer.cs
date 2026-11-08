@@ -37,6 +37,9 @@ internal static class TopLayer
 
     internal static bool InputBlocked => Survey().Blocked;
 
+    /// <summary>Whether the taskbar's overflow panel is open, when views let the pointer through to it.</summary>
+    internal static bool OverflowOpen => Survey().OverflowOpen;
+
     /// <summary>Raises only when another ordinary window is ahead, then repairs the higher layers.</summary>
     internal static void Raise(nint window)
     {

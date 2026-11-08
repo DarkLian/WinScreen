@@ -33,7 +33,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         return User32.SendMessageTimeout(source, User32.WM_NCHITTEST, 0, Pack(mapped), 2, 30, out nint hit) != 0 ? hit : -2;
     }
 
-    private nint TargetAt(Point mapped)
+    internal nint TargetAt(Point mapped)
     {
         nint target = source;
         for (int depth = 0; depth < 32; depth++)

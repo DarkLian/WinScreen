@@ -8,14 +8,25 @@ public static class PipGeometry
     internal static bool NeedsWholePreview(int pictureWidth, int shownWidth) =>
         pictureWidth > 0 && shownWidth > 0 && pictureWidth / (double)shownWidth < 0.5;
 
-    internal static int SizingHit(Point point, Rectangle bounds, int band)
+    /// <summary>Resize bands, in DIPs. A view used directly keeps thin edges, so the app's own controls near
+    /// them (a browser's tabs, for one) can still be clicked; its corners stay easy to grab.</summary>
+    internal const int EdgeBand = 6, DirectEdgeBand = 2, DirectCornerBand = 8;
+
+    /// <param name="corner">How far a corner reaches along each side; never less than <paramref name="band"/>.</param>
+    internal static int SizingHit(Point point, Rectangle bounds, int band, int corner = 0)
     {
         if (!bounds.Contains(point)) return 0;
-        bool left = point.X < bounds.Left + band, right = point.X >= bounds.Right - band;
-        bool top = point.Y < bounds.Top + band, bottom = point.Y >= bounds.Bottom - band;
-        if (top) return left ? 13 : right ? 14 : 12;
-        if (bottom) return left ? 16 : right ? 17 : 15;
-        return left ? 10 : right ? 11 : 0;
+        corner = Math.Max(corner, band);
+        bool nearLeft = point.X < bounds.Left + corner, nearRight = point.X >= bounds.Right - corner;
+        bool nearTop = point.Y < bounds.Top + corner, nearBottom = point.Y >= bounds.Bottom - corner;
+        if (nearTop && nearLeft) return 13;
+        if (nearTop && nearRight) return 14;
+        if (nearBottom && nearLeft) return 16;
+        if (nearBottom && nearRight) return 17;
+        if (point.Y < bounds.Top + band) return 12;
+        if (point.Y >= bounds.Bottom - band) return 15;
+        if (point.X < bounds.Left + band) return 10;
+        return point.X >= bounds.Right - band ? 11 : 0;
     }
 
     internal static Rectangle FitPicture(Rectangle area, Rectangle shown)

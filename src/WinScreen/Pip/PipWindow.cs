@@ -24,6 +24,7 @@ public sealed class PipWindow : Form
     private const int WM_MOUSEACTIVATE = 0x0021;
     private const int MA_NOACTIVATE = 3;
     private const int WM_SETCURSOR = 0x0020, HTCLIENT = 1;
+
     private bool _cursorFromFrame;
 
     private const int WM_DISPLAYCHANGE = 0x007E;
@@ -51,6 +52,7 @@ public sealed class PipWindow : Form
     private Icon? _sourceIcon;
     private bool _suspended;
     private bool _inputPaused;
+    private bool _passToShell;
     private bool _parkedCaptureFallback;
     private Task _retiringCapture = Task.CompletedTask;
     private bool _resumeRequested;
@@ -416,7 +418,7 @@ public sealed class PipWindow : Form
             return;
         const long both = User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT;
         long style = User32.GetWindowLongPtr(Handle, User32.GWL_EXSTYLE);
-        bool passes = _overrides.ClickThrough || _inputPaused;
+        bool passes = _overrides.ClickThrough || _passToShell;
         long wanted = passes ? style | both : style & ~both;
         if (wanted != style)
             User32.SetWindowLongPtr(Handle, User32.GWL_EXSTYLE, (nint)wanted);
@@ -758,7 +760,9 @@ public sealed class PipWindow : Form
         if (m.Msg == User32.WM_NCHITTEST && !_overrides.ClickThrough)
         {
             var point = new Point((short)m.LParam.ToInt64(), (short)(m.LParam.ToInt64() >> 16));
-            int hit = PipGeometry.SizingHit(point, Bounds, Dpi.Scale(6, DeviceDpi));
+            int hit = _interactiveItem.Checked
+                ? PipGeometry.SizingHit(point, Bounds, Dpi.Scale(PipGeometry.DirectEdgeBand, DeviceDpi), Dpi.Scale(PipGeometry.DirectCornerBand, DeviceDpi))
+                : PipGeometry.SizingHit(point, Bounds, Dpi.Scale(PipGeometry.EdgeBand, DeviceDpi));
             if (hit != 0) { m.Result = hit; return; }
         }
         if (m.Msg == 0x0214 && _overrides.KeepAspectRatio && !_lastShown.IsEmpty)
@@ -791,6 +795,8 @@ public sealed class PipWindow : Form
             {
                 if (_cursorFromFrame) Cursor.Current = Cursors.Default;
                 _cursorFromFrame = false;
+                // With input shared, the app's answer sets the pointer seen over the view.
+                if (_live.SharesInput) _live.AskForCursor();
                 m.Result = 1;
                 return;
             }
@@ -1112,6 +1118,7 @@ public sealed class PipWindow : Form
         try { if (_origin.IsAvailable) _windows.SetParkedReachable(_source, false); }
         catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); }
         live.Dispose();
+        Cursor.Current = Cursors.Default;
         SetInputPassesThrough(false);
         if (User32.GetForegroundWindow() == _source)
         {
@@ -1204,6 +1211,7 @@ public sealed class PipWindow : Form
     {
         if (_inputPaused == paused) return;
         _inputPaused = paused;
+        if (!paused) _passToShell = false;
         if (paused)
         {
             CancelPress();
@@ -1388,6 +1396,10 @@ public sealed class PipWindow : Form
         if (_hideItem.Checked && !_windows.IsHidden(_source))
             _hideItem.Checked = false;
         PauseInput(_menu.Visible || TopLayer.InputBlocked);
+        // The taskbar's overflow panel can open over a view; the pointer goes through to it. WinScreen's own menus
+        // need no such thing: a click on the view while its menu is open just closes the menu.
+        bool passToShell = _inputPaused && TopLayer.OverflowOpen;
+        if (passToShell != _passToShell) { _passToShell = passToShell; ApplyClickThrough(); }
         FollowOriginalState();
         if (_suspended || IsDisposed) return;
         // A hidden original's link text and tooltips would show where it really is; every fifth tick is enough.
