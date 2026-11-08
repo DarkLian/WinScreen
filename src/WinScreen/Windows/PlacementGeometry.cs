@@ -5,6 +5,8 @@ public enum WindowAnchor { TopLeft, Top, TopRight, Left, Center, Right, BottomLe
 [Flags]
 public enum ResizeEdges { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 }
 
+public enum SnapZone { None, Maximize, Left, Right, TopLeft, TopRight, BottomLeft, BottomRight }
+
 /// <summary>The arithmetic of placing a window, kept apart from Windows so it can be tested directly.</summary>
 public static class PlacementGeometry
 {
@@ -64,6 +66,53 @@ public static class PlacementGeometry
         if (edges.HasFlag(ResizeEdges.Top)) top = Math.Min(top + moved.Height, bottom - smallest.Height);
         if (edges.HasFlag(ResizeEdges.Bottom)) bottom = Math.Max(bottom + moved.Height, top + smallest.Height);
         return Rectangle.FromLTRB(left, top, right, bottom);
+    }
+
+    /// <summary>
+    /// Which snap a dragged window gets with the pointer here. Only an edge with no other display past it
+    /// counts, so the pointer can still cross to a neighbouring display. Near a side edge's ends it's a corner;
+    /// the bottom edge doesn't snap, as in Windows.
+    /// </summary>
+    public static SnapZone SnapZoneAt(Point pointer, Rectangle display, bool leftOpen, bool topOpen, bool rightOpen)
+    {
+        const int Reach = 1;
+        int corner = Math.Max(40, display.Height / 8);
+        bool left = leftOpen && pointer.X <= display.Left + Reach;
+        bool right = rightOpen && pointer.X >= display.Right - 1 - Reach;
+        bool top = topOpen && pointer.Y <= display.Top + Reach;
+        bool upper = pointer.Y < display.Top + corner, lower = pointer.Y >= display.Bottom - corner;
+        if (left) return upper ? SnapZone.TopLeft : lower ? SnapZone.BottomLeft : SnapZone.Left;
+        if (right) return upper ? SnapZone.TopRight : lower ? SnapZone.BottomRight : SnapZone.Right;
+        if (top) return SnapZone.Maximize;
+        return SnapZone.None;
+    }
+
+    /// <summary>The visible frame a snap gives, inside a display's work area. Maximize fills it.</summary>
+    public static Rectangle SnapFrame(SnapZone zone, Rectangle area)
+    {
+        int halfWidth = area.Width / 2, halfHeight = area.Height / 2;
+        return zone switch
+        {
+            SnapZone.Left => new Rectangle(area.Left, area.Top, halfWidth, area.Height),
+            SnapZone.Right => Rectangle.FromLTRB(area.Left + halfWidth, area.Top, area.Right, area.Bottom),
+            SnapZone.TopLeft => new Rectangle(area.Left, area.Top, halfWidth, halfHeight),
+            SnapZone.TopRight => Rectangle.FromLTRB(area.Left + halfWidth, area.Top, area.Right, area.Top + halfHeight),
+            SnapZone.BottomLeft => Rectangle.FromLTRB(area.Left, area.Top + halfHeight, area.Left + halfWidth, area.Bottom),
+            SnapZone.BottomRight => Rectangle.FromLTRB(area.Left + halfWidth, area.Top + halfHeight, area.Right, area.Bottom),
+            _ => area,
+        };
+    }
+
+    /// <summary>
+    /// Where a window that's coming out of maximized or snapped goes, so the point that was grabbed stays
+    /// under the pointer: the same share across and down the smaller window as it was of the bigger one.
+    /// </summary>
+    public static Rectangle RestoredUnder(Point pointer, Point grabbed, Rectangle before, Size restored)
+    {
+        double across = before.Width > 0 ? Math.Clamp((grabbed.X - before.Left) / (double)before.Width, 0, 1) : 0.5;
+        double down = before.Height > 0 ? Math.Clamp((grabbed.Y - before.Top) / (double)before.Height, 0, 1) : 0;
+        return new Rectangle(pointer.X - (int)Math.Round(across * restored.Width),
+            pointer.Y - (int)Math.Round(down * restored.Height), restored.Width, restored.Height);
     }
 
     /// <summary>The display after <paramref name="current"/>, wrapping round, or -1 when there's only one.</summary>

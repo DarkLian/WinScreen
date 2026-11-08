@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -23,7 +24,8 @@ internal static class ModifierHookPolicy
 
 /// <summary>
 /// Hold a modifier and drag anywhere in a window: left button moves it, right button resizes it from the
-/// nearest edge or corner. Raw input can see a click but can't stop it reaching the app, so this needs a
+/// nearest edge or corner. A maximized window comes out of maximized once the drag gets going, and a moved
+/// window can snap to a display's edges the way a title-bar drag does. Raw input can see a click but can't stop it reaching the app, so this needs a
 /// low-level mouse hook. That hook and its threads exist only while <see cref="Active"/> is on, and there is
 /// no keyboard hook: the modifier is only read at the moment a mouse button goes down.
 /// </summary>
@@ -39,9 +41,28 @@ internal sealed class MouseGestures : IDisposable
     private const int MaskKey = 0xE8; // Unassigned: tapping it stops a held Alt or Win opening a menu or Start.
     private const int ClaimEscape = WM_APP + 1, ReleaseEscape = WM_APP + 2;
     private const int EscapeHotkey = 0x5751;
+    private static readonly uint[] EscapeModifiers = [0, 1, 8]; // None, Alt, Win.
     private const uint KeyUp = 2;
     private const int ThreadExit = 2000;
+    private const int SettleLimitMilliseconds = 50;
+    private const int SM_CXDRAG = 68, SM_CYDRAG = 69, SPI_GETWINARRANGING = 0x0082;
+    private const long WS_THICKFRAME = 0x40000, WS_MAXIMIZEBOX = 0x10000;
+    private const int SW_SHOWMAXIMIZED = 3;
     private static readonly Size Smallest = new(120, 60);
+
+    /// <summary>What the mover knows about the drag in hand. Only the mover thread touches it.</summary>
+    private sealed class Drag(Gesture gesture)
+    {
+        public Gesture Gesture { get; } = gesture;
+        public Rectangle Original = gesture.Original; // Where the motion is measured from.
+        public Point Start = gesture.Start;
+        public WindowPlacement Before;
+        public bool Maximized, Restored, CanSnap, CanMaximize;
+        public Size? SnappedFrom; // The size before a snap, for a snapped window being dragged out.
+        public SnapZone Zone;
+        public Point Pointer;
+        public Rectangle? Sent;
+    }
 
     private sealed record Gesture(nint Window, bool Resizing, Point Start, Rectangle Original, ResizeEdges Edges, int ReleaseMessage);
 
@@ -49,6 +70,8 @@ internal sealed class MouseGestures : IDisposable
     private readonly Action<nint> _began;
     private readonly HookProc _proc; // Held here so the collector can't take it while Windows has it.
     private readonly AutoResetEvent _moved = new(false);
+    private readonly ConcurrentQueue<(Gesture Gesture, bool Cancelled)> _endings = new();
+    private readonly Dictionary<nint, (Rectangle Snapped, Size Before)> _snapped = []; // Mover thread only.
     private Thread? _hookThread, _mover;
     private uint _hookThreadId;
     private volatile Gesture? _gesture;
@@ -74,6 +97,12 @@ internal sealed class MouseGestures : IDisposable
     private nint _wheelWindow;
     private int _wheelRemainder;
     public bool MenuVisible { get => _menuVisible; set => _menuVisible = value; }
+
+    /// <summary>Whether a moved window snaps at a display's edges. Windows' own Snap switch has to be on too.</summary>
+    public bool SnapEnabled { get; set; } = true;
+
+    /// <summary>Told, off the UI thread, where a snap would put the window, or null when there's none.</summary>
+    public Action<Rectangle?>? SnapPreview { get; set; }
     private long _lastCallback;
     private long _longestCallbackTicks;
 
@@ -136,17 +165,19 @@ internal sealed class MouseGestures : IDisposable
             {
                 while (GetMessage(out Msg message, 0, 0, 0) > 0)
                 {
+                    // Esc on its own, or with the held key: people keep holding it while they drag.
                     if (message.Message == ClaimEscape)
-                        RegisterHotKey(0, EscapeHotkey, User32.MOD_NOREPEAT, VK_ESCAPE);
+                        for (int i = 0; i < EscapeModifiers.Length; i++)
+                            RegisterHotKey(0, EscapeHotkey + i, User32.MOD_NOREPEAT | EscapeModifiers[i], VK_ESCAPE);
                     else if (message.Message == ReleaseEscape)
-                        UnregisterHotKey(0, EscapeHotkey);
-                    else if (message.Message == WM_HOTKEY && message.WParam == EscapeHotkey)
+                        ReleaseEscapeKeys();
+                    else if (message.Message == WM_HOTKEY && message.WParam - EscapeHotkey is >= 0 and < 3)
                         Cancel();
                 }
             }
             finally
             {
-                UnregisterHotKey(0, EscapeHotkey);
+                ReleaseEscapeKeys();
                 UnhookWindowsHookEx(hook);
             }
         }) { IsBackground = true, Name = "WinScreen modifier hook", Priority = ThreadPriority.AboveNormal };
@@ -177,6 +208,11 @@ internal sealed class MouseGestures : IDisposable
         _hookThread?.Join(ThreadExit);
         _mover?.Join(ThreadExit);
         _hookThread = _mover = null;
+    }
+
+    private static void ReleaseEscapeKeys()
+    {
+        for (int i = 0; i < EscapeModifiers.Length; i++) UnregisterHotKey(0, EscapeHotkey + i);
     }
 
     private bool ModifierHeld() => Key == ModifierKey.Win
@@ -320,22 +356,29 @@ internal sealed class MouseGestures : IDisposable
         _swallowRelease = false;
         bool dragged = _dragClaimed;
         _dragClaimed = false;
-        _gesture = null;
+        if (_gesture is { } gesture)
+        {
+            _gesture = null;
+            _endings.Enqueue((gesture, false));
+            _moved.Set();
+        }
         PostThreadMessage(_hookThreadId, ReleaseEscape, 0, 0);
         if (dragged) MaskModifier();
         return true;
     }
 
-    /// <summary>Esc puts the window back. The button is still down, so its release is still WinScreen's to swallow.</summary>
+    /// <summary>
+    /// Esc puts the window back, maximized again if it was. The button is still down, so its release is still
+    /// WinScreen's to swallow. The mover does the putting back: this thread must never wait on another app.
+    /// </summary>
     private void Cancel()
     {
         Gesture? gesture = _gesture;
         if (gesture is null)
             return;
         _gesture = null;
-        Rectangle r = gesture.Original;
-        User32.SetWindowPos(gesture.Window, 0, r.X, r.Y, r.Width, r.Height,
-            User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_ASYNCWINDOWPOS);
+        _endings.Enqueue((gesture, true));
+        _moved.Set();
     }
 
     private void MaskModifier()
@@ -346,35 +389,218 @@ internal sealed class MouseGestures : IDisposable
         keybd_event(MaskKey, 0, KeyUp, 0);
     }
 
-    /// <summary>Follows the pointer off the hook's thread. Asynchronous moves mean a hung app can't stall the mouse.</summary>
+    /// <summary>
+    /// Follows the pointer off the hook's thread. Each move is asynchronous, so a hung app can't stall the mouse,
+    /// and the next one waits until the app has caught up with the last: sending every pointer position would
+    /// pile up in a slow app's queue and play back long after the pointer stopped.
+    /// </summary>
     private void MoveWindows()
     {
-        Gesture? noted = null;
+        Drag? drag = null;
         while (!_stopping && !_moveStopping)
         {
             _moved.WaitOne();
-            if (_moveStopping) return;
+            if (_moveStopping) break;
+            while (_endings.TryDequeue(out var ending))
+            {
+                if (drag is null || !ReferenceEquals(drag.Gesture, ending.Gesture))
+                    drag = Started(ending.Gesture); // Released before the mover got to it: it still goes where it was dropped.
+                if (!ending.Cancelled) Follow(drag, Pointer());
+                Finish(drag, ending.Cancelled);
+                drag = null;
+            }
+
             if (_stopping || _gesture is not { } gesture)
             {
-                noted = null;
+                if (drag is not null) ShowZone(drag, SnapZone.None);
+                drag = null;
                 continue;
             }
 
-            if (!ReferenceEquals(noted, gesture))
-            {
-                noted = gesture;
-                _began(gesture.Window);
-            }
+            if (drag is null || !ReferenceEquals(drag.Gesture, gesture))
+                drag = Started(gesture);
+            Follow(drag, Pointer());
+        }
 
-            long packed = Interlocked.Read(ref _point);
-            var moved = new Size((int)(packed >> 32) - gesture.Start.X, (int)packed - gesture.Start.Y);
-            const uint flags = User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_ASYNCWINDOWPOS;
-            Rectangle r = gesture.Resizing
-                ? PlacementGeometry.Resized(gesture.Original, gesture.Edges, moved, Smallest)
-                : new Rectangle(gesture.Original.Location + moved, gesture.Original.Size);
-            User32.SetWindowPos(gesture.Window, 0, r.X, r.Y, r.Width, r.Height, gesture.Resizing ? flags : flags | User32.SWP_NOSIZE);
+        if (drag is not null) ShowZone(drag, SnapZone.None);
+    }
+
+    private Point Pointer()
+    {
+        long packed = Interlocked.Read(ref _point);
+        return new Point((int)(packed >> 32), (int)packed);
+    }
+
+    private Drag Started(Gesture gesture)
+    {
+        _began(gesture.Window);
+        var drag = new Drag(gesture) { Before = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() } };
+        User32.GetWindowPlacement(gesture.Window, ref drag.Before);
+        drag.Maximized = User32.IsZoomed(gesture.Window);
+        long style = (long)User32.GetWindowLongPtr(gesture.Window, User32.GWL_STYLE);
+        drag.CanSnap = (style & WS_THICKFRAME) != 0;
+        drag.CanMaximize = (style & WS_MAXIMIZEBOX) != 0;
+        foreach (nint gone in _snapped.Keys.Where(window => !User32.IsWindow(window)).ToArray())
+            _snapped.Remove(gone);
+        if (!drag.Maximized && !gesture.Resizing && _snapped.TryGetValue(gesture.Window, out var snapped) &&
+            snapped.Snapped == gesture.Original)
+            drag.SnappedFrom = snapped.Before;
+        return drag;
+    }
+
+    private void Follow(Drag drag, Point pointer)
+    {
+        Gesture gesture = drag.Gesture;
+        drag.Pointer = pointer;
+        if ((drag.Maximized || drag.SnappedFrom is not null) && !drag.Restored)
+        {
+            // A click with the key held, or a little wobble, shouldn't take a window out of maximized.
+            if (Math.Abs(pointer.X - gesture.Start.X) < GetSystemMetrics(SM_CXDRAG) &&
+                Math.Abs(pointer.Y - gesture.Start.Y) < GetSystemMetrics(SM_CYDRAG))
+                return;
+            if (!Restore(drag, pointer)) return;
+        }
+
+        var moved = new Size(pointer.X - drag.Start.X, pointer.Y - drag.Start.Y);
+        Rectangle r = gesture.Resizing
+            ? PlacementGeometry.Resized(drag.Original, gesture.Edges, moved, Smallest)
+            : new Rectangle(drag.Original.Location + moved, drag.Original.Size);
+        if (!gesture.Resizing) ShowZone(drag, ZoneAt(drag, pointer));
+        Send(gesture.Window, r, gesture.Resizing ? 0 : User32.SWP_NOSIZE, drag);
+    }
+
+    /// <summary>Takes a window out of maximized or snapped, under the pointer. False when the app is hung.</summary>
+    private bool Restore(Drag drag, Point pointer)
+    {
+        nint window = drag.Gesture.Window;
+        if (IsHungAppWindow(window)) return false;
+        drag.Restored = true;
+        if (drag.SnappedFrom is { } size)
+        {
+            _snapped.Remove(window);
+            Rectangle under = PlacementGeometry.RestoredUnder(pointer, drag.Gesture.Start, drag.Original, size);
+            Send(window, under, 0, drag);
+            drag.Original = under;
+            drag.Start = pointer;
+            return true;
+        }
+
+        Screen screen = Screen.FromHandle(window);
+        Rectangle area = screen.WorkingArea, all = screen.Bounds;
+        Rect normal = drag.Before.NormalPosition;
+        var restored = new Size(normal.Right - normal.Left, normal.Bottom - normal.Top);
+        Rectangle target = drag.Gesture.Resizing
+            ? area // Resizing starts from what's on screen, so the window doesn't jump.
+            : PlacementGeometry.RestoredUnder(pointer, drag.Gesture.Start, area, restored);
+        WindowPlacement placement = drag.Before;
+        placement.ShowCommand = User32.SW_SHOWNOACTIVATE;
+        placement.NormalPosition = new Rect(target.Left - (area.Left - all.Left), target.Top - (area.Top - all.Top),
+            target.Right - (area.Left - all.Left), target.Bottom - (area.Top - all.Top));
+        User32.SetWindowPlacement(window, ref placement);
+        if (drag.Gesture.Resizing && WindowInfo.TryGetFrameBounds(window, out Rectangle frame, out Rectangle outer))
+        {
+            Rectangle wanted = PlacementGeometry.OuterFor(area, frame, outer);
+            User32.SetWindowPos(window, 0, wanted.X, wanted.Y, wanted.Width, wanted.Height, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+        }
+
+        if (!User32.GetWindowRect(window, out Rect now)) return false;
+        drag.Original = Rectangle.FromLTRB(now.Left, now.Top, now.Right, now.Bottom);
+        drag.Sent = drag.Original;
+        if (!drag.Gesture.Resizing) drag.Start = pointer; // A resize keeps measuring from the press.
+        return true;
+    }
+
+    /// <summary>Asks for a new place without waiting on the app, then gives it a moment to get there.</summary>
+    private static void Send(nint window, Rectangle r, uint extra, Drag drag)
+    {
+        if (drag.Sent == r) return;
+        drag.Sent = r;
+        User32.SetWindowPos(window, 0, r.X, r.Y, r.Width, r.Height,
+            User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_ASYNCWINDOWPOS | extra);
+        var clock = Stopwatch.StartNew();
+        while (clock.ElapsedMilliseconds < SettleLimitMilliseconds)
+        {
+            if (!User32.GetWindowRect(window, out Rect now)) return;
+            if (now.Left == r.Left && now.Top == r.Top &&
+                ((extra & User32.SWP_NOSIZE) != 0 || (now.Right == r.Right && now.Bottom == r.Bottom)))
+                return;
+            Thread.Sleep(1);
         }
     }
+
+    private SnapZone ZoneAt(Drag drag, Point pointer)
+    {
+        if (!SnapEnabled || !drag.CanSnap || !WindowsSnaps()) return SnapZone.None;
+        Rectangle display = Screen.FromPoint(pointer).Bounds;
+        Screen[] screens = Screen.AllScreens;
+        bool Open(int x, int y) => !screens.Any(screen => screen.Bounds.Contains(x, y));
+        SnapZone zone = PlacementGeometry.SnapZoneAt(pointer, display, Open(display.Left - 1, pointer.Y),
+            Open(pointer.X, display.Top - 1), Open(display.Right, pointer.Y));
+        return zone == SnapZone.Maximize && !drag.CanMaximize ? SnapZone.None : zone;
+    }
+
+    private void ShowZone(Drag drag, SnapZone zone)
+    {
+        if (drag.Zone == zone) return;
+        drag.Zone = zone;
+        SnapPreview?.Invoke(zone == SnapZone.None
+            ? null
+            : PlacementGeometry.SnapFrame(zone, Screen.FromPoint(drag.Pointer).WorkingArea));
+    }
+
+    private void Finish(Drag drag, bool cancelled)
+    {
+        SnapZone zone = drag.Zone;
+        ShowZone(drag, SnapZone.None);
+        nint window = drag.Gesture.Window;
+        if (cancelled)
+        {
+            if (drag.Maximized)
+            {
+                if (drag.Restored && !IsHungAppWindow(window)) User32.SetWindowPlacement(window, ref drag.Before);
+                return;
+            }
+            Rectangle r = drag.Gesture.Original;
+            User32.SetWindowPos(window, 0, r.X, r.Y, r.Width, r.Height,
+                User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_ASYNCWINDOWPOS);
+            if (drag.SnappedFrom is { } before) _snapped[window] = (r, before);
+            return;
+        }
+
+        if (zone != SnapZone.None && !IsHungAppWindow(window)) Snap(drag, zone);
+    }
+
+    private void Snap(Drag drag, SnapZone zone)
+    {
+        nint window = drag.Gesture.Window;
+        if (!User32.GetWindowRect(window, out Rect now)) return;
+        var dropped = Rectangle.FromLTRB(now.Left, now.Top, now.Right, now.Bottom);
+        Screen screen = Screen.FromPoint(drag.Pointer);
+        Rectangle area = screen.WorkingArea, all = screen.Bounds;
+        if (zone == SnapZone.Maximize)
+        {
+            // It comes back out of maximized at the size it had, where it was dropped.
+            var placement = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() };
+            if (!User32.GetWindowPlacement(window, ref placement)) return;
+            placement.ShowCommand = SW_SHOWMAXIMIZED;
+            placement.NormalPosition = new Rect(dropped.Left - (area.Left - all.Left), dropped.Top - (area.Top - all.Top),
+                dropped.Right - (area.Left - all.Left), dropped.Bottom - (area.Top - all.Top));
+            User32.SetWindowPlacement(window, ref placement);
+            return;
+        }
+
+        Rectangle target = PlacementGeometry.SnapFrame(zone, area);
+        for (int attempt = 0; attempt < 2; attempt++) // A second go if a change of scaling changed the invisible margins.
+        {
+            if (!WindowInfo.TryGetFrameBounds(window, out Rectangle frame, out Rectangle outer) || frame == target) break;
+            Send(window, PlacementGeometry.OuterFor(target, frame, outer), 0, drag);
+        }
+        if (User32.GetWindowRect(window, out now))
+            _snapped[window] = (Rectangle.FromLTRB(now.Left, now.Top, now.Right, now.Bottom), dropped.Size);
+    }
+
+    /// <summary>Windows' own "Snap windows" switch.</summary>
+    private static bool WindowsSnaps() => !SystemParametersInfo(SPI_GETWINARRANGING, 0, out int on, 0) || on != 0;
 
     private static long Pack(int x, int y) => ((long)x << 32) | (uint)y;
 
@@ -429,6 +655,17 @@ internal sealed class MouseGestures : IDisposable
 
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int key);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
+
+    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SystemParametersInfo(uint action, uint parameter, out int value, uint update);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsHungAppWindow(nint window);
 
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte key, byte scan, uint flags, nuint extra);

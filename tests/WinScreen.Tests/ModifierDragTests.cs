@@ -44,10 +44,51 @@ public sealed class ModifierHookPolicyTests
             PlacementGeometry.Resized(Window, ResizeEdges.Left, new Size(900, 0), new Size(120, 60)));
     }
 
+    private static readonly Rectangle Display = new(0, 0, 1920, 1080);
+
+    [Theory]
+    [InlineData(0, 500, SnapZone.Left)]
+    [InlineData(1919, 500, SnapZone.Right)]
+    [InlineData(900, 0, SnapZone.Maximize)]
+    [InlineData(0, 20, SnapZone.TopLeft)]
+    [InlineData(1919, 1070, SnapZone.BottomRight)]
+    [InlineData(900, 1079, SnapZone.None)]
+    [InlineData(900, 500, SnapZone.None)]
+    [InlineData(5, 500, SnapZone.None)]
+    public void A_window_snaps_only_with_the_pointer_at_an_edge(int x, int y, SnapZone expected) =>
+        Assert.Equal(expected, PlacementGeometry.SnapZoneAt(new Point(x, y), Display, true, true, true));
+
+    [Fact]
+    public void An_edge_with_another_display_past_it_doesnt_snap()
+    {
+        Assert.Equal(SnapZone.None, PlacementGeometry.SnapZoneAt(new Point(1919, 500), Display, true, true, false));
+        Assert.Equal(SnapZone.None, PlacementGeometry.SnapZoneAt(new Point(900, 0), Display, true, false, true));
+    }
+
+    [Fact]
+    public void Snaps_fill_halves_and_quarters_of_the_work_area()
+    {
+        var area = new Rectangle(0, 0, 1920, 1040);
+        Assert.Equal(new Rectangle(0, 0, 960, 1040), PlacementGeometry.SnapFrame(SnapZone.Left, area));
+        Assert.Equal(new Rectangle(960, 0, 960, 1040), PlacementGeometry.SnapFrame(SnapZone.Right, area));
+        Assert.Equal(new Rectangle(960, 520, 960, 520), PlacementGeometry.SnapFrame(SnapZone.BottomRight, area));
+        Assert.Equal(area, PlacementGeometry.SnapFrame(SnapZone.Maximize, area));
+    }
+
+    [Fact]
+    public void A_window_coming_out_of_maximized_keeps_the_grabbed_point_under_the_pointer()
+    {
+        // Grabbed three quarters across and a tenth down a 1920 by 1000 window, now 800 by 600.
+        Rectangle restored = PlacementGeometry.RestoredUnder(new Point(1500, 150), new Point(1440, 100),
+            new Rectangle(0, 0, 1920, 1000), new Size(800, 600));
+        Assert.Equal(new Rectangle(900, 90, 800, 600), restored);
+    }
+
     [Fact]
     public void It_is_off_until_asked_for_and_damaged_settings_keep_it_safe()
     {
         Assert.False(new AppSettings().ModifierDrag);
+        Assert.True(new AppSettings().SnapWhileDragging);
         string path = Path.Combine(Directory.CreateTempSubdirectory("winscreen-modifier").FullName, "settings.json");
         File.WriteAllText(path, "{\"ModifierKey\":9,\"ModifierExclusions\":null}");
         AppSettings loaded = AppSettings.Load(path);
@@ -191,6 +232,158 @@ public sealed class ModifierGestureTests
             Assert.True(Desktop.WaitFor(() => Near(RectOf(target.Handle).Size, new Size(450, 340)), 1000), RectOf(target.Handle).ToString());
             Assert.Null(target.NextReport(100));
             Assert.InRange(drag.LongestCallback.TotalMilliseconds, 0, 100);
+        }
+        finally
+        {
+            keybd_event(Alt, 0, 2, 0);
+            drag.SetActive(false);
+            Cursor.Position = original;
+        }
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsZoomed(nint window);
+
+    private static void Press(uint down)
+    {
+        mouse_event(down, 0, 0, 0, 0);
+        Pump(60);
+    }
+
+    private static void Glide(Point from, Point to, int steps, int pause)
+    {
+        for (int i = 1; i <= steps; i++)
+        {
+            MoveTo(new Point(from.X + (to.X - from.X) * i / steps, from.Y + (to.Y - from.Y) * i / steps));
+            Pump(pause);
+        }
+    }
+
+    private static MouseGestures Gestures(TargetProcess target) => new(window => window == target.Handle, _ => { });
+
+    [Fact]
+    public void A_fast_drag_of_a_slow_app_catches_up_as_soon_as_its_let_go_and_then_stays()
+    {
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(new(300, 200, 400, 300));
+        target.BeSlow(30);
+        Desktop.Activate(target.Handle);
+        using var drag = Gestures(target);
+        drag.SnapEnabled = false;
+        Point original = Cursor.Position;
+        drag.SetActive(true);
+        Pump(150);
+        try
+        {
+            keybd_event(Alt, 0, 0, 0);
+            MoveTo(new Point(450, 300));
+            Pump(60);
+            Press(LeftDown);
+            Glide(new Point(450, 300), new Point(850, 500), 60, 4); // About 60 moves in a quarter of a second.
+            mouse_event(LeftUp, 0, 0, 0, 0);
+            keybd_event(Alt, 0, 2, 0);
+            var expected = new Point(700, 400);
+            Assert.True(Desktop.WaitFor(() => Near(RectOf(target.Handle).Location, expected), 400), RectOf(target.Handle).ToString());
+            Pump(500);
+            Assert.True(Near(RectOf(target.Handle).Location, expected), "It moved again after settling: " + RectOf(target.Handle));
+        }
+        finally
+        {
+            keybd_event(Alt, 0, 2, 0);
+            drag.SetActive(false);
+            Cursor.Position = original;
+        }
+    }
+
+    [Fact]
+    public void Alt_drag_brings_a_maximized_window_out_and_esc_puts_it_back()
+    {
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(new(300, 200, 400, 300));
+        target.UseFrame();
+        Desktop.Activate(target.Handle);
+        Size normal = RectOf(target.Handle).Size;
+        User32.ShowWindow(target.Handle, User32.SW_MAXIMIZE);
+        Assert.True(Desktop.WaitFor(() => IsZoomed(target.Handle), 2000));
+        using var drag = Gestures(target);
+        drag.SnapEnabled = false;
+        Point original = Cursor.Position;
+        drag.SetActive(true);
+        Pump(150);
+        try
+        {
+            keybd_event(Alt, 0, 0, 0);
+            // A click with the key held leaves it maximized.
+            MoveTo(new Point(600, 400));
+            Pump(60);
+            Press(LeftDown);
+            mouse_event(LeftUp, 0, 0, 0, 0);
+            Pump(200);
+            Assert.True(IsZoomed(target.Handle));
+
+            // Esc partway through a drag puts it back to maximized.
+            Press(LeftDown);
+            Glide(new Point(600, 400), new Point(700, 450), 10, 20);
+            Assert.True(Desktop.WaitFor(() => !IsZoomed(target.Handle), 1000), "It didn't come out of maximized.");
+            Desktop.Press(Keys.Escape);
+            mouse_event(LeftUp, 0, 0, 0, 0);
+            Assert.True(Desktop.WaitFor(() => IsZoomed(target.Handle), 1000), "Esc didn't put it back to maximized.");
+
+            // A real drag leaves it at its own size, under the pointer.
+            MoveTo(new Point(600, 400));
+            Pump(60);
+            Press(LeftDown);
+            Glide(new Point(600, 400), new Point(700, 450), 10, 20);
+            mouse_event(LeftUp, 0, 0, 0, 0);
+            keybd_event(Alt, 0, 2, 0);
+            Assert.True(Desktop.WaitFor(() => !IsZoomed(target.Handle) && Near(RectOf(target.Handle).Size, normal), 1000),
+                RectOf(target.Handle).ToString());
+            Assert.True(RectOf(target.Handle).Contains(new Point(700, 450)), RectOf(target.Handle).ToString());
+            Assert.Null(target.NextReport(100));
+        }
+        finally
+        {
+            keybd_event(Alt, 0, 2, 0);
+            drag.SetActive(false);
+            Cursor.Position = original;
+        }
+    }
+
+    [Fact]
+    public void Alt_drag_to_the_left_edge_snaps_to_half_and_dragging_out_brings_back_the_size()
+    {
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(new(500, 200, 400, 300));
+        target.UseFrame();
+        Desktop.Activate(target.Handle);
+        Size before = RectOf(target.Handle).Size;
+        using var drag = Gestures(target);
+        Point original = Cursor.Position;
+        drag.SetActive(true);
+        Pump(150);
+        try
+        {
+            Screen screen = Screen.FromHandle(target.Handle);
+            Rectangle half = PlacementGeometry.SnapFrame(SnapZone.Left, screen.WorkingArea);
+            keybd_event(Alt, 0, 0, 0);
+            MoveTo(new Point(650, 300));
+            Pump(60);
+            Press(LeftDown);
+            Glide(new Point(650, 300), new Point(screen.Bounds.Left, 400), 15, 20);
+            Pump(100);
+            mouse_event(LeftUp, 0, 0, 0, 0);
+            Assert.True(Desktop.WaitFor(() => WindowInfo.TryGetFrameBounds(target.Handle, out Rectangle frame, out _) &&
+                Near(frame.Location, half.Location) && Near(frame.Size, half.Size), 1500), RectOf(target.Handle).ToString());
+
+            MoveTo(new Point(200, 400));
+            Pump(60);
+            Press(LeftDown);
+            Glide(new Point(200, 400), new Point(600, 450), 15, 20);
+            mouse_event(LeftUp, 0, 0, 0, 0);
+            keybd_event(Alt, 0, 2, 0);
+            Assert.True(Desktop.WaitFor(() => Near(RectOf(target.Handle).Size, before), 1000), RectOf(target.Handle).ToString());
+            Assert.True(RectOf(target.Handle).Contains(new Point(600, 450)), RectOf(target.Handle).ToString());
         }
         finally
         {

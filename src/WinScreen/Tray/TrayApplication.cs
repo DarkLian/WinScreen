@@ -37,6 +37,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly Glass.ContentEffects _content;
     private readonly PinBorders _borders = new();
     private readonly ActionFlash _flash = new();
+    private readonly SnapPreview _snapPreview = new();
     private readonly Dictionary<nint, ShrinkTile> _shrunk = [];
     private readonly Dictionary<nint, PipWindow> _pips = [];
     private readonly List<PipWindow> _viewsInOrder = [];
@@ -82,6 +83,9 @@ public sealed class TrayApplication : ApplicationContext
         _dark.Ignore(_toolbar.Handle);
         _ = _flash.Handle;
         _dark.Ignore(_flash.Handle);
+        _ = _snapPreview.Handle;
+        _dark.Ignore(_snapPreview.Handle);
+        _modifierDrag.SnapPreview = area => _toolbar.BeginInvoke(() => _snapPreview.ShowAt(area));
         _dark.Notice += text => Alert(T("window.dark"), text, ToolTipIcon.Info);
         _modifierDrag.OpacityEligible = CanChangeOpacity;
         _modifierDrag.OpacityRequested = (window, steps) =>
@@ -532,6 +536,7 @@ public sealed class TrayApplication : ApplicationContext
 
         _modifierDrag.Key = _settings.ModifierKey;
         _modifierDrag.MoveEnabled = _settings.ModifierDrag;
+        _modifierDrag.SnapEnabled = _settings.SnapWhileDragging;
         _modifierDrag.MenuEnabled = _settings.WindowMenu;
         _modifierDrag.MenuGesture = _settings.WindowMenuGesture;
         _modifierDrag.OpacityWheelEnabled = _settings.OpacityWheel;
@@ -543,7 +548,7 @@ public sealed class TrayApplication : ApplicationContext
             (_settings.ModifierDrag && !_hookForegroundExcluded) ||
             ((_settings.WindowMenu || fallbackMenu) && !menuExcluded) ||
             (_settings.OpacityWheel && !programExcluded),
-            FullScreen.Current(), WindowInfo.FillsMonitor(foreground), false, FullScreen.IsAway());
+            FullScreen.Current(), !User32.IsZoomed(foreground) && WindowInfo.FillsMonitor(foreground), false, FullScreen.IsAway());
         if (!run && _windowMenu is { IsDisposed: false }) _windowMenu.Close();
         Point cursor = Cursor.Position;
         // Windows drops a slow hook without saying so. Input with no callback means it has, so put it back.
@@ -574,8 +579,9 @@ public sealed class TrayApplication : ApplicationContext
     /// <summary>Asked inside the mouse hook, only for a press with the modifier held, so it can afford these calls.</summary>
     private bool CanDrag(nint window)
     {
-        if (!CanGesture(window) ||
-            User32.IsZoomed(window) || User32.IsIconic(window) || WindowInfo.FillsMonitor(window))
+        // A maximized window can be dragged out of maximized; one that fills the screen without being maximized is
+        // a game or a full-screen app.
+        if (!CanGesture(window) || User32.IsIconic(window) || (!User32.IsZoomed(window) && WindowInfo.FillsMonitor(window)))
             return false;
         // CanGesture has already turned away administrator apps.
         return !_settings.ModifierExclusions.Contains(WindowInfo.ProgramOf(window), StringComparer.OrdinalIgnoreCase);
@@ -826,6 +832,7 @@ public sealed class TrayApplication : ApplicationContext
             form.Close();
         _toolbar.Dispose();
         _flash.Dispose();
+        _snapPreview.Dispose();
         Task.Run(_updates.ApplyOnExit).GetAwaiter().GetResult();
         _updates.Dispose();
         _hotkeys.Dispose();

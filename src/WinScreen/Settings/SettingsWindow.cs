@@ -108,6 +108,7 @@ public sealed class SettingsWindow : Form
     private readonly CheckBox _modifierDrag = new()
         { Text = T("gestures.moveResize.enable"), AutoSize = true };
 
+    private readonly CheckBox _snapWhileDragging = new() { Text = T("gestures.moveResize.snap"), AutoSize = true };
     private readonly ComboBox _modifierKey = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
 
     private readonly ListBox _modifierExclusions = new() { Dock = DockStyle.Fill, IntegralHeight = false };
@@ -433,6 +434,7 @@ public sealed class SettingsWindow : Form
         draft.AllowPipInFullScreen = _allowPip.Checked;
         draft.ModifierDrag = _modifierDrag.Checked;
         draft.ModifierKey = (ModifierKey)Math.Max(0, _modifierKey.SelectedIndex);
+        draft.SnapWhileDragging = _snapWhileDragging.Checked;
         draft.WindowMenu = _windowMenu.Checked;
         draft.WindowMenuGesture = (WindowMenuGesture)Math.Max(0, _windowMenuGesture.SelectedIndex);
         draft.WindowMenuExclusions = Programs(_windowMenuExclusions, _newMenuExclusion);
@@ -549,6 +551,7 @@ public sealed class SettingsWindow : Form
             nameof(AppSettings.PauseInFullScreen) => _pauseInFullScreen,
             nameof(AppSettings.AllowPipInFullScreen) => _allowPip,
             nameof(AppSettings.ModifierDrag) => _modifierDrag,
+            nameof(AppSettings.SnapWhileDragging) => _snapWhileDragging,
             nameof(AppSettings.OpacityWheel) => _opacityWheel,
             nameof(AnchorPreferences.Automatic) => _autoAnchors,
             nameof(AppSettings.PausePinWhenMaximized) => _pausePin,
@@ -603,6 +606,7 @@ public sealed class SettingsWindow : Form
         _allowPip.Checked = values.AllowPipInFullScreen;
         _modifierDrag.Checked = values.ModifierDrag;
         _modifierKey.SelectedIndex = (int)values.ModifierKey;
+        _snapWhileDragging.Checked = values.SnapWhileDragging;
         _windowMenu.Checked = values.WindowMenu;
         _windowMenuGesture.SelectedIndex = (int)values.WindowMenuGesture;
         _windowMenuExclusions.Items.Clear();
@@ -724,7 +728,7 @@ public sealed class SettingsWindow : Form
         key.Controls.Add(_modifierKey);
         var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false,
             Dock = DockStyle.Fill, AutoScroll = true };
-        page.Controls.Add(Section(T("gestures.moveResize.title"), _modifierDrag, key,
+        page.Controls.Add(Section(T("gestures.moveResize.title"), _modifierDrag, key, _snapWhileDragging,
             ProgramRules(T("gestures.exclusions"), _modifierExclusions, _newModifierExclusion)));
         page.Controls.Add(Note(T("gestures.moveResize.help")));
         _windowMenuGesture.Items.AddRange([T("gestures.menu.ctrlRight"), T("gestures.menu.ctrlShiftRight"), T("gestures.menu.ctrlMiddle")]);

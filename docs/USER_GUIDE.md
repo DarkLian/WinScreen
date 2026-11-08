@@ -100,7 +100,8 @@ The toolbar's **Arrange window** button has everything that moves a window:
 - Roll up to the title bar *(experimental)*.
 
 Turn on **Settings → Mouse gestures → Move and resize** to hold Alt (or Win) and drag anywhere in a window: the left button
-moves it, the right button resizes it. Turn on **Window menu** there for a menu of commands on **Ctrl+right-click**.
+moves it, the right button resizes it. It works on maximized windows too, and Esc puts the window back. Drag a window to the
+left or right edge of the screen to fill that half, to a corner for a quarter, or to the top to maximize it. Turn on **Window menu** there for a menu of commands on **Ctrl+right-click**.
 
 The tray and window menus also have **Borderless**, **Fill display**, **Dark title bar**, **Copy** and **Open file location**.
 

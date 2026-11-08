@@ -73,6 +73,13 @@ internal static class Program
                             Console.WriteLine("button");
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "slow")
+                        window.BeginInvoke(() =>
+                        {
+                            window.SlowMilliseconds = int.Parse(parts[1]);
+                            Console.WriteLine("slow");
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "titlebar")
                         window.BeginInvoke(window.UseTitleBar);
                     if (parts[0] == "hang")
@@ -219,8 +226,14 @@ internal sealed partial class TargetForm : Form
         ], 2, (uint)Marshal.SizeOf<RawInputDevice>());
     }
 
+    /// <summary>How long each move or resize takes to handle, like an app that's slow to lay itself out.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public int SlowMilliseconds { get; set; }
+
     protected override void WndProc(ref Message m)
     {
+        if (m.Msg == 0x0047 && SlowMilliseconds > 0) // WM_WINDOWPOSCHANGED
+            Thread.Sleep(SlowMilliseconds);
         if (m.Msg == 0x8001)
         {
             Interlocked.Exchange(ref _animationPending, 0);

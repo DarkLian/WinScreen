@@ -73,6 +73,15 @@ internal sealed class TargetProcess : IDisposable
             throw new InvalidOperationException("Test target's frame didn't settle.");
     }
 
+    /// <summary>Makes every move or resize take this long for the window to handle.</summary>
+    internal void BeSlow(int milliseconds)
+    {
+        _process.StandardInput.WriteLine("slow " + milliseconds);
+        _process.StandardInput.Flush();
+        if (NextReport() != "slow")
+            throw new InvalidOperationException("Test target didn't slow down.");
+    }
+
     /// <summary>Adds a real control at (20, 30), 140 by 50, for anything that looks inside a window.</summary>
     internal void AddButton()
     {

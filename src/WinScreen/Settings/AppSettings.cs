@@ -226,6 +226,10 @@ public sealed class AppSettings
     public bool ModifierDrag { get; set; }
 
     public ModifierKey ModifierKey { get; set; }
+
+    /// <summary>A window moved that way snaps to a display's edges, as with a title-bar drag.</summary>
+    public bool SnapWhileDragging { get; set; } = true;
+
     public bool WindowMenu { get; set; }
     public WindowMenuGesture WindowMenuGesture { get; set; }
     public List<string> WindowMenuExclusions { get; set; } = [];
