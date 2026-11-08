@@ -68,13 +68,14 @@ public sealed class TopLayerTests
             var inSubmenu = new Point(inner.Left + inner.Width / 2, inner.Bottom - 6);
             try
             {
-                TopLayer.Above = null;
-                TopLayer.Raise(cover.Handle);
+                const uint flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
+                User32.SetWindowPos(cover.Handle, User32.HWND_TOPMOST, 0, 0, 0, 0, flags);
                 Pump(50);
                 Assert.Equal(cover.Handle, RootAt(inMenu)); // Without the rule, it really would cover the menu.
 
                 TopLayer.Above = () => TopLayer.OpenDropDowns(menu);
-                TopLayer.Raise(cover.Handle);
+                User32.SetWindowPos(cover.Handle, User32.HWND_TOPMOST, 0, 0, 0, 0, flags);
+                TopLayer.KeepAbove();
                 Pump(50);
                 Assert.Equal(menu.Handle, RootAt(inMenu));
                 Assert.Equal(more.DropDown.Handle, RootAt(inSubmenu));
@@ -86,6 +87,84 @@ public sealed class TopLayerTests
                 menu.Close();
             }
         });
+    }
+
+    [Fact]
+    public void A_view_lifted_to_the_top_stays_under_the_taskbar_and_tips_stay_over_menus()
+    {
+        Func<IEnumerable<nint>>? before = TopLayer.Above;
+        nint taskbar = User32.FindWindow("Shell_TrayWnd", null);
+        Assert.NotEqual(0, taskbar);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Rectangle bar = Desktop.BoundsOf(taskbar);
+            using var view = new Form
+            {
+                FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.Manual, ShowInTaskbar = false,
+                Bounds = Rectangle.Inflate(bar, 0, 40), BackColor = Color.Magenta, TopMost = true,
+            };
+            using var menu = new ContextMenuStrip { AutoClose = false };
+            menu.Items.Add("Something with a tip").ToolTipText = "x";
+            using var menuOwner = new Form { FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.Manual, ShowInTaskbar = false, Bounds = new Rectangle(0, 0, 1, 1) };
+            using var tipForm = new Form { FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.Manual, ShowInTaskbar = false };
+            Func<nint, bool> wasTip = TopLayer.IsTip;
+            try
+            {
+                view.Show();
+                TopLayer.Raise(view.Handle);
+                Pump(100);
+                var onBar = new Point(bar.Left + bar.Width / 2, bar.Top + bar.Height / 2);
+                Assert.Equal(taskbar, RootAt(onBar)); // The taskbar stays reachable over a view.
+
+                Rectangle screen = Screen.PrimaryScreen!.WorkingArea;
+                // A menu belongs to the window it's shown for, and moves with it; the tray menu's is hidden.
+                menuOwner.Show();
+                menu.Show(menuOwner, menuOwner.PointToClient(new Point(screen.Left + 300, screen.Top + 300)));
+                TopLayer.Above = () => TopLayer.OpenDropDowns(menu);
+                // A small always-on-top window over the menu, standing in for a hover tip.
+                tipForm.Bounds = new Rectangle(menu.Left + 10, menu.Top + 5, 120, 24);
+                tipForm.Show();
+                User32.SetWindowPos(tipForm.Handle, User32.HWND_TOPMOST, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+                nint tipWindow = tipForm.Handle;
+                TopLayer.IsTip = window => window == tipWindow;
+                Pump(100);
+                TopLayer.Raise(view.Handle); // What the menu guard and every view does over and over.
+                TopLayer.KeepAbove();
+                Pump(50);
+                Assert.True(IsAbove(tipWindow, menu.Handle), "The tip went under its menu.");
+                Assert.True(IsAbove(menu.Handle, taskbar), "The menu went under the taskbar.");
+                Assert.True(IsAbove(taskbar, view.Handle), "The view went over the taskbar: " + TopOrder(view.Handle, menu.Handle, tipWindow, taskbar));
+            }
+            finally
+            {
+                TopLayer.Above = before;
+                TopLayer.IsTip = wasTip;
+                tipForm.Close();
+                menu.Close();
+                view.Close();
+            }
+        });
+    }
+
+    private static string TopOrder(nint view, nint menu, nint tip, nint taskbar)
+    {
+        var names = new List<string>();
+        nint window = User32.GetWindow(User32.GetDesktopWindow(), 5);
+        for (int i = 0; window != 0 && i < 40; i++, window = User32.GetWindow(window, 2))
+        {
+            if (!User32.IsWindowVisible(window)) continue;
+            string name = window == view ? "VIEW" : window == menu ? "MENU" : window == tip ? "TIP" : window == taskbar ? "TASKBAR" : WindowInfo.ClassName(window);
+            bool top = (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0;
+            names.Add(name + (top ? "*" : ""));
+        }
+        return string.Join(" > ", names);
+    }
+
+    private static bool IsAbove(nint upper, nint lower)
+    {
+        for (nint window = User32.GetWindow(upper, 2); window != 0; window = User32.GetWindow(window, 2))
+            if (window == lower) return true;
+        return false;
     }
 
     private static nint RootAt(Point point) => User32.GetAncestor(Desktop.TopWindowAt(point), User32.GA_ROOT);

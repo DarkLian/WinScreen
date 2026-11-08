@@ -86,6 +86,13 @@ public sealed class PipWindow : Form
     private bool _liveSawSourceFocus;
     private long _unobservedSince;
     private readonly ToolStripMenuItem _interactiveItem;
+    private readonly ToolStripMenuItem _hoverItem;
+    private SourcePopups? _popups;
+    private int _popupTick;
+    private bool _liveStartedZoomed;
+    private Rectangle _settledAt;
+    private long _settleUntil;
+    private System.Windows.Forms.Timer? _closeCheck;
 
 
     [System.ComponentModel.DefaultValue(false)]
@@ -130,6 +137,11 @@ public sealed class PipWindow : Form
             (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
         _interactiveItem = new ToolStripMenuItem(T("pip.interactive"), null,
             (_, _) => SetInteractive(!_interactiveItem!.Checked));
+        _hoverItem = new ToolStripMenuItem(T("pip.interactive.hover"), null, (_, _) =>
+        {
+            EndLive(); // The next visit starts the other way.
+            _hoverItem!.Checked = !_hoverItem.Checked;
+        });
         var options = new ToolStripMenuItem(T("pip.options"));
         options.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
         options.DropDownOpening += (_, _) => FillOptions(options);
@@ -139,6 +151,7 @@ public sealed class PipWindow : Form
         _menu.Items.Add(_switcherItem);
         _menu.Items.Add(_autoMoveItem);
         _menu.Items.Add(_interactiveItem);
+        _menu.Items.Add(_hoverItem);
         _goToItem = _menu.Items.Add(T("pip.goToOriginal"), null, (_, _) => GoToSource());
         _removeCropItem = new ToolStripMenuItem(T("pip.removeCrop"), null, (_, _) => SetCrop(Rectangle.Empty));
         _menu.Items.Add(_removeCropItem);
@@ -152,7 +165,8 @@ public sealed class PipWindow : Form
             _menu.Items["inputStatus"]!.Text = InputDescription;
             _retryItem.Visible = CanRetryCapture;
             _autoMoveItem.Visible = AllowAutoMove;
-            _interactiveItem.Visible = AllowInteractive && _origin.IsWindow;
+            _interactiveItem.Visible = _hoverItem.Visible = AllowInteractive && _origin.IsWindow;
+            _hoverItem.Enabled = _interactiveItem.Checked;
             _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
             _switcherItem.Visible = AllowSwitcherHiding && _origin.IsWindow;
             _switcherItem.Enabled = _origin.IsAvailable && _windows.IsHidden(_source);
@@ -692,6 +706,7 @@ public sealed class PipWindow : Form
             else
             {
                 _windows.ShowOwned(_source, this);
+                _popups?.ShowAll();
             }
 
             _hideItem.Checked = hidden;
@@ -966,6 +981,8 @@ public sealed class PipWindow : Form
         EndInteraction();
         if (_hideItem.Checked && _origin.IsAvailable)
             SetOriginalHidden(false);
+        _popups?.ShowAll();
+        _closeCheck?.Dispose();
         _tips.Dispose();
         DropHoverPreview();
         _titleBar?.Dispose();
@@ -1073,6 +1090,17 @@ public sealed class PipWindow : Form
 
     internal PipInteraction? LiveInteraction => _live;
 
+    /// <summary>Why the last visit ended, for tests and diagnostics.</summary>
+    internal string LastVisitEnd { get; private set; } = "";
+
+    /// <summary>"Show hover effects" for direct use: the original takes input, hover included, wherever the pointer is on its content.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal bool ShowsHoverEffects
+    {
+        get => _hoverItem.Checked;
+        set { EndLive(); _hoverItem.Checked = value; }
+    }
+
     /// <summary>Where the compact title bar is while it shows, for tests.</summary>
     internal Rectangle? TitleBarBounds => _titleBar is { Visible: true } bar ? bar.Bounds : null;
 
@@ -1090,14 +1118,20 @@ public sealed class PipWindow : Form
         _foregroundBeforeLive = User32.GetForegroundWindow();
         _liveSawSourceFocus = false;
         _unobservedSince = 0;
-        var live = new PipInteraction(_source, RectangleToScreen(area), ShownPart(_thumbnail.SourceSize));
-        live.Left += () => BeginInvokeIfAlive(EndLive);
+        bool hover = _hoverItem.Checked;
+        _popups ??= new SourcePopups(_source);
+        var live = new PipInteraction(_source, RectangleToScreen(area), ShownPart(_thumbnail.SourceSize), Handle,
+            replay: !hover, _popups);
+        live.Left += () => BeginInvokeIfAlive(() => { LastVisitEnd = "the pointer left"; EndLive(); });
         live.Pressed += _pressOutcomes.Enqueue;
         live.ViewDragged += moved => BeginInvokeIfAlive(() => DragLiveView(moved));
+        live.CaptionPressed += action => BeginInvokeIfAlive(() => OnCaption(action));
+        live.QuestionShown += () => BeginInvokeIfAlive(OnQuestion);
+        _liveStartedZoomed = User32.IsZoomed(_source);
         try
         {
-            _windows.BeginInteractive(_source, Handle);
-            SetInputPassesThrough(true);
+            // The original goes just above the view; at opacity 0 the pointer passes through it to the view.
+            _windows.BeginInteractive(_source, Handle, reachable: hover);
             live.Start(PointToScreen(pointer));
             _live = live;
         }
@@ -1137,7 +1171,15 @@ public sealed class PipWindow : Form
         try
         {
             if (_origin.IsAvailable)
+            {
                 _windows.EndInteractive(_source);
+                // Moves the app hadn't handled yet can still arrive after this; for a moment, undo any.
+                if (User32.GetWindowRect(_source, out Rect home))
+                {
+                    _settledAt = Rectangle.FromLTRB(home.Left, home.Top, home.Right, home.Bottom);
+                    _settleUntil = Environment.TickCount64 + SettleMilliseconds;
+                }
+            }
         }
         catch (WindowOperationException failure)
         {
@@ -1245,8 +1287,90 @@ public sealed class PipWindow : Form
     /// <summary>Puts this above other topmost windows, which a hidden original just went above too.</summary>
     private void StayOnTop() => WinScreen.Windows.TopLayer.Raise(Handle);
 
+    /// <summary>Windows lifts an activated always-on-top window over the taskbar; this puts it back under.</summary>
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        if (IsHandleCreated) StayOnTop();
+    }
+
     /// <summary>Ends a visit in progress with "Use this view directly", putting the original back in its place.</summary>
     internal void EndVisit() => EndLive();
+
+    /// <summary>How long after a visit the original is held where it was put back.</summary>
+    internal const int SettleMilliseconds = 600;
+
+    /// <summary>The original's own close, minimize and maximize buttons, and its icon, clicked in the view.</summary>
+    private void OnCaption(CaptionAction action)
+    {
+        switch (action)
+        {
+            case CaptionAction.Close:
+                EndLive();
+                User32.PostMessage(_source, 0x0112 /* WM_SYSCOMMAND */, 0xF060 /* SC_CLOSE */, 0);
+                // The view closes with the original. If it's still there, it asked something: show it.
+                _closeCheck?.Dispose();
+                _closeCheck = new System.Windows.Forms.Timer { Interval = 1000 };
+                _closeCheck.Tick += (_, _) =>
+                {
+                    _closeCheck?.Dispose();
+                    _closeCheck = null;
+                    if (!IsDisposed && _origin.IsAvailable) GoToSource();
+                };
+                _closeCheck.Start();
+                break;
+            case CaptionAction.Minimize:
+                SuspendView();
+                break;
+            case CaptionAction.GoToOriginal:
+                GoToSource();
+                break;
+            case CaptionAction.Menu:
+                EndLive();
+                _menu.Show(Cursor.Position);
+                break;
+        }
+    }
+
+    /// <summary>The original asks something: a question nobody can see mustn't wait, so show the original.</summary>
+    private void OnQuestion()
+    {
+        LastVisitEnd = "the original asked something";
+        EndLive();
+        if (_origin.IsAvailable) GoToSource();
+    }
+
+    /// <summary>
+    /// What the original does by itself while used directly, from a button it draws as content: minimizing
+    /// minimizes the view instead (a minimized window has no picture), and maximizing goes to the original.
+    /// </summary>
+    private void FollowOriginalState()
+    {
+        if (!_interactiveItem.Checked || _suspended || !_origin.IsAvailable)
+            return;
+        if (User32.IsIconic(_source) && _windows.IsHidden(_source))
+        {
+            EndLive();
+            User32.ShowWindow(_source, User32.SW_SHOWNOACTIVATE);
+            SuspendView();
+        }
+        else if (_live is not null && !_liveStartedZoomed && User32.IsZoomed(_source))
+        {
+            EndLive();
+            GoToSource();
+        }
+    }
+
+    /// <summary>Puts the original back where a visit left it if a late move arrived, for a moment after the visit.</summary>
+    private void HoldSettledPlace()
+    {
+        if (_live is not null || _settleUntil == 0) return;
+        if (Environment.TickCount64 > _settleUntil) { _settleUntil = 0; return; }
+        if (!_origin.IsAvailable || User32.IsIconic(_source) || User32.IsZoomed(_source)) return;
+        if (User32.GetWindowRect(_source, out Rect now) && (now.Left != _settledAt.Left || now.Top != _settledAt.Top))
+            User32.SetWindowPos(_source, 0, _settledAt.Left, _settledAt.Top, 0, 0,
+                User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+    }
 
     /// <summary>A view that couldn't update says so and stays open; the next change can put it right.</summary>
     private void Attempt(Action action)
@@ -1348,6 +1472,12 @@ public sealed class PipWindow : Form
         }
         if (_hideItem.Checked && !_windows.IsHidden(_source))
             _hideItem.Checked = false;
+        HoldSettledPlace();
+        FollowOriginalState();
+        if (_suspended || IsDisposed) return;
+        // A hidden original's link text and tooltips would show where it really is; every fifth tick is enough.
+        if (_live is null && _hideItem.Checked && ++_popupTick % 5 == 0)
+            (_popups ??= new SourcePopups(_source)).Sweep(null);
         if (_pressed && MouseButtons == MouseButtons.None)
             CancelPress();
         try { FollowPointer(); ShowState(); }
@@ -1365,14 +1495,19 @@ public sealed class PipWindow : Form
             User32.GetWindowThreadProcessId(foreground, out uint foregroundProcess);
             User32.GetWindowThreadProcessId(_source, out uint sourceProcess);
             if (foreground == _source) _liveSawSourceFocus = true;
-            bool switchedAway = foregroundProcess != sourceProcess && foregroundProcess != Environment.ProcessId &&
+            // No foreground window at all is a moment in passing, while a click hands the focus over.
+            bool switchedAway = foreground != 0 && foregroundProcess != sourceProcess && foregroundProcess != Environment.ProcessId &&
                 (_liveSawSourceFocus || foreground != _foregroundBeforeLive);
             if (_live.ObservedPointer(Cursor.Position)) _unobservedSince = 0;
             else if (_unobservedSince == 0) _unobservedSince = Environment.TickCount64;
             bool hookLost = _unobservedSince != 0 && Environment.TickCount64 - _unobservedSince > 150;
             // Windows drops a hook it thinks is slow. The source must not stay clickable if that happens.
             if (switchedAway || hookLost || !Bounds.Contains(Cursor.Position) && MouseButtons == MouseButtons.None && !_live.InPopup)
+            {
+                LastVisitEnd = switchedAway ? $"switched to 0x{foreground:X} ({WindowInfo.ClassName(foreground)})"
+                    : hookLost ? "the hook stopped seeing the pointer" : "the pointer was outside";
                 EndLive();
+            }
         }
 
         if (_interacting && ShouldEndInteraction())
@@ -1423,7 +1558,7 @@ public sealed class PipWindow : Form
             if (!_titleBar.Visible)
             {
                 _titleBar.Show();
-                WinScreen.Windows.TopLayer.KeepAbove();
+                WinScreen.Windows.TopLayer.Raise(_titleBar.Handle);
             }
         }
         else ShowCloseButton();
@@ -1502,7 +1637,7 @@ public sealed class PipWindow : Form
             }
             bool appearing = !_hoverPreview.Visible;
             _hoverPreview.UpdatePreview(shown, PipPreviewGeometry.Place(avoid, size, area));
-            if (appearing) WinScreen.Windows.TopLayer.KeepAbove();
+            if (appearing) WinScreen.Windows.TopLayer.Raise(_hoverPreview.Handle);
         }
         catch (WindowOperationException)
         {

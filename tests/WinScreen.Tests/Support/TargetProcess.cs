@@ -73,10 +73,24 @@ internal sealed class TargetProcess : IDisposable
             throw new InvalidOperationException("Test target's frame didn't settle.");
     }
 
-    /// <summary>Shows a small popup the window owns, at this screen position, and returns it.</summary>
-    internal nint ShowPopup(Point at)
+    internal bool HasExited => _process.HasExited;
+
+    /// <summary>Shows a question the window owns, with a title bar, as "Save changes?" does, and returns it.</summary>
+    internal nint ShowDialog()
     {
-        _process.StandardInput.WriteLine($"popup {at.X} {at.Y}");
+        _process.StandardInput.WriteLine("dialog");
+        _process.StandardInput.Flush();
+        string? report = NextReport();
+        if (report is null || !report.StartsWith("dialog ", StringComparison.Ordinal))
+            throw new InvalidOperationException("Test target didn't show a dialog.");
+        return (nint)long.Parse(report[7..]);
+    }
+
+    /// <summary>Shows a small popup the window owns, at this screen position, and returns it.</summary>
+    /// <param name="displayOnly">Click-through, as a browser's link text is.</param>
+    internal nint ShowPopup(Point at, bool displayOnly = false)
+    {
+        _process.StandardInput.WriteLine($"popup {at.X} {at.Y}" + (displayOnly ? " display" : ""));
         _process.StandardInput.Flush();
         string? report = NextReport();
         if (report is null || !report.StartsWith("popup ", StringComparison.Ordinal))

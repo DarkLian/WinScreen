@@ -84,8 +84,29 @@ internal static class Program
                                 Bounds = new Rectangle(int.Parse(at[0]), int.Parse(at[1]), 160, 40), BackColor = Color.Gold, Owner = window,
                             };
                             _ = popup.Handle;
+                            if (at.Length > 2 && at[2] == "display")
+                            {
+                                // Click-through, as a browser's link text and tooltips are.
+                                nint style = NativeShow.GetWindowLongPtr(popup.Handle, -20);
+                                NativeShow.SetWindowLongPtr(popup.Handle, -20, style | 0x80000 | 0x20);
+                                NativeShow.SetLayeredWindowAttributes(popup.Handle, 0, 255, 2);
+                            }
                             NativeShow.ShowWindow(popup.Handle, 4); // Shown without taking the focus, as link previews are.
                             Console.WriteLine("popup " + popup.Handle.ToInt64());
+                            Console.Out.Flush();
+                        });
+                    if (parts[0] == "dialog")
+                        window.BeginInvoke(() =>
+                        {
+                            // A question the window asks, as "Save changes?" does.
+                            var dialog = new Form
+                            {
+                                FormBorderStyle = FormBorderStyle.FixedDialog, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual,
+                                Bounds = new Rectangle(window.Left + 40, window.Top + 60, 260, 140), Text = "Save changes?",
+                                MinimizeBox = false, MaximizeBox = false,
+                            };
+                            dialog.Show(window);
+                            Console.WriteLine("dialog " + dialog.Handle.ToInt64());
                             Console.Out.Flush();
                         });
                     if (parts[0] == "slow")
@@ -129,6 +150,16 @@ internal static partial class NativeShow
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool ShowWindow(nint window, int command);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    internal static partial nint GetWindowLongPtr(nint window, int index);
+
+    [LibraryImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    internal static partial nint SetWindowLongPtr(nint window, int index, nint value);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetLayeredWindowAttributes(nint window, uint key, byte alpha, uint flags);
 }
 
 internal sealed partial class TargetForm : Form

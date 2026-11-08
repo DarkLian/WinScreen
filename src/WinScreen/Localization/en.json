@@ -208,6 +208,7 @@
   "pip.input.activateOriginal": "Click goes to the original",
   "pip.input.viewOnly": "View only",
   "pip.interactive": "Use this view directly (experimental)",
+  "pip.interactive.hover": "Show hover effects (the window may show faintly around the view)",
   "pip.interactive.mixedDpi": "Direct use doesn't work across displays with different scaling. Use Go to original window instead.",
   "pip.keepUpdating": "&Keep updating (hide original)",
   "pip.lockPosition": "Lock position",

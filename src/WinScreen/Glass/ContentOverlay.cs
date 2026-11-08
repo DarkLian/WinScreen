@@ -140,10 +140,10 @@ internal sealed unsafe class ContentOverlay : Form
         if (!Visible)
             Show();
         bool topmost = (User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0;
-        User32.SetWindowPos(Handle, topmost ? User32.HWND_TOPMOST : User32.HWND_NOTOPMOST, 0, 0, 0, 0,
+        if (topmost) WinScreen.Windows.TopLayer.Raise(Handle);
+        else User32.SetWindowPos(Handle, User32.HWND_NOTOPMOST, 0, 0, 0, 0,
             User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
         User32.SetWindowPos(_source, Handle, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
-        if (topmost) WinScreen.Windows.TopLayer.KeepAbove();
     }
 
     private void CreateDevice(Size size)

@@ -42,6 +42,6 @@ internal sealed class SnapPreview : Form
         Bounds = r;
         if (!Visible) Show();
         User32.SetWindowPos(Handle, User32.HWND_TOPMOST, r.X, r.Y, r.Width, r.Height, User32.SWP_NOACTIVATE);
-        WinScreen.Windows.TopLayer.KeepAbove();
+        WinScreen.Windows.TopLayer.Raise(Handle);
     }
 }

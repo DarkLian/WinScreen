@@ -151,8 +151,8 @@ internal sealed class PinBorder : Form
             return;
 
         nint insertAfter = above == 0 ? User32.HWND_TOPMOST : above;
-        User32.SetWindowPos(Handle, insertAfter, 0, 0, 0, 0,
+        if (insertAfter == User32.HWND_TOPMOST) TopLayer.Raise(Handle);
+        else User32.SetWindowPos(Handle, insertAfter, 0, 0, 0, 0,
             User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
-        if (insertAfter == User32.HWND_TOPMOST) TopLayer.KeepAbove();
     }
 }

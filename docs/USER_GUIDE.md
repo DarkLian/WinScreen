@@ -71,7 +71,11 @@ Hover over a view to see its title bar, with buttons to minimize and close it.
 - **View options:** frame limit, opacity, size, position lock and click-through, just for this view.
 - **Presets:** save the crop, size and place under a name and use it again later.
 - **Use this view directly** *(experimental)*: click, select text and scroll right inside the view.
-  Presses on the original's title bar move the view instead, and keys go back to your previous window when you leave.
+  The original stays out of sight the whole time. Links don't light up as you point at them; turn on
+  **Show hover effects** for that, though the window may then show faintly around the view.
+  The original's title bar moves the view. Its minimize button minimizes the view, its maximize button takes you
+  to the original, and its close button closes the original and the view. If the app asks you something, the
+  original comes back so you can answer. Keys go back to your previous window when you leave.
 
 **In Settings → Picture-in-Picture** you can choose a hover preview or reading lens, and keep minimized views on the taskbar.
 

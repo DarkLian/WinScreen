@@ -723,7 +723,11 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     /// riskiest state there is: invisible, clickable, and larger than the view. It lasts one pointer visit.
     /// The placement is journaled first, so a forced kill during a slide puts the window back.
     /// </summary>
-    public void BeginInteractive(nint window, nint view)
+    /// <param name="reachable">
+    /// False keeps it invisible (alpha 0) until a press is replayed to it; true makes it faint (alpha 1) and able
+    /// to take input, hover included, for the whole visit.
+    /// </param>
+    public void BeginInteractive(nint window, nint view, bool reachable = true)
     {
         lock (_gate)
         {
@@ -736,9 +740,11 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 SaveJournal();
             }
 
-            ApplyAlpha(window, state, InteractiveOpacity);
+            ApplyAlpha(window, state, reachable ? InteractiveOpacity : HiddenOpacity);
             WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
-            User32.SetWindowPos(window, view, 0, 0, 0, 0,
+            // Just above the view: its opacity then decides whether the pointer reaches it or the view.
+            nint above = view == User32.HWND_TOPMOST ? 0 : User32.GetWindow(view, 3 /* GW_HWNDPREV */);
+            User32.SetWindowPos(window, above == 0 || above == window ? User32.HWND_TOPMOST : above, 0, 0, 0, 0,
                 User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
         }
     }
@@ -1375,6 +1381,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             if (User32.GetForegroundWindow() == window)
             {
                 SetTopmost(window, true, identity);
+                TopLayer.Raise(window); // Still under the taskbar, so its icons can be reached.
                 return;
             }
 
