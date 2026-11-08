@@ -5,11 +5,11 @@
 <h1 align="center">WinScreen</h1>
 
 <p align="center">
-  <strong>🚧 Under heavy development.</strong> Things change quickly and some features are still experimental.
+  <strong>🧪 Beta testing.</strong> Things may still change and some features are still experimental. Your feedback helps most right now.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-under%20heavy%20development-orange" alt="Status: under heavy development">
+  <img src="https://img.shields.io/badge/status-beta%20testing-yellow" alt="Status: beta testing">
   <a href="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml"><img src="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?include_prereleases&label=release" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 and 11">

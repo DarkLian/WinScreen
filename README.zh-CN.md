@@ -5,11 +5,11 @@
 <h1 align="center">WinScreen</h1>
 
 <p align="center">
-  <strong>🚧 正在积极开发中。</strong>功能变化较快，部分功能仍处于实验阶段。
+  <strong>🧪 Beta 测试中。</strong>功能仍可能变化，部分功能仍处于实验阶段。现在最需要你的反馈。
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-under%20heavy%20development-orange" alt="状态：积极开发中">
+  <img src="https://img.shields.io/badge/status-beta%20testing-yellow" alt="状态：Beta 测试中">
   <a href="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml"><img src="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml/badge.svg" alt="构建"></a>
   <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?include_prereleases&label=release" alt="最新版本"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 和 11">
