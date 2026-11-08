@@ -73,6 +73,13 @@ internal sealed class TargetProcess : IDisposable
             throw new InvalidOperationException("Test target's frame didn't settle.");
     }
 
+    internal void EnableContextMenu()
+    {
+        _process.StandardInput.WriteLine("contextmenu");
+        _process.StandardInput.Flush();
+        if (NextReport() != "context-ready") throw new InvalidOperationException("Context menu did not initialize.");
+    }
+
     internal bool HasExited => _process.HasExited;
 
     /// <summary>Shows a question the window owns, with a title bar, as "Save changes?" does, and returns it.</summary>

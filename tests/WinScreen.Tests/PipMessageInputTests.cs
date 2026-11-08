@@ -9,7 +9,7 @@ using Xunit;
 namespace WinScreen.Tests;
 
 [Trait("Category", "Interactive")]
-public sealed class PipMessageInputTests
+public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint x, uint y, uint data, nuint extra);
 
@@ -50,6 +50,63 @@ public sealed class PipMessageInputTests
         Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "The message visit did not start.");
         Thread.Sleep(100);
         return pointer;
+    }
+
+    [Theory]
+    [InlineData(320, 20, false)]
+    [InlineData(320, 20, true)]
+    [InlineData(640, 220, false)]
+    [InlineData(640, 220, true)]
+    [InlineData(1200, 0, false)]
+    [InlineData(1200, 0, true)]
+    public void Right_click_opens_source_menu_across_the_entire_picture(int width, int top, bool framed)
+    {
+        using var source = new TargetProcess(new Rectangle(160, 120, 1000, 700));
+        if (framed) source.UseFrame();
+        source.EnableContextMenu();
+        PipInteraction.DiagnoseInput = true;
+        try
+        {
+            Drive(source, (view, ui, _) =>
+            {
+                ui(() => { view.SetCrop(Rectangle.Empty); view.Bounds = new Rectangle(20, top, width, width * 7 / 10); });
+                Hover(view);
+                output.WriteLine($"sourceDpi={User32.GetDpiForWindow(source.Handle)} viewDpi={User32.GetDpiForWindow(view.Handle)} bounds={view.Bounds} backend={view.BackendKind}");
+                Rectangle parked = Desktop.BoundsOf(source.Handle);
+                Assert.True(User32.GetClientRect(source.Handle, out Rect client));
+                var clientOrigin = new NativePoint();
+                Assert.True(User32.ClientToScreen(source.Handle, ref clientOrigin));
+                output.WriteLine($"clientOrigin={clientOrigin.X},{clientOrigin.Y} clientSize={client.Right},{client.Bottom} parked={parked}");
+                // Sample the real client surface. A genuine native caption deliberately opens the view's menu.
+                foreach (double y in new[] { .02, .06, .10, .15, .25, .50, .85 })
+                foreach (double x in new[] { .25, .50, .75 })
+                {
+                    var live = view.LiveInteraction;
+                    Assert.NotNull(live);
+                    var (area, shown) = live.CurrentGeometry;
+                    Point sourcePoint = new(clientOrigin.X - parked.Left + (int)(client.Right * x),
+                        clientOrigin.Y - parked.Top + (int)(client.Bottom * y));
+                    Point pointer = new(area.Left + (int)Math.Round((sourcePoint.X - shown.Left) * (double)area.Width / shown.Width),
+                        area.Top + (int)Math.Round((sourcePoint.Y - shown.Top) * (double)area.Height / shown.Height));
+                    Desktop.SlideMouse(pointer); Thread.Sleep(100);
+                    mouse_event(8, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(16, 0, 0, 0, 0);
+                    nint menu = 0;
+                    bool opened = Desktop.WaitFor(() =>
+                    {
+                        while (source.NextReport(0) is { } report)
+                            if (report.StartsWith("context-open ")) menu = (nint)long.Parse(report[13..]);
+                        return menu != 0 && User32.IsWindowVisible(menu);
+                    }, 1500);
+                    Assert.True(opened, $"No source menu at {x:P0},{y:P0}: " + string.Join("\n", live.InputDiagnostics));
+                    Assert.Equal(PressOutcome.Delivered, view.PressOutcomes.Last());
+                    Assert.Equal(parked, Desktop.BoundsOf(source.Handle));
+                    Desktop.Press(Keys.Escape);
+                    Assert.True(Desktop.WaitFor(() => !User32.IsWindowVisible(menu)));
+                    Thread.Sleep(100);
+                }
+            });
+        }
+        finally { PipInteraction.DiagnoseInput = false; }
     }
 
     [Fact]

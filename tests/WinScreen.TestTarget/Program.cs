@@ -118,6 +118,15 @@ internal static class Program
                             Console.WriteLine("slow");
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "contextmenu")
+                        window.BeginInvoke(() =>
+                        {
+                            var menu = new ContextMenuStrip();
+                            menu.Items.Add("Probe action");
+                            menu.Opened += (_, _) => { Console.WriteLine("context-open " + menu.Handle.ToInt64()); Console.Out.Flush(); };
+                            window.ContextMenuStrip = menu;
+                            Console.WriteLine("context-ready"); Console.Out.Flush();
+                        });
                     if (parts[0] == "recordmessages")
                         window.BeginInvoke(window.RecordMessages);
                     if (parts[0] == "browserlike")
