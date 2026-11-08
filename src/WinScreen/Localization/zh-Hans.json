@@ -362,5 +362,6 @@
   "anchors.controls.view": "此窗口有视图。",
   "pip.taskbar.enable": "将最小化的视图保留在任务栏上",
   "pip.interactive": "直接使用此视图（实验性）",
-  "pip.interactive.mixedDpi": "显示器缩放比例不同时无法直接使用视图。请改用“转到原窗口”。"
+  "pip.interactive.mixedDpi": "显示器缩放比例不同时无法直接使用视图。请改用“转到原窗口”。",
+  "errors.app.windowsTooOld": "WinScreen 需要 Windows 10 2004 版或更高版本，或 Windows 11。"
 }

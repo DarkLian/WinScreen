@@ -362,5 +362,6 @@
   "anchors.controls.view": "This window has a view.",
   "pip.taskbar.enable": "Keep minimized views on the taskbar",
   "pip.interactive": "Use this view directly (experimental)",
-  "pip.interactive.mixedDpi": "Direct use isn't available across displays with different scaling. Use Go to original instead."
+  "pip.interactive.mixedDpi": "Direct use isn't available across displays with different scaling. Use Go to original instead.",
+  "errors.app.windowsTooOld": "WinScreen needs Windows 10 version 2004 or later, or Windows 11."
 }

@@ -1,7 +1,8 @@
 <Project>
   <PropertyGroup>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
-    <SupportedOSPlatformVersion>10.0.22000.0</SupportedOSPlatformVersion>
+    <!-- Windows 10 version 2004 and later. Earlier builds lack capture exclusion and parts of window capture. -->
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <!-- Pass -p:WinScreenArchitecture=arm64 for a native ARM64 build. -->
     <WinScreenArchitecture Condition="'$(WinScreenArchitecture)' == ''">x64</WinScreenArchitecture>
     <Platforms>$(WinScreenArchitecture)</Platforms>
