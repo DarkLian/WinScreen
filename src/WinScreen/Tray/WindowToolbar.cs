@@ -287,8 +287,7 @@ public sealed class WindowToolbar : Form
         ShowStates();
         Show();
         // A pinned target is in the topmost group too, and Show alone can leave the bar underneath it.
-        User32.SetWindowPos(Handle, User32.HWND_TOPMOST, 0, 0, 0, 0,
-            User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        WinScreen.Windows.TopLayer.Raise(Handle);
     }
 
     /// <summary>

@@ -17,6 +17,9 @@ internal sealed class WindowMenuHost : Form
     internal bool NeedsHook;
     internal Action? FallbackOpened;
 
+    /// <summary>The menu itself; this form only holds it.</summary>
+    internal ContextMenuStrip Popup => _menu;
+
     public WindowMenuHost(ContextMenuStrip menu, Point point)
     {
         _menu = menu;

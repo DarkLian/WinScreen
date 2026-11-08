@@ -67,8 +67,7 @@ internal sealed class PipStateChip : Form
         Location = new Point(bottomLeft.X, bottomLeft.Y - Height);
         if (Visible) return;
         Show();
-        User32.SetWindowPos(Handle, User32.HWND_TOPMOST, 0, 0, 0, 0,
-            User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        WinScreen.Windows.TopLayer.Raise(Handle);
     }
 
     protected override bool ShowWithoutActivation => true;

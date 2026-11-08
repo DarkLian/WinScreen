@@ -1242,20 +1242,8 @@ public sealed class PipWindow : Form
             User32.SetForegroundWindow(_foregroundBeforeMenu);
     }
 
-    /// <summary>
-    /// WinScreen's own menus and Settings, while open. They stay above views, so a view can never cover the
-    /// place someone went to change it.
-    /// </summary>
-    internal static Func<IEnumerable<nint>>? AppWindowsAbove { get; set; }
-
     /// <summary>Puts this above other topmost windows, which a hidden original just went above too.</summary>
-    private void StayOnTop()
-    {
-        const uint flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
-        User32.SetWindowPos(Handle, User32.HWND_TOPMOST, 0, 0, 0, 0, flags);
-        foreach (nint window in AppWindowsAbove?.Invoke() ?? [])
-            User32.SetWindowPos(window, User32.HWND_TOPMOST, 0, 0, 0, 0, flags);
-    }
+    private void StayOnTop() => WinScreen.Windows.TopLayer.Raise(Handle);
 
     /// <summary>Ends a visit in progress with "Use this view directly", putting the original back in its place.</summary>
     internal void EndVisit() => EndLive();
@@ -1432,7 +1420,11 @@ public sealed class PipWindow : Form
             _titleBar.UpdateTitle(_origin.Title, _sourceIcon);
             int height = Dpi.Scale(28, DeviceDpi);
             _titleBar.Bounds = new Rectangle(Left + PipGeometry.Border, ControlsTop(height), Width - 2 * PipGeometry.Border, height);
-            if (!_titleBar.Visible) _titleBar.Show();
+            if (!_titleBar.Visible)
+            {
+                _titleBar.Show();
+                WinScreen.Windows.TopLayer.KeepAbove();
+            }
         }
         else ShowCloseButton();
 
@@ -1466,8 +1458,7 @@ public sealed class PipWindow : Form
         if (_closeButton.Visible)
             return;
         _closeButton.Show();
-        User32.SetWindowPos(_closeButton.Handle, User32.HWND_TOPMOST, 0, 0, 0, 0,
-            User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        WinScreen.Windows.TopLayer.Raise(_closeButton.Handle);
     }
 
     private void DropHoverPreview()
@@ -1509,7 +1500,9 @@ public sealed class PipWindow : Form
                 _hoverPreview = new PipHoverPreview(this, _source);
                 KeepPartOutOfScreenCapture(_hoverPreview);
             }
+            bool appearing = !_hoverPreview.Visible;
             _hoverPreview.UpdatePreview(shown, PipPreviewGeometry.Place(avoid, size, area));
+            if (appearing) WinScreen.Windows.TopLayer.KeepAbove();
         }
         catch (WindowOperationException)
         {

@@ -54,8 +54,7 @@ internal sealed class ActionFlash : Form
         Location = Pip.PipGeometry.KeepInside(
             new Rectangle(area.Left + (area.Width - size.Width) / 2, area.Top + Gap, size.Width, size.Height), screen);
         Show();
-        User32.SetWindowPos(Handle, User32.HWND_TOPMOST, 0, 0, 0, 0,
-            User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        WinScreen.Windows.TopLayer.Raise(Handle);
         _timer.Stop();
         _timer.Start();
     }

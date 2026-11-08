@@ -41,6 +41,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly Dictionary<nint, ShrinkTile> _shrunk = [];
     private readonly Dictionary<nint, PipWindow> _pips = [];
     private readonly List<PipWindow> _viewsInOrder = [];
+    private readonly System.Windows.Forms.Timer _menuGuard = new() { Interval = 100 };
     private readonly Dictionary<nint, WindowIdentity> _setupDone = [];
     private readonly Dictionary<nint, WindowIdentity> _setupNone = [];
     private readonly SavedViews _savedViews = new();
@@ -126,7 +127,11 @@ public sealed class TrayApplication : ApplicationContext
         // A view being used directly has its original under it, ready for clicks. Opening WinScreen's own
         // menu or Settings ends that first, and they stay above every view.
         _tray.ContextMenuStrip.Opening += (_, _) => EndVisits();
-        PipWindow.AppWindowsAbove = AppWindowsAbove;
+        WinScreen.Windows.TopLayer.Above = AppWindowsAbove;
+        // A backstop for anything lifted to the top while the menu is open, by WinScreen or anyone else.
+        _menuGuard.Tick += (_, _) => WinScreen.Windows.TopLayer.KeepAbove();
+        _tray.ContextMenuStrip.Opened += (_, _) => _menuGuard.Start();
+        _tray.ContextMenuStrip.Closed += (_, _) => _menuGuard.Stop();
         _tray.MouseClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
@@ -173,7 +178,6 @@ public sealed class TrayApplication : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
         var builder = CreateWindowMenuBuilder(() => _menuIdentity);
         builder.Populate(_targetTitle.DropDownItems, true);
-        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(T("updates.check"), null, async (_, _) => await CheckForUpdates());
         menu.Items.Add(T("app.about"), null, (_, _) => MessageBox.Show(
             string.Format(T("app.version"), AppInfo.Version), "WinScreen", MessageBoxButtons.OK,
@@ -794,16 +798,27 @@ public sealed class TrayApplication : ApplicationContext
             if (!view.IsDisposed) view.EndVisit();
     }
 
+    /// <summary>
+    /// WinScreen's own windows that stay above views, lowest first: Settings, then a view's own menu, the
+    /// window menu, and the tray menu with whichever of their submenus are open.
+    /// </summary>
     private IEnumerable<nint> AppWindowsAbove()
     {
-        if (_tray.ContextMenuStrip is { Visible: true, IsHandleCreated: true } menu) yield return menu.Handle;
-        if (_windowMenu is { IsDisposed: false, Visible: true, IsHandleCreated: true } windowMenu) yield return windowMenu.Handle;
         if (_settingsWindow is { IsDisposed: false, Visible: true, IsHandleCreated: true } settings)
         {
             yield return settings.Handle;
             foreach (Form owned in settings.OwnedForms)
                 if (owned.Visible && owned.IsHandleCreated) yield return owned.Handle;
         }
+        foreach (PipWindow view in _viewsInOrder)
+            if (!view.IsDisposed)
+                foreach (nint window in WinScreen.Windows.TopLayer.OpenDropDowns(view.ContextMenuStrip))
+                    yield return window;
+        if (_windowMenu is { IsDisposed: false })
+            foreach (nint window in WinScreen.Windows.TopLayer.OpenDropDowns(_windowMenu.Popup))
+                yield return window;
+        foreach (nint window in WinScreen.Windows.TopLayer.OpenDropDowns(_tray.ContextMenuStrip))
+            yield return window;
     }
 
     private void OpenSettings()
@@ -848,6 +863,7 @@ public sealed class TrayApplication : ApplicationContext
         _content.TurnAllOff();
         _anchors.RemoveAll();
         _updateTimer.Dispose();
+        _menuGuard.Dispose();
         _watch.Dispose();
         _borders.Dispose();
         _dark.Dispose();

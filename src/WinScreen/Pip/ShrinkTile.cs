@@ -90,8 +90,7 @@ public sealed class ShrinkTile : Form
             _hid = true; // A partially failed conceal must still be revealed by OnFormClosed.
             _windows.HideOwned(_source, this);
             User32.SetForegroundWindow(Handle); // Keys mustn't go to a window that can't be seen.
-            User32.SetWindowPos(Handle, User32.HWND_TOPMOST, 0, 0, 0, 0,
-                User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+            WinScreen.Windows.TopLayer.Raise(Handle);
         }
         catch (WindowOperationException)
         {
