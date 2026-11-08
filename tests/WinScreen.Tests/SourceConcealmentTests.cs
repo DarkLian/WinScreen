@@ -116,7 +116,6 @@ public sealed class SourceConcealmentTests
         {
             using var view = new PipWindow(source.Handle, new WindowController([])) { AllowInteractive = true };
             view.ApplyPipPreferences(new PipPreferences { Backend = backend });
-            view.ApplyViewPreferences(new PipViewPreferences { CompactTitleBar = false });
             view.ShowOnTop();
             view.Location = new Point(screen.Right - view.Width - 80, screen.Bottom - view.Height - 80);
             view.SetInteractive(true);

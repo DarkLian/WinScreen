@@ -62,7 +62,7 @@ You can save a display or area there and open it again later from **Picture-in-P
 | Ctrl+drag | Crop to the part you want; Ctrl+double-click to remove the crop |
 | Right-click | Open the view's menu |
 
-Hover over a view to see its title bar, with buttons to minimize and close it.
+Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. The bar fades away after you leave.
 
 **Useful options in the view's menu**
 
@@ -77,7 +77,7 @@ Hover over a view to see its title bar, with buttons to minimize and close it.
   to the original, and its close button closes the original and the view. If the app asks you something, the
   original comes back so you can answer. Keys go back to your previous window when you leave.
 
-**In Settings → Picture-in-Picture** you can choose a hover preview or reading lens, and keep minimized views on the taskbar.
+**In Settings → Picture-in-Picture** you can choose a hover preview (for small views only) or reading lens, and keep minimized views on the taskbar.
 
 ## Anchors
 

@@ -21,7 +21,6 @@ public sealed class PipWindow : Form
     private const int WheelNotch = 120;
     private const int StartLongSide = 480;
     private const int ScreenMargin = 20;
-    private const int CloseButtonSize = 28;
     private const int EscapeHotkey = 0x5750;
     private const int WM_MOUSEACTIVATE = 0x0021;
     private const int MA_NOACTIVATE = 3;
@@ -45,8 +44,6 @@ public sealed class PipWindow : Form
     private readonly ToolStripMenuItem _autoMoveItem;
     private readonly ToolStripMenuItem _removeCropItem;
     private readonly ContextMenuStrip _menu = new();
-    private readonly ToolTip _tips = new() { ShowAlways = true };
-    private PipCloseButton? _closeButton;
     private PipTitleBar? _titleBar;
     private PipHoverPreview? _hoverPreview;
     private PipViewPreferences _viewPreferences = new();
@@ -125,9 +122,6 @@ public sealed class PipWindow : Form
         StartPosition = FormStartPosition.Manual;
         Text = T("pip.titlePrefix") + source.Title;
         _longSide = Dpi.Scale(StartLongSide, source.Dpi);
-        _tips.SetToolTip(this, source.IsWindow
-            ? T("pip.controls.window")
-            : T("pip.controls.screen"));
 
         _hideItem = new ToolStripMenuItem(T("pip.keepUpdating"), null,
             (_, _) => SetOriginalHidden(!_hideItem!.Checked));
@@ -162,6 +156,7 @@ public sealed class PipWindow : Form
         _menu.Items.Add(T("pip.close"), null, (_, _) => Close());
         _menu.Opening += (_, _) =>
         {
+            _titleBar?.HoldVisible();
             _menu.Items["inputStatus"]!.Text = InputDescription;
             _retryItem.Visible = CanRetryCapture;
             _autoMoveItem.Visible = AllowAutoMove;
@@ -253,8 +248,6 @@ public sealed class PipWindow : Form
         _viewPreferences = preferences.Validated();
         _titleBar?.Dispose();
         _titleBar = null;
-        _closeButton?.Dispose();
-        _closeButton = null;
         DropHoverPreview();
     }
 
@@ -288,8 +281,7 @@ public sealed class PipWindow : Form
         _suspended = true;
         _resumeRequested = false;
         DropHoverPreview();
-        _titleBar?.Hide();
-        _closeButton?.Hide();
+        _titleBar?.Dismiss();
         _chip?.Hide();
         _autoMove.Stop();
         _thumbnail?.Dispose();
@@ -983,12 +975,10 @@ public sealed class PipWindow : Form
             SetOriginalHidden(false);
         _popups?.ShowAll();
         _closeCheck?.Dispose();
-        _tips.Dispose();
         DropHoverPreview();
         _titleBar?.Dispose();
         _sourceIcon?.Dispose();
         _taskbarPicture?.Dispose();
-        _closeButton?.Dispose();
         _chip?.Dispose();
         _menu.Dispose();
     }
@@ -1101,7 +1091,7 @@ public sealed class PipWindow : Form
         set { EndLive(); _hoverItem.Checked = value; }
     }
 
-    /// <summary>Where the compact title bar is while it shows, for tests.</summary>
+    /// <summary>Where the title bar is while it shows, for tests.</summary>
     internal Rectangle? TitleBarBounds => _titleBar is { Visible: true } bar ? bar.Bounds : null;
 
     /// <summary>Every press's outcome over this view's life, so none can pass unnoticed in tests.</summary>
@@ -1526,74 +1516,53 @@ public sealed class PipWindow : Form
         }
     }
 
-    /// <summary>Shows the close button while the pointer is on the view, and keeps it in the corner.</summary>
-    private void FollowPointer()
-        => UpdateHover(Cursor.Position, Environment.TickCount64);
+    private void FollowPointer() => UpdateHover(Cursor.Position, Environment.TickCount64);
 
     internal void UpdateHover(Point pointer, long now)
     {
-        // Outside the view, the title bar and close button count as part of it, so they stay while reached for.
-        bool over = Bounds.Contains(pointer) || _titleBar?.Dragging == true ||
-                    (_titleBar is { Visible: true } bar && bar.Bounds.Contains(pointer)) ||
-                    (_closeButton is { Visible: true } close && close.Bounds.Contains(pointer));
         ClaimEscape(_selecting);
-        if (!over || _suspended || _interacting || _selecting || _pressed || _overrides.ClickThrough)
+        bool unavailable = _suspended || _interacting || _selecting || _overrides.ClickThrough;
+        if (unavailable)
         {
-            _closeButton?.Hide();
-            _titleBar?.Hide();
+            _titleBar?.Dismiss();
             DropHoverPreview();
             return;
         }
-
-        if (_viewPreferences.CompactTitleBar)
+        if (_titleBar is null)
         {
-            if (_titleBar is null)
-            {
-                _titleBar = new PipTitleBar(this, () => _overrides.PositionLocked, SuspendView);
-                KeepPartOutOfScreenCapture(_titleBar);
-            }
-            _titleBar.UpdateTitle(_origin.Title, _sourceIcon);
-            int height = Dpi.Scale(28, DeviceDpi);
-            _titleBar.Bounds = new Rectangle(Left + PipGeometry.Border, ControlsTop(height), Width - 2 * PipGeometry.Border, height);
-            if (!_titleBar.Visible)
-            {
-                _titleBar.Show();
-                WinScreen.Windows.TopLayer.Raise(_titleBar.Handle);
-            }
+            _titleBar = new PipTitleBar(this, () => _overrides.PositionLocked, SuspendView);
+            KeepPartOutOfScreenCapture(_titleBar);
+            _titleBar.MenuRequested += point => _menu.Show(point);
+            PositionTitleBar();
         }
-        else ShowCloseButton();
-
-        FollowHoverPreview(pointer, now);
+        _titleBar.UpdateTitle(_origin.Title, _sourceIcon);
+        bool over = Bounds.Contains(pointer) || _titleBar.Dragging ||
+            (_titleBar.Visible && _titleBar.Bounds.Contains(pointer));
+        if (_menu.Visible || _titleBar.Dragging) _titleBar.HoldVisible();
+        else _titleBar.FollowHover(over, now);
+        if (over && !_pressed) FollowHoverPreview(pointer, now);
+        else DropHoverPreview();
     }
 
-    /// <summary>
-    /// Where the title bar or close button goes. Normally over the top of the view; while the view is used
-    /// directly, the top of the picture is what people click (a browser's tabs, say), so they sit just
-    /// outside it, above, or below when there's no room above.
-    /// </summary>
-    private int ControlsTop(int height)
+    private void PositionTitleBar()
     {
-        if (!_interactiveItem.Checked)
-            return Top + PipGeometry.Border;
+        if (_titleBar is null || IsDisposed || _titleBar.Dragging) return;
+        int height = Dpi.Scale(28, DeviceDpi);
         Rectangle area = Screen.FromControl(this).WorkingArea;
-        return Top - height >= area.Top ? Top - height : Bottom;
+        User32.SetWindowPos(_titleBar.Handle, 0, Left, Top - height >= area.Top ? Top - height : Bottom, Width, height,
+            User32.SWP_NOACTIVATE | User32.SWP_NOZORDER);
     }
 
-    private void ShowCloseButton()
+    protected override void OnMove(EventArgs e)
     {
+        base.OnMove(e);
+        PositionTitleBar();
+    }
 
-        int size = Dpi.Scale(CloseButtonSize, DeviceDpi);
-        if (_closeButton is null)
-        {
-            _closeButton = new PipCloseButton(this, T("pip.close").Replace("&", ""), size);
-            KeepPartOutOfScreenCapture(_closeButton);
-        }
-
-        _closeButton.Location = new Point(Right - size - PipGeometry.Border, ControlsTop(size));
-        if (_closeButton.Visible)
-            return;
-        _closeButton.Show();
-        WinScreen.Windows.TopLayer.Raise(_closeButton.Handle);
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        PositionTitleBar();
     }
 
     private void DropHoverPreview()
@@ -1605,7 +1574,9 @@ public sealed class PipWindow : Form
 
     private void FollowHoverPreview(Point pointer, long now)
     {
-        if (_viewPreferences.HoverPreview == Settings.PipHoverPreview.Off || !_origin.IsWindow || _lastShown.IsEmpty ||
+        if (_viewPreferences.HoverPreview == Settings.PipHoverPreview.Off ||
+            (_viewPreferences.HoverPreview == Settings.PipHoverPreview.WholeView &&
+             !PipGeometry.NeedsWholePreview(PipGeometry.ViewArea(ClientSize).Width, _lastShown.Width)) || !_origin.IsWindow || _lastShown.IsEmpty ||
             _titleBar?.Dragging == true || _titleBar?.Bounds.Contains(pointer) == true)
         {
             DropHoverPreview();

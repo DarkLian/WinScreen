@@ -6,7 +6,7 @@ namespace WinScreen.Pip;
 internal enum PipChipState { None, SourceMinimized, NoNewPicture, Starting, Fallback, Unavailable }
 
 /// <summary>
-/// A small note on a view saying its picture may be out of date. Like the close button it's a window of
+/// A small note on a view saying its picture may be out of date. Like the title bar it's a window of
 /// its own, because nothing can be painted over the picture. A minimized source is a fact, so it's always
 /// shown. No new frames can just mean the source is idle, so that waits until the pointer is on the view.
 /// </summary>

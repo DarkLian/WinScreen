@@ -366,7 +366,7 @@ public class PipWindowTests
 
     [Fact]
     [Trait("Category", "Interactive")]
-    public void The_close_button_is_really_there_to_click()
+    public void The_title_bar_close_button_is_really_there_to_click()
     {
         using var source = new TargetProcess(SourceSpot);
         Point mouse = Desktop.CursorPosition();
@@ -376,7 +376,10 @@ public class PipWindowTests
             {
                 using PipWindow pip = OpenAwayFromToasts(source.Handle);
                 pump(150);
-                var corner = new Point(pip.Right - 16, pip.Top + 16);
+                Desktop.MoveMouse(new Point(pip.Left + 50, pip.Top + 50));
+                Assert.True(Desktop.WaitFor(() => pip.TitleBarBounds is not null, 2000, () => pump(20)));
+                Rectangle bar = pip.TitleBarBounds!.Value;
+                var corner = new Point(bar.Right - 16, bar.Top + bar.Height / 2);
                 Desktop.MoveMouse(corner);
 
                 // Only what the pointer would hit counts; a window can be visible behind the view.
@@ -385,7 +388,7 @@ public class PipWindowTests
                     nint root = User32.GetAncestor(Desktop.TopWindowAt(corner), User32.GA_ROOT);
                     return root != pip.Handle && (Desktop.ExStyle(root) & User32.WS_EX_NOACTIVATE) != 0;
                 }, 2000, () => pump(20));
-                Assert.True(onTop, "The close button is behind the view.");
+                Assert.True(onTop, "The title bar close button is behind the view.");
             });
         }
         finally

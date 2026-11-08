@@ -135,7 +135,6 @@ public sealed class InteractiveViewTests
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             using var view = new PipWindow(source, new WindowController([])) { AllowInteractive = true };
-            view.ApplyViewPreferences(new PipViewPreferences { CompactTitleBar = false });
             var problems = new List<string>();
             view.Problem += problems.Add;
             view.Notice += problems.Add;
@@ -228,7 +227,6 @@ public sealed class InteractiveViewTests
         source.UseFrame();
         Drive(source, (view, ui) =>
         {
-            ui(() => view.ApplyViewPreferences(new PipViewPreferences { CompactTitleBar = true }));
             Rectangle frame = view.Bounds;
             Hover(new Point(frame.Left + frame.Width / 2, frame.Top + 12), view);
             Rectangle? bar = null;

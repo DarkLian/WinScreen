@@ -10,6 +10,15 @@ namespace WinScreen.Tests;
 public sealed class PipPreviewGeometryTests
 {
     [Theory]
+    [InlineData(300, 1000, true)]
+    [InlineData(499, 1000, true)]
+    [InlineData(500, 1000, false)]
+    [InlineData(600, 1000, false)]
+    [InlineData(300, 400, false)]
+    public void Whole_preview_is_only_for_small_views_of_the_shown_crop(int picture, int shown, bool expected)
+        => Assert.Equal(expected, PipGeometry.NeedsWholePreview(picture, shown));
+
+    [Theory]
     [InlineData(-100, -100)]
     [InlineData(900, 800)]
     [InlineData(120, 90)]
@@ -114,6 +123,69 @@ public sealed class PipComfortTests
     }
 
     [Fact]
+    public void Title_bar_tracks_moves_and_resizes_outside_the_picture_and_fades_after_a_delay()
+    {
+        using var target = new TargetProcess(new Rectangle(240, 160, 400, 300));
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var view = new PipWindow(target.Handle, new WindowController([]));
+            view.ShowOnTop();
+            view.Location = new Point(700, 200);
+            ((System.Windows.Forms.Timer)typeof(PipWindow).GetField("_watch",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(view)!).Stop();
+            long now = Environment.TickCount64;
+            view.UpdateHover(new Point(750, 250), now);
+            var bar = Assert.Single(view.OwnedForms.OfType<PipTitleBar>());
+            void Pump(int ms)
+            {
+                long until = Environment.TickCount64 + ms;
+                while (Environment.TickCount64 < until) { Application.DoEvents(); Thread.Sleep(5); }
+            }
+            Pump(70);
+            Assert.InRange(bar.Opacity, 0.01, 0.99);
+            Pump(150);
+            Assert.Equal(1, bar.Opacity);
+            Assert.Equal(new Rectangle(view.Left, view.Top - bar.Height, view.Width, bar.Height), bar.Bounds);
+            view.Location = new Point(710, Screen.FromControl(view).WorkingArea.Top);
+            Assert.Equal(new Point(view.Left, view.Bottom), bar.Location);
+            view.Width += 40;
+            Assert.Equal(view.Width, bar.Width);
+            view.UpdateHover(new Point(-30000, -30000), now + 300);
+            view.UpdateHover(new Point(-30000, -30000), now + 1299);
+            Assert.Equal(1, bar.Opacity);
+            view.UpdateHover(new Point(-30000, -30000), now + 1300);
+            Pump(120);
+            Assert.InRange(bar.Opacity, 0.05, 0.95);
+            Pump(240);
+            Assert.False(bar.Visible);
+            Assert.Equal(0, bar.Opacity);
+        });
+    }
+
+    [Fact]
+    public void Right_clicking_the_title_bar_opens_the_view_menu_with_or_without_direct_use()
+    {
+        using var target = new TargetProcess(new Rectangle(240, 160, 400, 300));
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var view = new PipWindow(target.Handle, new WindowController([])) { AllowInteractive = true };
+            view.ShowOnTop();
+            foreach (bool direct in new[] { false, true })
+            {
+                view.SetInteractive(direct);
+                view.UpdateHover(new Point(view.Left + 50, view.Top + 50), Environment.TickCount64);
+                var bar = Assert.Single(view.OwnedForms.OfType<PipTitleBar>());
+                typeof(Control).GetMethod("OnMouseDown", System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic)!.Invoke(bar, [new MouseEventArgs(MouseButtons.Right, 1, 10, 10, 0)]);
+                Assert.True(view.ContextMenuStrip!.Visible);
+                view.ContextMenuStrip.Close();
+            }
+            Assert.DoesNotContain(typeof(PipWindow).GetFields(System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic), field => field.FieldType == typeof(ToolTip));
+        });
+    }
+
+    [Fact]
     public void Title_bar_drag_moves_the_view_and_respects_its_position_lock()
     {
         using var target = new TargetProcess(new Rectangle(240, 160, 400, 300));
@@ -172,10 +244,11 @@ public sealed class PipComfortTests
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             using var view = new PipWindow(target.Handle, new WindowController([]));
-            view.ApplyViewPreferences(new() { CompactTitleBar = false, HoverPreview = mode });
+            view.ApplyViewPreferences(new() { HoverPreview = mode });
             view.ShowOnTop();
             view.Location = new Point(700, 120);
-            view.SetCrop(new Rectangle(30, 40, 200, 150));
+            view.SetCrop(new Rectangle(30, 40, 350, 250));
+            view.Size = new Size(164, 118);
             var point = new Point(view.Left + view.Width / 2, view.Top + view.Height / 2);
             nint focus = User32.GetForegroundWindow();
             view.UpdateHover(point, 1000);
@@ -239,7 +312,6 @@ public sealed class PipComfortTests
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             using var view = new PipWindow(target.Handle, new WindowController([]));
-            view.ApplyViewPreferences(new() { CompactTitleBar = false });
             view.ShowOnTop();
             var pointer = new Point(view.Left + 50, view.Top + 70);
             view.UpdateHover(pointer, 1000);

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using WinScreen.Native;
 using WinScreen.Windows;
 using static WinScreen.Localization.UiText;
@@ -13,11 +14,74 @@ internal sealed class PipTitleBar : Form
     private readonly PictureBox _icon;
     private readonly Button _minimize, _close;
     private Point _start, _original;
+    private readonly System.Windows.Forms.Timer _fade = new() { Interval = 15 };
+    private long _leftAt, _fadeAt;
+    private double _from, _target;
+    internal event Action<Point>? MenuRequested;
+
+    internal void HoldVisible()
+    {
+        _fade.Stop();
+        _leftAt = 0;
+        _target = 1;
+        Opacity = 1;
+        if (!Visible) { Show(); TopLayer.Raise(Handle); }
+    }
+
+    internal void Dismiss()
+    {
+        _fade.Stop();
+        _leftAt = 0;
+        Opacity = 0;
+        Hide();
+    }
+
+    internal void FollowHover(bool over, long now)
+    {
+        if (over || Dragging)
+        {
+            _leftAt = 0;
+            FadeTo(1);
+        }
+        else if (_leftAt == 0) _leftAt = now;
+        else if (now - _leftAt >= 1000) FadeTo(0);
+    }
+
+    private void FadeTo(double target)
+    {
+        if (_target == target && (_fade.Enabled || Opacity == target)) return;
+        _from = Visible ? Opacity : 0;
+        _target = target;
+        _fadeAt = Environment.TickCount64;
+        if (target > 0 && !Visible)
+        {
+            Opacity = 0;
+            Show();
+            TopLayer.Raise(Handle);
+        }
+        _fade.Start();
+    }
+
+    private void FadeTick()
+    {
+        double fraction = Math.Clamp((Environment.TickCount64 - _fadeAt) / (_target > _from ? 150.0 : 300.0), 0, 1);
+        Opacity = _from + (_target - _from) * fraction;
+        if (fraction < 1) return;
+        _fade.Stop();
+        if (_target == 0) Hide();
+    }
+
+    [DllImport("user32.dll")] private static extern nint BeginDeferWindowPos(int count);
+    [DllImport("user32.dll")] private static extern nint DeferWindowPos(nint batch, nint window, nint after,
+        int x, int y, int width, int height, uint flags);
+    [DllImport("user32.dll")] private static extern bool EndDeferWindowPos(nint batch);
 
     internal bool Dragging { get; private set; }
 
     public PipTitleBar(Form view, Func<bool> locked, Action minimize)
     {
+        _fade.Tick += (_, _) => FadeTick();
+        Opacity = 0;
         _view = view;
         _locked = locked;
         Owner = view;
@@ -27,18 +91,27 @@ internal sealed class PipTitleBar : Form
         BackColor = SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(32, 32, 32);
         _close = MakeButton("×", T("pip.close").Replace("&", ""), () => view.Close());
         _minimize = MakeButton("−", T("pip.minimize"), minimize);
+        _close.FlatAppearance.MouseOverBackColor = Color.FromArgb(232, 17, 35);
+        _minimize.FlatAppearance.MouseOverBackColor = Color.FromArgb(64, 64, 64);
         _title = new Label { ForeColor = SystemInformation.HighContrast ? SystemColors.WindowText : Color.White, AutoEllipsis = true, UseMnemonic = false,
             TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill };
         _icon = new PictureBox { Dock = DockStyle.Left, SizeMode = PictureBoxSizeMode.CenterImage };
         Controls.AddRange([_title, _icon, _minimize, _close]);
+        foreach (Control button in new Control[] { _minimize, _close })
+            button.MouseDown += (_, e) =>
+            {
+                if (e.Button == MouseButtons.Right) MenuRequested?.Invoke(button.PointToScreen(e.Location));
+            };
         foreach (Control control in new Control[] { this, _title, _icon })
         {
             control.MouseDown += (_, e) =>
             {
-                if (e.Button != MouseButtons.Left || _locked()) return;
+                if (e.Button == MouseButtons.Right) { MenuRequested?.Invoke(control.PointToScreen(e.Location)); return; }
+                if (e.Button != MouseButtons.Left || e.Clicks > 1 || _locked()) return;
                 _start = control.PointToScreen(e.Location);
                 _original = _view.Location;
                 Dragging = true;
+                HoldVisible();
                 control.Capture = true;
             };
             control.MouseMove += (_, e) =>
@@ -46,8 +119,15 @@ internal sealed class PipTitleBar : Form
                 if (!Dragging || _locked()) return;
                 Point point = control.PointToScreen(e.Location);
                 Point place = _original + new Size(point.X - _start.X, point.Y - _start.Y);
-                _view.Location = PipGeometry.KeepInside(new Rectangle(place, _view.Size), Screen.FromPoint(point).WorkingArea);
-                Location = new Point(_view.Left + PipGeometry.Border, _view.Top + PipGeometry.Border);
+                Rectangle area = Screen.FromPoint(point).WorkingArea;
+                place = PipGeometry.KeepInside(new Rectangle(place, _view.Size), area);
+                int top = place.Y - Height >= area.Top ? place.Y - Height : place.Y + _view.Height;
+                const uint flags = User32.SWP_NOACTIVATE | User32.SWP_NOZORDER | User32.SWP_NOSIZE;
+                nint batch = BeginDeferWindowPos(2);
+                if (batch != 0) batch = DeferWindowPos(batch, _view.Handle, 0, place.X, place.Y, 0, 0, flags);
+                if (batch != 0) batch = DeferWindowPos(batch, Handle, 0, place.X, top, 0, 0, flags);
+                if (batch == 0 || !EndDeferWindowPos(batch)) _view.Location = place;
+
             };
             control.MouseUp += (_, _) => { Dragging = false; control.Capture = false; };
             control.MouseCaptureChanged += (_, _) => { if (!control.Capture) Dragging = false; };
@@ -59,7 +139,7 @@ internal sealed class PipTitleBar : Form
         if (_title.Text != title) _title.Text = title;
         int size = Dpi.Scale(28, _view.DeviceDpi);
         Height = size;
-        _close.Width = _minimize.Width = size;
+        _close.Width = _minimize.Width = Dpi.Scale(46, _view.DeviceDpi);
         _icon.Width = size;
         var iconSize = new Size(Dpi.Scale(16, _view.DeviceDpi), Dpi.Scale(16, _view.DeviceDpi));
         if (icon is not null && _icon.Image?.Size != iconSize)
@@ -100,7 +180,7 @@ internal sealed class PipTitleBar : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _icon.Image?.Dispose();
+        if (disposing) { _fade.Dispose(); _icon.Image?.Dispose(); }
         base.Dispose(disposing);
     }
 }

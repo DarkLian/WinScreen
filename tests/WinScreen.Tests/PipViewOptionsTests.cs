@@ -93,6 +93,16 @@ public sealed class PipPresetTests : IDisposable
     }
 
     [Fact]
+    public void Retired_title_bar_setting_is_ignored_without_losing_other_preferences()
+    {
+        string path = Path.Combine(_folder, "settings.json");
+        File.WriteAllText(path, """{"PipViews":{"CompactTitleBar":false,"MinimizeToTaskbar":true,"HoverDelayMilliseconds":900}}""");
+        AppSettings loaded = AppSettings.Load(path);
+        Assert.True(loaded.PipViews.MinimizeToTaskbar);
+        Assert.Equal(900, loaded.PipViews.HoverDelayMilliseconds);
+    }
+
+    [Fact]
     public void Older_settings_load_with_no_presets()
     {
         string path = Path.Combine(_folder, "settings.json");

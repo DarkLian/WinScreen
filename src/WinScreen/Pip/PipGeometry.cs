@@ -5,6 +5,9 @@ namespace WinScreen.Pip;
 /// <summary>The arithmetic behind a PiP window, kept apart from the window so it can be tested directly.</summary>
 public static class PipGeometry
 {
+    internal static bool NeedsWholePreview(int pictureWidth, int shownWidth) =>
+        pictureWidth > 0 && shownWidth > 0 && pictureWidth / (double)shownWidth < 0.5;
+
     public const int Border = 2;
     public const int MinimumWidth = 160;
     public const int MinimumHeight = 60;

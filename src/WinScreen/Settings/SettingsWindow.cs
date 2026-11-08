@@ -54,7 +54,6 @@ public sealed class SettingsWindow : Form
     private readonly ComboBox _pipRate = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
     private readonly ComboBox _pipScaling = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private readonly NumericUpDown _pipOpacity = new() { Minimum = 10, Maximum = 100, Width = 75 };
-    private readonly CheckBox _pipTitleBar = new() { Text = T("pip.titleBar.enable"), AutoSize = true };
     private readonly CheckBox _pipTaskbar = new() { Text = T("pip.taskbar.enable"), AutoSize = true };
     private readonly ComboBox _pipPreview = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private readonly CheckBox _pipCaptureBorder = new() { Text = T("pip.captureBorder.hide"), AutoSize = true };
@@ -469,7 +468,7 @@ public sealed class SettingsWindow : Form
         draft.Pip.OpacityPercent = Number(_pipOpacity);
         draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
         draft.HideCaptureBorder = _pipCaptureBorder.Checked;
-        draft.PipViews = new PipViewPreferences { CompactTitleBar = _pipTitleBar.Checked, MinimizeToTaskbar = _pipTaskbar.Checked,
+        draft.PipViews = new PipViewPreferences { MinimizeToTaskbar = _pipTaskbar.Checked,
             HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
             HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds }.Validated();
         return draft;
@@ -638,7 +637,6 @@ public sealed class SettingsWindow : Form
         _pipOpacity.Value = pip.OpacityPercent;
         _pipDiagnostics.Checked = pip.ShowDiagnostics;
         _pipCaptureBorder.Checked = values.HideCaptureBorder;
-        _pipTitleBar.Checked = values.PipViews.CompactTitleBar;
         _pipTaskbar.Checked = values.PipViews.MinimizeToTaskbar;
         _pipPreview.SelectedIndex = (int)values.PipViews.Validated().HoverPreview;
         _opacityStep.Value = Math.Clamp(values.OpacityStepPercent, 1, 25);
@@ -787,7 +785,7 @@ public sealed class SettingsWindow : Form
         page.Controls.Add(Note(T("pip.rendering.captureIndicatorHelp")));
         page.Controls.Add(Note(T("pip.diagnostics.retryHelp")));
         page.Controls.Add(Section(T("settings.experimental"), _pipInput, _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
-        page.Controls.Add(Section(T("pip.hover.title"), _pipTitleBar, _pipTaskbar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));
+        page.Controls.Add(Section(T("pip.hover.title"), _pipTaskbar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));
         return page;
     }
 
@@ -1097,7 +1095,6 @@ public sealed class SettingsWindow : Form
         Option(T("features.autoAnchors"), none, _autoAnchors.Checked, "anchors");
         Option(T("features.opacityWheel"), T("features.wheelShortcut"), _opacityWheel.Checked, "appearance");
         Option(_detectDark.Text, none, _detectDark.Checked && _experimental.Checked, "appearance");
-        Option(_pipTitleBar.Text, none, _pipTitleBar.Checked, "pip");
         Option(_pipTaskbar.Text, none, _pipTaskbar.Checked, "pip");
         Option(T("pip.hover.mode"), none, _pipPreview.SelectedIndex > 0, "pip");
         _features.EndUpdate();
