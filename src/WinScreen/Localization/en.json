@@ -182,7 +182,7 @@
   "pip.bookmarks.resolvedRegion": "Area to show",
   "pip.bookmarks.save": "Save this source...",
   "pip.bookmarks.title": "Saved sources",
-  "pip.capture.hiddenStandard": "This Windows version uses Standard capture while the original is hidden to keep its capture border out of sight.",
+  "pip.capture.hiddenStandard": "Standard capture keeps the capture border out of sight while the original is hidden.",
   "pip.captureBorder.hide": "Hide the yellow border Windows draws around a captured window",
   "pip.chooseSource": "Choose what to show",
   "pip.clickThrough": "Click-through (turn off from the tray)",

@@ -607,17 +607,24 @@ internal sealed class PipInteraction : IDisposable
             Record(PressOutcome.ViewControl, point, 0);
             return false;
         }
+        nint control = RootAt(point);
+        if (control != _viewWindow && ProcessOf(control) == (uint)Environment.ProcessId)
+        {
+            Record(PressOutcome.ViewControl, point, 0);
+            return false;
+        }
         if (_messages is not null && !_outside && (InView(point) || _inPopup)) return MessagePress(point, button);
         if (_outside || (!InView(point) && !_inPopup))
         {
             Record(PressOutcome.Outside, point, 0);
-            _heldSwallowed |= button;
             if (!_outside)
             {
                 _outside = true;
                 Left?.Invoke();
             }
-
+            // An outside press can pass to its real visible target while UI teardown catches up.
+            if (RootAt(point) != _source) return false;
+            _heldSwallowed |= button;
             return true;
         }
 

@@ -77,6 +77,8 @@ Every view has a title bar above the picture, or below it near the top of the sc
 - **Compatible input** helps apps whose controls do not respond normally. This choice is remembered for that app.
   It may briefly show a faint outline around the view during a click.
 
+Views pause direct use while a WinScreen menu or the tray overflow panel is open.
+
 When Windows cannot hide the capture border, a hidden original uses Standard capture. Showing it restores your capture choice.
 
 **In Settings → Picture-in-Picture** you can choose a hover preview (for small views only) or reading lens, and keep minimized views on the taskbar.

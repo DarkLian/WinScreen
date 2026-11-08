@@ -24,6 +24,7 @@ internal sealed class SourcePopups
     private readonly Dictionary<nint, Point> _hidden = []; // Popup, and where it was.
 
     public SourcePopups(nint source) => _source = source;
+    internal Action<nint> RaisePopup { get; init; } = Windows.TopLayer.Raise;
 
     /// <summary>
     /// Moves popups off the screen or back. <paramref name="view"/> is where the pointer works with the original;
@@ -71,9 +72,9 @@ internal sealed class SourcePopups
                         Point place = PipGeometry.KeepInside(desired, Screen.FromPoint(at).WorkingArea);
                         _placed[popup] = (current, place);
                         User32.SetWindowPos(popup, 0, place.X, place.Y, 0, 0, Move);
-                        Windows.TopLayer.Raise(popup);
+                        RaisePopup(popup);
                     }
-                    if (BehindView(popup, viewWindow)) Windows.TopLayer.Raise(popup);
+                    if (BehindView(popup, viewWindow)) RaisePopup(popup);
                     continue;
                 }
                 bool away = kind == Kind.DisplayOnly ||

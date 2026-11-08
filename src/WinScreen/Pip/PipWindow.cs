@@ -50,6 +50,7 @@ public sealed class PipWindow : Form
     private long _hoverSince;
     private Icon? _sourceIcon;
     private bool _suspended;
+    private bool _inputPaused;
     private bool _parkedCaptureFallback;
     private Task _retiringCapture = Task.CompletedTask;
     private bool _resumeRequested;
@@ -158,6 +159,7 @@ public sealed class PipWindow : Form
         _menu.Items.Add(T("pip.close"), null, (_, _) => Close());
         _menu.Opening += (_, _) =>
         {
+            PauseInput(true, keepTitleBar: true);
             _titleBar?.HoldVisible();
             _menu.Items["inputStatus"]!.Text = InputDescription;
             _retryItem.Visible = CanRetryCapture;
@@ -170,7 +172,7 @@ public sealed class PipWindow : Form
             _foregroundBeforeMenu = User32.GetForegroundWindow();
             User32.SetForegroundWindow(Handle);
         };
-        _menu.Closed += (_, _) => ReturnFocusAfterMenu();
+        _menu.Closed += (_, _) => { ReturnFocusAfterMenu(); PauseInput(TopLayer.InputBlocked); };
         ContextMenuStrip = _menu;
 
         _watch.Tick += (_, _) => FollowSource();
@@ -220,6 +222,8 @@ public sealed class PipWindow : Form
             OpenInFreeSpot(_thumbnail);
             ApplyClickThrough();
             Show();
+            PauseInput(TopLayer.InputBlocked);
+            if (_inputPaused) TopLayer.KeepAbove();
             StayOnTop();
             if ((User32.GetWindowLongPtr(Handle, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) == 0)
                 WindowController.Pin(Handle);
@@ -434,11 +438,12 @@ public sealed class PipWindow : Form
             return;
         const long both = User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT;
         long style = User32.GetWindowLongPtr(Handle, User32.GWL_EXSTYLE);
-        long wanted = _overrides.ClickThrough ? style | both : style & ~both;
+        bool passes = _overrides.ClickThrough || _inputPaused;
+        long wanted = passes ? style | both : style & ~both;
         if (wanted != style)
             User32.SetWindowLongPtr(Handle, User32.GWL_EXSTYLE, (nint)wanted);
-        if (_overrides.ClickThrough)
-            User32.SetLayeredWindowAttributes(Handle, 0, _preferences.Alpha, User32.LWA_ALPHA);
+        if (passes)
+            User32.SetLayeredWindowAttributes(Handle, 0, _overrides.ClickThrough ? _preferences.Alpha : (byte)255, User32.LWA_ALPHA);
     }
 
     private void FillOptions(ToolStripMenuItem options)
@@ -1150,9 +1155,23 @@ public sealed class PipWindow : Form
     internal IReadOnlyCollection<PressOutcome> PressOutcomes => _pressOutcomes;
 
     /// <summary>The pointer came onto the view. Everything that lets real input through exists from here until it leaves.</summary>
+    private SourcePopups CreateSourcePopups() => new(_source)
+    {
+        RaisePopup = popup => BeginInvokeIfAlive(() =>
+        {
+            if (_cleaned || _live is null || !_origin.IsAvailable || !User32.IsWindow(popup)) return;
+            uint thread = User32.GetWindowThreadProcessId(popup, out uint process);
+            User32.GetWindowThreadProcessId(_source, out uint sourceProcess);
+            if (process == sourceProcess && (WindowInfo.IsOwnedBy(popup, _source) ||
+                WindowInfo.ClassName(popup) == "#32768" && thread == User32.GetWindowThreadProcessId(_source, out _)))
+                TopLayer.Raise(popup);
+        }),
+    };
+
     private void BeginLive(Point pointer)
     {
-        if (_live is not null || _thumbnail is null || _suspended || !_origin.IsAvailable || !_windows.IsHidden(_source))
+        if (_live is not null || _thumbnail is null || _suspended || !_origin.IsAvailable || !_windows.IsHidden(_source) ||
+            _inputPaused || _menu.Visible || TopLayer.InputBlocked)
             return;
         Rectangle area = PictureArea;
         if (!area.Contains(pointer))
@@ -1161,7 +1180,7 @@ public sealed class PipWindow : Form
         _liveSawSourceFocus = false;
         _unobservedSince = 0;
         bool messages = !CompatibleInput;
-        _popups ??= new SourcePopups(_source);
+        _popups ??= CreateSourcePopups();
         var live = new PipInteraction(_source, RectangleToScreen(area), ShownPart(_thumbnail.SourceSize), Handle,
             messageInput: messages, _popups);
         live.Left += () => BeginInvokeIfAlive(() => { LastVisitEnd = "the pointer left"; EndLive(); });
@@ -1191,8 +1210,9 @@ public sealed class PipWindow : Form
 
     private void BeginInvokeIfAlive(Action action)
     {
-        if (IsHandleCreated && !IsDisposed)
-            BeginInvoke(action);
+        if (!IsHandleCreated || IsDisposed) return;
+        try { BeginInvoke(action); }
+        catch (InvalidOperationException) when (IsDisposed || !IsHandleCreated) { }
     }
 
     private void DragLiveView(Size moved)
@@ -1329,7 +1349,24 @@ public sealed class PipWindow : Form
     }
 
     /// <summary>Puts this above other topmost windows, which a hidden original just went above too.</summary>
-    private void StayOnTop() => WinScreen.Windows.TopLayer.Raise(Handle);
+    private void StayOnTop()
+    {
+        if (!_inputPaused && !_menu.Visible && !TopLayer.InputBlocked) TopLayer.Raise(Handle);
+    }
+
+    private void PauseInput(bool paused, bool keepTitleBar = false)
+    {
+        if (_inputPaused == paused) return;
+        _inputPaused = paused;
+        if (paused)
+        {
+            CancelPress();
+            EndLive();
+            DropHoverPreview();
+            if (!keepTitleBar && !_menu.Visible) _titleBar?.Dismiss();
+        }
+        ApplyClickThrough();
+    }
 
     /// <summary>Windows lifts an activated always-on-top window over the taskbar; this puts it back under.</summary>
     protected override void OnActivated(EventArgs e)
@@ -1518,12 +1555,13 @@ public sealed class PipWindow : Form
         }
         if (_hideItem.Checked && !_windows.IsHidden(_source))
             _hideItem.Checked = false;
+        PauseInput(_menu.Visible || TopLayer.InputBlocked);
         HoldSettledPlace();
         FollowOriginalState();
         if (_suspended || IsDisposed) return;
         // A hidden original's link text and tooltips would show where it really is; every fifth tick is enough.
         if (_live is null && _hideItem.Checked && ++_popupTick % 5 == 0)
-            (_popups ??= new SourcePopups(_source)).Sweep(null);
+            (_popups ??= CreateSourcePopups()).Sweep(null);
         if (_pressed && MouseButtons == MouseButtons.None)
             CancelPress();
         try { FollowPointer(); ShowState(); }
@@ -1577,7 +1615,7 @@ public sealed class PipWindow : Form
     internal void UpdateHover(Point pointer, long now)
     {
         ClaimEscape(_selecting);
-        bool unavailable = _suspended || _interacting || _selecting || _overrides.ClickThrough;
+        bool unavailable = _suspended || _interacting || _selecting || _overrides.ClickThrough || (_inputPaused && !_menu.Visible);
         if (unavailable)
         {
             _titleBar?.Dismiss();
@@ -1596,7 +1634,7 @@ public sealed class PipWindow : Form
             (_titleBar.Visible && _titleBar.Bounds.Contains(pointer));
         if (_menu.Visible || _titleBar.Dragging) _titleBar.HoldVisible();
         else _titleBar.FollowHover(over, now);
-        if (over && !_pressed) FollowHoverPreview(pointer, now);
+        if (over && !_pressed && !_menu.Visible) FollowHoverPreview(pointer, now);
         else DropHoverPreview();
     }
 

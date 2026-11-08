@@ -49,7 +49,8 @@ public sealed class AppEndToEndTests : IDisposable
             return window != 0;
         }, 8000), "WinScreen.exe didn't start.");
         _appWindow = window;
-        Thread.Sleep(300);
+        Assert.True(_app.WaitForInputIdle(10000), "WinScreen did not finish initializing its UI.");
+        Thread.Sleep(2000); // Input-idle can occur while the notification-area startup still pumps messages.
     }
 
     private void RestartWith(AppSettings settings)
@@ -63,7 +64,8 @@ public sealed class AppEndToEndTests : IDisposable
         settings.Save(Path.Combine(_data, "settings.json"));
         _app = Start();
         _appWindow = WaitForAppWindow();
-        Thread.Sleep(300);
+        Assert.True(_app.WaitForInputIdle(10000), "WinScreen did not finish initializing its UI.");
+        Thread.Sleep(2000); // Input-idle can occur while the notification-area startup still pumps messages.
     }
 
     private nint WaitForAppWindow()
@@ -777,10 +779,9 @@ public sealed class AppEndToEndTests : IDisposable
         Hotkey(Keys.P, target);
         nint pip = WaitForPip();
 
-        // Keep the view away from the spot being clicked.
-        Rectangle start = Desktop.BoundsOf(pip);
-        Desktop.Drag(new Point(start.Left + 60, start.Top + 60), new Point(100, 100), pip);
-        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(pip).Left == 40), "The view didn't move.");
+        // Position this fixture directly; the dedicated title-bar test covers dragging.
+        Assert.True(User32.SetWindowPos(pip, 0, 40, 40, 0, 0,
+            User32.SWP_NOSIZE | User32.SWP_NOACTIVATE | User32.SWP_NOZORDER));
         Rectangle view = Desktop.BoundsOf(pip);
 
         var pressed = new Point(view.Left + view.Width * 3 / 4, view.Top + view.Height / 2);
@@ -918,7 +919,7 @@ public sealed class AppEndToEndTests : IDisposable
         {
             pip = Desktop.FindProcessWindow(_app.Id, title => title.StartsWith("PiP - ", StringComparison.Ordinal));
             return pip != 0;
-        }), "Ctrl+Alt+P didn't open a PiP window.");
+        }), $"Ctrl+Alt+P did not open a view. Shell state={Windows.FullScreen.Current()}, foreground={Windows.WindowInfo.Title(User32.GetForegroundWindow())}, appExited={_app.HasExited}");
         Thread.Sleep(300);
         return pip;
     }
@@ -1044,20 +1045,18 @@ public sealed class AppEndToEndTests : IDisposable
     }
 
     [Fact]
-    public void Compact_title_bar_drag_and_minimize_work_with_real_mouse_input()
+    public void Title_bar_drag_and_minimize_work_with_real_mouse_input()
     {
         using var target = new TargetProcess(Spot);
         Focus(target);
         Hotkey(Keys.P, target);
-        nint pip = 0;
-        Assert.True(Desktop.WaitFor(() =>
-        {
-            pip = Desktop.FindProcessWindow(_app.Id, title => title.StartsWith("PiP - ", StringComparison.Ordinal));
-            return pip != 0;
-        }));
+        nint pip = WaitForPip();
         Rectangle bounds = Desktop.BoundsOf(pip);
         Desktop.MoveMouse(new Point(bounds.Left + 60, bounds.Top + 60));
-        Point grip = new(bounds.Left + 60, bounds.Top + 14);
+        int dpi = Dpi.Of(pip), height = Dpi.Scale(28, dpi);
+        bool above = bounds.Top - height >= Screen.FromHandle(pip).WorkingArea.Top;
+        Point grip = new(bounds.Left + Dpi.Scale(60, dpi), above ? bounds.Top - height / 2 : bounds.Bottom + height / 2);
+        Size gripOffset = new(grip.X - bounds.Left, grip.Y - bounds.Top);
         nint bar = 0;
         Assert.True(Desktop.WaitFor(() =>
         {
@@ -1070,11 +1069,11 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() =>
         {
             Rectangle moved = Desktop.BoundsOf(pip);
-            return Math.Abs(moved.Left - (goal.X - 60)) <= 2 && Math.Abs(moved.Top - (goal.Y - 14)) <= 2;
+            return Math.Abs(moved.Left - (goal.X - gripOffset.Width)) <= 2 && Math.Abs(moved.Top - (goal.Y - gripOffset.Height)) <= 2;
         }), Desktop.BoundsOf(pip).ToString());
         Assert.Equal(target.Handle, User32.GetForegroundWindow());
         Rectangle title = Desktop.BoundsOf(bar);
-        Desktop.ClickOn(new Point(title.Right - 42, title.Top + 14), bar);
+        Desktop.ClickOn(new Point(title.Right - Dpi.Scale(69, dpi), title.Top + height / 2), bar);
         Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(pip)), "Minimize did not hide the view.");
         Assert.True(User32.IsWindow(pip));
         Assert.Equal(target.Handle, User32.GetForegroundWindow());

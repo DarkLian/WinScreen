@@ -182,7 +182,7 @@
   "pip.bookmarks.resolvedRegion": "要显示的区域",
   "pip.bookmarks.save": "保存此来源...",
   "pip.bookmarks.title": "已保存的来源",
-  "pip.capture.hiddenStandard": "此 Windows 版本会在原窗口隐藏时使用标准捕获，以免显示捕获边框。",
+  "pip.capture.hiddenStandard": "原窗口隐藏时使用标准捕获，以免显示捕获边框。",
   "pip.captureBorder.hide": "隐藏 Windows 在被捕获窗口周围显示的黄色边框",
   "pip.chooseSource": "选择显示内容",
   "pip.clickThrough": "鼠标穿透（从托盘关闭）",
