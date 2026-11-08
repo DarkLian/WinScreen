@@ -71,12 +71,20 @@ public sealed class WindowPlacer(WindowController windows)
         if (!_history.TryGetValue(window, out var history) || !history.Identity.IsSameWindow() || history.Earlier.Count == 0)
             return false;
         WindowPlacement placement = history.Earlier[^1];
-        history.Earlier.RemoveAt(history.Earlier.Count - 1);
         placement.Length = Marshal.SizeOf<WindowPlacement>();
         if (placement.ShowCommand == 1)
             placement.ShowCommand = User32.SW_SHOWNOACTIVATE;
         if (!User32.SetWindowPlacement(window, ref placement))
             throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
+        Settle(window);
+        var actual = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() };
+        if (!User32.GetWindowPlacement(window, ref actual) ||
+            Math.Abs(actual.NormalPosition.Left - placement.NormalPosition.Left) > Tolerance ||
+            Math.Abs(actual.NormalPosition.Top - placement.NormalPosition.Top) > Tolerance ||
+            Math.Abs(actual.NormalPosition.Right - placement.NormalPosition.Right) > Tolerance ||
+            Math.Abs(actual.NormalPosition.Bottom - placement.NormalPosition.Bottom) > Tolerance)
+            throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
+        history.Earlier.RemoveAt(history.Earlier.Count - 1);
         return true;
     }
 
@@ -139,7 +147,8 @@ public sealed class WindowPlacer(WindowController windows)
         if (WindowInfo.TryGetFrameBounds(window, out Rectangle frame, out _) && frame.Size != target.Size)
             Move(window, target, 0); // Scaling changed on the way, so the invisible margins did too.
         if (!WindowInfo.TryGetFrameBounds(window, out frame, out _) ||
-            Math.Abs(frame.Left - target.Left) > Tolerance || Math.Abs(frame.Top - target.Top) > Tolerance)
+            Math.Abs(frame.Left - target.Left) > Tolerance || Math.Abs(frame.Top - target.Top) > Tolerance ||
+            Math.Abs(frame.Width - target.Width) > Tolerance || Math.Abs(frame.Height - target.Height) > Tolerance)
             throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
     }
 

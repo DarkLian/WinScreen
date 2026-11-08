@@ -1,4 +1,4 @@
-using WinScreen.Localization;
+﻿using WinScreen.Localization;
 using WinScreen.Native;
 using WinScreen.Settings;
 using WinScreen.Tests.Support;
@@ -36,13 +36,16 @@ public sealed class WindowMenuBuilderTests
                 builder.Populate(menu.Items, tray);
                 builder.Refresh(menu.Items);
                 var commands = Commands(menu.Items).Where(item => item.Tag is AppCommand).ToArray();
-                foreach (AppCommand command in CommandCatalog.Ordered.Where(command => tray || command != AppCommand.RestoreAll))
+                foreach (AppCommand command in CommandCatalog.Ordered.Where(command => command != AppCommand.RestoreAll))
                     Assert.Contains(commands, item => Equals(item.Tag, command));
                 foreach (AppCommand command in new[] { AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.ToggleDarkTitleBar, AppCommand.ShowWindowInfo })
                     Assert.Contains(commands, item => Equals(item.Tag, command));
                 Assert.All(commands.Where(item => !Equals(item.Tag, AppCommand.RestoreAll)), item => Assert.False(item.Enabled));
-                if (tray) Assert.True(Assert.Single(commands, item => Equals(item.Tag, AppCommand.RestoreAll)).Enabled);
-                else Assert.DoesNotContain(commands, item => Equals(item.Tag, AppCommand.RestoreAll));
+                Assert.DoesNotContain(commands, item => Equals(item.Tag, AppCommand.RestoreAll));
+                Assert.Single(commands, item => Equals(item.Tag, AppCommand.ShowWindowInfo));
+                Assert.Equal(CommandCatalog.ArrangeMenu.OfType<AppCommand>(),
+                    Commands(menu.Items).Single(item => Equals(item.Tag, AppCommand.Arrange)).DropDownItems
+                        .OfType<ToolStripMenuItem>().Select(item => (AppCommand)item.Tag!));
                 Assert.Contains(menu.Items.OfType<ToolStripMenuItem>(), item => item.Text == UiText.T("common.copy"));
             }
         });

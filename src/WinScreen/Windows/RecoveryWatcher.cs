@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using WinScreen.Hotkeys;
 
 namespace WinScreen.Windows;
@@ -18,6 +18,7 @@ internal sealed class RecoveryWatcher : IDisposable
     private readonly object _gate = new();
     private Process? _watcher;
     private EventWaitHandle? _stop;
+    private long _retryAt;
 
     public RecoveryWatcher() : this(StartCopy)
     {
@@ -41,21 +42,25 @@ internal sealed class RecoveryWatcher : IDisposable
             if (!needed)
             {
                 Stop();
+                _retryAt = 0;
                 return;
             }
 
             if (_watcher is { HasExited: false })
                 return;
+            if (Environment.TickCount64 < _retryAt) return;
             Stop();
             try
             {
                 _stop = new EventWaitHandle(false, EventResetMode.ManualReset, StopName(Environment.ProcessId));
                 _watcher = _start(Environment.ProcessId);
+                if (_watcher is null) _retryAt = Environment.TickCount64 + 1000;
             }
             catch (Exception failure) when (failure is System.ComponentModel.Win32Exception or IOException or
                                                 UnauthorizedAccessException or InvalidOperationException)
             {
                 Stop();
+                _retryAt = Environment.TickCount64 + 1000;
             }
         }
     }
@@ -95,6 +100,9 @@ internal sealed class RecoveryWatcher : IDisposable
     /// for recovery only after a real death with no new copy of WinScreen already in charge.
     /// </summary>
     public static void Watch(int parent, Action recover)
+        => WatchUntilRecovered(parent, () => { recover(); return true; });
+
+    public static void WatchUntilRecovered(int parent, Func<bool> recover)
     {
         using EventWaitHandle stop = new(false, EventResetMode.ManualReset, StopName(parent));
         Process? process = null;
@@ -115,16 +123,23 @@ internal sealed class RecoveryWatcher : IDisposable
             }
         }
 
-        using Mutex guard = ForRecovery(out bool held);
-        try
+        while (!stop.WaitOne(0))
         {
-            if (!Mutex.TryOpenExisting(RunningInstance.MutexName, out Mutex? running))
-                recover();
-            running?.Dispose();
-        }
-        finally
-        {
-            if (held) guard.ReleaseMutex();
+            using Mutex guard = ForRecovery(out bool held);
+            if (held)
+            {
+                try
+                {
+                    if (Mutex.TryOpenExisting(RunningInstance.MutexName, out Mutex? running))
+                    {
+                        running.Dispose();
+                        return;
+                    }
+                    if (recover()) return;
+                }
+                finally { guard.ReleaseMutex(); }
+            }
+            if (stop.WaitOne(1000)) return;
         }
     }
 

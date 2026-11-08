@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace WinScreen.Windows;
 
@@ -18,6 +18,7 @@ public sealed record WindowRecord(
     public long ProcessStartTicks { get; init; }
     public uint ThreadId { get; init; }
     public long OwnedStyles { get; init; }
+    public bool Concealed { get; init; }
     public long StyleBits { get; init; }
     // Nullable: zero is a valid original value and still needs restoring.
     public long? SwitcherBits { get; init; }

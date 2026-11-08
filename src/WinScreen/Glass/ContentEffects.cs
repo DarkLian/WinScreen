@@ -1,4 +1,4 @@
-using WinScreen.Windows;
+﻿using WinScreen.Windows;
 
 namespace WinScreen.Glass;
 
@@ -23,6 +23,7 @@ internal sealed class ContentEffects(WindowController windows) : IDisposable
     public bool Has(nint window) => _overlays.ContainsKey(window);
 
     public int Count => _overlays.Count;
+    internal IEnumerable<nint> Sources => _overlays.Keys;
 
     public void SetLevels(ContentLevels levels)
     {
@@ -37,20 +38,28 @@ internal sealed class ContentEffects(WindowController windows) : IDisposable
         if (_overlays.TryGetValue(window, out ContentOverlay? existing))
         {
             TurnOff(window);
-            if (existing.Look == look)
+            if (_overlays.ContainsKey(window) || existing.Look == look)
                 return false;
         }
 
         var overlay = new ContentOverlay(window, look, _levels);
-        windows.ConcealSolid(window);
         try
         {
+            windows.HideOwned(window, overlay, solid: true);
             overlay.Start();
         }
         catch
         {
+            if (windows.IsConcealedBy(window, overlay))
+            {
+                try { windows.ShowOwned(window, overlay); }
+                catch (WindowOperationException)
+                {
+                    _overlays[window] = overlay;
+                    throw;
+                }
+            }
             overlay.Dispose();
-            windows.Show(window);
             throw;
         }
 
@@ -66,18 +75,20 @@ internal sealed class ContentEffects(WindowController windows) : IDisposable
 
     public void TurnOff(nint window)
     {
-        if (!_overlays.Remove(window, out ContentOverlay? overlay))
+        if (!_overlays.TryGetValue(window, out ContentOverlay? overlay))
             return;
-        overlay.Dispose();
         try
         {
             if (Native.User32.IsWindow(window))
-                windows.Show(window);
+                windows.ShowOwned(window, overlay);
         }
         catch (WindowOperationException failure)
         {
             Problem?.Invoke(failure.Message);
+            return;
         }
+        _overlays.Remove(window);
+        overlay.Dispose();
     }
 
     public void TurnAllOff()

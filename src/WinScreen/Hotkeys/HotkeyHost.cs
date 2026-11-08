@@ -25,6 +25,8 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
     public event Action<int>? Pressed;
     public event Action? CloseRequested;
 
+    internal bool IsRegistered(int command) => _dispatch.ContainsValue(command);
+
     /// <summary>Claims a global hotkey. Returns false with a reason when another program holds it.</summary>
     public bool TryRegister(int id, uint modifiers, Keys key, out string? failure)
     {

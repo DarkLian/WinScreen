@@ -77,6 +77,21 @@ public sealed class WindowPlacementTests
 {
     private static readonly Rectangle Spot = new(240, 200, 400, 300);
 
+    [Fact]
+    public void Minimum_size_refusals_are_reported_and_do_not_consume_undo()
+    {
+        using var target = new TargetProcess(Spot);
+        var placer = new WindowPlacer(new WindowController([]));
+        placer.SetFrame(target.Handle, new Rectangle(500, 200, 700, 500));
+        target.SetMinimumSize(new Size(600, 400));
+        Assert.Throws<WindowOperationException>(() => placer.SetFrame(target.Handle, new Rectangle(500, 200, 200, 100)));
+        Assert.True(placer.RestorePrior(target.Handle)); // Undo the refused exact placement.
+        Assert.Throws<WindowOperationException>(() => placer.RestorePrior(target.Handle)); // Original is below the new minimum.
+        target.SetMinimumSize(new Size(100, 80));
+        Assert.True(placer.RestorePrior(target.Handle));
+        Assert.Equal(Spot, FrameOf(target.Handle));
+    }
+
     private static Rectangle FrameOf(nint window)
     {
         Assert.True(WindowInfo.TryGetFrameBounds(window, out Rectangle frame, out _));

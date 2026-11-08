@@ -1,4 +1,4 @@
-using WinScreen.Native;
+﻿using WinScreen.Native;
 using WinScreen.Pip;
 using WinScreen.Settings;
 using WinScreen.Tests.Support;
@@ -173,11 +173,10 @@ public sealed class PipScreenViewTests
             destination.Show();
             using var selector = new PipBackendSelector(new ScreenPipSource(MainDisplay, null), destination.Handle,
                 new PipPreferences { Backend = PipBackendPreference.Dwm }, _ => throw new NotSupportedException("no capture"));
-            Assert.Throws<WindowOperationException>(() =>
-            {
-                selector.Poll(destination.ClientSize);
-                selector.Poll(destination.ClientSize);
-            });
+            selector.Poll(destination.ClientSize);
+            selector.Poll(destination.ClientSize);
+            Assert.Equal(PipSessionState.Failed, selector.State);
+            Assert.True(selector.CanRetry);
         });
     }
 

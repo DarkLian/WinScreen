@@ -1,9 +1,9 @@
-using static WinScreen.Localization.UiText;
+﻿using static WinScreen.Localization.UiText;
 using WinScreen.Native;
 
 namespace WinScreen.Pip;
 
-internal enum PipChipState { None, SourceMinimized, NoNewPicture }
+internal enum PipChipState { None, SourceMinimized, NoNewPicture, Starting, Fallback, Unavailable }
 
 /// <summary>
 /// A small note on a view saying its picture may be out of date. Like the close button it's a window of
@@ -24,8 +24,8 @@ internal sealed class PipStateChip : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
         Owner = view;
-        BackColor = Color.FromArgb(32, 32, 32);
-        ForeColor = Color.White;
+        BackColor = SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(32, 32, 32);
+        ForeColor = SystemInformation.HighContrast ? SystemColors.WindowText : Color.White;
         Cursor = Cursors.Hand;
     }
 
@@ -36,6 +36,9 @@ internal sealed class PipStateChip : Form
     {
         if (busy) return PipChipState.None;
         if (minimized) return PipChipState.SourceMinimized;
+        if (state is PipSessionState.Starting or PipSessionState.Recovering) return PipChipState.Starting;
+        if (state == PipSessionState.Fallback) return PipChipState.Fallback;
+        if (state == PipSessionState.Failed) return PipChipState.Unavailable;
         return state == PipSessionState.SourcePaused && pointerOnView ? PipChipState.NoNewPicture : PipChipState.None;
     }
 
@@ -43,6 +46,9 @@ internal sealed class PipStateChip : Form
     {
         PipChipState.SourceMinimized => T("pip.state.sourceMinimized"),
         PipChipState.NoNewPicture => T("pip.state.noNewPicture"),
+        PipChipState.Starting => T("pip.state.starting"),
+        PipChipState.Fallback => T("pip.state.fallback"),
+        PipChipState.Unavailable => T("common.unavailable"),
         _ => "",
     };
 

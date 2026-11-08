@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using WinScreen.Native;
 
@@ -49,12 +49,14 @@ internal sealed class PipInteraction : IDisposable
     private const uint AbortIfHung = 0x2;
     private const int WH_MOUSE_LL = 14;
     private const int WM_QUIT = 0x12, WM_MOUSEMOVE = 0x200, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202,
-        WM_RBUTTONDOWN = 0x204, WM_RBUTTONUP = 0x205, WM_MBUTTONDOWN = 0x207, WM_MBUTTONUP = 0x208, WM_MOUSEWHEEL = 0x20A;
+        WM_RBUTTONDOWN = 0x204, WM_RBUTTONUP = 0x205, WM_MBUTTONDOWN = 0x207, WM_MBUTTONUP = 0x208, WM_MOUSEWHEEL = 0x20A,
+        WM_XBUTTONDOWN = 0x20B, WM_XBUTTONUP = 0x20C, WM_MOUSEHWHEEL = 0x20E;
     private const int VK_MENU = 0x12;
     private const int Keep = 256;
     private const uint Move = User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE;
 
     private readonly nint _source;
+    private readonly Windows.WindowIdentity _identity;
     private readonly uint _sourceProcess;
     private readonly HookProc _hook;
     private readonly AutoResetEvent _moved = new(false);
@@ -65,16 +67,18 @@ internal sealed class PipInteraction : IDisposable
     private volatile bool _outside;
     private volatile bool _inPopup;
     private long _pointer;
+    private long _observedPointer;
     private Rectangle _view;
     private Rectangle _shown;
-    private bool _heldDelivered;
-    private bool _heldSwallowed;
+    private MouseButtons _heldDelivered;
+    private MouseButtons _heldSwallowed;
     private Point _dragFrom;
     private bool _dragging;
 
     public PipInteraction(nint source, Rectangle view, Rectangle shown)
     {
         _source = source;
+        _identity = Windows.WindowIdentity.Capture(source);
         _view = view;
         _shown = shown;
         _hook = Callback;
@@ -100,6 +104,8 @@ internal sealed class PipInteraction : IDisposable
 
     /// <summary>Follows the view when it moves or the source changes shape.</summary>
     internal bool InPopup => _inPopup;
+    internal bool ObservedPointer(Point point) => Interlocked.Read(ref _observedPointer) == Pack(point);
+    private static long Pack(Point point) => ((long)point.X << 32) | (uint)point.Y;
 
     public void Update(Rectangle view, Rectangle shown)
     {
@@ -126,6 +132,7 @@ internal sealed class PipInteraction : IDisposable
 
     public void Start(Point pointer)
     {
+        Interlocked.Exchange(ref _observedPointer, Pack(pointer));
         Point place = PlaceFor(pointer);
         User32.SetWindowPos(_source, 0, place.X, place.Y, 0, 0, Move);
         Publish(pointer);
@@ -167,6 +174,8 @@ internal sealed class PipInteraction : IDisposable
             long wait = MoveGapMilliseconds - clock.ElapsedMilliseconds;
             if (wait > 0)
                 Thread.Sleep((int)wait);
+            if (_stopping || !_identity.Matches()) return;
+            if (_inPopup) continue;
             clock.Restart();
             long packed = Interlocked.Read(ref _pointer);
             Point place = PlaceFor(new Point((int)(packed >> 32), (int)packed));
@@ -192,12 +201,15 @@ internal sealed class PipInteraction : IDisposable
             return CallNextHookEx(0, code, message, data);
         var info = Marshal.PtrToStructure<MouseHookInfo>(data);
         var point = new Point(info.X, info.Y);
+        Interlocked.Exchange(ref _observedPointer, Pack(point));
         bool swallow = (int)message switch
         {
             WM_MOUSEMOVE => OnMove(point),
-            WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN => OnPress(point, (int)message == WM_LBUTTONDOWN),
-            WM_LBUTTONUP or WM_RBUTTONUP or WM_MBUTTONUP => OnRelease(point),
-            WM_MOUSEWHEEL => _outside,
+            WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN => OnPress(point, ButtonOf((int)message)),
+            WM_LBUTTONUP or WM_RBUTTONUP or WM_MBUTTONUP => OnRelease(point, ButtonOf((int)message - 1)),
+            WM_XBUTTONDOWN => OnPress(point, (info.MouseData >> 16) == 1 ? MouseButtons.XButton1 : MouseButtons.XButton2),
+            WM_XBUTTONUP => OnRelease(point, (info.MouseData >> 16) == 1 ? MouseButtons.XButton1 : MouseButtons.XButton2),
+            WM_MOUSEWHEEL or WM_MOUSEHWHEEL => _outside || !_identity.Matches() || ProcessOf(RootAt(point)) != _sourceProcess,
             _ => false,
         };
         return swallow ? 1 : CallNextHookEx(0, code, message, data);
@@ -213,7 +225,7 @@ internal sealed class PipInteraction : IDisposable
             return false;
         }
 
-        if (_heldDelivered)
+        if (_heldDelivered != MouseButtons.None)
         {
             Publish(point); // Dragging out of the view keeps a selection going.
             return false;
@@ -242,12 +254,12 @@ internal sealed class PipInteraction : IDisposable
         return false;
     }
 
-    private bool OnPress(Point point, bool left)
+    private bool OnPress(Point point, MouseButtons button)
     {
         if (_outside || (!InView(point) && !_inPopup))
         {
             Record(PressOutcome.Outside, point, 0);
-            _heldSwallowed = true;
+            _heldSwallowed |= button;
             if (!_outside)
             {
                 _outside = true;
@@ -266,47 +278,57 @@ internal sealed class PipInteraction : IDisposable
 
         if (root != _source && ProcessOf(root) == _sourceProcess)
         {
+            if (!_identity.Matches()) { _heldSwallowed |= button; return true; }
             Record(PressOutcome.Popup, point, 0);
+            _heldDelivered |= button;
             return false;
         }
 
-        if (root != _source || !Align(point))
+        if (!_identity.Matches() || root != _source || !Align(point))
         {
             Record(PressOutcome.Unconfirmed, point, 0);
-            _heldSwallowed = true;
+            _heldSwallowed |= button;
             return true;
         }
 
         nint position = (nint)((point.Y << 16) | (point.X & 0xFFFF));
         nint hit = -2;
         bool answered = User32.SendMessageTimeout(_source, User32.WM_NCHITTEST, 0, position, AbortIfHung, HitTestMilliseconds, out hit) != 0;
-        if (!answered)
+        if (!answered || !_identity.Matches() || RootAt(point) != _source)
         {
             Record(PressOutcome.Unconfirmed, point, 0);
-            _heldSwallowed = true;
+            _heldSwallowed |= button;
             return true;
         }
 
         if (!PressRules.ReachesContent(hit) || (GetAsyncKeyState(VK_MENU) & 0x8000) != 0)
         {
             Record(PressOutcome.MovedView, point, hit);
-            _heldSwallowed = true;
-            _dragging = left;
+            _heldSwallowed |= button;
+            _dragging = button == MouseButtons.Left;
             _dragFrom = point;
             return true;
         }
 
         Record(PressOutcome.Delivered, point, hit);
-        _heldDelivered = true;
+        _heldDelivered |= button;
         return false;
     }
 
-    private bool OnRelease(Point point)
+    private static MouseButtons ButtonOf(int message) => message switch
     {
-        bool swallow = _heldSwallowed;
-        _heldSwallowed = false;
-        _heldDelivered = false;
-        _dragging = false;
+        WM_LBUTTONDOWN => MouseButtons.Left,
+        WM_RBUTTONDOWN => MouseButtons.Right,
+        _ => MouseButtons.Middle,
+    };
+
+    private bool OnRelease(Point point, MouseButtons button)
+    {
+        bool swallow = (_heldSwallowed & button) != 0 ||
+            (_heldDelivered & button) != 0 && !_identity.Matches();
+        _heldSwallowed &= ~button;
+        _heldDelivered &= ~button;
+        if (button == MouseButtons.Left) _dragging = false;
         if (!_outside && !InView(point) && !_inPopup && RootAt(point) != 0 && ProcessOf(RootAt(point)) != _sourceProcess)
         {
             _outside = true;
@@ -353,7 +375,7 @@ internal sealed class PipInteraction : IDisposable
             _hookThread.Join(2000);
         }
 
-        _mover?.Join(2000);
+        _mover?.Join();
         if (_mover is not null)
             Active--;
         _moved.Dispose();

@@ -1,4 +1,4 @@
-using WinScreen.Localization;
+﻿using WinScreen.Localization;
 using WinScreen.Settings;
 using WinScreen.Tests.Support;
 using WinScreen.Tray;
@@ -95,11 +95,12 @@ public sealed class ToolbarPreferencesTests
             settings.RefreshFeatures();
             var table = Descendants(settings).OfType<ListView>().Single();
             var pin = table.Items.Cast<ListViewItem>().Single(row => Equals(row.Tag, AppCommand.TogglePin));
-            Assert.Equal("Ctrl+F9", pin.SubItems[1].Text);
+            Assert.Equal("Ctrl+Alt+T", pin.SubItems[3].Text);
+            Assert.Equal("Ctrl+Alt+T", pin.SubItems[2].Text);
             var dark = table.Items.Cast<ListViewItem>().Single(row => Equals(row.Tag, AppCommand.ToggleDark));
-            Assert.Equal(UiText.T("features.disabled"), dark.SubItems[2].Text);
-            Assert.Contains(table.Items.Cast<ListViewItem>(), row => row.Text == UiText.T("features.opacityWheel") && row.SubItems[2].Text == UiText.T("features.enabled"));
-            Assert.Contains(table.Items.Cast<ListViewItem>(), row => Equals(row.Tag, "toolbar") && row.SubItems[2].Text == UiText.T("features.disabled"));
+            Assert.Equal(UiText.T("features.disabled"), dark.SubItems[4].Text);
+            Assert.Contains(table.Items.Cast<ListViewItem>(), row => row.Text == UiText.T("features.opacityWheel") && row.SubItems[4].Text == UiText.T("features.enabled"));
+            Assert.Contains(table.Items.Cast<ListViewItem>(), row => Equals(row.Tag, "toolbar") && row.SubItems[4].Text == UiText.T("features.disabled"));
             Assert.False(preferences.OpacityWheel);
         });
     }
@@ -113,7 +114,7 @@ public sealed class ToolbarPreferencesTests
             using var settings = new SettingsWindow(preferences, new StartWithWindows(@"Software\WinScreenTests\Toolbar"), _ => []);
             settings.RefreshFeatures();
             var table = Descendants(settings).OfType<ListView>().Single();
-            string State() => table.Items.Cast<ListViewItem>().Single(row => Equals(row.Tag, "toolbar")).SubItems[2].Text;
+            string State() => table.Items.Cast<ListViewItem>().Single(row => Equals(row.Tag, "toolbar")).SubItems[4].Text;
             Assert.Equal(UiText.T("features.disabled"), State());
             settings.SetOption(nameof(AppSettings.ExperimentalFeatures), true);
             settings.RefreshFeatures();
@@ -197,7 +198,7 @@ public sealed class ToolbarPreferencesTests
             settings.CreateControl();
             _ = table.Handle;
             Activate(AppCommand.TogglePin);
-            Assert.Equal(UiText.T("settings.hotkeys"), tabs.SelectedTab!.Text);
+            Assert.Equal(UiText.T("features.title"), tabs.SelectedTab!.Text);
             Activate("toolbar");
             Assert.Equal(UiText.T("toolbar.settings.title"), tabs.SelectedTab!.Text);
             Activate("gestures");

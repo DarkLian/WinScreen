@@ -24,6 +24,7 @@ internal static class Program
                 int.Parse(Get("--width", "400")), int.Parse(Get("--height", "300"))),
             Get("--title", "WinScreen test target"),
             Get("--colors", "C81E1E"));
+        using var unhang = new ManualResetEventSlim();
 
         window.Shown += (_, _) =>
         {
@@ -46,6 +47,14 @@ internal static class Program
                             string[] dimensions = parts[1].Split(' ');
                             window.Size = new Size(int.Parse(dimensions[0]), int.Parse(dimensions[1]));
                         });
+                    if (parts[0] == "minimum")
+                        window.BeginInvoke(() =>
+                        {
+                            string[] dimensions = parts[1].Split(' ');
+                            window.MinimumSize = new Size(int.Parse(dimensions[0]), int.Parse(dimensions[1]));
+                            Console.WriteLine("minimum");
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "layered")
                         window.BeginInvoke(window.CreateUnattributedLayeredWindow);
                     if (parts[0] == "plain")
@@ -67,12 +76,21 @@ internal static class Program
                     if (parts[0] == "titlebar")
                         window.BeginInvoke(window.UseTitleBar);
                     if (parts[0] == "hang")
+                    {
+                        unhang.Reset();
                         window.BeginInvoke(() =>
                         {
                             Console.WriteLine("hung");
                             Console.Out.Flush();
-                            Thread.Sleep(10000);
+                            var blocked = Stopwatch.StartNew();
+                            while (!unhang.IsSet && blocked.ElapsedMilliseconds < 10000) Thread.Sleep(10);
                         });
+                    }
+                    if (parts[0] == "unhang")
+                    {
+                        unhang.Set();
+                        window.BeginInvoke(() => { Console.WriteLine("responsive"); Console.Out.Flush(); });
+                    }
                 }
 
                 window.BeginInvoke(window.Close);

@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.Json;
 using WinScreen.Settings;
 using WinScreen.Tray;
@@ -139,7 +139,7 @@ public sealed class CustomizationTests : IDisposable
             if (duplicateHotkeys)
             {
                 changed.Hotkeys[AppCommand.TogglePin] = "Ctrl+Shift+F19";
-                changed.Hotkeys[AppCommand.ToggleDark] = "Ctrl+Shift+F19";
+                changed.Hotkeys[AppCommand.OpenPip] = "Ctrl+Shift+F19";
             }
             SettingsTransfer.Export(changed, exportFile);
             var imported = SettingsTransfer.Import(exportFile, settings);

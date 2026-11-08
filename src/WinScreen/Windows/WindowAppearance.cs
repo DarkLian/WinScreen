@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using WinScreen.Native;
 using static WinScreen.Localization.UiText;
 
@@ -18,6 +18,12 @@ public sealed partial class WindowController
     // The mouse hook must never wait for the controller's UI-thread lock.
     internal bool GestureBlocked(nint window) => _gestureState.Any(state =>
         state.Window == window && (state.Hidden || state.Peeking));
+
+    internal bool IsBorderlessFilled(nint window)
+    {
+        lock (_gate) return _changed.TryGetValue(window, out var state) && state.Identity.Matches() &&
+            state.PlacementBeforeBorderless is not null && state.BorderlessFilled;
+    }
 
     public bool IsBorderless(nint window)
     {

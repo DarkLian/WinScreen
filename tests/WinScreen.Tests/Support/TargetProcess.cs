@@ -94,6 +94,13 @@ internal sealed class TargetProcess : IDisposable
         _process.StandardInput.Flush();
     }
 
+    internal void SetMinimumSize(Size size)
+    {
+        _process.StandardInput.WriteLine($"minimum {size.Width} {size.Height}");
+        _process.StandardInput.Flush();
+        if (NextReport() != "minimum") throw new InvalidOperationException("The minimum size was not applied.");
+    }
+
     /// <summary>Makes the top of this borderless window answer as a title bar.</summary>
     public void UseTitleBar()
     {
@@ -124,6 +131,13 @@ internal sealed class TargetProcess : IDisposable
         _process.StandardInput.WriteLine("hang");
         _process.StandardInput.Flush();
         if (NextReport() != "hung") throw new InvalidOperationException("The target did not hang as requested.");
+    }
+
+    public void Unhang()
+    {
+        _process.StandardInput.WriteLine("unhang");
+        _process.StandardInput.Flush();
+        if (NextReport() != "responsive") throw new InvalidOperationException("The target did not resume.");
     }
 
     public void Dispose()

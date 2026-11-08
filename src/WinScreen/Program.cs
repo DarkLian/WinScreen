@@ -1,4 +1,4 @@
-using static WinScreen.Localization.UiText;
+﻿using static WinScreen.Localization.UiText;
 using Velopack;
 using WinScreen.Hotkeys;
 using WinScreen.Localization;
@@ -22,7 +22,7 @@ internal static class Program
     {
         if (RecoveryWatcher.ParentFrom(arguments) is { } parent)
         {
-            RecoveryWatcher.Watch(parent, RecoverLeftWindows);
+            RecoveryWatcher.WatchUntilRecovered(parent, RecoverLeftWindows);
             return;
         }
 
@@ -56,11 +56,7 @@ internal static class Program
 
         var windows = new WindowController(settings.ExcludedPrograms,
             new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")));
-        using (Mutex recovery = RecoveryWatcher.ForRecovery(out bool held))
-        {
-            windows.RecoverFromJournal();
-            if (held) recovery.ReleaseMutex();
-        }
+        windows.RecoverFromJournal();
 
         // A crash must not leave someone's window see-through and impossible to click.
         AppDomain.CurrentDomain.ProcessExit += (_, _) => windows.RestoreAll();
@@ -77,11 +73,12 @@ internal static class Program
     }
 
     /// <summary>What the watcher does after the app was killed: the same recovery as the next start.</summary>
-    private static void RecoverLeftWindows()
+    private static bool RecoverLeftWindows()
     {
         AppSettings settings = AppSettings.Load(Path.Combine(DataFolder, "settings.json"));
         UiText.Initialize(settings.Language);
-        new WindowController(settings.ExcludedPrograms, new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")))
-            .RecoverFromJournal();
+        var windows = new WindowController(settings.ExcludedPrograms, new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")));
+        windows.RecoverFromJournal();
+        return !windows.RecoveryBlocked && windows.PendingRestores == 0;
     }
 }

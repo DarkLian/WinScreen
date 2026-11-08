@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using WinScreen.Settings;
 using WinScreen.Windows;
@@ -17,11 +17,9 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     {
         foreach (AppCommand command in CommandCatalog.Ordered)
         {
-            if (!tray && command is AppCommand.RestoreAll or AppCommand.RestoreWindow) continue;
+            if (command == AppCommand.RestoreAll || !tray && command == AppCommand.RestoreWindow) continue;
             ToolStripMenuItem item = Command(command);
-            if (!tray && command == AppCommand.Arrange)
-                foreach (AppCommand? action in CommandCatalog.ArrangeMenu)
-                    item.DropDownItems.Add(action is { } entry ? Command(entry) : new ToolStripSeparator());
+            if (command == AppCommand.Arrange) PopulateArrange(item.DropDownItems);
             items.Add(item);
             if (CommandCatalog.EndsGroup(command)) items.Add(new ToolStripSeparator());
         }
@@ -39,7 +37,12 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
             Screen[] screens = Screen.AllScreens;
             if (screens.Length > 1)
                 foreach (Screen screen in screens)
-                    fillItem.DropDownItems.Add(screen.DeviceName, null, (_, _) => WithTarget(window => fill(window, screen.Bounds)));
+                    fillItem.DropDownItems.Add(screen.DeviceName, null, (_, _) => WithTarget(window =>
+                    {
+                        Screen? current = Screen.AllScreens.FirstOrDefault(item => item.DeviceName == screen.DeviceName);
+                        if (current is null || current.Bounds != screen.Bounds) { staleTarget(); return; }
+                        fill(window, current.Bounds);
+                    }));
         }
         RefreshDisplays();
         borderless.DropDownOpening += (_, _) => RefreshDisplays();
@@ -57,8 +60,13 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
             WindowUtilities.CopyText(WindowUtilities.Information(window)))).Tag = new Utility(false);
         items.Add(copy);
         items.Add(T("window.openLocation"), null, (_, _) => WithTarget(WindowUtilities.OpenLocation)).Tag = new Utility(true);
-        items.Add(Command(AppCommand.ShowWindowInfo));
         if (!tray) items.Add(Command(AppCommand.RestoreWindow));
+    }
+
+    internal void PopulateArrange(ToolStripItemCollection items)
+    {
+        foreach (AppCommand? action in CommandCatalog.ArrangeMenu)
+            items.Add(action is { } entry ? Command(entry) : new ToolStripSeparator());
     }
 
     private ToolStripMenuItem Command(AppCommand command) => new(CommandCatalog.Name(command), null, (_, _) =>

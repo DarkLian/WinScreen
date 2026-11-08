@@ -1,4 +1,4 @@
-using Microsoft.Win32;
+﻿using Microsoft.Win32;
 using WinScreen.Localization;
 using WinScreen.Native;
 using WinScreen.Settings;
@@ -275,7 +275,8 @@ public sealed class SettingsWindowTests : IDisposable
             Assert.Equal("Ctrl+Alt+R", applied.Hotkeys[AppCommand.RestoreAll]);
             Assert.Contains("ExampleProgram", applied.ExcludedPrograms);
             Assert.True(applied.OpaqueOnHover);
-            Assert.True(startup.IsOn);
+            Assert.False(startup.IsOn); // The apply callback owns the save transaction.
+            Assert.True(applied.StartWithWindows);
             Assert.True(applied.HighlightPinned);
             Assert.True(applied.PipAutoMove);
             Assert.False(applied.ShowNotifications);
@@ -292,7 +293,7 @@ public sealed class SettingsWindowTests : IDisposable
         {
             var forgotten = new ProgramSetup { Program = "exampleprogram", Pinned = true };
             var settings = new AppSettings { SavedSetups = [forgotten] };
-            using var window = new SettingsWindow(settings, new StartWithWindows(_key), _ => []);
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key), draft => { settings.CopyFrom(draft); return []; });
             _ = window.Handle;
 
             var savedByHotkey = new ProgramSetup { Program = "anotherprogram", Dark = true };
@@ -318,11 +319,11 @@ public sealed class SettingsWindowTests : IDisposable
             {
                 UiText.Initialize(language);
                 var settings = new AppSettings { Language = language, ShowNotifications = false };
-                using var window = new SettingsWindow(settings, new StartWithWindows(_key), _ => []);
+                using var window = new SettingsWindow(settings, new StartWithWindows(_key), draft => { settings.CopyFrom(draft); return []; });
                 _ = window.Handle;
                 Control[] controls = Descendants(window).ToArray();
                 Assert.Equal(title, window.Text);
-                Assert.Contains(controls, control => control.Text == pin);
+                Assert.Contains(controls.OfType<ListView>().Single().Items.Cast<ListViewItem>(), row => row.Text == pin);
                 var languages = controls.OfType<ComboBox>().First();
                 Assert.Equal(index, languages.SelectedIndex);
                 Assert.True(window.SaveChanges());

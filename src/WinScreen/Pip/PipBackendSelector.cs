@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using WinScreen.Settings;
 using WinScreen.Windows;
@@ -33,11 +33,21 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     internal event Action<string>? Problem;
     public PipBackendKind Kind => _active ? _advanced!.Kind : PipBackendKind.DwmThumbnail;
     public PipSessionState State => _disposed ? PipSessionState.Stopped : _active ? _advanced!.State :
-        _policy.Pinned ? PipSessionState.Fallback : _advanced is not null ? PipSessionState.Starting : PipSessionState.Compositor;
+        _policy.Pinned ? (_dwm is null ? PipSessionState.Failed : PipSessionState.Fallback) : _advanced is not null ? PipSessionState.Starting : PipSessionState.Compositor;
     // Existing UI uses DWM window-surface coordinates. WGC coordinates are translated at the boundary below.
     public Size SourceSize => _dwm?.SourceSize ?? _source.SurfaceSize;
-    internal bool CanRetry => _dwm is not null && _policy.Pinned && _preferences.Backend != PipBackendPreference.Dwm &&
+    internal bool CanRetry => _policy.Pinned && _preferences.Backend != PipBackendPreference.Dwm &&
         (_advanced is null || _advanced.Completion.IsCompleted);
+
+    internal Task Retirement => _advanced?.Completion ?? Task.CompletedTask;
+    internal string StatusText => State switch
+    {
+        PipSessionState.Starting or PipSessionState.Recovering => T("pip.state.starting"),
+        PipSessionState.SourcePaused => T("pip.state.noNewPicture"),
+        PipSessionState.Fallback => T("pip.state.fallback"),
+        PipSessionState.Failed or PipSessionState.Stopped => T("common.unavailable"),
+        _ => T("pip.state.live"),
+    };
 
     internal PipBackendSelector(WindowIdentity identity, nint destination, PipPreferences preferences,
         Func<PipCaptureStart, IPipCaptureBackend>? createCapture = null)
@@ -113,9 +123,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     internal void Poll(Size client)
     {
         PollCapture(client);
-        if (_dwm is null && _policy.Pinned)
-            throw new WindowOperationException(T("errors.pip.captureStopped") +
-                                               (_lastDiagnostics.Failure is { } failure ? " " + failure : ""));
+
     }
 
     private void PollCapture(Size client)

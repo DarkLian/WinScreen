@@ -1,4 +1,4 @@
-using static WinScreen.Localization.UiText;
+﻿using static WinScreen.Localization.UiText;
 using WinScreen.Native;
 using WinScreen.Windows;
 
@@ -88,7 +88,7 @@ public sealed class ShrinkTile : Form
         {
             Show();
             _hid = true; // A partially failed conceal must still be revealed by OnFormClosed.
-            _windows.Hide(_source);
+            _windows.HideOwned(_source, this);
             User32.SetForegroundWindow(Handle); // Keys mustn't go to a window that can't be seen.
             User32.SetWindowPos(Handle, User32.HWND_TOPMOST, 0, 0, 0, 0,
                 User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
@@ -162,6 +162,16 @@ public sealed class ShrinkTile : Form
             Close();
     }
 
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (_hid && _identity.Matches())
+        {
+            try { _windows.ShowOwned(_source, this); _hid = false; }
+            catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); e.Cancel = true; }
+        }
+        base.OnFormClosing(e);
+    }
+
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _tip.Dispose();
@@ -173,7 +183,7 @@ public sealed class ShrinkTile : Form
         {
             try
             {
-                _windows.Show(_source);
+                _windows.ShowOwned(_source, this);
                 User32.SetForegroundWindow(_source);
             }
             catch (WindowOperationException failure)

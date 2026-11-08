@@ -1,4 +1,4 @@
-using static WinScreen.Localization.UiText;
+﻿using static WinScreen.Localization.UiText;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -56,6 +56,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public bool ClickThrough { get; set; }
         public byte Alpha { get; set; } = 255;
         public bool Hidden { get; set; }
+        public object? ConcealmentOwner { get; set; }
         public bool SolidWhileHovered { get; set; }
         public Color? GlassColor { get; set; }
         public bool PinPaused { get; set; }
@@ -95,6 +96,42 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         {
             lock (_gate) return _changed.Count;
         }
+    }
+
+    internal bool NeedsRecoveryWatcher
+    {
+        get { lock (_gate) return _changed.Values.Any(state => state.Hidden || state.PlacementBeforePeek is not null); }
+    }
+
+    internal void HideOwned(nint window, object owner, bool solid = false)
+    {
+        lock (_gate)
+        {
+            ChangedWindow state = Track(window);
+            if (state.Hidden && !ReferenceEquals(state.ConcealmentOwner, owner))
+                throw new WindowOperationException(T("errors.window.showFirst"));
+            state.ConcealmentOwner = owner;
+            if (solid) ConcealSolid(window);
+            else Hide(window);
+        }
+    }
+
+    internal void ShowOwned(nint window, object owner)
+    {
+        lock (_gate)
+        {
+            _changed.TryGetValue(window, out var state);
+            if (state is { Hidden: true } && !ReferenceEquals(state.ConcealmentOwner, owner))
+                throw new WindowOperationException(T("errors.window.showFirst"));
+            Show(window);
+            if (state is not null) state.ConcealmentOwner = null;
+        }
+    }
+
+    internal bool IsConcealedBy(nint window, object owner)
+    {
+        lock (_gate) return _changed.TryGetValue(window, out var state) && state.Hidden &&
+            state.Identity.Matches() && ReferenceEquals(state.ConcealmentOwner, owner);
     }
 
     public void SetExcluded(IEnumerable<string> programs)
@@ -490,7 +527,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     {
         lock (_gate)
             return _changed.TryGetValue(window, out ChangedWindow? state) && state.Identity.Matches() && state.Layered
-                ? state.Alpha
+                ? (state.Hidden ? state.AlphaBeforeHiding : state.Alpha)
                 : (byte)255;
     }
 
@@ -777,9 +814,22 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     {
         if (journal is null)
             return;
+        using Mutex recovery = RecoveryWatcher.ForRecovery(out bool held);
+        if (!held)
+        {
+            _recoveryBlocked = true;
+            RecoveryWarning = T("errors.recovery.busy");
+            return;
+        }
+        try { RecoverJournalUnderLock(); }
+        finally { recovery.ReleaseMutex(); }
+    }
+
+    private void RecoverJournalUnderLock()
+    {
         lock (_gate)
         {
-            var records = journal.Load();
+            var records = journal!.Load();
             _recoveryBlocked = journal.ReadFailed;
             if (_recoveryBlocked)
             {
@@ -809,6 +859,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 var state = new ChangedWindow
                 {
                     Identity = identity,
+                    Hidden = record.Concealed || WindowInfo.IsConcealed((nint)record.Window),
                     OwnedStyles = record.OwnedStyles,
                     OriginalExStyle = record.ExStyle,
                     HadLayeredAttributes = record.HadLayeredAttributes,
@@ -861,7 +912,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
 
         // After the save, so a watcher that starts now already has this window to recover.
-        bool concealed = _changed.Values.Any(state => state.Hidden);
+        bool concealed = NeedsRecoveryWatcher;
         if (concealed != _anythingConcealed)
         {
             _anythingConcealed = concealed;
@@ -889,6 +940,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             state.OriginalAlpha, state.OriginalLayeredFlags,
             state.PlacementBeforePeek is { } p ? FromPlacement(p) : null, state.Cropped)
         {
+            Concealed = state.Hidden,
             IdentityToken = state.Identity.Token, ProcessStartTicks = state.Identity.ProcessStartTicks,
             ThreadId = state.Identity.ThreadId, OwnedStyles = state.OwnedStyles,
             RollUpPlacement = state.PlacementBeforeRollUp is { } rolled ? FromPlacement(rolled) : null,
@@ -1051,7 +1103,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     {
         state.Identity.Require();
         var failures = new List<string>();
-        state.Hidden = false;
         if (state.PlacementBeforePeek is not null)
             Attempt("restore-placement", () => FinishPeek(window, state));
         if (state.PlacementBeforeRollUp is not null)
@@ -1096,6 +1147,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             });
         if (failures.Count > 0)
             throw new WindowOperationException(string.Join(Environment.NewLine, failures));
+        state.Hidden = false;
+        state.ConcealmentOwner = null;
 
         void Attempt(string step, Action action)
         {

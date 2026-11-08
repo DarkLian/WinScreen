@@ -1,4 +1,4 @@
-using WinScreen.Localization;
+﻿using WinScreen.Localization;
 using WinScreen.Settings;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -180,9 +180,9 @@ public sealed class LocalizationTests : IDisposable
     [Theory]
     // Reviewed catalog values, sorted by stable key with NUL separators.
     // Update deliberately when adding labels; existing values retain their migration output.
-    [InlineData("en", "EE7B2F94B2DDD146978FD491A8034A8A4D078E4CB307330381861F95B9BE2D74")]
-    [InlineData("zh-Hans", "CF1FCF48DFC900D45F629CD5311DD0BC4F1D80923202B848A3537B99F4854591")]
-    [InlineData("zh-Hant", "4D89E148E7EA20EC3F9F50567B16FAB75577251D98320D830AF62822382ABB69")]
+    [InlineData("en", "21B2DB4715CD2A2C55C5E76971DE551618F6E2FF3ED64492DCE58B29EA28BF7C")]
+    [InlineData("zh-Hans", "7C4D4D669CA36A85C60752B1AACE9A51DFB5C06F16CAF6FB785B5B00D9BB8FA0")]
+    [InlineData("zh-Hant", "04165D41706231360819FD76C838F252046BE6874E72860766CCA9E6B9B5A2C0")]
     public void Every_translation_matches_the_reviewed_catalog(string language, string expectedDigest)
     {
         UiText.Initialize(language);

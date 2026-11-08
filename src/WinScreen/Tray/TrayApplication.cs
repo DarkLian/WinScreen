@@ -1,4 +1,4 @@
-using static WinScreen.Localization.UiText;
+﻿using static WinScreen.Localization.UiText;
 using System.Runtime.InteropServices;
 using WinScreen.Anchors;
 using WinScreen.Dark;
@@ -43,7 +43,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly Dictionary<nint, WindowIdentity> _setupDone = [];
     private readonly SavedViews _savedViews = new();
     private readonly Dictionary<nint, long> _setupRetryAt = [];
-    private readonly ToolStripMenuItem _targetTitle = new() { Enabled = false };
+    private readonly ToolStripMenuItem _targetTitle = new();
     private readonly ToolStripMenuItem _statusItem = new();
     private string _lastStatus = T("tray.noActions");
     private WindowIdentity? _lastIdentity;
@@ -148,17 +148,19 @@ public sealed class TrayApplication : ApplicationContext
     private ContextMenuStrip BuildMenu()
     {
         var menu = new ContextMenuStrip();
+        menu.Items.Add(T("pip.open") + "...", null, (_, _) => Run(AppCommand.PickPipSource, 0));
+        menu.Items.Add(BuildViewsMenu());
+        menu.Items.Add(T("window.restoreAll"), null, (_, _) => Run(AppCommand.RestoreAll, 0));
+        menu.Items.Add(T("settings.title"), null, (_, _) => OpenSettings());
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_targetTitle);
         menu.Items.Add(_statusItem);
         _statusItem.Click += (_, _) =>
             MessageBox.Show(_lastStatus, "WinScreen", MessageBoxButtons.OK, MessageBoxIcon.Information);
         menu.Items.Add(new ToolStripSeparator());
         var builder = CreateWindowMenuBuilder(() => _menuIdentity);
-        builder.Populate(menu.Items, true);
-
-        menu.Items.Add(BuildViewsMenu());
+        builder.Populate(_targetTitle.DropDownItems, true);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(T("settings.title"), null, (_, _) => OpenSettings());
         menu.Items.Add(T("updates.check"), null, async (_, _) => await CheckForUpdates());
         menu.Items.Add(T("app.about"), null, (_, _) => MessageBox.Show(
             string.Format(T("app.version"), AppInfo.Version), "WinScreen", MessageBoxButtons.OK,
@@ -170,8 +172,10 @@ public sealed class TrayApplication : ApplicationContext
             _menuIdentity = _lastIdentity?.IsSameWindow() == true ? _lastIdentity : null;
             _menuWindow = _menuIdentity?.Window ?? 0;
             _targetTitle.Text = T("tray.targetPrefix") +
-                                (_menuWindow == 0 ? T("tray.noTarget") : MenuText(WindowInfo.Title(_menuWindow)));
-            builder.Refresh(menu.Items);
+                (_menuWindow == 0 ? T("tray.noTarget") : MenuText(WindowInfo.Title(_menuWindow))) +
+                (_menuWindow != 0 ? " " + T("tray.lastEligible") : "");
+            _targetTitle.Enabled = _menuWindow != 0;
+            builder.Refresh(_targetTitle.DropDownItems);
         };
         return menu;
     }
@@ -214,21 +218,36 @@ public sealed class TrayApplication : ApplicationContext
         views.DropDownOpening += (_, _) =>
         {
             views.DropDownItems.Clear();
-            views.DropDownItems.Add(CommandCatalog.Name(AppCommand.PickPipSource) + "...", null,
-                (_, _) => Run(AppCommand.PickPipSource, 0));
-            if (_viewsInOrder.Count > 0)
-                views.DropDownItems.Add(new ToolStripSeparator());
             foreach (PipWindow view in _viewsInOrder)
             {
-                var item = new ToolStripMenuItem(MenuText(view.Text));
+                var item = new ToolStripMenuItem(MenuText(view.Text) + " - " + view.StateDescription);
                 if (view.IsSuspended)
                     item.DropDownItems.Add(T("pip.restoreView"), null, (_, _) => view.ResumeView());
-                item.DropDownItems.Add(new ToolStripMenuItem(T("window.clickThrough"), null,
-                    (_, _) => view.Overrides = view.Overrides with { ClickThrough = !view.Overrides.ClickThrough })
-                    { Checked = view.Overrides.ClickThrough });
+                if (view.SourceIsWindow)
+                    item.DropDownItems.Add(T("pip.goToOriginal"), null, (_, _) => view.GoToSource());
+                if (view.Overrides.ClickThrough)
+                    item.DropDownItems.Add(T("pip.reenableClicks"), null,
+                        (_, _) => view.Overrides = view.Overrides with { ClickThrough = false });
+                if (view.CanRetryCapture)
+                    item.DropDownItems.Add(T("pip.backend.retry"), null, (_, _) => view.RetryCapture());
                 item.DropDownItems.Add(T("common.close"), null, (_, _) => view.Close());
                 views.DropDownItems.Add(item);
             }
+            foreach (var (source, tile) in _shrunk)
+            {
+                var item = new ToolStripMenuItem(MenuText(tile.Text) + " - " + T("pip.state.originalHidden"));
+                item.DropDownItems.Add(T("pip.goToOriginal"), null, (_, _) => tile.Close());
+                item.DropDownItems.Add(T("common.close"), null, (_, _) => tile.Close());
+                views.DropDownItems.Add(item);
+            }
+            foreach (nint source in _content.Sources)
+            {
+                var item = new ToolStripMenuItem(MenuText(WindowInfo.Title(source)) + " - " + T("settings.effects.title"));
+                item.DropDownItems.Add(T("window.restore"), null, (_, _) => Run(AppCommand.RestoreWindow, source));
+                views.DropDownItems.Add(item);
+            }
+            if (views.DropDownItems.Count == 0)
+                views.DropDownItems.Add(new ToolStripMenuItem(T("pip.views.empty")) { Enabled = false });
         };
         return views;
     }
@@ -267,19 +286,20 @@ public sealed class TrayApplication : ApplicationContext
         if (problems.Count > 0)
             return problems;
 
-        bool startupBefore = _startup.IsOn;
+        object? startupValue = _startup.ReadValue();
+        bool startupChanged = settings.StartWithWindows is { } requestedStartup && requestedStartup != (startupValue is not null);
         if (!_hotkeys.TryReplaceBindings(desired, () =>
             {
                 try
                 {
                     if (settings.Imported && File.Exists(_settingsPath))
                         File.Copy(_settingsPath, _settingsPath + ".before-import-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"));
-                    if (settings.StartWithWindows is { } startup) _startup.IsOn = startup;
+                    if (startupChanged) _startup.IsOn = settings.StartWithWindows!.Value;
                     settings.Save(_settingsPath);
                 }
                 catch
                 {
-                    _startup.IsOn = startupBefore;
+                    if (startupChanged) _startup.RestoreValue(startupValue);
                     throw;
                 }
             }, out var conflicts))
@@ -314,7 +334,6 @@ public sealed class TrayApplication : ApplicationContext
             pip.AllowInteractive = _settings.ExperimentalFeatures;
             if (!_settings.ExperimentalFeatures) pip.SetInteractive(false);
             pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;
-        pip.AllowInteractive = _settings.ExperimentalFeatures;
             if (!_settings.ExperimentalFeatures) pip.SetSwitcherHidden(false);
             if (!_settings.ExperimentalFeatures) pip.SetAutoMove(false);
         }
@@ -338,6 +357,8 @@ public sealed class TrayApplication : ApplicationContext
         var used = new Dictionary<(uint, Keys), AppCommand>();
         foreach (AppCommand command in CommandCatalog.All)
         {
+            if (CommandCatalog.IsExperimental(command) && !settings.ExperimentalFeatures)
+                continue; // Keep the saved choice without reserving a disabled command's keys.
             string value = settings.Hotkeys.GetValueOrDefault(command, "");
             if (value.Length == 0)
                 continue;
@@ -412,7 +433,8 @@ public sealed class TrayApplication : ApplicationContext
             AppCommand.ToggleShrink => _shrunk.ContainsKey(window),
             AppCommand.ToggleCrop => _windows.IsCropped(window),
             AppCommand.ToggleRollUp => _windows.IsRolledUp(window),
-            AppCommand.ToggleBorderless or AppCommand.ToggleBorderlessFill => _windows.IsBorderless(window),
+            AppCommand.ToggleBorderless => _windows.IsBorderless(window) && !_windows.IsBorderlessFilled(window),
+            AppCommand.ToggleBorderlessFill => _windows.IsBorderlessFilled(window),
             AppCommand.ToggleDarkTitleBar => _windows.IsDarkTitleBar(window),
             _ => false,
         };
@@ -432,6 +454,7 @@ public sealed class TrayApplication : ApplicationContext
 
     private void Watch()
     {
+        _recoveryWatcher.Follow(_windows.NeedsRecoveryWatcher);
         nint foreground = User32.GetForegroundWindow();
         _savedViews.ConcealIfLeft(foreground);
         if (_content.Count > 0) _content.DropClosed();
@@ -656,7 +679,13 @@ public sealed class TrayApplication : ApplicationContext
             return;
         }
 
-        if (_pips.Remove(window, out var preview)) preview.Close();
+        if (_pips.TryGetValue(window, out var preview))
+        {
+            preview.Close();
+            if (!preview.IsDisposed) return;
+        }
+        _content.TurnOff(window);
+        if (_content.Has(window)) return;
         var tile = new ShrinkTile(window, _windows);
         _shrunk[window] = tile;
         tile.FormClosed += (_, _) => _shrunk.Remove(window);
@@ -717,7 +746,7 @@ public sealed class TrayApplication : ApplicationContext
             return;
         }
 
-        _settingsWindow = new SettingsWindow(_settings, _startup, Apply);
+        _settingsWindow = new SettingsWindow(_settings, _startup, Apply, command => _hotkeys.IsRegistered((int)command));
         _settingsWindow.Show();
         _settingsWindow.Activate();
     }
@@ -934,8 +963,8 @@ public sealed class TrayApplication : ApplicationContext
                     }
 
                     if (_croppingWindow == window) CancelCrop();
-                    if (_pips.Remove(window, out var view)) view.Close();
-                    if (_shrunk.Remove(window, out var shrunkTile)) shrunkTile.Close();
+                    if (_pips.TryGetValue(window, out var view)) view.Close();
+                    if (_shrunk.TryGetValue(window, out var shrunkTile)) shrunkTile.Close();
                     if (_dark.IsDark(window)) _dark.Toggle(window);
                     _content.TurnOff(window);
                     if (_anchors.Has(window)) _anchors.Toggle(window);
@@ -968,13 +997,10 @@ public sealed class TrayApplication : ApplicationContext
     private void ShowArrangeMenu(nint window)
     {
         var menu = new ContextMenuStrip();
-        foreach (AppCommand? entry in CommandCatalog.ArrangeMenu)
-        {
-            if (entry is not { } command)
-                menu.Items.Add(new ToolStripSeparator());
-            else if (IsAvailable(command))
-                menu.Items.Add(CommandCatalog.Name(command), null, (_, _) => Run(command, window));
-        }
+        WindowIdentity identity = WindowIdentity.Observe(window);
+        var builder = CreateWindowMenuBuilder(() => identity);
+        builder.PopulateArrange(menu.Items);
+        builder.Refresh(menu.Items);
 
         // A menu only closes on an outside click while its program has the focus.
         menu.Closed += (_, _) =>
@@ -992,9 +1018,13 @@ public sealed class TrayApplication : ApplicationContext
     {
         if (!WindowInfo.TryGetFrameBounds(window, out Rectangle frame, out _))
             return;
+        var identity = WindowIdentity.Capture(window);
         using var dialog = new PlacementDialog(CommandCatalog.Name(AppCommand.PlaceExactly), frame);
         if (dialog.ShowDialog() == DialogResult.OK)
+        {
+            identity.Require();
             _placer.SetFrame(window, dialog.Frame);
+        }
     }
 
     private static void ShowWindowInfo(nint window)
@@ -1020,7 +1050,13 @@ public sealed class TrayApplication : ApplicationContext
 
     private PipWindow OpenViewOf(nint window)
     {
-        if (_shrunk.Remove(window, out var tile)) tile.Close();
+        if (_shrunk.TryGetValue(window, out var tile))
+        {
+            tile.Close();
+            if (!tile.IsDisposed) throw new WindowOperationException(T("errors.window.showFirst"));
+        }
+        _content.TurnOff(window);
+        if (_content.Has(window)) throw new WindowOperationException(T("errors.window.showFirst"));
         var pip = new PipWindow(window, _windows);
         _pips[window] = pip;
         pip.FormClosed += (_, _) => _pips.Remove(window);
@@ -1032,6 +1068,7 @@ public sealed class TrayApplication : ApplicationContext
     {
         pip.AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding;
         pip.AllowAutoMove = _settings.ExperimentalFeatures;
+        pip.AllowInteractive = _settings.ExperimentalFeatures;
         pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;
         _viewsInOrder.Add(pip);
         pip.FormClosed += (_, _) => _viewsInOrder.Remove(pip);
@@ -1103,12 +1140,19 @@ public sealed class TrayApplication : ApplicationContext
         if (_cropping is { IsDisposed: false })
             return;
         var source = new ScreenPipSource(device, null);
+        source.Require();
+        Rectangle selectedDisplay = source.Screen.Bounds;
         var overlay = new CropOverlay(source.Screen.Bounds);
         overlay.Chosen += part =>
         {
             if (_cropping != overlay) return;
             _cropping = null;
-            OpenScreenView(new ScreenPipSource(device, part));
+            Attempt(() =>
+            {
+                source.Require();
+                if (source.Screen.Bounds != selectedDisplay) throw new WindowOperationException(T("errors.pip.displayUnavailable"));
+                OpenScreenView(new ScreenPipSource(device, part));
+            });
         };
         _cropping = overlay;
         try

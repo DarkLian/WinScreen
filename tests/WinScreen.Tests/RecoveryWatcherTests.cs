@@ -6,6 +6,20 @@ namespace WinScreen.Tests;
 
 public sealed class RecoveryWatcherTests
 {
+    [Fact]
+    public void A_failed_launch_is_retried_after_a_short_backoff()
+    {
+        int attempts = 0;
+        using var watcher = new RecoveryWatcher(_ => ++attempts == 1
+            ? throw new System.ComponentModel.Win32Exception(5) : Process.GetCurrentProcess());
+        watcher.Follow(true);
+        watcher.Follow(true);
+        Assert.Equal(1, attempts);
+        Thread.Sleep(1100);
+        watcher.Follow(true);
+        Assert.Equal(2, attempts);
+        Assert.True(watcher.IsRunning);
+    }
     [Theory]
     [InlineData(new[] { "--watch", "123" }, 123)]
     [InlineData(new string[0], null)]

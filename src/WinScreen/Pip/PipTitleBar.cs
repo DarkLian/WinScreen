@@ -24,10 +24,10 @@ internal sealed class PipTitleBar : Form
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
-        BackColor = Color.FromArgb(32, 32, 32);
+        BackColor = SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(32, 32, 32);
         _close = MakeButton("×", T("pip.close").Replace("&", ""), () => view.Close());
         _minimize = MakeButton("−", T("pip.minimize"), minimize);
-        _title = new Label { ForeColor = Color.White, AutoEllipsis = true, UseMnemonic = false,
+        _title = new Label { ForeColor = SystemInformation.HighContrast ? SystemColors.WindowText : Color.White, AutoEllipsis = true, UseMnemonic = false,
             TextAlign = ContentAlignment.MiddleLeft, Dock = DockStyle.Fill };
         _icon = new PictureBox { Dock = DockStyle.Left, SizeMode = PictureBoxSizeMode.CenterImage };
         Controls.AddRange([_title, _icon, _minimize, _close]);
@@ -74,7 +74,8 @@ internal sealed class PipTitleBar : Form
     private static Button MakeButton(string glyph, string name, Action action)
     {
         var button = new Button { Text = glyph, AccessibleName = name, Dock = DockStyle.Right, TabStop = false,
-            FlatStyle = FlatStyle.Flat, ForeColor = Color.White, BackColor = Color.FromArgb(32, 32, 32) };
+            FlatStyle = FlatStyle.Flat, ForeColor = SystemInformation.HighContrast ? SystemColors.WindowText : Color.White,
+            BackColor = SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(32, 32, 32) };
         button.FlatAppearance.BorderSize = 0;
         button.Click += (_, _) => action();
         return button;

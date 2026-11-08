@@ -1,4 +1,4 @@
-using static WinScreen.Localization.UiText;
+﻿using static WinScreen.Localization.UiText;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using WinScreen.Native;
@@ -54,6 +54,9 @@ public sealed class PipWindow : Form
     private long _hoverSince;
     private Icon? _sourceIcon;
     private bool _suspended;
+    private Task _retiringCapture = Task.CompletedTask;
+    private bool _resumeRequested;
+    private Bitmap? _taskbarPicture;
     private PipStateChip? _chip;
     private PipBackendSelector? _thumbnail;
     private PipPreferences _preferences = new() { Backend = PipBackendPreference.Dwm };
@@ -81,7 +84,7 @@ public sealed class PipWindow : Form
     private readonly System.Collections.Concurrent.ConcurrentQueue<PressOutcome> _pressOutcomes = new();
     private nint _foregroundBeforeLive;
     private readonly ToolStripMenuItem _interactiveItem;
-    private const uint PrintFullContent = 2; // PW_RENDERFULLCONTENT: includes content drawn with the GPU.
+
 
     [System.ComponentModel.DefaultValue(false)]
     public bool AllowClickForwarding { get; set; }
@@ -128,6 +131,7 @@ public sealed class PipWindow : Form
         var options = new ToolStripMenuItem(T("pip.options"));
         options.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
         options.DropDownOpening += (_, _) => FillOptions(options);
+        _menu.Items.Add(new ToolStripMenuItem { Name = "inputStatus", Enabled = false });
         _menu.Items.Add(options);
         _menu.Items.Add(_hideItem);
         _menu.Items.Add(_switcherItem);
@@ -137,13 +141,14 @@ public sealed class PipWindow : Form
         _removeCropItem = new ToolStripMenuItem(T("pip.removeCrop"), null, (_, _) => SetCrop(Rectangle.Empty));
         _menu.Items.Add(_removeCropItem);
         _menu.Items.Add(T("pip.diagnostics.title"), null, (_, _) => ShowDiagnostics());
-        _retryItem = new ToolStripMenuItem(T("pip.backend.retry"), null, (_, _) => _thumbnail?.Retry());
+        _retryItem = new ToolStripMenuItem(T("pip.backend.retry"), null, (_, _) => RetryCapture());
         _menu.Items.Add(_retryItem);
         _menu.Items.Add(T("pip.minimize"), null, (_, _) => SuspendView());
         _menu.Items.Add(T("pip.close"), null, (_, _) => Close());
         _menu.Opening += (_, _) =>
         {
-            _retryItem.Visible = _thumbnail?.CanRetry == true;
+            _menu.Items["inputStatus"]!.Text = InputDescription;
+            _retryItem.Visible = CanRetryCapture;
             _autoMoveItem.Visible = AllowAutoMove;
             _interactiveItem.Visible = AllowInteractive && _origin.IsWindow;
             _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
@@ -238,6 +243,23 @@ public sealed class PipWindow : Form
     }
 
     internal bool IsSuspended => _suspended;
+    internal bool SourceIsWindow => _origin.IsWindow;
+    internal bool CanRetryCapture => _suspended || _thumbnail?.CanRetry == true;
+    internal string InputDescription => _overrides.ClickThrough ? T("pip.state.clickThrough") :
+        _interactiveItem.Checked ? T("pip.interactive") : AllowClickForwarding && _origin.IsWindow
+            ? T("settings.pip.forwardClicks") : T("pip.input.activateOriginal");
+    internal string StateDescription => string.Join(", ", new[]
+    {
+        _suspended ? T("pip.state.suspended") : _thumbnail?.StatusText ?? T("common.unavailable"),
+        InputDescription,
+        _hideItem.Checked ? T("pip.state.originalHidden") : "",
+    }.Where(value => value.Length > 0));
+
+    internal void RetryCapture()
+    {
+        if (_suspended) ResumeView();
+        else _thumbnail?.Retry();
+    }
 
     internal void SuspendView()
     {
@@ -245,13 +267,16 @@ public sealed class PipWindow : Form
         CancelPress();
         EndLive();
         EndInteraction();
+        CacheTaskbarPicture();
         _suspended = true;
+        _resumeRequested = false;
         DropHoverPreview();
         _titleBar?.Hide();
         _closeButton?.Hide();
         _chip?.Hide();
         _autoMove.Stop();
         _thumbnail?.Dispose();
+        _retiringCapture = _thumbnail?.Retirement ?? Task.CompletedTask;
         _thumbnail = null;
         Hide();
         if (_viewPreferences.MinimizeToTaskbar && _sourceIcon is not null)
@@ -271,41 +296,44 @@ public sealed class PipWindow : Form
     /// A still picture of what the view shows, made only when Windows asks. Views of a display or
     /// region have no window to ask, so they show their icon.
     /// </summary>
-    private Bitmap? TaskbarPreview(Size limit)
+    private void CacheTaskbarPicture()
     {
-        if (!_origin.IsWindow || !_origin.IsAvailable || User32.IsIconic(_source) ||
-            !User32.GetWindowRect(_source, out Rect bounds))
-            return null;
-        Size whole = Size.Round(new SizeF(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top));
-        if (whole.Width <= 0 || whole.Height <= 0)
-            return null;
-        using var full = new Bitmap(whole.Width, whole.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        using (Graphics graphics = Graphics.FromImage(full))
+        if (!Visible || Width <= 0 || Height <= 0) return;
+        try
         {
-            nint context = graphics.GetHdc();
+            var picture = new Bitmap(Width, Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
             try
             {
-                if (!User32.PrintWindow(_source, context, PrintFullContent))
-                    return null;
+                using Graphics graphics = Graphics.FromImage(picture);
+                graphics.CopyFromScreen(Location, Point.Empty, Size);
             }
-            finally { graphics.ReleaseHdc(context); }
+            catch { picture.Dispose(); throw; }
+            _taskbarPicture?.Dispose();
+            _taskbarPicture = picture;
         }
+        catch (Exception failure) when (failure is System.ComponentModel.Win32Exception or ExternalException or ArgumentException)
+        {
+            // The taskbar can use the source icon while the desktop is locked.
+        }
+    }
 
-        Rectangle shown = _lastShown;
-        shown.Intersect(new Rectangle(Point.Empty, whole));
-        if (shown.Width <= 0 || shown.Height <= 0)
-            shown = new Rectangle(Point.Empty, whole);
-        Size size = PipGeometry.FitInside(shown.Size, limit);
-        var picture = new Bitmap(size.Width, size.Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-        using (Graphics graphics = Graphics.FromImage(picture))
-            graphics.DrawImage(full, new Rectangle(Point.Empty, size), shown, GraphicsUnit.Pixel);
-        return picture;
+    private Bitmap? TaskbarPreview(Size limit)
+    {
+        if (_taskbarPicture is null) return null;
+        return new Bitmap(_taskbarPicture, PipGeometry.FitInside(_taskbarPicture.Size, limit));
     }
 
     internal void ResumeView()
     {
         if (!_suspended || _cleaned) return;
-        if (!_origin.IsAvailable) { Close(); return; }
+        if (!_origin.IsAvailable)
+        {
+            if (_origin.IsWindow) Close();
+            else Problem?.Invoke(T("errors.pip.displayUnavailable"));
+            return;
+        }
+        if (!_retiringCapture.IsCompleted) { _resumeRequested = true; return; }
+        _resumeRequested = false;
         try
         {
             _thumbnail = new PipBackendSelector(_origin, Handle, BackendPreferences());
@@ -391,6 +419,11 @@ public sealed class PipWindow : Form
     private void FillOptions(ToolStripMenuItem options)
     {
         options.DropDownItems.Clear();
+        options.DropDownItems.Add(new ToolStripMenuItem(
+            _overrides.FrameRate is null && _overrides.Scaling is null && _overrides.OpacityPercent is null
+                ? T("pip.defaults.inherited") : T("pip.defaults.overridden")) { Enabled = false });
+        options.DropDownItems.Add(new ToolStripMenuItem(T("pip.controls.help")) { Enabled = false });
+        options.DropDownItems.Add(T("pip.zoom.reset"), null, (_, _) => { ResetZoom(); SetCrop(Rectangle.Empty); });
         bool capture = BackendKind != PipBackendKind.DwmThumbnail;
         ToolStripMenuItem rate = Choices(T("pip.frameRate"), _overrides.FrameRate,
             [(T("pip.useSettings"), null), (T("pip.frameRate.matchMonitor"), 0), ("15 FPS", 15), ("30 FPS", 30), ("60 FPS", 60), ("120 FPS", 120)],
@@ -420,7 +453,12 @@ public sealed class PipWindow : Form
         var presets = new ToolStripMenuItem(T("pip.presets"));
         IReadOnlyList<PipPreset> saved = Presets?.Invoke() ?? [];
         foreach (PipPreset preset in saved)
-            presets.DropDownItems.Add(preset.Name.Replace("&", "&&"), null, (_, _) => ApplyPreset(preset));
+        {
+            var entry = new ToolStripMenuItem(preset.Name.Replace("&", "&&"));
+            entry.DropDownItems.Add(new ToolStripMenuItem(PresetChanges(preset)) { Enabled = false });
+            entry.DropDownItems.Add(T("common.apply"), null, (_, _) => ApplyPreset(preset));
+            presets.DropDownItems.Add(entry);
+        }
         if (saved.Count > 0)
             presets.DropDownItems.Add(new ToolStripSeparator());
         presets.DropDownItems.Add(T("pip.presets.save"), null, (_, _) => SavePreset());
@@ -433,6 +471,21 @@ public sealed class PipWindow : Form
         }
 
         options.DropDownItems.Add(presets);
+    }
+
+    private string PresetChanges(PipPreset preset)
+    {
+        PipPreset current = CurrentPreset(preset.Name);
+        var changes = new List<string>();
+        if (preset.CropFor(WholeSize()) != Crop || _zoom != PipGeometry.WholeView) changes.Add(T("window.crop"));
+        if (preset.LongSide > 0 && preset.LongSide != current.LongSide) changes.Add(T("pip.size") + $": {preset.LongSide} px");
+        if (preset.Device is not null && (preset.Device != current.Device || preset.Left != current.Left || preset.Top != current.Top))
+            changes.Add(T("pip.presets.position"));
+        if (preset.FrameRate != current.FrameRate) changes.Add(T("pip.frameRate") + ": " + (preset.FrameRate?.ToString() ?? T("pip.useSettings")));
+        if (preset.OpacityPercent != current.OpacityPercent) changes.Add(T("pip.opacity") + ": " + (preset.OpacityPercent?.ToString() ?? T("pip.useSettings")));
+        if (preset.Scaling != current.Scaling) changes.Add(T("pip.scaling"));
+        if (preset.PositionLocked is { } locked && locked != current.PositionLocked) changes.Add(T("pip.lockPosition") + ": " + (locked ? T("common.yes") : T("common.no")));
+        return changes.Count == 0 ? T("pip.presets.noChanges") : string.Join("; ", changes);
     }
 
     private static ToolStripMenuItem Choices<T1>(string title, T1 current, (string Label, T1 Value)[] choices, Action<T1> choose)
@@ -467,7 +520,7 @@ public sealed class PipWindow : Form
             Name = name, CropX = _crop.X, CropY = _crop.Y, CropWidth = _crop.Width, CropHeight = _crop.Height,
             LongSide = _longSide, Device = Screen.FromControl(this).DeviceName, Left = left, Top = top,
             FrameRate = _overrides.FrameRate, OpacityPercent = _overrides.OpacityPercent, Scaling = _overrides.Scaling,
-            CropShares = PipCropShares.Of(_crop, whole), PositionLocked = _overrides.PositionLocked ? true : null,
+            CropShares = PipCropShares.Of(_crop, whole), PositionLocked = _overrides.PositionLocked,
         };
     }
 
@@ -583,6 +636,7 @@ public sealed class PipWindow : Form
     {
         if (!_origin.IsWindow)
             return;
+        if (!hidden) { EndLive(); EndInteraction(); }
         try
         {
             _origin.Require();
@@ -591,14 +645,14 @@ public sealed class PipWindow : Form
                     T("errors.pip.previewNotReady"));
             if (hidden)
             {
-                _windows.Hide(_source);
+                _windows.HideOwned(_source, this);
                 if (User32.GetForegroundWindow() == _source)
                     User32.SetForegroundWindow(Handle); // Keys mustn't go to a window that can't be seen.
                 StayOnTop();
             }
             else
             {
-                _windows.Show(_source);
+                _windows.ShowOwned(_source, this);
             }
 
             _hideItem.Checked = hidden;
@@ -609,14 +663,14 @@ public sealed class PipWindow : Form
             {
                 try
                 {
-                    _windows.Show(_source);
+                    _windows.ShowOwned(_source, this);
                 }
                 catch (WindowOperationException)
                 {
                 }
             }
 
-            _hideItem.Checked = _origin.IsAvailable && _windows.IsHidden(_source);
+            _hideItem.Checked = _origin.IsAvailable && _windows.IsConcealedBy(_source, this);
             Problem?.Invoke(failure.Message);
         }
     }
@@ -833,6 +887,8 @@ public sealed class PipWindow : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        EndLive();
+        EndInteraction();
         // Keep the recovery surface reachable if a concealed source is temporarily unresponsive.
         if (_origin.IsWindow && _origin.IsAvailable &&
             (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source)))
@@ -875,6 +931,7 @@ public sealed class PipWindow : Form
         DropHoverPreview();
         _titleBar?.Dispose();
         _sourceIcon?.Dispose();
+        _taskbarPicture?.Dispose();
         _closeButton?.Dispose();
         _chip?.Dispose();
         _menu.Dispose();
@@ -947,6 +1004,7 @@ public sealed class PipWindow : Form
     /// <summary>Turns direct use of this view on or off. It needs the original hidden: sliding a visible window around isn't acceptable.</summary>
     internal void SetInteractive(bool on)
     {
+        if (on && (!AllowInteractive || !_origin.IsWindow)) return;
         if (on)
         {
             if (!PressRules.SharedScaling(Screen.AllScreens.Select(ScreenDpi)))
@@ -1031,6 +1089,7 @@ public sealed class PipWindow : Form
         if (_live is not { } live)
             return;
         _live = null;
+        live.Dispose(); // Stop the mover before returning the source to its journaled placement.
         try
         {
             if (_origin.IsAvailable)
@@ -1041,7 +1100,6 @@ public sealed class PipWindow : Form
             Problem?.Invoke(failure.Message);
         }
 
-        live.Dispose();
         SetInputPassesThrough(false);
         if (User32.GetForegroundWindow() == _source)
         {
@@ -1222,9 +1280,11 @@ public sealed class PipWindow : Form
     {
         if (!_origin.IsAvailable)
         {
-            Close();
+            if (_origin.IsWindow) Close();
+            else if (!_suspended) SuspendView();
             return;
         }
+        if (_resumeRequested && _retiringCapture.IsCompleted) ResumeView();
 
         string title = T("pip.titlePrefix") + _origin.Title;
         if (Text != title) Text = title;
@@ -1239,7 +1299,8 @@ public sealed class PipWindow : Form
             // If even the independent compatibility surface fails, close through normal restoration.
             // Repeating the same draw from this timer would spam the tray and strand a hidden source.
             Problem?.Invoke(failure.Message);
-            Close();
+            if (_origin.IsWindow) Close();
+            else SuspendView();
             return;
         }
         if (_hideItem.Checked && !_windows.IsHidden(_source))
@@ -1301,7 +1362,7 @@ public sealed class PipWindow : Form
                 _titleBar = new PipTitleBar(this, () => _overrides.PositionLocked, SuspendView);
                 KeepPartOutOfScreenCapture(_titleBar);
             }
-            _titleBar.UpdateTitle(_origin.Title, _sourceIcon);
+            _titleBar.UpdateTitle(_origin.Title + " - " + InputDescription, _sourceIcon);
             _titleBar.Bounds = new Rectangle(Left + PipGeometry.Border, Top + PipGeometry.Border,
                 Width - 2 * PipGeometry.Border, Dpi.Scale(28, DeviceDpi));
             if (!_titleBar.Visible) _titleBar.Show();
@@ -1458,6 +1519,7 @@ public sealed class PipWindow : Form
             return;
         }
 
+        EndLive();
         EndInteraction();
         if (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source))
             SetOriginalHidden(false);

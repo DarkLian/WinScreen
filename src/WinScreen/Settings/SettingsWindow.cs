@@ -1,4 +1,4 @@
-using static WinScreen.Localization.UiText;
+﻿using static WinScreen.Localization.UiText;
 using System.Diagnostics;
 using WinScreen.Tray;
 using WinScreen.Updates;
@@ -38,6 +38,12 @@ public sealed class SettingsWindow : Form
     private readonly ComboBox _toolbarTrigger = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
     private readonly NumericUpDown _toolbarDelay = new() { Minimum = 100, Maximum = 2000, Increment = 100, Width = 90 };
     private readonly CheckedListBox _toolbarButtons = new() { CheckOnClick = true, Width = 455, Height = 225, IntegralHeight = false };
+    private readonly TabControl _tabs = new() { Size = new Size(540, 520), Multiline = true };
+    private readonly TextBox _actionSearch = new() { Dock = DockStyle.Top };
+    private readonly Panel _shortcutEditor = new() { Dock = DockStyle.Fill, Height = 28 };
+    private readonly Label _shortcutLabel = new() { AutoSize = true };
+    private readonly Dictionary<AppCommand, string> _shortcutProblems = [];
+    private readonly Func<AppCommand, bool>? _registered;
     private readonly ListView _features = new() { View = View.Details, FullRowSelect = true, MultiSelect = false, Dock = DockStyle.Fill };
 
     private sealed record ToolbarChoice(AppCommand Command)
@@ -104,10 +110,12 @@ public sealed class SettingsWindow : Form
 
     private readonly ComboBox _modifierKey = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
 
-    private readonly TextBox _modifierExclusions = new() { Width = 455 };
+    private readonly ListBox _modifierExclusions = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ComboBox _newModifierExclusion = ProgramPicker();
     private readonly CheckBox _windowMenu = new() { Text = T("gestures.menu.enable"), AutoSize = true };
     private readonly ComboBox _windowMenuGesture = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
-    private readonly TextBox _windowMenuExclusions = new() { Width = 455 };
+    private readonly ListBox _windowMenuExclusions = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ComboBox _newMenuExclusion = ProgramPicker();
 
     private readonly CheckBox _pausePin = new()
         { Text = T("settings.pin.pauseMaximized"), AutoSize = true };
@@ -124,10 +132,10 @@ public sealed class SettingsWindow : Form
     private readonly HashSet<ProgramSetup> _removedSetups = [];
 
     private readonly Label _status = new()
-        { AutoSize = true, ForeColor = Color.Firebrick, MaximumSize = new Size(500, 0) };
+        { AutoSize = true, ForeColor = SystemColors.WindowText, MaximumSize = new Size(500, 0) };
 
     public SettingsWindow(AppSettings settings, StartWithWindows startup,
-        Func<AppSettings, IReadOnlyList<HotkeyProblem>> apply)
+        Func<AppSettings, IReadOnlyList<HotkeyProblem>> apply, Func<AppCommand, bool>? registered = null)
     {
         SuspendLayout();
         AutoScaleDimensions = new SizeF(96F, 96F); // Every size below is written for 100% display scaling.
@@ -135,11 +143,13 @@ public sealed class SettingsWindow : Form
         _settings = settings;
         _startup = startup;
         _apply = apply;
+        _registered = registered;
         _errors.ContainerControl = this;
         _experimental.CheckedChanged += (_, _) =>
         {
             _pipInput.Enabled = _experimental.Checked;
             _pipAutoMove.Enabled = _experimental.Checked;
+            if (_hotkeys.Count > 0) RefreshFeatures();
         };
         _language.Items.AddRange([T("settings.language.system"), "English", "简体中文", "繁體中文"]);
 
@@ -153,13 +163,11 @@ public sealed class SettingsWindow : Form
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         Padding = new Padding(12);
 
-        var tabs = new TabControl { Size = new Size(540, 520) };
+        var tabs = _tabs;
         var generalPage = Tab(T("settings.general"), BuildGeneral());
         var featuresPage = Tab(T("features.title"), BuildFeatures());
-        var hotkeysPage = Tab(T("settings.hotkeys"), BuildHotkeys());
         tabs.TabPages.Add(generalPage);
         tabs.TabPages.Add(featuresPage);
-        tabs.TabPages.Add(hotkeysPage);
         tabs.TabPages.Add(Tab(T("settings.programs"), BuildPrograms()));
         tabs.TabPages.Add(Tab(T("settings.savedSetups"), BuildSetups()));
         var pipPage = Tab(T("pip.open"), BuildPip());
@@ -175,7 +183,8 @@ public sealed class SettingsWindow : Form
             object? tag = _features.SelectedItems[0].Tag;
             if (tag is AppCommand command)
             {
-                tabs.SelectedTab = hotkeysPage;
+                tabs.SelectedTab = featuresPage;
+                ShowShortcutEditor();
                 _hotkeys[command].Focus();
                 return;
             }
@@ -205,7 +214,11 @@ public sealed class SettingsWindow : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _errors.Dispose();
+        if (disposing)
+        {
+            _errors.Dispose();
+            foreach (TextBox box in _hotkeys.Values) box.Dispose();
+        }
         base.Dispose(disposing);
     }
 
@@ -282,8 +295,10 @@ public sealed class SettingsWindow : Form
         draft.ModifierKey = (ModifierKey)Math.Max(0, _modifierKey.SelectedIndex);
         draft.WindowMenu = _windowMenu.Checked;
         draft.WindowMenuGesture = (WindowMenuGesture)Math.Max(0, _windowMenuGesture.SelectedIndex);
-        draft.WindowMenuExclusions = _windowMenuExclusions.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-        draft.ModifierExclusions = _modifierExclusions.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        AddTyped(_windowMenuExclusions, _newMenuExclusion);
+        AddTyped(_modifierExclusions, _newModifierExclusion);
+        draft.WindowMenuExclusions = _windowMenuExclusions.Items.Cast<string>().ToList();
+        draft.ModifierExclusions = _modifierExclusions.Items.Cast<string>().ToList();
         draft.PausePinWhenMaximized = _pausePin.Checked;
         draft.OpaqueOnHover = _opaqueOnHover.Checked;
         draft.HighlightPinned = _highlightPinned.Checked;
@@ -319,9 +334,20 @@ public sealed class SettingsWindow : Form
                 if (_hotkeys.TryGetValue(problem.Command, out TextBox? box))
                     _errors.SetError(box, problem.Message);
             if (problems.Count > 0)
+            {
+                foreach (HotkeyProblem problem in problems) _shortcutProblems[problem.Command] = problem.Message;
+                _actionSearch.Clear();
+                RefreshFeatures();
+                _tabs.SelectedIndex = 1;
+                ListViewItem? row = _features.Items.Cast<ListViewItem>().FirstOrDefault(item => Equals(item.Tag, problems[0].Command));
+                if (row is not null) { row.Selected = true; row.EnsureVisible(); }
+                ShowShortcutEditor();
+                _hotkeys[problems[0].Command].Focus();
                 return false;
-            _startup.IsOn = _startWithWindows.Checked;
-            _settings.CopyFrom(draft);
+            }
+            _pendingImport = null;
+            _shortcutProblems.Clear();
+            RefreshFeatures();
             return true;
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException
@@ -465,8 +491,10 @@ public sealed class SettingsWindow : Form
         _modifierKey.SelectedIndex = (int)values.ModifierKey;
         _windowMenu.Checked = values.WindowMenu;
         _windowMenuGesture.SelectedIndex = (int)values.WindowMenuGesture;
-        _windowMenuExclusions.Text = string.Join(", ", values.WindowMenuExclusions);
-        _modifierExclusions.Text = string.Join(", ", values.ModifierExclusions);
+        _windowMenuExclusions.Items.Clear();
+        _windowMenuExclusions.Items.AddRange(values.WindowMenuExclusions.Cast<object>().ToArray());
+        _modifierExclusions.Items.Clear();
+        _modifierExclusions.Items.AddRange(values.ModifierExclusions.Cast<object>().ToArray());
         _pausePin.Checked = values.PausePinWhenMaximized;
         _opaqueOnHover.Checked = values.OpaqueOnHover;
         _highlightPinned.Checked = values.HighlightPinned;
@@ -501,6 +529,7 @@ public sealed class SettingsWindow : Form
         _borderThickness.Value = border.Thickness;
         _defaultOpacity.Value = Math.Clamp(values.DefaultOpacityPercent, AppSettings.LowestOpacityPercent,
             AppSettings.HighestOpacityPercent);
+        RefreshFeatures();
     }
 
     private static TabPage Tab(string title, Control content)
@@ -559,19 +588,12 @@ public sealed class SettingsWindow : Form
         else if (!VelopackUpdateSession.IsInstalled)
             startup.Add(Note(T("updates.installedOnly")));
 
-        var opacity = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 2, 0, 0) };
-        opacity.Controls.Add(new Label
-            { Text = T("settings.opacity.default"), AutoSize = true, Margin = new Padding(3, 6, 4, 0) });
-        opacity.Controls.Add(_defaultOpacity);
-        opacity.Controls.Add(new Label { Text = "%", AutoSize = true, Margin = new Padding(4, 6, 0, 0) });
-
         var page = new FlowLayoutPanel
             { FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true };
         page.Controls.Add(Section(T("settings.startupAndUpdates"), startup.ToArray()));
-        page.Controls.Add(Section(T("settings.windows"), _showToolbar, _pauseInFullScreen, _allowPip, _pausePin, _opaqueOnHover,
-            _highlightPinned, opacity));
-        page.Controls.Add(Section(T("settings.experimental"), _experimental, _pipInput, _pipAutoMove,
-            Note(T("settings.pip.autoMoveHelp"))));
+        page.Controls.Add(Section(T("settings.windows"), _pauseInFullScreen, _allowPip));
+        page.Controls.Add(Section(T("settings.experimental"), _experimental));
+        page.Controls.Add(BuildTransfer());
         page.Controls.Add(new Label
         {
             Text = string.Format(T("app.version"), AppInfo.Version), AutoSize = true,
@@ -589,14 +611,14 @@ public sealed class SettingsWindow : Form
         var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false,
             Dock = DockStyle.Fill, AutoScroll = true };
         page.Controls.Add(Section(T("gestures.moveResize.title"), _modifierDrag, key,
-            new Label { Text = T("gestures.exclusions"), AutoSize = true },
-            _modifierExclusions));
+            ProgramRules(T("gestures.exclusions"), _modifierExclusions, _newModifierExclusion)));
         page.Controls.Add(Note(T("gestures.moveResize.help")));
         _windowMenuGesture.Items.AddRange([T("gestures.menu.ctrlRight"), T("gestures.menu.ctrlShiftRight"), T("gestures.menu.ctrlMiddle")]);
         page.Controls.Add(Section(T("window.menu"), _windowMenu, _windowMenuGesture,
-            new Label { Text = T("gestures.exclusions"), AutoSize = true }, _windowMenuExclusions));
+            ProgramRules(T("gestures.exclusions"), _windowMenuExclusions, _newMenuExclusion)));
         page.Controls.Add(Note(T("gestures.menu.help")));
         page.Controls.Add(Note(T("gestures.hookHelp")));
+        page.Controls.Add(Note(T("programs.precedence")));
         return page;
     }
 
@@ -633,48 +655,22 @@ public sealed class SettingsWindow : Form
         page.Controls.Add(Note(T("pip.rendering.compatibilityHelp")));
         page.Controls.Add(Note(T("pip.rendering.captureIndicatorHelp")));
         page.Controls.Add(Note(T("pip.diagnostics.retryHelp")));
+        page.Controls.Add(Section(T("settings.experimental"), _pipInput, _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
         page.Controls.Add(Section(T("pip.hover.title"), _pipTitleBar, _pipTaskbar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));
         return page;
     }
 
-    private GroupBox BuildHotkeys()
-    {
-        var table = new TableLayoutPanel { ColumnCount = 2, Dock = DockStyle.Fill, AutoScroll = true };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 255));
-        AppCommand[] commands = CommandCatalog.All.ToArray();
-        table.RowCount = commands.Length + 1; // The spare row takes the leftover height.
-        foreach (AppCommand command in commands)
-        {
-            table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            var box = new TextBox { ReadOnly = true, Dock = DockStyle.Fill, ShortcutsEnabled = false };
-            box.KeyDown += (_, e) =>
-            {
-                e.SuppressKeyPress = true;
-                CaptureHotkey(command, e.KeyData, HotkeyText.WinKeyDown);
-            };
-            _hotkeys[command] = box;
-            table.Controls.Add(new Label
-                { Text = CommandCatalog.Name(command), AutoSize = true, Anchor = AnchorStyles.Left });
-            table.Controls.Add(box);
-        }
-
-        table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var group = new GroupBox
-            { Text = T("settings.hotkeys.captureHelp"), Dock = DockStyle.Fill };
-        group.Controls.Add(table);
-        return group;
-    }
-
     private TableLayoutPanel BuildPrograms()
     {
-        var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 2, Dock = DockStyle.Fill };
+        var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Dock = DockStyle.Fill };
+        page.Controls.Add(Note(T("programs.precedence")), 0, 0);
+        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         page.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         page.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        page.Controls.Add(BuildProgramList(T("programs.exclusions"), _excluded, _newExcluded), 0, 0);
+        page.Controls.Add(BuildProgramList(T("programs.exclusions"), _excluded, _newExcluded), 0, 1);
         page.Controls.Add(
             BuildProgramList(T("programs.inclusions"), _included, _newIncluded),
-            0, 1);
+            0, 2);
         return page;
     }
 
@@ -762,7 +758,7 @@ public sealed class SettingsWindow : Form
         return row;
     }
 
-    private FlowLayoutPanel BuildCustomization()
+    private Control BuildTransfer()
     {
         var export = new Button { Text = T("settings.transfer.export"), AutoSize = true };
         export.Click += (_, _) =>
@@ -787,15 +783,20 @@ public sealed class SettingsWindow : Form
             catch (Exception e) when (e is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
             { _status.Text = e.Message; }
         };
+        return Section(T("settings.transfer.title"), Note(T("settings.transfer.paths")), export, import);
+    }
+
+    private FlowLayoutPanel BuildCustomization()
+    {
         var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true };
-        page.Controls.Add(Section(T("settings.opacity.title"), SettingRow(T("settings.opacity.step"), _opacityStep), _opacityWheel));
-        page.Controls.Add(Section(T("settings.pin.border"), SettingRow(T("settings.pin.color"), _borderColor),
+        page.Controls.Add(Section(T("settings.opacity.title"), SettingRow(T("settings.opacity.default"), _defaultOpacity),
+            SettingRow(T("settings.opacity.step"), _opacityStep), _opacityWheel, _opaqueOnHover));
+        page.Controls.Add(Section(T("settings.pin.border"), _pausePin, _highlightPinned, SettingRow(T("settings.pin.color"), _borderColor),
             SettingRow(T("settings.pin.opacity"), _borderOpacity), SettingRow(T("settings.pin.thickness"), _borderThickness)));
         page.Controls.Add(_detectDark);
         page.Controls.Add(Section(T("settings.effects.title"), _layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.pictures"), _glassPictures), _pictureSafeDark, Note(T("settings.effects.help"))));
-        page.Controls.Add(Section(T("settings.transfer.title"), Note(T("settings.transfer.paths")), export, import));
         return page;
     }
 
@@ -813,7 +814,7 @@ public sealed class SettingsWindow : Form
         _toolbarTrigger.Items.AddRange([T("toolbar.trigger.titleBar"), T("toolbar.trigger.minimize")]);
         foreach (AppCommand command in ToolbarPreferences.DefaultButtons()) _toolbarButtons.Items.Add(new ToolbarChoice(command));
         var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true };
-        page.Controls.Add(Section(T("toolbar.settings.title"), SettingRow(T("toolbar.placement.label"), _toolbarPlacement),
+        page.Controls.Add(Section(T("toolbar.settings.title"), _showToolbar, SettingRow(T("toolbar.placement.label"), _toolbarPlacement),
             SettingRow(T("toolbar.trigger.label"), _toolbarTrigger), SettingRow(T("toolbar.delay.label"), _toolbarDelay),
             Note(T("toolbar.trigger.help"))));
         page.Controls.Add(Section(T("toolbar.buttons.label"), _toolbarButtons, Note(T("toolbar.buttons.help"))));
@@ -832,7 +833,7 @@ public sealed class SettingsWindow : Form
         GroupBox options = Section(T("anchors.settings.title"), _autoAnchors, Note(T("anchors.auto.help")),
             SettingRow(T("anchors.side.label"), _anchorSide), SettingRow(T("anchors.look.label"), _anchorLook),
             SettingRow(T("anchors.limit"), _anchorLimit), SettingRow(T("anchors.size"), _anchorSize),
-            _anchorRecency, _anchorAvoid, Note(T("anchors.avoid.help")));
+            _anchorRecency, _anchorAvoid, Note(T("anchors.avoid.help")), Note(T("programs.precedence")));
         page.Controls.Add(options, 0, 0);
         page.SetColumnSpan(options, 2);
         page.Controls.Add(BuildProgramList(T("anchors.auto.only"), _anchorOnly, _newAnchorOnly), 0, 1);
@@ -840,31 +841,105 @@ public sealed class SettingsWindow : Form
         return page;
     }
 
+    private static Control ProgramRules(string title, ListBox list, ComboBox picker)
+    {
+        GroupBox group = BuildProgramList(title, list, picker);
+        group.Dock = DockStyle.None;
+        group.Size = new Size(ContentWidth - 30, 140);
+        return group;
+    }
+
     private Control BuildFeatures()
     {
-        _features.Columns.Add(T("features.name"), 230);
-        _features.Columns.Add(T("features.shortcut"), 150);
-        _features.Columns.Add(T("features.state"), 100);
+        _features.HideSelection = false;
+        _features.Columns.Add(T("features.name"), 160);
+        _features.Columns.Add(T("actions.target"), 100);
+        _features.Columns.Add(T("actions.default"), 120);
+        _features.Columns.Add(T("actions.saved"), 120);
+        _features.Columns.Add(T("features.state"), 160);
+        foreach (AppCommand command in CommandCatalog.All)
+        {
+            var box = new TextBox { ReadOnly = true, Dock = DockStyle.Fill, ShortcutsEnabled = false,
+                AccessibleName = CommandCatalog.Name(command) };
+            box.KeyDown += (_, e) =>
+            {
+                if (e.KeyCode == Keys.Tab) return;
+                e.SuppressKeyPress = true;
+                CaptureHotkey(command, e.KeyData, HotkeyText.WinKeyDown);
+            };
+            _hotkeys[command] = box;
+        }
+        var clear = new Button { Text = T("actions.clear"), AutoSize = true };
+        var reset = new Button { Text = T("actions.reset"), AutoSize = true };
+        void SetSelected(bool defaults)
+        {
+            if (_features.SelectedItems.Count == 0 || _features.SelectedItems[0].Tag is not AppCommand command) return;
+            _hotkeys[command].Text = defaults ? new AppSettings().Hotkeys.GetValueOrDefault(command, "") : "";
+            _hotkeys[command].Focus();
+        }
+        clear.Click += (_, _) => SetSelected(false);
+        reset.Click += (_, _) => SetSelected(true);
+        var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Bottom };
+        buttons.Controls.AddRange([clear, reset]);
+        var editor = new TableLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, ColumnCount = 1 };
+        editor.Controls.Add(_shortcutLabel);
+        editor.Controls.Add(_shortcutEditor);
+        editor.Controls.Add(buttons);
+        editor.Controls.Add(Note(T("settings.hotkeys.captureHelp")));
+        _features.SelectedIndexChanged += (_, _) => ShowShortcutEditor();
+        _actionSearch.AccessibleName = T("actions.search");
+        _actionSearch.PlaceholderText = T("actions.search");
+        _actionSearch.TextChanged += (_, _) => RefreshFeatures();
         var page = new Panel { Dock = DockStyle.Fill };
-        var help = new Label { Text = T("features.help"), AutoSize = true, MaximumSize = new Size(ContentWidth, 0), Dock = DockStyle.Top };
         page.Controls.Add(_features);
-        page.Controls.Add(help);
+        page.Controls.Add(editor);
+        page.Controls.Add(new Label { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top });
+        page.Controls.Add(_actionSearch);
         return page;
+    }
+
+    private void ShowShortcutEditor()
+    {
+        _shortcutEditor.Controls.Clear();
+        _shortcutLabel.Text = "";
+        if (_features.SelectedItems.Count == 0 || _features.SelectedItems[0].Tag is not AppCommand command) return;
+        _shortcutLabel.Text = CommandCatalog.Name(command);
+        _shortcutEditor.Controls.Add(_hotkeys[command]);
     }
 
     internal void RefreshFeatures()
     {
+        object? selected = _features.SelectedItems.Count > 0 ? _features.SelectedItems[0].Tag : null;
         _features.BeginUpdate();
         _features.Items.Clear();
+        var defaults = new AppSettings();
         foreach (AppCommand command in CommandCatalog.All)
         {
-            string hotkey = _hotkeys[command].Text;
-            _features.Items.Add(new ListViewItem([CommandCatalog.Name(command).Replace("&", ""),
-                hotkey.Length == 0 ? T("features.unassigned") : hotkey,
-                !CommandCatalog.IsExperimental(command) || _experimental.Checked ? T("features.available") : T("features.disabled")]) { Tag = command });
+            string name = CommandCatalog.Name(command).Replace("&", "");
+            string target = command is AppCommand.RestoreAll or AppCommand.PickPipSource
+                ? T("actions.target.app") : T("actions.target.window");
+            string saved = _settings.Hotkeys.GetValueOrDefault(command, "");
+            string state = _shortcutProblems.GetValueOrDefault(command) ??
+                (CommandCatalog.IsExperimental(command) && !_settings.ExperimentalFeatures ? T("features.disabled") :
+                 saved.Length == 0 ? T("features.unassigned") :
+                 _registered?.Invoke(command) == true ? T("actions.registered") : T("actions.unavailable"));
+            string[] values = [name, target, defaults.Hotkeys.GetValueOrDefault(command, ""), saved, state];
+            if (!string.IsNullOrWhiteSpace(_actionSearch.Text) && !values.Any(value =>
+                value.Contains(_actionSearch.Text, StringComparison.CurrentCultureIgnoreCase))) continue;
+            var row = new ListViewItem(values) { Tag = command };
+            _features.Items.Add(row);
+            if (Equals(selected, command)) row.Selected = true;
         }
-        void Option(string name, string shortcut, bool enabled, string page) => _features.Items.Add(
-            new ListViewItem([name.Replace("&", ""), shortcut, enabled ? T("features.enabled") : T("features.disabled")]) { Tag = page });
+        void Option(string name, string shortcut, bool enabled, string page)
+        {
+            string[] values = [name.Replace("&", ""), T("actions.target.app"), shortcut, shortcut,
+                enabled ? T("features.enabled") : T("features.disabled")];
+            if (!string.IsNullOrWhiteSpace(_actionSearch.Text) && !values.Any(value =>
+                value.Contains(_actionSearch.Text, StringComparison.CurrentCultureIgnoreCase))) return;
+            var row = new ListViewItem(values) { Tag = page };
+            _features.Items.Add(row);
+            if (Equals(selected, page)) row.Selected = true;
+        }
         string none = T("features.noShortcut");
         bool toolbarHasButtons = _toolbarButtons.CheckedItems.Cast<ToolbarChoice>().Any(choice =>
             !CommandCatalog.IsExperimental(choice.Command) || _experimental.Checked);
@@ -884,5 +959,7 @@ public sealed class SettingsWindow : Form
         Option(_pipTaskbar.Text, none, _pipTaskbar.Checked, "pip");
         Option(T("pip.hover.mode"), none, _pipPreview.SelectedIndex > 0, "pip");
         _features.EndUpdate();
+        if (_features.SelectedItems.Count == 0 && _features.Items.Count > 0) _features.Items[0].Selected = true;
+        ShowShortcutEditor();
     }
 }
