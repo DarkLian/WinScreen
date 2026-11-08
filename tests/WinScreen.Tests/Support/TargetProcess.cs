@@ -136,6 +136,13 @@ internal sealed class TargetProcess : IDisposable
     }
 
     /// <summary>Makes the top of this borderless window answer as a title bar.</summary>
+    internal void UseCaptionButton(int hit)
+    {
+        _process.StandardInput.WriteLine("captionhit " + hit);
+        _process.StandardInput.Flush();
+        if (NextReport() != "captionhit") throw new InvalidOperationException("The target has no caption button.");
+    }
+
     public void UseTitleBar()
     {
         _process.StandardInput.WriteLine("titlebar");

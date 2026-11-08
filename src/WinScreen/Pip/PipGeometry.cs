@@ -8,6 +8,42 @@ public static class PipGeometry
     internal static bool NeedsWholePreview(int pictureWidth, int shownWidth) =>
         pictureWidth > 0 && shownWidth > 0 && pictureWidth / (double)shownWidth < 0.5;
 
+    internal static int SizingHit(Point point, Rectangle bounds, int band)
+    {
+        if (!bounds.Contains(point)) return 0;
+        bool left = point.X < bounds.Left + band, right = point.X >= bounds.Right - band;
+        bool top = point.Y < bounds.Top + band, bottom = point.Y >= bounds.Bottom - band;
+        if (top) return left ? 13 : right ? 14 : 12;
+        if (bottom) return left ? 16 : right ? 17 : 15;
+        return left ? 10 : right ? 11 : 0;
+    }
+
+    internal static Rectangle FitPicture(Rectangle area, Rectangle shown)
+    {
+        if (shown.Width <= 0 || shown.Height <= 0 || area.Width <= 0 || area.Height <= 0) return area;
+        double scale = Math.Min(area.Width / (double)shown.Width, area.Height / (double)shown.Height);
+        int width = Math.Max(1, (int)Math.Round(shown.Width * scale));
+        int height = Math.Max(1, (int)Math.Round(shown.Height * scale));
+        return new Rectangle(area.Left + (area.Width - width) / 2, area.Top + (area.Height - height) / 2, width, height);
+    }
+
+    internal static Rectangle SizeWithAspect(Rectangle proposed, int edge, Rectangle shown)
+    {
+        if (shown.Width <= 0 || shown.Height <= 0) return proposed;
+        int width = Math.Max(MinimumWidth, proposed.Width);
+        int height = Math.Max(MinimumHeight, proposed.Height);
+        if (edge is 3 or 6)
+            width = Math.Max(MinimumWidth, (int)Math.Round((height - 2 * Border) * (double)shown.Width / shown.Height) + 2 * Border);
+        else
+            height = Math.Max(MinimumHeight, (int)Math.Round((width - 2 * Border) * (double)shown.Height / shown.Width) + 2 * Border);
+        // A minimum in either direction must preserve the picture's ratio too.
+        width = Math.Max(width, (int)Math.Round((height - 2 * Border) * (double)shown.Width / shown.Height) + 2 * Border);
+        height = (int)Math.Round((width - 2 * Border) * (double)shown.Height / shown.Width) + 2 * Border;
+        int left = edge is 1 or 4 or 7 ? proposed.Right - width : proposed.Left;
+        int top = edge is 3 or 4 or 5 ? proposed.Bottom - height : proposed.Top;
+        return new Rectangle(left, top, width, height);
+    }
+
     public const int Border = 2;
     public const int MinimumWidth = 160;
     public const int MinimumHeight = 60;

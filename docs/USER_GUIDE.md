@@ -62,12 +62,12 @@ You can save a display or area there and open it again later from **Picture-in-P
 | Ctrl+drag | Crop to the part you want; Ctrl+double-click to remove the crop |
 | Right-click | Open the view's menu |
 
-Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. The bar fades away after you leave.
+Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. Drag an edge or corner to resize. **Keep aspect ratio** in View options is on by default. The bar fades away after you leave.
 
 **Useful options in the view's menu**
 
 - **Keep updating (hide original):** some apps, such as browsers, stop drawing when they're covered. This hides the original
-  so the view stays live.
+  so the view stays live. It also removes the original from the taskbar and Alt+Tab where supported. Showing the original or closing the view restores its entry.
 - **View options:** frame limit, opacity, size, position lock and click-through, just for this view.
 - **Presets:** save the crop, size and place under a name and use it again later.
 - **Use this view directly** *(experimental)*: click, select text and scroll right inside the view.

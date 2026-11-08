@@ -116,6 +116,8 @@ internal static class Program
                             Console.WriteLine("slow");
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "captionhit")
+                        window.BeginInvoke(() => window.UseCaptionHit(int.Parse(parts[1])));
                     if (parts[0] == "titlebar")
                         window.BeginInvoke(window.UseTitleBar);
                     if (parts[0] == "hang")
@@ -206,6 +208,13 @@ internal sealed partial class TargetForm : Form
         int x, int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
 
     /// <summary>A borderless window has no title bar to ask about, so the top strip claims to be one.</summary>
+    public void UseCaptionHit(int hit)
+    {
+        _hasTitleBar = true;
+        _captionHit = hit;
+        Report("captionhit");
+    }
+
     public void UseTitleBar()
     {
         _hasTitleBar = true;
@@ -241,6 +250,7 @@ internal sealed partial class TargetForm : Form
     private Color[] _colors = [];
     private DateTime _lastRawInput = DateTime.MinValue;
     private bool _hasTitleBar;
+    private int _captionHit = HTCAPTION;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RawInputDevice
@@ -301,7 +311,7 @@ internal sealed partial class TargetForm : Form
         {
             int y = (short)(m.LParam.ToInt64() >> 16);
             if (y - Top < TitleBarHeight)
-                m.Result = HTCAPTION;
+                m.Result = _captionHit;
         }
     }
 

@@ -74,7 +74,6 @@ public sealed class SwitcherPipTests
                 long start = Frames();
                 Pump(2000);
                 long baseline = Frames() - start;
-                pip.SetSwitcherHidden(true);
                 if (preference != PipBackendPreference.Dwm && Environment.OSVersion.Version.Build < 22000)
                 {
                     // Windows 10 can't capture a window out of the switcher, so this is refused, with a reason.

@@ -429,7 +429,7 @@ internal sealed class PipInteraction : IDisposable
     {
         nint position = (nint)((pointer.Y << 16) | (pointer.X & 0xFFFF));
         if (User32.SendMessageTimeout(_source, User32.WM_NCHITTEST, 0, position, AbortIfHung, 15, out nint hit) != 0)
-            SetReachable(PressRules.ReachesContent(hit));
+            SetReachable(!AtViewBorder(pointer) && PressRules.ReachesContent(hit));
     }
 
     private void Record(PressOutcome outcome, Point at, nint hit)
@@ -505,8 +505,21 @@ internal sealed class PipInteraction : IDisposable
         return false;
     }
 
+    private bool AtViewBorder(Point point)
+    {
+        if (_viewWindow == 0 || !User32.GetWindowRect(_viewWindow, out Rect bounds)) return false;
+        return PipGeometry.SizingHit(point, Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom),
+            Dpi.Scale(6, Dpi.Of(_viewWindow))) != 0;
+    }
+
     private bool OnPress(Point point, MouseButtons button)
     {
+        if (AtViewBorder(point))
+        {
+            SetReachable(false);
+            Record(PressOutcome.ViewControl, point, 0);
+            return false;
+        }
         if (_outside || (!InView(point) && !_inPopup))
         {
             Record(PressOutcome.Outside, point, 0);

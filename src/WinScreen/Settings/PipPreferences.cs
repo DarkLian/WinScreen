@@ -44,7 +44,7 @@ public sealed class PipPreferences
 
 /// <summary>What one view does differently from Settings. It ends with the view unless saved as a preset.</summary>
 internal sealed record PipOverrides(int? FrameRate = null, int? OpacityPercent = null, PipScaling? Scaling = null,
-    bool PositionLocked = false, bool ClickThrough = false);
+    bool PositionLocked = false, bool ClickThrough = false, bool KeepAspectRatio = true);
 
 /// <summary>A crop as shares of the whole source, so it still fits after the window is resized.</summary>
 public sealed record PipCropShares(double X, double Y, double Width, double Height)

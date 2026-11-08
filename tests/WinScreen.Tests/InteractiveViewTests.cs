@@ -519,7 +519,9 @@ public sealed class InteractiveViewTests
         using var source = new TargetProcess(SourceSpot);
         source.UseFrame();
         Size original = Desktop.BoundsOf(source.Handle).Size;
-        Point minimize = FindOnTitleBar(source.Handle, 8);
+        // Tool-window switcher hiding removes native minimize chrome. Custom caption buttons still report HTMINBUTTON.
+        source.UseCaptionButton(8);
+        Point minimize = new(original.Width / 2, 16);
         Drive(source, (view, _) =>
         {
             Hover(InView(view, original, minimize), view);

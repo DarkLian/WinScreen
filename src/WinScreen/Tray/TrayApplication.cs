@@ -372,7 +372,6 @@ public sealed class TrayApplication : ApplicationContext
             pip.AllowInteractive = _settings.ExperimentalFeatures;
             if (!_settings.ExperimentalFeatures) pip.SetInteractive(false);
             pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;
-            if (!_settings.ExperimentalFeatures) pip.SetSwitcherHidden(false);
             if (!_settings.ExperimentalFeatures) pip.SetAutoMove(false);
         }
 

@@ -711,12 +711,6 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(ForegroundIsApp));
         Desktop.Press(Keys.K); // &Keep updating
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0));
-        Desktop.RightClickOn(point, pip);
-        Assert.True(Desktop.WaitFor(ForegroundIsApp));
-        Desktop.Press(Keys.Home);
-        Desktop.Press(Keys.Down);
-        Desktop.Press(Keys.Down); // View options, Keep updating, then switcher hiding.
-        Desktop.Press(Keys.Enter);
         Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOOLWINDOW) != 0));
         _app.Kill();
         Assert.True(_app.WaitForExit(4000));

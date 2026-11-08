@@ -39,7 +39,6 @@ public sealed class PipWindow : Form
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 50 };
     private readonly System.Windows.Forms.Timer _autoMove = new() { Interval = 1000 };
     private readonly ToolStripMenuItem _hideItem;
-    private readonly ToolStripMenuItem _switcherItem;
     private readonly ToolStripItem _goToItem;
     private readonly ToolStripMenuItem _autoMoveItem;
     private readonly ToolStripMenuItem _removeCropItem;
@@ -125,8 +124,6 @@ public sealed class PipWindow : Form
 
         _hideItem = new ToolStripMenuItem(T("pip.keepUpdating"), null,
             (_, _) => SetOriginalHidden(!_hideItem!.Checked));
-        _switcherItem = new ToolStripMenuItem(T("pip.hideSwitcher"), null,
-            (_, _) => SetSwitcherHidden(!_windows.IsOutOfSwitcher(_source)));
         _autoMoveItem = new ToolStripMenuItem(T("pip.autoMove"), null,
             (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
         _interactiveItem = new ToolStripMenuItem(T("pip.interactive"), null,
@@ -142,7 +139,6 @@ public sealed class PipWindow : Form
         _menu.Items.Add(new ToolStripMenuItem { Name = "inputStatus", Enabled = false });
         _menu.Items.Add(options);
         _menu.Items.Add(_hideItem);
-        _menu.Items.Add(_switcherItem);
         _menu.Items.Add(_autoMoveItem);
         _menu.Items.Add(_interactiveItem);
         _menu.Items.Add(_hoverItem);
@@ -163,9 +159,6 @@ public sealed class PipWindow : Form
             _interactiveItem.Visible = _hoverItem.Visible = AllowInteractive && _origin.IsWindow;
             _hoverItem.Enabled = _interactiveItem.Checked;
             _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
-            _switcherItem.Visible = AllowSwitcherHiding && _origin.IsWindow;
-            _switcherItem.Enabled = _origin.IsAvailable && _windows.IsHidden(_source);
-            _switcherItem.Checked = _origin.IsAvailable && _windows.IsOutOfSwitcher(_source);
             _removeCropItem.Enabled = !_crop.IsEmpty;
             // A menu only closes on an outside click while its program has the focus.
             _foregroundBeforeMenu = User32.GetForegroundWindow();
@@ -347,7 +340,7 @@ public sealed class PipWindow : Form
         {
             _thumbnail = new PipBackendSelector(_origin, Handle, BackendPreferences());
             _thumbnail.Problem += text => Problem?.Invoke(text);
-            _thumbnail.SetViewport(PipGeometry.ViewArea(ClientSize), _lastShown);
+            _thumbnail.SetViewport(PictureArea, _lastShown);
             _suspended = false;
             DropTaskbarProxy();
             ApplyClickThrough();
@@ -448,6 +441,9 @@ public sealed class PipWindow : Form
         options.DropDownItems.Add(Choices(T("pip.opacity"), _overrides.OpacityPercent,
             [(T("pip.useSettings"), null), ("100%", 100), ("75%", 75), ("50%", 50), ("25%", 25)],
             value => Overrides = _overrides with { OpacityPercent = value }));
+        options.DropDownItems.Add(new ToolStripMenuItem(T("pip.keepAspectRatio"), null,
+            (_, _) => Overrides = _overrides with { KeepAspectRatio = !_overrides.KeepAspectRatio })
+            { Checked = _overrides.KeepAspectRatio });
         options.DropDownItems.Add(new ToolStripMenuItem(T("pip.lockPosition"), null,
             (_, _) => Overrides = _overrides with { PositionLocked = !_overrides.PositionLocked })
             { Checked = _overrides.PositionLocked });
@@ -691,6 +687,8 @@ public sealed class PipWindow : Form
             if (hidden)
             {
                 _windows.HideOwned(_source, this);
+                if (SwitcherHidingStopsView) Problem?.Invoke(T("errors.switcher.windows10"));
+                else _windows.SetOutOfSwitcher(_source, true);
                 if (User32.GetForegroundWindow() == _source)
                     User32.SetForegroundWindow(Handle); // Keys mustn't go to a window that can't be seen.
                 StayOnTop();
@@ -742,13 +740,27 @@ public sealed class PipWindow : Form
         {
             _origin.Require();
             _windows.SetOutOfSwitcher(_source, hidden);
-            _switcherItem.Checked = hidden;
         }
         catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); }
     }
 
     protected override void WndProc(ref Message m)
     {
+        if (m.Msg == User32.WM_NCHITTEST && !_overrides.ClickThrough)
+        {
+            var point = new Point((short)m.LParam.ToInt64(), (short)(m.LParam.ToInt64() >> 16));
+            int hit = PipGeometry.SizingHit(point, Bounds, Dpi.Scale(6, DeviceDpi));
+            if (hit != 0) { m.Result = hit; return; }
+        }
+        if (m.Msg == 0x0214 && _overrides.KeepAspectRatio && !_lastShown.IsEmpty)
+        {
+            Rect native = Marshal.PtrToStructure<Rect>(m.LParam);
+            Rectangle bounds = PipGeometry.SizeWithAspect(Rectangle.FromLTRB(native.Left, native.Top, native.Right, native.Bottom),
+                (int)m.WParam, _lastShown);
+            Marshal.StructureToPtr(new Rect(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom), m.LParam, false);
+            m.Result = 1;
+            return;
+        }
         // Keep the modifiers carried by the press. This inactive view may process it after Ctrl is released.
         if (m.Msg is 0x0201 or 0x0203)
             _controlAtPress = (m.WParam.ToInt64() & 0x0008) != 0; // MK_CONTROL
@@ -794,7 +806,7 @@ public sealed class PipWindow : Form
 
         if ((ModifierKeys & Keys.Control) != 0)
         {
-            Rectangle shown = PipGeometry.ViewArea(ClientSize);
+            Rectangle shown = PictureArea;
             ZoomAt(new PointF((e.X - shown.Left) / (float)shown.Width, (e.Y - shown.Top) / (float)shown.Height),
                 Math.Pow(ZoomStep, e.Delta / (double)WheelNotch));
             return;
@@ -846,7 +858,7 @@ public sealed class PipWindow : Form
             BeginLive(e.Location);
         if (_panning && e.Button == MouseButtons.Middle)
         {
-            Rectangle area = PipGeometry.ViewArea(ClientSize);
+            Rectangle area = PictureArea;
             _zoom = PipGeometry.Pan(_zoom, (_panFrom.X - e.X) * _zoom.Width / area.Width,
                 (_panFrom.Y - e.Y) * _zoom.Height / area.Height);
             _panFrom = e.Location;
@@ -860,7 +872,7 @@ public sealed class PipWindow : Form
         if (_selecting)
         {
             _selection = Rectangle.Intersect(PipGeometry.Between(_dragStart, e.Location),
-                PipGeometry.ViewArea(ClientSize));
+                PictureArea);
             Attempt(ShowSelection);
         }
         else if (_dragged || Math.Abs(e.X - _dragStart.X) >= DragThreshold ||
@@ -893,7 +905,7 @@ public sealed class PipWindow : Form
             }
             else
             {
-                Rectangle part = PipGeometry.SelectionToSource(_selection, PipGeometry.ViewArea(ClientSize),
+                Rectangle part = PipGeometry.SelectionToSource(_selection, PictureArea,
                     ShownPart(_thumbnail.SourceSize));
                 part.Offset(-_whole.X, -_whole.Y);
                 SetCrop(part);
@@ -1000,7 +1012,7 @@ public sealed class PipWindow : Form
             return;
         }
 
-        Rectangle view = PipGeometry.ViewArea(ClientSize);
+        Rectangle view = PictureArea;
         if (!view.Contains(point))
             return;
 
@@ -1102,7 +1114,7 @@ public sealed class PipWindow : Form
     {
         if (_live is not null || _thumbnail is null || _suspended || !_origin.IsAvailable || !_windows.IsHidden(_source))
             return;
-        Rectangle area = PipGeometry.ViewArea(ClientSize);
+        Rectangle area = PictureArea;
         if (!area.Contains(pointer))
             return;
         _foregroundBeforeLive = User32.GetForegroundWindow();
@@ -1148,7 +1160,7 @@ public sealed class PipWindow : Form
             return;
         Location += moved;
         if (_thumbnail is not null)
-            _live.Update(RectangleToScreen(PipGeometry.ViewArea(ClientSize)), ShownPart(_thumbnail.SourceSize));
+            _live.Update(RectangleToScreen(PictureArea), ShownPart(_thumbnail.SourceSize));
     }
 
     /// <summary>In this order: the source stops taking clicks, goes home, the hook goes, the view takes input, keys come back.</summary>
@@ -1410,7 +1422,7 @@ public sealed class PipWindow : Form
             .Select(other => other.Bounds);
         Bounds = new Rectangle(PipGeometry.FreeSpot(wanted, others, area, margin), size);
         _lastShown = shown;
-        view.SetViewport(PipGeometry.ViewArea(ClientSize), shown);
+        view.SetViewport(PictureArea, shown);
     }
 
     /// <param name="pointer">Keeps this screen point on the same spot of the view; otherwise it holds its corner.</param>
@@ -1430,7 +1442,7 @@ public sealed class PipWindow : Form
             : PipGeometry.KeepCorner(Bounds, size, area);
         Bounds = new Rectangle(PipGeometry.KeepInside(new Rectangle(place, size), area), size);
         _lastShown = shown;
-        _thumbnail.SetViewport(PipGeometry.ViewArea(ClientSize), shown);
+        _thumbnail.SetViewport(PictureArea, shown);
     }
 
     private void FollowSource()
@@ -1480,7 +1492,7 @@ public sealed class PipWindow : Form
 
         if (_live is not null && _thumbnail is not null)
         {
-            _live.Update(RectangleToScreen(PipGeometry.ViewArea(ClientSize)), ShownPart(_thumbnail.SourceSize));
+            _live.Update(RectangleToScreen(PictureArea), ShownPart(_thumbnail.SourceSize));
             nint foreground = User32.GetForegroundWindow();
             User32.GetWindowThreadProcessId(foreground, out uint foregroundProcess);
             User32.GetWindowThreadProcessId(_source, out uint sourceProcess);
@@ -1544,6 +1556,8 @@ public sealed class PipWindow : Form
         else DropHoverPreview();
     }
 
+    private Rectangle PictureArea => PipGeometry.FitPicture(PipGeometry.ViewArea(ClientSize), _lastShown);
+
     private void PositionTitleBar()
     {
         if (_titleBar is null || IsDisposed || _titleBar.Dragging) return;
@@ -1563,6 +1577,11 @@ public sealed class PipWindow : Form
     {
         base.OnResize(e);
         PositionTitleBar();
+        if (_thumbnail is not null && !_lastShown.IsEmpty && ClientSize.Width > 4 && ClientSize.Height > 4)
+        {
+            _longSide = Math.Max(Width, Height);
+            Attempt(() => _thumbnail.SetViewport(PictureArea, _lastShown));
+        }
     }
 
     private void DropHoverPreview()
@@ -1576,7 +1595,7 @@ public sealed class PipWindow : Form
     {
         if (_viewPreferences.HoverPreview == Settings.PipHoverPreview.Off ||
             (_viewPreferences.HoverPreview == Settings.PipHoverPreview.WholeView &&
-             !PipGeometry.NeedsWholePreview(PipGeometry.ViewArea(ClientSize).Width, _lastShown.Width)) || !_origin.IsWindow || _lastShown.IsEmpty ||
+             !PipGeometry.NeedsWholePreview(PictureArea.Width, _lastShown.Width)) || !_origin.IsWindow || _lastShown.IsEmpty ||
             _titleBar?.Dragging == true || _titleBar?.Bounds.Contains(pointer) == true)
         {
             DropHoverPreview();
@@ -1594,7 +1613,7 @@ public sealed class PipWindow : Form
         bool lens = _viewPreferences.HoverPreview == Settings.PipHoverPreview.Lens;
         if (lens)
         {
-            Point mapped = PipGeometry.PointToSource(PointToClient(pointer), PipGeometry.ViewArea(ClientSize), shown);
+            Point mapped = PipGeometry.PointToSource(PointToClient(pointer), PictureArea, shown);
             shown = PipPreviewGeometry.Lens(shown, mapped, new Size(240, 160));
         }
         Size size = PipGeometry.FitLongSide(lens ? Dpi.Scale(400, DeviceDpi) : Math.Min(960, Math.Max(Width, Height) * 2), shown, area.Size);
