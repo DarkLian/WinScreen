@@ -108,8 +108,9 @@ You need the .NET 10 SDK named in `global.json`. Run `.\build.ps1 -SkipInteracti
 
 ## Code signing policy
 
-Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
-[SignPath Foundation](https://signpath.org/).
+**WinScreen isn't signed yet.** We've applied to [SignPath Foundation](https://signpath.org/) for free code signing
+and are waiting to hear back. Once they accept, releases will be signed, with free code signing provided by
+[SignPath.io](https://about.signpath.io/) and the certificate by SignPath Foundation.
 
 - **Who's involved:** [DarkLian](https://github.com/DarkLian) writes and reviews WinScreen's code, with help from AI
   agents, and approves every signed release. Nobody else can change the code or sign a release.

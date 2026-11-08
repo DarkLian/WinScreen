@@ -108,8 +108,8 @@ WinScreen 由 DarkLian 在 AI 助手的协助下开发。最好的帮助就是�
 
 ## 代码签名政策
 
-免费代码签名由 [SignPath.io](https://about.signpath.io/) 提供，证书来自
-[SignPath Foundation](https://signpath.org/)。
+**WinScreen 暂未签名。**我们已向 [SignPath Foundation](https://signpath.org/) 申请免费代码签名，正在等待回复。
+获批后，发布版本将会签名：免费代码签名由 [SignPath.io](https://about.signpath.io/) 提供，证书来自 SignPath Foundation。
 
 - **参与者：**[DarkLian](https://github.com/DarkLian) 在 AI 助手的协助下编写和审查 WinScreen 的代码，并批准每个签名发布。
   其他人无法修改代码或签署发布。
