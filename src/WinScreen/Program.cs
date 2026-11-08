@@ -41,6 +41,14 @@ internal static class Program
         string settingsPath = Path.Combine(DataFolder, "settings.json");
         AppSettings settings = AppSettings.Load(settingsPath);
         UiText.Initialize(settings.Language);
+#pragma warning disable WFO5001 // WinForms marks dark mode as experimental; anything it doesn't draw dark stays readable.
+        Application.SetColorMode(settings.Theme switch
+        {
+            "light" => SystemColorMode.Classic,
+            "dark" => SystemColorMode.Dark,
+            _ => SystemColorMode.System,
+        });
+#pragma warning restore WFO5001
 
         if (Environment.OSVersion.Version.Build < MinimumBuild)
         {

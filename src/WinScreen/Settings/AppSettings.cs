@@ -214,6 +214,9 @@ public sealed class AppSettings
     public bool ShowNotifications { get; set; } = true;
     public bool AutomaticUpdates { get; set; }
     public string Language { get; set; } = "system";
+
+    /// <summary>How WinScreen's own windows look: "system" follows Windows, or "light" or "dark".</summary>
+    public string Theme { get; set; } = "system";
     public bool PauseInFullScreen { get; set; } = true;
     public bool AllowPipInFullScreen { get; set; }
     public bool PausePinWhenMaximized { get; set; }
@@ -364,6 +367,7 @@ public sealed class AppSettings
         loaded.SavedSetups = (loaded.SavedSetups ?? [])
             .Where(value => value is not null && !string.IsNullOrWhiteSpace(value.Program)).ToList();
         loaded.Language = loaded.Language is "en" or "zh-Hans" or "zh-Hant" ? loaded.Language : "system";
+        loaded.Theme = loaded.Theme is "light" or "dark" ? loaded.Theme : "system";
         loaded.DefaultOpacityPercent =
             Math.Clamp(loaded.DefaultOpacityPercent, LowestOpacityPercent, HighestOpacityPercent);
         foreach ((AppCommand command, string hotkey) in defaults.Hotkeys)

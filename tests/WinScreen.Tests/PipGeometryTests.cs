@@ -160,17 +160,13 @@ public class PipGeometryTests
     [Fact]
     public void The_real_window_lands_with_the_clicked_spot_under_the_cursor()
     {
-        var area = new Rectangle(0, 0, 1920, 1040);
-        Assert.Equal(new Point(500, 300),
-            PipGeometry.PeekPosition(new Point(800, 450), new Point(300, 150), new Size(800, 600), area));
+        Assert.Equal(new Point(500, 300), PipGeometry.PeekPosition(new Point(800, 450), new Point(300, 150)));
     }
 
     [Fact]
-    public void The_real_window_stays_on_screen_near_an_edge()
+    public void Near_an_edge_the_real_window_goes_partly_off_screen_so_the_pointer_never_moves()
     {
-        var area = new Rectangle(0, 0, 1920, 1040);
-        Assert.Equal(new Point(1120, 440),
-            PipGeometry.PeekPosition(new Point(1900, 1030), new Point(300, 150), new Size(800, 600), area));
+        Assert.Equal(new Point(1600, 880), PipGeometry.PeekPosition(new Point(1900, 1030), new Point(300, 150)));
     }
 
     [Theory]

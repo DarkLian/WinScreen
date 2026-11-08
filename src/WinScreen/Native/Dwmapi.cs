@@ -28,6 +28,9 @@ internal static partial class Dwmapi
     public const uint DWM_TNP_VISIBLE = 0x8;
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     public const int DWMWA_CLOAKED = 14;
+    public const int DWMWA_BORDER_COLOR = 34;
+    public const int DWMWA_COLOR_DEFAULT = unchecked((int)0xFFFFFFFF);
+    public const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmSetIconicThumbnail(nint window, nint bitmap, uint flags);

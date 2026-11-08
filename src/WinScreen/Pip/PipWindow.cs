@@ -979,7 +979,9 @@ public sealed class PipWindow : Form
     /// <summary>
     /// Puts the real window under the cursor with the clicked spot exactly beneath it, then passes the
     /// click on. Windows and apps see ordinary input, so this works in any program, keyboard included.
-    /// The window goes back when the cursor leaves it.
+    /// The window goes back when the cursor leaves it. The pointer itself never moves. When the click
+    /// can't land safely, it brings the original forward instead, which is what a click on a view does
+    /// without forwarding, so there's nothing to warn about.
     /// </summary>
     private void Interact(Point point)
     {
@@ -996,7 +998,8 @@ public sealed class PipWindow : Form
             return;
 
         Size sourceSize = _thumbnail.SourceSize;
-        if (sourceSize.Width <= 0 || sourceSize.Height <= 0)
+        // A maximized window can't be slid under the pointer, and moving the pointer to it instead is jarring.
+        if (sourceSize.Width <= 0 || sourceSize.Height <= 0 || User32.IsZoomed(_source))
         {
             GoToSource();
             return;
@@ -1004,7 +1007,7 @@ public sealed class PipWindow : Form
 
         Point spot = PipGeometry.PointToSource(point, view, ShownPart(sourceSize));
         Point cursor = PointToScreen(point);
-        Point position = PipGeometry.PeekPosition(cursor, spot, sourceSize, Screen.FromPoint(cursor).WorkingArea);
+        Point position = PipGeometry.PeekPosition(cursor, spot);
 
         try
         {
@@ -1019,22 +1022,19 @@ public sealed class PipWindow : Form
             _interacting = true;
             var target = new Point(position.X + spot.X, position.Y + spot.Y);
             // Activation and hit-test must agree after repositioning; a transparent, covered, cloaked,
-            // replaced, or refused source must never turn into a desktop click.
-            Cursor.Position = target;
-            if (!_origin.IsAvailable || User32.GetForegroundWindow() != _source || !WindowInfo.IsAvailable(_source) ||
+            // replaced, or refused source must never turn into a desktop click. A popup of the source's
+            // own, such as a browser's link preview, counts as the source.
+            nint hit = User32.WindowFromPoint(new NativePoint { X = target.X, Y = target.Y });
+            if (target != cursor || !_origin.IsAvailable || User32.GetForegroundWindow() != _source ||
+                !WindowInfo.IsAvailable(_source) ||
                 (User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE) & User32.WS_EX_TRANSPARENT) != 0 ||
-                User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = target.X, Y = target.Y }),
-                    User32.GA_ROOT) != _source)
-                throw new WindowOperationException(
-                    T(
-                        "errors.pip.clickUnverified"));
+                (User32.GetAncestor(hit, User32.GA_ROOT) != _source && User32.GetAncestor(hit, User32.GA_ROOTOWNER) != _source))
+                throw new WindowOperationException(T("errors.pip.clickUnverified"));
             User32.ClickLeftButton();
         }
-        catch (WindowOperationException failure)
+        catch (WindowOperationException)
         {
             EndInteraction();
-            Cursor.Position = cursor;
-            Problem?.Invoke(failure.Message);
             GoToSource();
             return;
         }
@@ -1239,12 +1239,23 @@ public sealed class PipWindow : Form
             User32.SetForegroundWindow(_foregroundBeforeMenu);
     }
 
+    /// <summary>
+    /// WinScreen's own menus and Settings, while open. They stay above views, so a view can never cover the
+    /// place someone went to change it.
+    /// </summary>
+    internal static Func<IEnumerable<nint>>? AppWindowsAbove { get; set; }
+
     /// <summary>Puts this above other topmost windows, which a hidden original just went above too.</summary>
     private void StayOnTop()
     {
-        User32.SetWindowPos(Handle, User32.HWND_TOPMOST, 0, 0, 0, 0,
-            User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        const uint flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
+        User32.SetWindowPos(Handle, User32.HWND_TOPMOST, 0, 0, 0, 0, flags);
+        foreach (nint window in AppWindowsAbove?.Invoke() ?? [])
+            User32.SetWindowPos(window, User32.HWND_TOPMOST, 0, 0, 0, 0, flags);
     }
+
+    /// <summary>Ends a visit in progress with "Use this view directly", putting the original back in its place.</summary>
+    internal void EndVisit() => EndLive();
 
     /// <summary>A view that couldn't update says so and stays open; the next change can put it right.</summary>
     private void Attempt(Action action)

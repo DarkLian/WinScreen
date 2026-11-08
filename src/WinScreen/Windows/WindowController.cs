@@ -71,6 +71,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public bool BorderlessFilled { get; set; }
         public long? SwitcherBits { get; set; }
         public int? OriginalDarkTitleBar { get; set; }
+        public bool BorderHidden { get; set; }
     }
 
     private HashSet<string> _excluded = new(excludedProcesses, StringComparer.OrdinalIgnoreCase);
@@ -876,6 +877,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                     BorderlessFilled = record.BorderlessFilled,
                     SwitcherBits = record.SwitcherBits,
                     OriginalDarkTitleBar = record.OriginalDarkTitleBar,
+                    BorderHidden = record.BorderHidden,
                 };
                 _changed[(nint)record.Window] = state;
             }
@@ -950,6 +952,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             BorderlessFilled = state.BorderlessFilled,
             SwitcherBits = state.SwitcherBits,
             OriginalDarkTitleBar = state.OriginalDarkTitleBar,
+            BorderHidden = state.BorderHidden,
         };
     }
 
@@ -1008,11 +1011,33 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     {
         ApplyAlpha(window, state, HiddenOpacity);
         WriteExStyle(window, ReadExStyle(window) | User32.WS_EX_TRANSPARENT);
+        HideBorder(window, state);
+    }
+
+    /// <summary>
+    /// Windows 11 draws a thin border round each window that doesn't fade with the window, so a hidden one
+    /// would still show its outline. It's taken off while hidden. Windows can't say what color an app chose
+    /// for it, so it goes back to the default afterwards.
+    /// </summary>
+    private static void HideBorder(nint window, ChangedWindow state)
+    {
+        if (state.BorderHidden || !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return;
+        state.BorderHidden = true; // Recorded first, so recovery puts it back even if this is the last thing that happens.
+        if (Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_BORDER_COLOR, Dwmapi.DWMWA_COLOR_NONE, sizeof(int)) != 0)
+            state.BorderHidden = false;
+    }
+
+    private static void RestoreBorder(nint window, ChangedWindow state)
+    {
+        if (!state.BorderHidden) return;
+        Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_BORDER_COLOR, Dwmapi.DWMWA_COLOR_DEFAULT, sizeof(int));
+        state.BorderHidden = false;
     }
 
     private void Reveal(nint window, ChangedWindow state)
     {
         state.SolidWhileHovered = false;
+        RestoreBorder(window, state);
         ApplyAlpha(window, state, state.AlphaBeforeHiding);
         if (!state.ClickThrough)
             WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
@@ -1115,6 +1140,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             Attempt("restore-switcher", () => RestoreSwitcher(window, state));
         if (state.OriginalDarkTitleBar is not null)
             Attempt("restore-titlebar", () => RestoreTitleBar(window, state));
+        if (state.BorderHidden)
+            Attempt("restore-border", () => RestoreBorder(window, state));
         bool restoredAttributes = !state.HadLayeredAttributes;
         if ((state.OwnedStyles & User32.WS_EX_LAYERED) != 0 && state.HadLayeredAttributes)
             Attempt("restore-alpha", () =>

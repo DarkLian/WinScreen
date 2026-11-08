@@ -76,6 +76,8 @@ public sealed class SettingsWindow : Form
     private readonly ErrorProvider _errors = new();
     private readonly ComboBox _language = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private static readonly string[] Languages = ["system", "en", "zh-Hans", "zh-Hant"];
+    private readonly ComboBox _theme = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150 };
+    private static readonly string[] Themes = ["system", "light", "dark"];
     private readonly StartWithWindows _startup;
     private readonly Func<AppSettings, IReadOnlyList<HotkeyProblem>> _apply;
     private readonly Dictionary<AppCommand, TextBox> _hotkeys = [];
@@ -157,6 +159,7 @@ public sealed class SettingsWindow : Form
             if (_hotkeys.Count > 0) RefreshFeatures();
         };
         _language.Items.AddRange([T("settings.language.system"), "English", "简体中文", "繁體中文"]);
+        _theme.Items.AddRange([T("settings.theme.system"), T("settings.theme.light"), T("settings.theme.dark")]);
 
         Text = T("settings.window.title");
         Icon = TrayApplication.LoadIcon();
@@ -431,6 +434,7 @@ public sealed class SettingsWindow : Form
         draft.PipClickForwarding = _pipInput.Checked;
         draft.StartWithWindows = _startWithWindows.Checked;
         draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
+        draft.Theme = Themes[Math.Max(0, _theme.SelectedIndex)];
         draft.PauseInFullScreen = _pauseInFullScreen.Checked;
         draft.AllowPipInFullScreen = _allowPip.Checked;
         draft.ModifierDrag = _modifierDrag.Checked;
@@ -605,6 +609,7 @@ public sealed class SettingsWindow : Form
         _experimental.Checked = values.ExperimentalFeatures;
         _pipInput.Checked = values.PipClickForwarding;
         _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, values.Language));
+        _theme.SelectedIndex = Math.Max(0, Array.IndexOf(Themes, values.Theme));
         _pauseInFullScreen.Checked = values.PauseInFullScreen;
         _allowPip.Checked = values.AllowPipInFullScreen;
         _modifierDrag.Checked = values.ModifierDrag;
@@ -702,7 +707,11 @@ public sealed class SettingsWindow : Form
         _language.Width = 150;
         language.Controls.Add(_language);
 
-        var startup = new List<Control> { language, _startWithWindows, _showNotifications, _automaticUpdates };
+        var theme = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+        theme.Controls.Add(new Label { Text = T("settings.theme"), AutoSize = true, Margin = new Padding(3, 6, 8, 0) });
+        theme.Controls.Add(_theme);
+
+        var startup = new List<Control> { language, theme, _startWithWindows, _showNotifications, _automaticUpdates };
         bool updatesWork = VelopackUpdateSession.IsConfigured && VelopackUpdateSession.IsInstalled;
         _automaticUpdates.Enabled = updatesWork;
         if (!VelopackUpdateSession.IsConfigured)

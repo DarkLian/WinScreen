@@ -26,7 +26,7 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **WinScreen's own windows** (views, tiles, Settings) | Refused: "Use this on the original window…" | same |
 | **Programs on the leave-alone list** (Settings → Programs) | Refused with the program's name. The list wins over everything else. | same; `AppSettings.Allows` |
 | **Programs not on the work-on list**, when that list isn't empty | Refused with the program's name. | same |
-| **Administrator (elevated) apps**, when WinScreen isn't elevated | Windows' UIPI blocks WinScreen from tagging the window, so effects are refused with "It may be running as administrator." Mouse gestures check for elevation directly and leave it alone. | `WindowIdentity.Capture`, `Windows/WindowIdentity.cs:28`; `TrayApplication.CanGesture` |
+| **Administrator (elevated) apps**, when WinScreen isn't elevated | Windows' UIPI blocks WinScreen from tagging the window, so effects are refused with a message saying to start WinScreen as administrator. Mouse gestures check for elevation directly and leave it alone. Started as administrator, WinScreen works on them like any other app, gestures included (`ProcessInfo.SelfElevated`). | `WindowIdentity.Capture`, `Windows/WindowIdentity.cs:28`; `TrayApplication.CanGesture` |
 | **App not responding** | Most changes wait half a second for an answer, then say "The window isn't responding right now." | `WindowController.EnsureResponsive` |
 | **Full-screen app or game running** (Settings → General → "Pause in full screen", on by default) | Hotkeys and toolbar commands are refused, except Put back / Put every window back. Views follow their own rules (see Picture-in-Picture). | `FullScreenPolicy.Decide`, `Windows/FullScreen.cs:49` |
 | **PC locked or the user is away** | The mouse hook is removed, so gestures and Ctrl+Alt+wheel stop. | `ModifierHookPolicy`, `FullScreen.IsAway` |
@@ -143,7 +143,8 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 
 | View feature | Status | Notes |
 |---|---|---|
-| Click through to the original | 🧪 ⚠️ | Experimental **and** "Forward clicks" on. A click that can't be confirmed is cancelled (`errors.pip.clickUnverified`). |
+| Click through to the original | 🧪 ⚠️ | Experimental **and** "Forward clicks" on. The original slides under the pointer so the click lands on the spot shown; the pointer itself never moves, so near a screen edge part of the original goes off screen for the moment. A maximized original, or a click that can't be confirmed as landing on the original (or one of its own popups), brings the original forward instead, without a warning (`PipWindow.Interact`). |
+| WinScreen's tray menu, window menu and Settings | ✅ | Always above views. Opening them ends any "Use this view directly" visit first (`TrayApplication.EndVisits`, `PipWindow.AppWindowsAbove`). |
 | Move away from the pointer | 🧪 ⚠️ | Experimental **and** "Move out of the way" on. Needs a recent Windows (`errors.pip.autoMoveUnsupported`). |
 | Interactive view, hide from Alt+Tab | 🧪 | Hiding from the taskbar is refused for apps whose taskbar button Windows controls, and on Windows 10 when views use smooth capture. |
 | Rendering | ⚠️ | Auto, Standard (compositor thumbnail) or Smooth (screen capture). Auto tries Smooth first. Smooth falls back to Standard when it isn't available. Frame rate and scaling only apply to Smooth. |
@@ -199,8 +200,8 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 - **Win 11 Snap Layouts panel** and Snap Assist aren't available to Alt-drag (no public API). Edge snapping is
   WinScreen's own.
 - **A lost mouse hook mid-drag** can leave a window following the pointer until the next click.
-- **Elevated windows** are refused by tagging, not by an up-front check, so the message mentions administrator only as
-  "may be". Running WinScreen as administrator lifts this, which isn't documented for users.
+- **Elevated windows** are refused by tagging, not by an up-front check. Running WinScreen as administrator lifts this;
+  start-at-sign-in doesn't, because it starts WinScreen without administrator rights.
 - **Borderless windows from other apps** (not WinScreen's Borderless) are treated as normal unless they fill the
   screen. Most cells marked ❔ under Borderless refer to WinScreen's own Borderless and haven't been tested.
 - **Multiple monitors with different scaling**: snapping does a second pass if the margins change on the way, but

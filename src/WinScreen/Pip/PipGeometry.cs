@@ -131,15 +131,10 @@ public static class PipGeometry
     }
 
     /// <summary>
-    /// Where a source window goes so that <paramref name="spot"/> sits under the cursor, kept on
-    /// screen. Near a screen edge the spot can't reach the cursor, so the cursor moves to it.
+    /// Where a source window goes so that <paramref name="spot"/> sits exactly under the cursor. Near a
+    /// screen edge part of it goes off screen for the moment: the pointer never moves.
     /// </summary>
-    public static Point PeekPosition(Point cursor, Point spot, Size sourceSize, Rectangle area)
-    {
-        return new Point(
-            Math.Clamp(cursor.X - spot.X, area.Left, Math.Max(area.Left, area.Right - sourceSize.Width)),
-            Math.Clamp(cursor.Y - spot.Y, area.Top, Math.Max(area.Top, area.Bottom - sourceSize.Height)));
-    }
+    public static Point PeekPosition(Point cursor, Point spot) => new(cursor.X - spot.X, cursor.Y - spot.Y);
 
     /// <summary>The largest size of this shape that fits inside a limit, never empty.</summary>
     public static Size FitInside(Size shape, Size limit)

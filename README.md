@@ -64,7 +64,8 @@ Download the installer from [Releases](https://github.com/DarkLian/WinScreen/rel
 - **WinScreen-win-Setup.exe** for Windows 10 (version 2004 or later) and Windows 11 on most PCs.
 - **WinScreen-win-arm64-Setup.exe** for Windows 11 on ARM.
 
-You don't need administrator rights or anything else installed. WinScreen lives in the system tray.
+You don't need anything else installed, and it runs without administrator rights. WinScreen lives in the system tray.
+To use it on apps that run as administrator, start WinScreen as administrator too.
 
 The installer isn't signed yet, so Windows may say it doesn't recognize it. Choose **More info**, then **Run anyway**.
 To remove it, go to **Settings → Apps → Installed apps** in Windows.

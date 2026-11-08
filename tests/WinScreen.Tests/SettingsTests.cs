@@ -397,7 +397,7 @@ public sealed class SettingsWindowTests : IDisposable
             Assert.Equal(60, settings.DefaultOpacityPercent);
             Assert.Contains("notepad", settings.ExcludedPrograms);
 
-            Descendants(window).OfType<ComboBox>().Skip(1).First().Text = "Typed.exe";
+            Descendants(window).OfType<ComboBox>().Skip(2).First().Text = "Typed.exe";
             window.RefreshApply();
             Assert.True(window.HasChanges); // A name typed but not added counts, as it does for Save.
         });
@@ -432,7 +432,7 @@ public sealed class SettingsWindowTests : IDisposable
                 return [];
             });
             _ = window.Handle;
-            Descendants(window).OfType<ComboBox>().Skip(1).First().Text = "Typed.exe";
+            Descendants(window).OfType<ComboBox>().Skip(2).First().Text = "Typed.exe";
             Assert.True(window.SaveChanges());
             Assert.Contains("Typed", applied!.ExcludedPrograms);
         });

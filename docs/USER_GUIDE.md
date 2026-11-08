@@ -154,7 +154,8 @@ the newer installer. Your settings stay as they are.
 ## Good to know
 
 - WinScreen runs on Windows 10 (version 2004 or later) and Windows 11, on x64 and ARM PCs. The ARM version needs Windows 11.
-- Apps running as administrator can't be changed.
+- To change apps running as administrator, including moving them with Alt-drag, start WinScreen as administrator
+  too (right-click it, then **Run as administrator**). Starting with Windows starts it without those rights.
 - Commands pause while a game or full-screen app is in front. Views can't appear over games in exclusive full screen.
 - A minimized app stops drawing, so its view shows the last picture.
 - Protected video may show as black in a view.

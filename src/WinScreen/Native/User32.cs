@@ -89,6 +89,7 @@ internal static partial class User32
     public const int SW_MAXIMIZE = 3;
 
     public const uint GA_ROOT = 2;
+    public const uint GA_ROOTOWNER = 3;
     public const uint GW_HWNDPREV = 3;
     public const uint GW_OWNER = 4;
 

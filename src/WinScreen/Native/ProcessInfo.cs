@@ -28,6 +28,9 @@ internal static partial class ProcessInfo
     /// True when a process runs as administrator. A normal process isn't allowed to look at an elevated
     /// one's token, so being refused counts as yes. That's also the answer that keeps WinScreen away from it.
     /// </summary>
+    /// <summary>Whether WinScreen itself was started as administrator, which lets it work with such apps too.</summary>
+    public static bool SelfElevated { get; } = IsElevated((uint)Environment.ProcessId);
+
     public static bool IsElevated(uint processId)
     {
         nint process = OpenProcess(ProcessQueryLimited, false, processId);

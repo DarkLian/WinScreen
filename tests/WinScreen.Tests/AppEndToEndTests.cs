@@ -764,7 +764,7 @@ public sealed class AppEndToEndTests : IDisposable
     }
 
     [Fact]
-    public void A_click_in_the_view_lands_on_the_right_spot_of_a_maximized_window()
+    public void A_click_in_the_view_of_a_maximized_window_brings_it_forward_without_moving_the_pointer()
     {
         // The borderless test window fills the whole screen when maximized, which counts as full-screen.
         RestartWith(new AppSettings { PauseInFullScreen = false });
@@ -786,15 +786,13 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(pip).Left == 40), "The view didn't move.");
         Rectangle view = Desktop.BoundsOf(pip);
 
-        Desktop.ClickOn(new Point(view.Left + view.Width * 3 / 4, view.Top + view.Height / 2), pip);
+        var pressed = new Point(view.Left + view.Width * 3 / 4, view.Top + view.Height / 2);
+        Desktop.ClickOn(pressed, pip);
 
-        string? click = target.NextReport();
-        Assert.NotNull(click);
-        string[] parts = click.Split(' ');
-        Assert.Equal("click", parts[0]);
-        Assert.InRange(int.Parse(parts[1]), full.Width * 3 / 4 - 12, full.Width * 3 / 4 + 12);
-        Assert.InRange(int.Parse(parts[2]), full.Height / 2 - 12, full.Height / 2 + 12);
-        Assert.Equal("real=True", parts[3]);
+        // A maximized window can't slide under the pointer, so it just comes forward: no click, no pointer jump.
+        Assert.Null(target.NextReport(400));
+        Assert.Equal(pressed, Desktop.CursorPosition());
+        Assert.Equal(full, Desktop.BoundsOf(target.Handle));
         Assert.True(User32.IsZoomed(target.Handle), "The window stopped being maximized.");
         Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle));
 

@@ -123,6 +123,10 @@ public sealed class TrayApplication : ApplicationContext
         _tray.Icon = LoadIcon();
         _tray.Text = "WinScreen";
         _tray.ContextMenuStrip = BuildMenu();
+        // A view being used directly has its original under it, ready for clicks. Opening WinScreen's own
+        // menu or Settings ends that first, and they stay above every view.
+        _tray.ContextMenuStrip.Opening += (_, _) => EndVisits();
+        PipWindow.AppWindowsAbove = AppWindowsAbove;
         _tray.MouseClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
@@ -594,7 +598,8 @@ public sealed class TrayApplication : ApplicationContext
     {
         if (_windows.Refusal(window) is not null || _windows.GestureBlocked(window)) return false;
         User32.GetWindowThreadProcessId(window, out uint process);
-        return !ProcessInfo.IsElevated(process);
+        // Windows only lets an app reach an administrator app's windows when it runs as administrator too.
+        return ProcessInfo.SelfElevated || !ProcessInfo.IsElevated(process);
     }
 
     private bool CanOpenWindowMenu(nint window) => CanGesture(window) && !User32.IsIconic(window) &&
@@ -783,6 +788,24 @@ public sealed class TrayApplication : ApplicationContext
         }
     }
 
+    private void EndVisits()
+    {
+        foreach (PipWindow view in _viewsInOrder.ToArray())
+            if (!view.IsDisposed) view.EndVisit();
+    }
+
+    private IEnumerable<nint> AppWindowsAbove()
+    {
+        if (_tray.ContextMenuStrip is { Visible: true, IsHandleCreated: true } menu) yield return menu.Handle;
+        if (_windowMenu is { IsDisposed: false, Visible: true, IsHandleCreated: true } windowMenu) yield return windowMenu.Handle;
+        if (_settingsWindow is { IsDisposed: false, Visible: true, IsHandleCreated: true } settings)
+        {
+            yield return settings.Handle;
+            foreach (Form owned in settings.OwnedForms)
+                if (owned.Visible && owned.IsHandleCreated) yield return owned.Handle;
+        }
+    }
+
     private void OpenSettings()
     {
         if (_settingsWindow is { IsDisposed: false })
@@ -791,7 +814,9 @@ public sealed class TrayApplication : ApplicationContext
             return;
         }
 
-        _settingsWindow = new SettingsWindow(_settings, _startup, Apply, command => _hotkeys.IsRegistered((int)command));
+        EndVisits();
+        _settingsWindow = new SettingsWindow(_settings, _startup, Apply, command => _hotkeys.IsRegistered((int)command))
+            { TopMost = true };
         _settingsWindow.Show();
         _settingsWindow.Activate();
     }

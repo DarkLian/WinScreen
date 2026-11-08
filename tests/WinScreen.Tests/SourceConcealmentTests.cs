@@ -110,6 +110,7 @@ public sealed class SourceConcealmentTests
         using var backdrop = new TargetProcess(screen, "E0E0E0", "WinScreen test backdrop");
         using var source = new TargetProcess(new Rectangle(160, 160, 500, 400));
         source.UseFrame();
+        Desktop.GainForegroundRights();
         Desktop.Activate(source.Handle);
         WindowMenuBuilderTests.OnUiThread(() =>
         {
