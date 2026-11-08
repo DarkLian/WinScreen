@@ -34,6 +34,7 @@ public sealed class TrayApplication : ApplicationContext
     private readonly AnchorSet _anchors = new();
     private readonly AutomaticAnchors _automaticAnchors;
     private readonly RecoveryWatcher _recoveryWatcher = new();
+    private readonly Glass.ContentEffects _content;
     private readonly PinBorders _borders = new();
     private readonly ActionFlash _flash = new();
     private readonly Dictionary<nint, ShrinkTile> _shrunk = [];
@@ -94,6 +95,9 @@ public sealed class TrayApplication : ApplicationContext
             });
         };
         _windows.ConcealmentChanged += _recoveryWatcher.Follow;
+        _content = new Glass.ContentEffects(_windows);
+        _content.Problem += text => Alert(T("errors.operation.title"), text);
+        _content.Created += handle => _dark.Ignore(handle);
         _automaticAnchors = new AutomaticAnchors(_anchors, CanHaveAutomaticAnchor, () => Paused || FullScreen.IsActive());
         _anchors.Created += _dark.Ignore;
         _anchors.HasView = _pips.ContainsKey;
@@ -298,6 +302,7 @@ public sealed class TrayApplication : ApplicationContext
         _toolbar.Configure(_settings.Toolbar);
         _anchors.Configure(_settings.Anchors);
         _automaticAnchors.Configure(_settings.Anchors.Automatic, _settings.Anchors.AvoidContent);
+        _content.SetLevels(_settings.Effects.Levels);
         _updates.SetEnabled(_settings.AutomaticUpdates);
         _updateTimer.Interval = 30_000;
         foreach (PipWindow pip in _viewsInOrder)
@@ -318,6 +323,7 @@ public sealed class TrayApplication : ApplicationContext
         {
             CancelCrop();
             _dark.TurnAllOff();
+            _content.TurnAllOff();
             foreach (var tile in _shrunk.Values.ToArray()) tile.Close();
             if (_windows.EndExperimentalEffects() > 0)
                 Alert(T("recovery.attention"), T("errors.recovery.someFailed"));
@@ -398,8 +404,8 @@ public sealed class TrayApplication : ApplicationContext
             AppCommand.TogglePin => _windows.IsPinned(window),
             AppCommand.ToggleClickThrough => _windows.IsClickThrough(window),
             AppCommand.OpenPip => _pips.ContainsKey(window),
-            AppCommand.ToggleDark => _dark.IsDark(window),
-            AppCommand.ToggleGlass => _windows.IsGlass(window),
+            AppCommand.ToggleDark => _dark.IsDark(window) || _content.Has(window, Glass.ContentLook.Dark),
+            AppCommand.ToggleGlass => _windows.IsGlass(window) || _content.Has(window, Glass.ContentLook.Glass),
             AppCommand.ToggleAnchor => _anchors.Has(window),
             AppCommand.ToggleDefaultOpacity => _windows.OpacityOf(window) < 255,
             AppCommand.SaveWindowSetup => _settings.SetupForWindow(window) is not null,
@@ -428,6 +434,7 @@ public sealed class TrayApplication : ApplicationContext
     {
         nint foreground = User32.GetForegroundWindow();
         _savedViews.ConcealIfLeft(foreground);
+        if (_content.Count > 0) _content.DropClosed();
         if (_windows.CanControl(foreground))
         {
             if (_lastIdentity is null || _lastIdentity.Window != foreground || !_lastIdentity.IsSameWindow())
@@ -564,7 +571,7 @@ public sealed class TrayApplication : ApplicationContext
             identity.Require();
             if (setup.Alpha < 255) _windows.SetOpacity(window, setup.Alpha);
             identity.Require();
-            if (_settings.ExperimentalFeatures && setup.Dark && !_dark.IsDark(window)) _dark.Toggle(window);
+            if (_settings.ExperimentalFeatures && setup.Dark && !_dark.IsDark(window) && !_content.Has(window, Glass.ContentLook.Dark)) ToggleDark(window);
             identity.Require();
             RestoreSavedView(window, setup);
             _setupDone[window] = identity;
@@ -604,7 +611,7 @@ public sealed class TrayApplication : ApplicationContext
             ExecutablePath = WindowInfo.ExecutablePath(window),
             Pinned = _windows.IsPinned(window),
             Alpha = _windows.OpacityOf(window),
-            Dark = _dark.IsDark(window),
+            Dark = _dark.IsDark(window) || _content.Has(window, Glass.ContentLook.Dark),
         };
         if (_pips.TryGetValue(window, out PipWindow? view))
         {
@@ -741,6 +748,7 @@ public sealed class TrayApplication : ApplicationContext
         foreach (PipWindow preview in _viewsInOrder.ToArray()) preview.Close();
         foreach (var tile in _shrunk.Values.ToArray()) tile.Close();
         _dark.TurnAllOff();
+        _content.TurnAllOff();
         _anchors.RemoveAll();
         _updateTimer.Dispose();
         _watch.Dispose();
@@ -884,10 +892,10 @@ public sealed class TrayApplication : ApplicationContext
                     _windows.ToggleDarkTitleBar(window);
                     break;
                 case AppCommand.ToggleDark:
-                    _dark.Toggle(window);
+                    ToggleDark(window);
                     break;
                 case AppCommand.ToggleGlass:
-                    _windows.ToggleGlass(window);
+                    ToggleGlass(window);
                     break;
                 case AppCommand.ToggleAnchor:
                     _anchors.Toggle(window);
@@ -906,6 +914,7 @@ public sealed class TrayApplication : ApplicationContext
                     foreach (PipWindow preview in _viewsInOrder.ToArray()) preview.Close();
                     foreach (var shrunk in _shrunk.Values.ToArray()) shrunk.Close();
                     _dark.TurnAllOff();
+                    _content.TurnAllOff();
                     _anchors.RemoveAll();
                     int failed = _windows.RestoreAll();
                     if (failed > 0)
@@ -928,6 +937,7 @@ public sealed class TrayApplication : ApplicationContext
                     if (_pips.Remove(window, out var view)) view.Close();
                     if (_shrunk.Remove(window, out var shrunkTile)) shrunkTile.Close();
                     if (_dark.IsDark(window)) _dark.Toggle(window);
+                    _content.TurnOff(window);
                     if (_anchors.Has(window)) _anchors.Toggle(window);
                     if (_windows.RestoreWindow(window))
                         Confirm(T("window.restore"), T("recovery.restored"));
@@ -1118,7 +1128,31 @@ public sealed class TrayApplication : ApplicationContext
 
     private bool HasAnythingToRestore(nint window) =>
         _windows.HasChanges(window) || _pips.ContainsKey(window) || _shrunk.ContainsKey(window) ||
-        _dark.IsDark(window) || _anchors.Has(window) || _croppingWindow == window;
+        _dark.IsDark(window) || _content.Has(window) || _anchors.Has(window) || _croppingWindow == window;
+
+    /// <summary>Picture-safe Dark when it's chosen in Settings, otherwise the simple filter. Only one at a time.</summary>
+    private void ToggleDark(nint window)
+    {
+        if (_content.Has(window, Glass.ContentLook.Dark) || (_settings.Effects.PictureSafeDark && !_dark.IsDark(window)))
+        {
+            _content.Toggle(window, Glass.ContentLook.Dark);
+            return;
+        }
+
+        _dark.Toggle(window);
+    }
+
+    /// <summary>Layered Glass when it's chosen in Settings, otherwise the colour-key Glass.</summary>
+    private void ToggleGlass(nint window)
+    {
+        if (_content.Has(window, Glass.ContentLook.Glass) || (_settings.Effects.LayeredGlass && !_windows.IsGlass(window)))
+        {
+            _content.Toggle(window, Glass.ContentLook.Glass);
+            return;
+        }
+
+        _windows.ToggleGlass(window);
+    }
 
     private int OpacityDelta(int steps) => steps * (int)Math.Round(Math.Clamp(_settings.OpacityStepPercent, 1, 25) * 255 / 100.0);
 

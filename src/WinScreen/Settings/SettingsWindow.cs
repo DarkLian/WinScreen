@@ -14,6 +14,11 @@ public sealed class SettingsWindow : Form
     private AppSettings? _pendingImport;
     private readonly NumericUpDown _opacityStep = new() { Minimum = 1, Maximum = 25, Width = 70 };
     private readonly CheckBox _opacityWheel = new() { Text = T("settings.opacity.wheel"), AutoSize = true };
+    private readonly CheckBox _layeredGlass = new() { Text = T("settings.effects.layeredGlass"), AutoSize = true };
+    private readonly CheckBox _pictureSafeDark = new() { Text = T("settings.effects.pictureSafeDark"), AutoSize = true };
+    private readonly NumericUpDown _glassBackground = new() { Minimum = 0, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _glassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _glassPictures = new() { Minimum = 20, Maximum = 100, Width = 70 };
     private readonly CheckBox _detectDark = new() { Text = T("settings.dark.detect"), AutoSize = true };
     private readonly TextBox _borderColor = new() { Width = 90 };
     private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
@@ -287,6 +292,11 @@ public sealed class SettingsWindow : Form
         draft.OpacityStepPercent = (int)_opacityStep.Value;
         draft.OpacityWheel = _opacityWheel.Checked;
         draft.DetectAlreadyDark = _detectDark.Checked;
+        draft.Effects = new EffectPreferences
+        {
+            LayeredGlass = _layeredGlass.Checked, PictureSafeDark = _pictureSafeDark.Checked,
+            BackgroundPercent = (int)_glassBackground.Value, TextPercent = (int)_glassText.Value, PicturePercent = (int)_glassPictures.Value,
+        }.Validated();
         draft.PinBorder = new PinBorderPreferences
         {
             ColorHex = _borderColor.Text,
@@ -479,6 +489,12 @@ public sealed class SettingsWindow : Form
         _opacityStep.Value = Math.Clamp(values.OpacityStepPercent, 1, 25);
         _opacityWheel.Checked = values.OpacityWheel;
         _detectDark.Checked = values.DetectAlreadyDark;
+        EffectPreferences effects = values.Effects.Validated();
+        _layeredGlass.Checked = effects.LayeredGlass;
+        _pictureSafeDark.Checked = effects.PictureSafeDark;
+        _glassBackground.Value = effects.BackgroundPercent;
+        _glassText.Value = effects.TextPercent;
+        _glassPictures.Value = effects.PicturePercent;
         PinBorderPreferences border = values.PinBorder.Validated();
         _borderColor.Text = border.ColorHex;
         _borderOpacity.Value = border.OpacityPercent;
@@ -776,6 +792,9 @@ public sealed class SettingsWindow : Form
         page.Controls.Add(Section(T("settings.pin.border"), SettingRow(T("settings.pin.color"), _borderColor),
             SettingRow(T("settings.pin.opacity"), _borderOpacity), SettingRow(T("settings.pin.thickness"), _borderThickness)));
         page.Controls.Add(_detectDark);
+        page.Controls.Add(Section(T("settings.effects.title"), _layeredGlass,
+            SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
+            SettingRow(T("settings.effects.pictures"), _glassPictures), _pictureSafeDark, Note(T("settings.effects.help"))));
         page.Controls.Add(Section(T("settings.transfer.title"), Note(T("settings.transfer.paths")), export, import));
         return page;
     }

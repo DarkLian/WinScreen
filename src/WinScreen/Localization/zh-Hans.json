@@ -363,5 +363,14 @@
   "pip.taskbar.enable": "将最小化的视图保留在任务栏上",
   "pip.interactive": "直接使用此视图（实验性）",
   "pip.interactive.mixedDpi": "显示器缩放比例不同时无法直接使用视图。请改用“转到原窗口”。",
-  "errors.app.windowsTooOld": "WinScreen 需要 Windows 10 2004 版或更高版本，或 Windows 11。"
+  "errors.app.windowsTooOld": "WinScreen 需要 Windows 10 2004 版或更高版本，或 Windows 11。",
+  "settings.effects.title": "保留图片的玻璃和深色（实验性）",
+  "settings.effects.layeredGlass": "玻璃只淡化背景，保留文字和图片",
+  "settings.effects.background": "背景（%）",
+  "settings.effects.text": "文字（%）",
+  "settings.effects.pictures": "图片和视频（%）",
+  "settings.effects.pictureSafeDark": "深色模式不改变图片和视频",
+  "settings.effects.help": "这些效果使用显卡，仅在窗口绘制时运行。处理期间，Windows 会在窗口周围显示彩色边框。",
+  "errors.glass.unavailable": "无法处理此窗口。请改用普通的玻璃或深色模式。",
+  "errors.glass.stopped": "效果已停止，窗口已恢复正常。"
 }

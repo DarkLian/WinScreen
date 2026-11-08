@@ -363,5 +363,14 @@
   "pip.taskbar.enable": "Keep minimized views on the taskbar",
   "pip.interactive": "Use this view directly (experimental)",
   "pip.interactive.mixedDpi": "Direct use isn't available across displays with different scaling. Use Go to original instead.",
-  "errors.app.windowsTooOld": "WinScreen needs Windows 10 version 2004 or later, or Windows 11."
+  "errors.app.windowsTooOld": "WinScreen needs Windows 10 version 2004 or later, or Windows 11.",
+  "settings.effects.title": "Glass and Dark that keep pictures (experimental)",
+  "settings.effects.layeredGlass": "Glass fades only the background, and keeps text and pictures",
+  "settings.effects.background": "Background (%)",
+  "settings.effects.text": "Text (%)",
+  "settings.effects.pictures": "Pictures and video (%)",
+  "settings.effects.pictureSafeDark": "Dark mode leaves pictures and video as they are",
+  "settings.effects.help": "These use your graphics card and only work while the window draws. Windows shows a coloured border around the window while it's being processed.",
+  "errors.glass.unavailable": "This window can't be processed. Try the simple Glass or Dark instead.",
+  "errors.glass.stopped": "The effect stopped, so the window is back to normal."
 }

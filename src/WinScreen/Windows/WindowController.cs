@@ -580,6 +580,29 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
+    /// <summary>
+    /// Makes a window invisible but leaves it clickable and in its place in the stack, for an effect that
+    /// draws it again on top. Recovery treats it like any hidden window.
+    /// </summary>
+    public void ConcealSolid(nint window)
+    {
+        lock (_gate)
+        {
+            ChangedWindow state = Track(window);
+            if (state.Hidden)
+                return;
+            if (state.PlacementBeforeBorderless is not null)
+                throw new WindowOperationException(T("errors.borderless.disableFirst"));
+            EnsureLayeringSafe(state);
+            state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
+            state.Hidden = true;
+            Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT);
+            Conceal(window, state);
+            if (!state.ClickThrough)
+                WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
+        }
+    }
+
     /// <summary>Makes a hidden window visible and clickable again.</summary>
     public void Show(nint window)
     {
