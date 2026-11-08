@@ -1,89 +1,108 @@
-# WinScreen
+<p align="center">
+  <img src="docs/assets/winscreen.png" width="96" alt="WinScreen 图标">
+</p>
 
-设置支持调整不透明度步长和置顶边框、可选 Ctrl+Alt+滚轮不透明度控制、深色检测及 JSON 导入/导出。
-导出文件包含程序路径；滚轮不透明度控制不适用于管理员应用。详见[用户指南](docs/USER_GUIDE.zh-CN.md)。
-窗口视图提供紧凑悬停标题栏和可选的完整视图预览或阅读放大镜。最小化后通过托盘还原；悬停预览仅适用于窗口来源。
+<h1 align="center">WinScreen</h1>
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
+<p align="center">
+  <strong>🚧 正在积极开发中。</strong>功能变化较快，部分功能仍处于实验阶段。
+</p>
 
-免费的 Windows 窗口工具，面向 64 位 Windows 11。无需账号、试用期或激活码。
+<p align="center">
+  <img src="https://img.shields.io/badge/status-under%20heavy%20development-orange" alt="状态：积极开发中">
+  <a href="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml"><img src="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml/badge.svg" alt="构建"></a>
+  <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?include_prereleases&label=release" alt="最新版本"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 和 11">
+  <img src="https://img.shields.io/badge/arch-x64%20%7C%20ARM64-4c8bf5" alt="x64 和 ARM64">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/DarkLian/WinScreen" alt="MIT 许可证"></a>
+</p>
 
-可将窗口置顶、调整透明度、打开窗口、显示器或屏幕区域的实时画中画预览、精确移动和调整窗口，或通过浮动锚点快速切换到指定窗口。
-界面支持 English、简体中文和繁體中文。
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a>
+</p>
+
+WinScreen 是一个免费的窗口小帮手。可以让窗口保持置顶、变成半透明、用小窗口实时查看，或一键找回被挡住的窗口。
+无需账号、试用期或激活码。
+
+## 亮点
+
+**让窗口待在需要的地方**
+- 把任意窗口置顶，还能设为半透明或鼠标穿透。
+- 按住 Ctrl+Alt 滚动滚轮，直接调整指针下窗口的不透明度。
+- 记住程序的配置，让它的窗口每次打开都置顶、半透明或深色。
+
+**画中画**
+- 为窗口、整个显示器或屏幕的一部分打开小的实时视图。
+- 可以裁剪、放大、调整大小，并把布局保存为预设。
+- 隐藏原窗口并保持视图更新，把视图最小化到任务栏，悬停即可预览。
+- 直接在视图里点击和滚动 *（实验性）*。
+
+**锚点**
+- 悬浮按钮，一键把窗口带回前台。
+- 窗口被其他窗口挡住时，也可以自动添加。
+
+**排列窗口**
+- 把窗口放到九个位置之一、移到下一个显示器，或输入精确的位置和大小。
+- 按住一个键拖动窗口任意处即可移动或调整大小。
+- 无边框模式、填满显示器、收起到标题栏、移到最底层。
+
+**效果** *（实验性）*
+- 深色模式，以及保持图片和视频原样的版本。
+- 只淡化背景、保留文字和图片的玻璃效果。
+- 把窗口裁剪到需要的部分，或缩小成实时小图块。
+
+**好用，放心试**
+- 标题栏工具栏、功能页、鼠标菜单，快捷键都可以修改。
+- 按 Ctrl+Alt+R 撤销所有更改。即使 WinScreen 意外停止，窗口也会自动恢复。
+- 支持 English、简体中文和繁體中文。
 
 ## 安装
 
-发布版本后，从 [Releases](https://github.com/DarkLian/WinScreen/releases) 下载 **WinScreen-win-Setup.exe** 并运行。
-无需管理员权限，也无需另外安装 .NET。启动后，WinScreen 会在系统托盘中运行。
+从 [Releases](https://github.com/DarkLian/WinScreen/releases) 下载安装程序并运行：
 
-本地开发安装程序未进行 Authenticode 代码签名，Windows 可能显示 SmartScreen 警告。正式发布必须通过有效的发布者签名验证。请只运行你信任的安装程序。
-卸载位置：**Windows 设置 → 应用 → 已安装的应用**。
+- **WinScreen-win-Setup.exe**：适用于大多数电脑上的 Windows 10（2004 版或更高版本）和 Windows 11。
+- **WinScreen-win-arm64-Setup.exe**：适用于 ARM 电脑上的 Windows 11。
 
+无需管理员权限，也不用另外安装任何东西。WinScreen 会显示在系统托盘中。
+如需卸载，请打开 Windows 的 **设置 → 应用 → 已安装的应用**。
 
-## 安全默认值
+## 快速上手
 
-当前仅在 Windows 11 Pro（内部版本 26300）、单台 1920×1080 显示器、100% 缩放下完成本地测试。Windows 10、多显示器和混合缩放仍未验证。
+1. 点击要更改的窗口。
+2. 按 **Ctrl+Alt+T** 置顶，按 **Ctrl+Alt+P** 打开实时视图，或按 **Ctrl+Alt+A** 添加锚点。
+3. 点击托盘图标打开设置，右键点击可使用所有命令。
+4. 按 **Ctrl+Alt+R** 把所有窗口恢复原样。
 
-默认点击画中画只切换到原窗口。点击转发、深色、玻璃、裁剪、缩小、卷起和自动避让属于实验性功能，需要在设置中主动开启。锚点右键现在打开普通菜单。
-按 **Ctrl+Alt+U** 还原一个窗口，按 **Ctrl+Alt+R** 还原全部；排除窗口也可还原。问题始终会以通知提示，并保留在托盘的「最近结果」中，即使关闭了操作确认也是如此。
-
-## 快速开始
-
-在 **设置 → 鼠标手势 → 窗口菜单** 中启用后，可用 Ctrl+右键单击操作鼠标下方的窗口。
-托盘和窗口菜单还提供无边框、填满显示器、原生深色标题栏、复制及打开文件位置。
-从 Alt+Tab 和任务栏隐藏 PiP 来源是实验性的单视图选项；恢复方式与应用限制请参阅指南。
-
-1. 先激活需要操作的窗口。
-2. 按 **Ctrl+Alt+T** 置顶，按 **Ctrl+Alt+P** 打开画中画，或按 **Ctrl+Alt+A** 添加浮动锚点。
-3. 点击系统托盘中的 WinScreen 图标打开 **设置**，修改快捷键、语言、通知及其他选项。右键点击可使用全部命令。
-4. 按 **Ctrl+Alt+R**，或在托盘菜单中选择 **还原所有窗口**，撤销 WinScreen 对窗口的更改。
-
-将鼠标停在当前窗口标题栏的中间，也会显示工具栏。**设置 → 工具栏** 可更改位置、延迟和按钮；从最小化按钮打开仅适用于 Windows 绘制的标题栏。**设置 → 功能** 列出可用功能及其快捷键。
-
-| 功能 | 默认快捷键 |
+| 操作 | 快捷键 |
 | --- | --- |
-| 置顶／取消置顶原窗口 | Ctrl+Alt+T |
-| 打开／关闭小型实时画中画预览 | Ctrl+Alt+P |
-| 添加／移除浮动锚点 | Ctrl+Alt+A |
-| 切换默认透明度 | Ctrl+Alt+O |
-| 增加／减少不透明度 | Ctrl+Alt+Up / Down |
-| 开启／关闭鼠标穿透 | Ctrl+Alt+C |
-| 还原所有已更改的窗口 | Ctrl+Alt+R |
-| 仅还原当前窗口 | Ctrl+Alt+U |
+| 置顶或取消置顶 | Ctrl+Alt+T |
+| 打开或关闭实时视图 | Ctrl+Alt+P |
+| 添加或移除锚点 | Ctrl+Alt+A |
+| 更透明或更不透明 | Ctrl+Alt+Down / Up |
+| 开关默认透明度 | Ctrl+Alt+O |
+| 开关鼠标穿透 | Ctrl+Alt+C |
+| 还原此窗口 | Ctrl+Alt+U |
+| 还原所有窗口 | Ctrl+Alt+R |
 
-完整快捷键、锚点操作、画中画交互、设置和故障排查，请参阅 **[用户指南](docs/USER_GUIDE.zh-CN.md)**。依赖某项功能之前，请先查看 **[已知限制](docs/USER_GUIDE.zh-CN.md#已知限制)**。
+**[用户指南](docs/USER_GUIDE.zh-CN.md)** 介绍了所有功能。
 
 ## 更新
 
-手动升级时，先退出 WinScreen，再使用同一个 Windows 账号运行新版安装程序。通常无需先卸载旧版；设置保存在独立目录中。
+在设置中开启自动更新后，WinScreen 会在关闭时安装新版本。手动更新时，先关闭 WinScreen，再运行新版安装程序。
+你的设置会保留。
 
-自动更新需要在设置中**主动开启**。安装版会在后台检查新版本，验证更新元数据的签名及安装包的哈希值，
-并在正常退出时安装，不会自动重新启动。关闭此选项会取消待处理的更新工作和安装。
+## 告诉我们你的想法
 
-自动更新需要本仓库中已签名的发布文件。正式发布前必须配置更新签名密钥、有效的预期 Authenticode 发布者签名、受保护的发布环境，并完成对应提交的专用桌面验证。
-目前尚未完成两个已发布版本之间的真实升级验证。
+WinScreen 由 DarkLian 在 AI 助手的协助下开发。最好的帮助就是告诉我们它用起来怎么样。
+欢迎 [提交 issue](https://github.com/DarkLian/WinScreen/issues) 分享想法、报告问题，或说说让你不顺手的小地方。
+**[参与贡献](CONTRIBUTING.md)** 说明了哪些反馈最有帮助。
 
-更新元数据的签名与安装程序的 Windows 代码签名是两回事。本地开发安装程序目前仍未进行 Authenticode 签名。
-信任边界和限制请参阅 **[安全说明（英文）](SECURITY.md)**。
+如果 WinScreen 对你有用，也可以在 [Ko-fi](https://ko-fi.com/darklian) 上支持它。
 
-## 分享你的使用体验
+## 自行构建
 
-WinScreen 由作者 DarkLian 与 AI 智能体共同维护，因此最好的帮助方式不是提交 Pull Request，而是告诉我们它在你那里用起来怎么样。
-欢迎[提交 Issue](https://github.com/DarkLian/WinScreen/issues) 分享使用体验、提出建议或报告问题，再小的不便也值得反馈。
-更多说明请参阅 **[贡献指南（英文）](CONTRIBUTING.md)**。
-
-如果 WinScreen 对你有帮助，也欢迎[在 Ko-fi 上支持这个项目](https://ko-fi.com/darklian)。
-
-## 构建
-
-需要 `global.json` 中指定的 .NET 10 SDK。
-
-```powershell
-.\build.ps1 -SkipInteractive
-```
-
-输出文件：`dist\release\WinScreen-win-Setup.exe`。
+需要 `global.json` 中指定的 .NET 10 SDK。运行 `.\build.ps1 -SkipInteractive`，安装程序会出现在 `dist\release`。
 
 ## 许可证
 
-[MIT](LICENSE)。
+[MIT](LICENSE)

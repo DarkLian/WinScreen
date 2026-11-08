@@ -1,90 +1,108 @@
-# WinScreen
+<p align="center">
+  <img src="docs/assets/winscreen.png" width="96" alt="WinScreen icon">
+</p>
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
+<h1 align="center">WinScreen</h1>
 
-A free window helper for 64-bit Windows 11. No account, trial, or activation key.
-Locally tested on Windows 11 Pro build 26300, one 1920×1080 display at 100% scaling. Other Windows editions, Windows 10,
-mixed DPI, and multiple monitors remain unverified.
+<p align="center">
+  <strong>🚧 Under heavy development.</strong> Things change quickly and some features are still experimental.
+</p>
 
-Keep a window on top, adjust its transparency, open a live Picture-in-Picture view of a window, display, or screen region,
-move and resize windows exactly, or jump to them with a floating Anchor.
-The interface supports English, 简体中文, and 繁體中文.
+<p align="center">
+  <img src="https://img.shields.io/badge/status-under%20heavy%20development-orange" alt="Status: under heavy development">
+  <a href="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml"><img src="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?include_prereleases&label=release" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 and 11">
+  <img src="https://img.shields.io/badge/arch-x64%20%7C%20ARM64-4c8bf5" alt="x64 and ARM64">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/DarkLian/WinScreen" alt="MIT license"></a>
+</p>
 
-Settings include adjustable opacity steps and pin borders, optional Ctrl+Alt+wheel opacity, already-dark detection,
-and JSON import/export. Exported files contain program paths; the opacity wheel cannot control administrator apps.
-Window views have a compact hover title bar and optional whole-view preview or reading lens. Minimized views are
-restored from the tray. Hover previews are available for window sources only.
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a>
+</p>
+
+WinScreen is a free helper for the windows on your screen. Keep a window on top, make it see-through, watch it in a small
+live view, or bring a buried window back with one click. No account, no trial, no activation key.
+
+## Highlights
+
+**Keep windows where you need them**
+- Pin any window on top, and make it see-through or click-through.
+- Scroll with Ctrl+Alt to change a window's opacity right under the pointer.
+- Remember a program's setup, so its windows open pinned, see-through or dark every time.
+
+**Picture-in-Picture**
+- Open a small live view of a window, a whole display, or part of the screen.
+- Crop it, zoom in, resize it, and save the layout as a preset.
+- Hide the original and keep the view updating, minimize views to the taskbar, and preview them on hover.
+- Use a view directly, clicking and scrolling inside it *(experimental)*.
+
+**Anchors**
+- Floating buttons that bring a window back instantly.
+- Added for you when a window gets buried under others, if you like.
+
+**Arrange windows**
+- Snap a window to nine places, move it to the next display, or type an exact position and size.
+- Move and resize from anywhere by holding a key and dragging.
+- Borderless mode, fill the display, roll up to the title bar, send to the back.
+
+**Effects** *(experimental)*
+- Dark mode, and a version that keeps pictures and video as they are.
+- Glass that fades the background but keeps text and pictures.
+- Crop a window to the part you need, or shrink it to a small live tile.
+
+**Easy to use and safe to try**
+- A toolbar on title bars, a Features page, a mouse menu, and hotkeys you can change.
+- Undo everything with Ctrl+Alt+R. Windows come back on their own even if WinScreen stops unexpectedly.
+- English, 简体中文 and 繁體中文.
 
 ## Install
 
-Download **WinScreen-win-Setup.exe** from [Releases](https://github.com/DarkLian/WinScreen/releases) when a release is available, then run it.
-No administrator rights or separate .NET installation are needed. WinScreen runs in the system tray.
+Download the installer from [Releases](https://github.com/DarkLian/WinScreen/releases) and run it:
 
-Local developer installers are not Authenticode signed, so Windows may show a SmartScreen warning. Public release publication requires a valid publisher signature. Only run an installer you trust.
-Uninstall through **Windows Settings → Apps → Installed apps**.
+- **WinScreen-win-Setup.exe** for Windows 10 (version 2004 or later) and Windows 11 on most PCs.
+- **WinScreen-win-arm64-Setup.exe** for Windows 11 on ARM.
 
-## Safety defaults
-
-PiP clicks bring the original window forward by default. Click forwarding, Dark, Glass, Crop, Shrink, Roll up, and auto-move
-are experimental and must be explicitly enabled in Settings. Anchor right-click opens a normal context menu.
-Use **Ctrl+Alt+U** to restore one window or **Ctrl+Alt+R** to restore all. Recovery remains available for excluded windows.
-Problems always appear as a notification and stay in the tray's **Last result** item, even with confirmations turned off.
+You don't need administrator rights or anything else installed. WinScreen lives in the system tray.
+To remove it, go to **Settings → Apps → Installed apps** in Windows.
 
 ## Quick start
 
-1. Activate the window you want to change.
-2. Press **Ctrl+Alt+T** to pin it on top, **Ctrl+Alt+P** for Picture-in-Picture, or **Ctrl+Alt+A** for an Anchor.
-3. Click WinScreen's tray icon to open **Settings** and change hotkeys, language, notifications, and other options. Right-click it for every command.
-4. Press **Ctrl+Alt+R**, or choose **Restore all windows** from the tray menu, to undo WinScreen's window changes.
+1. Click the window you want to change.
+2. Press **Ctrl+Alt+T** to pin it on top, **Ctrl+Alt+P** for a live view, or **Ctrl+Alt+A** for an Anchor.
+3. Click the tray icon for Settings, or right-click it for every command.
+4. Press **Ctrl+Alt+R** to put every window back the way it was.
 
-A toolbar also appears when the pointer rests on the middle of the active window's title bar. **Settings → Toolbar** changes its placement, delay, and buttons; opening it from the Minimize button works only on title bars drawn by Windows. **Settings → Features** lists what's available and its shortcut.
-
-Enable **Settings → Mouse gestures → Window menu** for Ctrl+right-click commands on the window under the pointer.
-The tray and window menus also offer borderless mode, display fill, a native dark title bar, Copy, and Open file location.
-Hiding a PiP source from Alt+Tab and the taskbar is an experimental per-view option. See the guide for recovery and app limitations.
-
-| Feature | Default shortcut |
+| Do this | Shortcut |
 | --- | --- |
-| Pin / unpin the actual window | Ctrl+Alt+T |
-| Open / close a small live Picture-in-Picture view | Ctrl+Alt+P |
-| Add / remove a floating Anchor | Ctrl+Alt+A |
-| Toggle default transparency | Ctrl+Alt+O |
-| Increase / decrease opacity | Ctrl+Alt+Up / Down |
-| Toggle mouse click-through | Ctrl+Alt+C |
-| Restore all changed windows | Ctrl+Alt+R |
-| Restore only the active window | Ctrl+Alt+U |
+| Pin or unpin on top | Ctrl+Alt+T |
+| Open or close a live view | Ctrl+Alt+P |
+| Add or remove an Anchor | Ctrl+Alt+A |
+| More or less see-through | Ctrl+Alt+Down / Up |
+| Switch default see-through on or off | Ctrl+Alt+O |
+| Click-through on or off | Ctrl+Alt+C |
+| Put this window back | Ctrl+Alt+U |
+| Put every window back | Ctrl+Alt+R |
 
-See the **[User Guide](docs/USER_GUIDE.md)** for every shortcut, Anchor controls, PiP interaction, settings, and troubleshooting, and see its
-**[Known limitations](docs/USER_GUIDE.md#known-limitations)** before relying on a feature.
+The **[User Guide](docs/USER_GUIDE.md)** explains every feature.
 
 ## Updates
 
-For a manual upgrade, exit WinScreen and run the newer installer under the same Windows account. You normally do not need to uninstall first; settings are stored separately.
+Turn on automatic updates in Settings and WinScreen installs new versions when you close it. To update by hand, close
+WinScreen and run the newer installer. Your settings stay as they are.
 
-Automatic updates are **opt-in** in Settings. An installed copy checks in the background, verifies signed update metadata and package hashes, and installs on normal exit without restarting the app. Turning the option off cancels pending work and installation.
+## Tell us what you think
 
-Automatic updates need signed releases hosted in this repository. Release signing, a valid expected Authenticode publisher, a protected release environment, and a successful dedicated desktop-validation run for this exact commit are required before publication. A live upgrade between two hosted versions has not yet been verified.
+WinScreen is made by DarkLian with the help of AI agents. The best way to help is to tell us how it works for you.
+[Open an issue](https://github.com/DarkLian/WinScreen/issues) to share an idea, report a problem, or mention something
+small that bugs you. See **[Contributing](CONTRIBUTING.md)** for what helps most.
 
-Local installers remain unsigned even though update metadata is signed. See **[Security](SECURITY.md)** for the trust model and limits.
+If WinScreen is useful to you, you can [support it on Ko-fi](https://ko-fi.com/darklian).
 
-## Share your experience
+## Build it yourself
 
-WinScreen is maintained by its author, DarkLian, together with AI agents, so the best way to help isn't a pull request.
-It's telling us how WinScreen works for you. Please [open an issue](https://github.com/DarkLian/WinScreen/issues) to
-share your experience, suggest an idea, or report a problem. Small annoyances count too. See **[Contributing](CONTRIBUTING.md)** for what helps most.
-
-If WinScreen is useful to you, you can also [support it on Ko-fi](https://ko-fi.com/darklian).
-
-## Build
-
-Requires the .NET 10 SDK specified in `global.json`.
-
-```powershell
-.\build.ps1 -SkipInteractive
-```
-
-Output: `dist\release\WinScreen-win-Setup.exe`.
+You need the .NET 10 SDK named in `global.json`. Run `.\build.ps1 -SkipInteractive`, and the installer appears in `dist\release`.
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE)

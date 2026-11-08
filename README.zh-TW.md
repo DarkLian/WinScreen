@@ -1,89 +1,108 @@
-# WinScreen
+<p align="center">
+  <img src="docs/assets/winscreen.png" width="96" alt="WinScreen 圖示">
+</p>
 
-設定支援調整不透明度幅度與置頂邊框、可選 Ctrl+Alt+滾輪不透明度控制、深色偵測及 JSON 匯入/匯出。
-匯出檔案包含程式路徑；滾輪不透明度控制不適用於系統管理員應用程式。詳見[使用指南](docs/USER_GUIDE.zh-TW.md)。
-視窗檢視提供精簡停留標題列與可選的完整檢視預覽或閱讀放大鏡。最小化後透過系統匣還原；停留預覽僅適用於視窗來源。
+<h1 align="center">WinScreen</h1>
 
-[English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
+<p align="center">
+  <strong>🚧 正在積極開發中。</strong>功能變化較快，部分功能仍處於實驗階段。
+</p>
 
-免費的 Windows 視窗工具，適用於 64 位元 Windows 11。無須帳號、試用期或啟用碼。
+<p align="center">
+  <img src="https://img.shields.io/badge/status-under%20heavy%20development-orange" alt="狀態：積極開發中">
+  <a href="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml"><img src="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml/badge.svg" alt="建置"></a>
+  <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?include_prereleases&label=release" alt="最新版本"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 與 11">
+  <img src="https://img.shields.io/badge/arch-x64%20%7C%20ARM64-4c8bf5" alt="x64 與 ARM64">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/DarkLian/WinScreen" alt="MIT 授權"></a>
+</p>
 
-可將視窗置頂、調整透明度、開啟視窗、顯示器或螢幕區域的即時子母畫面預覽、精確移動與調整視窗，或透過浮動錨點快速切換至指定視窗。
-介面支援 English、简体中文與繁體中文。
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a>
+</p>
+
+WinScreen 是一個免費的視窗小幫手。可以讓視窗保持置頂、變成半透明、用小視窗即時查看，或一鍵找回被擋住的視窗。
+無須帳號、試用期或啟用碼。
+
+## 亮點
+
+**讓視窗待在需要的地方**
+- 把任何視窗置頂，還能設為半透明或滑鼠穿透。
+- 按住 Ctrl+Alt 捲動滾輪，直接調整指標下視窗的不透明度。
+- 記住程式的設定，讓它的視窗每次開啟都置頂、半透明或深色。
+
+**子母畫面**
+- 為視窗、整個顯示器或螢幕的一部分開啟小的即時檢視。
+- 可以裁切、放大、調整大小，並把版面儲存為預設。
+- 隱藏原視窗並保持檢視更新，把檢視最小化到工作列，停留即可預覽。
+- 直接在檢視裡點選和捲動 *（實驗性）*。
+
+**錨點**
+- 浮動按鈕，一鍵把視窗帶回前景。
+- 視窗被其他視窗擋住時，也可以自動新增。
+
+**排列視窗**
+- 把視窗放到九個位置之一、移到下一台顯示器，或輸入精確的位置與大小。
+- 按住一個鍵拖曳視窗任何地方即可移動或調整大小。
+- 無邊框模式、填滿顯示器、收起到標題列、移到最底層。
+
+**效果** *（實驗性）*
+- 深色模式，以及保持圖片與影片原樣的版本。
+- 只淡化背景、保留文字與圖片的玻璃效果。
+- 把視窗裁切到需要的部分，或縮小成即時小圖塊。
+
+**好用，放心試**
+- 標題列工具列、功能頁、滑鼠選單，快捷鍵都可以修改。
+- 按 Ctrl+Alt+R 復原所有變更。即使 WinScreen 意外停止，視窗也會自動恢復。
+- 支援 English、简体中文與繁體中文。
 
 ## 安裝
 
-發行版本後，從 [Releases](https://github.com/DarkLian/WinScreen/releases) 下載 **WinScreen-win-Setup.exe** 並執行。
-無須系統管理員權限，也無須另外安裝 .NET。啟動後，WinScreen 會在系統匣中執行。
+從 [Releases](https://github.com/DarkLian/WinScreen/releases) 下載安裝程式並執行：
 
-本機開發安裝程式未進行 Authenticode 程式碼簽章，Windows 可能顯示 SmartScreen 警告。正式發行必須通過有效的發行者簽章驗證。請只執行你信任的安裝程式。
-解除安裝位置：**Windows 設定 → 應用程式 → 已安裝的應用程式**。
+- **WinScreen-win-Setup.exe**：適用於大多數電腦上的 Windows 10（2004 版或更新版本）與 Windows 11。
+- **WinScreen-win-arm64-Setup.exe**：適用於 ARM 電腦上的 Windows 11。
 
+無須系統管理員權限，也不用另外安裝任何東西。WinScreen 會顯示在系統匣中。
+如需解除安裝，請開啟 Windows 的 **設定 → 應用程式 → 已安裝的應用程式**。
 
-## 安全預設值
+## 快速上手
 
-目前僅在 Windows 11 Pro（組建 26300）、單台 1920×1080 螢幕、100% 縮放下完成本機測試。Windows 10、多螢幕與混合縮放仍未驗證。
+1. 點選要變更的視窗。
+2. 按 **Ctrl+Alt+T** 置頂，按 **Ctrl+Alt+P** 開啟即時檢視，或按 **Ctrl+Alt+A** 新增錨點。
+3. 點選系統匣圖示開啟設定，以滑鼠右鍵點選可使用所有命令。
+4. 按 **Ctrl+Alt+R** 把所有視窗恢復原樣。
 
-預設點選子母畫面只切換至原視窗。點擊轉送、深色、玻璃、裁切、縮小、捲起與自動避讓屬於實驗性功能，需要在設定中主動開啟。錨點右鍵現在開啟一般選單。
-按 **Ctrl+Alt+U** 還原一個視窗，按 **Ctrl+Alt+R** 還原全部；排除視窗也可還原。問題一律會以通知提示，並保留在系統匣的「最近結果」中，即使關閉了操作確認也是如此。
-
-## 快速開始
-
-在 **設定 → 滑鼠手勢 → 視窗選單** 中啟用後，可用 Ctrl+按滑鼠右鍵操作游標下方的視窗。
-系統匣與視窗選單也提供無邊框、填滿顯示器、原生深色標題列、複製及開啟檔案位置。
-從 Alt+Tab 與工作列隱藏 PiP 來源是實驗性的個別檢視選項；復原方式與應用程式限制請參閱指南。
-
-1. 先啟用需要操作的視窗。
-2. 按 **Ctrl+Alt+T** 置頂，按 **Ctrl+Alt+P** 開啟子母畫面，或按 **Ctrl+Alt+A** 新增浮動錨點。
-3. 點選系統匣中的 WinScreen 圖示開啟 **設定**，修改快捷鍵、語言、通知與其他選項。以滑鼠右鍵點選可使用全部命令。
-4. 按 **Ctrl+Alt+R**，或在系統匣選單中選擇 **還原所有視窗**，復原 WinScreen 對視窗的變更。
-
-將滑鼠停在目前視窗標題列的中間，也會顯示工具列。**設定 → 工具列** 可變更位置、延遲與按鈕；從最小化按鈕開啟僅適用於 Windows 繪製的標題列。**設定 → 功能** 列出可用功能及其快捷鍵。
-
-| 功能 | 預設快捷鍵 |
+| 操作 | 快捷鍵 |
 | --- | --- |
-| 置頂／取消置頂原視窗 | Ctrl+Alt+T |
-| 開啟／關閉小型即時子母畫面預覽 | Ctrl+Alt+P |
-| 新增／移除浮動錨點 | Ctrl+Alt+A |
-| 切換預設透明度 | Ctrl+Alt+O |
-| 增加／減少不透明度 | Ctrl+Alt+Up / Down |
-| 開啟／關閉滑鼠穿透 | Ctrl+Alt+C |
-| 還原所有已變更的視窗 | Ctrl+Alt+R |
-| 僅還原目前視窗 | Ctrl+Alt+U |
+| 置頂或取消置頂 | Ctrl+Alt+T |
+| 開啟或關閉即時檢視 | Ctrl+Alt+P |
+| 新增或移除錨點 | Ctrl+Alt+A |
+| 更透明或更不透明 | Ctrl+Alt+Down / Up |
+| 開關預設透明度 | Ctrl+Alt+O |
+| 開關滑鼠穿透 | Ctrl+Alt+C |
+| 還原此視窗 | Ctrl+Alt+U |
+| 還原所有視窗 | Ctrl+Alt+R |
 
-完整快捷鍵、錨點操作、子母畫面互動、設定與疑難排解，請參閱 **[使用指南](docs/USER_GUIDE.zh-TW.md)**。依賴某項功能之前，請先查看 **[已知限制](docs/USER_GUIDE.zh-TW.md#已知限制)**。
+**[使用指南](docs/USER_GUIDE.zh-TW.md)** 介紹了所有功能。
 
 ## 更新
 
-手動升級時，先結束 WinScreen，再使用同一個 Windows 帳號執行新版安裝程式。通常無須先移除舊版；設定儲存在獨立目錄中。
+在設定中開啟自動更新後，WinScreen 會在關閉時安裝新版本。手動更新時，先關閉 WinScreen，再執行新版安裝程式。
+你的設定會保留。
 
-自動更新需要在設定中**主動開啟**。安裝版會在背景檢查新版本，驗證更新中繼資料的簽章與套件的雜湊值，
-並在正常結束時安裝，不會自動重新啟動。關閉此選項會取消待處理的更新工作與安裝。
+## 告訴我們你的想法
 
-自動更新需要本儲存庫中已簽章的發行檔案。正式發行前必須設定更新簽章金鑰、有效的預期 Authenticode 發行者簽章、受保護的發行環境，並完成對應提交的專用桌面驗證。
-目前尚未完成兩個已發行版本之間的實際升級驗證。
+WinScreen 由 DarkLian 在 AI 助手的協助下開發。最好的幫助就是告訴我們它用起來怎麼樣。
+歡迎 [提交 issue](https://github.com/DarkLian/WinScreen/issues) 分享想法、回報問題，或說說讓你不順手的小地方。
+**[參與貢獻](CONTRIBUTING.md)** 說明了哪些回饋最有幫助。
 
-更新中繼資料的簽章與安裝程式的 Windows 程式碼簽章是兩回事。本機開發安裝程式目前仍未進行 Authenticode 簽章。
-信任邊界與限制請參閱 **[安全說明（英文）](SECURITY.md)**。
+如果 WinScreen 對你有用，也可以在 [Ko-fi](https://ko-fi.com/darklian) 上支持它。
 
-## 分享您的使用體驗
+## 自行建置
 
-WinScreen 由作者 DarkLian 與 AI 代理程式共同維護，因此最好的幫助方式不是提交 Pull Request，而是告訴我們它在您那裡用起來如何。
-歡迎[提交 Issue](https://github.com/DarkLian/WinScreen/issues) 分享使用體驗、提出建議或回報問題，再小的不便也值得回饋。
-更多說明請參閱 **[貢獻指南（英文）](CONTRIBUTING.md)**。
+需要 `global.json` 中指定的 .NET 10 SDK。執行 `.\build.ps1 -SkipInteractive`，安裝程式會出現在 `dist\release`。
 
-如果 WinScreen 對您有幫助，也歡迎[在 Ko-fi 上支持這個專案](https://ko-fi.com/darklian)。
+## 授權
 
-## 建置
-
-需要 `global.json` 中指定的 .NET 10 SDK。
-
-```powershell
-.\build.ps1 -SkipInteractive
-```
-
-輸出檔案：`dist\release\WinScreen-win-Setup.exe`。
-
-## 授權條款
-
-[MIT](LICENSE)。
+[MIT](LICENSE)
