@@ -106,6 +106,16 @@ If WinScreen is useful to you, you can [support it on Ko-fi](https://ko-fi.com/d
 
 You need the .NET 10 SDK named in `global.json`. Run `.\build.ps1 -SkipInteractive`, and the installer appears in `dist\release`.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/).
+
+- **Who's involved:** [DarkLian](https://github.com/DarkLian) writes and reviews WinScreen's code, with help from AI
+  agents, and approves every signed release. Nobody else can change the code or sign a release.
+- **Privacy:** WinScreen doesn't send anything about you or your PC anywhere. It only goes online when you turn on
+  automatic updates or choose **Check for updates**, and then it just asks GitHub for a newer version.
+
 ## License
 
 [MIT](LICENSE)

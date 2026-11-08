@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WinScreen's own program files, for both x64 and ARM64. Signed before they go into the installer. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <directory path="x64">
+      <pe-file path="WinScreen.exe" product-name="WinScreen" product-version="${version}">
+        <authenticode-sign />
+      </pe-file>
+      <pe-file path="WinScreen.dll" product-name="WinScreen" product-version="${version}">
+        <authenticode-sign />
+      </pe-file>
+    </directory>
+    <directory path="arm64">
+      <pe-file path="WinScreen.exe" product-name="WinScreen" product-version="${version}">
+        <authenticode-sign />
+      </pe-file>
+      <pe-file path="WinScreen.dll" product-name="WinScreen" product-version="${version}">
+        <authenticode-sign />
+      </pe-file>
+    </directory>
+  </zip-file>
+</artifact-configuration>

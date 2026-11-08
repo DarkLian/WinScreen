@@ -3,7 +3,9 @@ name: Release
 # Push a version tag to build the installers and publish them as a GitHub Release.
 #   v1.2.3        a stable release. Needs desktop validation for the commit and the update signing key.
 #   v1.2.3-beta   a prerelease (also -alpha, -rc, with an optional .N). Installed copies never update to it.
-# Installers are code-signed only when a signing provider is configured; otherwise they are published unsigned.
+# Code signing goes through SignPath when the SIGNPATH_API_TOKEN secret and the SIGNPATH_ORGANIZATION_ID variable are
+# set (the artifact configurations are in .signpath). Each signed release waits for two approvals in SignPath: the
+# program files first, then the installers. Without SignPath the installers are published unsigned.
 on:
   push:
     tags:
@@ -21,7 +23,7 @@ jobs:
       actions: read
     env:
       # Secrets can't be read in a step condition, so whether code signing is set up is worked out here.
-      SIGNED: ${{ secrets.WINSCREEN_AUTHENTICODE_SIGN_PARAMS != '' }}
+      SIGNED: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -49,27 +51,106 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
-      - name: Build and package
+      - name: Build and package (unsigned)
+        if: env.SIGNED != 'true'
         shell: pwsh
         env:
-          WINSCREEN_AUTHENTICODE_SIGN_PARAMS: ${{ secrets.WINSCREEN_AUTHENTICODE_SIGN_PARAMS }}
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
-          if (-not $env:WINSCREEN_AUTHENTICODE_SIGN_PARAMS) { Write-Output '::warning::No code signing provider is configured, so the installers are unsigned.' }
+          Write-Output '::warning::Code signing is not set up, so the installers are unsigned.'
           ./build.ps1 -CI -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw 'The x64 build failed.' }
           # Windows 11 on ARM gets a native build with its own update channel. Its tests run in the Build workflow's ARM job.
           ./build.ps1 -CI -Architecture arm64 -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw 'The ARM64 build failed.' }
-      - name: Verify installer publisher
+
+      # Signed: build, sign WinScreen's own files, pack them, then sign the installers.
+      - name: Build the program
+        if: env.SIGNED == 'true'
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          ./build.ps1 -CI -Stage Publish -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'The x64 build failed.' }
+          ./build.ps1 -CI -Stage Publish -Architecture arm64 -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'The ARM64 build failed.' }
+          foreach ($architecture in 'x64', 'arm64') {
+            $folder = New-Item -ItemType Directory -Force "signing/program/$architecture"
+            Copy-Item "dist/win-$architecture/WinScreen.exe", "dist/win-$architecture/WinScreen.dll" $folder
+          }
+      - name: Upload the program for signing
+        id: program-upload
+        if: env.SIGNED == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: program-unsigned
+          path: signing/program
+          if-no-files-found: error
+      - name: Sign the program
+        if: env.SIGNED == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'WinScreen' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: program
+          github-artifact-id: ${{ steps.program-upload.outputs.artifact-id }}
+          parameters: |
+            version: "${{ steps.tag.outputs.version }}"
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signing/program-signed
+      - name: Pack the signed program
+        if: env.SIGNED == 'true'
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          foreach ($architecture in 'x64', 'arm64') {
+            Copy-Item "signing/program-signed/$architecture/WinScreen.exe", "signing/program-signed/$architecture/WinScreen.dll" "dist/win-$architecture" -Force
+            ./build.ps1 -CI -Stage Pack -Architecture $architecture -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
+            if ($LASTEXITCODE -ne 0) { throw "Packing $architecture failed." }
+          }
+          $folder = New-Item -ItemType Directory -Force 'signing/installers'
+          Copy-Item 'dist/release/WinScreen-win-Setup.exe', 'dist/release-arm64/WinScreen-win-arm64-Setup.exe' $folder
+      - name: Upload the installers for signing
+        id: installer-upload
+        if: env.SIGNED == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: installers-unsigned
+          path: signing/installers
+          if-no-files-found: error
+      - name: Sign the installers
+        if: env.SIGNED == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'WinScreen' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: installers
+          github-artifact-id: ${{ steps.installer-upload.outputs.artifact-id }}
+          parameters: |
+            version: "${{ steps.tag.outputs.version }}"
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signing/installers-signed
+      - name: Check every signature
         if: env.SIGNED == 'true'
         shell: pwsh
         env:
           EXPECTED_THUMBPRINT: ${{ vars.WINSCREEN_PUBLISHER_THUMBPRINT }}
         run: |
-          foreach ($installer in 'dist/release/WinScreen-win-Setup.exe', 'dist/release-arm64/WinScreen-win-arm64-Setup.exe') {
-            $signature = Get-AuthenticodeSignature $installer
-            if (-not $env:EXPECTED_THUMBPRINT -or $signature.Status -ne 'Valid' -or $signature.SignerCertificate.Thumbprint -ne $env:EXPECTED_THUMBPRINT) { throw "Installer publisher signature verification failed: $installer" }
+          Copy-Item 'signing/installers-signed/WinScreen-win-Setup.exe' 'dist/release' -Force
+          Copy-Item 'signing/installers-signed/WinScreen-win-arm64-Setup.exe' 'dist/release-arm64' -Force
+          $files = @('dist/release/WinScreen-win-Setup.exe', 'dist/release-arm64/WinScreen-win-arm64-Setup.exe') +
+            (Get-ChildItem dist/win-x64, dist/win-arm64 -Filter 'WinScreen.*' -File | Where-Object Extension -in '.exe', '.dll').FullName
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature $file
+            if ($signature.Status -ne 'Valid') { throw "Not properly signed: $file ($($signature.Status))" }
+            if ($env:EXPECTED_THUMBPRINT -and $signature.SignerCertificate.Thumbprint -ne $env:EXPECTED_THUMBPRINT) { throw "Signed by an unexpected certificate: $file" }
+            Write-Output "Signed: $file ($($signature.SignerCertificate.Subject))"
           }
       - name: Sign update feed
         shell: pwsh
@@ -95,6 +176,7 @@ jobs:
           $notes = @()
           if ($env:PRERELEASE -eq 'true') { $notes += 'This is a beta. Things may still change, and installed copies won''t update to betas automatically.' }
           if ($env:SIGNED -ne 'true') { $notes += 'The installer isn''t code-signed yet, so Windows may say it doesn''t recognize it. Choose **More info**, then **Run anyway**.' }
+          else { $notes += 'Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).' }
           $notes += '**Which file?** `WinScreen-win-Setup.exe` for most PCs, `WinScreen-win-arm64-Setup.exe` for Windows 11 on ARM.'
           $arguments = @($env:GITHUB_REF_NAME) + (Get-ChildItem dist/release, dist/release-arm64 -File).FullName +
             @('--title', $env:TITLE, '--notes', ($notes -join "`n`n"), '--generate-notes')

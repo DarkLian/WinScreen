@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The two installers, made after the signed program files are packed. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="WinScreen-win-Setup.exe" product-name="WinScreen" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+    <pe-file path="WinScreen-win-arm64-Setup.exe" product-name="WinScreen" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

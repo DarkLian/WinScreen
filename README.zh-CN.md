@@ -106,6 +106,16 @@ WinScreen 由 DarkLian 在 AI 助手的协助下开发。最好的帮助就是�
 
 需要 `global.json` 中指定的 .NET 10 SDK。运行 `.\build.ps1 -SkipInteractive`，安装程序会出现在 `dist\release`。
 
+## 代码签名政策
+
+免费代码签名由 [SignPath.io](https://about.signpath.io/) 提供，证书来自
+[SignPath Foundation](https://signpath.org/)。
+
+- **参与者：**[DarkLian](https://github.com/DarkLian) 在 AI 助手的协助下编写和审查 WinScreen 的代码，并批准每个签名发布。
+  其他人无法修改代码或签署发布。
+- **隐私：**WinScreen 不会把你或你电脑的任何信息发送到任何地方。只有在你开启自动更新或选择 **检查更新** 时才会联网，
+  而且只是向 GitHub 查询是否有新版本。
+
 ## 许可证
 
 [MIT](LICENSE)

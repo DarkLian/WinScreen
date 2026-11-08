@@ -11,6 +11,9 @@
     .\build.ps1 -Version 1.2.3      Use this version instead of the one in Directory.Build.props.
     .\build.ps1 -Architecture arm64 Native ARM64. Tests run only on a machine that can run them;
                                     built elsewhere, it compiles and packages without testing.
+    .\build.ps1 -Stage Publish      Stops once the program is in dist\win-<arch>, so its files can be
+                                    code-signed before they go into the installer.
+    .\build.ps1 -Stage Pack         Makes the installer from what's already in dist\win-<arch>.
 
   The installer is dist\release\WinScreen-win-Setup.exe, or dist\release-arm64\WinScreen-win-arm64-Setup.exe.
   Each architecture has its own update channel, so an installed copy can't take the other's update.
@@ -22,7 +25,8 @@ param(
     [string]$Version,
     [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64',
     [string]$UpdateRepository = 'DarkLian/WinScreen',
-    [switch]$SignUpdates
+    [switch]$SignUpdates,
+    [ValidateSet('All', 'Publish', 'Pack')][string]$Stage = 'All'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,10 +66,19 @@ foreach ($folder in $program, $release) {
     if (-not $resolvedOutput.StartsWith([IO.Path]::GetFullPath($PSScriptRoot) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Build output is outside the workspace: $resolvedOutput"
     }
-    if (Test-Path $folder) { Remove-Item $folder -Recurse -Force }
+    # Packing on its own uses the program that's already there, which may have been signed since.
+    if ((Test-Path $folder) -and -not ($Stage -eq 'Pack' -and $folder -eq $program)) { Remove-Item $folder -Recurse -Force }
+}
+if ($Stage -eq 'Pack' -and -not (Test-Path (Join-Path $program 'WinScreen.exe'))) {
+    throw "Nothing to pack in $program. Run with -Stage Publish first."
+}
+if ($Stage -eq 'Pack') {
+    $built = (Get-Item (Join-Path $program 'WinScreen.exe')).VersionInfo.ProductVersion
+    if ($built -ne $Version) { throw "$program has version $built, not $Version. Run with -Stage Publish first." }
 }
 
-Step 'Build' @('build', 'WinScreen.slnx', '-c', 'Release', "-p:Version=$Version", $updateProperty, $architectureProperty)
+if ($Stage -ne 'Pack') {
+Step 'Build'@('build', 'WinScreen.slnx', '-c', 'Release', "-p:Version=$Version", $updateProperty, $architectureProperty)
 
 $filter = if ($CI -or ($SkipInteractive -and -not $DesktopTests)) { 'Category!=RealWindows&Category!=Interactive' } else { 'Category!=Interactive' }
 if ($canTest) {
@@ -84,8 +97,14 @@ if ($canTest -and -not $CI -and -not $SkipInteractive) {
     Step 'Test the packaged program' @('test', 'WinScreen.slnx', '-c', 'Release', '--no-build', '--filter', 'Category=Interactive', $architectureProperty)
     Remove-Item Env:\WINSCREEN_EXE
 }
+}
 
-Step 'Restore packaging tool' @('tool', 'restore')
+if ($Stage -eq 'Publish') {
+    Write-Output "Done: $program"
+    return
+}
+
+Step 'Restore packaging tool'@('tool', 'restore')
 $packageArguments = @('tool', 'run', 'vpk', '--', 'pack',
     '--packId', 'WinScreen', '--packVersion', $Version, '--packDir', $program, '--mainExe', 'WinScreen.exe',
     '--runtime', $runtime, '--channel', $channel, '--packTitle', 'WinScreen', '--packAuthors', 'WinScreen', '--icon', 'src\WinScreen\Assets\WinScreen.ico',
