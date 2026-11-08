@@ -100,14 +100,14 @@ public class PipWindowTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void Safe_default_and_click_through_sources_do_not_receive_synthetic_clicks(bool experimental)
+    public void A_click_on_a_view_never_reaches_or_raises_the_original(bool clickThrough)
     {
         using var source = new TargetProcess(SourceSpot);
         OnUiThread(pump =>
         {
             var windows = new WindowController([]);
-            if (experimental) windows.ToggleClickThrough(source.Handle);
-            using var pip = new PipWindow(source.Handle, windows) { AllowClickForwarding = experimental };
+            if (clickThrough) windows.ToggleClickThrough(source.Handle);
+            using var pip = new PipWindow(source.Handle, windows);
             Desktop.GainForegroundRights();
             pip.ShowOnTop();
             pump(150);
@@ -119,6 +119,7 @@ public class PipWindowTests
             pump(150);
             Assert.Null(source.NextReport(100));
             Assert.Equal(SourceSpot, Desktop.BoundsOf(source.Handle));
+            Assert.NotEqual(source.Handle, User32.GetForegroundWindow());
             // A physical mouse move during a desktop test is not evidence that PiP moved the cursor.
             if (inputBefore == Desktop.LastInputTick())
                 Assert.Equal(pointerBefore, Desktop.CursorPosition());

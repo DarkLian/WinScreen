@@ -44,7 +44,7 @@ public static class PipGeometry
         return new Rectangle(left, top, width, height);
     }
 
-    public const int Border = 2;
+    public const int Border = 0;
     public const int MinimumWidth = 160;
     public const int MinimumHeight = 60;
 
@@ -168,12 +168,6 @@ public static class PipGeometry
 
         return wanted.Location;
     }
-
-    /// <summary>
-    /// Where a source window goes so that <paramref name="spot"/> sits exactly under the cursor. Near a
-    /// screen edge part of it goes off screen for the moment: the pointer never moves.
-    /// </summary>
-    public static Point PeekPosition(Point cursor, Point spot) => new(cursor.X - spot.X, cursor.Y - spot.Y);
 
     /// <summary>The largest size of this shape that fits inside a limit, never empty.</summary>
     public static Size FitInside(Size shape, Size limit)

@@ -34,16 +34,6 @@ internal struct WindowPlacement
     public Rect NormalPosition;
 }
 
-[StructLayout(LayoutKind.Sequential)]
-internal struct MouseInput
-{
-    public uint Type;
-    private readonly uint _alignsUnionOn64Bit;
-    public int X, Y;
-    public uint Data, Flags, Time;
-    public nint ExtraInfo;
-}
-
 /// <summary>The user32.dll calls WinScreen needs. Window handles are plain <see cref="nint"/>.</summary>
 internal static partial class User32
 {
@@ -243,25 +233,6 @@ internal static partial class User32
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetWindowPlacement(nint hWnd, ref WindowPlacement placement);
-
-    [LibraryImport("user32.dll", SetLastError = true)]
-    private static unsafe partial uint SendInput(uint count, MouseInput* inputs, int size);
-
-    /// <summary>A real click at the cursor, as if the button had been pressed.</summary>
-    public static unsafe void ClickLeftButton()
-    {
-        const uint leftDown = 0x2, leftUp = 0x4;
-        MouseInput* inputs = stackalloc MouseInput[2];
-        inputs[0] = new MouseInput { Flags = leftDown };
-        inputs[1] = new MouseInput { Flags = leftUp };
-        uint sent = SendInput(2, inputs, sizeof(MouseInput));
-        if (sent != 2)
-        {
-            if (sent == 1)
-                SendInput(1, inputs + 1, sizeof(MouseInput)); // Do not leave the mouse button held down.
-            throw new Windows.WindowOperationException(UiText.T("errors.input.clickRefused"));
-        }
-    }
 
     [LibraryImport("user32.dll")]
     public static partial nint GetWindow(nint hWnd, uint command);

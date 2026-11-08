@@ -38,7 +38,7 @@ public sealed class AppEndToEndTests : IDisposable
     {
         Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0,
             "Close the running WinScreen before these tests.");
-        var settings = new AppSettings { ExperimentalFeatures = true, PipClickForwarding = true };
+        var settings = new AppSettings { ExperimentalFeatures = true };
         settings.Hotkeys[AppCommand.SaveWindowSetup] = "Ctrl+Alt+S"; // The Hotkey helper presses Ctrl+Alt+key.
         settings.Save(Path.Combine(_data, "settings.json"));
         _app = Start();
@@ -60,7 +60,6 @@ public sealed class AppEndToEndTests : IDisposable
         _app.Dispose();
 
         settings.ExperimentalFeatures = true;
-        settings.PipClickForwarding = true;
         settings.Save(Path.Combine(_data, "settings.json"));
         _app = Start();
         _appWindow = WaitForAppWindow();
@@ -727,43 +726,7 @@ public sealed class AppEndToEndTests : IDisposable
     }
 
     [Fact]
-    public void Clicking_and_typing_in_the_view_reach_the_real_window_as_real_input()
-    {
-        using var target = new TargetProcess(Spot, "C81E1E,1E64C8", "WinScreen PiP source");
-        Focus(target);
-        Hotkey(Keys.P, target);
-        nint pip = WaitForPip();
-
-        Rectangle start = Desktop.BoundsOf(pip);
-        Desktop.Drag(new Point(start.Left + 60, start.Top + 60), new Point(700, 160), pip);
-        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(pip).Left == 640),
-            $"The drag left the view at {Desktop.BoundsOf(pip)}.");
-        Rectangle view = Desktop.BoundsOf(pip);
-
-        // A click at three quarters across and half way down lands on that spot of the real window.
-        Desktop.ClickOn(new Point(view.Left + view.Width * 3 / 4, view.Top + view.Height / 2), pip);
-        string? click = target.NextReport();
-        Assert.NotNull(click);
-        string[] parts = click.Split(' ');
-        Assert.Equal("click", parts[0]);
-        Assert.InRange(int.Parse(parts[1]), 290, 310);
-        Assert.InRange(int.Parse(parts[2]), 140, 160);
-        Assert.Equal("real=True", parts[3]);
-
-        // The real window now has the keyboard too.
-        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle),
-            "The real window didn't get the keyboard.");
-        Desktop.Press(Keys.Q);
-        Assert.Equal("key q real=True", target.NextReport());
-
-        // Leaving sends the window home and hands back the view.
-        Desktop.MoveMouse(new Point(40, 40));
-        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(target.Handle) == Spot), "The real window didn't go back.");
-        Assert.Equal(0, Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST);
-    }
-
-    [Fact]
-    public void A_click_in_the_view_of_a_maximized_window_brings_it_forward_without_moving_the_pointer()
+    public void A_click_on_a_view_leaves_the_original_where_it_is()
     {
         // The borderless test window fills the whole screen when maximized, which counts as full-screen.
         RestartWith(new AppSettings { PauseInFullScreen = false });
@@ -783,16 +746,19 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(User32.SetWindowPos(pip, 0, 40, 40, 0, 0,
             User32.SWP_NOSIZE | User32.SWP_NOACTIVATE | User32.SWP_NOZORDER));
         Rectangle view = Desktop.BoundsOf(pip);
+        using var other = new TargetProcess(new Rectangle(view.Right + 80, view.Bottom + 80, 240, 160), "1E64C8", "Another window");
+        Focus(other);
 
         var pressed = new Point(view.Left + view.Width * 3 / 4, view.Top + view.Height / 2);
         Desktop.ClickOn(pressed, pip);
 
-        // A maximized window can't slide under the pointer, so it just comes forward: no click, no pointer jump.
+        // Going to the original is in the view's menu; a click on the picture does nothing to it.
         Assert.Null(target.NextReport(400));
         Assert.Equal(pressed, Desktop.CursorPosition());
         Assert.Equal(full, Desktop.BoundsOf(target.Handle));
         Assert.True(User32.IsZoomed(target.Handle), "The window stopped being maximized.");
-        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle));
+        Thread.Sleep(300);
+        Assert.Equal(other.Handle, User32.GetForegroundWindow()); // Nothing brought the original forward.
 
         // Still visible on top, so it can be used again.
         Assert.NotEqual(0, Desktop.ExStyle(pip) & User32.WS_EX_TOPMOST);

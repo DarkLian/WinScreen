@@ -55,12 +55,11 @@ You can save a display or area there and open it again later from **Picture-in-P
 
 | On a view | What happens |
 | --- | --- |
-| Click | Go to the original window |
 | Drag | Move the view |
 | Wheel | Resize the view |
 | Ctrl+wheel | Zoom in; Ctrl+double-click to zoom out |
 | Ctrl+drag | Crop to the part you want; Ctrl+double-click to remove the crop |
-| Right-click | Open the view's menu |
+| Right-click | Open the view's menu, with **Go to original window** |
 
 Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. Drag an edge or corner to resize. **Keep aspect ratio** in View options is on by default. The bar fades away after you leave.
 
@@ -74,8 +73,6 @@ Every view has a title bar above the picture, or below it near the top of the sc
   The original stays hidden. Drag the view's title bar to move it, or hold Alt and drag the picture.
   Menus open near the pointer. If the app asks you something, the original comes back so you can answer.
   Keys return to your previous window when you leave.
-- **Compatible input** helps apps whose controls do not respond normally. This choice is remembered for that app.
-  It may briefly show a faint outline around the view during a click.
 
 Views pause direct use while a WinScreen menu or the tray overflow panel is open.
 

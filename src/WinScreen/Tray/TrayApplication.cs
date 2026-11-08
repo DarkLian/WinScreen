@@ -367,7 +367,6 @@ public sealed class TrayApplication : ApplicationContext
         {
             pip.ApplyPipPreferences(_settings.Pip);
             pip.ApplyViewPreferences(_settings.PipViews);
-            pip.AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding;
             pip.AllowAutoMove = _settings.ExperimentalFeatures;
             pip.AllowInteractive = _settings.ExperimentalFeatures;
             if (!_settings.ExperimentalFeatures) pip.SetInteractive(false);
@@ -1156,7 +1155,6 @@ public sealed class TrayApplication : ApplicationContext
 
     private void OpenView(PipWindow pip)
     {
-        pip.AllowClickForwarding = _settings.ExperimentalFeatures && _settings.PipClickForwarding;
         pip.AllowAutoMove = _settings.ExperimentalFeatures;
         pip.AllowInteractive = _settings.ExperimentalFeatures;
         pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;
@@ -1177,21 +1175,6 @@ public sealed class TrayApplication : ApplicationContext
             bookmarks.RemoveAll(saved => string.Equals(saved.Name, bookmark.Name, StringComparison.CurrentCultureIgnoreCase));
             bookmarks.Add(bookmark);
         });
-        string inputProgram = pip.SourceIsWindow ? WindowInfo.ExecutablePath(pip.SourceWindow) : "";
-        pip.CompatibleInput = _settings.PipCompatibleInputPrograms.Contains(inputProgram, StringComparer.OrdinalIgnoreCase);
-        pip.SaveCompatibleInput = compatible =>
-        {
-            if (inputProgram.Length == 0) return true;
-            var draft = _settings.Clone();
-            draft.PipCompatibleInputPrograms.RemoveAll(path => string.Equals(path, inputProgram, StringComparison.OrdinalIgnoreCase));
-            if (compatible) draft.PipCompatibleInputPrograms.Add(inputProgram);
-            try { draft.Save(_settingsPath); _settings.CopyFrom(draft); return true; }
-            catch (Exception failure) when (IsExpected(failure))
-            {
-                Alert(T("errors.settings.saveFailed"), failure.Message);
-                return false;
-            }
-        };
         pip.ApplyPipPreferences(_settings.Pip);
         pip.ApplyViewPreferences(_settings.PipViews);
         pip.ShowOnTop();

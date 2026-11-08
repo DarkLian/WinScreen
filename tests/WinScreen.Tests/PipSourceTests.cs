@@ -106,7 +106,7 @@ public sealed class PipScreenViewTests
             // Screen views are hidden from screen reads, so the picture can only be checked with that lifted.
             User32.SetWindowDisplayAffinity(pip.Handle, User32.WDA_NONE);
             Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Middle(pip)), Color.FromArgb(0x1E, 0xB4, 0x46)), 4000, () => pump(20)), pip.DiagnosticSnapshot);
-            Assert.InRange((pip.Width - 4) / (double)(pip.Height - 4), 1.3, 1.37);
+            Assert.InRange(pip.Width / (double)pip.Height, 1.3, 1.37);
             pip.Close();
             pump(150);
         });

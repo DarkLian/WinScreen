@@ -157,8 +157,10 @@ public sealed class ConcealmentOwnershipTests
             controller.SetOpacity(target.Handle, 128);
             controller.HideOwned(target.Handle, first);
             Assert.Equal(128, controller.OpacityOf(target.Handle));
-            controller.BeginInteractive(target.Handle, WinScreen.Native.User32.HWND_TOPMOST);
-            controller.EndInteractive(target.Handle);
+            controller.Park(target.Handle);
+            controller.SetParkedReachable(target.Handle, true); // A visit makes it faint for a while.
+            controller.SetParkedReachable(target.Handle, false);
+            controller.Unpark(target.Handle);
             Assert.True(controller.IsHidden(target.Handle));
             Assert.Throws<WindowOperationException>(() => controller.HideOwned(target.Handle, second));
             Assert.Throws<WindowOperationException>(() => controller.ShowOwned(target.Handle, second));

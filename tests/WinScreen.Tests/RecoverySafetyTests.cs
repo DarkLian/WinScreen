@@ -223,22 +223,6 @@ public sealed class RecoverySafetyTests
     }
 
     [Fact]
-    public void A_failed_peek_rolls_back_placement_before_returning()
-    {
-        using var target = new TargetProcess(Spot);
-        Desktop.GainForegroundRights();
-        var windows = new WindowController([], new ChangeJournal(JournalPath()));
-        windows.Checkpoint = (step, _) =>
-        {
-            if (step == "peek-moved") throw new WindowOperationException("Injected pin failure");
-        };
-        Assert.Throws<WindowOperationException>(() => windows.BeginPeek(target.Handle, new Point(600, 200)));
-        Assert.Equal(Spot, Desktop.BoundsOf(target.Handle));
-        Assert.False(windows.IsPeeking(target.Handle));
-        windows.RestoreAll();
-    }
-
-    [Fact]
     public void Hover_stays_solid_when_opacity_is_changed_and_unsafe_layered_renderers_are_refused()
     {
         using var source = new TargetProcess(Spot);

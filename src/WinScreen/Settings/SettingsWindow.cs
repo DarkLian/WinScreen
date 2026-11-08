@@ -69,10 +69,7 @@ public sealed class SettingsWindow : Form
     private readonly CheckBox _experimental = new()
         { Text = T("settings.experimental.enable"), AutoSize = true };
 
-    private readonly CheckBox _pipInput = new()
-        { Text = T("settings.pip.forwardClicks"), AutoSize = true };
-
-    private readonly ErrorProvider _errors = new();
+private readonly ErrorProvider _errors = new();
     private readonly ComboBox _language = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private static readonly string[] Languages = ["system", "en", "zh-Hans", "zh-Hant"];
     private readonly ComboBox _theme = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150 };
@@ -153,7 +150,6 @@ public sealed class SettingsWindow : Form
         _errors.ContainerControl = this;
         _experimental.CheckedChanged += (_, _) =>
         {
-            _pipInput.Enabled = _experimental.Checked;
             _pipAutoMove.Enabled = _experimental.Checked;
             if (_hotkeys.Count > 0) RefreshFeatures();
         };
@@ -217,7 +213,6 @@ public sealed class SettingsWindow : Form
         Controls.Add(page);
 
         LoadValues();
-        _pipInput.Enabled = _experimental.Checked;
         _pipAutoMove.Enabled = _experimental.Checked;
         WatchForChanges(this);
         foreach (TextBox box in _hotkeys.Values) box.TextChanged += (_, _) => QueueApplyRefresh();
@@ -430,7 +425,6 @@ public sealed class SettingsWindow : Form
         draft.ShowNotifications = _showNotifications.Checked;
         draft.AutomaticUpdates = _automaticUpdates.Checked;
         draft.ExperimentalFeatures = _experimental.Checked;
-        draft.PipClickForwarding = _pipInput.Checked;
         draft.StartWithWindows = _startWithWindows.Checked;
         draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
         draft.Theme = Themes[Math.Max(0, _theme.SelectedIndex)];
@@ -552,7 +546,6 @@ public sealed class SettingsWindow : Form
             nameof(AppSettings.ShowNotifications) => _showNotifications,
             nameof(AppSettings.AutomaticUpdates) => _automaticUpdates,
             nameof(AppSettings.ExperimentalFeatures) => _experimental,
-            nameof(AppSettings.PipClickForwarding) => _pipInput,
             nameof(AppSettings.PauseInFullScreen) => _pauseInFullScreen,
             nameof(AppSettings.AllowPipInFullScreen) => _allowPip,
             nameof(AppSettings.ModifierDrag) => _modifierDrag,
@@ -606,7 +599,6 @@ public sealed class SettingsWindow : Form
         _showNotifications.Checked = values.ShowNotifications;
         _automaticUpdates.Checked = values.AutomaticUpdates;
         _experimental.Checked = values.ExperimentalFeatures;
-        _pipInput.Checked = values.PipClickForwarding;
         _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, values.Language));
         _theme.SelectedIndex = Math.Max(0, Array.IndexOf(Themes, values.Theme));
         _pauseInFullScreen.Checked = values.PauseInFullScreen;
@@ -784,7 +776,7 @@ public sealed class SettingsWindow : Form
         page.Controls.Add(Note(T("pip.rendering.compatibilityHelp")));
         page.Controls.Add(Note(T("pip.rendering.captureIndicatorHelp")));
         page.Controls.Add(Note(T("pip.diagnostics.retryHelp")));
-        page.Controls.Add(Section(T("settings.experimental"), _pipInput, _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
+        page.Controls.Add(Section(T("settings.experimental"), _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
         page.Controls.Add(Section(T("pip.hover.title"), _pipTaskbar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));
         return page;
     }

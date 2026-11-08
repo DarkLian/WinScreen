@@ -25,7 +25,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
 
     // A window with no opacity at all gets no clicks, so while it's being used through its view it's at the
     // least opacity that does. That's only while the pointer is on the view.
-    private const byte InteractiveOpacity = 1;
     private const int PinAttempts = 5;
     private const int PinRetryMilliseconds = 10;
     private const uint ResponsiveMilliseconds = 400;
@@ -672,118 +671,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             }
             Reveal(window, state);
             state.Hidden = false;
-            SaveJournal();
-        }
-    }
-
-    /// <summary>
-    /// Brings a window forward at this position so it can be used directly, for now. A maximized window
-    /// stays as it is, because resizing it would move everything inside it away from the spot being
-    /// clicked. Returns where the window's top-left corner ended up.
-    /// </summary>
-    public Point BeginPeek(nint window, Point position)
-    {
-        lock (_gate)
-        {
-            ChangedWindow state = Track(window);
-            if (state.PlacementBeforeBorderless is not null)
-                throw new WindowOperationException(T("errors.borderless.disableFirst"));
-            bool maximized = User32.IsZoomed(window);
-            if (state.PlacementBeforePeek is null)
-            {
-                state.PlacementBeforePeek = ReadPlacement(window);
-                Prepare(window, state, User32.WS_EX_TOPMOST);
-                try
-                {
-                    if (state.Hidden)
-                        Reveal(window, state);
-                    if (maximized)
-                    {
-                        User32.SetForegroundWindow(window);
-                        if (User32.GetForegroundWindow() != window)
-                            throw new WindowOperationException(T("errors.window.activationFailed"));
-                    }
-                    else
-                    {
-                        Move(window, position);
-                        Checkpoint?.Invoke("peek-moved", window);
-                        Pin(window, state.Identity);
-                    }
-                }
-                catch
-                {
-                    try
-                    {
-                        FinishPeek(window, state);
-                        SaveJournal();
-                    }
-                    catch (WindowOperationException)
-                    {
-                        /* Keep the placement and durable record for retry. */
-                    }
-
-                    throw;
-                }
-            }
-
-            if (!User32.GetWindowRect(window, out Rect r))
-                throw Failure(T("actions.readPosition"), window);
-            return new Point(r.Left, r.Top);
-        }
-    }
-
-    /// <summary>
-    /// Makes a hidden window take real input while it stays invisible, just below its view. This is the
-    /// riskiest state there is: invisible, clickable, and larger than the view. It lasts one pointer visit.
-    /// The placement is journaled first, so a forced kill during a slide puts the window back.
-    /// </summary>
-    /// <param name="reachable">
-    /// False keeps it invisible (alpha 0) until a press is replayed to it; true makes it faint (alpha 1) and able
-    /// to take input, hover included, for the whole visit.
-    /// </param>
-    public void BeginInteractive(nint window, nint view, bool reachable = true)
-    {
-        lock (_gate)
-        {
-            ChangedWindow state = Track(window);
-            if (!state.Hidden)
-                throw new WindowOperationException(T("errors.pip.previewNotReady"));
-            if (state.PlacementBeforePeek is null)
-            {
-                state.PlacementBeforePeek = ReadPlacement(window);
-                SaveJournal();
-            }
-
-            ApplyAlpha(window, state, reachable ? InteractiveOpacity : HiddenOpacity);
-            WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
-            // Just above the view: its opacity then decides whether the pointer reaches it or the view.
-            nint above = view == User32.HWND_TOPMOST ? 0 : User32.GetWindow(view, 3 /* GW_HWNDPREV */);
-            User32.SetWindowPos(window, above == 0 || above == window ? User32.HWND_TOPMOST : above, 0, 0, 0, 0,
-                User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
-        }
-    }
-
-    /// <summary>First takes clicks away from the window, so it can't catch another, then returns it to its place.</summary>
-    public void EndInteractive(nint window)
-    {
-        lock (_gate)
-        {
-            if (!_changed.TryGetValue(window, out ChangedWindow? state) || !User32.IsWindow(window))
-                return;
-            WriteExStyle(window, ReadExStyle(window) | User32.WS_EX_TRANSPARENT);
-            if (state.Hidden) ApplyAlpha(window, state, HiddenOpacity);
-            FinishPeek(window, state);
-            SaveJournal();
-        }
-    }
-
-    /// <summary>Sends a window back to where it was before <see cref="BeginPeek"/>.</summary>
-    public void EndPeek(nint window)
-    {
-        lock (_gate)
-        {
-            if (_changed.TryGetValue(window, out ChangedWindow? state) && User32.IsWindow(window))
-                FinishPeek(window, state);
             SaveJournal();
         }
     }

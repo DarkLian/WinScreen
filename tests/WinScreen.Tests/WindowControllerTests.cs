@@ -285,7 +285,7 @@ public class WindowControllerTests
         killed.TogglePin(target.Handle);
         killed.ChangeOpacity(target.Handle, -100);
         killed.Hide(target.Handle);
-        killed.BeginPeek(target.Handle, new Point(640, 300));
+        killed.Park(target.Handle);
         Assert.NotEqual(Spot, Desktop.BoundsOf(target.Handle));
 
         // The first controller never gets to restore anything, as after a forced kill.

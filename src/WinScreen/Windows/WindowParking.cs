@@ -58,7 +58,31 @@ public sealed partial class WindowController
         }
     }
 
+    /// <summary>
+    /// While a view is used directly, the parked original is at opacity 1 and can be hit, so apps that check what
+    /// is at a point, as browsers do before they scroll, find themselves there. Only its two-pixel strip is on
+    /// screen. Recovery puts back the journaled style and opacity as for any hidden window.
+    /// </summary>
+    internal void SetParkedReachable(nint window, bool reachable)
+    {
+        lock (_gate)
+        {
+            if (!_changed.TryGetValue(window, out var state) || !state.Parked || !User32.IsWindow(window)) return;
+            state.Identity.Require();
+            long style = ReadExStyle(window);
+            if (!reachable) WriteExStyle(window, style | User32.WS_EX_TRANSPARENT); // Clicks go first, then the window fades.
+            ApplyAlpha(window, state, reachable ? ReachableOpacity : HiddenOpacity);
+            if (reachable) WriteExStyle(window, style & ~User32.WS_EX_TRANSPARENT);
+        }
+    }
+
+    internal bool IsParkedReachable(nint window) =>
+        IsParked(window) && (ReadExStyle(window) & User32.WS_EX_TRANSPARENT) == 0;
+
+    private const byte ReachableOpacity = 1;
+
     internal static Rectangle ParkingPlace(Size size, IReadOnlyList<Rectangle> monitors)
+
     {
         // Try each external edge in preference order. Every visible intersection stays within its two-pixel strip.
         for (int edge = 0; edge < 4; edge++)

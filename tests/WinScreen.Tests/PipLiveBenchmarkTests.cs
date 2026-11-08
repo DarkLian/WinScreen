@@ -43,8 +43,8 @@ public sealed class PipLiveBenchmarkTests(ITestOutputHelper output)
                     Assert.True(Desktop.WaitFor(() => pip.BackendKind != PipBackendKind.DwmThumbnail, 15000, () => Pump(20)), pip.DiagnosticSnapshot);
                 // A wheel-size operation is unnecessary for this fixture: set the viewport directly through its owner.
                 var selector = (PipBackendSelector)typeof(PipWindow).GetField("_thumbnail", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(pip)!;
-                pip.ClientSize = new(width + 4, height + 4);
-                selector.SetViewport(new(2, 2, width, height), new(0, 0, 1920, 1080));
+                pip.ClientSize = new(width, height);
+                selector.SetViewport(new(0, 0, width, height), new(0, 0, 1920, 1080));
                 Pump(700);
                 using var process = Process.GetCurrentProcess();
                 TimeSpan cpu = process.TotalProcessorTime;
@@ -58,9 +58,8 @@ public sealed class PipLiveBenchmarkTests(ITestOutputHelper output)
                     // Keep a long memory fixture away from the user's pointer and global desktop input.
                     // Warmup above proves real presentation; this phase measures capture/GPU-processing memory,
                     // with the host hidden. Occluded Present is not counted as a displayed new frame.
-                    // This fixture measures WGC itself, including on systems that cannot hide its border.
-                    pip.CompatibleInput = true;
-                    pip.SetOriginalHidden(true);
+                    // A parked original falls back to Standard capture where its border can't be hidden, so this
+                    // fixture leaves the original showing: it measures smooth capture itself.
                     pip.Location = new(-30000, -30000);
                     pip.Hide();
                 }

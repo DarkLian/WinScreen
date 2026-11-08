@@ -99,7 +99,7 @@ public class PipGeometryTests
     [Fact]
     public void Fit_height_keeps_the_source_shape()
     {
-        Assert.Equal(244, PipGeometry.FitHeight(484, new Rectangle(0, 0, 800, 400)));
+        Assert.Equal(242, PipGeometry.FitHeight(484, new Rectangle(0, 0, 800, 400)));
     }
 
     [Fact]
@@ -109,9 +109,9 @@ public class PipGeometryTests
     }
 
     [Fact]
-    public void View_area_sits_inside_the_border()
+    public void The_picture_fills_the_whole_view()
     {
-        Assert.Equal(new Rectangle(2, 2, 476, 296), PipGeometry.ViewArea(new Size(480, 300)));
+        Assert.Equal(new Rectangle(0, 0, 480, 300), PipGeometry.ViewArea(new Size(480, 300)));
     }
 
     [Fact]
@@ -157,21 +157,9 @@ public class PipGeometryTests
                 new Rectangle(100, 50, 200, 100)));
     }
 
-    [Fact]
-    public void The_real_window_lands_with_the_clicked_spot_under_the_cursor()
-    {
-        Assert.Equal(new Point(500, 300), PipGeometry.PeekPosition(new Point(800, 450), new Point(300, 150)));
-    }
-
-    [Fact]
-    public void Near_an_edge_the_real_window_goes_partly_off_screen_so_the_pointer_never_moves()
-    {
-        Assert.Equal(new Point(1600, 880), PipGeometry.PeekPosition(new Point(1900, 1030), new Point(300, 150)));
-    }
-
     [Theory]
-    [InlineData(800, 400, 480, 242)]
-    [InlineData(400, 800, 242, 480)]
+    [InlineData(800, 400, 480, 240)]
+    [InlineData(400, 800, 240, 480)]
     public void The_longer_side_sets_the_size_so_tall_windows_stay_small(int width, int height, int fitWidth,
         int fitHeight)
     {

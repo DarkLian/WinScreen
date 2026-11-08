@@ -55,69 +55,6 @@ public sealed class PressRuleTests
     [InlineData(20, false)]
     public void Borders_and_corners_do_nothing(int hit, bool border) => Assert.Equal(border, PressRules.IsBorder(hit));
 
-    [Fact]
-    public void Mixed_scaling_is_refused()
-    {
-        Assert.True(PressRules.SharedScaling([100]));
-        Assert.True(PressRules.SharedScaling([150, 150]));
-        Assert.False(PressRules.SharedScaling([100, 125]));
-    }
-}
-
-[Trait("Category", "RealWindows")]
-public sealed class InteractiveRecoveryTests
-{
-    [Fact]
-    public void A_forced_kill_during_a_slide_puts_the_window_back_in_place()
-    {
-        string folder = Directory.CreateTempSubdirectory("winscreen-interactive-").FullName;
-        try
-        {
-            string file = Path.Combine(folder, "changed-windows.json");
-            using var target = new TargetProcess(new Rectangle(240, 160, 400, 300));
-            target.UseFrame();
-            Rectangle home = Desktop.BoundsOf(target.Handle);
-            var windows = new WindowController([], new ChangeJournal(file));
-            windows.Hide(target.Handle);
-            windows.BeginInteractive(target.Handle, User32.HWND_TOPMOST);
-            Assert.Equal(0, Desktop.ExStyle(target.Handle) & User32.WS_EX_TRANSPARENT);
-            User32.SetWindowPos(target.Handle, 0, 700, 400, 0, 0, User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
-            Assert.NotEqual(home, Desktop.BoundsOf(target.Handle));
-
-            // The next copy has only what reached the disk, as a watcher or a restart would.
-            var next = new WindowController([], new ChangeJournal(file));
-            next.RecoverFromJournal();
-            Assert.Equal(home, Desktop.BoundsOf(target.Handle));
-            Assert.False(WindowInfo.IsConcealed(target.Handle));
-            Assert.Equal(0, Desktop.ExStyle(target.Handle) & User32.WS_EX_TRANSPARENT);
-        }
-        finally { Directory.Delete(folder, true); }
-    }
-
-    [Fact]
-    public void Ending_a_visit_takes_clicks_away_and_returns_the_window()
-    {
-        using var target = new TargetProcess(new Rectangle(240, 160, 400, 300));
-        target.UseFrame();
-        Rectangle home = Desktop.BoundsOf(target.Handle);
-        var windows = new WindowController([]);
-        windows.Hide(target.Handle);
-        windows.BeginInteractive(target.Handle, User32.HWND_TOPMOST);
-        User32.SetWindowPos(target.Handle, 0, 700, 400, 0, 0, User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
-        windows.EndInteractive(target.Handle);
-        Assert.Equal(home, Desktop.BoundsOf(target.Handle));
-        Assert.NotEqual(0, Desktop.ExStyle(target.Handle) & User32.WS_EX_TRANSPARENT);
-        Assert.True(WindowInfo.IsConcealed(target.Handle));
-        windows.RestoreAll();
-        Assert.False(WindowInfo.IsConcealed(target.Handle));
-    }
-
-    [Fact]
-    public void A_window_that_is_not_hidden_cannot_take_input_invisibly()
-    {
-        using var target = new TargetProcess(new Rectangle(240, 160, 400, 300));
-        Assert.Throws<WindowOperationException>(() => new WindowController([]).BeginInteractive(target.Handle, User32.HWND_TOPMOST));
-    }
 }
 
 /// <summary>Real pointer input on the live desktop, limited to these tests' own windows.</summary>
@@ -138,7 +75,6 @@ public sealed class InteractiveViewTests
             var problems = new List<string>();
             view.Problem += problems.Add;
             view.Notice += problems.Add;
-            view.CompatibleInput = true;
             view.ShowOnTop();
             view.Location = viewAt ?? new Point(1100, 500);
             view.SetInteractive(true);
@@ -199,8 +135,8 @@ public sealed class InteractiveViewTests
             Rectangle frame = view.Bounds;
             var inside = new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2);
             Hover(inside, view);
-            Assert.Equal(0, Desktop.ExStyle(source.Handle) & User32.WS_EX_TRANSPARENT);
             Assert.True(WindowInfo.IsConcealed(source.Handle));
+            Rectangle parked = Desktop.BoundsOf(source.Handle);
             Desktop.MouseButton(true);
             Desktop.MouseButton(false);
             PipInteraction live = view.LiveInteraction!;
@@ -215,10 +151,10 @@ public sealed class InteractiveViewTests
             Desktop.MoveMouse(new Point(frame.Left - 40, frame.Top - 40));
             Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null, 2000), "The visit didn't end.");
             Assert.True(Desktop.WaitFor(() => PipInteraction.Active == 0, 2000), "The hook stayed.");
-            Assert.Equal(home, Desktop.BoundsOf(source.Handle));
-            Assert.NotEqual(0, Desktop.ExStyle(source.Handle) & User32.WS_EX_TRANSPARENT);
+            Assert.Equal(parked, Desktop.BoundsOf(source.Handle)); // It never moved, and is still parked.
             Assert.True(WindowInfo.IsConcealed(source.Handle));
         });
+        Assert.Equal(home, Desktop.BoundsOf(source.Handle)); // Closing the view puts it back.
     }
 
     [Fact]
@@ -239,43 +175,16 @@ public sealed class InteractiveViewTests
     }
 
     [Fact]
-    public void A_popup_of_the_original_outside_the_view_is_kept_off_screen_until_the_visit_ends()
-    {
-        using var source = new TargetProcess(SourceSpot);
-        source.UseFrame();
-        Drive(source, (view, _) =>
-        {
-            Rectangle frame = view.Bounds;
-            var inside = new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2);
-            Hover(inside, view);
-            var away = new Point(40, Screen.PrimaryScreen!.WorkingArea.Bottom - 80);
-            nint popup = source.ShowPopup(away);
-            Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(popup).Right <= SystemInformation.VirtualScreen.Left, 2000),
-                $"The popup stayed on screen: {Desktop.BoundsOf(popup)}; live={view.LiveInteraction is not null}; " +
-                $"rootowner=0x{User32.GetAncestor(popup, User32.GA_ROOTOWNER):X} source=0x{source.Handle:X}; " +
-                $"threads {User32.GetWindowThreadProcessId(popup, out uint p1)}/{User32.GetWindowThreadProcessId(source.Handle, out uint p2)}; " +
-                $"visible={Desktop.IsWindowVisible(popup)}");
-
-            Desktop.MoveMouse(new Point(frame.Left - 40, frame.Top - 40));
-            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null, 2000), "The visit didn't end.");
-            Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(popup).Location == away, 2000),
-                "The popup didn't come back: " + Desktop.BoundsOf(popup));
-        });
-    }
-
-    [Fact]
     public void A_press_on_the_hidden_title_bar_moves_the_view_and_never_reaches_the_window()
     {
         using var source = new TargetProcess(SourceSpot);
         source.UseFrame();
-        Rectangle home = Desktop.BoundsOf(source.Handle);
         Drive(source, (view, _) =>
         {
             Rectangle frame = view.Bounds;
-            Rectangle area = new(frame.Left + PipGeometry.Border, frame.Top + PipGeometry.Border,
-                frame.Width - 2 * PipGeometry.Border, frame.Height - 2 * PipGeometry.Border);
-            var title = new Point(area.Left + area.Width / 3, area.Top + 10);
+            var title = new Point(frame.Left + frame.Width / 3, frame.Top + 10);
             Hover(title, view);
+            Rectangle parked = Desktop.BoundsOf(source.Handle);
             Desktop.MouseButton(true);
             for (int step = 1; step <= 5; step++)
                 Slide(new Point(title.X + step * 12, title.Y + step * 8));
@@ -284,10 +193,12 @@ public sealed class InteractiveViewTests
             var press = view.LiveInteraction!.Log.Single();
             Assert.Equal(PressOutcome.MovedView, press.Outcome);
             Assert.False(PressRules.ReachesContent(press.Hit));
-            Assert.True(Desktop.WaitFor(() => view.Location == new Point(frame.Left + 60, frame.Top + 40)), view.Location.ToString());
+            // Moves sent as input land within a pixel of where they were aimed.
+            Assert.True(Desktop.WaitFor(() => Math.Abs(view.Left - (frame.Left + 60)) <= 1 && Math.Abs(view.Top - (frame.Top + 40)) <= 1),
+                view.Location.ToString());
             Desktop.MoveMouse(new Point(40, 40));
             Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null, 2000));
-            Assert.Equal(home, Desktop.BoundsOf(source.Handle));
+            Assert.Equal(parked, Desktop.BoundsOf(source.Handle));
         });
     }
 
@@ -305,13 +216,19 @@ public sealed class InteractiveViewTests
         {
             Rectangle frame = view.Bounds;
             int x = edgeX switch { -1 => frame.Left - 1, 1 => frame.Right, _ => frame.Left + frame.Width / 2 };
-            int y = edgeY switch { -1 => frame.Top - 1, 1 => frame.Bottom, _ => frame.Top + frame.Height / 2 };
             Hover(new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2), view);
+            // The view's own title bar sits just above it while the pointer is there; the outside starts above that.
+            Assert.True(Desktop.WaitFor(() => view.TitleBarBounds is not null), "The title bar didn't show.");
+            int top = Math.Min(frame.Top, view.TitleBarBounds!.Value.Top);
+            int y = edgeY switch { -1 => top - 1, 1 => frame.Bottom, _ => frame.Top + frame.Height / 2 };
             Desktop.MoveMouse(new Point(x, y));
             Desktop.MouseButton(true);
             Desktop.MouseButton(false);
             Assert.Null(source.NextReport(300));
-            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null, 2000), "Leaving didn't end the visit.");
+            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null, 2000),
+                $"Leaving didn't end the visit: pointer {Desktop.CursorPosition()}, view {view.Bounds}, title bar {view.TitleBarBounds}, " +
+                $"buttons {Control.MouseButtons}, in popup {view.LiveInteraction?.InPopup}, outcomes {string.Join(",", view.PressOutcomes)}, " +
+                $"top {WindowInfo.ClassName(Desktop.TopWindowAt(new Point(x, y)))}");
             Assert.True(WindowInfo.IsConcealed(source.Handle));
         });
     }
@@ -380,7 +297,7 @@ public sealed class InteractiveViewTests
                 }
             Assert.True(delivered == arrived, $"{delivered} delivered, {arrived} arrived; " +
                 $"pressed at {string.Join(" ", log.Where(press => press.Outcome == PressOutcome.Delivered).Select(press => $"{press.At.X},{press.At.Y}"))}; " +
-                $"replays {string.Join("; ", live.ReplayMisses)}; reports {string.Join("; ", reports)}");
+                $"reports {string.Join("; ", reports)}");
             // A window too busy to confirm its place keeps a press from reaching it. That's safe, but must stay rare.
             Assert.True(log.Count(press => press.Outcome is PressOutcome.Delivered or PressOutcome.MovedView) >= presses * 98 / 100,
                 string.Join(", ", log.GroupBy(press => press.Outcome).Select(group => $"{group.Key}={group.Count()}")));
@@ -430,12 +347,26 @@ public sealed class InteractiveViewTests
         }
     }
 
+    /// <summary>
+    /// During a visit the original stays where it was parked, at opacity 1 at most, with no more than its two-pixel
+    /// strip on any display.
+    /// </summary>
+    private static void AssertOutOfSight(nint source, Rectangle parked, string when)
+    {
+        Rectangle now = Desktop.BoundsOf(source);
+        Assert.True(Desktop.Alpha(source) is byte alpha && alpha <= 1, $"It showed {when}: opacity {Desktop.Alpha(source)}");
+        Assert.True(parked == now, $"It moved {when}: {parked} -> {now}");
+        foreach (Screen screen in Screen.AllScreens)
+        {
+            Rectangle overlap = Rectangle.Intersect(now, screen.Bounds);
+            Assert.True(overlap.IsEmpty || Math.Min(overlap.Width, overlap.Height) <= 2, $"{overlap} of it is on screen {when}.");
+        }
+    }
+
     /// <summary>The view's picture area on screen.</summary>
     private static Rectangle PictureOf(PipWindow view)
     {
-        Rectangle frame = view.Bounds;
-        return new Rectangle(frame.Left + PipGeometry.Border, frame.Top + PipGeometry.Border,
-            frame.Width - 2 * PipGeometry.Border, frame.Height - 2 * PipGeometry.Border);
+        return view.Bounds; // The picture fills the view.
     }
 
     /// <summary>Where a point of the original, relative to its top-left, shows in the view.</summary>
@@ -471,26 +402,29 @@ public sealed class InteractiveViewTests
             Rectangle picture = PictureOf(view);
             var inside = new Point(picture.Left + picture.Width / 2, picture.Top + picture.Height / 2);
             Hover(inside, view);
-            Assert.Equal((byte)0, Desktop.Alpha(source.Handle));
-            Assert.False(view.LiveInteraction!.Reachable);
+            Rectangle parked = Desktop.BoundsOf(source.Handle);
+            void Hidden(string when) => AssertOutOfSight(source.Handle, parked, when);
+            Hidden("on arrival");
             Slide(new Point(inside.X + 20, inside.Y + 10));
-            Assert.Equal((byte)0, Desktop.Alpha(source.Handle)); // Hovering never makes it faint.
+            Hidden("while hovered");
 
             Desktop.MouseButton(true);
+            Hidden("while pressed");
             Desktop.MouseButton(false);
             string? report = source.NextReport();
             Assert.NotNull(report);
             Assert.StartsWith("click", report);
-            Assert.True(Desktop.WaitFor(() => Desktop.Alpha(source.Handle) == 0, 500), "It stayed faint after a click.");
+            Hidden("after a click");
 
-            // A drag: the window holds the mouse, so it goes back to invisible while the drag goes on.
             Desktop.MouseButton(true);
             Assert.NotNull(source.NextReport());
-            Assert.True(Desktop.WaitFor(() => Desktop.Alpha(source.Handle) == 0, 500), "It stayed faint during a drag.");
             for (int step = 1; step <= 4; step++)
+            {
                 Slide(new Point(inside.X + 20 - step * 10, inside.Y + 10 + step * 6));
+                Hidden("during a drag");
+            }
             Desktop.MouseButton(false);
-            Assert.True(Desktop.WaitFor(() => Desktop.Alpha(source.Handle) == 0, 500), "It stayed faint after the drag.");
+            Hidden("after the drag");
             Assert.All(view.LiveInteraction!.Log, press => Assert.Equal(PressOutcome.Delivered, press.Outcome));
         });
     }
@@ -503,16 +437,14 @@ public sealed class InteractiveViewTests
         Size original = Desktop.BoundsOf(source.Handle).Size;
         Drive(source, (view, ui) =>
         {
-            ui(() => view.CompatibleInput = false);
             Hover(InView(view, original, new Point(original.Width / 2, original.Height / 2)), view);
-            Assert.False(view.LiveInteraction!.Reachable);
-            Assert.Equal((byte)0, Desktop.Alpha(source.Handle));
             Rectangle parked = Desktop.BoundsOf(source.Handle);
+            AssertOutOfSight(source.Handle, parked, "on arrival");
 
             Slide(InView(view, original, new Point(original.Width / 3, 12))); // The original's title bar.
-            Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Reachable == false, 1000), "The title bar took the pointer.");
-            Assert.Equal((byte)0, Desktop.Alpha(source.Handle));
-            Assert.Equal(parked, Desktop.BoundsOf(source.Handle));
+            Thread.Sleep(200);
+            Assert.NotNull(view.LiveInteraction);
+            AssertOutOfSight(source.Handle, parked, "over its title bar");
         });
     }
 
@@ -574,7 +506,7 @@ public sealed class InteractiveViewTests
     }
 
     [Fact]
-    public void Link_text_and_tips_of_a_hidden_original_never_show_but_its_menus_do()
+    public void Link_text_and_tips_of_a_hidden_original_never_show()
     {
         using var source = new TargetProcess(SourceSpot);
         source.UseFrame();
@@ -587,43 +519,11 @@ public sealed class InteractiveViewTests
             Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(text).Right <= SystemInformation.VirtualScreen.Left, 2000),
                 "Link text showed at rest: " + Desktop.BoundsOf(text));
 
-            // During a visit, a menu by the pointer stays and the link text stays away.
+            // During a visit the link text stays away too. Menus are covered by the message input tests.
             var inside = new Point(picture.Left + picture.Width / 2, picture.Top + picture.Height / 2);
             Hover(inside, view);
-            nint menu = source.ShowPopup(new Point(inside.X + 4, inside.Y + 4));
             Thread.Sleep(400);
-            Assert.Equal(new Point(inside.X + 4, inside.Y + 4), Desktop.BoundsOf(menu).Location);
             Assert.True(Desktop.BoundsOf(text).Right <= SystemInformation.VirtualScreen.Left, "Link text came back during a visit.");
-        });
-    }
-
-    [Fact]
-    public void After_a_visit_a_slow_original_stays_where_it_was_put_back()
-    {
-        using var source = new TargetProcess(SourceSpot);
-        source.UseFrame();
-        Rectangle home = Desktop.BoundsOf(source.Handle);
-        source.BeSlow(25);
-        Drive(source, (view, _) =>
-        {
-            Rectangle picture = PictureOf(view);
-            var inside = new Point(picture.Left + picture.Width / 2, picture.Top + picture.Height / 2);
-            Hover(inside, view);
-            for (int step = 0; step < 30; step++)
-                Desktop.MoveMouse(new Point(inside.X + (step % 2 == 0 ? 25 : -25), inside.Y + step % 7));
-                Thread.Sleep(10);
-            Desktop.MoveMouse(new Point(picture.Left - 60, picture.Top - 60));
-            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null, 2000), "The visit didn't end.");
-            Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(source.Handle) == home, PipWindow.SettleMilliseconds),
-                "Not put back: " + Desktop.BoundsOf(source.Handle));
-            var clock = System.Diagnostics.Stopwatch.StartNew();
-            while (clock.ElapsedMilliseconds < 1500)
-            {
-                Assert.True(Desktop.BoundsOf(source.Handle) == home || clock.ElapsedMilliseconds < PipWindow.SettleMilliseconds,
-                    $"Moved away again after {clock.ElapsedMilliseconds} ms: {Desktop.BoundsOf(source.Handle)}");
-                Thread.Sleep(20);
-            }
-            Assert.Equal(home, Desktop.BoundsOf(source.Handle));
         });
     }
 

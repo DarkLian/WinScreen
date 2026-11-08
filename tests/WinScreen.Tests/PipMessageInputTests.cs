@@ -212,26 +212,119 @@ public sealed class PipMessageInputTests
     }
 
     [Fact]
-    public void Compatible_input_supports_a_control_that_checks_the_real_pointer()
+    public void Moves_reach_the_source_only_at_mapped_points_while_it_holds_the_mouse()
     {
         using var source = new TargetProcess(new Rectangle(160, 120, 800, 600));
-        source.AddButton();
-        Drive(source, (view, ui, _) =>
+        source.BehaveLikeBrowser(); // Holds the mouse on a press and asks to hear when the pointer leaves.
+        Drive(source, (view, _, _) =>
         {
-            ui(() => { view.SetCrop(new Rectangle(0, 0, 400, 300)); view.CompatibleInput = true; });
-            Rectangle picture = PipGeometry.ViewArea(view.ClientSize);
-            Point pointer = new(view.Left + picture.Left + 60 * picture.Width / 400,
-                view.Top + picture.Top + 50 * picture.Height / 300);
-            Desktop.SlideMouse(pointer);
-            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null));
-            Thread.Sleep(100);
+            Point pointer = Hover(view);
+            while (source.NextReport(50) is not null) { }
             Desktop.MouseButton(true);
+            for (int i = 1; i <= 6; i++) { Desktop.SlideMouse(pointer + new Size(i * 10, i * 6)); Thread.Sleep(40); }
             Desktop.MouseButton(false);
-            Thread.Sleep(100);
-            var reports = new List<string>();
-            while (source.NextReport(300) is { } report) reports.Add(report);
-            Assert.Contains("control-click", reports);
+            Thread.Sleep(200);
+            var moves = new List<string[]>();
+            while (source.NextReport(150) is { } report)
+                if (report.StartsWith("mouse 200 ")) moves.Add(report.Split(' '));
+            Assert.True(moves.Count >= 6, $"Only {moves.Count} moves arrived.");
+            // A stray real move would arrive relative to the parked window, far outside its client area.
+            Assert.All(moves, move =>
+            {
+                Assert.InRange(int.Parse(move[2]), 0, 799);
+                Assert.InRange(int.Parse(move[3]), 0, 599);
+            });
         });
+    }
+
+    [Fact]
+    public void The_view_leaves_the_pointer_shape_to_the_app_during_a_visit()
+    {
+        using var source = new TargetProcess(new Rectangle(160, 120, 800, 600));
+        Drive(source, (view, ui, controller) =>
+        {
+            Hover(view);
+            nint SetCursorOnView()
+            {
+                nint shown = 0;
+                ui(() =>
+                {
+                    Cursor.Current = Cursors.IBeam; // As the app would have set it.
+                    User32.SendMessageTimeout(view.Handle, 0x0020, view.Handle, (nint)(1 | (0x200 << 16)), 0, 500, out _);
+                    shown = Cursor.Current.Handle;
+                });
+                return shown;
+            }
+            Assert.Equal(Cursors.IBeam.Handle, SetCursorOnView());
+            Assert.True(windowsReachable(view, true), "The parked original wasn't reachable during the visit.");
+            Desktop.SlideMouse(new Point(view.Left - 60, view.Top - 60));
+            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null), "The visit didn't end.");
+            Assert.True(windowsReachable(view, false), "The parked original stayed reachable after the visit.");
+            Assert.Equal(Cursors.Default.Handle, SetCursorOnView()); // Outside a visit the view sets its own.
+        });
+
+        bool windowsReachable(PipWindow view, bool expected) => Desktop.WaitFor(() =>
+            (Desktop.ExStyle(source.Handle) & User32.WS_EX_TRANSPARENT) == 0 == expected &&
+            Desktop.Alpha(source.Handle) == (expected ? 1 : 0));
+    }
+
+    private const string EdgePath = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
+
+    [Fact]
+    public void A_browser_scrolls_under_the_wheel_in_a_view_used_directly()
+    {
+        if (!File.Exists(EdgePath)) return;
+        string root = Directory.CreateTempSubdirectory("winscreen-wheel").FullName;
+        using var browser = new System.Diagnostics.Process();
+        try
+        {
+            string page = Path.Combine(root, "page.html");
+            File.WriteAllText(page, """
+                <!doctype html><title>WheelPage w=0 y=0</title>
+                <style>body{margin:0}div{height:6000px;background:linear-gradient(#fff,#08f)}</style><div></div>
+                <script>let w=0;function r(){document.title=`WheelPage w=${w} y=${Math.round(scrollY)}`};addEventListener('wheel',()=>{w++;r()},{passive:true});addEventListener('scroll',r);</script>
+                """);
+            browser.StartInfo = new System.Diagnostics.ProcessStartInfo(EdgePath) { UseShellExecute = false };
+            foreach (string arg in new[] { "--user-data-dir=" + Path.Combine(root, "profile"), "--no-first-run", "--no-default-browser-check",
+                "--disable-sync", "--window-size=900,700", "--window-position=160,100", "--app=" + new Uri(page).AbsoluteUri })
+                browser.StartInfo.ArgumentList.Add(arg);
+            Assert.True(browser.Start());
+            nint edge = 0;
+            Assert.True(Desktop.WaitFor(() => { edge = User32.FindWindow(null, "WheelPage w=0 y=0"); return edge != 0; }, 20000), "The browser didn't open.");
+            Thread.Sleep(1000);
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                using var view = new PipWindow(edge, new WindowController([])) { AllowInteractive = true };
+                view.ShowOnTop();
+                view.Location = new Point(1000, 250);
+                view.SetInteractive(true);
+                Exception? failure = null;
+                Point home = Desktop.CursorPosition();
+                var driver = new Thread(() =>
+                {
+                    try
+                    {
+                        Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
+                        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "The visit didn't start.");
+                        Thread.Sleep(300);
+                        for (int i = 0; i < 3; i++) { mouse_event(0x800, 0, 0, unchecked((uint)-120), 0); Thread.Sleep(80); }
+                        Assert.True(Desktop.WaitFor(() => !WindowInfo.Title(edge).EndsWith(" y=0"), 3000), WindowInfo.Title(edge));
+                    }
+                    catch (Exception e) { failure = e; }
+                    finally { Desktop.MoveMouse(home); }
+                });
+                driver.Start();
+                while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
+                view.Close();
+                if (failure is not null) throw new Xunit.Sdk.XunitException(failure.ToString());
+            });
+        }
+        finally
+        {
+            try { if (!browser.HasExited) browser.Kill(true); } catch (InvalidOperationException) { }
+            browser.WaitForExit(5000);
+            try { Directory.Delete(root, true); } catch (IOException) { }
+        }
     }
 
     [Fact]

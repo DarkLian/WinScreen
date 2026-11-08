@@ -143,6 +143,14 @@ internal sealed class TargetProcess : IDisposable
         if (NextReport() != "recordmessages") throw new InvalidOperationException("Message recording did not start.");
     }
 
+    /// <summary>Makes the window handle the mouse as a browser page does, and report the messages involved.</summary>
+    internal void BehaveLikeBrowser()
+    {
+        _process.StandardInput.WriteLine("browserlike");
+        _process.StandardInput.Flush();
+        if (NextReport() != "browserlike") throw new InvalidOperationException("The target did not start behaving like a browser.");
+    }
+
     internal void UseCaptionButton(int hit)
     {
         _process.StandardInput.WriteLine("captionhit " + hit);

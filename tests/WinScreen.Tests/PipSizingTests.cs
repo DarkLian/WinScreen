@@ -55,7 +55,7 @@ public sealed class PipSizingTests
                     Rect result = Marshal.PtrToStructure<Rect>(memory);
                     if (keep)
                     {
-                        Assert.InRange(Math.Abs((result.Right - result.Left - 4) / 2.0 - (result.Bottom - result.Top - 4)), 0, 1);
+                        Assert.InRange(Math.Abs((result.Right - result.Left) / 2.0 - (result.Bottom - result.Top)), 0, 1);
                         if (edge is 1 or 4 or 7) Assert.Equal(original.Right, result.Right);
                         if (edge is 3 or 4 or 5) Assert.Equal(original.Bottom, result.Bottom);
                     }
@@ -107,7 +107,7 @@ public sealed class PipSizingTests
             while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
             if (failure is not null) throw new Xunit.Sdk.XunitException(failure.ToString());
             Assert.True(view.Width > before.Width + 40, $"Before {before}, after {view.Bounds}");
-            Assert.InRange(Math.Abs((view.Width - 4) * .75 - (view.Height - 4)), 0, 1);
+            Assert.InRange(Math.Abs(view.Width * .75 - view.Height), 0, 1);
         });
     }
 }

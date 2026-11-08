@@ -120,6 +120,8 @@ internal static class Program
                         });
                     if (parts[0] == "recordmessages")
                         window.BeginInvoke(window.RecordMessages);
+                    if (parts[0] == "browserlike")
+                        window.BeginInvoke(window.BehaveLikeBrowser);
                     if (parts[0] == "captionhit")
                         window.BeginInvoke(() => window.UseCaptionHit(int.Parse(parts[1])));
                     if (parts[0] == "titlebar")
@@ -218,6 +220,37 @@ internal sealed partial class TargetForm : Form
         Report("recordmessages");
     }
 
+    /// <summary>
+    /// Behaves as a browser page does with the mouse: asks to hear when the pointer leaves, shows a text cursor,
+    /// and holds the mouse while a button is down. Reports each of those messages too.
+    /// </summary>
+    public void BehaveLikeBrowser()
+    {
+        _browserLike = true;
+        _recordMessages = true;
+        Report("browserlike");
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TrackMouse
+    {
+        public int Size;
+        public uint Flags;
+        public nint Window;
+        public uint HoverTime;
+    }
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool TrackMouseEvent(ref TrackMouse track);
+    [LibraryImport("user32.dll", EntryPoint = "LoadCursorW")]
+    private static partial nint LoadCursor(nint instance, nint name);
+    [LibraryImport("user32.dll")]
+    private static partial nint SetCursor(nint cursor);
+    [LibraryImport("user32.dll")]
+    private static partial nint SetCapture(nint window);
+    private bool _browserLike;
+
     public void UseCaptionHit(int hit)
     {
         _hasTitleBar = true;
@@ -308,6 +341,24 @@ internal sealed partial class TargetForm : Form
     {
         if (_recordMessages && m.Msg is >= 0x200 and <= 0x20e)
             Report($"mouse {m.Msg:X} {(short)m.LParam.ToInt64()} {(short)(m.LParam.ToInt64() >> 16)} {m.WParam.ToInt64()}");
+        if (_browserLike)
+        {
+            if (m.Msg is 0x2A3 or 0x215 or 0x06 or 0x07 or 0x08 or 0x1C)
+                Report($"event {m.Msg:X} {m.WParam.ToInt64()}");
+            if (m.Msg == 0x200)
+            {
+                var track = new TrackMouse { Size = Marshal.SizeOf<TrackMouse>(), Flags = 0x2, Window = Handle };
+                TrackMouseEvent(ref track);
+                SetCursor(LoadCursor(0, 32513)); // IDC_IBEAM
+            }
+            if (m.Msg == 0x201) SetCapture(Handle);
+            if (m.Msg == 0x20) // WM_SETCURSOR
+            {
+                SetCursor(LoadCursor(0, 32513));
+                m.Result = 1;
+                return;
+            }
+        }
         if (m.Msg == 0x0047 && SlowMilliseconds > 0) // WM_WINDOWPOSCHANGED
             Thread.Sleep(SlowMilliseconds);
         if (m.Msg == 0x8001)

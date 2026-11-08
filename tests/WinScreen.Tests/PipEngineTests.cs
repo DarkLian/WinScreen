@@ -114,7 +114,6 @@ public sealed class PipEngineTests
             Assert.Equal(expected, settings.Pip.Backend);
             Assert.InRange(settings.Pip.FrameRate, 0, 480);
             Assert.InRange(settings.Pip.OpacityPercent, 10, 100);
-            Assert.False(settings.PipClickForwarding);
             Assert.False(settings.PipAutoMove);
             Assert.Equal("Ctrl+Alt+T", settings.Hotkeys[AppCommand.TogglePin]);
             Assert.Equal(expected, settings.Clone().Pip.Backend);

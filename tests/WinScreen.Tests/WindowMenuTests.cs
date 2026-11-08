@@ -75,7 +75,7 @@ public sealed class WindowMenuBuilderTests
         {
             UiText.Initialize(language);
             foreach (string text in new[] { "gestures.title", "window.menu", "window.borderless", "window.fillDisplay", "window.darkTitleBar",
-                         "window.copy.all", "pip.keepAspectRatio", "pip.interactive.compatible", "gestures.menu.ctrlRight", "gestures.menu.ctrlShiftRight", "gestures.menu.ctrlMiddle",
+                         "window.copy.all", "pip.keepAspectRatio", "gestures.menu.ctrlRight", "gestures.menu.ctrlShiftRight", "gestures.menu.ctrlMiddle",
                          "errors.borderless.disableFirst", "errors.window.nonstandardTitleBar" })
                 Assert.NotEqual(UiText.GetCatalog("en")[text], UiText.T(text));
         }

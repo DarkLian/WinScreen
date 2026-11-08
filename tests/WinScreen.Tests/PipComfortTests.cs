@@ -145,11 +145,14 @@ public sealed class PipComfortTests
             Assert.InRange(bar.Opacity, 0.01, 0.99);
             Pump(150);
             Assert.Equal(1, bar.Opacity);
-            Assert.Equal(new Rectangle(view.Left, view.Top - bar.Height, view.Width, bar.Height), bar.Bounds);
+            Assert.Equal(new Rectangle(view.Left, view.Top - bar.Height, bar.FittedWidth(view.Width), bar.Height), bar.Bounds);
             view.Location = new Point(710, Screen.FromControl(view).WorkingArea.Top);
             Assert.Equal(new Point(view.Left, view.Bottom), bar.Location);
-            view.Width += 40;
+            view.Width = bar.Width - 20; // Narrower than the title needs: the bar keeps to the view.
             Assert.Equal(view.Width, bar.Width);
+            view.Width += 300;
+            Assert.Equal(bar.FittedWidth(view.Width), bar.Width);
+            Assert.True(bar.Width < view.Width, $"The bar {bar.Width} filled the view {view.Width}.");
             view.UpdateHover(new Point(-30000, -30000), now + 300);
             view.UpdateHover(new Point(-30000, -30000), now + 1299);
             Assert.Equal(1, bar.Opacity);
@@ -159,6 +162,39 @@ public sealed class PipComfortTests
             Pump(240);
             Assert.False(bar.Visible);
             Assert.Equal(0, bar.Opacity);
+        });
+    }
+
+    [Fact]
+    public void The_title_bar_fits_its_title_with_the_buttons_right_after_it()
+    {
+        string longTitle = string.Concat(Enumerable.Repeat("A very long window title ", 12));
+        using var brief = new TargetProcess(new Rectangle(240, 160, 900, 600), "C81E1E", "Notes");
+        using var wordy = new TargetProcess(new Rectangle(240, 160, 900, 600), "C81E1E", longTitle);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            int briefWidth = 0;
+            foreach (TargetProcess source in new[] { brief, wordy })
+            {
+                using var view = new PipWindow(source.Handle, new WindowController([]));
+                view.ShowOnTop();
+                view.Width = 640;
+                view.UpdateHover(new Point(view.Left + 50, view.Top + 50), Environment.TickCount64);
+                var bar = Assert.Single(view.OwnedForms.OfType<PipTitleBar>());
+                Application.DoEvents();
+                Assert.Equal(view.Left, bar.Left);
+                Assert.Equal(bar.Right, bar.CloseBounds.Right);
+                Assert.Equal(bar.CloseBounds.Left, bar.MinimizeBounds.Right);
+                Assert.Equal(bar.MinimizeBounds.Left, bar.TitleTextBounds.Right); // Buttons follow the title.
+                Assert.True(bar.CloseBounds.Width >= Dpi.Scale(40, view.DeviceDpi));
+                if (source == brief)
+                {
+                    briefWidth = bar.Width;
+                    Assert.True(bar.Width < view.Width / 2, $"A short title made a {bar.Width} wide bar.");
+                }
+                else Assert.Equal(view.Width, bar.Width); // As wide as the view at most; the title ends in an ellipsis.
+            }
+            Assert.True(briefWidth > 0);
         });
     }
 

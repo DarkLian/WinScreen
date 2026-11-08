@@ -89,8 +89,8 @@ internal sealed class PipTitleBar : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
         BackColor = SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(32, 32, 32);
-        _close = MakeButton("×", T("pip.close").Replace("&", ""), () => view.Close());
-        _minimize = MakeButton("−", T("pip.minimize"), minimize);
+        _close = MakeButton(GlyphFont is null ? "×" : "\uE8BB", T("pip.close").Replace("&", ""), () => view.Close());
+        _minimize = MakeButton(GlyphFont is null ? "−" : "\uE921", T("pip.minimize"), minimize);
         _close.FlatAppearance.MouseOverBackColor = Color.FromArgb(232, 17, 35);
         _minimize.FlatAppearance.MouseOverBackColor = Color.FromArgb(64, 64, 64);
         _title = new Label { ForeColor = SystemInformation.HighContrast ? SystemColors.WindowText : Color.White, AutoEllipsis = true, UseMnemonic = false,
@@ -139,7 +139,7 @@ internal sealed class PipTitleBar : Form
         if (_title.Text != title) _title.Text = title;
         int size = Dpi.Scale(28, _view.DeviceDpi);
         Height = size;
-        _close.Width = _minimize.Width = Dpi.Scale(46, _view.DeviceDpi);
+        _close.Width = _minimize.Width = Dpi.Scale(ButtonWidth, _view.DeviceDpi);
         _icon.Width = size;
         var iconSize = new Size(Dpi.Scale(16, _view.DeviceDpi), Dpi.Scale(16, _view.DeviceDpi));
         if (icon is not null && _icon.Image?.Size != iconSize)
@@ -151,12 +151,44 @@ internal sealed class PipTitleBar : Form
         }
     }
 
+    private const int ButtonWidth = 40, TitlePadding = 12, MinimumTitle = 48;
+    private const float GlyphPoints = 10f;
+
+    /// <summary>Windows' own caption glyphs, which are larger and crisper than text dashes and crosses.</summary>
+    private static readonly FontFamily? GlyphFont = FindGlyphFont();
+
+    private static FontFamily? FindGlyphFont()
+    {
+        using var fonts = new System.Drawing.Text.InstalledFontCollection();
+        foreach (string name in new[] { "Segoe Fluent Icons", "Segoe MDL2 Assets" })
+            if (fonts.Families.FirstOrDefault(family => family.Name == name) is { } family) return family;
+        return null;
+    }
+
+    /// <summary>
+    /// As wide as the icon, the title and the two buttons need, so the buttons sit right after the title. It is
+    /// never wider than the view; a longer title then ends in an ellipsis.
+    /// </summary>
+    internal int FittedWidth(int viewWidth)
+    {
+        int dpi = _view.DeviceDpi;
+        int fixedPart = Dpi.Scale(28, dpi) + 2 * Dpi.Scale(ButtonWidth, dpi) + Dpi.Scale(TitlePadding, dpi);
+        int text = Math.Max(Dpi.Scale(MinimumTitle, dpi), TextRenderer.MeasureText(_title.Text, _title.Font).Width);
+        return Math.Min(viewWidth, fixedPart + text);
+    }
+
+    /// <summary>Where the buttons are on screen, for tests.</summary>
+    internal Rectangle MinimizeBounds => _minimize.RectangleToScreen(_minimize.ClientRectangle);
+    internal Rectangle CloseBounds => _close.RectangleToScreen(_close.ClientRectangle);
+    internal Rectangle TitleTextBounds => _title.RectangleToScreen(_title.ClientRectangle);
+
     private static Button MakeButton(string glyph, string name, Action action)
     {
         var button = new Button { Text = glyph, AccessibleName = name, Dock = DockStyle.Right, TabStop = false,
             FlatStyle = FlatStyle.Flat, ForeColor = SystemInformation.HighContrast ? SystemColors.WindowText : Color.White,
             BackColor = SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(32, 32, 32) };
         button.FlatAppearance.BorderSize = 0;
+        if (GlyphFont is not null) button.Font = new Font(GlyphFont, GlyphPoints);
         button.Click += (_, _) => action();
         return button;
     }
@@ -180,7 +212,9 @@ internal sealed class PipTitleBar : Form
 
     protected override void Dispose(bool disposing)
     {
+        Font[] glyphs = disposing && GlyphFont is not null ? [_close.Font, _minimize.Font] : [];
         if (disposing) { _fade.Dispose(); _icon.Image?.Dispose(); }
         base.Dispose(disposing);
+        foreach (Font font in glyphs) font.Dispose();
     }
 }

@@ -23,21 +23,18 @@ public sealed class PipParkingGeometryTests
     }
 
     [Fact]
-    public void Compatible_input_paths_survive_cloning_and_loading_and_null_entries_are_ignored()
+    public void Settings_from_before_a_single_direct_use_mode_still_load()
     {
         string folder = Directory.CreateTempSubdirectory("winscreen-input-settings").FullName;
         try
         {
-            var settings = new AppSettings { PipCompatibleInputPrograms = [@"C:\Apps\One.exe", @"C:\Apps\Two.exe"] };
             string file = Path.Combine(folder, "settings.json");
-            settings.Save(file);
-            Assert.Equal(settings.PipCompatibleInputPrograms, settings.Clone().PipCompatibleInputPrograms);
-            Assert.Equal(settings.PipCompatibleInputPrograms, AppSettings.Load(file).PipCompatibleInputPrograms);
-            File.WriteAllText(file, """{"PipCompatibleInputPrograms":[null,"","C:/Apps/One.exe","c:/apps/one.EXE"]}""");
-            Assert.Single(AppSettings.Load(file).PipCompatibleInputPrograms);
+            File.WriteAllText(file, """{"PipCompatibleInputPrograms":["C:/Apps/One.exe"],"PipClickForwarding":true,"OpacityStepPercent":7}""");
+            Assert.Equal(7, AppSettings.Load(file).OpacityStepPercent);
         }
         finally { Directory.Delete(folder, true); }
     }
+
 }
 
 [Trait("Category", "RealWindows")]
@@ -69,6 +66,10 @@ public sealed class PipParkedRecoveryTests
             windows.Park(source.Handle);
             Assert.True(checkedIntent);
             Assert.NotEqual(before, Desktop.BoundsOf(source.Handle));
+            // As during a visit: faint, hit-testable, and still put back by a new copy after a forced kill.
+            windows.SetParkedReachable(source.Handle, true);
+            Assert.Equal((byte)1, Desktop.Alpha(source.Handle));
+            Assert.Equal(0, Desktop.ExStyle(source.Handle) & User32.WS_EX_TRANSPARENT);
             var recovery = new WindowController([], journal);
             recovery.RecoverFromJournal();
             Assert.Equal(before, Desktop.BoundsOf(source.Handle));

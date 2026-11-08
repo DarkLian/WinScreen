@@ -95,7 +95,6 @@ public sealed class WindowAppearanceTests
     [Theory]
     [InlineData("hidden")]
     [InlineData("crop")]
-    [InlineData("peek")]
     [InlineData("rollup")]
     [InlineData("minimized")]
     public void Incompatible_states_refuse_borderless_without_removing_the_frame(string state)
@@ -109,7 +108,6 @@ public sealed class WindowAppearanceTests
             {
                 case "hidden": windows.Hide(target.Handle); break;
                 case "crop": windows.Crop(target.Handle, new Rectangle(0, 0, 150, 100)); break;
-                case "peek": windows.BeginPeek(target.Handle, new Point(350, 240)); break;
                 case "rollup": windows.ToggleRollUp(target.Handle); break;
                 case "minimized": User32.ShowWindow(target.Handle, 6); break;
             }
