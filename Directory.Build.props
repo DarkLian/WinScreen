@@ -16,7 +16,7 @@
     <Company>WinScreen</Company>
     <Product>WinScreen</Product>
     <Copyright>Copyright (c) 2026 WinScreen</Copyright>
-    <Version>0.7.1-beta</Version>
+    <Version>0.8.0-beta</Version>
     <!-- Keep the commit out of the product version, so every signed file reports the same version. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
