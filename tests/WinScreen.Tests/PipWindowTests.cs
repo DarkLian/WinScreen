@@ -270,7 +270,7 @@ public class PipWindowTests
             Assert.True(Shows(pip, Red, pump));
 
             pip.SetOriginalHidden(true);
-            Assert.Equal((byte?)1, Desktop.Alpha(source.Handle));
+            Assert.Equal((byte?)0, Desktop.Alpha(source.Handle));
             Assert.NotEqual(0, Desktop.ExStyle(source.Handle) & User32.WS_EX_TRANSPARENT);
             Assert.True(Shows(pip, Red, pump),
                 $"PiP went blank when the original was hidden: {Desktop.ColorOnScreen(Middle(pip))}.");
@@ -292,7 +292,7 @@ public class PipWindowTests
             PipWindow pip = OpenAwayFromToasts(source.Handle);
             pump(200);
             pip.SetOriginalHidden(true);
-            Assert.Equal((byte?)1, Desktop.Alpha(source.Handle));
+            Assert.Equal((byte?)0, Desktop.Alpha(source.Handle));
             pip.Close();
             Assert.True(Desktop.WaitFor(() => Desktop.Alpha(source.Handle) == 255, 2000, () => pump(20)));
         });

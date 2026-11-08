@@ -73,6 +73,21 @@ internal static class Program
                             Console.WriteLine("button");
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "popup")
+                        window.BeginInvoke(() =>
+                        {
+                            // An owned popup at a screen position, like a browser's link preview.
+                            string[] at = parts[1].Split(' ');
+                            var popup = new Form
+                            {
+                                FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual,
+                                Bounds = new Rectangle(int.Parse(at[0]), int.Parse(at[1]), 160, 40), BackColor = Color.Gold, Owner = window,
+                            };
+                            _ = popup.Handle;
+                            NativeShow.ShowWindow(popup.Handle, 4); // Shown without taking the focus, as link previews are.
+                            Console.WriteLine("popup " + popup.Handle.ToInt64());
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "slow")
                         window.BeginInvoke(() =>
                         {
@@ -107,6 +122,13 @@ internal static class Program
 
         Application.Run(window);
     }
+}
+
+internal static partial class NativeShow
+{
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool ShowWindow(nint window, int command);
 }
 
 internal sealed partial class TargetForm : Form

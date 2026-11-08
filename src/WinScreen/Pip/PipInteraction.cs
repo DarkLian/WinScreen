@@ -74,6 +74,7 @@ internal sealed class PipInteraction : IDisposable
     private MouseButtons _heldSwallowed;
     private Point _dragFrom;
     private bool _dragging;
+    private readonly Dictionary<nint, Point> _hiddenPopups = []; // Mover thread only: popup and where it was.
 
     public PipInteraction(nint source, Rectangle view, Rectangle shown)
     {
@@ -166,22 +167,89 @@ internal sealed class PipInteraction : IDisposable
     private void MoveWindow()
     {
         var clock = Stopwatch.StartNew();
-        while (!_stopping)
+        try
         {
-            _moved.WaitOne(250);
-            if (_stopping)
-                return;
-            long wait = MoveGapMilliseconds - clock.ElapsedMilliseconds;
-            if (wait > 0)
-                Thread.Sleep((int)wait);
-            if (_stopping || !_identity.Matches()) return;
-            if (_inPopup) continue;
-            clock.Restart();
-            long packed = Interlocked.Read(ref _pointer);
-            Point place = PlaceFor(new Point((int)(packed >> 32), (int)packed));
-            User32.SetWindowPos(_source, 0, place.X, place.Y, 0, 0, Move | User32.SWP_ASYNCWINDOWPOS);
+            while (!_stopping)
+            {
+                _moved.WaitOne(250);
+                if (_stopping)
+                    return;
+                long wait = MoveGapMilliseconds - clock.ElapsedMilliseconds;
+                if (wait > 0)
+                    Thread.Sleep((int)wait);
+                if (_stopping || !_identity.Matches()) return;
+                HideStrayPopups();
+                if (_inPopup) continue;
+                clock.Restart();
+                long packed = Interlocked.Read(ref _pointer);
+                Point place = PlaceFor(new Point((int)(packed >> 32), (int)packed));
+                User32.SetWindowPos(_source, 0, place.X, place.Y, 0, 0, Move | User32.SWP_ASYNCWINDOWPOS);
+            }
+        }
+        finally
+        {
+            ShowHiddenPopups();
         }
     }
+
+    /// <summary>
+    /// The original's own popups appear where the original really is, not where its view is. Menus and lists
+    /// open by the pointer, inside the view, and stay; anything wholly outside the view, such as a browser's
+    /// link preview at the original's bottom edge, is moved off the screen until it comes back in or the visit ends.
+    /// </summary>
+    private void HideStrayPopups()
+    {
+        Rectangle view;
+        lock (_moved) view = _view;
+        uint thread = User32.GetWindowThreadProcessId(_source, out _);
+        var seen = new HashSet<nint>();
+        EnumThreadWindows(thread, (window, _) =>
+        {
+            if (window != _source && User32.IsWindowVisible(window) &&
+                Windows.WindowInfo.IsOwnedBy(window, _source))
+                seen.Add(window);
+            return true;
+        }, 0);
+        foreach (nint popup in seen)
+        {
+            if (!User32.GetWindowRect(popup, out Rect r)) continue;
+            bool stray = !Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).IntersectsWith(view);
+            // Sent off before but put back by its app: send it off again.
+            if (stray && (!_hiddenPopups.ContainsKey(popup) || r.Right > SystemInformation.VirtualScreen.Left)) HidePopup(popup);
+            else if (!stray && _hiddenPopups.ContainsKey(popup)) ShowPopup(popup);
+        }
+        foreach (nint gone in _hiddenPopups.Keys.Where(popup => !seen.Contains(popup)).ToArray())
+            ShowPopup(gone); // Closed, or hidden by its app: put back as it was for next time.
+    }
+
+    private void HidePopup(nint popup)
+    {
+        if (!User32.GetWindowRect(popup, out Rect r)) return;
+        _hiddenPopups[popup] = new Point(r.Left, r.Top);
+        Rectangle all = SystemInformation.VirtualScreen;
+        User32.SetWindowPos(popup, 0, all.Left - (r.Right - r.Left) - 100, all.Top - (r.Bottom - r.Top) - 100, 0, 0,
+            Move | User32.SWP_ASYNCWINDOWPOS);
+    }
+
+    private void ShowPopup(nint popup)
+    {
+        if (!_hiddenPopups.Remove(popup, out Point at) || !User32.IsWindow(popup)) return;
+        // Only if it's still where it was sent: if the app has placed it since, that place wins.
+        if (User32.GetWindowRect(popup, out Rect r) && r.Right <= SystemInformation.VirtualScreen.Left)
+            User32.SetWindowPos(popup, 0, at.X, at.Y, 0, 0, Move | User32.SWP_ASYNCWINDOWPOS);
+    }
+
+    private void ShowHiddenPopups()
+    {
+        foreach (nint popup in _hiddenPopups.Keys.ToArray())
+            ShowPopup(popup);
+    }
+
+    private delegate bool EnumWindowsProc(nint window, nint data);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumThreadWindows(uint thread, EnumWindowsProc callback, nint data);
 
     private void Record(PressOutcome outcome, Point at, nint hit)
     {

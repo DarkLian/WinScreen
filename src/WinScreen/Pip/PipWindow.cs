@@ -1028,7 +1028,7 @@ public sealed class PipWindow : Form
             if (target != cursor || !_origin.IsAvailable || User32.GetForegroundWindow() != _source ||
                 !WindowInfo.IsAvailable(_source) ||
                 (User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE) & User32.WS_EX_TRANSPARENT) != 0 ||
-                (User32.GetAncestor(hit, User32.GA_ROOT) != _source && User32.GetAncestor(hit, User32.GA_ROOTOWNER) != _source))
+                (User32.GetAncestor(hit, User32.GA_ROOT) is var root && root != _source && !WindowInfo.IsOwnedBy(root, _source)))
                 throw new WindowOperationException(T("errors.pip.clickUnverified"));
             User32.ClickLeftButton();
         }

@@ -19,7 +19,13 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     public const byte MinimumOpacity = 51;
     public const byte ClickThroughOpacity = 204;
 
-    private const byte HiddenOpacity = 1;
+    // Fully transparent. Windows 11 blends in linear light when HDR or automatic color management is on, where
+    // even 1 of 255 shows as a faint ghost of the window. Views and captures still get the whole picture.
+    private const byte HiddenOpacity = 0;
+
+    // A window with no opacity at all gets no clicks, so while it's being used through its view it's at the
+    // least opacity that does. That's only while the pointer is on the view.
+    private const byte InteractiveOpacity = 1;
     private const int PinAttempts = 5;
     private const int PinRetryMilliseconds = 10;
     private const uint ResponsiveMilliseconds = 400;
@@ -730,6 +736,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 SaveJournal();
             }
 
+            ApplyAlpha(window, state, InteractiveOpacity);
             WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
             User32.SetWindowPos(window, view, 0, 0, 0, 0,
                 User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
@@ -744,6 +751,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             if (!_changed.TryGetValue(window, out ChangedWindow? state) || !User32.IsWindow(window))
                 return;
             WriteExStyle(window, ReadExStyle(window) | User32.WS_EX_TRANSPARENT);
+            if (state.Hidden) ApplyAlpha(window, state, HiddenOpacity);
             FinishPeek(window, state);
             SaveJournal();
         }
@@ -1521,6 +1529,17 @@ public static class WindowInfo
     }
 
     /// <summary>True while a window is kept invisible, as a hidden or shrunk original is.</summary>
+    /// <summary>Whether <paramref name="window"/> belongs to <paramref name="owner"/>, directly or through other owned windows.</summary>
+    public static bool IsOwnedBy(nint window, nint owner)
+    {
+        for (int depth = 0; depth < 8 && window != 0; depth++)
+        {
+            window = User32.GetWindow(window, User32.GW_OWNER);
+            if (window == owner) return true;
+        }
+        return false;
+    }
+
     public static bool IsConcealed(nint window)
     {
         return (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_LAYERED) != 0

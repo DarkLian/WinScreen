@@ -198,6 +198,31 @@ public sealed class InteractiveViewTests
     }
 
     [Fact]
+    public void A_popup_of_the_original_outside_the_view_is_kept_off_screen_until_the_visit_ends()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        source.UseFrame();
+        Drive(source, (view, _) =>
+        {
+            Rectangle frame = view.Bounds;
+            var inside = new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2);
+            Hover(inside, view);
+            var away = new Point(40, Screen.PrimaryScreen!.WorkingArea.Bottom - 80);
+            nint popup = source.ShowPopup(away);
+            Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(popup).Right <= SystemInformation.VirtualScreen.Left, 2000),
+                $"The popup stayed on screen: {Desktop.BoundsOf(popup)}; live={view.LiveInteraction is not null}; " +
+                $"rootowner=0x{User32.GetAncestor(popup, User32.GA_ROOTOWNER):X} source=0x{source.Handle:X}; " +
+                $"threads {User32.GetWindowThreadProcessId(popup, out uint p1)}/{User32.GetWindowThreadProcessId(source.Handle, out uint p2)}; " +
+                $"visible={Desktop.IsWindowVisible(popup)}");
+
+            Desktop.MoveMouse(new Point(frame.Left - 40, frame.Top - 40));
+            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null, 2000), "The visit didn't end.");
+            Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(popup).Location == away, 2000),
+                "The popup didn't come back: " + Desktop.BoundsOf(popup));
+        });
+    }
+
+    [Fact]
     public void A_press_on_the_hidden_title_bar_moves_the_view_and_never_reaches_the_window()
     {
         using var source = new TargetProcess(SourceSpot);

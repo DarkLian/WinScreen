@@ -488,7 +488,7 @@ public sealed class AppEndToEndTests : IDisposable
             tile = Desktop.FindProcessWindow(_app.Id, title => title == "Shrunk - Window to shrink");
             return tile != 0;
         }), "Ctrl+Alt+W didn't leave a tile.");
-        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 1), "The window wasn't hidden.");
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0), "The window wasn't hidden.");
 
         Rectangle small = Desktop.BoundsOf(tile);
         Assert.True(small.Width <= Spot.Width / 2, $"The tile is {small}.");
@@ -504,7 +504,7 @@ public sealed class AppEndToEndTests : IDisposable
         var moved = new Point(middle.X + 300, middle.Y + 60);
         Desktop.Drag(middle, moved, tile);
         Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(tile).Left == small.Left + 300), "The tile didn't move.");
-        Assert.Equal((byte?)1, Desktop.Alpha(target.Handle));
+        Assert.Equal((byte?)0, Desktop.Alpha(target.Handle));
 
         Desktop.ClickOn(moved, tile);
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 255), "The window didn't come back.");
@@ -521,7 +521,7 @@ public sealed class AppEndToEndTests : IDisposable
         long before = Desktop.ExStyle(target.Handle);
         Focus(target);
         Hotkey(Keys.W, target);
-        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 1));
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0));
 
         Desktop.PostMessage(_appWindow, User32.WM_CLOSE, 0, 0);
 
@@ -710,7 +710,7 @@ public sealed class AppEndToEndTests : IDisposable
         Desktop.RightClickOn(point, pip);
         Assert.True(Desktop.WaitFor(ForegroundIsApp));
         Desktop.Press(Keys.K); // &Keep updating
-        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 1));
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0));
         Desktop.RightClickOn(point, pip);
         Assert.True(Desktop.WaitFor(ForegroundIsApp));
         Desktop.Press(Keys.Home);
@@ -724,7 +724,7 @@ public sealed class AppEndToEndTests : IDisposable
         _app = Start();
         _appWindow = WaitForAppWindow();
         Assert.True(Desktop.WaitFor(() => Desktop.ExStyle(target.Handle) == original));
-        Assert.NotEqual((byte?)1, Desktop.Alpha(target.Handle));
+        Assert.True(Desktop.Alpha(target.Handle) is null or > 1, "The window is still hidden.");
     }
 
     [Fact]
@@ -813,7 +813,7 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => ForegroundIsApp()), "The view's menu didn't open.");
         Desktop.Press(Keys.K);
 
-        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 1), "The original wasn't hidden.");
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0), "The original wasn't hidden.");
     }
 
     private bool ForegroundIsApp()

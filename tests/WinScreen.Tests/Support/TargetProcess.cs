@@ -73,6 +73,17 @@ internal sealed class TargetProcess : IDisposable
             throw new InvalidOperationException("Test target's frame didn't settle.");
     }
 
+    /// <summary>Shows a small popup the window owns, at this screen position, and returns it.</summary>
+    internal nint ShowPopup(Point at)
+    {
+        _process.StandardInput.WriteLine($"popup {at.X} {at.Y}");
+        _process.StandardInput.Flush();
+        string? report = NextReport();
+        if (report is null || !report.StartsWith("popup ", StringComparison.Ordinal))
+            throw new InvalidOperationException("Test target didn't show a popup.");
+        return (nint)long.Parse(report[6..]);
+    }
+
     /// <summary>Makes every move or resize take this long for the window to handle.</summary>
     internal void BeSlow(int milliseconds)
     {
