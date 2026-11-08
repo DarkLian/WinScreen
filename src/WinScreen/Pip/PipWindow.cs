@@ -1073,6 +1073,9 @@ public sealed class PipWindow : Form
 
     internal PipInteraction? LiveInteraction => _live;
 
+    /// <summary>Where the compact title bar is while it shows, for tests.</summary>
+    internal Rectangle? TitleBarBounds => _titleBar is { Visible: true } bar ? bar.Bounds : null;
+
     /// <summary>Every press's outcome over this view's life, so none can pass unnoticed in tests.</summary>
     internal IReadOnlyCollection<PressOutcome> PressOutcomes => _pressOutcomes;
 
@@ -1406,7 +1409,10 @@ public sealed class PipWindow : Form
 
     internal void UpdateHover(Point pointer, long now)
     {
-        bool over = Bounds.Contains(pointer) || _titleBar?.Dragging == true;
+        // Outside the view, the title bar and close button count as part of it, so they stay while reached for.
+        bool over = Bounds.Contains(pointer) || _titleBar?.Dragging == true ||
+                    (_titleBar is { Visible: true } bar && bar.Bounds.Contains(pointer)) ||
+                    (_closeButton is { Visible: true } close && close.Bounds.Contains(pointer));
         ClaimEscape(_selecting);
         if (!over || _suspended || _interacting || _selecting || _pressed || _overrides.ClickThrough)
         {
@@ -1424,13 +1430,26 @@ public sealed class PipWindow : Form
                 KeepPartOutOfScreenCapture(_titleBar);
             }
             _titleBar.UpdateTitle(_origin.Title, _sourceIcon);
-            _titleBar.Bounds = new Rectangle(Left + PipGeometry.Border, Top + PipGeometry.Border,
-                Width - 2 * PipGeometry.Border, Dpi.Scale(28, DeviceDpi));
+            int height = Dpi.Scale(28, DeviceDpi);
+            _titleBar.Bounds = new Rectangle(Left + PipGeometry.Border, ControlsTop(height), Width - 2 * PipGeometry.Border, height);
             if (!_titleBar.Visible) _titleBar.Show();
         }
         else ShowCloseButton();
 
         FollowHoverPreview(pointer, now);
+    }
+
+    /// <summary>
+    /// Where the title bar or close button goes. Normally over the top of the view; while the view is used
+    /// directly, the top of the picture is what people click (a browser's tabs, say), so they sit just
+    /// outside it, above, or below when there's no room above.
+    /// </summary>
+    private int ControlsTop(int height)
+    {
+        if (!_interactiveItem.Checked)
+            return Top + PipGeometry.Border;
+        Rectangle area = Screen.FromControl(this).WorkingArea;
+        return Top - height >= area.Top ? Top - height : Bottom;
     }
 
     private void ShowCloseButton()
@@ -1443,7 +1462,7 @@ public sealed class PipWindow : Form
             KeepPartOutOfScreenCapture(_closeButton);
         }
 
-        _closeButton.Location = new Point(Right - size - PipGeometry.Border, Top + PipGeometry.Border);
+        _closeButton.Location = new Point(Right - size - PipGeometry.Border, ControlsTop(size));
         if (_closeButton.Visible)
             return;
         _closeButton.Show();

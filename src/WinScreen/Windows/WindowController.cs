@@ -19,8 +19,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     public const byte MinimumOpacity = 51;
     public const byte ClickThroughOpacity = 204;
 
-    // Fully transparent. Windows 11 blends in linear light when HDR or automatic color management is on, where
-    // even 1 of 255 shows as a faint ghost of the window. Views and captures still get the whole picture.
+    // Fully transparent. On some Windows 11 PCs even 1 of 255 showed as a faint ghost of the whole window (seen
+    // without HDR; the cause isn't known). Views and captures still get the whole picture.
     private const byte HiddenOpacity = 0;
 
     // A window with no opacity at all gets no clicks, so while it's being used through its view it's at the

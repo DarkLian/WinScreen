@@ -198,6 +198,24 @@ public sealed class InteractiveViewTests
     }
 
     [Fact]
+    public void Used_directly_the_title_bar_sits_outside_the_view_so_the_top_of_the_picture_can_be_clicked()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        source.UseFrame();
+        Drive(source, (view, ui) =>
+        {
+            ui(() => view.ApplyViewPreferences(new PipViewPreferences { CompactTitleBar = true }));
+            Rectangle frame = view.Bounds;
+            Hover(new Point(frame.Left + frame.Width / 2, frame.Top + 12), view);
+            Rectangle? bar = null;
+            Assert.True(Desktop.WaitFor(() => { ui(() => bar = view.TitleBarBounds); return bar is not null; }, 2000),
+                "The title bar didn't show.");
+            Assert.False(bar!.Value.IntersectsWith(PipGeometry.ViewArea(frame.Size) is var area
+                ? new Rectangle(frame.Location + (Size)area.Location, area.Size) : frame), $"Title bar {bar} covers the view {frame}.");
+        });
+    }
+
+    [Fact]
     public void A_popup_of_the_original_outside_the_view_is_kept_off_screen_until_the_visit_ends()
     {
         using var source = new TargetProcess(SourceSpot);
