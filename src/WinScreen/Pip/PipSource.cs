@@ -44,6 +44,9 @@ internal sealed class WindowPipSource(WindowIdentity identity) : PipSource
     public override string Title => WindowInfo.Title(identity.Window);
     public override nint Window => identity.Window;
     private long? _processCheckedAt;
+    // Injectable only inside the assembly, to verify cadence without wall-clock sleeps or process reuse.
+    internal Func<long> AvailabilityClock { get; init; } = static () => Environment.TickCount64;
+    internal Func<bool> ProcessMatches { get; init; } = identity.Matches;
 
     /// <summary>
     /// Asked several times every 50 ms. The marker WinScreen put on the window goes when the window does, so it tells
@@ -54,11 +57,11 @@ internal sealed class WindowPipSource(WindowIdentity identity) : PipSource
     {
         get
         {
-            if (identity.Token == 0) return identity.Matches();
+            if (identity.Token == 0) return ProcessMatches();
             if (!identity.StillThere()) return false;
-            long now = Environment.TickCount64;
+            long now = AvailabilityClock();
             if (_processCheckedAt is { } checkedAt && now - checkedAt < 1000) return true;
-            if (!identity.Matches()) return false;
+            if (!ProcessMatches()) return false;
             _processCheckedAt = now;
             return true;
         }

@@ -54,6 +54,38 @@ public sealed class PipSourceLogicTests
 public sealed class PipWindowSourceTests
 {
     [Fact]
+    public void Process_validation_runs_initially_at_each_boundary_and_never_caches_a_failure()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var window = new Form();
+            WindowIdentity identity = WindowIdentity.Capture(window.Handle);
+            long now = 42000;
+            int checks = 0;
+            bool matches = true;
+            var source = new WindowPipSource(identity)
+            {
+                AvailabilityClock = () => now,
+                ProcessMatches = () => { checks++; return matches; },
+            };
+            Assert.True(source.IsAvailable); Assert.Equal(1, checks);
+            now += 999;
+            Assert.True(source.IsAvailable); Assert.Equal(1, checks);
+            now++;
+            Assert.True(source.IsAvailable); Assert.Equal(2, checks);
+            now += 999;
+            Assert.True(source.IsAvailable); Assert.Equal(2, checks);
+            now++; matches = false;
+            Assert.False(source.IsAvailable); Assert.Equal(3, checks);
+            Assert.False(source.IsAvailable); Assert.Equal(4, checks);
+            matches = true;
+            Assert.True(source.IsAvailable); Assert.Equal(5, checks);
+            window.Dispose(); // Even a cached process success never bypasses the per-window token check.
+            Assert.False(source.IsAvailable); Assert.Equal(5, checks);
+        });
+    }
+
+    [Fact]
     public void A_window_source_checks_the_process_before_caching_availability()
     {
         WindowMenuBuilderTests.OnUiThread(() =>
