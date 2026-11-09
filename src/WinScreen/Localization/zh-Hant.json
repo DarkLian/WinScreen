@@ -204,7 +204,7 @@
   "pip.hover.whole": "完整檢視",
   "pip.hover.windowsOnly": "預覽只適用於視窗檢視。",
   "pip.input.viewOnly": "僅檢視",
-  "pip.interactive": "直接使用此檢視（實驗性）",
+  "pip.interactive": "互動式子母畫面（實驗性）",
   "pip.keepAspectRatio": "保持長寬比",
   "pip.keepUpdating": "保持更新（隱藏原視窗）(&K)",
   "pip.lockPosition": "鎖定位置",

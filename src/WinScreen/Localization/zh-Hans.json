@@ -204,7 +204,7 @@
   "pip.hover.whole": "完整视图",
   "pip.hover.windowsOnly": "预览只适用于窗口视图。",
   "pip.input.viewOnly": "仅查看",
-  "pip.interactive": "直接使用此视图（实验性）",
+  "pip.interactive": "交互式画中画（实验性）",
   "pip.keepAspectRatio": "保持宽高比",
   "pip.keepUpdating": "保持更新（隐藏原窗口）(&K)",
   "pip.lockPosition": "锁定位置",

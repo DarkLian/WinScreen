@@ -204,7 +204,7 @@
   "pip.hover.whole": "Whole view",
   "pip.hover.windowsOnly": "Previews work for window views only.",
   "pip.input.viewOnly": "View only",
-  "pip.interactive": "Use this view directly (experimental)",
+  "pip.interactive": "Interactive PiP (experimental)",
   "pip.keepAspectRatio": "Keep aspect ratio",
   "pip.keepUpdating": "&Keep updating (hide original)",
   "pip.lockPosition": "Lock position",

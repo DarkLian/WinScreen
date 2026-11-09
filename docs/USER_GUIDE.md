@@ -69,13 +69,17 @@ Every view has a title bar above the picture, or below it near the top of the sc
   so the view stays live. It also removes the original from the taskbar and Alt+Tab where supported. Showing the original or closing the view restores its entry.
 - **View options:** frame limit, opacity, size, position lock and click-through, just for this view.
 - **Presets:** save the crop, size and place under a name and use it again later.
-- **Use this view directly** *(experimental)* lets you point, click, select text, drag and scroll in the picture.
-  The original stays hidden. Drag the view's title bar to move it, or hold Alt and drag the picture.
+- **Interactive PiP (experimental)** lets you point, click, select text, drag and scroll in the picture.
+  Hide original stays checked and locked while this is on. Turning it off restores your previous hiding choice.
+  Drag the view's title bar to move it, or hold Alt and drag the picture.
   Menus open near the pointer. If the app asks you something, the original comes back so you can answer.
   Keys return to your previous window when you leave.
   Store apps, such as Calculator, work too. They keep their taskbar button, and choosing it shows the app.
   On some newer controls, in Store apps and parts of File Explorer, you can click, right-click and scroll,
   but not hover, drag or select.
+  Browser pointer shapes work, but hover effects and tooltips may not stay active.
+  For continuous scrolling, enable **Middle-click scrolling (replaces app action)** in this view, middle-click, then move away from that point. Middle-click again, left-click or press Escape to stop. Leave it off to keep the app's normal middle-click actions.
+  Some modern menus can still flicker; show the original if a menu is difficult to use.
   A few apps can't be hidden, such as PowerShell ISE, and WinScreen tells you.
 
 Views pause direct use while a WinScreen menu or the tray overflow panel is open.
