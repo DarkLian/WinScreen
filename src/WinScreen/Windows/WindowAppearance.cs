@@ -221,7 +221,7 @@ public sealed partial class WindowController
             }
             ChangedWindow state = Track(window);
             if (state.SwitcherBits is not null) return;
-            if (!state.Hidden || state.PlacementBeforePeek is not null)
+            if (!state.Hidden || state.PlacementBeforePeek is not null && !state.Parked) // A parked window keeps its placement there too.
                 throw new WindowOperationException(T("errors.switcher.hideOriginalFirst"));
             if (TaskbarButtonOwnedByWindows(window))
                 throw new WindowOperationException(T("errors.switcher.windowsManaged"));
@@ -234,6 +234,44 @@ public sealed partial class WindowController
                 throw Failure(T("actions.hideSwitcherEntry"), window);
             SaveJournal();
         }
+    }
+
+    /// <summary>
+    /// Takes a hidden window's button off the taskbar and changes nothing about the window, so it keeps its own
+    /// caption buttons. It stays in Alt+Tab, where choosing it shows it again.
+    /// </summary>
+    public void RemoveTaskbarButton(nint window)
+    {
+        lock (_gate)
+        {
+            ChangedWindow state = Track(window);
+            if (state.TaskbarButtonRemoved || state.SwitcherBits is not null) return;
+            if (!state.Hidden || state.PlacementBeforePeek is not null && !state.Parked) // A parked window keeps its placement there too.
+                throw new WindowOperationException(T("errors.switcher.hideOriginalFirst"));
+            if (TaskbarButtonOwnedByWindows(window))
+                throw new WindowOperationException(T("errors.switcher.windowsManaged"));
+            state.TaskbarButtonRemoved = true;
+            Prepare(window, state); // Recorded first, so recovery puts the button back.
+            if (!TaskbarList.Remove(window))
+            {
+                state.TaskbarButtonRemoved = false;
+                SaveJournal();
+                throw Failure(T("actions.hideSwitcherEntry"), window);
+            }
+        }
+    }
+
+    public bool IsOffTaskbar(nint window)
+    {
+        lock (_gate) return _changed.TryGetValue(window, out var state) && state.Identity.Matches() && state.TaskbarButtonRemoved;
+    }
+
+    private static void RestoreTaskbarButton(nint window, ChangedWindow state)
+    {
+        if (!state.TaskbarButtonRemoved) return;
+        state.Identity.Require();
+        if (!TaskbarList.Add(window)) throw Failure(T("actions.restorePosition"), window);
+        state.TaskbarButtonRemoved = false;
     }
 
     private void RestoreSwitcher(nint window, ChangedWindow state)

@@ -692,7 +692,7 @@ public sealed class AppEndToEndTests : IDisposable
     }
 
     [Fact]
-    public void Starting_after_a_forced_kill_restores_a_source_hidden_from_the_switcher()
+    public void Starting_after_a_forced_kill_restores_a_source_taken_off_the_taskbar()
     {
         if (Environment.OSVersion.Version.Build < 22000)
         {
@@ -713,7 +713,10 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(ForegroundIsApp));
         Desktop.Press(Keys.K); // &Keep updating
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0));
-        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOOLWINDOW) != 0));
+        // Hidden, it leaves the taskbar but keeps its own styles, so its caption buttons stay its own.
+        Assert.True(Desktop.WaitFor(() => File.Exists(Path.Combine(_data, "changed-windows.json")) &&
+            File.ReadAllText(Path.Combine(_data, "changed-windows.json")).Contains("\"TaskbarButtonRemoved\":true")));
+        Assert.Equal(0, Desktop.ExStyle(target.Handle) & WinScreen.Windows.WindowController.SwitcherMask & ~original);
         Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(target.Handle) != originalBounds));
         _app.Kill();
         Assert.True(_app.WaitForExit(4000));

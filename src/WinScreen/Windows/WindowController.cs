@@ -76,6 +76,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public bool BorderlessFilled { get; set; }
         public bool Parked { get; set; }
         public long? SwitcherBits { get; set; }
+        public bool TaskbarButtonRemoved { get; set; }
         public int? OriginalDarkTitleBar { get; set; }
         public bool BorderHidden { get; set; }
     }
@@ -672,6 +673,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             bool parked = state.Parked;
             if (parked) Unpark(window);
             RestoreSwitcher(window, state);
+            RestoreTaskbarButton(window, state);
             if (parked)
             {
                 // Let the app repaint at its restored placement while it remains fully transparent.
@@ -806,6 +808,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                     BorderlessFilled = record.BorderlessFilled,
                     Parked = record.Parked,
                     SwitcherBits = record.SwitcherBits,
+                    TaskbarButtonRemoved = record.TaskbarButtonRemoved,
                     OriginalDarkTitleBar = record.OriginalDarkTitleBar,
                     BorderHidden = record.BorderHidden,
                 };
@@ -882,6 +885,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             BorderlessFilled = state.BorderlessFilled,
             Parked = state.Parked,
             SwitcherBits = state.SwitcherBits,
+            TaskbarButtonRemoved = state.TaskbarButtonRemoved,
             OriginalDarkTitleBar = state.OriginalDarkTitleBar,
             BorderHidden = state.BorderHidden,
         };
@@ -1073,6 +1077,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             Attempt("restore-borderless", () => RemoveBorderless(window, state));
         if (state.SwitcherBits is not null)
             Attempt("restore-switcher", () => RestoreSwitcher(window, state));
+        if (state.TaskbarButtonRemoved)
+            Attempt("restore-taskbar", () => RestoreTaskbarButton(window, state));
         if (state.OriginalDarkTitleBar is not null)
             Attempt("restore-titlebar", () => RestoreTitleBar(window, state));
         if (state.BorderHidden)

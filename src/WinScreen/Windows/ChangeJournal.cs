@@ -23,6 +23,9 @@ public sealed record WindowRecord(
     public long StyleBits { get; init; }
     // Nullable: zero is a valid original value and still needs restoring.
     public long? SwitcherBits { get; init; }
+
+    /// <summary>The window's taskbar button was taken off while it was hidden; it goes back.</summary>
+    public bool TaskbarButtonRemoved { get; init; }
     public int[]? BorderlessPlacement { get; init; }
     public int[]? BorderlessOrigin { get; init; }
     public bool BorderlessFilled { get; init; }

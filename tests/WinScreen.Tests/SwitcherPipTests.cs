@@ -40,6 +40,75 @@ public sealed class SwitcherPipTests
         });
     }
 
+    /// <summary>
+    /// A hidden original keeps its own caption buttons in the view: its title bar looks as it did while it was
+    /// shown. Taking it out of Alt+Tab as well (the separate option) gives it a tool window's frame, with a small
+    /// close button only, which shows the comparison can tell the two apart.
+    /// </summary>
+    [Fact]
+    public void A_hidden_original_keeps_its_own_caption_buttons_in_the_view()
+    {
+        using var source = new TargetProcess(new Rectangle(240, 160, 400, 300));
+        source.UseFrame(); // A real title bar with Windows' own caption buttons.
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var pip = new PipWindow(source.Handle, windows) { AllowSwitcherHiding = true };
+            pip.ApplyPipPreferences(new PipPreferences { Backend = PipBackendPreference.Dwm });
+            try
+            {
+                pip.ShowOnTop();
+                pip.Location = new Point(800, 140);
+                Pump(800);
+                Rectangle Corner()
+                {
+                    Rectangle b = pip.Bounds;
+                    return new Rectangle(b.Right - Math.Min(160, b.Width / 2), b.Top, Math.Min(160, b.Width / 2), Math.Min(48, b.Height / 4));
+                }
+                Rectangle corner = Corner();
+                using Bitmap shown = Capture(corner);
+                pip.SetOriginalHidden(true);
+                Assert.True(windows.IsHidden(source.Handle));
+                Pump(1200);
+                Assert.Equal(corner, Corner());
+                using Bitmap hidden = Capture(corner);
+                double same = Difference(shown, hidden);
+
+                pip.SetSwitcherHidden(true);
+                Assert.True(windows.IsOutOfSwitcher(source.Handle));
+                Pump(1200);
+                using Bitmap tool = Capture(corner);
+                double changed = Difference(shown, tool);
+                Assert.True(same < 6 && changed > 3 * same + 4,
+                    $"Title bar corner differs from the shown original by {same:F1} when hidden and {changed:F1} as a tool window.");
+                pip.Close();
+                Assert.False(windows.IsHidden(source.Handle));
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
+
+    private static Bitmap Capture(Rectangle area)
+    {
+        var image = new Bitmap(area.Width, area.Height);
+        using var graphics = Graphics.FromImage(image);
+        graphics.CopyFromScreen(area.Location, Point.Empty, area.Size);
+        return image;
+    }
+
+    /// <summary>Mean difference per color channel, 0 to 255.</summary>
+    private static double Difference(Bitmap a, Bitmap b)
+    {
+        long total = 0;
+        for (int y = 0; y < a.Height; y++)
+            for (int x = 0; x < a.Width; x++)
+            {
+                Color p = a.GetPixel(x, y), q = b.GetPixel(x, y);
+                total += Math.Abs(p.R - q.R) + Math.Abs(p.G - q.G) + Math.Abs(p.B - q.B);
+            }
+        return total / (3.0 * a.Width * a.Height);
+    }
+
     private static void Pump(int milliseconds)
     {
         long end = Environment.TickCount64 + milliseconds;
@@ -78,12 +147,16 @@ public sealed class SwitcherPipTests
                 {
                     // Windows 10 can't capture a window out of the switcher, so this is refused, with a reason.
                     Assert.False(windows.IsOutOfSwitcher(source.Handle));
+                    Assert.False(windows.IsOffTaskbar(source.Handle));
                     Assert.Equal([Localization.UiText.T("errors.switcher.windows10")], problems);
                     pip.Close();
                     Assert.False(windows.IsHidden(source.Handle));
                     return;
                 }
-                Assert.True(windows.IsOutOfSwitcher(source.Handle));
+                // Hiding takes only the taskbar button: the window keeps its styles, and so its own caption buttons.
+                Assert.True(windows.IsOffTaskbar(source.Handle));
+                Assert.False(windows.IsOutOfSwitcher(source.Handle));
+                Assert.Equal(before & WindowController.SwitcherMask, Desktop.ExStyle(source.Handle) & WindowController.SwitcherMask);
                 Pump(400);
                 start = Frames();
                 Pump(2000);
@@ -108,6 +181,7 @@ public sealed class SwitcherPipTests
                 pip.Close();
                 Assert.False(windows.IsHidden(source.Handle));
                 Assert.False(windows.IsOutOfSwitcher(source.Handle));
+                Assert.False(windows.IsOffTaskbar(source.Handle));
                 Assert.Equal(before & WindowController.SwitcherMask, Desktop.ExStyle(source.Handle) & WindowController.SwitcherMask);
                 Assert.NotEqual(source.Handle, User32.GetForegroundWindow());
             }
