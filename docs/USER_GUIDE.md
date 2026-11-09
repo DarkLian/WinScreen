@@ -77,7 +77,8 @@ Every view has a title bar above the picture, or below it near the top of the sc
   Store apps, such as Calculator, work too. They keep their taskbar button, and choosing it shows the app.
   On some newer controls, in Store apps and parts of File Explorer, you can click, right-click and scroll,
   but not hover, drag or select.
-  Browser pointer shapes work, but hover effects and tooltips may not stay active.
+  By default, browser pointer shapes work, but hover effects and tooltips may not stay active.
+  **Enhanced hover (experimental)** is off by default. Turn it on for this view to keep hover effects in compatible applications using a small native helper inside the application. See the [compatibility table](FEATURE_COMPATIBILITY.md) for supported applications. Native tooltips may still be unavailable.
   For continuous scrolling, enable **Middle-click scrolling (replaces app action)** in this view, middle-click, then move away from that point. Middle-click again, left-click or press Escape to stop. Leave it off to keep the app's normal middle-click actions.
   Some modern menus can still flicker; show the original if a menu is difficult to use.
   A few apps can't be hidden, such as PowerShell ISE, and WinScreen tells you.

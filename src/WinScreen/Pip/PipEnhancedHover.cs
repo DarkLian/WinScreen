@@ -6,7 +6,7 @@ using WinScreen.Windows;
 
 namespace WinScreen.Pip;
 
-/// <summary>Optional Messages extension. All calls are on the input worker, never the mouse hook.</summary>
+/// <summary>Optional Messages extension. After visit startup, the input worker owns the native session.</summary>
 internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposable
 {
     // A native thread has one activation slot. Refuse competing views rather than replacing their target.
