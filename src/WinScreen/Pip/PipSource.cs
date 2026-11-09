@@ -43,7 +43,7 @@ internal sealed class WindowPipSource(WindowIdentity identity) : PipSource
 {
     public override string Title => WindowInfo.Title(identity.Window);
     public override nint Window => identity.Window;
-    private long _processCheckedAt = long.MinValue;
+    private long? _processCheckedAt;
 
     /// <summary>
     /// Asked several times every 50 ms. The marker WinScreen put on the window goes when the window does, so it tells
@@ -57,7 +57,7 @@ internal sealed class WindowPipSource(WindowIdentity identity) : PipSource
             if (identity.Token == 0) return identity.Matches();
             if (!identity.StillThere()) return false;
             long now = Environment.TickCount64;
-            if (now - _processCheckedAt < 1000) return true;
+            if (_processCheckedAt is { } checkedAt && now - checkedAt < 1000) return true;
             if (!identity.Matches()) return false;
             _processCheckedAt = now;
             return true;

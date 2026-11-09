@@ -51,6 +51,30 @@ public sealed class PipSourceLogicTests
 }
 
 [Trait("Category", "RealWindows")]
+public sealed class PipWindowSourceTests
+{
+    [Fact]
+    public void A_window_source_checks_the_process_before_caching_availability()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var window = new Form();
+            WindowIdentity identity = WindowIdentity.Capture(window.Handle);
+            Assert.True(new WindowPipSource(identity).IsAvailable);
+
+            // The cheap HWND/token check cannot detect a mismatched process start time.
+            // The first availability query must perform the full process check, even at positive uptime.
+            WindowIdentity changed = identity with { ProcessStartTicks = identity.ProcessStartTicks + 1 };
+            Assert.True(changed.StillThere());
+            Assert.False(changed.Matches());
+            var source = new WindowPipSource(changed);
+            Assert.False(source.IsAvailable);
+            Assert.False(source.IsAvailable); // A failed check must not be cached as a success.
+        });
+    }
+}
+
+[Trait("Category", "RealWindows")]
 public sealed class PipScreenViewTests
 {
     private static void OnUiThread(Action<Action<int>> test)
