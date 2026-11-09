@@ -727,8 +727,8 @@ public sealed class PipWindow : Form
                 _windows.HideOwned(_source, this);
                 if (SwitcherHidingStopsView) Problem?.Invoke(T("errors.switcher.windows10"));
                 // A Store app keeps the taskbar button Windows owns; activating it shows the app (FollowSource).
-                // Only the button goes: a tool window's frame would replace the original's own caption buttons in
-                // the view. Choosing it in Alt+Tab shows the original, as for a Store app.
+                // Only its taskbar entry goes, which Windows 11 also leaves out of Alt+Tab; a tool window's frame
+                // would replace the original's own caption buttons in the view.
                 else if (!WindowController.TaskbarButtonOwnedByWindows(_source)) _windows.RemoveTaskbarButton(_source);
                 _windows.Park(_source);
                 ConfigureParkedCapture();

@@ -237,8 +237,8 @@ public sealed partial class WindowController
     }
 
     /// <summary>
-    /// Takes a hidden window's button off the taskbar and changes nothing about the window, so it keeps its own
-    /// caption buttons. It stays in Alt+Tab, where choosing it shows it again.
+    /// Takes a hidden window off the shell's task list and changes nothing about the window, so it keeps its own
+    /// caption buttons. The taskbar drops its button, and Windows 11 leaves it out of Alt+Tab as well.
     /// </summary>
     public void RemoveTaskbarButton(nint window)
     {

@@ -66,7 +66,7 @@ Every view has a title bar above the picture, or below it near the top of the sc
 **Useful options in the view's menu**
 
 - **Keep updating (hide original):** some apps, such as browsers, stop drawing when they're covered. This hides the original
-  so the view stays live. It also removes the original's taskbar button where supported. It stays in Alt+Tab, and choosing it there shows it. Showing the original or closing the view brings the button back.
+  so the view stays live. It also removes the original from the taskbar and Alt+Tab where supported. Showing the original or closing the view restores its entry.
 - **View options:** frame limit, opacity, size, position lock and click-through, just for this view.
 - **Presets:** save the crop, size and place under a name and use it again later.
 - **Interactive PiP (experimental)** lets you point, click, select text, drag and scroll in the picture.
