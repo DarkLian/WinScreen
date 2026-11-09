@@ -10,11 +10,13 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
 {
     private MouseButtons _held;
     internal nint PressTarget { get; private set; }
+    internal string PressTransport { get; private set; } = "messages";
     private nint _dragTarget;
     private Point _lastPointer;
+    private PipControlInput? _controls;
+    private Point? _controlPress;
     private readonly Dictionary<MouseButtons, (long Time, Point At, nint Target)> _clicks = [];
 
-    [DllImport("user32.dll")] private static extern nint RealChildWindowFromPoint(nint parent, NativePoint point);
     [DllImport("user32.dll")] private static extern bool ScreenToClient(nint window, ref NativePoint point);
     [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")] private static extern nint GetClassLongPtr(nint window, int index);
     [DllImport("user32.dll")] private static extern uint GetDoubleClickTime();
@@ -39,11 +41,29 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         nint target = source;
         for (int depth = 0; depth < 32; depth++)
         {
-            var point = new NativePoint { X = mapped.X, Y = mapped.Y };
-            if (!ScreenToClient(target, ref point)) return 0;
-            nint child = RealChildWindowFromPoint(target, point);
-            if (child == 0 || child == target) return target;
+            nint child = InputChildAt(target, mapped);
+            if (child == 0) return target;
             target = child;
+        }
+        return 0;
+    }
+
+    private static nint InputChildAt(nint parent, Point mapped)
+    {
+        // Rendering surfaces can be children of another process (Chromium's GPU window, for
+        // example). Rectangle-only searches pick those even when they decline mouse input.
+        // Walk siblings in Z order, respecting both click-through styles and hit testing.
+        for (nint child = User32.GetWindow(parent, 5 /* GW_CHILD */); child != 0;
+             child = User32.GetWindow(child, 2 /* GW_HWNDNEXT */))
+        {
+            if (!User32.IsWindowVisible(child) ||
+                ((long)User32.GetWindowLongPtr(child, User32.GWL_EXSTYLE) & User32.WS_EX_TRANSPARENT) != 0 ||
+                !User32.GetWindowRect(child, out Rect bounds) ||
+                !Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom).Contains(mapped)) continue;
+            if (User32.SendMessageTimeout(child, User32.WM_NCHITTEST, 0, Pack(mapped), 2, 20, out nint hit) == 0)
+                continue;
+            if (hit is -1 or 0 or -2) continue;
+            return child;
         }
         return 0;
     }
@@ -76,6 +96,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     {
         _lastPointer = pointer;
         Point mapped = MappedScreen(pointer, view, shown);
+        if (_controlPress is not null) return true;
         return Post(_held != MouseButtons.None ? _dragTarget : TargetAt(mapped), 0x200, Keys(_held), mapped);
     }
 
@@ -85,6 +106,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         Point mapped = MappedScreen(pointer, view, shown);
         nint target = _held != MouseButtons.None ? _dragTarget : TargetAt(mapped);
         PressTarget = target;
+        PressTransport = "messages";
         int down = DownMessage(button);
         long now = Environment.TickCount64;
         bool doubleClick = _clicks.TryGetValue(button, out var previous) && previous.Target == target &&
@@ -92,6 +114,15 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
             Math.Abs(pointer.Y - previous.At.Y) <= SystemInformation.DoubleClickSize.Height / 2 &&
             ((long)GetClassLongPtr(target, -26) & 8) != 0;
         MouseButtons held = _held | button;
+        if (button == MouseButtons.Left && _held == MouseButtons.None &&
+            WindowInfo.ClassName(target) == "Microsoft.UI.Content.DesktopChildSiteBridge")
+        {
+            PressTransport = "automation";
+            _controlPress = mapped;
+            _held = held;
+            _dragTarget = target;
+            return true;
+        }
         nint keys = ButtonKeys(button, held);
         if (!Post(target, down + (doubleClick ? 2 : 0), keys, mapped)) return false;
         if (doubleClick) _clicks.Remove(button);
@@ -105,6 +136,14 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     {
         if ((_held & button) == 0) return false;
         _held &= ~button;
+        if (button == MouseButtons.Left && _controlPress is { } press)
+        {
+            _controlPress = null;
+            Point release = MappedScreen(pointer, view, shown);
+            if (Math.Abs(release.X - press.X) > SystemInformation.DragSize.Width ||
+                Math.Abs(release.Y - press.Y) > SystemInformation.DragSize.Height) return false;
+            return (_controls ??= new PipControlInput(identity)).Click(_dragTarget, press);
+        }
         return Post(_dragTarget, DownMessage(button) + 1, ButtonKeys(button, _held), MappedScreen(pointer, view, shown));
     }
 
@@ -117,6 +156,8 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
 
     internal void ReleaseAll(Rectangle view, Rectangle shown)
     {
+        if (_controlPress is not null) { _controlPress = null; _held &= ~MouseButtons.Left; }
+        _controls?.Dispose();
         foreach (MouseButtons button in new[] { MouseButtons.Left, MouseButtons.Right, MouseButtons.Middle, MouseButtons.XButton1, MouseButtons.XButton2 })
             if ((_held & button) != 0 && identity.StillThere()) Release(_lastPointer, button, view, shown);
     }

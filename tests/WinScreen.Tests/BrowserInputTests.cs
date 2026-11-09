@@ -197,7 +197,9 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         try
         {
             File.WriteAllText(Path.Combine(root, "next.html"), "<!doctype html><title>NextProbe</title>");
-            if (maximized) { User32.ShowWindow(window, 3); Thread.Sleep(500); }
+            // A new browser can inherit a maximized placement from its environment.
+            User32.ShowWindow(window, maximized ? 3 : 9);
+            Thread.Sleep(500);
             Rectangle original = Desktop.BoundsOf(window);
             Visit(window, (view, at, l) =>
             {

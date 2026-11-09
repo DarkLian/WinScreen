@@ -281,7 +281,7 @@ internal sealed class PipInteraction : IDisposable
                     $"class={Windows.WindowInfo.ClassName(target)} targetBounds={targetBounds.Left},{targetBounds.Top},{targetBounds.Right},{targetBounds.Bottom} " +
                     $"visible={User32.IsWindowVisible(target)} pid={ProcessOf(target)} physicalRoot=0x{root:X} physicalClass={Windows.WindowInfo.ClassName(root)} " +
                     $"foreground=0x{User32.GetForegroundWindow():X} sharing={SharesInput} sourceExStyle=0x{User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE):X} " +
-                    $"border={AtViewBorder(at)} outcome={outcome} queued={queued?.ToString() ?? "not-attempted"} effect=unobserved";
+                    $"border={AtViewBorder(at)} outcome={outcome} transport={_messages.PressTransport} queued={queued?.ToString() ?? "not-attempted"} effect=unobserved";
                 lock (_diagnostics)
                 {
                     _diagnostics.Enqueue(entry);
