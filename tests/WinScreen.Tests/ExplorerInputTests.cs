@@ -12,7 +12,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
 {
     private bool _requireStationary;
 
-    [Fact(Skip = "PIP-501: WinUI still resets its popup position; fixed-anchor relocation does not prevent every flicker.")]
+    [Fact(Skip = "PIP-501: Windows 11's WinUI menus put themselves back at their own position once or twice while opening; corrections and waiting first both still see it.")]
     public void Explorer_tab_menus_remain_stationary_during_sustained_navigation()
     {
         _requireStationary = true;
@@ -62,6 +62,106 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 found.Bounds.Width, found.Bounds.Height) };
         }
         return null;
+    }
+
+    /// <summary>
+    /// File Explorer's New submenu, used through a view: it opens beside its parent menu, as on the original, not
+    /// on top of it; it is what the pointer reaches where the two meet; and its Folder item makes a folder.
+    /// </summary>
+    [Fact]
+    public void A_submenu_opens_beside_its_menu_and_takes_the_click_through_a_view()
+    {
+        string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
+        File.WriteAllText(Path.Combine(root, "probe.txt"), "x");
+        nint window = 0;
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", root) { UseShellExecute = true });
+            Assert.True(Desktop.WaitFor(() =>
+            {
+                foreach (var process in Process.GetProcessesByName("explorer"))
+                    using (process)
+                        if (process.MainWindowTitle.StartsWith(Path.GetFileName(root), StringComparison.Ordinal))
+                            window = process.MainWindowHandle;
+                return window != 0;
+            }, 15000), "Explorer did not open the probe folder.");
+            Thread.Sleep(800);
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = true };
+                view.ShowOnTop();
+                view.Location = new Point(900, 220);
+                view.SetInteractive(true);
+                Exception? failure = null;
+                Point home = Desktop.CursorPosition();
+                var driver = new Thread(() =>
+                {
+                    try
+                    {
+                        Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
+                        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null));
+                        Thread.Sleep(500);
+                        // The empty part of the file list, low in the window.
+                        Rectangle source = Desktop.BoundsOf(window);
+                        var (area, shown) = view.LiveInteraction!.CurrentGeometry;
+                        Point background = new(source.Left + source.Width * 6 / 10, source.Top + source.Height * 8 / 10);
+                        Desktop.SlideMouse(new Point(area.Left + (int)Math.Round((background.X - source.Left - shown.Left) * (double)area.Width / shown.Width),
+                            area.Top + (int)Math.Round((background.Y - source.Top - shown.Top) * (double)area.Height / shown.Height)));
+                        Thread.Sleep(150);
+                        mouse_event(8, 0, 0, 0, 0); Thread.Sleep(50); mouse_event(16, 0, 0, 0, 0);
+                        BrowserAccessibility.Control? item = null;
+                        Assert.True(Desktop.WaitFor(() => (item = MenuItem(window, "New")) is not null, 4000), "No menu with New. " + string.Join(",", view.PressOutcomes));
+                        Thread.Sleep(400);
+                        item = MenuItem(window, "New")!;
+                        nint parent = Desktop.TopWindowAt(new Point(item.Bounds.Left + 10, item.Bounds.Top + item.Bounds.Height / 2));
+                        Rectangle parentBounds = Desktop.BoundsOf(parent);
+                        Assert.True(view.Bounds.IntersectsWith(parentBounds), $"The menu {parentBounds} isn't by the view {view.Bounds}.");
+                        Desktop.SlideMouse(new Point(item.Bounds.Left + item.Bounds.Width / 2, item.Bounds.Top + item.Bounds.Height / 2));
+                        BrowserAccessibility.Control? folder = null;
+                        Assert.True(Desktop.WaitFor(() => (folder = MenuItem(window, "Folder")) is not null, 4000), "The New submenu did not open.");
+                        Thread.Sleep(500);
+                        folder = MenuItem(window, "Folder")!;
+                        Point onFolder = new(folder.Bounds.Left + folder.Bounds.Width / 2, folder.Bounds.Top + folder.Bounds.Height / 2);
+                        nint child = Desktop.TopWindowAt(onFolder);
+                        Rectangle childBounds = Desktop.BoundsOf(child);
+                        Assert.NotEqual(parent, child);
+                        Assert.Equal(parentBounds, Desktop.BoundsOf(parent));
+                        // Beside the parent, overlapping it no more than a menu's edge, as Windows lays it out.
+                        Rectangle overlap = Rectangle.Intersect(parentBounds, childBounds);
+                        Assert.True(overlap.Width <= 16 || overlap.Height <= 16,
+                            $"The submenu {childBounds} covers its menu {parentBounds}.");
+                        for (int i = 0; i < 20; i++)
+                        {
+                            Desktop.SlideMouse(onFolder + new Size(i % 5 * 4 - 8, i % 3 * 3 - 3));
+                            Thread.Sleep(40);
+                            Assert.Equal(child, Desktop.TopWindowAt(onFolder));
+                            if (!overlap.IsEmpty)
+                                Assert.Equal(child, Desktop.TopWindowAt(new Point(overlap.Left + overlap.Width / 2, overlap.Top + overlap.Height / 2)));
+                            Assert.Equal(childBounds, Desktop.BoundsOf(child));
+                        }
+                        Desktop.SlideMouse(onFolder);
+                        Thread.Sleep(150);
+                        Desktop.MouseButton(true); Thread.Sleep(50); Desktop.MouseButton(false);
+                        Assert.True(Desktop.WaitFor(() => Directory.GetDirectories(root).Length == 1, 4000), "Folder did not make a folder.");
+                        Assert.Equal(PressOutcome.Popup, view.PressOutcomes.Last());
+                        Thread.Sleep(300);
+                        Desktop.Press(Keys.Escape); // Leaves the new folder's name as it is.
+                        Thread.Sleep(300);
+                    }
+                    catch (Exception e) { failure = e; }
+                    finally { Desktop.MouseButton(false); Desktop.MoveMouse(home); }
+                });
+                driver.Start();
+                while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
+                view.Close();
+                if (failure is not null) throw new Xunit.Sdk.XunitException(failure.ToString());
+            });
+        }
+        finally
+        {
+            if (window != 0) CloseWindow(window);
+            Directory.Delete(root, true);
+        }
     }
 
     [Fact]

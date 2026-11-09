@@ -41,19 +41,40 @@ internal static class TopLayer
     internal static bool OverflowOpen => Survey().OverflowOpen;
 
     /// <summary>Raises only when another ordinary window is ahead, then repairs the higher layers.</summary>
-    internal static void Raise(nint window)
+    internal static void Raise(nint window) => RaiseGroup([window]);
+
+    /// <summary>
+    /// Raises windows that belong together, such as a menu and its submenus, lowest first, so each stays above the
+    /// ones before it. Nothing moves when no other ordinary window is ahead of them and their order is already
+    /// right; members never count as covering each other. Then repairs the higher layers.
+    /// </summary>
+    internal static void RaiseGroup(IReadOnlyList<nint> lowestFirst)
     {
+        nint[] group = lowestFirst.Where(window => window != 0).Distinct().ToArray();
+        if (group.Length == 0) return;
+        var members = group.ToHashSet();
         var state = Survey();
         nint[] above = ProtectedWindows(state);
-        var higher = state.Taskbars.Concat(above).Concat(state.Tips).Where(handle => handle != window).ToHashSet();
-        bool covered = !state.Order.Contains(window);
+        var higher = state.Taskbars.Concat(above).Concat(state.Tips).Where(handle => !members.Contains(handle)).ToHashSet();
+        bool covered = group.Any(window => !state.Order.Contains(window));
+        int next = group.Length - 1; // The member expected next, walking down from the top.
+        bool outsider = false;
         foreach (nint other in state.Order)
         {
-            if (other == window) break;
-            if (!higher.Contains(other) && !WindowInfo.IsOwnedBy(other, window)) covered = true;
+            if (covered || next < 0) break;
+            if (members.Contains(other))
+            {
+                if (outsider || other != group[next]) covered = true;
+                next--;
+            }
+            else if (!higher.Contains(other) && !group.Any(member => WindowInfo.IsOwnedBy(other, member))) outsider = true;
         }
-        if (covered) { Lift(window); state = Survey(); }
-        if (LiftCovered(state.Taskbars.Where(handle => handle != window).ToArray(), above.Concat(state.Tips), state.Order))
+        if (covered)
+        {
+            foreach (nint window in group) Lift(window);
+            state = Survey();
+        }
+        if (LiftCovered(state.Taskbars.Where(handle => !members.Contains(handle)).ToArray(), above.Concat(state.Tips), state.Order))
             state = Survey();
         RepairProtected(above, state);
     }

@@ -160,6 +160,65 @@ public sealed class TopLayerTests
         return string.Join(" > ", names);
     }
 
+    /// <summary>
+    /// An app's menu and its submenu are lifted together, oldest first. Lifting one alone treated the submenu as a
+    /// window covering its parent and put the parent over it.
+    /// </summary>
+    [Fact]
+    public void A_menu_chain_is_lifted_in_order_and_a_correct_order_is_left_alone()
+    {
+        Desktop.GainForegroundRights(); // Before any window: on a thread with windows it would wait on their painting.
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Rectangle screen = Screen.PrimaryScreen!.WorkingArea;
+            Form Make(Rectangle bounds, Color color) => new()
+            {
+                FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.Manual, ShowInTaskbar = false,
+                Bounds = bounds, BackColor = color,
+            };
+            using var parent = Make(new(screen.Left + 200, screen.Top + 200, 240, 300), Color.Blue);
+            using var child = Make(new(screen.Left + 420, screen.Top + 240, 220, 200), Color.Lime);
+            using var cover = Make(new(screen.Left + 150, screen.Top + 150, 600, 450), Color.Magenta);
+            using var active = new Form { StartPosition = FormStartPosition.Manual, Bounds = new(screen.Left + 900, screen.Top + 600, 200, 120) };
+            active.Show();
+            parent.Show(); child.Show(); cover.Show();
+            try
+            {
+                // The test's own window is the active one, so nothing the person has open is over these.
+                Desktop.Activate(active.Handle);
+                Point overlap = new(screen.Left + 430, screen.Top + 300), parentOnly = new(screen.Left + 220, screen.Top + 470);
+                const uint flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
+                User32.SetWindowPos(cover.Handle, User32.HWND_TOPMOST, 0, 0, 0, 0, flags);
+                Pump(50);
+                Assert.Equal(cover.Handle, RootAt(overlap));
+
+                TopLayer.RaiseGroup([parent.Handle, child.Handle]);
+                Pump(50);
+                Assert.Equal(child.Handle, RootAt(overlap));
+                Assert.Equal(parent.Handle, RootAt(parentOnly));
+
+                // The order is already right and nothing ordinary is ahead: nothing is lifted.
+                long lifts = TopLayer.LiftCount;
+                TopLayer.RaiseGroup([parent.Handle, child.Handle]);
+                Assert.Equal(lifts, TopLayer.LiftCount);
+
+                // Lifting the parent by itself no longer counts as covered by its own submenu once grouped:
+                // a wrong order inside the chain is repaired.
+                User32.SetWindowPos(parent.Handle, User32.HWND_TOPMOST, 0, 0, 0, 0, flags);
+                Pump(50);
+                Assert.Equal(parent.Handle, RootAt(overlap));
+                TopLayer.RaiseGroup([parent.Handle, child.Handle]);
+                Pump(50);
+                Assert.Equal(child.Handle, RootAt(overlap));
+                Assert.Equal(parent.Handle, RootAt(parentOnly));
+            }
+            finally
+            {
+                cover.Close(); child.Close(); parent.Close(); active.Close();
+            }
+        });
+    }
+
     private static bool IsAbove(nint upper, nint lower)
     {
         for (nint window = User32.GetWindow(upper, 2); window != 0; window = User32.GetWindow(window, 2))

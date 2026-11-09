@@ -19,11 +19,25 @@ internal sealed class SourcePopups
 {
     private const uint Move = User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_ASYNCWINDOWPOS;
     private const long WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x80;
+    /// <summary>How near a new popup must be to an open one to belong to it, as a submenu does.</summary>
+    private const int Adjacent = 8;
     private readonly nint _source;
-    private readonly Dictionary<nint, (Point Original, Point Placed)> _placed = [];
+    private readonly Dictionary<nint, Placement> _placed = [];
     private readonly Dictionary<nint, Point> _hidden = []; // Popup, and where it was.
+    private long _opened;
     public SourcePopups(nint source) => _source = source;
-    internal Action<nint> RaisePopup { get; init; } = Windows.TopLayer.Raise;
+
+    /// <summary>Lifts the menus in use, oldest first, so the newest (a submenu) ends on top of its parent.</summary>
+    internal Action<IReadOnlyList<nint>> RaisePopups { get; init; } = popups => Windows.TopLayer.RaiseGroup(popups);
+
+    /// <param name="Original">Where its app first put it, to go back to.</param>
+    /// <param name="Placed">Where it stays for this opening.</param>
+    /// <param name="Order">When it opened: a later popup of the same chain is above an earlier one.</param>
+    private sealed record Placement(Point Original, Point Placed, Size Size, long Order)
+    {
+        internal Rectangle PlacedBounds => new(Placed, Size);
+        internal Rectangle OriginalBounds => new(Original, Size);
+    }
 
     /// <summary>
     /// Moves popups off the screen or back. <paramref name="view"/> is where the pointer works with the original;
@@ -39,17 +53,20 @@ internal sealed class SourcePopups
         lock (_hidden)
         {
             uint thread = User32.GetWindowThreadProcessId(_source, out uint process);
-            var seen = new HashSet<nint>();
+            var seen = new Dictionary<nint, int>(); // Each popup and its depth in the z-order, topmost 0.
+            int viewDepth = -1, depth = 0;
             if (thread != 0)
                 EnumWindows((window, _) =>
                 {
+                    if (window == viewWindow && viewWindow != 0) viewDepth = depth;
                     if (window != _source && User32.IsWindowVisible(window) && IsPopupOf(window, _source, process))
-                        seen.Add(window);
+                        seen[window] = depth;
+                    depth++;
                     return true;
                 }, 0);
 
-            bool question = thread != 0 && !IsWindowEnabled(_source);
-            foreach (nint popup in seen)
+            bool question = thread != 0 && !IsWindowEnabled(_source), opened = false;
+            foreach (nint popup in seen.Keys)
             {
                 if (!User32.GetWindowRect(popup, out Rect r)) continue;
                 Kind kind = KindOf(popup);
@@ -63,15 +80,11 @@ internal sealed class SourcePopups
                     Point current = new(r.Left, r.Top);
                     if (!_placed.TryGetValue(popup, out var previous))
                     {
-                        int width = r.Right - r.Left, height = r.Bottom - r.Top;
-                        int dx = r.Left - sourcePoint.X, dy = r.Top - sourcePoint.Y;
-                        if (Math.Abs(dx) > width) dx = 0;
-                        if (Math.Abs(dy) > height) dy = 0;
-                        Rectangle desired = new(at.X + dx, at.Y + dy, width, height);
-                        Point place = PipGeometry.KeepInside(desired, Screen.FromPoint(at).WorkingArea);
-                        _placed[popup] = (current, place);
-                        User32.SetWindowPos(popup, 0, place.X, place.Y, 0, 0, Move);
-                        RaisePopup(popup);
+                        Rectangle native = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
+                        Point place = PlaceNew(native, at, sourcePoint);
+                        _placed[popup] = new Placement(current, place, native.Size, ++_opened);
+                        if (place != current) User32.SetWindowPos(popup, 0, place.X, place.Y, 0, 0, Move);
+                        opened = true;
                     }
                     else if (current != previous.Placed)
                     {
@@ -79,7 +92,6 @@ internal sealed class SourcePopups
                         // this opening, not to the latest pointer or transient layout position.
                         User32.SetWindowPos(popup, 0, previous.Placed.X, previous.Placed.Y, 0, 0, Move);
                     }
-                    if (BehindView(popup, viewWindow)) RaisePopup(popup);
                     continue;
                 }
                 bool away = kind == Kind.DisplayOnly ||
@@ -88,11 +100,57 @@ internal sealed class SourcePopups
                 if (away && (!_hidden.ContainsKey(popup) || r.Right > SystemInformation.VirtualScreen.Left)) Hide(popup, r);
                 else if (!away && _hidden.ContainsKey(popup)) Show(popup);
             }
-            foreach (nint gone in _placed.Keys.Where(popup => !seen.Contains(popup)).ToArray()) _placed.Remove(gone);
-            foreach (nint gone in _hidden.Keys.Where(popup => !seen.Contains(popup)).ToArray())
+            foreach (nint gone in _placed.Keys.Where(popup => !seen.ContainsKey(popup)).ToArray()) _placed.Remove(gone);
+            foreach (nint gone in _hidden.Keys.Where(popup => !seen.ContainsKey(popup)).ToArray())
                 Show(gone); // Closed, or hidden by its app: put back as it was for next time.
+            if (_placed.Count != 0 && (opened || OutOfOrder(seen, viewDepth)))
+                RaisePopups(_placed.OrderBy(entry => entry.Value.Order).Select(entry => entry.Key).ToArray());
             return question;
         }
+    }
+
+    /// <summary>
+    /// Where a popup that just opened goes. One beside a popup already placed for this opening is its submenu:
+    /// left where its app put it when that is already beside the moved parent (Windows lays a menu's submenu out
+    /// from where the parent really is), or else moved with the parent, as one laid out from the parent's first
+    /// place would be. Any other goes next to the pointer.
+    /// </summary>
+    private Point PlaceNew(Rectangle native, Point at, Point sourcePoint)
+    {
+        Rectangle area = Screen.FromPoint(at).WorkingArea;
+        foreach (Placement parent in _placed.Values.OrderByDescending(placement => placement.Order))
+        {
+            if (Beside(native, parent.PlacedBounds)) return native.Location;
+            if (Beside(native, parent.OriginalBounds))
+                return PipGeometry.KeepInside(new Rectangle(native.Location + (Size)parent.Placed - (Size)parent.Original, native.Size), area);
+        }
+        int dx = native.Left - sourcePoint.X, dy = native.Top - sourcePoint.Y;
+        if (Math.Abs(dx) > native.Width) dx = 0;
+        if (Math.Abs(dy) > native.Height) dy = 0;
+        return PipGeometry.KeepInside(new Rectangle(at.X + dx, at.Y + dy, native.Width, native.Height), area);
+    }
+
+    private static bool Beside(Rectangle popup, Rectangle other)
+    {
+        Rectangle near = other;
+        near.Inflate(Adjacent, Adjacent);
+        return popup.IntersectsWith(near);
+    }
+
+    /// <summary>
+    /// Whether the placed popups need lifting: one is behind the view, or a later one (a submenu) is under an
+    /// earlier one. An order that is already right is left alone.
+    /// </summary>
+    private bool OutOfOrder(Dictionary<nint, int> depths, int viewDepth)
+    {
+        int below = int.MaxValue;
+        foreach (nint popup in _placed.OrderBy(entry => entry.Value.Order).Select(entry => entry.Key))
+        {
+            if (!depths.TryGetValue(popup, out int depth)) continue;
+            if (depth >= below || viewDepth >= 0 && depth > viewDepth) return true;
+            below = depth;
+        }
+        return false;
     }
 
     /// <summary>Puts every popup moved away back where it was.</summary>
@@ -135,17 +193,6 @@ internal sealed class SourcePopups
         return Kind.Interactive;
     }
 
-    private static bool BehindView(nint popup, nint view)
-    {
-        if (view == 0) return false;
-        nint window = User32.GetWindow(User32.GetDesktopWindow(), 5);
-        for (int count = 0; window != 0 && count < 4096; count++, window = User32.GetWindow(window, 2))
-        {
-            if (window == popup) return false;
-            if (window == view) return true;
-        }
-        return false;
-    }
 
     private void Hide(nint popup, Rect r)
     {

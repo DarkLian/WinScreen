@@ -1101,12 +1101,12 @@ public sealed class PipWindow : Form
     /// <summary>The pointer came onto the view. Everything that lets real input through exists from here until it leaves.</summary>
     private SourcePopups CreateSourcePopups() => new(_source)
     {
-        RaisePopup = popup => BeginInvokeIfAlive(() =>
+        RaisePopups = popups => BeginInvokeIfAlive(() =>
         {
-            if (_cleaned || _live is null || !_origin.IsAvailable || !User32.IsWindow(popup)) return;
+            if (_cleaned || _live is null || !_origin.IsAvailable) return;
             User32.GetWindowThreadProcessId(_source, out uint sourceProcess);
-            if (SourcePopups.IsPopupOf(popup, _source, sourceProcess))
-                TopLayer.Raise(popup);
+            nint[] own = popups.Where(popup => User32.IsWindow(popup) && SourcePopups.IsPopupOf(popup, _source, sourceProcess)).ToArray();
+            if (own.Length != 0) TopLayer.RaiseGroup(own);
         }),
     };
 
