@@ -275,6 +275,9 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
             (nint)((long)(data & 0xffff0000u) | (long)Keys(_held)), mapped, true);
     }
 
+    internal bool CanScroll(Point pointer, Rectangle view, Rectangle shown) =>
+        PipInputRoutes.Supports(RouteOf(TargetAt(MappedScreen(pointer, view, shown))), InputOperation.Wheel);
+
     /// <summary>Releases every button still held, so none stays down in the app. Returns the buttons whose press was a pending click.</summary>
     internal MouseButtons ReleaseAll(Rectangle view, Rectangle shown)
     {

@@ -122,6 +122,179 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
 
     [Theory]
     [MemberData(nameof(BrowserCases))]
+    public void Browser_hover_observations_distinguish_pointer_shapes_from_persistent_effects(string path)
+    {
+        const string page = """
+            <!doctype html><title>HoverState</title>
+            <style>body{margin:0}#hover{position:absolute;left:0;top:0;width:100vw;height:90vh;background:red;cursor:pointer}
+            #hover:hover{background:rgb(0, 128, 0)}#preview{display:none}#hover:hover #preview{display:block}</style>
+            <div id=hover title="Hover tooltip">Hover me<div id=preview>Preview</div></div>
+            <script>let enter=0,over=0,move=0,leave=0;
+            hover.onmouseenter=()=>enter++;hover.onmouseover=()=>over++;hover.onmousemove=()=>move++;hover.onmouseleave=()=>leave++;
+            setInterval(()=>document.title=`HoverState active=${hover.matches(':hover')} preview=${getComputedStyle(preview).display} enter=${enter} over=${over} move=${move} leave=${leave}`,50);</script>
+            """;
+        var log = new StringBuilder();
+        var (browser, window, root) = Open(page, "HoverState", app: true, path);
+        try
+        {
+            Rectangle document = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds;
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Point originalPoint = new(document.Left + document.Width / 2, document.Top + document.Height / 2);
+            Desktop.SlideMouse(originalPoint);
+            Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains("active=true preview=block"), 4000),
+                $"Visible hover baseline: {WindowInfo.Title(window)}; window={Desktop.BoundsOf(window)} document={document} point={originalPoint} foreground=0x{User32.GetForegroundWindow():X} source=0x{window:X}");
+            Thread.Sleep(1500);
+            log.AppendLine("original resting: " + WindowInfo.Title(window));
+            Visit(window, (view, at, l) =>
+            {
+                int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - Desktop.BoundsOf(window).Top;
+                foreach (bool sharing in new[] { true, false })
+                {
+                    PipInteraction.ShareInput = sharing;
+                    Point[] points = Enumerable.Range(0, 5).Select(i => at(new Point(140 + i * 20, top + 140))).ToArray();
+                    // End and restart so the sharing experiment starts with the requested policy.
+                    Desktop.SlideMouse(new Point(view.Left - 50, view.Top + 100));
+                    Thread.Sleep(200);
+                    Desktop.SlideMouse(points[0]);
+                    Thread.Sleep(400);
+                    for (int i = 0; i < 5; i++) { Desktop.SlideMouse(points[i]); Thread.Sleep(80); }
+                    l.AppendLine($"sharing={sharing} moving: {WindowInfo.Title(window)} cursor={Sample(100)}");
+                    Thread.Sleep(1500);
+                    l.AppendLine($"sharing={sharing} resting: {WindowInfo.Title(window)} cursor={Sample(100)}");
+                }
+            }, log);
+        }
+        finally { Close(browser, root); PipInteraction.ShareInput = true; }
+        string report = log.ToString();
+        output.WriteLine(report);
+        Assert.DoesNotContain("EXC ", report);
+        Assert.Contains("original resting: HoverState active=true preview=block", report);
+        Assert.Contains("cursor=hand", report);
+        var events = System.Text.RegularExpressions.Regex.Match(report, @"sharing=True resting: HoverState active=(true|false) preview=\w+ enter=(\d+) over=(\d+) move=(\d+) leave=(\d+)");
+        Assert.True(events.Success && int.Parse(events.Groups[2].Value) > 0 && int.Parse(events.Groups[3].Value) > 0 &&
+            int.Parse(events.Groups[4].Value) > 0, report);
+        // Persistence is recorded, not claimed: native leave tracking still observes the physical pointer.
+        // PIP-503's desired sustained-hover acceptance remains open in the engineering audit.
+    }
+
+    [Theory]
+    [MemberData(nameof(BrowserCases))]
+    public void Middle_click_keeps_the_apps_own_action_when_the_scroll_option_is_off(string path)
+    {
+        const string page = """
+            <!doctype html><title>MiddleAction count=0</title><style>body{margin:0;height:10000px}button{position:absolute;left:100px;top:100px;width:400px;height:200px}</style>
+            <button id=b>Middle action</button><script>let c=0;b.onmousedown=e=>{if(e.button===1)e.preventDefault()};b.onauxclick=e=>{if(e.button===1){e.preventDefault();document.title=`MiddleAction count=${++c}`}};</script>
+            """;
+        var log = new StringBuilder();
+        var (browser, window, root) = Open(page, "MiddleAction", app: true, path);
+        try
+        {
+            Visit(window, (view, at, l) =>
+            {
+                int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - Desktop.BoundsOf(window).Top;
+                Point button = at(new Point(250, top + 160));
+                for (int count = 1; count <= 2; count++)
+                {
+                    Desktop.SlideMouse(button); Thread.Sleep(100);
+                    mouse_event(0x20, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(0x40, 0, 0, 0, 0);
+                    Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window) == $"MiddleAction count={count}", 3000),
+                        $"Auxiliary action {count}: {WindowInfo.Title(window)}; outcomes {string.Join(",",view.PressOutcomes)}");
+                    Assert.False(view.LiveInteraction?.Scrolling ?? false);
+                    // Toggling the option on and off restores native behavior too.
+                    view.Invoke(() => { view.SetMiddleClickScroll(true); view.SetMiddleClickScroll(false); });
+                }
+                Assert.DoesNotContain(PressOutcome.ScrollMode, view.PressOutcomes);
+            }, log);
+        }
+        finally { Close(browser, root); }
+        output.WriteLine(log.ToString());
+        Assert.DoesNotContain("EXC ", log.ToString());
+    }
+
+    [Theory]
+    [MemberData(nameof(BrowserCases))]
+    public void Browser_middle_click_autoscroll_moves_content_and_cancels(string path)
+    {
+        const string page = """
+            <!doctype html><title>AutoScroll y=0</title><style>body{margin:0;height:12000px;background:repeating-linear-gradient(white 0px,white 90px,gray 100px)}</style>
+            <script>const report=()=>document.title=`AutoScroll y=${Math.round(scrollY)}`;onscroll=report;setInterval(report,50)</script>
+            """;
+        var log = new StringBuilder();
+        var (browser, window, root) = Open(page, "AutoScroll", app: true, path);
+        try
+        {
+            Visit(window, (view, at, l) =>
+            {
+                view.Invoke(() => view.SetMiddleClickScroll(true));
+                Point anchor = new(view.Left + view.Width / 2, view.Top + view.Height / 2);
+                Desktop.SlideMouse(anchor);
+                Thread.Sleep(200);
+                mouse_event(0x20, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(0x40, 0, 0, 0, 0);
+                Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Scrolling == true, 300), "No prompt scroll-mode feedback.");
+                l.AppendLine("middle feedback: " + Sample(500));
+                Desktop.SlideMouse(anchor + new Size(0, 60));
+                Thread.Sleep(1000);
+                l.AppendLine("after displacement: " + WindowInfo.Title(window) + " cursor=" + Sample(100));
+                Thread.Sleep(2500);
+                l.AppendLine("after wait: " + WindowInfo.Title(window) + " cursor=" + Sample(100));
+                Desktop.Press(Keys.Escape);
+                Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Scrolling == false, 500));
+                Thread.Sleep(600); // The browser may finish its current smooth-wheel animation.
+                string stopped = WindowInfo.Title(window);
+                Desktop.SlideMouse(anchor + new Size(0, 80)); Thread.Sleep(500);
+                l.AppendLine("after escape: " + WindowInfo.Title(window));
+                Assert.Equal(stopped, WindowInfo.Title(window));
+                Assert.False(view.LiveInteraction?.Scrolling ?? false);
+                foreach (bool middle in new[] { true, false })
+                {
+                    Desktop.SlideMouse(anchor);
+                    mouse_event(0x20, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(0x40, 0, 0, 0, 0);
+                    Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Scrolling == true, 500));
+                    Desktop.SlideMouse(anchor + new Size(0, 40)); Thread.Sleep(400);
+                    mouse_event(middle ? 0x20u : 2u, 0, 0, 0, 0); Thread.Sleep(40);
+                    mouse_event(middle ? 0x40u : 4u, 0, 0, 0, 0);
+                    Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Scrolling == false, 500));
+                    Thread.Sleep(600);
+                    stopped = WindowInfo.Title(window); Thread.Sleep(400);
+                    Assert.Equal(stopped, WindowInfo.Title(window));
+                }
+                foreach (bool leave in new[] { false, true })
+                {
+                    Desktop.SlideMouse(anchor);
+                    mouse_event(0x20, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(0x40, 0, 0, 0, 0);
+                    Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Scrolling == true, 500));
+                    Desktop.SlideMouse(anchor + new Size(0, 30)); Thread.Sleep(400);
+                    if (leave) Desktop.SlideMouse(new Point(view.Left - 60, view.Top + 100));
+                    else view.Invoke(() => view.SetMiddleClickScroll(false));
+                    Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Scrolling != true, 500));
+                    Thread.Sleep(600);
+                    stopped = WindowInfo.Title(window); Thread.Sleep(400);
+                    Assert.Equal(stopped, WindowInfo.Title(window));
+                    if (!leave) view.Invoke(() => view.SetMiddleClickScroll(true));
+                }
+                Desktop.SlideMouse(anchor);
+                Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null, 1000));
+                mouse_event(0x20, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(0x40, 0, 0, 0, 0);
+                Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Scrolling == true, 500));
+                Thread.Sleep(100); // Let the view claim Escape for this mode.
+                view.Invoke(view.SuspendView);
+                // A minimized/suspended view must release its temporary global Escape registration immediately.
+                bool escapeFree = User32.RegisterHotKey(0, 0x575F, User32.MOD_NOREPEAT, (uint)Keys.Escape);
+                if (escapeFree) User32.UnregisterHotKey(0, 0x575F);
+                Assert.True(escapeFree, "Suspending the view left Escape claimed by the scrolling mode.");
+            }, log);
+        }
+        finally { Close(browser, root); }
+        string report = log.ToString();
+        output.WriteLine(report);
+        Assert.DoesNotContain("EXC ", report);
+        var match = System.Text.RegularExpressions.Regex.Match(report, @"after displacement: AutoScroll y=(\d+)");
+        Assert.True(match.Success && int.Parse(match.Groups[1].Value) > 100, report);
+    }
+
+    [Theory]
+    [MemberData(nameof(BrowserCases))]
     public void A_browser_used_through_a_view_shows_its_own_pointer_and_takes_clicks_selection_and_keys(string path)
     {
         var log = new StringBuilder();

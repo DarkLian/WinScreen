@@ -208,6 +208,7 @@
   "pip.keepAspectRatio": "保持長寬比",
   "pip.keepUpdating": "保持更新（隱藏原視窗）(&K)",
   "pip.lockPosition": "鎖定位置",
+  "pip.middleScroll": "中鍵捲動（取代應用程式動作）",
   "pip.minimize": "最小化檢視",
   "pip.opacity": "不透明度",
   "pip.opacityPercent": "子母畫面不透明度（%）",

@@ -85,6 +85,9 @@ public sealed class PipWindow : Form
     private bool _liveSawSourceFocus;
     private long _unobservedSince;
     private readonly ToolStripMenuItem _interactiveItem;
+    private readonly ToolStripMenuItem _middleScrollItem;
+    private bool _hiddenBeforeInteractive;
+    private bool _wasScrolling;
     private SourcePopups? _popups;
     private int _popupTick;
     private bool _liveStartedZoomed;
@@ -124,6 +127,8 @@ public sealed class PipWindow : Form
             (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
         _interactiveItem = new ToolStripMenuItem(T("pip.interactive"), null,
             (_, _) => SetInteractive(!_interactiveItem!.Checked));
+        _middleScrollItem = new ToolStripMenuItem(T("pip.middleScroll"), null,
+            (_, _) => SetMiddleClickScroll(!_middleScrollItem!.Checked));
         var options = new ToolStripMenuItem(T("pip.options"));
         options.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
         options.DropDownOpening += (_, _) => FillOptions(options);
@@ -132,6 +137,7 @@ public sealed class PipWindow : Form
         _menu.Items.Add(_hideItem);
         _menu.Items.Add(_autoMoveItem);
         _menu.Items.Add(_interactiveItem);
+        _menu.Items.Add(_middleScrollItem);
         _goToItem = _menu.Items.Add(T("pip.goToOriginal"), null, (_, _) => GoToSource());
         _removeCropItem = new ToolStripMenuItem(T("pip.removeCrop"), null, (_, _) => SetCrop(Rectangle.Empty));
         _menu.Items.Add(_removeCropItem);
@@ -148,6 +154,7 @@ public sealed class PipWindow : Form
             _retryItem.Visible = CanRetryCapture;
             _autoMoveItem.Visible = AllowAutoMove;
             _interactiveItem.Visible = AllowInteractive && _origin.IsWindow;
+            _middleScrollItem.Visible = _interactiveItem.Visible && _interactiveItem.Checked;
             _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
             _removeCropItem.Enabled = !_crop.IsEmpty;
             // A menu only closes on an outside click while its program has the focus.
@@ -682,8 +689,32 @@ public sealed class PipWindow : Form
     /// <summary>Makes the original invisible, or brings it back. The view keeps updating either way.</summary>
     public void SetOriginalHidden(bool hidden)
     {
+        if (_interactiveItem.Checked && !hidden) return;
+        ChangeInteractionMode(_interactiveItem.Checked, hidden);
+    }
+
+    // All mode changes converge here. Menu state is published from actual concealment, including failure and
+    // recovery; an interactive view never advertises a visible original as interactive.
+    private void ChangeInteractionMode(bool interactive, bool hidden)
+    {
+        if (!interactive || !hidden) EndLive();
+        bool changed = SetConcealment(hidden);
+        PublishInteractionMode(interactive && changed);
+    }
+
+    private void PublishInteractionMode(bool interactive)
+    {
+        bool hidden = _origin.IsWindow && _origin.IsAvailable && _windows.IsConcealedBy(_source, this);
+        if (!hidden) EndLive();
+        _hideItem.Checked = hidden;
+        _interactiveItem.Checked = interactive && hidden;
+        _hideItem.Enabled = !_interactiveItem.Checked;
+    }
+
+    private bool SetConcealment(bool hidden)
+    {
         if (!_origin.IsWindow)
-            return;
+            return false;
         if (!hidden) EndLive();
         try
         {
@@ -710,8 +741,7 @@ public sealed class PipWindow : Form
                 _thumbnail?.Configure(BackendPreferences());
                 _popups?.ShowAll();
             }
-
-            _hideItem.Checked = hidden;
+            return true;
         }
         catch (WindowOperationException failure)
         {
@@ -726,8 +756,8 @@ public sealed class PipWindow : Form
                 }
             }
 
-            _hideItem.Checked = _origin.IsAvailable && _windows.IsConcealedBy(_source, this);
             Problem?.Invoke(failure.Message);
+            return false;
         }
     }
 
@@ -811,6 +841,7 @@ public sealed class PipWindow : Form
 
         if (m.Msg == User32.WM_HOTKEY && m.WParam == EscapeHotkey)
         {
+            _live?.CancelScroll();
             CancelPress();
             return;
         }
@@ -989,7 +1020,7 @@ public sealed class PipWindow : Form
         if (_origin.IsWindow && _origin.IsAvailable &&
             (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source)))
         {
-            SetOriginalHidden(false);
+            ChangeInteractionMode(false, false);
             if (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source)) e.Cancel = true;
         }
         base.OnFormClosing(e);
@@ -1021,7 +1052,7 @@ public sealed class PipWindow : Form
         _thumbnail?.Dispose();
         _thumbnail = null;
         if (_hideItem.Checked && _origin.IsAvailable)
-            SetOriginalHidden(false);
+            ChangeInteractionMode(false, false);
         _popups?.ShowAll();
         _closeCheck?.Dispose();
         DropHoverPreview();
@@ -1032,27 +1063,31 @@ public sealed class PipWindow : Form
         _menu.Dispose();
     }
 
-    /// <summary>Turns direct use on or off. The source stays hidden and parked either way.</summary>
+    /// <summary>Interactive use requires concealment; turning it off restores the prior hiding preference.</summary>
     internal void SetInteractive(bool on)
     {
+        if (on == _interactiveItem.Checked) return;
         if (on && (!AllowInteractive || !_origin.IsWindow)) return;
         if (on)
         {
-            SetOriginalHidden(true);
-            if (!_windows.IsHidden(_source))
-                return;
-            if (_overrides.ClickThrough)
+            _hiddenBeforeInteractive = _hideItem.Checked;
+            ChangeInteractionMode(true, true);
+            if (_interactiveItem.Checked && _overrides.ClickThrough)
                 Overrides = _overrides with { ClickThrough = false };
         }
         else
         {
-            EndLive();
+            ChangeInteractionMode(false, _hiddenBeforeInteractive);
         }
-
-        _interactiveItem.Checked = on;
     }
 
     internal PipInteraction? LiveInteraction => _live;
+
+    internal void SetMiddleClickScroll(bool enabled)
+    {
+        _middleScrollItem.Checked = enabled;
+        if (_live is { } live) { live.MiddleClickScroll = enabled; if (!enabled) live.CancelScroll(); }
+    }
 
     /// <summary>Why the last visit ended, for tests and diagnostics.</summary>
     internal string LastVisitEnd { get; private set; } = "";
@@ -1088,6 +1123,7 @@ public sealed class PipWindow : Form
         _unobservedSince = 0;
         _popups ??= CreateSourcePopups();
         var live = new PipInteraction(_source, RectangleToScreen(area), ShownPart(_thumbnail.SourceSize), Handle, _popups);
+        live.MiddleClickScroll = _middleScrollItem.Checked;
         live.Left += () => BeginInvokeIfAlive(() => { LastVisitEnd = "the pointer left"; EndLive(); });
         live.Pressed += _pressOutcomes.Enqueue;
         live.ViewDragged += moved => BeginInvokeIfAlive(() => DragLiveView(moved));
@@ -1132,6 +1168,7 @@ public sealed class PipWindow : Form
     /// <summary>In this order: the source stops taking clicks, goes home, the hook goes, the view takes input, keys come back.</summary>
     private void EndLive()
     {
+        ClaimEscape(_selecting); // Scrolling must not keep a global Escape claim after a visit/suspension ends.
         if (_live is not { } live)
             return;
         _live = null;
@@ -1200,7 +1237,7 @@ public sealed class PipWindow : Form
 
     /// <summary>
     /// The view doesn't take the focus, so Esc can't reach it the usual way. It's claimed only during a
-    /// crop drag: a pointer merely resting on the view mustn't take Esc from a dialog or a game.
+    /// crop drag or optional scrolling: a pointer merely resting here mustn't take Esc from another app.
     /// </summary>
     private void ClaimEscape(bool claim)
     {
@@ -1250,7 +1287,7 @@ public sealed class PipWindow : Form
         if (IsHandleCreated) StayOnTop();
     }
 
-    /// <summary>Ends a visit in progress with "Use this view directly", putting the original back in its place.</summary>
+    /// <summary>Ends an Interactive PiP visit, making the parked original unreachable again.</summary>
     internal void EndVisit() => EndLive();
 
     /// <summary>The original's own close, minimize and maximize buttons, and its icon, clicked in the view.</summary>
@@ -1413,11 +1450,13 @@ public sealed class PipWindow : Form
     {
         if (!_origin.IsAvailable)
         {
+            PublishInteractionMode(false);
             if (_origin.IsWindow) Close();
             else if (!_suspended) SuspendView();
             return;
         }
         if (_resumeRequested && _retiringCapture.IsCompleted) ResumeView();
+        PublishInteractionMode(_interactiveItem.Checked);
 
         string title = T("pip.titlePrefix") + _origin.Title;
         if (Text != title) Text = title;
@@ -1439,8 +1478,6 @@ public sealed class PipWindow : Form
             else SuspendView();
             return;
         }
-        if (_hideItem.Checked && !_windows.IsHidden(_source))
-            _hideItem.Checked = false;
         PauseInput(_menu.Visible || TopLayer.InputBlocked);
         // The taskbar's overflow panel can open over a view; the pointer goes through to it. WinScreen's own menus
         // need no such thing: a click on the view while its menu is open just closes the menu.
@@ -1501,7 +1538,10 @@ public sealed class PipWindow : Form
 
     internal void UpdateHover(Point pointer, long now)
     {
-        ClaimEscape(_selecting);
+        ClaimEscape(_selecting || _live?.Scrolling == true);
+        if (_live?.Scrolling == true) Cursor.Current = _live.ScrollCursor;
+        else if (_wasScrolling) Cursor.Current = Cursors.Default;
+        _wasScrolling = _live?.Scrolling == true;
         bool unavailable = _suspended || _selecting || _overrides.ClickThrough || (_inputPaused && !_menu.Visible);
         if (unavailable)
         {
@@ -1672,10 +1712,7 @@ public sealed class PipWindow : Form
             return;
         }
 
-        EndLive();
-        if (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source))
-
-            SetOriginalHidden(false);
+        ChangeInteractionMode(false, false);
         if (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source))
             return;
         if (User32.IsIconic(_source))

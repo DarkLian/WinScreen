@@ -29,6 +29,8 @@ public enum PressOutcome
     /// such as a drag or a middle click on a control reached through UI Automation. Nothing was sent.
     /// </summary>
     Unsupported,
+    /// <summary>A press started or cancelled the view's explicitly enabled middle-click scrolling mode.</summary>
+    ScrollMode,
 }
 
 /// <summary>What a press on the hidden window's caption buttons or icon does, by the standard for views used directly.</summary>
@@ -137,11 +139,24 @@ internal sealed class PipInteraction : IDisposable
     private MouseButtons _pendingClick; // A deferred press: its outcome comes once the control is activated.
     private Point _dragFrom;
     private bool _dragging;
+    private volatile bool _middleClickScroll;
+    internal bool MiddleClickScroll { get => _middleClickScroll; set => _middleClickScroll = value; }
+    private volatile bool _scrolling;
+    internal bool Scrolling => _scrolling;
+    private Point _scrollAnchor, _scrollPoint;
+    private long _scrollTick;
+    private double _scrollX, _scrollY;
+    internal Cursor ScrollCursor => _scrollPoint.Y < _scrollAnchor.Y - 12 ? Cursors.PanNorth
+        : _scrollPoint.Y > _scrollAnchor.Y + 12 ? Cursors.PanSouth
+        : _scrollPoint.X < _scrollAnchor.X - 12 ? Cursors.PanWest
+        : _scrollPoint.X > _scrollAnchor.X + 12 ? Cursors.PanEast : Cursors.NoMove2D;
+
+    internal void CancelScroll() => Enqueue(new(EventKind.CancelScroll, default));
 
     private readonly List<InputEvent> _queue = [];
     private readonly AutoResetEvent _work = new(false);
 
-    private enum EventKind { Move, Press, Release, Wheel, Record }
+    private enum EventKind { Move, Press, Release, Wheel, Record, CancelScroll }
 
     private readonly record struct InputEvent(EventKind Kind, Point At, MouseButtons Button = MouseButtons.None,
         bool Alt = false, bool Horizontal = false, uint Data = 0, PressOutcome Outcome = default);
@@ -501,7 +516,7 @@ internal sealed class PipInteraction : IDisposable
         var batch = new List<InputEvent>();
         while (true)
         {
-            _work.WaitOne(100);
+            _work.WaitOne(_scrolling ? 16 : 100);
             lock (_queue)
             {
                 batch.AddRange(_queue);
@@ -513,6 +528,11 @@ internal sealed class PipInteraction : IDisposable
                 catch (Windows.WindowOperationException) { Leave(); }
             }
             batch.Clear();
+            if (_scrolling && !_stopping)
+            {
+                try { ScrollTick(); }
+                catch (Windows.WindowOperationException) { _scrolling = false; Leave(); }
+            }
             if (_stopping)
             {
                 lock (_queue) if (_queue.Count == 0) return;
@@ -529,8 +549,12 @@ internal sealed class PipInteraction : IDisposable
             case EventKind.Press: PressArrived(input.At, input.Button, input.Alt); break;
             case EventKind.Release: ReleaseArrived(input.At, input.Button); break;
             case EventKind.Wheel:
+                StopScroll();
                 var (view, shown) = Geometry();
                 _messages.Wheel(input.At, input.Horizontal, input.Data, view, shown);
+                break;
+            case EventKind.CancelScroll:
+                StopScroll();
                 break;
         }
     }
@@ -546,6 +570,7 @@ internal sealed class PipInteraction : IDisposable
         }
         var (view, shown) = Geometry();
         Publish(point);
+        if (_scrolling) { _scrollPoint = point; return; }
         // Held presses keep going everywhere; otherwise the view's own sizing border isn't the app's.
         if (_heldDelivered == MouseButtons.None && (_pendingClick != MouseButtons.None || AtViewBorder(point))) return;
         if (_heldDelivered == MouseButtons.None && !view.Contains(point)) return;
@@ -567,6 +592,12 @@ internal sealed class PipInteraction : IDisposable
 
     private void PressArrived(Point point, MouseButtons button, bool alt)
     {
+        if (_scrolling)
+        {
+            _scrolling = false;
+            if (!alt && button is MouseButtons.Left or MouseButtons.Middle)
+            { Record(PressOutcome.ScrollMode, point, 1); return; }
+        }
         // Not before Windows has told the app where the real pointer is (see MaxRecheckWait).
         long waited = Stopwatch.GetTimestamp();
         _rechecked.Wait(MaxRecheckWait);
@@ -596,6 +627,16 @@ internal sealed class PipInteraction : IDisposable
             Record(PressOutcome.Unconfirmed, point, hit);
             return;
         }
+        if (!alt && button == MouseButtons.Middle && MiddleClickScroll &&
+            _heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None && _messages.CanScroll(point, view, shown))
+        {
+            _scrollAnchor = _scrollPoint = point;
+            _scrollX = _scrollY = 0;
+            _scrollTick = Stopwatch.GetTimestamp();
+            _scrolling = true;
+            Record(PressOutcome.ScrollMode, point, hit);
+            return;
+        }
         Delivery delivery = _messages.Press(point, button, view, shown);
         if (delivery == Delivery.Posted) _heldDelivered |= button;
         if (delivery == Delivery.Deferred) { _pendingClick |= button; return; } // Its outcome comes with the release.
@@ -604,6 +645,9 @@ internal sealed class PipInteraction : IDisposable
 
     private void ReleaseArrived(Point point, MouseButtons button)
     {
+        if (button == MouseButtons.Middle && _scrolling &&
+            (Math.Abs(point.X - _scrollAnchor.X) > SystemInformation.DragSize.Width ||
+             Math.Abs(point.Y - _scrollAnchor.Y) > SystemInformation.DragSize.Height)) _scrolling = false;
         if (button == MouseButtons.Left) _dragging = false;
         var (view, shown) = Geometry();
         if ((_pendingClick & button) != 0)
@@ -621,8 +665,37 @@ internal sealed class PipInteraction : IDisposable
         }
         _heldDelivered &= ~button;
         // Not if the hook has already taken a newer press: it stopped sharing for that one.
-        if (_heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None && view.Contains(point) &&
+        if (!_scrolling && _heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None && view.Contains(point) &&
             Volatile.Read(ref _swallowedBits) == 0) Share(true);
+    }
+
+    private void ScrollTick()
+    {
+        if (!MiddleClickScroll || _outside || _inPopup) { _scrolling = false; return; }
+        long now = Stopwatch.GetTimestamp();
+        double elapsed = Math.Min(.05, Stopwatch.GetElapsedTime(_scrollTick, now).TotalSeconds);
+        _scrollTick = now;
+        var (view, shown) = Geometry();
+        ScrollAxis(_scrollPoint.X - _scrollAnchor.X, true, ref _scrollX);
+        ScrollAxis(_scrollPoint.Y - _scrollAnchor.Y, false, ref _scrollY);
+        void ScrollAxis(int displacement, bool horizontal, ref double remainder)
+        {
+            // Wheel units per second: a quiet centre, linear speed outside it, bounded after a stalled worker.
+            double velocity = Math.Sign(displacement) * Math.Clamp(Math.Abs(displacement) - 12, 0, 120) * 12;
+            remainder += velocity * elapsed;
+            int delta = (int)remainder;
+            if (delta == 0) return;
+            remainder -= delta;
+            if (!horizontal) delta = -delta; // A downward wheel displacement scrolls down.
+            _messages.Wheel(_scrollAnchor, horizontal, unchecked((uint)(delta << 16)), view, shown);
+        }
+    }
+
+    private void StopScroll()
+    {
+        _scrolling = false;
+        if (_heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None &&
+            Volatile.Read(ref _swallowedBits) == 0 && !_outside) Share(true);
     }
 
     private static PressOutcome Outcome(Delivery delivery) => delivery switch

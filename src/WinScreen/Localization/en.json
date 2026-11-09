@@ -208,6 +208,7 @@
   "pip.keepAspectRatio": "Keep aspect ratio",
   "pip.keepUpdating": "&Keep updating (hide original)",
   "pip.lockPosition": "Lock position",
+  "pip.middleScroll": "Middle-click scrolling (replaces app action)",
   "pip.minimize": "Minimize view",
   "pip.opacity": "Opacity",
   "pip.opacityPercent": "View opacity (%)",
