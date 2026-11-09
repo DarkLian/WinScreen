@@ -36,7 +36,12 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     private int _wheelRemainder;
     /// <summary>Why the last press or release couldn't be delivered, for the press log.</summary>
     internal string Why { get; private set; } = "";
+    // Windows' double-click bookkeeping: a second click within the time and rectangle is a double-click message.
     private readonly Dictionary<MouseButtons, (long Time, Point At, nint Target)> _clicks = [];
+    // Each button's latest press and where it went in the app. Presses that follow it within the double-click time
+    // and rectangle (a double or triple click) go to the same point, and so does a release that didn't really move.
+    private readonly Dictionary<MouseButtons, (long Time, Point At, nint Target, Point Mapped)> _spot = [];
+    private Point _pressAt, _pressMapped;
 
     [DllImport("user32.dll")] private static extern bool ScreenToClient(nint window, ref NativePoint point);
     [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")] private static extern nint GetClassLongPtr(nint window, int index);
@@ -127,11 +132,28 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         _lastPointer = pointer;
         Point mapped = MappedScreen(pointer, view, shown);
         if (_controlPress is not null) return true;
+        // Within the double-click time of a left press, a move that stays inside the double-click rectangle isn't a
+        // move, as Windows treats it. In a view shown smaller, one pixel of hand jitter is several in the app, which
+        // would take it as the pointer moving away and count the next press as a new single click.
+        if (AtLastPress(MouseButtons.Left, pointer, 0, out _)) return true;
         nint target = _held != MouseButtons.None ? _dragTarget : TargetAt(mapped);
         MoveTarget = target;
         // Only posted messages carry a pointer; other routes have nothing to move.
         return RouteOf(target) == InputRoute.Messages && Post(target, 0x200, Keys(_held), mapped);
     }
+
+    /// <summary>The pointer is still where the button was last pressed, within the double-click time (and, given a target, on it).</summary>
+    private bool AtLastPress(MouseButtons button, Point pointer, nint target, out Point mapped)
+    {
+        mapped = default;
+        if (!_spot.TryGetValue(button, out var last) || (target != 0 && last.Target != target) ||
+            Environment.TickCount64 - last.Time > GetDoubleClickTime() || !WithinDoubleClick(pointer, last.At)) return false;
+        mapped = last.Mapped;
+        return true;
+    }
+
+    private static bool WithinDoubleClick(Point a, Point b) =>
+        Math.Abs(a.X - b.X) <= SystemInformation.DoubleClickSize.Width / 2 && Math.Abs(a.Y - b.Y) <= SystemInformation.DoubleClickSize.Height / 2;
 
     /// <summary>Asks the window under the pointer to set its cursor, as Windows would if the pointer were really there.</summary>
     /// <returns>False when it didn't answer within 20 ms: it is busy, or not responding.</returns>
@@ -153,8 +175,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         PressTransport = route.ToString().ToLowerInvariant();
         long now = Environment.TickCount64;
         bool secondClick = _clicks.TryGetValue(button, out var previous) && previous.Target == target &&
-            now - previous.Time <= GetDoubleClickTime() && Math.Abs(pointer.X - previous.At.X) <= SystemInformation.DoubleClickSize.Width / 2 &&
-            Math.Abs(pointer.Y - previous.At.Y) <= SystemInformation.DoubleClickSize.Height / 2;
+            now - previous.Time <= GetDoubleClickTime() && WithinDoubleClick(pointer, previous.At);
         InputOperation operation = button switch
         {
             MouseButtons.Left => secondClick ? InputOperation.DoubleClick : InputOperation.Click,
@@ -186,9 +207,15 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         int down = DownMessage(button);
         bool doubleClick = secondClick && ((long)GetClassLongPtr(target, -26) & 8) != 0;
         MouseButtons held = _held | button;
+        // The second press of a double-click (or third of a triple) lands where the first did, as moves above.
+        Point first = pointer;
+        if (AtLastPress(button, pointer, target, out Point same)) { mapped = same; first = _spot[button].At; }
         if (!Post(target, down + (doubleClick ? 2 : 0), ButtonKeys(button, held), mapped)) return Delivery.Failed;
         if (doubleClick) _clicks.Remove(button);
         else _clicks[button] = (now, pointer, target);
+        _spot[button] = (now, first, target, mapped);
+        _pressAt = pointer;
+        _pressMapped = mapped;
         _held = held;
         _dragTarget = target;
         return Delivery.Posted;
@@ -222,7 +249,9 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
             }
             return Delivery.Deferred;
         }
-        return Post(_dragTarget, DownMessage(button) + 1, ButtonKeys(button, _held), MappedScreen(pointer, view, shown), evenIfBusy: true)
+        Point at = MappedScreen(pointer, view, shown);
+        if (WithinDoubleClick(pointer, _pressAt)) at = _pressMapped; // It didn't really move.
+        return Post(_dragTarget, DownMessage(button) + 1, ButtonKeys(button, _held), at, evenIfBusy: true)
             ? Delivery.Posted : Delivery.Failed;
     }
 

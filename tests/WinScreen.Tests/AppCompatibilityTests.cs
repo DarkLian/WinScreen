@@ -164,6 +164,24 @@ public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper o
 
     private static void Settle(int milliseconds) { Thread.Sleep(milliseconds); }
 
+    private static Bitmap Picture(Rectangle area)
+    {
+        var bitmap = new Bitmap(area.Width, area.Height);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.CopyFromScreen(area.Location, Point.Empty, area.Size);
+        return bitmap;
+    }
+
+    /// <summary>Going down one column from a point, the last row of the block that differs between the pictures.</summary>
+    private static int MenuBottom(Bitmap before, Bitmap after, int x, int y)
+    {
+        int last = y, unchanged = 0;
+        for (; y < Math.Min(before.Height, after.Height) && unchanged <= 8; y++)
+            if (before.GetPixel(x, y).ToArgb() != after.GetPixel(x, y).ToArgb()) { last = y; unchanged = 0; }
+            else unchanged++;
+        return last;
+    }
+
     /// <summary>The file as saved so far; empty while the app is still writing it.</summary>
     private static string Saved(string file)
     {
@@ -177,15 +195,15 @@ public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper o
         #b{position:absolute;left:520px;top:200px;width:200px;height:80px}#i{position:absolute;left:520px;top:350px;width:250px;font-size:24px}</style>
         <p id=t>Someword ordinary text to select with the pointer. It runs over several lines so a drag can cover a good part of it here.</p>
         <button id=b>Press</button><input id=i>
-        <script>let c=0;const r=()=>document.title=`Probe c=${c} sel=${getSelection().toString().length} val=${i.value} s=${Math.round(scrollY)}`;
-        b.onclick=()=>{c++;r()};document.addEventListener('selectionchange',r);i.oninput=r;addEventListener('scroll',r);</script>
+        <script>let c=0;const r=()=>document.title=`Probe c=${c} sel=${getSelection().toString().length} val=${i.value} s=${Math.round(scrollY)} at=${mozInnerScreenX},${mozInnerScreenY}`;
+        b.onclick=()=>{c++;r()};document.addEventListener('selectionchange',r);i.oninput=r;addEventListener('scroll',r);setInterval(r,100);</script>
         """;
 
     /// <remarks>
-    /// Skipped: confirmed on 9 Nov that Firefox receives the posted press at the right point, as the foreground window,
-    /// and ignores it; it needs real pointer input, which is outside the current input design. Kept to measure a fix.
+    /// A new profile opens with a first-run dialog that covers the page and takes every click, real ones included; the
+    /// throwaway profile turns it off with Firefox's own preference. (Phase 3 measured with that dialog open.)
     /// </remarks>
-    [Fact(Skip = "Firefox ignores posted mouse input; direct use doesn't reach its pages (documented limitation).")]
+    [Fact]
     public void Firefox_takes_clicks_double_clicks_selection_typing_wheel_and_its_menu_through_a_view()
     {
         string firefox = Path.Combine(Apps, "firefox", "firefox.exe");
@@ -200,6 +218,20 @@ public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper o
             user_pref("browser.startup.homepage_override.mstone", "ignore");
             user_pref("app.update.enabled", false);
             user_pref("browser.tabs.warnOnClose", false);
+            user_pref("browser.preonboarding.enabled", false);
+            user_pref("browser.bypassAutoTriggerActions", true);
+            user_pref("browser.shell.skipDefaultBrowserCheckOnFirstRun", true);
+            user_pref("browser.shell.didSkipDefaultBrowserCheckOnFirstRun", true);
+            user_pref("browser.startup.upgradeDialog.enabled", false);
+            user_pref("browser.messaging-system.whatsNewPanel.enabled", false);
+            user_pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false);
+            user_pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons", false);
+            user_pref("browser.newtabpage.activity-stream.asrouter.providers.cfr", "null");
+            user_pref("browser.newtabpage.activity-stream.asrouter.providers.message-groups", "null");
+            user_pref("browser.newtabpage.activity-stream.asrouter.providers.messaging-experiments", "null");
+            user_pref("messaging-system.rsexperimentloader.enabled", false);
+            user_pref("app.normandy.enabled", false);
+            user_pref("browser.tabs.firefox-view", false);
             """);
         File.WriteAllText(Path.Combine(root, "page.html"), Page);
         var start = new ProcessStartInfo(firefox) { UseShellExecute = false };
@@ -209,36 +241,42 @@ public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper o
         var log = new StringBuilder();
         try
         {
-            nint window = WaitForWindow(process, t => t.StartsWith("Probe"));
+            // The process started here hands over to another and leaves, so its tree doesn't lead to the window: look
+            // for a Firefox window of this test's own copy.
+            nint window = 0;
+            Desktop.WaitFor(() => (window = FirefoxWindow(firefox, "Probe")) != 0, 40000);
             Assert.True(window != 0, "Firefox didn't open the page.");
             User32.SetWindowPos(window, 0, 120, 80, 900, 700, 0x14);
             Settle(1500);
             string Title() => WindowInfo.Title(window);
+            // The page's top-left inside the window, as the page itself reports it (its title ends "at=x,y").
+            Rectangle home = Desktop.BoundsOf(window);
+            string[] at0 = Title().Split("at=")[1].Split(' ')[0].Split(',');
+            Point page = new((int)double.Parse(at0[0], System.Globalization.CultureInfo.InvariantCulture) - home.Left,
+                (int)double.Parse(at0[1], System.Globalization.CultureInfo.InvariantCulture) - home.Top);
+            log.AppendLine($"page offset {page}");
+            User32.GetWindowThreadProcessId(window, out uint browserProcess);
+            int owner = (int)browserProcess; // Its menus belong to the process that has the window.
             Visit(window, (view, at) =>
             {
-                // The page's top-left inside the window: its document element.
-                Rectangle bounds = Desktop.BoundsOf(window);
-                var doc = BrowserAccessibility.Read(window).FirstOrDefault(c => c.Type == 50030 && c.Name.StartsWith("Probe"));
-                Point page = doc is null ? new Point(8, 100) : new Point(doc.Bounds.Left - bounds.Left, doc.Bounds.Top - bounds.Top);
-                log.AppendLine($"page offset {page}");
                 Point P(int x, int y) => at(new Point(page.X + x, page.Y + y));
                 Click(P(600, 230), times: 1); Click(P(600, 230)); Click(P(600, 230));
                 Assert.True(Desktop.WaitFor(() => Title().Contains("c=3 "), 2000), "Clicks: " + Title());
                 Click(P(45, 32), times: 2); // A double-click selects a word.
                 Assert.True(Desktop.WaitFor(() => Title().Contains("sel=8 ") || Title().Contains("sel=9 "), 2000), "Double-click: " + Title());
-                Drag(P(30, 32), P(380, 90));
-                Assert.True(Desktop.WaitFor(() => int.Parse(Title().Split("sel=")[1].Split(' ')[0]) > 50, 2000), "Drag selection: " + Title());
+                Drag(P(150, 52), P(380, 97)); // From the first line, past the word just selected, to the third.
+                Assert.True(Desktop.WaitFor(() => int.Parse(Title().Split("sel=")[1].Split(' ')[0]) > 25, 2000), "Drag selection: " + Title());
                 Click(P(600, 365));
                 Desktop.Press(Keys.A); Desktop.Press(Keys.B); Desktop.Press(Keys.C);
                 Assert.True(Desktop.WaitFor(() => Title().Contains("val=abc"), 2000), "Typing: " + Title());
                 Desktop.SlideMouse(P(300, 300)); Thread.Sleep(150);
                 for (int i = 0; i < 3; i++) { mouse_event(0x800, 0, 0, unchecked((uint)-120), 0); Thread.Sleep(100); }
                 Assert.True(Desktop.WaitFor(() => !Title().Contains(" s=0"), 2000), "Wheel: " + Title());
-                int before = Popups(process.Id, window).Count;
+                int before = Popups(owner, window).Count;
                 Point menuAt = P(300, 250);
                 Click(menuAt, right: true);
                 List<nint> menus = [];
-                Assert.True(Desktop.WaitFor(() => (menus = Popups(process.Id, window)).Count > before, 2000), "No context menu.");
+                Assert.True(Desktop.WaitFor(() => (menus = Popups(owner, window)).Count > before, 2000), "No context menu.");
                 Rectangle menu = Desktop.BoundsOf(menus[^1]);
                 log.AppendLine($"menu {menu} pointer {Desktop.CursorPosition()}");
                 Assert.True(Rectangle.Inflate(menu, 60, 60).Contains(Desktop.CursorPosition()), $"The menu isn't by the pointer: {menu}.");
@@ -250,12 +288,50 @@ public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper o
         {
             output.WriteLine(log.ToString());
             CloseTree(process);
+            CloseCopy(firefox);
             try { Directory.Delete(root, true); } catch (IOException) { }
         }
     }
 
+    /// <summary>A visible Firefox window of the given copy whose title starts so.</summary>
+    private static nint FirefoxWindow(string executable, string title)
+    {
+        for (nint w = User32.GetWindow(User32.GetDesktopWindow(), 5); w != 0; w = User32.GetWindow(w, 2))
+        {
+            if (!User32.IsWindowVisible(w) || WindowInfo.ClassName(w) != "MozillaWindowClass" || !WindowInfo.Title(w).StartsWith(title)) continue;
+            User32.GetWindowThreadProcessId(w, out uint pid);
+            if (string.Equals(ImageOf((int)pid), executable, StringComparison.OrdinalIgnoreCase)) return w;
+        }
+        return 0;
+    }
+
+    /// <summary>Closes every process running this executable: the tests' own portable copy, nobody else's.</summary>
+    private static void CloseCopy(string executable)
+    {
+        foreach (Process p in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(executable)))
+            using (p)
+                try { if (string.Equals(ImageOf(p.Id), executable, StringComparison.OrdinalIgnoreCase)) { p.Kill(); p.WaitForExit(3000); } }
+                catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+    }
+
+    private static string ImageOf(int process)
+    {
+        nint handle = OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, false, process);
+        if (handle == 0) return "";
+        try
+        {
+            var path = new StringBuilder(1024);
+            int size = path.Capacity;
+            return QueryFullProcessImageName(handle, 0, path, ref size) ? path.ToString() : "";
+        }
+        finally { CloseHandle(handle); }
+    }
+    [DllImport("kernel32.dll")] private static extern nint OpenProcess(uint access, bool inherit, int process);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "QueryFullProcessImageNameW")]
+    private static extern bool QueryFullProcessImageName(nint process, int flags, StringBuilder path, ref int size);
+
     [Fact]
-    public void An_electron_editor_takes_clicks_typing_and_saving_through_a_view()
+    public void An_electron_editor_takes_a_double_click_typing_and_its_context_menu_through_a_view()
     {
         string code = Path.Combine(Apps, "vscode", "Code.exe");
         if (!File.Exists(code)) return;
@@ -275,6 +351,8 @@ public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper o
         {
             nint window = WaitForWindow(process, t => t.Contains("probe.txt"));
             Assert.True(window != 0, "The editor didn't open the file.");
+            User32.ShowWindow(window, 9); // It may open maximized.
+            Thread.Sleep(300);
             User32.SetWindowPos(window, 0, 120, 80, 1000, 700, 0x14);
             Settle(2500);
             // Its editor doesn't show its lines to this test's accessibility client, so aim by its fixed layout: at 100%
@@ -288,16 +366,33 @@ public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper o
             log.AppendLine($"first word at {text} (scale {scale})");
             Visit(window, (view, at) =>
             {
-                // A click inside the first word puts the caret there; typing goes in at that point; Ctrl+S saves. (A
-                // double-click acts as two clicks in Chromium-based apps: a documented limitation, see BrowserInputTests.)
-                Click(at(text));
+                // A double-click selects the first word; typing replaces it. A right-click opens the editor's context
+                // menu, which it draws inside its own window, and a click on its last item (Command Palette) opens the
+                // palette, where Transform to Uppercase changes the word the right-click selected (the one now under
+                // the pointer). The saved file shows each step happened.
+                Click(at(text), times: 2);
                 Desktop.Press(Keys.Z);
+                Rectangle area = view.RectangleToScreen(view.ClientRectangle);
+                Desktop.SlideMouse(at(text)); Thread.Sleep(300);
+                using Bitmap before = Picture(area);
+                Click(at(text), right: true);
+                Thread.Sleep(300);
+                using Bitmap after = Picture(area);
+                // The menu opens down and right of the pointer: follow it down from there until the picture is unchanged.
+                double shown = (double)area.Width / Desktop.BoundsOf(window).Width;
+                Point pointer = at(text) - new Size(area.Location);
+                int column = pointer.X + (int)Math.Round(40 * scale * shown), bottom = MenuBottom(before, after, column, pointer.Y + 2);
+                log.AppendLine($"menu from {pointer} down to {bottom} in the view");
+                Assert.True(bottom - pointer.Y > 40, "No context menu appeared in the picture.");
+                // Its last item's row: VS Code's menu rows are 26 px high at 100%, with 4 px of padding below them.
+                Click(new Point(area.Left + column, area.Top + bottom - (int)Math.Round(17 * scale * shown)));
+                foreach (char c in "transform to uppercase") Desktop.Press(c == ' ' ? Keys.Space : (Keys)char.ToUpperInvariant(c));
+                Thread.Sleep(400);
+                Desktop.Press(Keys.Enter);
+                Thread.Sleep(300);
                 Desktop.Press(Keys.S, Keys.ControlKey);
-                Assert.True(Desktop.WaitFor(() => Saved(file) is { } saved && saved.Contains("z", StringComparison.OrdinalIgnoreCase) &&
-                    saved.Replace("z", "").Replace("Z", "").StartsWith("alpha beta gamma"), 3000),
-                    "After a click, Z and Ctrl+S the file is: " + Saved(file));
-                // Its editor's context menu wasn't seen after a delivered right-click (9 Nov; cause unknown). Chromium's
-                // own context menus are covered by BrowserInputTests, so that step isn't asserted here.
+                Assert.True(Desktop.WaitFor(() => Saved(file).StartsWith("z BETA gamma"), 3000),
+                    "After the double-click, Z, the menu's Command Palette, Transform to Uppercase and Ctrl+S the file is: '" + Saved(file) + "'");
                 Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
             }, log);
         }

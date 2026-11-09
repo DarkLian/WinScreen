@@ -756,6 +756,8 @@ public sealed class PipWindow : Form
         catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); }
     }
 
+    [DllImport("user32.dll")] private static extern int GetMessageTime();
+
     protected override void WndProc(ref Message m)
     {
         if (m.Msg == User32.WM_NCHITTEST && !_overrides.ClickThrough)
@@ -775,6 +777,8 @@ public sealed class PipWindow : Form
             m.Result = 1;
             return;
         }
+        // A pointer move to the view itself: Windows has checked where the real pointer is (PipInteraction.MaxRecheckWait).
+        if (m.Msg == 0x0200) _live?.ViewPointerMoved(GetMessageTime());
         // Keep the modifiers carried by the press. This inactive view may process it after Ctrl is released.
         if (m.Msg is 0x0201 or 0x0203)
             _controlAtPress = (m.WParam.ToInt64() & 0x0008) != 0; // MK_CONTROL

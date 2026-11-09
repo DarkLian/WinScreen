@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
 using WinScreen.Native;
 
 namespace WinScreen.Pip;
@@ -172,16 +173,42 @@ internal sealed class PipInteraction : IDisposable
     /// over links. While a button is held it stops, or the app's hold on the mouse would take the real pointer's
     /// moves, at the wrong place, as well as the ones sent to it.
     /// </summary>
-    private void Share(bool on)
+    /// <returns>When stopping: whether it was sharing until now.</returns>
+    private bool Share(bool on)
     {
         if (on)
         {
-            if (!ShareInput || _stopping || _appBusy || _viewThread == 0 || _sourceThread == 0 || _viewThread == _sourceThread) return;
+            if (!ShareInput || _stopping || _appBusy || _viewThread == 0 || _sourceThread == 0 || _viewThread == _sourceThread) return false;
             if (Interlocked.CompareExchange(ref _sharing, 1, 0) == 0 && !AttachThreadInput(_viewThread, _sourceThread, true))
                 Volatile.Write(ref _sharing, 0);
+            return false;
         }
-        else if (Interlocked.Exchange(ref _sharing, 0) == 1)
-            AttachThreadInput(_viewThread, _sourceThread, false);
+        if (Interlocked.Exchange(ref _sharing, 0) != 1) return false;
+        AttachThreadInput(_viewThread, _sourceThread, false);
+        return true;
+    }
+
+    /// <summary>
+    /// Stopping input sharing for a press makes Windows check the real pointer again a moment later and tell the app
+    /// where it is: elsewhere. Arriving after the press, the app takes that as the pointer leaving while held
+    /// (Chromium then counts clicks from one again, so a double-click became two single clicks); arriving before it,
+    /// it does no harm. The same check sends the view, which is really under the pointer, a move: the press waits for
+    /// that move, up to this long. Measured 9 Nov: it comes within 5 ms on Windows 11 and later in the Windows 10 VM,
+    /// where it took 31 to 57 ms (a fixed 10 ms wait failed every double-click there).
+    /// </summary>
+    private const int MaxRecheckWait = 100;
+
+    // Set once the view has had a pointer move after the hook stopped sharing for the latest press.
+    private readonly ManualResetEventSlim _rechecked = new(true);
+    private int _unsharedAt; // Environment.TickCount when sharing stopped, comparable with message times.
+
+    /// <summary>How long the latest press waited for the check, in ms; for tests.</summary>
+    internal double LastRecheckWait { get; private set; }
+
+    /// <summary>Called on the view's thread with the time of each pointer move the view itself is sent.</summary>
+    internal void ViewPointerMoved(int messageTime)
+    {
+        if (!_rechecked.IsSet && messageTime - Volatile.Read(ref _unsharedAt) >= 0) _rechecked.Set();
     }
 
     [DllImport("user32.dll")]
@@ -429,7 +456,9 @@ internal sealed class PipInteraction : IDisposable
             // Both return at once. They must happen here, while the hook holds the press: from another thread
             // Windows 10 may refuse the focus change, and an app that takes the mouse while still sharing input
             // with the view would also get the real pointer's moves.
-            Share(false);
+            _rechecked.Reset();
+            Volatile.Write(ref _unsharedAt, Environment.TickCount);
+            if (!Share(false)) _rechecked.Set(); // Nothing changed, so there is nothing to wait for.
             User32.SetForegroundWindow(_source);
         }
         _swallowed |= button;
@@ -538,6 +567,10 @@ internal sealed class PipInteraction : IDisposable
 
     private void PressArrived(Point point, MouseButtons button, bool alt)
     {
+        // Not before Windows has told the app where the real pointer is (see MaxRecheckWait).
+        long waited = Stopwatch.GetTimestamp();
+        _rechecked.Wait(MaxRecheckWait);
+        LastRecheckWait = Stopwatch.GetElapsedTime(waited).TotalMilliseconds;
         var (view, shown) = Geometry();
         nint hit = _messages.Hit(point, view, shown);
         if (!alt && PressRules.CaptionActionFor(hit, button) is { } action)
@@ -669,6 +702,7 @@ internal sealed class PipInteraction : IDisposable
             return;
         _stopping = true;
         Share(false);
+        _rechecked.Set();
         _moved.Set();
         if (_hookThread is not null)
         {

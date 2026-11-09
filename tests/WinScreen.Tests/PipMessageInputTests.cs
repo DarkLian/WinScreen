@@ -343,6 +343,44 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
         });
     }
 
+    /// <summary>
+    /// Windows' double-click rule, through a view: until the double-click time has passed, the pointer staying inside
+    /// the double-click rectangle isn't a move, and the second press lands where the first did. In a view shown smaller
+    /// one pixel of jitter is several in the app, which would count the two presses as apart.
+    /// </summary>
+    [Fact]
+    public void A_double_click_with_jitter_lands_on_one_point_and_moves_resume_after_the_double_click_time()
+    {
+        using var source = new TargetProcess(new Rectangle(160, 120, 800, 600));
+        source.RecordMessages();
+        Drive(source, (view, _, _) =>
+        {
+            Point pointer = Hover(view);
+            Thread.Sleep(150);
+            while (source.NextReport(50) is not null) { }
+            mouse_event(2, 0, 0, 0, 0); Thread.Sleep(30); mouse_event(4, 0, 0, 0, 0); Thread.Sleep(40);
+            Desktop.NudgeMouse(1, 1); Thread.Sleep(40);
+            mouse_event(2, 0, 0, 0, 0); Thread.Sleep(30); Desktop.NudgeMouse(-1, 0); Thread.Sleep(30); mouse_event(4, 0, 0, 0, 0);
+            Thread.Sleep(200);
+            var reports = new List<string>();
+            while (source.NextReport(100) is { } report) reports.Add(report);
+            string all = string.Join("\n", reports);
+            string[][] messages = reports.Where(r => r.StartsWith("mouse ")).Select(r => r.Split(' ')).ToArray();
+            Assert.DoesNotContain(messages, m => m[1] == "200");
+            string[] first = Assert.Single(messages, m => m[1] == "201");
+            string[] second = Assert.Single(messages, m => m[1] == "203"); // The window asks for double-clicks.
+            Assert.Equal((first[2], first[3]), (second[2], second[3]));
+            Assert.All(messages.Where(m => m[1] == "202"), m => Assert.Equal((first[2], first[3]), (m[2], m[3])));
+
+            // Once the double-click time has passed, the same small move is a move again.
+            Thread.Sleep((int)GetDoubleClickTime() + 100);
+            Desktop.NudgeMouse(1, 0);
+            Assert.True(Desktop.WaitFor(() => source.NextReport(100) is { } r && r.StartsWith("mouse 200 "), 1500), "Moves didn't resume.\n" + all);
+        });
+    }
+
+    [DllImport("user32.dll")] private static extern uint GetDoubleClickTime();
+
     [Fact]
     public void Moves_reach_the_source_only_at_mapped_points_while_it_holds_the_mouse()
     {

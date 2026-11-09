@@ -155,27 +155,27 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 | The original's caption buttons in a view used directly | ✅ | By hit-test (`PressRules.CaptionActionFor`): close asks the original to close (`SC_CLOSE`) and the view goes with it, or the original is shown after a second if it's still there; minimize minimizes the view, never the original (its picture would stop); maximize goes to the original; the icon or a right-click on the title bar opens the view's menu; borders do nothing; the title bar moves the view. An app that minimizes itself from its own content is restored, still hidden, and the view minimizes; one that maximizes itself goes to the original. |
 | The original after a visit | ✅ | The original never moves during a visit; it stays parked until it is shown or the view closes. |
 | Parking and display changes | ✅ / ❔ | A hidden original is parked on an outer edge of its own monitor when it has one, so it keeps its scale. When the displays change (a monitor added or removed, a resolution change), it is parked again past an outer edge of the new layout and the view is kept on a screen. Tested by reproducing the change's effect on one display; real mixed-scale monitors haven't been tested. |
-| Apps that refuse to be see-through | ⚠️ | Some apps (WPF ones, such as PowerShell ISE) drop the style that makes a window see-through, so they can't be hidden, kept updating or used directly. The view says so and leaves the app as it was. |
+| Apps that refuse to be see-through | ⚠️ | Some apps (WPF ones, such as PowerShell ISE) drop the style that makes a window see-through, so they can't be hidden, kept updating or used directly. The view says so and leaves the app as it was; a view of it still works while it is on screen. Other ways to hide them were measured and don't work: off screen, behind the taskbar edge or with an empty window region, a WPF window stops drawing and its view freezes (both capture methods). Its mouse input also needs the real pointer over the spot, which posted messages can't give. |
 
 **Use this view directly: what works where.** Every press gets one outcome: delivered, reached a popup, moved the view, a caption button, unsupported (that kind of window has no way to take it; nothing is sent), or unconfirmed (tried, but the app was busy or refused).
 
 | Window under the pointer | Input path | Supported | Unsupported |
 |---|---|---|---|
-| Ordinary windows of the app (Win32, WinForms, browsers, Explorer's file list) | Posted mouse messages at the mapped point | Hover and pointer shape, every button, double-click, drag and text selection, wheel, keys after a click | — |
+| Ordinary windows of the app (Win32, WinForms, browsers, Explorer's file list) | Posted mouse messages at the mapped point | Hover and pointer shape, every button, double-click (and triple), drag and text selection, wheel, keys after a click | — |
 | Newer UI frameworks: WinUI 3 islands (Explorer's command bar, tabs and address bar on Windows 11) and Store app content (Calculator, Settings) | Accessibility (UI Automation) | Click (invoke, select, toggle, expand, focus a text box); right-click opens the control's own menu, next to the pointer; double-click only where it means two clicks (buttons, check boxes, links, menu items); wheel scrolls what scrolls; keys after a click | Hover, drag and text selection, middle and side buttons, a double-click that opens an item or selects a word |
 | Any other program's window inside the original | — | — | Everything |
 
 | App (framework) | Direct use | Verified |
 |---|---|---|
-| Chrome, Edge (Chromium) | ✅ / ⚠️ | Pointer shapes, clicks, drag selection, typing, toolbar, tabs, context menus, wheel. A double-click acts as two single clicks (below) |
-| VS Code (Electron) | ✅ / ⚠️ | Click, typing and saving. A double-click acts as two single clicks (below); its editor's context menu wasn't seen after a right-click (cause not found) |
+| Chrome, Edge (Chromium) | ✅ | Pointer shapes, clicks, double-click to select a word (also with a pixel of jitter and in a view a quarter of the page's size), drag selection, typing, toolbar, tabs, context menus, wheel |
+| VS Code (Electron) | ✅ | Double-click to select a word, typing, its editor's context menu (drawn inside its window) and a click on one of its items, saving |
+| Firefox | ✅ | Clicks, double-click to select a word, drag selection, typing, wheel, its context menu by the pointer |
 | VLC (Qt) | ✅ | Context menu by the pointer, menu bar menus, a real click on a menu item |
 | File Explorer (Win32 and WinUI 3) | ✅ | See the table above |
 | Calculator, Settings (Store apps) | ✅ | Click, typing, double-click on buttons, wheel, caption buttons |
-| PowerShell ISE (WPF) | ❌ | Can't be hidden (see above) |
-| Firefox | ❌ | It receives the posted press at the right point and ignores it: only real pointer input reaches its pages. A view of Firefox works; direct use doesn't |
+| PowerShell ISE (WPF) | ❌ | Can't be hidden or used directly (see above); a view of it works while it is on screen |
 
-**Double-click in Chromium-based apps (Chrome, Edge, Electron).** Once the page has had a pointer move, Chromium resets its click count whenever there is any pause between the first click's release and the second press, so a double-click through a view arrives as two single clicks (measured with posted sequences; with no pause it is a double-click). Holding releases back would delay every click, so this stays a limitation for now. Win32 apps, File Explorer and Store app buttons double-click normally.
+**Double-clicks.** Windows' own rule applies through a view: until the double-click time has passed, the pointer staying inside the double-click rectangle isn't a move, and the second (or third) press lands where the first did. In a view shown smaller, one pixel of hand jitter is several in the app. When the view stops sharing input with the app for a press, Windows soon tells the app where the real pointer is; the press waits until that has happened, which it can see because the view is told too (at most 100 ms). Arriving during the press, that news used to turn a double-click in browsers into two single clicks. The wait is one tick of the system timer on the Windows 11 PC tested (about 15 ms) and 31 to 57 ms in the Windows 10 VM; a press that didn't stop sharing doesn't wait.
 
 Popups the original owns are followed whichever thread or process made them, and so are its program's own menus; other programs' windows are never moved. When the app stops answering for a moment, WinScreen stops sharing input with it until it answers again, so it never waits on the app.
 

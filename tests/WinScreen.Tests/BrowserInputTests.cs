@@ -230,42 +230,68 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         Assert.NotNull(timing);
     }
 
-    /// <summary>A double-click on a word in a page selects that word, as it does with a real mouse.</summary>
+    public static IEnumerable<object[]> DoubleClickCases() =>
+        BrowserCases().SelectMany(c => new[] { new object[] { c[0], 900 }, [c[0], 1800] });
+
+    /// <summary>
+    /// A double-click on a word in a page selects that word, as with a real mouse, also with a pixel of hand jitter
+    /// and in a view shown at about a quarter of the page's size (where one pixel is four in the page). A triple-click
+    /// selects the line.
+    /// </summary>
     /// <remarks>
-    /// Skipped: measured 9 Nov with posted sequences straight to a Chromium page. Once the page has had a pointer move,
-    /// any gap between the first release and the second press resets its click count, so the second press counts as a
-    /// single click; with no gap, or with the first release held until the second press, it is a double-click. Holding
-    /// releases back would delay every click, so this stays a documented limitation until real pointer input is designed.
+    /// It used to arrive as two single clicks: stopping input sharing for the press made Windows tell the page, just
+    /// after the press, that the real pointer was elsewhere (see PipInteraction.MaxRecheckWait). 1 in 10 worked then.
     /// </remarks>
-    [Theory(Skip = "Chromium resets its click count between posted clicks after a pointer move (documented limitation).")]
-    [MemberData(nameof(BrowserCases))]
-    public void A_double_click_selects_a_word_in_a_page_used_through_a_view(string path)
+    [Theory]
+    [MemberData(nameof(DoubleClickCases))]
+    public void A_double_click_selects_a_word_in_a_page_used_through_a_view(string path, int width)
     {
         const string page = """
-            <!doctype html><title>Dbl sel=0 n=0</title><style>body{margin:0;font:28px sans-serif}#w{position:absolute;left:40px;top:40px}</style>
-            <p id=w>Selectable words here</p>
-            <script>let n=0;const r=()=>document.title=`Dbl sel=${getSelection().toString().trim().length} n=${n}`;
-            document.addEventListener('selectionchange',r);addEventListener('dblclick',()=>{n++;r()});</script>
+            <!doctype html><title>Dbl n=0 sel=0</title><style>body{margin:0;font:28px sans-serif}p{position:absolute;left:40px;margin:0}</style>
+            <p style=top:40px>alpha bravo charlie</p><p style=top:120px>delta echo foxtrot</p>
+            <script>let n=0;addEventListener('dblclick',()=>n++);setInterval(()=>document.title=`Dbl n=${n} sel=${getSelection().toString().trim().length}`,30)</script>
             """;
         var (browser, window, root) = Open(page, "Dbl", app: true, path);
         var log = new StringBuilder();
         try
         {
+            User32.ShowWindow(window, 9);
+            User32.SetWindowPos(window, 0, 0, 100, width, 700, 0x14);
+            Thread.Sleep(800);
             Visit(window, (view, at, l) =>
             {
                 Rectangle client = Desktop.BoundsOf(window);
                 int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - client.Top;
-                Point word = at(new Point(40 + 30, top + 40 + 18)); // Inside "Selectable".
-                Desktop.SlideMouse(word); Thread.Sleep(150);
-                for (int i = 0; i < 2; i++) { mouse_event(2, 0, 0, 0, 0); Thread.Sleep(30); mouse_event(4, 0, 0, 0, 0); Thread.Sleep(50); }
-                Thread.Sleep(500);
-                l.AppendLine("after double-click: " + WindowInfo.Title(window));
-                if (view.LiveInteraction is { } live) foreach (string entry in live.InputDiagnostics) l.AppendLine(entry);
+                for (int i = 0; i < 5; i++)
+                {
+                    // A click in blank space clears the selection; then a double-click on a word, some with jitter.
+                    Desktop.SlideMouse(at(new Point(600, top + 400))); Thread.Sleep(80);
+                    mouse_event(2, 0, 0, 0, 0); Thread.Sleep(30); mouse_event(4, 0, 0, 0, 0); Thread.Sleep(300);
+                    Desktop.SlideMouse(at(new Point(60 + (i % 3) * 90, top + (i % 2 == 0 ? 55 : 135)))); Thread.Sleep(150 + (i % 3) * 100);
+                    string before = WindowInfo.Title(window);
+                    mouse_event(2, 0, 0, 0, 0); Thread.Sleep(45); mouse_event(4, 0, 0, 0, 0); Thread.Sleep(70 + (i % 2) * 60);
+                    if (i % 2 == 1) Desktop.NudgeMouse(1, 0);
+                    mouse_event(2, 0, 0, 0, 0); Thread.Sleep(45); mouse_event(4, 0, 0, 0, 0); Thread.Sleep(350);
+                    l.AppendLine($"{i}: {before} -> {WindowInfo.Title(window)} (the press waited {view.LiveInteraction?.LastRecheckWait:F1} ms)");
+                }
+                // A triple-click, with jitter before the third press, selects the whole line.
+                Desktop.SlideMouse(at(new Point(600, top + 400))); Thread.Sleep(80);
+                mouse_event(2, 0, 0, 0, 0); Thread.Sleep(30); mouse_event(4, 0, 0, 0, 0); Thread.Sleep(300);
+                Desktop.SlideMouse(at(new Point(150, top + 55))); Thread.Sleep(200);
+                for (int click = 0; click < 3; click++)
+                {
+                    if (click == 2) Desktop.NudgeMouse(0, 1);
+                    mouse_event(2, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(4, 0, 0, 0, 0); Thread.Sleep(70);
+                }
+                Thread.Sleep(350);
+                l.AppendLine("triple: " + WindowInfo.Title(window));
             }, log);
         }
         finally { Close(browser, root); }
         output.WriteLine(log.ToString());
-        Assert.Contains("after double-click: Dbl sel=10 n=1", log.ToString());
+        for (int i = 0; i < 5; i++)
+            Assert.Matches($@"(?m)^{i}: Dbl n={i} sel=0 -> Dbl n={i + 1} sel=[4-7]([^0-9]|$)", log.ToString());
+        Assert.Matches(@"(?m)^triple: Dbl n=\d+ sel=19([^0-9]|$)", log.ToString()); // "alpha bravo charlie"
     }
 
     public static IEnumerable<object[]> ToolbarCases()

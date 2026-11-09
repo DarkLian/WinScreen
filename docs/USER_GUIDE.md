@@ -76,8 +76,7 @@ Every view has a title bar above the picture, or below it near the top of the sc
   Store apps, such as Calculator, work too. They keep their taskbar button, and choosing it shows the app.
   On some newer controls, in Store apps and parts of File Explorer, you can click, right-click and scroll,
   but not hover, drag or select.
-  A few apps can't be hidden, such as PowerShell ISE, and WinScreen tells you. Firefox can be watched in a view
-  but not used directly. In browsers and apps built like them, a double-click acts as two single clicks.
+  A few apps can't be hidden, such as PowerShell ISE, and WinScreen tells you.
 
 Views pause direct use while a WinScreen menu or the tray overflow panel is open.
 
