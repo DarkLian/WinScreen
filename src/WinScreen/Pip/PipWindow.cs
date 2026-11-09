@@ -795,8 +795,8 @@ public sealed class PipWindow : Form
             {
                 if (_cursorFromFrame) Cursor.Current = Cursors.Default;
                 _cursorFromFrame = false;
-                // With input shared, the app's answer sets the pointer seen over the view.
-                if (_live.SharesInput) _live.AskForCursor();
+                // With input shared, the visit's input worker asks the app after each move it sends, and the
+                // app's answer sets the pointer seen over the view. Asking here would make this thread wait on it.
                 m.Result = 1;
                 return;
             }

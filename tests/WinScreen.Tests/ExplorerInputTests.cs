@@ -10,6 +10,9 @@ namespace WinScreen.Tests;
 [Trait("Category", "Interactive")]
 public sealed class ExplorerInputTests
 {
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern void mouse_event(uint flags, uint x, uint y, uint data, nuint extra);
+
     [Fact]
     public void Double_clicking_a_folder_in_a_view_navigates_explorer()
     {
@@ -62,6 +65,8 @@ public sealed class ExplorerInputTests
                         }
                         Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith(folder, StringComparison.Ordinal), 4000),
                             "Explorer did not navigate. " + string.Join("\n", view.LiveInteraction?.InputDiagnostics ?? []));
+                        // The rest is Windows 11's Explorer: its command bar, tabs and address bar.
+                        if (Environment.OSVersion.Version.Build < 22000) return;
                         void ClickControl(Func<BrowserAccessibility.Control, bool> match, double across = .5)
                         {
                             var control = Assert.Single(BrowserAccessibility.Read(window), c => match(c));
@@ -94,6 +99,30 @@ public sealed class ExplorerInputTests
                         ClickControl(c => c.Type == 50000 && c.Name == "View");
                         Check(() => BrowserAccessibility.Read(window).Any(c => c.Name == "Extra large icons"), "View menu");
                         Desktop.Press(Keys.Escape);
+                        Thread.Sleep(300);
+                        // Every click above reported what really happened, once the control acted.
+                        Check(() => view.PressOutcomes.Count(o => o == PressOutcome.Unconfirmed) == 0,
+                            "Outcomes " + string.Join(",", view.PressOutcomes));
+
+                        // A right-click has no equivalent on these controls: it's reported, not counted as delivered.
+                        int before = view.PressOutcomes.Count;
+                        var viewButton = Assert.Single(BrowserAccessibility.Read(window), c => c.Type == 50000 && c.Name == "View");
+                        source = Desktop.BoundsOf(window);
+                        (area, shown) = view.LiveInteraction!.CurrentGeometry;
+                        Point right = new(area.Left + (int)Math.Round((viewButton.Bounds.Left + viewButton.Bounds.Width / 2 - source.Left - shown.Left) * (double)area.Width / shown.Width),
+                            area.Top + (int)Math.Round((viewButton.Bounds.Top + viewButton.Bounds.Height / 2 - source.Top - shown.Top) * (double)area.Height / shown.Height));
+                        Desktop.SlideMouse(right);
+                        Thread.Sleep(100);
+                        mouse_event(8, 0, 0, 0, 0); Thread.Sleep(50); mouse_event(16, 0, 0, 0, 0);
+                        // Explorer's own tooltip can be under the pointer by then, which takes the press as a real popup.
+                        Check(() => view.PressOutcomes.Count == before + 1 && view.PressOutcomes.Last() is PressOutcome.Unconfirmed or PressOutcome.Popup,
+                            "Right-click outcome " + string.Join(",", view.PressOutcomes));
+
+                        // A click made just before the pointer leaves the view still happens.
+                        ClickControl(c => c.Type == 50000 && c.Name == "Back");
+                        Desktop.SlideMouse(new Point(view.Left - 60, view.Top - 60));
+                        Check(() => WindowInfo.Title(window).StartsWith(Path.GetFileName(root), StringComparison.Ordinal), "Back, then leaving at once");
+                        Check(() => view.PressOutcomes.Last() == PressOutcome.Delivered, "Late outcome " + string.Join(",", view.PressOutcomes));
                     }
                     catch (Exception e) { failure = e; }
                     finally { Desktop.MouseButton(false); Desktop.MoveMouse(home); }

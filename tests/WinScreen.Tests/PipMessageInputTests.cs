@@ -314,7 +314,9 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
                 return shown;
             }
             Assert.True(view.LiveInteraction!.SharesInput, "Input wasn't shared during the visit.");
-            Assert.Equal(Cursors.IBeam.Handle, SetCursorOnView());
+            // The app sets its shape as it handles the moves it's sent; the pointer seen over the view follows.
+            Desktop.NudgeMouse(1, 0);
+            Assert.True(Desktop.WaitFor(() => ShownCursor() == Cursors.IBeam.Handle, 2000), $"The pointer showed 0x{ShownCursor():X}.");
             Assert.True(windowsReachable(view, true), "The parked original wasn't reachable during the visit.");
             Desktop.SlideMouse(new Point(view.Left - 60, view.Top - 60));
             Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null), "The visit didn't end.");
@@ -454,5 +456,15 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
             Assert.Equal(before, Desktop.BoundsOf(source.Handle));
             Assert.True(Desktop.Alpha(source.Handle) is null or 255);
         });
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct CursorInfo { public int Size; public int Flags; public nint Cursor; public int X, Y; }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool GetCursorInfo(ref CursorInfo info);
+
+    private static nint ShownCursor()
+    {
+        var info = new CursorInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<CursorInfo>() };
+        return GetCursorInfo(ref info) ? info.Cursor : 0;
     }
 }

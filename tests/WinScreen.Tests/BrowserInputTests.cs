@@ -37,9 +37,18 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         nint window = 0;
         Desktop.WaitFor(() =>
         {
+            // Only this run's browser: its profile folder is in its command line. Another run's window can have
+            // the same title.
             window = 0;
-            foreach (Process p in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(path ?? EdgePath)))
-                if (p.MainWindowHandle != 0 && WindowInfo.Title(p.MainWindowHandle).StartsWith(title)) window = p.MainWindowHandle;
+            foreach (int id in ProcessesUsing(root))
+            {
+                try
+                {
+                    using Process p = Process.GetProcessById(id);
+                    if (p.MainWindowHandle != 0 && WindowInfo.Title(p.MainWindowHandle).StartsWith(title)) window = p.MainWindowHandle;
+                }
+                catch (ArgumentException) { }
+            }
             return window != 0;
         }, 20000);
         Thread.Sleep(1500);
@@ -50,6 +59,12 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     {
         try { if (!browser.HasExited) browser.Kill(true); } catch (InvalidOperationException) { }
         browser.WaitForExit(5000);
+        // The first process can hand the window to others and leave; close every process of this run's profile.
+        foreach (int id in ProcessesUsing(root))
+        {
+            try { using Process p = Process.GetProcessById(id); p.Kill(); p.WaitForExit(3000); }
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { }
+        }
         try { Directory.Delete(root, true); } catch (IOException) { }
     }
 
@@ -174,6 +189,45 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         Assert.True(selected.Success && int.Parse(selected.Groups[1].Value) > 50, report);
         Assert.Contains("val=abc fg=True", report);
         Assert.DoesNotContain("EXC ", report);
+    }
+
+    /// <summary>
+    /// Windows drops a low-level mouse hook that answers slowly, and every pointer move on the desktop waits for
+    /// it. The hook must stay cheap while a busy page is used through a view: moves, presses and wheel turns.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BrowserCases))]
+    public void The_hook_answers_quickly_while_a_browser_is_used_through_a_view(string path)
+    {
+        var log = new StringBuilder();
+        string cells = string.Concat(Enumerable.Range(0, 600).Select(i => $"<a href=#{i} title=t{i}>cell {i}</a> "));
+        string page = "<!doctype html><title>LatencyProbe</title><style>body{margin:0;font:14px sans-serif}a{display:inline-block;width:80px;height:22px}a:hover{background:#cde}</style>" +
+            "<div style='height:3000px'>" + cells + "</div>";
+        var (browser, window, root) = Open(page, "LatencyProbe", app: true, path);
+        string? timing = null;
+        try
+        {
+            Visit(window, (view, at, l) =>
+            {
+                var live = view.LiveInteraction!;
+                var random = new Random(7);
+                Rectangle bounds = Desktop.BoundsOf(window);
+                for (int i = 0; i < 1500; i++)
+                {
+                    Desktop.SlideMouse(at(new Point(40 + random.Next(bounds.Width - 80), 80 + random.Next(bounds.Height - 160))));
+                    Thread.Sleep(2);
+                    if (i % 150 == 75) { mouse_event(0x800, 0, 0, unchecked((uint)-120), 0); Thread.Sleep(5); mouse_event(0x800, 0, 0, 120, 0); }
+                    if (i % 300 == 150) { mouse_event(2, 0, 0, 0, 0); Thread.Sleep(30); mouse_event(4, 0, 0, 0, 0); }
+                    if (view.LiveInteraction is null) { l.AppendLine("EXC visit ended early: " + view.LastVisitEnd + " at " + i); break; }
+                }
+                timing = live.Timing.ToString();
+                l.AppendLine(timing);
+            }, log);
+        }
+        finally { Close(browser, root); }
+        output.WriteLine(log.ToString());
+        Assert.DoesNotContain("EXC ", log.ToString());
+        Assert.NotNull(timing);
     }
 
     public static IEnumerable<object[]> ToolbarCases()
@@ -302,6 +356,19 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             Close(browser, root);
         }
     }
+
+    /// <summary>Processes whose command line names this run's folder, which holds its browser profile.</summary>
+    private static List<int> ProcessesUsing(string root)
+    {
+        var ids = new List<int>();
+        using var search = new System.Management.ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='chrome.exe' OR Name='msedge.exe'");
+        foreach (var item in search.Get())
+            using (item)
+                if (item["CommandLine"] is string line && line.Contains(root, StringComparison.OrdinalIgnoreCase))
+                    ids.Add(Convert.ToInt32(item["ProcessId"]));
+        return ids;
+    }
+
 
     private static void SendCharacter(nint window, char ch) => User32.PostMessage(window, 0x102, ch, 0);
     private static bool HasMenu(nint owner)

@@ -5,15 +5,30 @@ using WinScreen.Windows;
 
 namespace WinScreen.Pip;
 
-/// <summary>Mouse messages for a stationary parked source. Coordinates are always taken from the current view and source.</summary>
+/// <summary>What became of a press or release handed to the hidden window.</summary>
+internal enum Delivery
+{
+    /// <summary>Nothing reached the window: it is gone, busy, or the surface can't take this input.</summary>
+    Failed,
+    /// <summary>Posted to a responsive window of the source's process at the mapped point.</summary>
+    Posted,
+    /// <summary>Waiting for the release: the outcome is reported when the control has been activated.</summary>
+    Deferred,
+}
+
+/// <summary>
+/// Mouse messages for a stationary parked source. Coordinates are always taken from the current view and source.
+/// Used from one thread at a time: the visit's input worker, then its teardown.
+/// </summary>
 internal sealed class PipMessageInput(nint source, WindowIdentity identity)
 {
     private MouseButtons _held;
     internal nint PressTarget { get; private set; }
     internal string PressTransport { get; private set; } = "messages";
+    /// <summary>The window the last move went to, which is also where the pointer's shape comes from.</summary>
+    internal nint MoveTarget { get; private set; }
     private nint _dragTarget;
     private Point _lastPointer;
-    private PipControlInput? _controls;
     private Point? _controlPress;
     private readonly Dictionary<MouseButtons, (long Time, Point At, nint Target)> _clicks = [];
 
@@ -21,10 +36,18 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")] private static extern nint GetClassLongPtr(nint window, int index);
     [DllImport("user32.dll")] private static extern uint GetDoubleClickTime();
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsHungAppWindow(nint window);
+
+    /// <summary>
+    /// Surfaces whose controls read pointer input from the system rather than from posted legacy mouse messages.
+    /// A left click on them goes through UI Automation instead.
+    /// </summary>
+    internal static bool IsPointerOnlySurface(nint window) => WindowInfo.ClassName(window) == "Microsoft.UI.Content.DesktopChildSiteBridge";
 
     internal Point MappedScreen(Point pointer, Rectangle view, Rectangle shown)
     {
-        identity.Require();
+        // The quick check: this runs for every move. The visit checked the process fully when it began.
+        if (!identity.StillThere()) throw new WindowOperationException(T("errors.identity.originalGone"));
         if (!User32.GetWindowRect(source, out Rect bounds)) throw new WindowOperationException(T("errors.pip.windowUnavailable"));
         Point spot = PipGeometry.PointToSource(pointer, view, shown);
         return new Point(bounds.Left + spot.X, bounds.Top + spot.Y);
@@ -69,7 +92,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     }
 
     private static nint Pack(Point point) => (nint)((point.Y << 16) | (point.X & 0xffff));
-    private nint Keys(MouseButtons held)
+    private static nint Keys(MouseButtons held)
     {
         int keys = 0;
         if ((held & MouseButtons.Left) != 0) keys |= 1;
@@ -82,11 +105,16 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         return keys;
     }
 
-    private bool Post(nint target, int message, nint keys, Point mapped, bool screenCoordinates = false)
+    /// <param name="evenIfBusy">
+    /// For a release that pairs a press already sent: the app must not be left with a button held down when it
+    /// catches up. Anything else isn't sent to a window that isn't responding, or it would act much later.
+    /// </param>
+    private bool Post(nint target, int message, nint keys, Point mapped, bool screenCoordinates = false, bool evenIfBusy = false)
     {
         if (target == 0 || !identity.StillThere() || !User32.IsWindow(target)) return false;
         User32.GetWindowThreadProcessId(target, out uint process);
         if (process != identity.ProcessId) return false;
+        if (!evenIfBusy && IsHungAppWindow(target)) return false;
         var point = new NativePoint { X = mapped.X, Y = mapped.Y };
         if (!screenCoordinates && !ScreenToClient(target, ref point)) return false;
         return User32.PostMessage(target, message, keys, Pack(new Point(point.X, point.Y)));
@@ -97,16 +125,36 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         _lastPointer = pointer;
         Point mapped = MappedScreen(pointer, view, shown);
         if (_controlPress is not null) return true;
-        return Post(_held != MouseButtons.None ? _dragTarget : TargetAt(mapped), 0x200, Keys(_held), mapped);
+        nint target = _held != MouseButtons.None ? _dragTarget : TargetAt(mapped);
+        MoveTarget = target;
+        return Post(target, 0x200, Keys(_held), mapped);
     }
 
-    internal bool Press(Point pointer, MouseButtons button, Rectangle view, Rectangle shown)
+    /// <summary>Asks the window under the pointer to set its cursor, as Windows would if the pointer were really there.</summary>
+    internal void AskForCursor()
+    {
+        nint target = MoveTarget;
+        if (target != 0 && identity.StillThere() && User32.IsWindow(target))
+            User32.SendMessageTimeout(target, 0x0020 /* WM_SETCURSOR */, target, (nint)(1 | (0x0200 << 16)), 0x2, 20, out _);
+    }
+
+    internal Delivery Press(Point pointer, MouseButtons button, Rectangle view, Rectangle shown)
     {
         _lastPointer = pointer;
         Point mapped = MappedScreen(pointer, view, shown);
         nint target = _held != MouseButtons.None ? _dragTarget : TargetAt(mapped);
         PressTarget = target;
         PressTransport = "messages";
+        if (target != 0 && IsPointerOnlySurface(target))
+        {
+            PressTransport = "automation";
+            // Only a plain left click has an automation equivalent. Anything else would be posted and ignored.
+            if (button != MouseButtons.Left || _held != MouseButtons.None) return Delivery.Failed;
+            _controlPress = mapped;
+            _held |= button;
+            _dragTarget = target;
+            return Delivery.Deferred;
+        }
         int down = DownMessage(button);
         long now = Environment.TickCount64;
         bool doubleClick = _clicks.TryGetValue(button, out var previous) && previous.Target == target &&
@@ -114,37 +162,44 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
             Math.Abs(pointer.Y - previous.At.Y) <= SystemInformation.DoubleClickSize.Height / 2 &&
             ((long)GetClassLongPtr(target, -26) & 8) != 0;
         MouseButtons held = _held | button;
-        if (button == MouseButtons.Left && _held == MouseButtons.None &&
-            WindowInfo.ClassName(target) == "Microsoft.UI.Content.DesktopChildSiteBridge")
-        {
-            PressTransport = "automation";
-            _controlPress = mapped;
-            _held = held;
-            _dragTarget = target;
-            return true;
-        }
-        nint keys = ButtonKeys(button, held);
-        if (!Post(target, down + (doubleClick ? 2 : 0), keys, mapped)) return false;
+        if (!Post(target, down + (doubleClick ? 2 : 0), ButtonKeys(button, held), mapped)) return Delivery.Failed;
         if (doubleClick) _clicks.Remove(button);
         else _clicks[button] = (now, pointer, target);
         _held = held;
         _dragTarget = target;
-        return true;
+        return Delivery.Posted;
     }
 
-    internal bool Release(Point pointer, MouseButtons button, Rectangle view, Rectangle shown)
+    /// <param name="activated">For a deferred press: called, from another thread, with what activation did.</param>
+    /// <returns>
+    /// Posted for a release that pairs a posted press; Deferred once a control activation is queued; Failed when
+    /// a deferred press can't become a click (it was a drag, or the queue was full), with <paramref name="why"/>.
+    /// </returns>
+    internal Delivery Release(Point pointer, MouseButtons button, Rectangle view, Rectangle shown,
+        Action<PipControlInput.Result>? activated, out string why)
     {
-        if ((_held & button) == 0) return false;
+        why = "";
+        if ((_held & button) == 0) return Delivery.Failed;
         _held &= ~button;
         if (button == MouseButtons.Left && _controlPress is { } press)
         {
             _controlPress = null;
             Point release = MappedScreen(pointer, view, shown);
             if (Math.Abs(release.X - press.X) > SystemInformation.DragSize.Width ||
-                Math.Abs(release.Y - press.Y) > SystemInformation.DragSize.Height) return false;
-            return (_controls ??= new PipControlInput(identity)).Click(_dragTarget, press);
+                Math.Abs(release.Y - press.Y) > SystemInformation.DragSize.Height)
+            {
+                why = "a drag on a surface that only takes clicks";
+                return Delivery.Failed;
+            }
+            if (activated is null || !PipControlInput.Shared.Click(identity, _dragTarget, press, activated))
+            {
+                why = "control input is busy";
+                return Delivery.Failed;
+            }
+            return Delivery.Deferred;
         }
-        return Post(_dragTarget, DownMessage(button) + 1, ButtonKeys(button, _held), MappedScreen(pointer, view, shown));
+        return Post(_dragTarget, DownMessage(button) + 1, ButtonKeys(button, _held), MappedScreen(pointer, view, shown), evenIfBusy: true)
+            ? Delivery.Posted : Delivery.Failed;
     }
 
     internal bool Wheel(Point pointer, bool horizontal, uint data, Rectangle view, Rectangle shown)
@@ -154,15 +209,19 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
             (nint)((long)(data & 0xffff0000u) | (long)Keys(_held)), mapped, true);
     }
 
-    internal void ReleaseAll(Rectangle view, Rectangle shown)
+    /// <summary>Releases every button still held, so none stays down in the app. Returns the buttons whose press was a pending click.</summary>
+    internal MouseButtons ReleaseAll(Rectangle view, Rectangle shown)
     {
-        if (_controlPress is not null) { _controlPress = null; _held &= ~MouseButtons.Left; }
-        _controls?.Dispose();
+        MouseButtons cancelled = MouseButtons.None;
+        if (_controlPress is not null) { _controlPress = null; _held &= ~MouseButtons.Left; cancelled = MouseButtons.Left; }
         foreach (MouseButtons button in new[] { MouseButtons.Left, MouseButtons.Right, MouseButtons.Middle, MouseButtons.XButton1, MouseButtons.XButton2 })
-            if ((_held & button) != 0 && identity.StillThere()) Release(_lastPointer, button, view, shown);
+            if ((_held & button) != 0 && identity.StillThere())
+                try { Release(_lastPointer, button, view, shown, null, out _); } catch (WindowOperationException) { }
+        _held = MouseButtons.None;
+        return cancelled;
     }
 
-    private nint ButtonKeys(MouseButtons button, MouseButtons held) =>
+    private static nint ButtonKeys(MouseButtons button, MouseButtons held) =>
         (nint)((long)Keys(held) | (button is MouseButtons.XButton1 or MouseButtons.XButton2 ? (button == MouseButtons.XButton1 ? 1L : 2L) << 16 : 0));
     private static int DownMessage(MouseButtons button) => button switch
     {

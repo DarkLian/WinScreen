@@ -124,6 +124,82 @@ public sealed class InteractiveViewTests
         Thread.Sleep(60);
     }
 
+    /// <summary>
+    /// Every pointer move on the desktop waits for the hook, and Windows drops a hook that answers slowly. An app
+    /// that is busy for a moment (not yet "not responding") must not slow the hook down.
+    /// </summary>
+    [Fact]
+    public void A_busy_app_in_a_view_never_slows_the_pointer()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        source.UseFrame();
+        Drive(source, (view, _) =>
+        {
+            Rectangle frame = view.Bounds;
+            Hover(new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2), view);
+            PipInteraction live = view.LiveInteraction!;
+            source.Hang();
+            try
+            {
+                for (int i = 0; i < 80; i++)
+                {
+                    Desktop.SlideMouse(new Point(frame.Left + 30 + i * (frame.Width - 60) / 80, frame.Top + frame.Height / 2 + (i % 7) * 4));
+                    Thread.Sleep(10);
+                    if (i == 40) { Desktop.MouseButton(true); Thread.Sleep(20); Desktop.MouseButton(false); }
+                }
+            }
+            finally { source.Unhang(); }
+            string timing = live.Timing.ToString();
+            Assert.True(live.Timing.Max < TimeSpan.FromMilliseconds(15), timing + "; visit ended: " + view.LastVisitEnd);
+            Assert.True(view.LiveInteraction is not null, "A busy app ended the visit: " + view.LastVisitEnd + "; " + timing);
+        });
+    }
+
+    /// <summary>
+    /// A press on an app Windows calls not responding isn't counted as delivered, and isn't left queued to act
+    /// on its own when the app catches up, long after the user moved on.
+    /// </summary>
+    [Fact]
+    public void A_press_on_an_app_that_is_not_responding_is_reported_and_never_acts_later()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        source.UseFrame();
+        Drive(source, (view, _) =>
+        {
+            Rectangle frame = view.Bounds;
+            var inside = new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2);
+            Hover(inside, view);
+            source.Hang();
+            try
+            {
+                // Windows calls a window not responding after five seconds without reading its messages.
+                Assert.True(Desktop.WaitFor(() => IsHungAppWindow(source.Handle), 9000), "The target never counted as not responding.");
+                for (int i = 0; i < 3; i++) { Desktop.NudgeMouse(i % 2 == 0 ? 1 : -1, 0); Thread.Sleep(30); }
+                Thread.Sleep(200);
+                // Either the visit is still on and reports the press as not delivered, or Windows' not-responding
+                // window ended it and the press stays with the view. Both are safe; a delivered press is not.
+                PipInteraction? during = view.LiveInteraction;
+                Desktop.MouseButton(true);
+                Desktop.MouseButton(false);
+                if (during is not null)
+                {
+                    Assert.True(Desktop.WaitFor(() => during.Log.Count > 0, 2000), "The press got no outcome.");
+                    Assert.Equal(PressOutcome.Unconfirmed, during.Log.Single().Outcome);
+                }
+                else
+                {
+                    Assert.False(string.IsNullOrEmpty(view.LastVisitEnd), "The visit ended without a reason.");
+                    Assert.DoesNotContain(PressOutcome.Delivered, view.PressOutcomes);
+                }
+            }
+            finally { source.Unhang(); }
+            Assert.Null(source.NextReport(1500)); // Nothing arrives once it reads its messages again.
+        });
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsHungAppWindow(nint window);
+
     [Fact]
     public void A_press_lands_on_the_point_the_view_shows_and_the_visit_leaves_nothing_behind()
     {

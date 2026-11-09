@@ -65,11 +65,17 @@ internal static class PressRules
     public static bool IsBorder(nint hit) => (int)hit is >= Left and <= BottomRight or Border;
 }
 
-//// <summary>
+
+/// <summary>
 /// One pointer visit to a view used directly. The original stays parked and invisible; the pointer's moves,
 /// presses and wheel turns reach it as messages at the matching point. The hook and its threads exist only
 /// for this visit.
 /// </summary>
+/// <remarks>
+/// Every pointer move on the desktop waits for a low-level hook, and Windows drops one that answers slowly. So
+/// the hook itself only decides, from WinScreen's own state, whether to let each event through, and hands the
+/// rest to an input worker, in order. Only the worker talks to the other app, which may be slow or busy.
+/// </remarks>
 internal sealed class PipInteraction : IDisposable
 {
     // Opt-in, per-visit and bounded. Contains geometry and window classes only, never UI text or keys.
@@ -83,6 +89,8 @@ internal sealed class PipInteraction : IDisposable
         WM_XBUTTONDOWN = 0x20B, WM_XBUTTONUP = 0x20C, WM_MOUSEHWHEEL = 0x20E;
     private const int VK_MENU = 0x12;
     private const int Keep = 256;
+    // Moves are merged while the worker is behind; presses and releases never are. A stuck worker can't grow this.
+    private const int MaxQueued = 512;
 
     private readonly nint _source;
     private readonly Windows.WindowIdentity _identity;
@@ -90,7 +98,7 @@ internal sealed class PipInteraction : IDisposable
     private readonly HookProc _hook;
     private readonly AutoResetEvent _moved = new(false);
     private readonly Queue<(PressOutcome Outcome, Point At, nint Hit)> _log = new();
-    private Thread? _hookThread, _watcher;
+    private Thread? _hookThread, _watcher, _worker;
     private uint _hookThreadId;
     private volatile bool _stopping;
     private volatile bool _outside;
@@ -99,15 +107,34 @@ internal sealed class PipInteraction : IDisposable
     private long _observedPointer;
     private Rectangle _view;
     private Rectangle _shown;
-    private MouseButtons _heldDelivered;
-    private MouseButtons _heldSwallowed;
-    private Point _dragFrom;
-    private bool _dragging;
     private readonly SourcePopups _popups;
     private readonly nint _viewWindow;
     private readonly PipMessageInput _messages;
     private readonly uint _viewThread, _sourceThread;
     private int _sharing; // 1 while the view's thread shares input state with the original's.
+
+    // Hook thread only: the buttons whose press the hook kept from the desktop, so their releases are kept too.
+    // Written by the hook only; the worker reads it to know whether a newer press is in progress.
+    private int _swallowedBits;
+    private MouseButtons _swallowed
+    {
+        get => (MouseButtons)Volatile.Read(ref _swallowedBits);
+        set => Volatile.Write(ref _swallowedBits, (int)value);
+    }
+
+    // Input worker only.
+    private MouseButtons _heldDelivered;
+    private MouseButtons _pendingClick; // A deferred press: its outcome comes once the control is activated.
+    private Point _dragFrom;
+    private bool _dragging;
+
+    private readonly List<InputEvent> _queue = [];
+    private readonly AutoResetEvent _work = new(false);
+
+    private enum EventKind { Move, Press, Release, Wheel, Record }
+
+    private readonly record struct InputEvent(EventKind Kind, Point At, MouseButtons Button = MouseButtons.None,
+        bool Alt = false, bool Horizontal = false, uint Data = 0, PressOutcome Outcome = default);
 
     /// <summary>Whether visits share input state with the original, for tests.</summary>
     internal static bool ShareInput { get; set; } = true;
@@ -152,22 +179,26 @@ internal sealed class PipInteraction : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool AttachThreadInput(uint attach, uint attachTo, [MarshalAs(UnmanagedType.Bool)] bool on);
 
-    /// <summary>Raised on the hook thread for a press on the original's caption buttons or icon.</summary>
+    /// <summary>Raised on the input worker for a press on the original's caption buttons or icon.</summary>
     public event Action<CaptionAction>? CaptionPressed;
 
     /// <summary>Raised on the watcher thread when the original asks something: a dialog, or it was disabled.</summary>
     public event Action? QuestionShown;
 
     /// <summary>How many sessions exist now, so tests can prove there is no hook once the pointer leaves.</summary>
-    internal static int Active { get; private set; }
+    internal static int Active => Volatile.Read(ref _active);
+    private static int _active;
 
-    /// <summary>Raised on the hook thread when the pointer has left the view.</summary>
+    /// <summary>Raised on the hook thread or the input worker when the pointer has left the view.</summary>
     public event Action? Left;
 
-    /// <summary>Raised on the hook thread with how far to move the view.</summary>
+    /// <summary>Raised on the input worker with how far to move the view.</summary>
     public event Action<Size>? ViewDragged;
 
-    /// <summary>Called with each press's outcome, so a lost press shows up in tests rather than in use.</summary>
+    /// <summary>
+    /// Called with each press's outcome, so a lost press shows up in tests rather than in use. A click on a
+    /// pointer-only surface reports once the control was activated, which can be after the visit ended.
+    /// </summary>
     public event Action<PressOutcome>? Pressed;
 
     internal IReadOnlyList<(PressOutcome Outcome, Point At, nint Hit)> Log
@@ -179,6 +210,9 @@ internal sealed class PipInteraction : IDisposable
     internal (Rectangle View, Rectangle Shown) CurrentGeometry => Geometry();
     internal bool ObservedPointer(Point point) => Interlocked.Read(ref _observedPointer) == Pack(point);
     private static long Pack(Point point) => ((long)point.X << 32) | (uint)point.Y;
+
+    /// <summary>How long each hook callback took during this visit.</summary>
+    internal PipHookTiming Timing { get; } = new();
 
     /// <summary>Follows the view when it moves or the source changes shape.</summary>
     public void Update(Rectangle view, Rectangle shown)
@@ -202,10 +236,13 @@ internal sealed class PipInteraction : IDisposable
 
     public void Start(Point pointer)
     {
+        _identity.Require(); // The full check, process included, once; moves use the quick one.
         Interlocked.Exchange(ref _observedPointer, Pack(pointer));
         Publish(pointer);
         var (view, shown) = Geometry();
         _messages.Move(pointer, view, shown);
+        _worker = new Thread(Work) { IsBackground = true, Name = "WinScreen interaction input", Priority = ThreadPriority.AboveNormal };
+        _worker.Start();
         using var ready = new ManualResetEventSlim();
         nint hook = 0;
         _hookThread = new Thread(() =>
@@ -221,11 +258,16 @@ internal sealed class PipInteraction : IDisposable
         _hookThread.Start();
         ready.Wait();
         if (hook == 0)
+        {
+            _stopping = true;
+            _work.Set();
+            _worker.Join(2000);
             throw new Windows.WindowOperationException(Localization.UiText.T("errors.pip.clickUnverified"));
+        }
         _watcher = new Thread(FollowPopups) { IsBackground = true, Name = "WinScreen interaction popups" };
         _watcher.Start();
         Share(true);
-        Active++;
+        Interlocked.Increment(ref _active);
     }
 
     private void Publish(Point pointer)
@@ -253,10 +295,274 @@ internal sealed class PipInteraction : IDisposable
                 }
             }
         }
-        catch (Windows.WindowOperationException) { Left?.Invoke(); }
+        catch (Windows.WindowOperationException) { Leave(); }
     }
 
-    private void Record(PressOutcome outcome, Point at, nint hit, nint queuedTarget = 0, bool? queued = null)
+    private void Leave()
+    {
+        if (_outside && _stopping) return;
+        _outside = true;
+        Left?.Invoke();
+    }
+
+    // ---- Hook thread: decide from WinScreen's own state only, then queue. ----
+
+    private nint Callback(int code, nint message, nint data)
+    {
+        if (code != 0 || _stopping)
+            return CallNextHookEx(0, code, message, data);
+        long started = PipHookTiming.Start();
+        bool swallow;
+        try { swallow = Decide(message, data); }
+        finally { Timing.Stop(started); }
+        return swallow ? 1 : CallNextHookEx(0, code, message, data);
+    }
+
+    private bool Decide(nint message, nint data)
+    {
+        var info = Marshal.PtrToStructure<MouseHookInfo>(data);
+        var point = new Point(info.X, info.Y);
+        Interlocked.Exchange(ref _observedPointer, Pack(point));
+        return (int)message switch
+        {
+            WM_MOUSEMOVE => OnMove(point),
+            WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN => OnPress(point, ButtonOf((int)message)),
+            WM_LBUTTONUP or WM_RBUTTONUP or WM_MBUTTONUP => OnRelease(point, ButtonOf((int)message - 1)),
+            WM_XBUTTONDOWN => OnPress(point, (info.MouseData >> 16) == 1 ? MouseButtons.XButton1 : MouseButtons.XButton2),
+            WM_XBUTTONUP => OnRelease(point, (info.MouseData >> 16) == 1 ? MouseButtons.XButton1 : MouseButtons.XButton2),
+            WM_MOUSEWHEEL or WM_MOUSEHWHEEL => OnWheel(point, (int)message == WM_MOUSEHWHEEL, info.MouseData),
+            _ => false,
+        };
+    }
+
+    private void Enqueue(InputEvent input)
+    {
+        lock (_queue)
+        {
+            if (input.Kind == EventKind.Move && _queue.Count > 0 && _queue[^1].Kind == EventKind.Move)
+                _queue[^1] = input;
+            else if (input.Kind != EventKind.Move || _queue.Count < MaxQueued)
+                _queue.Add(input);
+        }
+        _work.Set();
+    }
+
+    private bool OnMove(Point point)
+    {
+        if (_swallowed != MouseButtons.None)
+        {
+            // A held press keeps going, out of the view too: a selection, a scroll bar, or the view being moved.
+            Enqueue(new(EventKind.Move, point));
+            return false;
+        }
+        if (_outside)
+            return false;
+        nint root = RootAt(point);
+        if (root != _viewWindow && root != _source && ProcessOf(root) == _sourceProcess)
+        {
+            _inPopup = true; // A program's own menu can reach past the view; going there isn't leaving.
+            return false;
+        }
+        if (InView(point))
+        {
+            _inPopup = false;
+            Enqueue(new(EventKind.Move, point));
+            return false;
+        }
+        Leave();
+        return false;
+    }
+
+    private bool AtViewBorder(Point point)
+    {
+        if (_viewWindow == 0 || !User32.GetWindowRect(_viewWindow, out Rect bounds)) return false;
+        return PipGeometry.SizingHit(point, Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom),
+            Dpi.Scale(PipGeometry.DirectEdgeBand, Dpi.Of(_viewWindow)), Dpi.Scale(PipGeometry.DirectCornerBand, Dpi.Of(_viewWindow))) != 0;
+    }
+
+    private bool OnPress(Point point, MouseButtons button)
+    {
+        if (AtViewBorder(point))
+        {
+            Enqueue(new(EventKind.Record, point, Outcome: PressOutcome.ViewControl));
+            return false;
+        }
+        nint root = RootAt(point);
+        if (root != _viewWindow && ProcessOf(root) == (uint)Environment.ProcessId)
+        {
+            Enqueue(new(EventKind.Record, point, Outcome: PressOutcome.ViewControl));
+            return false;
+        }
+        if (!_outside && root != _viewWindow && root != _source && ProcessOf(root) == _sourceProcess)
+        {
+            _inPopup = true;
+            Enqueue(new(EventKind.Record, point, Outcome: PressOutcome.Popup));
+            return false;
+        }
+        if (_outside || !InView(point))
+        {
+            Enqueue(new(EventKind.Record, point, Outcome: PressOutcome.Outside));
+            if (!_outside) Leave();
+            return false; // It goes to whatever is really there.
+        }
+        // Everything inside the picture is kept from the desktop; the worker decides what it means.
+        bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        if (!alt)
+        {
+            // Both return at once. They must happen here, while the hook holds the press: from another thread
+            // Windows 10 may refuse the focus change, and an app that takes the mouse while still sharing input
+            // with the view would also get the real pointer's moves.
+            Share(false);
+            User32.SetForegroundWindow(_source);
+        }
+        _swallowed |= button;
+        Enqueue(new(EventKind.Press, point, button, Alt: alt));
+        return true;
+    }
+
+    private bool OnWheel(Point point, bool horizontal, uint mouseData)
+    {
+        if (_outside || !InView(point))
+            return false;
+        Enqueue(new(EventKind.Wheel, point, Horizontal: horizontal, Data: mouseData));
+        return true;
+    }
+
+    private bool OnRelease(Point point, MouseButtons button)
+    {
+        bool swallow = (_swallowed & button) != 0;
+        _swallowed &= ~button;
+        if (swallow) Enqueue(new(EventKind.Release, point, button));
+        if (_swallowed == MouseButtons.None && !_outside && !InView(point) && !_inPopup)
+        {
+            nint root = RootAt(point);
+            if (root != 0 && ProcessOf(root) != _sourceProcess) Leave();
+        }
+        return swallow;
+    }
+
+    private static MouseButtons ButtonOf(int message) => message switch
+    {
+        WM_LBUTTONDOWN => MouseButtons.Left,
+        WM_RBUTTONDOWN => MouseButtons.Right,
+        _ => MouseButtons.Middle,
+    };
+
+    // ---- Input worker: everything that talks to the other app, in the order it happened. ----
+
+    private void Work()
+    {
+        var batch = new List<InputEvent>();
+        while (true)
+        {
+            _work.WaitOne(100);
+            lock (_queue)
+            {
+                batch.AddRange(_queue);
+                _queue.Clear();
+            }
+            foreach (InputEvent input in batch)
+            {
+                try { Handle(input); }
+                catch (Windows.WindowOperationException) { Leave(); }
+            }
+            batch.Clear();
+            if (_stopping)
+            {
+                lock (_queue) if (_queue.Count == 0) return;
+            }
+        }
+    }
+
+    private void Handle(InputEvent input)
+    {
+        switch (input.Kind)
+        {
+            case EventKind.Record: Record(input.Outcome, input.At, 0); break;
+            case EventKind.Move: MoveArrived(input.At); break;
+            case EventKind.Press: PressArrived(input.At, input.Button, input.Alt); break;
+            case EventKind.Release: ReleaseArrived(input.At, input.Button); break;
+            case EventKind.Wheel:
+                var (view, shown) = Geometry();
+                _messages.Wheel(input.At, input.Horizontal, input.Data, view, shown);
+                break;
+        }
+    }
+
+    private void MoveArrived(Point point)
+    {
+        if (_dragging)
+        {
+            var moved = new Size(point.X - _dragFrom.X, point.Y - _dragFrom.Y);
+            _dragFrom = point;
+            ViewDragged?.Invoke(moved);
+            return;
+        }
+        var (view, shown) = Geometry();
+        Publish(point);
+        // Held presses keep going everywhere; otherwise the view's own sizing border isn't the app's.
+        if (_heldDelivered == MouseButtons.None && (_pendingClick != MouseButtons.None || AtViewBorder(point))) return;
+        if (_heldDelivered == MouseButtons.None && !view.Contains(point)) return;
+        _messages.Move(point, view, shown);
+        if (SharesInput) _messages.AskForCursor();
+    }
+
+    private void PressArrived(Point point, MouseButtons button, bool alt)
+    {
+        var (view, shown) = Geometry();
+        nint hit = _messages.Hit(point, view, shown);
+        if (!alt && PressRules.CaptionActionFor(hit, button) is { } action)
+        {
+            Record(PressOutcome.CaptionButton, point, hit);
+            CaptionPressed?.Invoke(action);
+            return;
+        }
+        if (!alt && PressRules.IsBorder(hit))
+        {
+            Record(PressOutcome.MovedView, point, hit); // Nothing happens: the view has its own border.
+            return;
+        }
+        if (hit == 2 || alt)
+        {
+            _dragging = button == MouseButtons.Left;
+            _dragFrom = point;
+            Record(PressOutcome.MovedView, point, hit);
+            return;
+        }
+        if (!PressRules.ReachesContent(hit))
+        {
+            Record(PressOutcome.Unconfirmed, point, hit);
+            return;
+        }
+        Delivery delivery = _messages.Press(point, button, view, shown);
+        if (delivery == Delivery.Posted) _heldDelivered |= button;
+        if (delivery == Delivery.Deferred) { _pendingClick |= button; return; } // Its outcome comes with the release.
+        Record(delivery == Delivery.Posted ? PressOutcome.Delivered : PressOutcome.Unconfirmed, point, hit, _messages.PressTarget, delivery == Delivery.Posted);
+    }
+
+    private void ReleaseArrived(Point point, MouseButtons button)
+    {
+        if (button == MouseButtons.Left) _dragging = false;
+        var (view, shown) = Geometry();
+        if ((_pendingClick & button) != 0)
+        {
+            _pendingClick &= ~button;
+            nint target = _messages.PressTarget;
+            Delivery delivery = _messages.Release(point, button, view, shown, result =>
+                Record(result.Done ? PressOutcome.Delivered : PressOutcome.Unconfirmed, point, 1, target, result.Done, result.What), out string why);
+            if (delivery != Delivery.Deferred) Record(PressOutcome.Unconfirmed, point, 1, target, false, why);
+        }
+        else if ((_heldDelivered & button) != 0)
+        {
+            _messages.Release(point, button, view, shown, null, out _);
+        }
+        _heldDelivered &= ~button;
+        // Not if the hook has already taken a newer press: it stopped sharing for that one.
+        if (_heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None && view.Contains(point) &&
+            Volatile.Read(ref _swallowedBits) == 0) Share(true);
+    }
+
+    private void Record(PressOutcome outcome, Point at, nint hit, nint queuedTarget = 0, bool? queued = null, string effect = "unobserved")
     {
         lock (_log)
         {
@@ -281,7 +587,8 @@ internal sealed class PipInteraction : IDisposable
                     $"class={Windows.WindowInfo.ClassName(target)} targetBounds={targetBounds.Left},{targetBounds.Top},{targetBounds.Right},{targetBounds.Bottom} " +
                     $"visible={User32.IsWindowVisible(target)} pid={ProcessOf(target)} physicalRoot=0x{root:X} physicalClass={Windows.WindowInfo.ClassName(root)} " +
                     $"foreground=0x{User32.GetForegroundWindow():X} sharing={SharesInput} sourceExStyle=0x{User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE):X} " +
-                    $"border={AtViewBorder(at)} outcome={outcome} transport={_messages.PressTransport} queued={queued?.ToString() ?? "not-attempted"} effect=unobserved";
+                    $"border={AtViewBorder(at)} outcome={outcome} transport={_messages.PressTransport} queued={queued?.ToString() ?? "not-attempted"} effect={effect} " +
+                    $"{Timing}";
                 lock (_diagnostics)
                 {
                     _diagnostics.Enqueue(entry);
@@ -301,208 +608,6 @@ internal sealed class PipInteraction : IDisposable
         13 => "HTTOPLEFT", 14 => "HTTOPRIGHT", 15 => "HTBOTTOM", 16 => "HTBOTTOMLEFT", 17 => "HTBOTTOMRIGHT",
         18 => "HTBORDER", 19 => "HTOBJECT", 20 => "HTCLOSE", 21 => "HTHELP", _ => "unknown",
     };
-
-    /// <summary>
-    /// Asks the window under the mapped pointer to set its cursor, as Windows would ask it if the pointer were
-    /// really there. It doesn't wait on a busy app.
-    /// </summary>
-    internal void AskForCursor()
-    {
-        try
-        {
-            var (view, shown) = Geometry();
-            long packed = Interlocked.Read(ref _pointer);
-            var pointer = new Point((int)(packed >> 32), (int)packed);
-            nint target = _messages.TargetAt(_messages.MappedScreen(pointer, view, shown));
-            if (target != 0)
-                User32.SendMessageTimeout(target, 0x0020 /* WM_SETCURSOR */, target, (nint)(1 | (0x0200 << 16)), 0x2, 20, out _);
-        }
-        catch (Windows.WindowOperationException) { }
-    }
-
-    private nint Callback(int code, nint message, nint data)
-    {
-        if (code != 0 || _stopping)
-            return CallNextHookEx(0, code, message, data);
-        var info = Marshal.PtrToStructure<MouseHookInfo>(data);
-        var point = new Point(info.X, info.Y);
-        Interlocked.Exchange(ref _observedPointer, Pack(point));
-        bool swallow;
-        try
-        {
-            swallow = (int)message switch
-            {
-                WM_MOUSEMOVE => OnMove(point),
-                WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN => OnPress(point, ButtonOf((int)message)),
-                WM_LBUTTONUP or WM_RBUTTONUP or WM_MBUTTONUP => OnRelease(point, ButtonOf((int)message - 1)),
-                WM_XBUTTONDOWN => OnPress(point, (info.MouseData >> 16) == 1 ? MouseButtons.XButton1 : MouseButtons.XButton2),
-                WM_XBUTTONUP => OnRelease(point, (info.MouseData >> 16) == 1 ? MouseButtons.XButton1 : MouseButtons.XButton2),
-                WM_MOUSEWHEEL or WM_MOUSEHWHEEL => OnWheel(point, (int)message == WM_MOUSEHWHEEL, info.MouseData),
-                _ => false,
-            };
-        }
-        catch (Windows.WindowOperationException)
-        {
-            _outside = true;
-            Left?.Invoke();
-            swallow = (int)message != WM_MOUSEMOVE;
-        }
-        return swallow ? 1 : CallNextHookEx(0, code, message, data);
-    }
-
-    private bool OnMove(Point point)
-    {
-        if (_dragging)
-        {
-            var moved = new Size(point.X - _dragFrom.X, point.Y - _dragFrom.Y);
-            _dragFrom = point;
-            ViewDragged?.Invoke(moved);
-            return false;
-        }
-        if (_outside)
-            return false;
-        if (_heldDelivered != MouseButtons.None)
-        {
-            // Dragging out of the view keeps a selection going.
-            var (view, shown) = Geometry();
-            Publish(point);
-            _messages.Move(point, view, shown);
-            return false;
-        }
-        nint root = RootAt(point);
-        if (root != _viewWindow && root != _source && ProcessOf(root) == _sourceProcess)
-        {
-            _inPopup = true; // A program's own menu can reach past the view; going there isn't leaving.
-            return false;
-        }
-        if (InView(point))
-        {
-            var (view, shown) = Geometry();
-            Publish(point);
-            if (!AtViewBorder(point)) _messages.Move(point, view, shown);
-            _inPopup = false;
-            return false;
-        }
-        _outside = true;
-        Left?.Invoke();
-        return false;
-    }
-
-    private bool AtViewBorder(Point point)
-    {
-        if (_viewWindow == 0 || !User32.GetWindowRect(_viewWindow, out Rect bounds)) return false;
-        return PipGeometry.SizingHit(point, Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom),
-            Dpi.Scale(PipGeometry.DirectEdgeBand, Dpi.Of(_viewWindow)), Dpi.Scale(PipGeometry.DirectCornerBand, Dpi.Of(_viewWindow))) != 0;
-    }
-
-    private bool OnPress(Point point, MouseButtons button)
-    {
-        if (AtViewBorder(point))
-        {
-            Record(PressOutcome.ViewControl, point, 0);
-            return false;
-        }
-        nint root = RootAt(point);
-        if (root != _viewWindow && ProcessOf(root) == (uint)Environment.ProcessId)
-        {
-            Record(PressOutcome.ViewControl, point, 0);
-            return false;
-        }
-        if (!_outside && root != _viewWindow && root != _source && ProcessOf(root) == _sourceProcess)
-        {
-            _inPopup = true;
-            Record(PressOutcome.Popup, point, 0);
-            return false;
-        }
-        if (_outside || !InView(point))
-        {
-            Record(PressOutcome.Outside, point, 0);
-            if (!_outside)
-            {
-                _outside = true;
-                Left?.Invoke();
-            }
-            return false; // It goes to whatever is really there.
-        }
-
-        var (view, shown) = Geometry();
-        nint hit = _messages.Hit(point, view, shown);
-        bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-        if (!alt && PressRules.CaptionActionFor(hit, button) is { } action)
-        {
-            _heldSwallowed |= button;
-            Record(PressOutcome.CaptionButton, point, hit);
-            CaptionPressed?.Invoke(action);
-            return true;
-        }
-        if (!alt && PressRules.IsBorder(hit))
-        {
-            _heldSwallowed |= button; // Nothing happens: the view has its own border.
-            Record(PressOutcome.MovedView, point, hit);
-            return true;
-        }
-        if (hit == 2 || alt)
-        {
-            _heldSwallowed |= button;
-            _dragging = button == MouseButtons.Left;
-            _dragFrom = point;
-            Record(PressOutcome.MovedView, point, hit);
-            return true;
-        }
-        if (!PressRules.ReachesContent(hit))
-        {
-            _heldSwallowed |= button;
-            Record(PressOutcome.Unconfirmed, point, hit);
-            return true;
-        }
-        Share(false);
-        User32.SetForegroundWindow(_source);
-        bool delivered = _messages.Press(point, button, view, shown);
-        if (delivered) _heldDelivered |= button;
-        else _heldSwallowed |= button;
-        Record(delivered ? PressOutcome.Delivered : PressOutcome.Unconfirmed, point, hit, _messages.PressTarget, delivered);
-        return true;
-    }
-
-    private bool OnWheel(Point point, bool horizontal, uint mouseData)
-    {
-        if (_outside || !InView(point))
-            return false;
-        var (view, shown) = Geometry();
-        _messages.Wheel(point, horizontal, mouseData, view, shown);
-        return true;
-    }
-
-    private static MouseButtons ButtonOf(int message) => message switch
-    {
-        WM_LBUTTONDOWN => MouseButtons.Left,
-        WM_RBUTTONDOWN => MouseButtons.Right,
-        _ => MouseButtons.Middle,
-    };
-
-    private bool OnRelease(Point point, MouseButtons button)
-    {
-        bool swallow = (_heldSwallowed & button) != 0;
-        if ((_heldDelivered & button) != 0)
-        {
-            var (view, shown) = Geometry();
-            try { _messages.Release(point, button, view, shown); }
-            catch (Windows.WindowOperationException) { }
-            swallow = true;
-        }
-        _heldSwallowed &= ~button;
-        _heldDelivered &= ~button;
-        if (button == MouseButtons.Left) _dragging = false;
-        if (_heldDelivered == MouseButtons.None && InView(point)) Share(true);
-        nint root = RootAt(point);
-        if (!_outside && !InView(point) && !_inPopup && root != 0 && ProcessOf(root) != _sourceProcess)
-        {
-            _outside = true;
-            Left?.Invoke();
-        }
-
-        return swallow;
-    }
 
     private static nint RootAt(Point point) =>
         User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y }), User32.GA_ROOT);
@@ -525,14 +630,24 @@ internal sealed class PipInteraction : IDisposable
             PostThreadMessage(_hookThreadId, WM_QUIT, 0, 0);
             _hookThread.Join(2000);
         }
-
-        _watcher?.Join();
-        var (view, shown) = Geometry();
-        // A press whose release never came must not leave the button held down in the app.
-        try { _messages.ReleaseAll(view, shown); } catch (Windows.WindowOperationException) { }
+        // The hook is gone: what it queued still goes out, releases included, then the worker ends.
+        _work.Set();
+        bool workerDone = _worker?.Join(2000) ?? true;
+        _watcher?.Join(2000);
+        if (workerDone)
+        {
+            var (view, shown) = Geometry();
+            // A press whose release never came must not leave the button held down in the app.
+            MouseButtons cancelled = MouseButtons.None;
+            try { cancelled = _messages.ReleaseAll(view, shown); } catch (Windows.WindowOperationException) { }
+            if ((cancelled | _pendingClick) != MouseButtons.None)
+            {
+                long packed = Interlocked.Read(ref _pointer);
+                Record(PressOutcome.Unconfirmed, new Point((int)(packed >> 32), (int)packed), 1, 0, false, "the visit ended during the press");
+            }
+        }
         if (_watcher is not null)
-            Active--;
-        _moved.Dispose();
+            Interlocked.Decrement(ref _active);
         if (DiagnoseInput && InputDiagnostics.Length > 0)
         {
             // One bounded file, written after the hook has stopped, never from its callback.
