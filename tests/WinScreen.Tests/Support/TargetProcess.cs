@@ -9,7 +9,7 @@ internal sealed class TargetProcess : IDisposable
     private readonly Process _process;
     private readonly BlockingCollection<string> _reports = [];
 
-    public TargetProcess(Rectangle bounds, string colors = "C81E1E", string title = "WinScreen test target")
+    public TargetProcess(Rectangle bounds, string colors = "C81E1E", string title = "WinScreen test target", string dpi = "permonitorv2")
     {
         Bounds = bounds;
         var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "WinScreen.TestTarget.exe"))
@@ -23,7 +23,7 @@ internal sealed class TargetProcess : IDisposable
                  {
                      "--left", bounds.Left.ToString(), "--top", bounds.Top.ToString(),
                      "--width", bounds.Width.ToString(), "--height", bounds.Height.ToString(),
-                     "--colors", colors, "--title", title,
+                     "--colors", colors, "--title", title, "--dpi", dpi,
                  })
         {
             start.ArgumentList.Add(arg);

@@ -20,7 +20,8 @@ public sealed partial class WindowController
                 throw new WindowOperationException(T("errors.pip.previewNotReady"));
             if (!User32.GetWindowRect(window, out Rect bounds)) throw Failure(T("actions.readPosition"), window);
             Rectangle original = Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
-            Rectangle parked = ParkingPlace(original.Size, Screen.AllScreens.Select(screen => screen.Bounds).ToArray());
+            Rectangle parked = ParkingPlace(original.Size, Screen.AllScreens.Select(screen => screen.Bounds).ToArray(),
+                Screen.FromRectangle(original).Bounds);
             state.PlacementBeforePeek = ReadPlacement(window);
             state.Parked = true;
             Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT);
@@ -81,12 +82,14 @@ public sealed partial class WindowController
 
     private const byte ReachableOpacity = 1;
 
-    internal static Rectangle ParkingPlace(Size size, IReadOnlyList<Rectangle> monitors)
-
+    /// <param name="home">
+    /// The monitor the window is on. Its own outer edges come first: on another monitor with a different scale the app
+    /// would be told its DPI changed and lay itself out again, twice, while hidden.
+    /// </param>
+    internal static Rectangle ParkingPlace(Size size, IReadOnlyList<Rectangle> monitors, Rectangle? home = null)
     {
         // Try each external edge in preference order. Every visible intersection stays within its two-pixel strip.
-        for (int edge = 0; edge < 4; edge++)
-        foreach (Rectangle monitor in monitors)
+        foreach (var (edge, monitor) in Candidates(monitors, home))
         {
             Point at = edge switch
             {
@@ -104,5 +107,16 @@ public sealed partial class WindowController
             if (fits) return candidate;
         }
         throw new WindowOperationException(T("errors.pip.noSurface"));
+    }
+
+    /// <summary>Bottom, right, left, top: the home monitor's edges first, then every monitor's, as before.</summary>
+    private static IEnumerable<(int Edge, Rectangle Monitor)> Candidates(IReadOnlyList<Rectangle> monitors, Rectangle? home)
+    {
+        bool hasHome = home is { } own && monitors.Contains(own);
+        if (hasHome)
+            for (int edge = 0; edge < 4; edge++) yield return (edge, home!.Value);
+        for (int edge = 0; edge < 4; edge++)
+            foreach (Rectangle monitor in monitors)
+                if (!hasHome || monitor != home) yield return (edge, monitor);
     }
 }

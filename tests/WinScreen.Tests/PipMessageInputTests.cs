@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using WinScreen.Native;
 using WinScreen.Pip;
 using WinScreen.Settings;
@@ -18,6 +18,9 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             var windows = new WindowController([]);
+            Point home = Desktop.CursorPosition();
+            // A pointer already resting where the view opens would start a visit before the test moves it.
+            Desktop.MoveMouse(new Point(860, 230));
             using var view = new PipWindow(source.Handle, windows) { AllowInteractive = true };
             view.ShowOnTop();
             view.Location = new Point(900, 250);
@@ -27,7 +30,6 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
             Assert.True(windows.IsParked(source.Handle));
             Assert.Equal((byte)0, Desktop.Alpha(source.Handle));
             Exception? failure = null;
-            Point home = Desktop.CursorPosition();
             bool Ui(Action step) { view.Invoke(step); return true; }
             var driver = new Thread(() =>
             {
@@ -228,7 +230,7 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
             Thread.Sleep(1400);
             Assert.True(view.LiveInteraction is not null, "Visit ended before popup click: " + view.LastVisitEnd);
             Rectangle placed = Desktop.BoundsOf(popup);
-            Assert.InRange(Math.Abs(placed.Left - pointer.X), 0, placed.Width);
+            Assert.True(Math.Abs(placed.Left - pointer.X) <= placed.Width, $"Placed {placed}, pointer {pointer}, parked {parked}, view {view.Bounds}, screen {Screen.FromPoint(pointer).WorkingArea}");
             Desktop.ClickOn(new Point(placed.Left + 30, placed.Top + 20), popup);
             Assert.Contains(PressOutcome.Popup, view.PressOutcomes);
             nint tip = source.ShowPopup(new Point(pointer.X + 20, pointer.Y + 20), displayOnly: true);

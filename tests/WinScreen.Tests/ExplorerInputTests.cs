@@ -13,6 +13,49 @@ public sealed class ExplorerInputTests
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern void mouse_event(uint flags, uint x, uint y, uint data, nuint extra);
 
+    private static string LastMenu = "";
+
+    /// <summary>
+    /// Closes the test's Explorer window with every tab in it. A close message only closes the tab in front, and the
+    /// rest would stay open on the desktop.
+    /// </summary>
+    private static void CloseWindow(nint window)
+    {
+        if (Type.GetTypeFromProgID("Shell.Application") is { } type && Activator.CreateInstance(type) is { } shell)
+        {
+            try
+            {
+                foreach (dynamic tab in ((dynamic)shell).Windows())
+                    if ((long)tab.HWND == window.ToInt64()) tab.Quit();
+            }
+            catch (System.Runtime.InteropServices.COMException) { }
+            finally { System.Runtime.InteropServices.Marshal.ReleaseComObject(shell); }
+        }
+        if (User32.IsWindow(window)) User32.PostMessage(window, User32.WM_CLOSE, 0, 0);
+    }
+
+    /// <summary>A menu item in one of the window's open popup menus, with its place on the screen.</summary>
+    private static BrowserAccessibility.Control? MenuItem(nint window, string name)
+    {
+        uint thread = User32.GetWindowThreadProcessId(window, out _);
+        for (nint top = User32.GetWindow(User32.GetDesktopWindow(), 5); top != 0; top = User32.GetWindow(top, 2))
+        {
+            if (!User32.IsWindowVisible(top) || User32.GetWindowThreadProcessId(top, out _) != thread || top == window) continue;
+            var controls = BrowserAccessibility.Read(top);
+            if (controls.FirstOrDefault(c => c.Type == 50011 && c.Name == name && c.Bounds.Width > 0) is not { } found) continue;
+            // Accessibility can report where the menu was laid out rather than where its window is now: take the
+            // item's place within the menu, on the window's real position.
+            // The window's own element follows the move; its content keeps the place it was laid out at.
+            Rectangle real = Desktop.BoundsOf(top);
+            var content = controls.Skip(1).Where(c => c.Bounds.Width > 0).ToList();
+            Rectangle laidOut = new(content.Min(c => c.Bounds.Left), content.Min(c => c.Bounds.Top), 0, 0);
+            LastMenu = $"window {real}, accessibility {laidOut}, item {found.Bounds}";
+            return found with { Bounds = new Rectangle(found.Bounds.Left - laidOut.Left + real.Left, found.Bounds.Top - laidOut.Top + real.Top,
+                found.Bounds.Width, found.Bounds.Height) };
+        }
+        return null;
+    }
+
     [Fact]
     public void Double_clicking_a_folder_in_a_view_navigates_explorer()
     {
@@ -67,9 +110,9 @@ public sealed class ExplorerInputTests
                             "Explorer did not navigate. " + string.Join("\n", view.LiveInteraction?.InputDiagnostics ?? []));
                         // The rest is Windows 11's Explorer: its command bar, tabs and address bar.
                         if (Environment.OSVersion.Version.Build < 22000) return;
-                        void ClickControl(Func<BrowserAccessibility.Control, bool> match, double across = .5)
+                        void ClickControl(Func<BrowserAccessibility.Control, bool> match, double across = .5, bool right = false, bool last = false, bool first = false)
                         {
-                            var control = Assert.Single(BrowserAccessibility.Read(window), c => match(c));
+                            var control = last ? BrowserAccessibility.Read(window).Last(c => match(c)) : first ? BrowserAccessibility.Read(window).First(c => match(c)) : Assert.Single(BrowserAccessibility.Read(window), c => match(c));
                             Assert.True(control.Enabled, control.ToString());
                             source = Desktop.BoundsOf(window);
                             (area, shown) = view.LiveInteraction!.CurrentGeometry;
@@ -77,9 +120,9 @@ public sealed class ExplorerInputTests
                                 area.Top + (int)Math.Round((control.Bounds.Top + control.Bounds.Height / 2 - source.Top - shown.Top) * (double)area.Height / shown.Height));
                             Desktop.SlideMouse(point);
                             Thread.Sleep(100);
-                            Desktop.MouseButton(true);
+                            mouse_event(right ? 8u : 2u, 0, 0, 0, 0);
                             Thread.Sleep(50);
-                            Desktop.MouseButton(false);
+                            mouse_event(right ? 16u : 4u, 0, 0, 0, 0);
                         }
                         void Check(Func<bool> effect, string name) => Assert.True(Desktop.WaitFor(effect, 4000),
                             name + " failed. " + string.Join("\n", view.LiveInteraction?.InputDiagnostics ?? []));
@@ -104,21 +147,36 @@ public sealed class ExplorerInputTests
                         Check(() => view.PressOutcomes.Count(o => o == PressOutcome.Unconfirmed) == 0,
                             "Outcomes " + string.Join(",", view.PressOutcomes));
 
-                        // A right-click has no equivalent on these controls: it's reported, not counted as delivered.
-                        int before = view.PressOutcomes.Count;
-                        var viewButton = Assert.Single(BrowserAccessibility.Read(window), c => c.Type == 50000 && c.Name == "View");
-                        source = Desktop.BoundsOf(window);
-                        (area, shown) = view.LiveInteraction!.CurrentGeometry;
-                        Point right = new(area.Left + (int)Math.Round((viewButton.Bounds.Left + viewButton.Bounds.Width / 2 - source.Left - shown.Left) * (double)area.Width / shown.Width),
-                            area.Top + (int)Math.Round((viewButton.Bounds.Top + viewButton.Bounds.Height / 2 - source.Top - shown.Top) * (double)area.Height / shown.Height));
-                        Desktop.SlideMouse(right);
-                        Thread.Sleep(100);
-                        mouse_event(8, 0, 0, 0, 0); Thread.Sleep(50); mouse_event(16, 0, 0, 0, 0);
-                        // Explorer's own tooltip can be under the pointer by then, which takes the press as a real popup.
-                        Check(() => view.PressOutcomes.Count == before + 1 && view.PressOutcomes.Last() is PressOutcome.Unconfirmed or PressOutcome.Popup,
-                            "Right-click outcome " + string.Join(",", view.PressOutcomes));
+                        // A right-click on a tab opens its own menu, next to the pointer, and the menu takes a real click.
+                        int tabs = BrowserAccessibility.Read(window).Count(c => c.Type == 50019);
+                        ClickControl(c => c.Type == 50019 && c.Name == folder, right: true);
+                        BrowserAccessibility.Control? duplicate = null;
+                        Check(() => (duplicate = MenuItem(window, "Duplicate tab")) is not null, "Tab menu " + string.Join(",", view.PressOutcomes));
+                        Check(() => view.PressOutcomes.Last() == PressOutcome.Delivered, "Right-click outcome " + string.Join(",", view.PressOutcomes));
+                        // The menu opens by the hidden original; the view's popup handling brings it next to the pointer.
+                        Point MenuItemAt() => (duplicate = MenuItem(window, "Duplicate tab")) is { } found
+                            ? new(found.Bounds.Left + found.Bounds.Width / 2, found.Bounds.Top + found.Bounds.Height / 2) : default;
+                        Point menuItem = default;
+                        Assert.True(Desktop.WaitFor(() => view.Bounds.IntersectsWith(new Rectangle((menuItem = MenuItemAt()) - new Size(400, 400), new Size(800, 800))), 3000),
+                            $"The menu isn't by the pointer: item {menuItem}, pointer {Desktop.CursorPosition()}, view {view.Bounds}; {LastMenu}");
+                        Desktop.SlideMouse(menuItem);
+                        Thread.Sleep(150);
+                        Desktop.MouseButton(true); Thread.Sleep(50); Desktop.MouseButton(false);
+                        Check(() => BrowserAccessibility.Read(window).Count(c => c.Type == 50019) == tabs + 1, "Duplicate tab");
+                        Check(() => view.PressOutcomes.Last() == PressOutcome.Popup, "Menu click outcome " + string.Join(",", view.PressOutcomes));
 
-                        // A click made just before the pointer leaves the view still happens.
+                        // A double-click on a tab means something of its own, which automation can't do: the second
+                        // press is reported as unsupported, and only the first click acts.
+                        Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
+                        Check(() => view.LiveInteraction is not null, "Visit after the menu");
+                        Thread.Sleep(200);
+                        ClickControl(c => c.Type == 50019 && c.Name == folder, last: true); // The folder's tab now has a duplicate.
+                        mouse_event(2, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(4, 0, 0, 0, 0);
+                        Check(() => view.PressOutcomes.Last() == PressOutcome.Unsupported, "Double-click outcome " + string.Join(",", view.PressOutcomes));
+
+                        // A click made just before the pointer leaves the view still happens: Back, in the tab with history.
+                        ClickControl(c => c.Type == 50019 && c.Name == folder, first: true);
+                        Thread.Sleep(300);
                         ClickControl(c => c.Type == 50000 && c.Name == "Back");
                         Desktop.SlideMouse(new Point(view.Left - 60, view.Top - 60));
                         Check(() => WindowInfo.Title(window).StartsWith(Path.GetFileName(root), StringComparison.Ordinal), "Back, then leaving at once");
@@ -136,7 +194,7 @@ public sealed class ExplorerInputTests
         finally
         {
             PipInteraction.DiagnoseInput = false;
-            if (window != 0) User32.PostMessage(window, User32.WM_CLOSE, 0, 0);
+            if (window != 0) CloseWindow(window);
             Directory.Delete(root, true);
         }
     }

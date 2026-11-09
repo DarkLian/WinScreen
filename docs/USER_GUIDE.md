@@ -73,6 +73,9 @@ Every view has a title bar above the picture, or below it near the top of the sc
   The original stays hidden. Drag the view's title bar to move it, or hold Alt and drag the picture.
   Menus open near the pointer. If the app asks you something, the original comes back so you can answer.
   Keys return to your previous window when you leave.
+  Store apps, such as Calculator, work too. They keep their taskbar button, and choosing it shows the app.
+  On some newer controls, in Store apps and parts of File Explorer, you can click, right-click and scroll,
+  but not hover, drag or select.
 
 Views pause direct use while a WinScreen menu or the tray overflow panel is open.
 

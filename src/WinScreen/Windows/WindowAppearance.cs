@@ -202,6 +202,12 @@ public sealed partial class WindowController
         if (Marshal.GetLastPInvokeError() != 0) throw Failure(T("actions.changeFrame"), window);
     }
 
+    /// <summary>
+    /// Store apps' frames: Windows keeps their taskbar button and Alt+Tab entry itself, so they can't leave the
+    /// switcher, but they can still be hidden.
+    /// </summary>
+    internal static bool TaskbarButtonOwnedByWindows(nint window) => WindowInfo.ClassName(window) == "ApplicationFrameWindow";
+
     public void SetOutOfSwitcher(nint window, bool on)
     {
         lock (_gate)
@@ -217,7 +223,7 @@ public sealed partial class WindowController
             if (state.SwitcherBits is not null) return;
             if (!state.Hidden || state.PlacementBeforePeek is not null)
                 throw new WindowOperationException(T("errors.switcher.hideOriginalFirst"));
-            if (WindowInfo.ClassName(window) == "ApplicationFrameWindow")
+            if (TaskbarButtonOwnedByWindows(window))
                 throw new WindowOperationException(T("errors.switcher.windowsManaged"));
             state.SwitcherBits = ReadExStyle(window) & SwitcherMask;
             Prepare(window, state);

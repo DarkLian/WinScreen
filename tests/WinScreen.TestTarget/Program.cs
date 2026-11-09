@@ -15,9 +15,15 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         var options = args.Chunk(2).ToDictionary(pair => pair[0], pair => pair[1]);
         string Get(string name, string fallback) => options.GetValueOrDefault(name, fallback);
+        // Older apps aren't per-monitor aware; Windows scales them, and their coordinates differ from the screen's.
+        Application.SetHighDpiMode(Get("--dpi", "permonitorv2") switch
+        {
+            "unaware" => HighDpiMode.DpiUnaware,
+            "system" => HighDpiMode.SystemAware,
+            _ => HighDpiMode.PerMonitorV2,
+        });
 
         var window = new TargetForm(
             new Rectangle(int.Parse(Get("--left", "200")), int.Parse(Get("--top", "200")),

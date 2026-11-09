@@ -16,10 +16,18 @@ public enum PressOutcome
     MovedView,
     /// <summary>It fell outside the view before the session ended.</summary>
     Outside,
-    /// <summary>The window couldn't confirm where it was in time, so the press was withheld.</summary>
+    /// <summary>
+    /// It was tried and didn't arrive, or can't be confirmed: the app is busy or not responding, the control
+    /// refused, or the visit ended first.
+    /// </summary>
     Unconfirmed,
     /// <summary>It mapped to the hidden window's close, minimize or maximize button, or its icon, which act on the view.</summary>
     CaptionButton,
+    /// <summary>
+    /// The window under it has no way to take this kind of press through a view (see <see cref="PipInputRoutes"/>),
+    /// such as a drag or a middle click on a control reached through UI Automation. Nothing was sent.
+    /// </summary>
+    Unsupported,
 }
 
 /// <summary>What a press on the hidden window's caption buttons or icon does, by the standard for views used directly.</summary>
@@ -537,7 +545,7 @@ internal sealed class PipInteraction : IDisposable
         Delivery delivery = _messages.Press(point, button, view, shown);
         if (delivery == Delivery.Posted) _heldDelivered |= button;
         if (delivery == Delivery.Deferred) { _pendingClick |= button; return; } // Its outcome comes with the release.
-        Record(delivery == Delivery.Posted ? PressOutcome.Delivered : PressOutcome.Unconfirmed, point, hit, _messages.PressTarget, delivery == Delivery.Posted);
+        Record(Outcome(delivery), point, hit, _messages.PressTarget, delivery == Delivery.Posted, _messages.Why);
     }
 
     private void ReleaseArrived(Point point, MouseButtons button)
@@ -549,8 +557,9 @@ internal sealed class PipInteraction : IDisposable
             _pendingClick &= ~button;
             nint target = _messages.PressTarget;
             Delivery delivery = _messages.Release(point, button, view, shown, result =>
-                Record(result.Done ? PressOutcome.Delivered : PressOutcome.Unconfirmed, point, 1, target, result.Done, result.What), out string why);
-            if (delivery != Delivery.Deferred) Record(PressOutcome.Unconfirmed, point, 1, target, false, why);
+                Record(result.Done ? PressOutcome.Delivered : result.Unsupported ? PressOutcome.Unsupported : PressOutcome.Unconfirmed,
+                    point, 1, target, result.Done, result.What), out string why);
+            if (delivery != Delivery.Deferred) Record(Outcome(delivery), point, 1, target, false, why);
         }
         else if ((_heldDelivered & button) != 0)
         {
@@ -561,6 +570,13 @@ internal sealed class PipInteraction : IDisposable
         if (_heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None && view.Contains(point) &&
             Volatile.Read(ref _swallowedBits) == 0) Share(true);
     }
+
+    private static PressOutcome Outcome(Delivery delivery) => delivery switch
+    {
+        Delivery.Posted => PressOutcome.Delivered,
+        Delivery.Unsupported => PressOutcome.Unsupported,
+        _ => PressOutcome.Unconfirmed,
+    };
 
     private void Record(PressOutcome outcome, Point at, nint hit, nint queuedTarget = 0, bool? queued = null, string effect = "unobserved")
     {

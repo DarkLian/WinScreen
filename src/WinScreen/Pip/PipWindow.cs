@@ -695,7 +695,8 @@ public sealed class PipWindow : Form
             {
                 _windows.HideOwned(_source, this);
                 if (SwitcherHidingStopsView) Problem?.Invoke(T("errors.switcher.windows10"));
-                else _windows.SetOutOfSwitcher(_source, true);
+                // A Store app keeps the taskbar button Windows owns; activating it shows the app (FollowSource).
+                else if (!WindowController.TaskbarButtonOwnedByWindows(_source)) _windows.SetOutOfSwitcher(_source, true);
                 _windows.Park(_source);
                 ConfigureParkedCapture();
                 if (User32.GetForegroundWindow() == _source)
@@ -1115,6 +1116,7 @@ public sealed class PipWindow : Form
         if (_live is not { } live)
             return;
         _live = null;
+        _liveEndedAt = Environment.TickCount64;
         try { if (_origin.IsAvailable) _windows.SetParkedReachable(_source, false); }
         catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); }
         live.Dispose();
@@ -1364,6 +1366,30 @@ public sealed class PipWindow : Form
         _thumbnail.SetViewport(PictureArea, shown);
     }
 
+    /// <summary>
+    /// A hidden original that something else brings to the front (its taskbar button, Alt+Tab, a notification, the
+    /// app itself) is shown, so nobody types into a window they can't see. A visit's own press doesn't count: it
+    /// happens while the visit is on, and the moment after it ends is left alone while the focus goes back.
+    /// </summary>
+    private void RevealIfActivatedElsewhere()
+    {
+        bool focused = _origin.IsWindow && User32.GetForegroundWindow() == _source;
+        bool arrived = focused && !_sourceWasFocused;
+        _sourceWasFocused = focused;
+        if (!arrived || _live is not null || !_hideItem.Checked || Environment.TickCount64 - _liveEndedAt < RevealGrace)
+            return;
+        LastReveal = Environment.TickCount64;
+        if (_suspended) ResumeView();
+        GoToSource();
+    }
+
+    private bool _sourceWasFocused;
+    private long _liveEndedAt;
+    private const long RevealGrace = 500;
+
+    /// <summary>When a hidden original was last shown because something else activated it, for tests.</summary>
+    internal long LastReveal { get; private set; }
+
     private void FollowSource()
     {
         if (!_origin.IsAvailable)
@@ -1376,6 +1402,7 @@ public sealed class PipWindow : Form
 
         string title = T("pip.titlePrefix") + _origin.Title;
         if (Text != title) Text = title;
+        RevealIfActivatedElsewhere();
         if (_suspended) return;
 
         try
