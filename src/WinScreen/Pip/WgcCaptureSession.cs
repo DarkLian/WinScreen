@@ -104,7 +104,10 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         }
         void Arrived(Direct3D11CaptureFramePool sender, object _)
         {
-            lock (_captureGate)
+            // Recreate waits for in-flight callbacks. A callback must never wait for the worker's
+            // recreation gate, or each waits for the other. The next arrival supplies a fresh frame.
+            if (!Monitor.TryEnter(_captureGate)) return;
+            try
             {
                 if (_stopping) return;
                 try
@@ -139,6 +142,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                     _wake.Set();
                 }
             }
+            finally { Monitor.Exit(_captureGate); }
         }
         try
         {

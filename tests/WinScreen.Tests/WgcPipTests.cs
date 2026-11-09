@@ -203,6 +203,39 @@ public sealed class WgcPipTests(ITestOutputHelper output)
     }
 
     [WgcFact]
+    public void Resizing_capture_keeps_arriving_and_completes_shutdown_without_callback_deadlock()
+    {
+        using var source = new TargetProcess(new(160, 160, 400, 300));
+        source.Animate(144);
+        OnUiThread(pump =>
+        {
+            using var destination = new Form { ClientSize = new(480, 320), Location = new(900, 150),
+                StartPosition = FormStartPosition.Manual, ShowInTaskbar = false };
+            destination.Show();
+            using var capture = new WgcCaptureSession(WindowIdentity.Capture(source.Handle), destination.Handle,
+                destination.ClientSize, PipDisplay.MonitorFromWindow(destination.Handle), new(), 60, 60, false);
+            try
+            {
+                capture.SetViewport(destination.ClientRectangle, new(0, 0, 400, 300));
+                Assert.True(Desktop.WaitFor(() => capture.State == PipSessionState.Live, 10000, () => pump(10)));
+                for (int i = 0; i < 120; i++)
+                {
+                    source.Resize(new(400 + i % 31, 300 + i % 23));
+                    pump(10);
+                }
+                source.Resize(new(503, 307));
+                Assert.True(Desktop.WaitFor(() => capture.SourceSize == new Size(503, 307), 8000, () => pump(10)),
+                    capture.Diagnostics.Snapshot(capture.Kind, capture.State, 60, 60, 60, true));
+                long before = capture.Diagnostics.Received;
+                Assert.True(Desktop.WaitFor(() => capture.Diagnostics.Received > before + 3, 3000, () => pump(10)));
+            }
+            finally { capture.Dispose(); }
+            Assert.True(Desktop.WaitFor(() => capture.Completion.IsCompleted, 5000, () => pump(10)),
+                "Capture did not finish after resizing; a callback may be blocking Recreate.");
+        });
+    }
+
+    [WgcFact]
     public void Independent_live_sessions_survive_one_hundred_resizes_and_source_exit()
     {
         using var source = new TargetProcess(new(160, 160, 400, 300));
