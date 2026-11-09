@@ -120,6 +120,7 @@ internal sealed class PipInteraction : IDisposable
     private readonly PipMessageInput _messages;
     private readonly uint _viewThread, _sourceThread;
     private int _sharing; // 1 while the view's thread shares input state with the original's.
+    private volatile bool _appBusy; // The app stopped answering; sharing waits until it answers again.
 
     // Hook thread only: the buttons whose press the hook kept from the desktop, so their releases are kept too.
     // Written by the hook only; the worker reads it to know whether a newer press is in progress.
@@ -175,7 +176,7 @@ internal sealed class PipInteraction : IDisposable
     {
         if (on)
         {
-            if (!ShareInput || _stopping || _viewThread == 0 || _sourceThread == 0 || _viewThread == _sourceThread) return;
+            if (!ShareInput || _stopping || _appBusy || _viewThread == 0 || _sourceThread == 0 || _viewThread == _sourceThread) return;
             if (Interlocked.CompareExchange(ref _sharing, 1, 0) == 0 && !AttachThreadInput(_viewThread, _sourceThread, true))
                 Volatile.Write(ref _sharing, 0);
         }
@@ -272,6 +273,14 @@ internal sealed class PipInteraction : IDisposable
             _worker.Join(2000);
             throw new Windows.WindowOperationException(Localization.UiText.T("errors.pip.clickUnverified"));
         }
+        // The visit began where the view last saw the pointer, which can be stale: a move made before the hook existed
+        // reached no one. From here every move is seen; take where the pointer really is now.
+        if (GetCursorPos(out NativePoint now) && InView(new Point(now.X, now.Y)) && Pack(new Point(now.X, now.Y)) != Interlocked.Read(ref _pointer))
+        {
+            Interlocked.Exchange(ref _observedPointer, Pack(new Point(now.X, now.Y)));
+            Publish(new Point(now.X, now.Y));
+            Enqueue(new(EventKind.Move, new Point(now.X, now.Y)));
+        }
         _watcher = new Thread(FollowPopups) { IsBackground = true, Name = "WinScreen interaction popups" };
         _watcher.Start();
         Share(true);
@@ -366,7 +375,7 @@ internal sealed class PipInteraction : IDisposable
         if (_outside)
             return false;
         nint root = RootAt(point);
-        if (root != _viewWindow && root != _source && ProcessOf(root) == _sourceProcess)
+        if (IsSourcePopup(root))
         {
             _inPopup = true; // A program's own menu can reach past the view; going there isn't leaving.
             return false;
@@ -401,7 +410,7 @@ internal sealed class PipInteraction : IDisposable
             Enqueue(new(EventKind.Record, point, Outcome: PressOutcome.ViewControl));
             return false;
         }
-        if (!_outside && root != _viewWindow && root != _source && ProcessOf(root) == _sourceProcess)
+        if (!_outside && IsSourcePopup(root))
         {
             _inPopup = true;
             Enqueue(new(EventKind.Record, point, Outcome: PressOutcome.Popup));
@@ -444,7 +453,7 @@ internal sealed class PipInteraction : IDisposable
         if (_swallowed == MouseButtons.None && !_outside && !InView(point) && !_inPopup)
         {
             nint root = RootAt(point);
-            if (root != 0 && ProcessOf(root) != _sourceProcess) Leave();
+            if (root != 0 && !IsSourcePopup(root) && root != _source) Leave();
         }
         return swallow;
     }
@@ -512,7 +521,19 @@ internal sealed class PipInteraction : IDisposable
         if (_heldDelivered == MouseButtons.None && (_pendingClick != MouseButtons.None || AtViewBorder(point))) return;
         if (_heldDelivered == MouseButtons.None && !view.Contains(point)) return;
         _messages.Move(point, view, shown);
-        if (SharesInput) _messages.AskForCursor();
+        // Sharing input with a thread that has stopped reading it would hold up WinScreen's own input too. The
+        // cursor question doubles as the check: no answer within 20 ms stops sharing until the app answers again.
+        if (SharesInput || _appBusy)
+        {
+            bool answered = _messages.AskForCursor();
+            if (!answered && !_appBusy) { _appBusy = true; Share(false); }
+            else if (answered && _appBusy)
+            {
+                _appBusy = false;
+                if (_heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None && Volatile.Read(ref _swallowedBits) == 0)
+                    Share(true);
+            }
+        }
     }
 
     private void PressArrived(Point point, MouseButtons button, bool alt)
@@ -625,6 +646,14 @@ internal sealed class PipInteraction : IDisposable
         18 => "HTBORDER", 19 => "HTOBJECT", 20 => "HTCLOSE", 21 => "HTHELP", _ => "unknown",
     };
 
+    /// <summary>
+    /// A window of the original's program, or one the original owns (a helper process's popup): the pointer is on
+    /// the app's own popup, so real input goes to it. Cheap enough for the hook: an owner walk of a few steps.
+    /// </summary>
+    private bool IsSourcePopup(nint root) =>
+        root != 0 && root != _viewWindow && root != _source &&
+        (ProcessOf(root) == _sourceProcess || Windows.WindowInfo.IsOwnedBy(root, _source));
+
     private static nint RootAt(Point point) =>
         User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y }), User32.GA_ROOT);
 
@@ -721,6 +750,10 @@ internal sealed class PipInteraction : IDisposable
 
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int key);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out NativePoint point);
 
     [DllImport("kernel32.dll", EntryPoint = "GetModuleHandleW")]
     private static extern nint GetModuleHandle(nint name);

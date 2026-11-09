@@ -7,7 +7,9 @@ namespace WinScreen.Tests.Support;
 internal static unsafe class BrowserAccessibility
 {
     internal sealed record Control(string Name, int Type, Rectangle Bounds, bool Focused, bool Enabled);
-    internal static List<Control> Read(nint window)
+    /// <param name="maxDepth">How deep to walk; Electron apps nest their content deeper than most.</param>
+    /// <param name="raw">Walk every element, not only controls: some apps show text only there.</param>
+    internal static List<Control> Read(nint window, int maxDepth = 16, bool raw = false)
     {
         nint automation = 0, walker = 0, root = 0;
         Guid cls = new("FF48DBA4-60EF-4201-AA87-54103EEF594E"), iid = new("30CBE57D-D9D0-452A-AB13-7AC5AC4825EE");
@@ -16,7 +18,7 @@ internal static unsafe class BrowserAccessibility
         {
             Marshal.ThrowExceptionForHR(CoCreateInstance(in cls, 0, 1, in iid, out automation));
             Marshal.ThrowExceptionForHR(((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(automation, 6))(automation, window, &root));
-            Marshal.ThrowExceptionForHR(((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(automation, 14))(automation, &walker));
+            Marshal.ThrowExceptionForHR(((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(automation, raw ? 16 : 14))(automation, &walker));
             Walk(root, 0, walker);
             return controls;
         }
@@ -28,7 +30,7 @@ internal static unsafe class BrowserAccessibility
         }
         void Walk(nint element, int depth, nint treeWalker)
         {
-            if (depth > 16 || controls.Count > 1000) return;
+            if (depth > maxDepth || controls.Count > 3000) return;
             nint name = 0;
             int type = 0, focus = 0, enabled = 0;
             Rect bounds = default;

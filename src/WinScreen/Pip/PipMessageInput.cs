@@ -134,11 +134,12 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     }
 
     /// <summary>Asks the window under the pointer to set its cursor, as Windows would if the pointer were really there.</summary>
-    internal void AskForCursor()
+    /// <returns>False when it didn't answer within 20 ms: it is busy, or not responding.</returns>
+    internal bool AskForCursor()
     {
         nint target = MoveTarget;
-        if (target != 0 && identity.StillThere() && User32.IsWindow(target))
-            User32.SendMessageTimeout(target, 0x0020 /* WM_SETCURSOR */, target, (nint)(1 | (0x0200 << 16)), 0x2, 20, out _);
+        if (target == 0 || !identity.StillThere() || !User32.IsWindow(target)) return true;
+        return User32.SendMessageTimeout(target, 0x0020 /* WM_SETCURSOR */, target, (nint)(1 | (0x0200 << 16)), 0x2, 20, out _) != 0;
     }
 
     internal Delivery Press(Point pointer, MouseButtons button, Rectangle view, Rectangle shown)

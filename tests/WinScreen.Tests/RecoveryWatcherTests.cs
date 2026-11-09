@@ -6,6 +6,24 @@ namespace WinScreen.Tests;
 
 public sealed class RecoveryWatcherTests
 {
+    /// <summary>
+    /// A parent that is gone, or dying while it is looked up, counts as ended; the wait never throws. The dying case is
+    /// a race, so it is tried many times against processes that exit at once.
+    /// </summary>
+    [Fact]
+    public void A_parent_that_is_gone_or_dying_counts_as_ended_and_a_stop_wins()
+    {
+        using var never = new ManualResetEvent(false);
+        Assert.True(RecoveryWatcher.WaitForParent(int.MaxValue - 1, never)); // No such process.
+        using var stopped = new ManualResetEvent(true);
+        Assert.False(RecoveryWatcher.WaitForParent(int.MaxValue - 1, stopped));
+        for (int i = 0; i < 40; i++)
+        {
+            using var dying = Process.Start(new ProcessStartInfo("cmd.exe", "/c exit") { CreateNoWindow = true, UseShellExecute = false })!;
+            Assert.True(RecoveryWatcher.WaitForParent(dying.Id, never));
+        }
+    }
+
     [Fact]
     public void A_failed_launch_is_retried_after_a_short_backoff()
     {

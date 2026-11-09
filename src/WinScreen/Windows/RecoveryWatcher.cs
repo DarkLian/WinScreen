@@ -107,23 +107,8 @@ internal sealed class RecoveryWatcher : IDisposable
     public static void WatchUntilRecovered(int parent, Func<bool> recover, string runningInstance = RunningInstance.MutexName)
     {
         using EventWaitHandle stop = new(false, EventResetMode.ManualReset, StopName(parent));
-        Process? process = null;
-        try { process = Process.GetProcessById(parent); }
-        catch (ArgumentException) { } // Already gone.
-        using (process)
-        {
-            if (process is not null)
-            {
-                using var exited = new ManualResetEvent(false)
-                    { SafeWaitHandle = new Microsoft.Win32.SafeHandles.SafeWaitHandle(process.Handle, false) };
-                if (WaitHandle.WaitAny([exited, stop]) == 1)
-                    return;
-            }
-            else if (stop.WaitOne(0))
-            {
-                return;
-            }
-        }
+        if (!WaitForParent(parent, stop))
+            return;
 
         while (!stop.WaitOne(0))
         {
@@ -143,6 +128,28 @@ internal sealed class RecoveryWatcher : IDisposable
             }
             if (stop.WaitOne(1000)) return;
         }
+    }
+
+    /// <summary>
+    /// Waits for the parent to end. False when it said it no longer needs a watcher. A parent that is already gone, or
+    /// is dying at this very moment, counts as ended: it can die between being found and being opened, right after it
+    /// started this watcher, and that must lead to recovery, never to the watcher failing.
+    /// </summary>
+    internal static bool WaitForParent(int parent, WaitHandle stop)
+    {
+        Process? process = null;
+        try
+        {
+            process = Process.GetProcessById(parent);
+            using var exited = new ManualResetEvent(false)
+                { SafeWaitHandle = new Microsoft.Win32.SafeHandles.SafeWaitHandle(process.Handle, false) };
+            return WaitHandle.WaitAny([exited, stop]) == 0;
+        }
+        catch (Exception gone) when (gone is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return !stop.WaitOne(0);
+        }
+        finally { process?.Dispose(); }
     }
 
     /// <summary>Only one copy recovers at a time, so a restart and a watcher can't both act on the journal.</summary>

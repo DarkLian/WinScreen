@@ -39,12 +39,12 @@ internal sealed class SourcePopups
     {
         lock (_hidden)
         {
-            uint thread = User32.GetWindowThreadProcessId(_source, out _);
+            uint thread = User32.GetWindowThreadProcessId(_source, out uint process);
             var seen = new HashSet<nint>();
             if (thread != 0)
-                EnumThreadWindows(thread, (window, _) =>
+                EnumWindows((window, _) =>
                 {
-                    if (window != _source && User32.IsWindowVisible(window) && (Windows.WindowInfo.IsOwnedBy(window, _source) || Windows.WindowInfo.ClassName(window) == "#32768"))
+                    if (window != _source && User32.IsWindowVisible(window) && IsPopupOf(window, _source, process))
                         seen.Add(window);
                     return true;
                 }, 0);
@@ -103,6 +103,18 @@ internal sealed class SourcePopups
         }
     }
 
+    /// <summary>
+    /// The original's popup: owned by it, by any of its program's threads or a helper process, or one of its program's
+    /// own menus, which Windows doesn't give an owner.
+    /// </summary>
+    internal static bool IsPopupOf(nint window, nint source, uint sourceProcess)
+    {
+        if (Windows.WindowInfo.IsOwnedBy(window, source)) return true;
+        if (Windows.WindowInfo.ClassName(window) != "#32768") return false;
+        User32.GetWindowThreadProcessId(window, out uint process);
+        return process == sourceProcess;
+    }
+
     internal enum Kind { DisplayOnly, Interactive, Dialog }
 
     /// <summary>Click-through windows can't be used, so they only show something; a captioned, activatable one asks something.</summary>
@@ -150,7 +162,7 @@ internal sealed class SourcePopups
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool EnumThreadWindows(uint thread, EnumWindowsProc callback, nint data);
+    private static extern bool EnumWindows(EnumWindowsProc callback, nint data);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

@@ -97,6 +97,7 @@
   "errors.identity.windowChanged": "The window changed while you were choosing it. Try again.",
   "errors.identity.windowGone": "That window has closed.",
   "errors.opacity.customTransparency": "This window draws its own transparency, so WinScreen can't change it.",
+  "errors.opacity.refused": "This app doesn't let WinScreen make it see-through, so it can't be hidden or made transparent.",
   "errors.operation.title": "WinScreen couldn't do that",
   "errors.pin.foregroundDenied": "Windows wouldn't bring \"{0}\" forward to pin it. Click the window and try the pin command again.",
   "errors.pip.advancedUnavailable": "Smooth capture isn't available, so the view uses standard mode.",

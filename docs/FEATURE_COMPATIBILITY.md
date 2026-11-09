@@ -154,7 +154,8 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 | The original's popups | ✅ / ⚠️ | Display-only popups stay off screen. Interactive menus and lists are moved near the mapped pointer and clamped to its monitor, raised above the view, and take real input. Dialogs end direct use and reveal the original. Apps with unusual ownership or custom popup behavior need manual checking. |
 | The original's caption buttons in a view used directly | ✅ | By hit-test (`PressRules.CaptionActionFor`): close asks the original to close (`SC_CLOSE`) and the view goes with it, or the original is shown after a second if it's still there; minimize minimizes the view, never the original (its picture would stop); maximize goes to the original; the icon or a right-click on the title bar opens the view's menu; borders do nothing; the title bar moves the view. An app that minimizes itself from its own content is restored, still hidden, and the view minimizes; one that maximizes itself goes to the original. |
 | The original after a visit | ✅ | The original never moves during a visit; it stays parked until it is shown or the view closes. |
-| Parking and display scale | ✅ / ❔ | A hidden original is parked on an outer edge of its own monitor when it has one, so it keeps its scale. Mixed-scale monitors haven't been tested. |
+| Parking and display changes | ✅ / ❔ | A hidden original is parked on an outer edge of its own monitor when it has one, so it keeps its scale. When the displays change (a monitor added or removed, a resolution change), it is parked again past an outer edge of the new layout and the view is kept on a screen. Tested by reproducing the change's effect on one display; real mixed-scale monitors haven't been tested. |
+| Apps that refuse to be see-through | ⚠️ | Some apps (WPF ones, such as PowerShell ISE) drop the style that makes a window see-through, so they can't be hidden, kept updating or used directly. The view says so and leaves the app as it was. |
 
 **Use this view directly: what works where.** Every press gets one outcome: delivered, reached a popup, moved the view, a caption button, unsupported (that kind of window has no way to take it; nothing is sent), or unconfirmed (tried, but the app was busy or refused).
 
@@ -163,6 +164,20 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 | Ordinary windows of the app (Win32, WinForms, browsers, Explorer's file list) | Posted mouse messages at the mapped point | Hover and pointer shape, every button, double-click, drag and text selection, wheel, keys after a click | — |
 | Newer UI frameworks: WinUI 3 islands (Explorer's command bar, tabs and address bar on Windows 11) and Store app content (Calculator, Settings) | Accessibility (UI Automation) | Click (invoke, select, toggle, expand, focus a text box); right-click opens the control's own menu, next to the pointer; double-click only where it means two clicks (buttons, check boxes, links, menu items); wheel scrolls what scrolls; keys after a click | Hover, drag and text selection, middle and side buttons, a double-click that opens an item or selects a word |
 | Any other program's window inside the original | — | — | Everything |
+
+| App (framework) | Direct use | Verified |
+|---|---|---|
+| Chrome, Edge (Chromium) | ✅ / ⚠️ | Pointer shapes, clicks, drag selection, typing, toolbar, tabs, context menus, wheel. A double-click acts as two single clicks (below) |
+| VS Code (Electron) | ✅ / ⚠️ | Click, typing and saving. A double-click acts as two single clicks (below); its editor's context menu wasn't seen after a right-click (cause not found) |
+| VLC (Qt) | ✅ | Context menu by the pointer, menu bar menus, a real click on a menu item |
+| File Explorer (Win32 and WinUI 3) | ✅ | See the table above |
+| Calculator, Settings (Store apps) | ✅ | Click, typing, double-click on buttons, wheel, caption buttons |
+| PowerShell ISE (WPF) | ❌ | Can't be hidden (see above) |
+| Firefox | ❌ | It receives the posted press at the right point and ignores it: only real pointer input reaches its pages. A view of Firefox works; direct use doesn't |
+
+**Double-click in Chromium-based apps (Chrome, Edge, Electron).** Once the page has had a pointer move, Chromium resets its click count whenever there is any pause between the first click's release and the second press, so a double-click through a view arrives as two single clicks (measured with posted sequences; with no pause it is a double-click). Holding releases back would delay every click, so this stays a limitation for now. Win32 apps, File Explorer and Store app buttons double-click normally.
+
+Popups the original owns are followed whichever thread or process made them, and so are its program's own menus; other programs' windows are never moved. When the app stops answering for a moment, WinScreen stops sharing input with it until it answers again, so it never waits on the app.
 
 Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% scale per-monitor, DPI-unaware and system-aware apps: presses, double-click, wheel, drag and title bar all land on the shown point) and Windows 11 (Chrome, File Explorer including its Duplicate tab menu, Calculator, Settings). Not tested: WPF, Firefox, Electron, Qt, games (which read raw input and won't take posted messages), and mixed-scale monitors.
 

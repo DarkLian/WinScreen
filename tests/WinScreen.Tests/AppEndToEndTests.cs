@@ -845,6 +845,31 @@ public sealed class AppEndToEndTests : IDisposable
         _appWindow = WaitForAppWindow();
     }
 
+    /// <summary>
+    /// The watcher can find WinScreen and then fail to open it because it died in between, right after starting the
+    /// watcher. Before the fix that crashed the watcher and left the window hidden (3 in 24 such kills in the VM).
+    /// </summary>
+    [Fact]
+    public void A_forced_kill_right_after_the_watcher_starts_still_reveals_the_window()
+    {
+        var log = new System.Text.StringBuilder();
+        for (int round = 0; round < 10; round++)
+        {
+            using var target = new TargetProcess(Spot);
+            ShrinkAndAwaitWatcher(target);
+            _app.Kill(); // At once: the watcher is tens of milliseconds old.
+            bool revealed = Desktop.WaitFor(() => !Windows.WindowInfo.IsConcealed(target.Handle), 2000);
+            log.AppendLine($"round {round}: revealed={revealed} journal={File.Exists(Path.Combine(_data, "changed-windows.json"))}");
+            Assert.True(revealed, "The window stayed hidden.\n" + log);
+            Assert.True(Desktop.WaitFor(() => Copies() == 0, 3000), "The watcher stayed.\n" + log);
+            _app.WaitForExit();
+            _app.Dispose();
+            _app = Start();
+            _appWindow = WaitForAppWindow();
+            Thread.Sleep(1000);
+        }
+    }
+
     [Fact]
     public void The_watcher_goes_when_nothing_is_hidden_and_does_nothing_after_a_clean_exit()
     {

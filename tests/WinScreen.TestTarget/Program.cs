@@ -32,6 +32,15 @@ internal static class Program
             Get("--colors", "C81E1E"));
         using var unhang = new ManualResetEventSlim();
 
+        if (options.TryGetValue("--owner", out string? ownerText))
+        {
+            // A popup of another program's window, from this separate process.
+            window.Shown += (_, _) =>
+            {
+                window.FormBorderStyle = FormBorderStyle.None;
+                NativeShow.SetWindowLongPtr(window.Handle, -8, (nint)long.Parse(ownerText));
+            };
+        }
         window.Shown += (_, _) =>
         {
             Console.Out.WriteLine(window.Handle.ToInt64());
@@ -103,6 +112,29 @@ internal static class Program
                             Console.WriteLine("popup " + popup.Handle.ToInt64());
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "threadpopup")
+                    {
+                        // An owned popup made by another UI thread of the same program, as multi-threaded apps do.
+                        string[] at = parts[1].Split(' ');
+                        nint owner = window.Handle;
+                        var ui = new Thread(() =>
+                        {
+                            var popup = new Form
+                            {
+                                FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual,
+                                Bounds = new Rectangle(int.Parse(at[0]), int.Parse(at[1]), 160, 40), BackColor = Color.Orange,
+                            };
+                            _ = popup.Handle;
+                            NativeShow.SetWindowLongPtr(popup.Handle, -8, owner); // GWLP_HWNDPARENT: owned across threads.
+                            NativeShow.ShowWindow(popup.Handle, 4);
+                            popup.MouseClick += (_, e) => { Console.WriteLine($"popup-click {e.X} {e.Y}"); Console.Out.Flush(); };
+                            Console.WriteLine("popup " + popup.Handle.ToInt64());
+                            Console.Out.Flush();
+                            Application.Run();
+                        }) { IsBackground = true };
+                        ui.SetApartmentState(ApartmentState.STA);
+                        ui.Start();
+                    }
                     if (parts[0] == "dialog")
                         window.BeginInvoke(() =>
                         {

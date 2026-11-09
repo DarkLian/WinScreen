@@ -782,6 +782,7 @@ public sealed class PipWindow : Form
         {
             PipDisplay.InvalidateRefresh();
             _thumbnail?.DisplayChanged();
+            if (m.Msg == WM_DISPLAYCHANGE) BeginInvokeIfAlive(FollowDisplays);
         }
         if (m.Msg == WM_MOUSEACTIVATE)
         {
@@ -811,6 +812,22 @@ public sealed class PipWindow : Form
         }
 
         base.WndProc(ref m);
+    }
+
+    /// <summary>
+    /// The displays changed (a monitor came or went, or a resolution changed): the hidden original goes past an outer
+    /// edge of the new layout, and the view stays on a screen it can be reached on.
+    /// </summary>
+    internal void FollowDisplays()
+    {
+        if (_cleaned || IsDisposed) return;
+        if (_origin.IsWindow && _origin.IsAvailable && _windows.IsParked(_source))
+        {
+            EndLive(); // Its mapping was for the old layout; the next move starts a new visit.
+            Attempt(() => _windows.Repark(_source));
+        }
+        Rectangle area = Screen.FromControl(this).WorkingArea;
+        if (!area.Contains(Bounds)) Location = PipGeometry.KeepInside(Bounds, area);
     }
 
     protected override void OnDpiChanged(DpiChangedEventArgs e)
@@ -1048,10 +1065,8 @@ public sealed class PipWindow : Form
         RaisePopup = popup => BeginInvokeIfAlive(() =>
         {
             if (_cleaned || _live is null || !_origin.IsAvailable || !User32.IsWindow(popup)) return;
-            uint thread = User32.GetWindowThreadProcessId(popup, out uint process);
             User32.GetWindowThreadProcessId(_source, out uint sourceProcess);
-            if (process == sourceProcess && (WindowInfo.IsOwnedBy(popup, _source) ||
-                WindowInfo.ClassName(popup) == "#32768" && thread == User32.GetWindowThreadProcessId(_source, out _)))
+            if (SourcePopups.IsPopupOf(popup, _source, sourceProcess))
                 TopLayer.Raise(popup);
         }),
     };

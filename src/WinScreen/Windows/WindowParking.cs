@@ -47,6 +47,29 @@ public sealed partial class WindowController
         }
     }
 
+    /// <summary>
+    /// After the displays change: a monitor that went away takes its edge with it, and Windows moves windows from it
+    /// onto the screens that are left, where a parked original would sit invisible but in the way. Put it past an
+    /// outer edge of the new layout. Its recorded placement is unchanged.
+    /// </summary>
+    internal void Repark(nint window)
+    {
+        lock (_gate)
+        {
+            if (!_changed.TryGetValue(window, out var state) || !state.Parked || !User32.IsWindow(window)) return;
+            state.Identity.Require();
+            if (!User32.GetWindowRect(window, out Rect bounds)) throw Failure(T("actions.readPosition"), window);
+            Rectangle now = Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
+            Rectangle[] monitors = Screen.AllScreens.Select(screen => screen.Bounds).ToArray();
+            Rect home = state.PlacementBeforePeek?.NormalPosition ?? bounds;
+            Rectangle parked = ParkingPlace(now.Size, monitors,
+                Screen.FromRectangle(Rectangle.FromLTRB(home.Left, home.Top, home.Right, home.Bottom)).Bounds);
+            if (parked == now) return;
+            if (!User32.SetWindowPos(window, 0, parked.Left, parked.Top, parked.Width, parked.Height,
+                    User32.SWP_NOACTIVATE | User32.SWP_NOZORDER)) throw Failure(T("actions.move"), window);
+        }
+    }
+
     internal void Unpark(nint window)
     {
         lock (_gate)

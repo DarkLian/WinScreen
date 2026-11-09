@@ -13,14 +13,15 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
 {
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint x, uint y, uint data, nuint extra);
 
-    private static void Drive(TargetProcess source, Action<PipWindow, Func<Action, bool>, WindowController> action)
+    /// <param name="restAt">Where the pointer rests when the view opens. By default just outside it: one resting
+    /// where the view opens starts a visit before the test moves it.</param>
+    private static void Drive(TargetProcess source, Action<PipWindow, Func<Action, bool>, WindowController> action, Point? restAt = null)
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             var windows = new WindowController([]);
             Point home = Desktop.CursorPosition();
-            // A pointer already resting where the view opens would start a visit before the test moves it.
-            Desktop.MoveMouse(new Point(860, 230));
+            Desktop.MoveMouse(restAt ?? new Point(860, 230));
             using var view = new PipWindow(source.Handle, windows) { AllowInteractive = true };
             view.ShowOnTop();
             view.Location = new Point(900, 250);
@@ -236,6 +237,78 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
             nint tip = source.ShowPopup(new Point(pointer.X + 20, pointer.Y + 20), displayOnly: true);
             Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(tip).Right <= SystemInformation.VirtualScreen.Left));
         });
+    }
+
+    /// <summary>
+    /// A visit can begin where the pointer rested when the view opened, and the pointer can move on before the
+    /// visit's hook exists. A menu opened then still belongs next to where the pointer really is.
+    /// </summary>
+    [Fact]
+    public void A_menu_opened_before_any_move_is_seen_appears_by_the_pointer()
+    {
+        using var source = new TargetProcess(new Rectangle(160, 120, 800, 600));
+        Drive(source, (view, _, _) =>
+        {
+            Point now = new(view.Left + view.Width / 3, view.Top + view.Height / 3);
+            Desktop.MoveMouse(now); // At once, while the visit is still starting.
+            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No visit.");
+            Thread.Sleep(300);
+            Rectangle parked = Desktop.BoundsOf(source.Handle);
+            var (area, shown) = view.LiveInteraction!.CurrentGeometry;
+            Point spot = PipGeometry.PointToSource(now, area, shown);
+            nint popup = source.ShowPopup(new Point(parked.Left + spot.X + 5, parked.Top + spot.Y + 5));
+            Assert.True(Desktop.WaitFor(() => Distance(Desktop.BoundsOf(popup).Location, now) < 60, 2000),
+                $"The menu is at {Desktop.BoundsOf(popup).Location}, the pointer at {now}.");
+        }, restAt: new Point(900 + 400, 250 + 280)); // Inside where the view opens, far from where the pointer goes.
+    }
+
+    private static double Distance(Point a, Point b) => Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
+
+    /// <summary>
+    /// Popups the app makes on another UI thread, or from a helper process, are still its popups: moved next to the
+    /// pointer, clickable, and put back afterwards. A window that merely sits near the original is left alone.
+    /// </summary>
+    [Fact]
+    public void Popups_of_other_threads_and_processes_follow_the_pointer_and_go_back()
+    {
+        using var source = new TargetProcess(new Rectangle(160, 120, 800, 600));
+        TargetProcess? helper = null, stranger = null;
+        nint threadPopup = 0;
+        Point threadAt = default;
+        try
+        {
+            Drive(source, (view, _, _) =>
+            {
+                Point pointer = Hover(view);
+                Rectangle parked = Desktop.BoundsOf(source.Handle);
+                Point at = new(parked.Left + 230, parked.Top + 180);
+
+                threadAt = at;
+                threadPopup = source.ShowThreadPopup(at);
+                Assert.True(Desktop.WaitFor(() => Distance(Desktop.BoundsOf(threadPopup).Location, pointer) < 200, 2000),
+                    $"Another thread's popup stayed at {Desktop.BoundsOf(threadPopup).Location}; pointer {pointer}.");
+                Rectangle placed = Desktop.BoundsOf(threadPopup);
+                Desktop.ClickOn(new Point(placed.Left + 30, placed.Top + 20), threadPopup);
+                Assert.True(Desktop.WaitFor(() => source.NextReport(200) is { } r && r.StartsWith("popup-click"), 2000), "The popup took no click.");
+                Assert.Contains(PressOutcome.Popup, view.PressOutcomes);
+
+                helper = new TargetProcess(new Rectangle(at.X, at.Y + 60, 160, 40), owner: source.Handle);
+                Assert.True(Desktop.WaitFor(() => Distance(Desktop.BoundsOf(helper.Handle).Location, pointer) < 200, 2000),
+                    $"Another process's popup stayed at {Desktop.BoundsOf(helper.Handle).Location}; pointer {pointer}.");
+
+                // Not owned by the original: not its popup, wherever it is.
+                stranger = new TargetProcess(new Rectangle(at.X, at.Y + 120, 160, 40));
+                Rectangle strangerAt = Desktop.BoundsOf(stranger.Handle);
+                Thread.Sleep(500);
+                Assert.Equal(strangerAt, Desktop.BoundsOf(stranger.Handle));
+            });
+            // The view closed: every popup it moved is back where its app put it.
+            Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(threadPopup).Location == threadAt, 2000),
+                $"The thread popup is at {Desktop.BoundsOf(threadPopup).Location}, not {threadAt}.");
+            Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(helper!.Handle).Location == threadAt + new Size(0, 60), 2000),
+                $"The helper popup is at {Desktop.BoundsOf(helper!.Handle).Location}.");
+        }
+        finally { helper?.Dispose(); stranger?.Dispose(); }
     }
 
     [Fact]

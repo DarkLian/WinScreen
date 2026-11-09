@@ -97,6 +97,7 @@
   "errors.identity.windowChanged": "選擇時視窗發生了變化，請再試一次。",
   "errors.identity.windowGone": "該視窗已關閉。",
   "errors.opacity.customTransparency": "此視窗自行繪製透明效果，WinScreen 無法變更。",
+  "errors.opacity.refused": "此應用程式不允許 WinScreen 將其設為透明，因此無法隱藏或調整透明度。",
   "errors.operation.title": "WinScreen 無法執行此操作",
   "errors.pin.foregroundDenied": "Windows 無法將「{0}」移至前景置頂。請點選該視窗後重試置頂。",
   "errors.pip.advancedUnavailable": "無法使用流暢擷取，檢視改用標準模式。",

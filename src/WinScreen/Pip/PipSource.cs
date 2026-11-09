@@ -43,7 +43,26 @@ internal sealed class WindowPipSource(WindowIdentity identity) : PipSource
 {
     public override string Title => WindowInfo.Title(identity.Window);
     public override nint Window => identity.Window;
-    public override bool IsAvailable => identity.Matches();
+    private long _processCheckedAt = long.MinValue;
+
+    /// <summary>
+    /// Asked several times every 50 ms. The marker WinScreen put on the window goes when the window does, so it tells
+    /// a closed or reused handle apart on every call; the process check (it opens the process) runs at most once a
+    /// second while it keeps passing. Changing a window still requires the full check (<see cref="Require"/>).
+    /// </summary>
+    public override bool IsAvailable
+    {
+        get
+        {
+            if (identity.Token == 0) return identity.Matches();
+            if (!identity.StillThere()) return false;
+            long now = Environment.TickCount64;
+            if (now - _processCheckedAt < 1000) return true;
+            if (!identity.Matches()) return false;
+            _processCheckedAt = now;
+            return true;
+        }
+    }
     public override bool IsMinimized => User32.IsIconic(identity.Window);
     public override bool ShowsCursor => false;
     public override Screen Screen => Screen.FromHandle(identity.Window);

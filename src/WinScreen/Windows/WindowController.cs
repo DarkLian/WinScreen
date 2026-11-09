@@ -619,7 +619,21 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
             state.Hidden = true;
             Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT | User32.WS_EX_TOPMOST);
-            Conceal(window, state);
+            try { Conceal(window, state); }
+            catch (WindowOperationException)
+            {
+                // Not hidden after all (the app refused to become see-through): it mustn't stay recorded as hidden,
+                // or WinScreen would keep a recovery record, and a watcher, for a window it never hid.
+                state.Hidden = false;
+                try
+                {
+                    RestoreBorder(window, state);
+                    if (!state.ClickThrough) WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
+                }
+                catch (WindowOperationException) { }
+                SaveJournal();
+                throw;
+            }
             LiftWhileHidden(window, state);
         }
     }
@@ -958,7 +972,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     {
         state.SolidWhileHovered = false;
         RestoreBorder(window, state);
-        ApplyAlpha(window, state, state.AlphaBeforeHiding);
+        if (state.Layered || state.AlphaBeforeHiding != 255) // Never made see-through: nothing to put back.
+            ApplyAlpha(window, state, state.AlphaBeforeHiding);
         if (!state.ClickThrough)
             WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
         if (!state.Pinned)
@@ -1237,6 +1252,10 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         if (!state.Layered)
         {
             WriteExStyle(window, ReadExStyle(window) | User32.WS_EX_LAYERED);
+            // Some apps (WPF ones, among others) manage this style themselves and drop it again at once: then there
+            // is no way to make them see-through, and saying so beats a failed system call.
+            if ((ReadExStyle(window) & User32.WS_EX_LAYERED) == 0)
+                throw new WindowOperationException(T("errors.opacity.refused"));
             state.Layered = true;
         }
 

@@ -230,6 +230,44 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         Assert.NotNull(timing);
     }
 
+    /// <summary>A double-click on a word in a page selects that word, as it does with a real mouse.</summary>
+    /// <remarks>
+    /// Skipped: measured 9 Nov with posted sequences straight to a Chromium page. Once the page has had a pointer move,
+    /// any gap between the first release and the second press resets its click count, so the second press counts as a
+    /// single click; with no gap, or with the first release held until the second press, it is a double-click. Holding
+    /// releases back would delay every click, so this stays a documented limitation until real pointer input is designed.
+    /// </remarks>
+    [Theory(Skip = "Chromium resets its click count between posted clicks after a pointer move (documented limitation).")]
+    [MemberData(nameof(BrowserCases))]
+    public void A_double_click_selects_a_word_in_a_page_used_through_a_view(string path)
+    {
+        const string page = """
+            <!doctype html><title>Dbl sel=0 n=0</title><style>body{margin:0;font:28px sans-serif}#w{position:absolute;left:40px;top:40px}</style>
+            <p id=w>Selectable words here</p>
+            <script>let n=0;const r=()=>document.title=`Dbl sel=${getSelection().toString().trim().length} n=${n}`;
+            document.addEventListener('selectionchange',r);addEventListener('dblclick',()=>{n++;r()});</script>
+            """;
+        var (browser, window, root) = Open(page, "Dbl", app: true, path);
+        var log = new StringBuilder();
+        try
+        {
+            Visit(window, (view, at, l) =>
+            {
+                Rectangle client = Desktop.BoundsOf(window);
+                int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - client.Top;
+                Point word = at(new Point(40 + 30, top + 40 + 18)); // Inside "Selectable".
+                Desktop.SlideMouse(word); Thread.Sleep(150);
+                for (int i = 0; i < 2; i++) { mouse_event(2, 0, 0, 0, 0); Thread.Sleep(30); mouse_event(4, 0, 0, 0, 0); Thread.Sleep(50); }
+                Thread.Sleep(500);
+                l.AppendLine("after double-click: " + WindowInfo.Title(window));
+                if (view.LiveInteraction is { } live) foreach (string entry in live.InputDiagnostics) l.AppendLine(entry);
+            }, log);
+        }
+        finally { Close(browser, root); }
+        output.WriteLine(log.ToString());
+        Assert.Contains("after double-click: Dbl sel=10 n=1", log.ToString());
+    }
+
     public static IEnumerable<object[]> ToolbarCases()
     {
         string bundled = Path.Combine(AppContext.BaseDirectory, "chrome-user", "chrome.exe");

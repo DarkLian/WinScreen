@@ -9,7 +9,7 @@ internal sealed class TargetProcess : IDisposable
     private readonly Process _process;
     private readonly BlockingCollection<string> _reports = [];
 
-    public TargetProcess(Rectangle bounds, string colors = "C81E1E", string title = "WinScreen test target", string dpi = "permonitorv2")
+    public TargetProcess(Rectangle bounds, string colors = "C81E1E", string title = "WinScreen test target", string dpi = "permonitorv2", nint owner = 0)
     {
         Bounds = bounds;
         var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "WinScreen.TestTarget.exe"))
@@ -28,6 +28,7 @@ internal sealed class TargetProcess : IDisposable
         {
             start.ArgumentList.Add(arg);
         }
+        if (owner != 0) { start.ArgumentList.Add("--owner"); start.ArgumentList.Add(owner.ToInt64().ToString()); }
 
         _process = Process.Start(start) ?? throw new InvalidOperationException("Test target didn't start.");
         Handle = (nint)long.Parse(_process.StandardOutput.ReadLine() ??
@@ -95,6 +96,17 @@ internal sealed class TargetProcess : IDisposable
 
     /// <summary>Shows a small popup the window owns, at this screen position, and returns it.</summary>
     /// <param name="displayOnly">Click-through, as a browser's link text is.</param>
+    /// <summary>An owned popup made by another UI thread of the target.</summary>
+    internal nint ShowThreadPopup(Point at)
+    {
+        _process.StandardInput.WriteLine($"threadpopup {at.X} {at.Y}");
+        _process.StandardInput.Flush();
+        string? report = NextReport();
+        if (report is null || !report.StartsWith("popup ", StringComparison.Ordinal))
+            throw new InvalidOperationException("Test target didn't show a popup.");
+        return (nint)long.Parse(report[6..]);
+    }
+
     internal nint ShowPopup(Point at, bool displayOnly = false)
     {
         _process.StandardInput.WriteLine($"popup {at.X} {at.Y}" + (displayOnly ? " display" : ""));

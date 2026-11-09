@@ -102,7 +102,7 @@ public sealed class InteractiveViewTests
                 Thread.Sleep(2);
             }
 
-            view.Close();
+            if (!view.IsDisposed) view.Close();
             if (failure is not null)
                 throw new Xunit.Sdk.XunitException(failure.ToString());
         });
@@ -152,6 +152,68 @@ public sealed class InteractiveViewTests
             string timing = live.Timing.ToString();
             Assert.True(live.Timing.Max < TimeSpan.FromMilliseconds(15), timing + "; visit ended: " + view.LastVisitEnd);
             Assert.True(view.LiveInteraction is not null, "A busy app ended the visit: " + view.LastVisitEnd + "; " + timing);
+        });
+    }
+
+    /// <summary>An app that dies while a button is held through its view: the visit, its hook and threads end, the view closes.</summary>
+    [Fact]
+    public void An_app_killed_mid_press_ends_the_visit_and_leaves_nothing_behind()
+    {
+        var source = new TargetProcess(SourceSpot);
+        source.UseFrame();
+        int threadsBefore = System.Diagnostics.Process.GetCurrentProcess().Threads.Count;
+        PipWindow? closedView = null;
+        Drive(source, (view, _) =>
+        {
+            closedView = view;
+            Rectangle frame = view.Bounds;
+            Hover(new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2), view);
+            Desktop.MouseButton(true);
+            Thread.Sleep(100);
+            source.Dispose(); // Killed, with the press still held.
+            Thread.Sleep(200);
+            Desktop.MouseButton(false);
+            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null, 2000), "The visit outlived its app.");
+            Assert.True(Desktop.WaitFor(() => PipInteraction.Active == 0, 2000), "The hook stayed.");
+            Assert.True(Desktop.WaitFor(() => view.IsDisposed || !view.Visible, 3000), "The view stayed open.");
+        });
+        Assert.True(closedView!.IsDisposed || !closedView.Visible);
+        // The visit's hook, input and popup threads are gone (other tests' threads may come and go: allow a little).
+        Assert.True(Desktop.WaitFor(() => System.Diagnostics.Process.GetCurrentProcess().Threads.Count <= threadsBefore + 2, 3000),
+            $"Threads: {threadsBefore} before, {System.Diagnostics.Process.GetCurrentProcess().Threads.Count} after.");
+    }
+
+    /// <summary>
+    /// While the pointer is on a view, its thread shares input state with the app's. When the app stops answering,
+    /// that must not stall WinScreen: sharing stops within a moment, leaving works, and the view's own thread
+    /// still answers at once.
+    /// </summary>
+    [Fact]
+    public void A_busy_app_stops_sharing_input_and_never_stalls_the_view()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        source.UseFrame();
+        Drive(source, (view, _) =>
+        {
+            Rectangle frame = view.Bounds;
+            Hover(new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2), view);
+            PipInteraction live = view.LiveInteraction!;
+            Assert.True(live.SharesInput, "Input wasn't shared at the start of the visit.");
+            source.Hang();
+            try
+            {
+                for (int i = 0; i < 6; i++) { Desktop.NudgeMouse(i % 2 == 0 ? 2 : -2, 0); Thread.Sleep(40); }
+                Assert.True(Desktop.WaitFor(() => !live.SharesInput, 1000), "Input stayed shared with a busy app.");
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                view.Invoke(() => { });
+                Assert.True(clock.ElapsedMilliseconds < 500, $"The view's thread took {clock.ElapsedMilliseconds} ms to answer.");
+                Desktop.SlideMouse(new Point(frame.Left - 60, frame.Top - 60));
+                Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null, 1000), "The visit didn't end while the app was busy.");
+            }
+            finally { source.Unhang(); }
+            // Once it answers again, a new visit shares input again.
+            Hover(new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2), view);
+            Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.SharesInput == true, 2000), "Sharing didn't come back.");
         });
     }
 
