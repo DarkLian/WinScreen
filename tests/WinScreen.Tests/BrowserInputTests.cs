@@ -141,6 +141,10 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             Desktop.GainForegroundRights();
             Desktop.Activate(window);
             Point originalPoint = new(document.Left + document.Width / 2, document.Top + document.Height / 2);
+            // Successive browser cases can open under the restored pointer at exactly this point.
+            // Generate real movement rather than relying on a same-coordinate synthetic event.
+            Desktop.SlideMouse(originalPoint - new Size(20, 20));
+            Thread.Sleep(80);
             Desktop.SlideMouse(originalPoint);
             Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains("active=true preview=block"), 4000),
                 $"Visible hover baseline: {WindowInfo.Title(window)}; window={Desktop.BoundsOf(window)} document={document} point={originalPoint} foreground=0x{User32.GetForegroundWindow():X} source=0x{window:X}");
