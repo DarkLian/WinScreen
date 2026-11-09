@@ -22,7 +22,6 @@ internal sealed class SourcePopups
     private readonly nint _source;
     private readonly Dictionary<nint, (Point Original, Point Placed)> _placed = [];
     private readonly Dictionary<nint, Point> _hidden = []; // Popup, and where it was.
-
     public SourcePopups(nint source) => _source = source;
     internal Action<nint> RaisePopup { get; init; } = Windows.TopLayer.Raise;
 
@@ -62,7 +61,7 @@ internal sealed class SourcePopups
                 if (kind == Kind.Interactive && pointer is { } at && mapped is { } sourcePoint)
                 {
                     Point current = new(r.Left, r.Top);
-                    if (!_placed.TryGetValue(popup, out var previous) || current != previous.Placed)
+                    if (!_placed.TryGetValue(popup, out var previous))
                     {
                         int width = r.Right - r.Left, height = r.Bottom - r.Top;
                         int dx = r.Left - sourcePoint.X, dy = r.Top - sourcePoint.Y;
@@ -73,6 +72,12 @@ internal sealed class SourcePopups
                         _placed[popup] = (current, place);
                         User32.SetWindowPos(popup, 0, place.X, place.Y, 0, 0, Move);
                         RaisePopup(popup);
+                    }
+                    else if (current != previous.Placed)
+                    {
+                        // Layout may put a popup back at its source coordinates. Its destination belongs to
+                        // this opening, not to the latest pointer or transient layout position.
+                        User32.SetWindowPos(popup, 0, previous.Placed.X, previous.Placed.Y, 0, 0, Move);
                     }
                     if (BehindView(popup, viewWindow)) RaisePopup(popup);
                     continue;

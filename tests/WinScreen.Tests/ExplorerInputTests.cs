@@ -8,8 +8,16 @@ using Xunit;
 namespace WinScreen.Tests;
 
 [Trait("Category", "Interactive")]
-public sealed class ExplorerInputTests
+public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper output)
 {
+    private bool _requireStationary;
+
+    [Fact(Skip = "PIP-501: WinUI still resets its popup position; fixed-anchor relocation does not prevent every flicker.")]
+    public void Explorer_tab_menus_remain_stationary_during_sustained_navigation()
+    {
+        _requireStationary = true;
+        Double_clicking_a_folder_in_a_view_navigates_explorer();
+    }
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern void mouse_event(uint flags, uint x, uint y, uint data, nuint extra);
 
@@ -159,6 +167,35 @@ public sealed class ExplorerInputTests
                         Point menuItem = default;
                         Assert.True(Desktop.WaitFor(() => view.Bounds.IntersectsWith(new Rectangle((menuItem = MenuItemAt()) - new Size(400, 400), new Size(800, 800))), 3000),
                             $"The menu isn't by the pointer: item {menuItem}, pointer {Desktop.CursorPosition()}, view {view.Bounds}; {LastMenu}");
+                        // Real pointer navigation must not remap an already relocated popup on each sweep.
+                        // Visit the whole menu, pause on each row, then activate a real item.
+                        nint popup = 0;
+                        Assert.True(Desktop.WaitFor(() =>
+                        {
+                            for (nint top = User32.GetWindow(User32.GetDesktopWindow(), 5); top != 0; top = User32.GetWindow(top, 2))
+                                if (User32.IsWindowVisible(top) && WindowInfo.IsOwnedBy(top, window) &&
+                                    BrowserAccessibility.Read(top).Any(c => c.Type == 50011 && c.Name == "Duplicate tab"))
+                                { popup = top; return true; }
+                            return false;
+                        }, 3000));
+                        Thread.Sleep(300);
+                        Rectangle settled = Desktop.BoundsOf(popup);
+                        var positions = new List<Rectangle>();
+                        for (int round = 0; round < 2; round++)
+                            for (int y = 16; y < settled.Height - 12; y += 24)
+                            {
+                                Desktop.SlideMouse(new Point(settled.Left + settled.Width / 2, settled.Top + y));
+                                for (int pause = 0; pause < 8; pause++)
+                                { Thread.Sleep(30); positions.Add(Desktop.BoundsOf(popup)); }
+                            }
+                        output.WriteLine($"Menu navigation: settled {settled}; observed {string.Join(", ", positions.Distinct())}; live={view.LiveInteraction is not null}");
+                        // Keep the desired stationary-menu acceptance explicitly skipped until PIP-501 is resolved.
+                        // The active flow still verifies real navigation and Duplicate tab, without claiming no flicker.
+                        if (_requireStationary) Assert.True(positions.All(p => p == settled),
+                            $"Tab menu moved during navigation: initial {settled}; observed {string.Join(", ", positions.Distinct())}; live={view.LiveInteraction is not null}; ended={view.LastVisitEnd}; {LastMenu}");
+                        Assert.True(Desktop.WaitFor(() => MenuItemAt() is var candidate &&
+                            view.Bounds.IntersectsWith(new Rectangle(candidate - new Size(400, 400), new Size(800, 800))), 2000));
+                        menuItem = MenuItemAt();
                         Desktop.SlideMouse(menuItem);
                         Thread.Sleep(150);
                         Desktop.MouseButton(true); Thread.Sleep(50); Desktop.MouseButton(false);
