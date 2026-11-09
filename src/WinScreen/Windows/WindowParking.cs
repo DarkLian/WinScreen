@@ -62,8 +62,8 @@ public sealed partial class WindowController
             Rectangle now = Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
             Rectangle[] monitors = Screen.AllScreens.Select(screen => screen.Bounds).ToArray();
             Rect home = state.PlacementBeforePeek?.NormalPosition ?? bounds;
-            Rectangle parked = ParkingPlace(now.Size, monitors,
-                Screen.FromRectangle(Rectangle.FromLTRB(home.Left, home.Top, home.Right, home.Bottom)).Bounds);
+            Rectangle homeMonitor = Screen.FromRectangle(Rectangle.FromLTRB(home.Left, home.Top, home.Right, home.Bottom)).Bounds;
+            Rectangle parked = state.HoverParking ? HoverParkingPlace(now.Size, monitors, homeMonitor) : ParkingPlace(now.Size, monitors, homeMonitor);
             if (parked == now) return;
             if (!User32.SetWindowPos(window, 0, parked.Left, parked.Top, parked.Width, parked.Height,
                     User32.SWP_NOACTIVATE | User32.SWP_NOZORDER)) throw Failure(T("actions.move"), window);
@@ -104,6 +104,49 @@ public sealed partial class WindowController
         IsParked(window) && (ReadExStyle(window) & User32.WS_EX_TRANSPARENT) == 0;
 
     private const byte ReachableOpacity = 1;
+
+    /// <summary>For native hover visits, keep the two-pixel strip clear of the usual bottom taskbar.
+    /// Chrome otherwise marks the page hidden and discards moves even while its leave messages are filtered.</summary>
+    internal void SetParkedHoverSurface(nint window, bool enabled)
+    {
+        lock (_gate)
+        {
+            if (!_changed.TryGetValue(window, out var state) || !state.Parked || !User32.IsWindow(window) || state.HoverParking == enabled) return;
+            state.Identity.Require();
+            bool previous = state.HoverParking;
+            state.HoverParking = enabled;
+            try
+            {
+                Repark(window);
+                if (enabled && !User32.SetWindowPos(window, 0, 0, 0, 0, 0,
+                    User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE)) throw Failure(T("actions.move"), window);
+            }
+            catch { state.HoverParking = previous; throw; }
+        }
+    }
+
+    internal static Rectangle HoverParkingPlace(Size size, IReadOnlyList<Rectangle> monitors, Rectangle? home = null)
+    {
+        var ordered = home is { } own && monitors.Contains(own) ? new[] { own }.Concat(monitors.Where(m => m != own)) : monitors;
+        foreach (Rectangle monitor in ordered)
+        foreach (int edge in new[] { 1, 2, 3, 0 })
+        {
+            Point at = edge switch
+            {
+                1 => new Point(monitor.Right - 2, monitor.Top),
+                2 => new Point(monitor.Left - size.Width + 2, monitor.Top),
+                3 => new Point(monitor.Left, monitor.Top - size.Height + 2),
+                _ => new Point(monitor.Left, monitor.Bottom - 2),
+            };
+            var candidate = new Rectangle(at, size);
+            if (monitors.All(other =>
+            {
+                Rectangle overlap = Rectangle.Intersect(candidate, other);
+                return overlap.IsEmpty || (edge is 0 or 3 ? overlap.Height <= 2 : overlap.Width <= 2);
+            })) return candidate;
+        }
+        throw new WindowOperationException(T("errors.pip.noSurface"));
+    }
 
     /// <param name="home">
     /// The monitor the window is on. Its own outer edges come first: on another monitor with a different scale the app

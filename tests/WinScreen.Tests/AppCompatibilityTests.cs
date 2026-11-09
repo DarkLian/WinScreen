@@ -67,6 +67,7 @@ public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper o
             view.ShowOnTop();
             view.Location = new Point(900, 200);
             view.SetInteractive(true);
+            view.SetEnhancedHover(Environment.GetEnvironmentVariable("WINSCREEN_TEST_ENHANCED_HOVER") == "1");
             Exception? failure = null;
             PipInteraction.DiagnoseInput = true;
             var driver = new Thread(() =>
@@ -77,6 +78,7 @@ public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper o
                     Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
                     Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No visit started.");
                     Thread.Sleep(300);
+                    log.AppendLine("Enhanced hover: " + view.LiveInteraction?.HoverStatus);
                     Point ToView(Point offset)
                     {
                         var (area, shown) = view.LiveInteraction!.CurrentGeometry;

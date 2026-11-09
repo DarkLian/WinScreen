@@ -194,6 +194,8 @@
   "pip.diagnostics.includeHardware": "在诊断信息中包含显卡详情",
   "pip.diagnostics.retryHelp": "右键点击视图可查看诊断信息或重试流畅捕获。",
   "pip.diagnostics.title": "画中画诊断",
+  "pip.enhancedHover": "增强悬停（实验性）",
+  "pip.enhancedHover.description": "通过应用内的小型原生辅助组件，在兼容的应用中保持悬停效果。",
   "pip.frameRate": "帧率上限",
   "pip.frameRate.matchMonitor": "跟随显示器",
   "pip.goToOriginal": "切换到原窗口(&G)",

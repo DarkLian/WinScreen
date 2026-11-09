@@ -25,6 +25,9 @@ internal enum Delivery
 internal sealed class PipMessageInput(nint source, WindowIdentity identity)
 {
     private MouseButtons _held;
+    internal bool EnhancedHover;
+    internal PipEnhancedHover Hover { get; } = new(identity);
+    internal InputRoute MoveRoute { get; private set; }
     internal nint PressTarget { get; private set; }
     internal string PressTransport { get; private set; } = "messages";
     /// <summary>The window the last move went to, which is also where the pointer's shape comes from.</summary>
@@ -138,8 +141,10 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         if (AtLastPress(MouseButtons.Left, pointer, 0, out _)) return true;
         nint target = _held != MouseButtons.None ? _dragTarget : TargetAt(mapped);
         MoveTarget = target;
+        MoveRoute = RouteOf(target);
+        Hover.Update(EnhancedHover && MoveRoute == InputRoute.Messages ? target : 0);
         // Only posted messages carry a pointer; other routes have nothing to move.
-        return RouteOf(target) == InputRoute.Messages && Post(target, 0x200, Keys(_held), mapped);
+        return MoveRoute == InputRoute.Messages && Post(target, 0x200, Keys(_held), mapped);
     }
 
     /// <summary>The pointer is still where the button was last pressed, within the double-click time (and, given a target, on it).</summary>

@@ -14,6 +14,13 @@
     <!-- File description: a local build says so; a published one is just WinScreen. -->
     <AssemblyTitle Condition="'$(WinScreenReleaseType)' == 'local'">WinScreen (local build)</AssemblyTitle>
   </PropertyGroup>
+  <Target Name="BuildHoverHelper" BeforeTargets="PrepareForBuild" Condition="'$(WinScreenArchitecture)' == 'x64'">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)/../WinScreen.Hover/build.ps1&quot; -Output &quot;$(MSBuildProjectDirectory)/$(IntermediateOutputPath)hover/WinScreen.Hover.dll&quot;" />
+    <Delete Files="$(TargetDir)WinScreen.Hover.dll" Condition="!Exists('$(IntermediateOutputPath)hover/WinScreen.Hover.dll')" />
+    <ItemGroup>
+      <None Include="$(IntermediateOutputPath)hover/WinScreen.Hover.dll" Link="WinScreen.Hover.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('$(IntermediateOutputPath)hover/WinScreen.Hover.dll')" />
+    </ItemGroup>
+  </Target>
   <ItemGroup>
     <AssemblyMetadata Include="UpdateRepository" Value="$(UpdateRepository)" />
     <AssemblyMetadata Include="ReleaseType" Value="$(WinScreenReleaseType)" />

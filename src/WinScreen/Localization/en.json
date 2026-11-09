@@ -194,6 +194,8 @@
   "pip.diagnostics.includeHardware": "Include graphics card details in diagnostics",
   "pip.diagnostics.retryHelp": "Right-click a view for diagnostics, or to try smooth capture again.",
   "pip.diagnostics.title": "View diagnostics",
+  "pip.enhancedHover": "Enhanced hover (experimental)",
+  "pip.enhancedHover.description": "Maintains hover effects in compatible applications using a small native helper inside the application.",
   "pip.frameRate": "Frame limit",
   "pip.frameRate.matchMonitor": "Match display",
   "pip.goToOriginal": "&Go to original window",

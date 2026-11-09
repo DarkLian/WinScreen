@@ -79,6 +79,7 @@ jobs:
             $folder = New-Item -ItemType Directory -Force "signing/program/$architecture"
             Copy-Item "dist/win-$architecture/WinScreen.exe", "dist/win-$architecture/WinScreen.dll" $folder
           }
+          Copy-Item 'dist/win-x64/WinScreen.Hover.dll' 'signing/program/x64'
       - name: Upload the program for signing
         id: program-upload
         if: env.SIGNED == 'true'
@@ -107,6 +108,7 @@ jobs:
         env:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
+          Copy-Item 'signing/program-signed/x64/WinScreen.Hover.dll' 'dist/win-x64' -Force
           foreach ($architecture in 'x64', 'arm64') {
             Copy-Item "signing/program-signed/$architecture/WinScreen.exe", "signing/program-signed/$architecture/WinScreen.dll" "dist/win-$architecture" -Force
             ./build.ps1 -CI -Release -Stage Pack -Architecture $architecture -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY

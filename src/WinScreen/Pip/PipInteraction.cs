@@ -141,6 +141,8 @@ internal sealed class PipInteraction : IDisposable
     private bool _dragging;
     private volatile bool _middleClickScroll;
     internal bool MiddleClickScroll { get => _middleClickScroll; set => _middleClickScroll = value; }
+    internal volatile bool EnhancedHover;
+    internal string HoverStatus => $"{(EnhancedHover && _messages.MoveRoute != InputRoute.Messages ? "unavailable: " + _messages.MoveRoute + " route" : _messages.Hover.Status)}; target=0x{_messages.MoveTarget:X}; busy={_appBusy}; outside={_outside}; popup={_inPopup}; enabled={EnhancedHover}; install={_messages.Hover.InstallMilliseconds:F3}ms uninstall={_messages.Hover.UninstallMilliseconds:F3}ms";
     private volatile bool _scrolling;
     internal bool Scrolling => _scrolling;
     private Point _scrollAnchor, _scrollPoint;
@@ -291,6 +293,7 @@ internal sealed class PipInteraction : IDisposable
         Interlocked.Exchange(ref _observedPointer, Pack(pointer));
         Publish(pointer);
         var (view, shown) = Geometry();
+        _messages.EnhancedHover = EnhancedHover;
         _messages.Move(pointer, view, shown);
         _worker = new Thread(Work) { IsBackground = true, Name = "WinScreen interaction input", Priority = ThreadPriority.AboveNormal };
         _worker.Start();
@@ -528,6 +531,8 @@ internal sealed class PipInteraction : IDisposable
                 catch (Windows.WindowOperationException) { Leave(); }
             }
             batch.Clear();
+            if (!EnhancedHover || _outside || _inPopup || _stopping || _appBusy) _messages.Hover.Dispose();
+            else _messages.Hover.Renew();
             if (_scrolling && !_stopping)
             {
                 try { ScrollTick(); }
@@ -535,7 +540,7 @@ internal sealed class PipInteraction : IDisposable
             }
             if (_stopping)
             {
-                lock (_queue) if (_queue.Count == 0) return;
+                lock (_queue) if (_queue.Count == 0) { _messages.Hover.Dispose(); return; }
             }
         }
     }
@@ -561,6 +566,7 @@ internal sealed class PipInteraction : IDisposable
 
     private void MoveArrived(Point point)
     {
+        if (_stopping && EnhancedHover) return;
         if (_dragging)
         {
             var moved = new Size(point.X - _dragFrom.X, point.Y - _dragFrom.Y);
@@ -574,6 +580,7 @@ internal sealed class PipInteraction : IDisposable
         // Held presses keep going everywhere; otherwise the view's own sizing border isn't the app's.
         if (_heldDelivered == MouseButtons.None && (_pendingClick != MouseButtons.None || AtViewBorder(point))) return;
         if (_heldDelivered == MouseButtons.None && !view.Contains(point)) return;
+        _messages.EnhancedHover = EnhancedHover && !_outside && !_inPopup && !_appBusy;
         _messages.Move(point, view, shown);
         // Sharing input with a thread that has stopped reading it would hold up WinScreen's own input too. The
         // cursor question doubles as the check: no answer within 20 ms stops sharing until the app answers again.
@@ -774,6 +781,7 @@ internal sealed class PipInteraction : IDisposable
         if (_stopping)
             return;
         _stopping = true;
+        _messages.Hover.Deactivate();
         Share(false);
         _rechecked.Set();
         _moved.Set();

@@ -9,6 +9,20 @@ namespace WinScreen.Tests;
 public sealed class PipParkingGeometryTests
 {
     [Fact]
+    public void Hover_parking_prefers_a_side_keeps_the_home_monitor_and_the_two_pixel_limit()
+    {
+        Rectangle home = new(-1920, 0, 1920, 1080);
+        Rectangle[] monitors = [home, new(0, 0, 1920, 1080), new(-1920, 1080, 1920, 1080)];
+        Rectangle parked = WindowController.HoverParkingPlace(new Size(900, 700), monitors, home);
+        Assert.Equal(home.Left - 900 + 2, parked.Left); // Right is internal, so use the home's left edge.
+        Assert.Equal(home.Top, parked.Top);
+        foreach (Rectangle monitor in monitors)
+        {
+            Rectangle intersection = Rectangle.Intersect(parked, monitor);
+            Assert.True(intersection.IsEmpty || intersection.Width <= 2 || intersection.Height <= 2);
+        }
+    }
+    [Fact]
     public void Parking_uses_an_external_edge_across_negative_and_stacked_monitors()
     {
         Rectangle[] monitors = [new(-1920, 0, 1920, 1080), new(0, 0, 1920, 1080), new(0, 1080, 1920, 1080)];

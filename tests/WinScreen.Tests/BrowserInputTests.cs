@@ -18,6 +18,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     private struct CursorInfo { public int Size; public int Flags; public nint Cursor; public int X, Y; }
     [DllImport("user32.dll")] private static extern bool GetCursorInfo(ref CursorInfo info);
     [DllImport("user32.dll")] private static extern nint LoadCursor(nint instance, nint name);
+    [DllImport("user32.dll", EntryPoint = "LoadKeyboardLayoutW", CharSet = CharSet.Unicode)] private static extern nint LoadKeyboardLayout(string id, uint flags);
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint x, uint y, uint data, nuint extra);
 
     private static string Shape(nint cursor) =>
@@ -51,6 +52,9 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             }
             return window != 0;
         }, 20000);
+        // These profiles test Latin physical keys; do not inherit the desktop's active IME.
+        // Request the layout on this test browser only, leaving the owner's windows alone.
+        User32.PostMessage(window, 0x50, 0, LoadKeyboardLayout("00000409", 0));
         Thread.Sleep(1500);
         return (browser, window, root);
     }
@@ -76,6 +80,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             view.ShowOnTop();
             view.Location = new Point(1000, 220);
             view.SetInteractive(true);
+            view.SetEnhancedHover(Environment.GetEnvironmentVariable("WINSCREEN_TEST_ENHANCED_HOVER") == "1");
             Point home = Desktop.CursorPosition();
             var driver = new Thread(() =>
             {
@@ -206,8 +211,214 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         var events = System.Text.RegularExpressions.Regex.Match(report, @"sharing=True resting: HoverState active=(true|false) preview=\w+ enter=(\d+) over=(\d+) move=(\d+) leave=(\d+)");
         Assert.True(events.Success && int.Parse(events.Groups[2].Value) > 0 && int.Parse(events.Groups[3].Value) > 0 &&
             int.Parse(events.Groups[4].Value) > 0, report);
-        // Persistence is recorded, not claimed: native leave tracking still observes the physical pointer.
-        // PIP-503's desired sustained-hover acceptance remains open in the engineering audit.
+        // Preserve the ordinary-input observations. The separate Enhanced_hover test asserts sustained
+        // CSS/DOM effects and cleanup for the native helper's validated rollout.
+    }
+
+    [NativeHoverFact(true)]
+    public void Enhanced_hover_keeps_css_previews_and_dom_state_and_clears_on_leave_and_disable()
+    {
+        string path = BrowserCases().Select(c => (string)c[0]).First(p => Path.GetFileName(p) == "chrome.exe");
+        Assert.True(File.Exists(Path.Combine(AppContext.BaseDirectory, "WinScreen.Hover.dll")), "Build the native x64 helper before this runtime test.");
+        const string page = """
+            <!doctype html><title>EnhancedState</title><style>body{margin:0}section{position:absolute;top:0;width:40vw;height:70vh}
+            #a{left:0}#b{left:50vw}.preview{display:none}section:hover .preview{display:block}</style>
+            <section id=a>A<div class=preview>Preview A</div></section><section id=b>B<div class=preview>Dropdown B</div></section>
+            <script>let dom='none',enter=0,leave=0;for(const x of [a,b]){x.onmouseenter=()=>{dom=x.id;enter++};x.onmouseleave=()=>{dom='none';leave++}}
+            setInterval(()=>{let x=document.querySelector('section:hover');document.title=`EnhancedState css=${x?.id||'none'} dom=${dom} preview=${x?getComputedStyle(x.lastChild).display:'none'} visibility=${document.visibilityState} enter=${enter} leave=${leave}`},30)</script>
+            """;
+        var (browser, window, root) = Open(page, "EnhancedState", app: true, path);
+        var log = new StringBuilder();
+        try
+        {
+            Visit(window, (view, at, l) =>
+            {
+                int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - Desktop.BoundsOf(window).Top;
+                Point first = at(new Point(150, top + 140));
+                Point second = at(new Point(Desktop.BoundsOf(window).Width * 3 / 4, top + 140));
+                Point outside = new(view.Left - 50, view.Top + 100);
+                void State(string id) => Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains($"css={id} dom={id} preview={(id == "none" ? "none" : "block")}"), 3000), WindowInfo.Title(window) + "; " + view.LiveInteraction?.HoverStatus + "; pointer=" + Desktop.CursorPosition() + "; geometry=" + view.LiveInteraction?.CurrentGeometry);
+                string Leaves() => System.Text.RegularExpressions.Regex.Match(WindowInfo.Title(window), @"leave=\d+").Value;
+                view.Invoke(() => view.SetEnhancedHover(true));
+                for (int visit = 0; visit < 3; visit++)
+                {
+                    Desktop.SlideMouse(first); State("a");
+                    string leaves = Leaves();
+                    for (int sample = 0; sample < 10; sample++) { Thread.Sleep(500); Assert.True(WindowInfo.Title(window).Contains("css=a dom=a preview=block visibility=visible"), WindowInfo.Title(window) + "; " + view.LiveInteraction?.HoverStatus); Assert.Equal(leaves, Leaves()); }
+                    Assert.StartsWith("active", view.LiveInteraction!.HoverStatus);
+                    l.AppendLine($"stationary {visit}: {WindowInfo.Title(window)}; {view.LiveInteraction.HoverStatus}");
+                    Desktop.SlideMouse(second); State("b");
+                    leaves = Leaves();
+                    for (int sample = 0; sample < 6; sample++) { Thread.Sleep(500); State("b"); Assert.Equal(leaves, Leaves()); }
+                    Desktop.SlideMouse(outside); State("none");
+                    Desktop.SlideMouse(first); State("a");
+                    view.Invoke(() => view.SetEnhancedHover(false)); State("none");
+                    Desktop.NudgeMouse(2, 0); Thread.Sleep(400); State("none");
+                    view.Invoke(() => view.SetEnhancedHover(true));
+                    Desktop.NudgeMouse(-2, 0); State("a");
+                    l.AppendLine($"visit {visit}: {WindowInfo.Title(window)}; {view.LiveInteraction!.HoverStatus}; {view.LiveInteraction.Timing}");
+                }
+                for (int cycle = 0; cycle < 10; cycle++)
+                {
+                    view.Invoke(() => view.SetEnhancedHover(false)); State("none");
+                    view.Invoke(() => view.SetEnhancedHover(true)); Desktop.NudgeMouse(cycle % 2 == 0 ? 2 : -2, 0); State("a");
+                }
+                view.Invoke(view.SuspendView); State("none");
+            }, log);
+        }
+        finally { output.WriteLine(log.ToString()); Close(browser, root); }
+        Assert.DoesNotContain("EXC ", log.ToString());
+    }
+
+    [NativeHoverFact]
+    public async Task A_hook_owner_crash_restores_a_parked_browser_and_clears_hover()
+    {
+        string path = BrowserCases().Select(c => (string)c[0]).First(p => Path.GetFileName(p) == "chrome.exe");
+        var (browser, window, root) = Open("""
+            <!doctype html><title>CrashHover</title><style>body{margin:0}#h{width:80vw;height:80vh}#p{display:none}#h:hover #p{display:block}</style>
+            <div id=h>Hover<div id=p>Preview</div></div><script>setInterval(()=>document.title=`CrashHover active=${h.matches(':hover')} preview=${getComputedStyle(p).display}`,50)</script>
+            """, "CrashHover", true, path);
+        Process? owner = null;
+        Thread? watcher = null;
+        Exception? recoveryFailure = null;
+        var journal = new ChangeJournal(Path.Combine(root, "journal.json"));
+        var windows = new WindowController([], journal);
+        Point home = Desktop.CursorPosition();
+        try
+        {
+            User32.ShowWindow(window, 9);
+            User32.SetWindowPos(window, 0, 80, 80, 800, 600, 0x14);
+            Thread.Sleep(400);
+            Rectangle original = Desktop.BoundsOf(window);
+            long style = Desktop.ExStyle(window);
+            var identity = WindowIdentity.Capture(window);
+            windows.Hide(window); windows.Park(window);
+            windows.SetParkedHoverSurface(window, true); windows.SetParkedReachable(window, true);
+            // Outside both the parked source and its restored bounds. No unrelated app is clicked.
+            Desktop.SlideMouse(new Point(1200, 700));
+            string dll = Path.Combine(AppContext.BaseDirectory, "WinScreen.Hover.dll");
+            string script = Path.Combine(root, "hook-owner.ps1");
+            File.WriteAllText(script, $$"""
+                Add-Type -TypeDefinition @'
+                using System; using System.Runtime.InteropServices;
+                public static class HookOwner {
+                  [DllImport(@"{{dll}}", EntryPoint="Start", CallingConvention=CallingConvention.Winapi)]
+                  private static extern IntPtr Start(uint thread, IntPtr target, long token, IntPtr source, IntPtr marker);
+                  [DllImport("user32.dll", EntryPoint="SetPropW", CharSet=CharSet.Unicode)] private static extern bool SetProp(IntPtr target, string name, IntPtr value);
+                  public static bool Install() {
+                    IntPtr window = new IntPtr({{window.ToInt64()}}L), marker = new IntPtr(System.Diagnostics.Process.GetCurrentProcess().Id);
+                    return SetProp(window, "{{WindowController.EnhancedHoverOwnerProperty}}", marker) && SetProp(window, "{{WindowController.EnhancedHoverActiveProperty}}", marker) &&
+                      Start({{identity.ThreadId}}, window, {{identity.Token}}L, window, marker) != IntPtr.Zero;
+                  }
+                }
+                '@
+                if (-not ([HookOwner]::Install())) { throw 'Native owner failed to install' }
+                [Console]::WriteLine('ready'); [Console]::Out.Flush()
+                [Threading.Thread]::Sleep(-1)
+                """);
+            var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"))
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            foreach (string arg in new[] { "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", script }) start.ArgumentList.Add(arg);
+            owner = Process.Start(start)!;
+            var ready = owner.StandardOutput.ReadLineAsync();
+            Assert.Equal("ready", await ready.WaitAsync(TimeSpan.FromSeconds(20)));
+            for (int move = 0; move < 5; move++) { User32.PostMessage(window, 0x200, 0, (nint)((150 << 16) | (150 + move))); Thread.Sleep(80); }
+            for (int sample = 0; sample < 10; sample++)
+            {
+                Thread.Sleep(500);
+                Assert.Contains("active=true preview=block", WindowInfo.Title(window));
+            }
+            int parent = owner.Id;
+            watcher = new Thread(() =>
+            {
+                try { RecoveryWatcher.Watch(parent, () => new WindowController([], journal).RecoverFromJournal(), @"Local\WinScreen.HoverRecoveryTest." + Guid.NewGuid()); }
+                catch (Exception e) { recoveryFailure = e; }
+            }) { IsBackground = true };
+            watcher.Start();
+            owner.Kill(); Assert.True(owner.WaitForExit(5000));
+            Assert.True(watcher.Join(8000), "Recovery watcher did not finish."); Assert.Null(recoveryFailure);
+            Assert.Equal(original, Desktop.BoundsOf(window));
+            Assert.Equal(style, Desktop.ExStyle(window));
+            Assert.True(Desktop.Alpha(window) is null or 255);
+            Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains("active=false preview=none")), WindowInfo.Title(window));
+            output.WriteLine("Owner killed: journal restored bounds, styles and opacity; CSS hover and preview cleared.");
+        }
+        finally
+        {
+            if (owner is not null) { if (!owner.HasExited) { owner.Kill(); owner.WaitForExit(5000); } owner.Dispose(); }
+            watcher?.Join(8000);
+            windows.RestoreAll();
+            Desktop.MoveMouse(home);
+            Close(browser, root);
+        }
+    }
+
+    [NativeHoverTheory(true)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Missing_or_invalid_hover_helpers_keep_mapped_clicks_functional(bool invalid)
+    {
+        string dll = Path.Combine(AppContext.BaseDirectory, "WinScreen.Hover.dll"), backup = dll + "." + Guid.NewGuid() + ".backup";
+        File.Move(dll, backup);
+        try
+        {
+            if (invalid) File.WriteAllBytes(dll, [0x4d, 0x5a, 0, 0]);
+            string path = BrowserCases().Select(c => (string)c[0]).First(p => Path.GetFileName(p) == "chrome.exe");
+            var (browser, window, root) = Open("""
+                <!doctype html><title>Fallback count=0</title><style>button{position:absolute;left:100px;top:100px;width:300px;height:150px}</style>
+                <button onclick="document.title='Fallback count=1'">Click</button>
+                """, "Fallback", true, path);
+            var log = new StringBuilder();
+            try
+            {
+                Visit(window, (view, at, l) =>
+                {
+                    view.Invoke(() => view.SetEnhancedHover(true));
+                    int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - Desktop.BoundsOf(window).Top;
+                    Desktop.SlideMouse(at(new Point(200, top + 160))); Thread.Sleep(150);
+                    l.AppendLine(view.LiveInteraction!.HoverStatus);
+                    Assert.StartsWith(invalid ? "failed:" : "unavailable:", view.LiveInteraction.HoverStatus);
+                    Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+                    Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith("Fallback count=1")), WindowInfo.Title(window));
+                }, log);
+            }
+            finally { output.WriteLine(log.ToString()); Close(browser, root); }
+            Assert.DoesNotContain("EXC ", log.ToString());
+        }
+        finally
+        {
+            if (File.Exists(dll)) File.Delete(dll);
+            File.Move(backup, dll);
+        }
+    }
+
+    [Windows10HoverFallbackFact]
+    public void Windows_10_keeps_ordinary_input_and_reports_hover_unavailable()
+    {
+        string path = BrowserCases().Select(c => (string)c[0]).First(p => Path.GetFileName(p) == "chrome.exe");
+        var (browser, window, root) = Open("""
+            <!doctype html><title>Win10Fallback count=0</title><style>button{position:absolute;left:100px;top:100px;width:300px;height:150px}</style>
+            <button onclick="document.title='Win10Fallback count=1'">Click</button>
+            """, "Win10Fallback", true, path);
+        var log = new StringBuilder();
+        try
+        {
+            Visit(window, (view, at, l) =>
+            {
+                Rectangle parked = Desktop.BoundsOf(window);
+                view.Invoke(() => view.SetEnhancedHover(true));
+                Assert.Equal(parked, Desktop.BoundsOf(window));
+                int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - parked.Top;
+                Desktop.SlideMouse(at(new Point(200, top + 160))); Thread.Sleep(150);
+                Assert.StartsWith("unavailable: requires Windows 11", view.LiveInteraction!.HoverStatus);
+                Assert.Equal(0, User32.GetProp(window, WindowController.EnhancedHoverOwnerProperty));
+                Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+                Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith("Win10Fallback count=1")), WindowInfo.Title(window));
+                l.AppendLine(view.LiveInteraction.HoverStatus);
+            }, log);
+        }
+        finally { output.WriteLine(log.ToString()); Close(browser, root); }
+        Assert.DoesNotContain("EXC ", log.ToString());
     }
 
     [Theory]
@@ -336,8 +547,9 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             #b{position:absolute;left:520px;top:200px;width:200px;height:80px}#i{position:absolute;left:520px;top:350px;width:250px;font-size:24px}</style>
             <p id=t>Some ordinary text to select with the pointer. It runs over several lines so a drag can cover a good part of it here.</p>
             <a id=l href="#x">A link</a><button id=b>Press</button><input id=i>
-            <script>let c=0;const r=()=>document.title=`Probe c=${c} sel=${getSelection().toString().length} val=${i.value}`;
-            b.onclick=()=>{c++;r()};document.addEventListener('selectionchange',r);i.oninput=r;</script>
+            <script>let c=0,last='';const r=()=>document.title=`Probe c=${c} sel=${getSelection().toString().length} val=${i.value}`+last+` visibility=${document.visibilityState}`;
+            b.onclick=()=>{c++;r()};document.addEventListener('selectionchange',r);i.oninput=r;
+            addEventListener('mousemove',e=>{last=` id=${e.target.id} xy=${e.clientX},${e.clientY} css=${getComputedStyle(e.target).cursor}`;r()});setInterval(r,100);</script>
             """;
         foreach (bool share in new[] { true })
         {
@@ -357,7 +569,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                         Desktop.SlideMouse(at(spot));
                         Thread.Sleep(80);
                         for (int i = 0; i < 4; i++) { Desktop.SlideMouse(at(spot + new Size(i * 3, 1))); Thread.Sleep(60); }
-                        l.AppendLine($"{name}: {Sample(500)}");
+                        l.AppendLine($"{name}: {Sample(500)} {WindowInfo.Title(window)} {view.LiveInteraction?.HoverStatus} sharing={view.LiveInteraction?.SharesInput}");
                     }
                     Desktop.SlideMouse(at(new Point(600, top + 230)));
                     Thread.Sleep(100);
@@ -375,6 +587,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                     Thread.Sleep(100);
                     Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
                     Thread.Sleep(400);
+                    Assert.Equal(window, User32.GetForegroundWindow());
                     Desktop.Press(Keys.A); Desktop.Press(Keys.B); Desktop.Press(Keys.C);
                     Thread.Sleep(300);
                     l.AppendLine("over input while typing: " + Sample(400));
@@ -392,7 +605,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         Assert.Contains("after 3 button clicks: Probe c=3 ", report);
         var selected = System.Text.RegularExpressions.Regex.Match(report, @"after drag select: Probe c=3 sel=(\d+)");
         Assert.True(selected.Success && int.Parse(selected.Groups[1].Value) > 50, report);
-        Assert.Contains("val=abc fg=True", report);
+        Assert.Matches(@"val=abc .*fg=True", report);
         Assert.DoesNotContain("EXC ", report);
     }
 
@@ -415,6 +628,11 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             Visit(window, (view, at, l) =>
             {
                 var live = view.LiveInteraction!;
+                User32.GetWindowThreadProcessId(window, out uint pid);
+                using var measured = Process.GetProcessById((int)pid);
+                using var host = Process.GetCurrentProcess();
+                TimeSpan sourceCpu = measured.TotalProcessorTime, hostCpu = host.TotalProcessorTime;
+                var elapsed = Stopwatch.StartNew();
                 var random = new Random(7);
                 Rectangle bounds = Desktop.BoundsOf(window);
                 for (int i = 0; i < 1500; i++)
@@ -427,6 +645,8 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 }
                 timing = live.Timing.ToString();
                 l.AppendLine(timing);
+                measured.Refresh(); host.Refresh();
+                l.AppendLine($"load wall={elapsed.Elapsed.TotalSeconds:F2}s sourceCpu={(measured.TotalProcessorTime-sourceCpu).TotalMilliseconds:F1}ms hostCpu={(host.TotalProcessorTime-hostCpu).TotalMilliseconds:F1}ms; {live.HoverStatus}");
             }, log);
         }
         finally { Close(browser, root); }
@@ -556,6 +776,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 {
                     Click(Spot(Omnibox));
                     Check(Desktop.WaitFor(() => BrowserAccessibility.Read(window).Any(c => Omnibox(c) && c.Focused)), "omnibox focus");
+                    Assert.Equal(window, User32.GetForegroundWindow());
                     Desktop.Press(Keys.A, Keys.ControlKey); Thread.Sleep(200);
                     Desktop.Press(Keys.A); Desktop.Press(Keys.B); Desktop.Press(Keys.C); Thread.Sleep(200);
                     Desktop.Press(Keys.A, Keys.ControlKey); Desktop.Press(Keys.C, Keys.ControlKey); Thread.Sleep(200);

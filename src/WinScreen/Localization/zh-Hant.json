@@ -194,6 +194,8 @@
   "pip.diagnostics.includeHardware": "在診斷資訊中包含顯示卡詳細資料",
   "pip.diagnostics.retryHelp": "以滑鼠右鍵點選檢視可查看診斷資訊或重試流暢擷取。",
   "pip.diagnostics.title": "子母畫面診斷",
+  "pip.enhancedHover": "增強懸停（實驗性）",
+  "pip.enhancedHover.description": "透過應用程式內的小型原生輔助元件，在相容的應用程式中保持懸停效果。",
   "pip.frameRate": "影格率上限",
   "pip.frameRate.matchMonitor": "跟隨顯示器",
   "pip.goToOriginal": "切換到原視窗(&G)",

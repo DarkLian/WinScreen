@@ -43,7 +43,7 @@ public sealed class PipWindow : Form
     private readonly ToolStripItem _goToItem;
     private readonly ToolStripMenuItem _autoMoveItem;
     private readonly ToolStripMenuItem _removeCropItem;
-    private readonly ContextMenuStrip _menu = new();
+    private readonly ContextMenuStrip _menu = new() { ShowItemToolTips = true };
     private PipTitleBar? _titleBar;
     private PipHoverPreview? _hoverPreview;
     private PipViewPreferences _viewPreferences = new();
@@ -86,6 +86,7 @@ public sealed class PipWindow : Form
     private long _unobservedSince;
     private readonly ToolStripMenuItem _interactiveItem;
     private readonly ToolStripMenuItem _middleScrollItem;
+    private readonly ToolStripMenuItem _enhancedHoverItem;
     private bool _hiddenBeforeInteractive;
     private bool _wasScrolling;
     private SourcePopups? _popups;
@@ -129,6 +130,8 @@ public sealed class PipWindow : Form
             (_, _) => SetInteractive(!_interactiveItem!.Checked));
         _middleScrollItem = new ToolStripMenuItem(T("pip.middleScroll"), null,
             (_, _) => SetMiddleClickScroll(!_middleScrollItem!.Checked));
+        _enhancedHoverItem = new ToolStripMenuItem(T("pip.enhancedHover"), null,
+            (_, _) => SetEnhancedHover(!_enhancedHoverItem!.Checked)) { ToolTipText = T("pip.enhancedHover.description") };
         var options = new ToolStripMenuItem(T("pip.options"));
         options.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
         options.DropDownOpening += (_, _) => FillOptions(options);
@@ -138,6 +141,7 @@ public sealed class PipWindow : Form
         _menu.Items.Add(_autoMoveItem);
         _menu.Items.Add(_interactiveItem);
         _menu.Items.Add(_middleScrollItem);
+        _menu.Items.Add(_enhancedHoverItem);
         _goToItem = _menu.Items.Add(T("pip.goToOriginal"), null, (_, _) => GoToSource());
         _removeCropItem = new ToolStripMenuItem(T("pip.removeCrop"), null, (_, _) => SetCrop(Rectangle.Empty));
         _menu.Items.Add(_removeCropItem);
@@ -155,6 +159,7 @@ public sealed class PipWindow : Form
             _autoMoveItem.Visible = AllowAutoMove;
             _interactiveItem.Visible = AllowInteractive && _origin.IsWindow;
             _middleScrollItem.Visible = _interactiveItem.Visible && _interactiveItem.Checked;
+            _enhancedHoverItem.Visible = _middleScrollItem.Visible;
             _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
             _removeCropItem.Enabled = !_crop.IsEmpty;
             // A menu only closes on an outside click while its program has the focus.
@@ -621,7 +626,7 @@ public sealed class PipWindow : Form
 
     internal PipBackendKind BackendKind => _thumbnail?.Kind ?? PipBackendKind.DwmThumbnail;
     internal PipSessionState BackendState => _thumbnail?.State ?? PipSessionState.Stopped;
-    internal string DiagnosticSnapshot => _thumbnail?.Snapshot() ?? "Stopped";
+    internal string DiagnosticSnapshot => (_thumbnail?.Snapshot() ?? "Stopped") + $"\nEnhanced hover: {_live?.HoverStatus ?? (_enhancedHoverItem.Checked ? "inactive" : "off")}";
 
     private void ShowDiagnostics()
     {
@@ -1085,6 +1090,14 @@ public sealed class PipWindow : Form
 
     internal PipInteraction? LiveInteraction => _live;
 
+    internal void SetEnhancedHover(bool enabled)
+    {
+        bool restart = _live is not null;
+        if (restart) EndLive();
+        _enhancedHoverItem.Checked = enabled;
+        if (restart) BeginLive(PointToClient(Cursor.Position));
+    }
+
     internal void SetMiddleClickScroll(bool enabled)
     {
         _middleScrollItem.Checked = enabled;
@@ -1126,6 +1139,7 @@ public sealed class PipWindow : Form
         _popups ??= CreateSourcePopups();
         var live = new PipInteraction(_source, RectangleToScreen(area), ShownPart(_thumbnail.SourceSize), Handle, _popups);
         live.MiddleClickScroll = _middleScrollItem.Checked;
+        live.EnhancedHover = _enhancedHoverItem.Checked;
         live.Left += () => BeginInvokeIfAlive(() => { LastVisitEnd = "the pointer left"; EndLive(); });
         live.Pressed += _pressOutcomes.Enqueue;
         live.ViewDragged += moved => BeginInvokeIfAlive(() => DragLiveView(moved));
@@ -1135,6 +1149,7 @@ public sealed class PipWindow : Form
         try
         {
             _windows.Park(_source);
+            _windows.SetParkedHoverSurface(_source, _enhancedHoverItem.Checked && PipEnhancedHover.CanAttempt(_source));
             live.Start(PointToScreen(pointer));
             _live = live;
             _windows.SetParkedReachable(_source, true);
@@ -1144,7 +1159,7 @@ public sealed class PipWindow : Form
         {
             _live = null;
             live.Dispose();
-            try { _windows.SetParkedReachable(_source, false); } catch (WindowOperationException) { }
+            try { _windows.SetParkedReachable(_source, false); _windows.SetParkedHoverSurface(_source, false); } catch (WindowOperationException) { }
             SetInputPassesThrough(false);
             _interactiveItem.Checked = false;
             Problem?.Invoke(failure.Message);
@@ -1175,7 +1190,7 @@ public sealed class PipWindow : Form
             return;
         _live = null;
         _liveEndedAt = Environment.TickCount64;
-        try { if (_origin.IsAvailable) _windows.SetParkedReachable(_source, false); }
+        try { if (_origin.IsAvailable) { _windows.SetParkedReachable(_source, false); _windows.SetParkedHoverSurface(_source, false); } }
         catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); }
         live.Dispose();
         Cursor.Current = Cursors.Default;

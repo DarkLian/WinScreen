@@ -16,6 +16,10 @@ public sealed class WindowOperationException(string message) : Exception(message
 public sealed partial class WindowController(IEnumerable<string> excludedProcesses, ChangeJournal? journal = null)
 {
     public const byte OpacityStep = 26;
+    internal const string EnhancedHoverOwnerProperty = "WinScreen.EnhancedHoverOwner.v1";
+    internal const string EnhancedHoverActiveProperty = "WinScreen.EnhancedHoverActive.v1";
+    [DllImport("user32.dll", EntryPoint = "RemovePropW", CharSet = CharSet.Unicode)]
+    private static extern nint RemoveProp(nint window, string name);
     public const byte MinimumOpacity = 51;
     public const byte ClickThroughOpacity = 204;
 
@@ -75,6 +79,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public Point? BorderlessOrigin { get; set; }
         public bool BorderlessFilled { get; set; }
         public bool Parked { get; set; }
+        public bool HoverParking { get; set; } // Transient; the existing journal already records the original placement.
         public long? SwitcherBits { get; set; }
         public bool TaskbarButtonRemoved { get; set; }
         public int? OriginalDarkTitleBar { get; set; }
@@ -916,7 +921,21 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         state.Identity.Require();
         var failures = new List<string>();
         if (state.Parked)
+        {
             User32.SendMessageTimeout(window, 0x001F /* WM_CANCELMODE */, 0, 0, 2, 30, out _);
+            // Only enhanced sessions leave this marker after a crash. Ordinary recovery keeps its
+            // existing message semantics; no blanket leave is sent to the source's child windows.
+            nint owner = User32.GetProp(window, EnhancedHoverOwnerProperty);
+            if (owner != 0)
+            {
+                User32.SendMessageTimeout(window, 0x02A3 /* WM_MOUSELEAVE */, 0, 0, 2, 30, out _);
+                if (User32.GetProp(window, EnhancedHoverOwnerProperty) == owner)
+                {
+                    RemoveProp(window, EnhancedHoverOwnerProperty);
+                    if (User32.GetProp(window, EnhancedHoverActiveProperty) == owner) RemoveProp(window, EnhancedHoverActiveProperty);
+                }
+            }
+        }
         Attempt("peek-pin", () => SetTopmost(window, state.Pinned, state.Identity));
         Attempt("peek-placement", () => WritePlacement(window, placement));
         if (state.Hidden)
@@ -929,6 +948,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             throw new WindowOperationException(string.Join(Environment.NewLine, failures));
         state.PlacementBeforePeek = null;
         state.Parked = false;
+        state.HoverParking = false;
 
         void Attempt(string step, Action action)
         {

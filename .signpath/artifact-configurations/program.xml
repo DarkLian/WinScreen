@@ -6,6 +6,9 @@
   </parameters>
   <zip-file>
     <directory path="x64">
+      <pe-file path="WinScreen.Hover.dll">
+        <authenticode-sign />
+      </pe-file>
       <pe-file path="WinScreen.exe" product-name="WinScreen" product-version="${version}">
         <authenticode-sign />
       </pe-file>
