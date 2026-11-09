@@ -167,6 +167,34 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                     Thread.Sleep(1500);
                     l.AppendLine($"sharing={sharing} resting: {WindowInfo.Title(window)} cursor={Sample(100)}");
                 }
+                if (Environment.GetEnvironmentVariable("WINSCREEN_HOVER_PROBE_DLL") is not null)
+                {
+                    PipInteraction.ShareInput = true;
+                    Point offset = new(220, top + 140);
+                    Point hoverPoint = at(offset);
+                    var input = new PipMessageInput(window, WindowIdentity.Capture(window));
+                    Point mapped = Desktop.BoundsOf(window).Location + (Size)offset;
+                    nint target = input.TargetAt(mapped);
+                    l.AppendLine($"native target=0x{target:X} class={WindowInfo.ClassName(target)} thread={User32.GetWindowThreadProcessId(target, out _)} rootThread={User32.GetWindowThreadProcessId(window, out _)}");
+                    using (var hook = new NativeHoverProbe(target))
+                    {
+                        Desktop.SlideMouse(new Point(view.Left - 50, view.Top + 100));
+                        Thread.Sleep(200);
+                        Desktop.SlideMouse(hoverPoint);
+                        Thread.Sleep(200);
+                        Desktop.NudgeMouse(2, 0);
+                        for (int sample = 0; sample < 10; sample++)
+                        {
+                            Thread.Sleep(500);
+                            string state = WindowInfo.Title(window);
+                            l.AppendLine($"native resting {sample}: {state}");
+                            Assert.Contains("active=true preview=block", state);
+                        }
+                        l.AppendLine($"native install={hook.InstallMilliseconds:F3}ms");
+                    }
+                    Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains("active=false preview=none")), WindowInfo.Title(window));
+                    l.AppendLine("native removed: " + WindowInfo.Title(window));
+                }
             }, log);
         }
         finally { Close(browser, root); PipInteraction.ShareInput = true; }
