@@ -11,9 +11,12 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- The languages WinScreen is translated into. The rest of .NET's translations would never be seen. -->
     <SatelliteResourceLanguages>en;zh-Hans;zh-Hant</SatelliteResourceLanguages>
+    <!-- File description: a local build says so; a published one is just WinScreen. -->
+    <AssemblyTitle Condition="'$(WinScreenReleaseType)' == 'local'">WinScreen (local build)</AssemblyTitle>
   </PropertyGroup>
   <ItemGroup>
     <AssemblyMetadata Include="UpdateRepository" Value="$(UpdateRepository)" />
+    <AssemblyMetadata Include="ReleaseType" Value="$(WinScreenReleaseType)" />
     <EmbeddedResource Include="Updates\update-public-key.pem" LogicalName="WinScreen.UpdatePublicKey" Condition="Exists('Updates\update-public-key.pem')" />
     <EmbeddedResource Include="Localization\*.json" WithCulture="false" LogicalName="WinScreen.Localization.%(Filename)%(Extension)" />
     <InternalsVisibleTo Include="WinScreen.Tests" />

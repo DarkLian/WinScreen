@@ -8,6 +8,10 @@
     .\build.ps1 -DesktopTests -SkipInteractive
                                     Includes native desktop tests; may use the mouse/keyboard.
     .\build.ps1 -CI                 For build servers with no desktop: logic tests only.
+    .\build.ps1 -Beta 4             A numbered local beta: version 0.8.0-beta.4 (the version in Directory.Build.props
+                                    plus .4), kept in dist\local\0.8.0-beta.4\<arch>. Never published.
+    .\build.ps1 -Release -Version 0.8.0-beta
+                                    A published release, as the Release workflow builds it from the tag v0.8.0-beta.
     .\build.ps1 -Version 1.2.3      Use this version instead of the one in Directory.Build.props.
     .\build.ps1 -Architecture arm64 Native ARM64. Tests run only on a machine that can run them;
                                     built elsewhere, it compiles and packages without testing.
@@ -15,7 +19,11 @@
                                     code-signed before they go into the installer.
     .\build.ps1 -Stage Pack         Makes the installer from what's already in dist\win-<arch>.
 
-  The installer is dist\release\WinScreen-win-Setup.exe, or dist\release-arm64\WinScreen-win-arm64-Setup.exe.
+  Every build is local unless -Release is given. A local build goes to dist\local\<version>\<arch>, and its installer
+  and portable zip are named with the version, the release type and the architecture, for example
+  WinScreen-0.8.0-beta.4-local-x64-Setup.exe. Its program's file description says "WinScreen (local build)".
+  A release goes to dist\release (x64) or dist\release-arm64 with Velopack's own names (WinScreen-win-Setup.exe), which
+  code signing expects; the Release workflow renames them to WinScreen-<version>-release-<arch>-Setup.exe after signing.
   Each architecture has its own update channel, so an installed copy can't take the other's update.
 #>
 param(
@@ -23,6 +31,8 @@ param(
     [switch]$CI,
     [switch]$DesktopTests,
     [string]$Version,
+    [ValidateRange(1, 999)][int]$Beta,
+    [switch]$Release,
     [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64',
     [string]$UpdateRepository = 'DarkLian/WinScreen',
     [switch]$SignUpdates,
@@ -51,17 +61,29 @@ function Step([string]$title, [string[]]$arguments) {
     if ($LASTEXITCODE -ne 0) { throw "$title failed." }
 }
 
+if ($Release -and -not $Version) { throw 'A release takes its version from its tag: pass -Version.' }
+if ($Release -and $Beta) { throw '-Beta is for local builds; a release is numbered by its tag.' }
+if ($Beta -and $Version) { throw 'Give either -Beta or -Version.' }
 if (-not $Version) {
-    $Version = ([xml](Get-Content 'Directory.Build.props')).Project.PropertyGroup.Version
+    $Version = ([xml](Get-Content 'Directory.Build.props')).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+    if ($Beta) {
+        if ($Version -notmatch '-(alpha|beta|rc)\z') { throw "Local betas number a prerelease version; $Version isn't one." }
+        $Version = "$Version.$Beta"
+    }
 }
+$releaseType = if ($Release) { 'release' } else { 'local' }
+$releaseTypeProperty = "-p:WinScreenReleaseType=$releaseType"
 
 $runtime = "win-$Architecture"
 $channel = if ($Architecture -eq 'x64') { 'win' } else { $runtime }
 $architectureProperty = "-p:WinScreenArchitecture=$Architecture"
 $canTest = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant() -eq $Architecture
 $program = Join-Path $PSScriptRoot "dist\$runtime"
-$release = Join-Path $PSScriptRoot $(if ($Architecture -eq 'x64') { 'dist\release' } else { "dist\release-$Architecture" })
-foreach ($folder in $program, $release) {
+$packageFolder = Join-Path $PSScriptRoot $(if (-not $Release) { "dist\local\$Version\$Architecture" } elseif ($Architecture -eq 'x64') { 'dist\release' } else { "dist\release-$Architecture" })
+if ($Beta -and $Stage -ne 'Pack' -and (Test-Path (Join-Path $packageFolder '*-Setup.exe'))) {
+    throw "$Version is already built in $packageFolder. Local betas aren't rebuilt: use the next number."
+}
+foreach ($folder in $program, $packageFolder) {
     $resolvedOutput = [IO.Path]::GetFullPath($folder)
     if (-not $resolvedOutput.StartsWith([IO.Path]::GetFullPath($PSScriptRoot) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Build output is outside the workspace: $resolvedOutput"
@@ -78,7 +100,7 @@ if ($Stage -eq 'Pack') {
 }
 
 if ($Stage -ne 'Pack') {
-Step 'Build'@('build', 'WinScreen.slnx', '-c', 'Release', "-p:Version=$Version", $updateProperty, $architectureProperty)
+Step 'Build'@('build', 'WinScreen.slnx', '-c', 'Release', "-p:Version=$Version", $updateProperty, $architectureProperty, $releaseTypeProperty)
 
 $filter = if ($CI -or ($SkipInteractive -and -not $DesktopTests)) { 'Category!=RealWindows&Category!=Interactive' } else { 'Category!=Interactive' }
 if ($canTest) {
@@ -90,7 +112,7 @@ else {
 
 # Self-contained, so people don't have to install .NET first.
 Step 'Package' @('publish', 'src\WinScreen\WinScreen.csproj', '-c', 'Release', '-o', $program,
-    '--self-contained', 'true', '-p:DebugType=embedded', "-p:Version=$Version", $updateProperty, $architectureProperty)
+    '--self-contained', 'true', '-p:DebugType=embedded', "-p:Version=$Version", $updateProperty, $architectureProperty, $releaseTypeProperty)
 
 if ($canTest -and -not $CI -and -not $SkipInteractive) {
     $env:WINSCREEN_EXE = Join-Path $program 'WinScreen.exe'
@@ -108,15 +130,23 @@ Step 'Restore packaging tool'@('tool', 'restore')
 $packageArguments = @('tool', 'run', 'vpk', '--', 'pack',
     '--packId', 'WinScreen', '--packVersion', $Version, '--packDir', $program, '--mainExe', 'WinScreen.exe',
     '--runtime', $runtime, '--channel', $channel, '--packTitle', 'WinScreen', '--packAuthors', 'WinScreen', '--icon', 'src\WinScreen\Assets\WinScreen.ico',
-    '--outputDir', $release)
+    '--outputDir', $packageFolder)
 if ($env:WINSCREEN_AUTHENTICODE_SIGN_PARAMS) {
     $packageArguments += @('--signParams', $env:WINSCREEN_AUTHENTICODE_SIGN_PARAMS)
 }
 Step 'Make the installer' $packageArguments
 
-Write-Output "Done: $(Join-Path $release "WinScreen-$channel-Setup.exe")"
+$installer = Join-Path $packageFolder "WinScreen-$channel-Setup.exe"
+if (-not $Release) {
+    # A local build carries its version and type in its file names, so copies of different builds can't be confused.
+    $name = "WinScreen-$Version-$releaseType-$Architecture"
+    Rename-Item $installer "$name-Setup.exe"
+    Rename-Item (Join-Path $packageFolder "WinScreen-$channel-Portable.zip") "$name-Portable.zip"
+    $installer = Join-Path $packageFolder "$name-Setup.exe"
+}
+Write-Output "Done: $installer"
 
 if ($SignUpdates) {
     Step 'Sign update feed' @('run', '--project', 'tools\WinScreen.UpdateSigning\WinScreen.UpdateSigning.csproj', '-c', 'Release', '--',
-        'sign', (Join-Path $release "releases.$channel.json"), (Join-Path $PSScriptRoot 'src\WinScreen\Updates\update-public-key.pem'))
+        'sign', (Join-Path $packageFolder "releases.$channel.json"), (Join-Path $PSScriptRoot 'src\WinScreen\Updates\update-public-key.pem'))
 }

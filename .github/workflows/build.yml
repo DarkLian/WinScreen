@@ -25,7 +25,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: WinScreen-Setup
-          path: dist/release/WinScreen-win-Setup.exe
+          path: dist/local/*/x64/WinScreen-*-local-x64-Setup.exe
 
   # Tests the native ARM64 build on ARM hardware. Releases build ARM64 too, so keep this passing.
   build-arm64:
@@ -42,4 +42,4 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: WinScreen-arm64-Setup
-          path: dist/release-arm64/WinScreen-win-arm64-Setup.exe
+          path: dist/local/*/arm64/WinScreen-*-local-arm64-Setup.exe

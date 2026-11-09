@@ -61,8 +61,8 @@ WinScreen 是一個免費的視窗小幫手。可以讓視窗保持置頂、變�
 
 從 [Releases](https://github.com/DarkLian/WinScreen/releases) 下載安裝程式並執行：
 
-- **WinScreen-win-Setup.exe**：適用於大多數電腦上的 Windows 10（2004 版或更新版本）與 Windows 11。
-- **WinScreen-win-arm64-Setup.exe**：適用於 ARM 電腦上的 Windows 11。
+- **WinScreen-…-x64-Setup.exe**：適用於大多數電腦上的 Windows 10（2004 版或更新版本）與 Windows 11。
+- **WinScreen-…-arm64-Setup.exe**：適用於 ARM 電腦上的 Windows 11。
 
 不用另外安裝任何東西，也無須系統管理員權限即可執行。WinScreen 會顯示在系統匣中。
 要操作以系統管理員身分執行的應用程式，請同樣以系統管理員身分啟動 WinScreen。

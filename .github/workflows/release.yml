@@ -58,10 +58,10 @@ jobs:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
           Write-Output '::warning::Code signing is not set up, so the installers are unsigned.'
-          ./build.ps1 -CI -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
+          ./build.ps1 -CI -Release -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw 'The x64 build failed.' }
           # Windows 11 on ARM gets a native build with its own update channel. Its tests run in the Build workflow's ARM job.
-          ./build.ps1 -CI -Architecture arm64 -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
+          ./build.ps1 -CI -Release -Architecture arm64 -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw 'The ARM64 build failed.' }
 
       # Signed: build, sign WinScreen's own files, pack them, then sign the installers.
@@ -71,9 +71,9 @@ jobs:
         env:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
-          ./build.ps1 -CI -Stage Publish -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
+          ./build.ps1 -CI -Release -Stage Publish -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw 'The x64 build failed.' }
-          ./build.ps1 -CI -Stage Publish -Architecture arm64 -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
+          ./build.ps1 -CI -Release -Stage Publish -Architecture arm64 -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
           if ($LASTEXITCODE -ne 0) { throw 'The ARM64 build failed.' }
           foreach ($architecture in 'x64', 'arm64') {
             $folder = New-Item -ItemType Directory -Force "signing/program/$architecture"
@@ -109,7 +109,7 @@ jobs:
         run: |
           foreach ($architecture in 'x64', 'arm64') {
             Copy-Item "signing/program-signed/$architecture/WinScreen.exe", "signing/program-signed/$architecture/WinScreen.dll" "dist/win-$architecture" -Force
-            ./build.ps1 -CI -Stage Pack -Architecture $architecture -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
+            ./build.ps1 -CI -Release -Stage Pack -Architecture $architecture -Version $env:VERSION -UpdateRepository $env:GITHUB_REPOSITORY
             if ($LASTEXITCODE -ne 0) { throw "Packing $architecture failed." }
           }
           $folder = New-Item -ItemType Directory -Force 'signing/installers'
@@ -166,18 +166,30 @@ jobs:
             dotnet run --project tools/WinScreen.UpdateSigning/WinScreen.UpdateSigning.csproj -c Release -- sign $feed src/WinScreen/Updates/update-public-key.pem
             if ($LASTEXITCODE -ne 0) { throw "Update signing failed: $feed" }
           }
+      - name: Name the files
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          # Signed under Velopack's names, which code signing expects; published with the version and release type.
+          foreach ($pair in @(@('dist/release', 'win', 'x64'), @('dist/release-arm64', 'win-arm64', 'arm64'))) {
+            $folder, $channel, $architecture = $pair
+            Rename-Item "$folder/WinScreen-$channel-Setup.exe" "WinScreen-$env:VERSION-release-$architecture-Setup.exe"
+            Rename-Item "$folder/WinScreen-$channel-Portable.zip" "WinScreen-$env:VERSION-release-$architecture-Portable.zip"
+          }
       - name: Publish the release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ steps.tag.outputs.prerelease }}
           TITLE: ${{ steps.tag.outputs.title }}
+          VERSION: ${{ steps.tag.outputs.version }}
         run: |
           $notes = @()
           if ($env:PRERELEASE -eq 'true') { $notes += 'This is a beta. Things may still change, and installed copies won''t update to betas automatically.' }
           if ($env:SIGNED -ne 'true') { $notes += 'The installer isn''t code-signed yet, so Windows may say it doesn''t recognize it. Choose **More info**, then **Run anyway**.' }
           else { $notes += 'Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).' }
-          $notes += '**Which file?** `WinScreen-win-Setup.exe` for most PCs, `WinScreen-win-arm64-Setup.exe` for Windows 11 on ARM.'
+          $notes += "**Which file?** ``WinScreen-$env:VERSION-release-x64-Setup.exe`` for most PCs, ``WinScreen-$env:VERSION-release-arm64-Setup.exe`` for Windows 11 on ARM."
           # What's new: the body of an annotated tag's message, after its title line, goes first.
           $ref = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$env:GITHUB_REF_NAME" | ConvertFrom-Json
           if ($LASTEXITCODE -eq 0 -and $ref.object.type -eq 'tag') {

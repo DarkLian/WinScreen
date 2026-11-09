@@ -61,8 +61,8 @@ live view, or bring a buried window back with one click. No account, no trial, n
 
 Download the installer from [Releases](https://github.com/DarkLian/WinScreen/releases) and run it:
 
-- **WinScreen-win-Setup.exe** for Windows 10 (version 2004 or later) and Windows 11 on most PCs.
-- **WinScreen-win-arm64-Setup.exe** for Windows 11 on ARM.
+- **WinScreen-…-x64-Setup.exe** for Windows 10 (version 2004 or later) and Windows 11 on most PCs.
+- **WinScreen-…-arm64-Setup.exe** for Windows 11 on ARM.
 
 You don't need anything else installed, and it runs without administrator rights. WinScreen lives in the system tray.
 To use it on apps that run as administrator, start WinScreen as administrator too.
