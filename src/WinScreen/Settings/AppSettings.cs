@@ -261,6 +261,7 @@ public sealed class AppSettings
     public bool DetectAlreadyDark { get; set; } = true;
     public PinBorderPreferences PinBorder { get; set; } = new();
     public PipViewPreferences PipViews { get; set; } = new();
+    public PipHoverPreferences PipHover { get; set; } = new();
     public ToolbarPreferences Toolbar { get; set; } = new();
     public AnchorPreferences Anchors { get; set; } = new();
     public EffectPreferences Effects { get; set; } = new();
@@ -350,6 +351,7 @@ public sealed class AppSettings
         loaded.OpacityStepPercent = Math.Clamp(loaded.OpacityStepPercent, 1, 25);
         loaded.PinBorder = (loaded.PinBorder ?? new()).Validated();
         loaded.PipViews = (loaded.PipViews ?? new()).Validated();
+        loaded.PipHover = (loaded.PipHover ?? new()).Validated();
         loaded.Toolbar = (loaded.Toolbar ?? new()).Validated();
         loaded.Anchors = (loaded.Anchors ?? new()).Validated();
         loaded.Effects = (loaded.Effects ?? new()).Validated();

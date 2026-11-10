@@ -159,26 +159,31 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 
 **Interactive PiP (experimental): what works where.** Hide original stays checked and unavailable while enabled; disabling Interactive PiP restores the previous hiding preference. Showing the original or recovery turns interaction off.
 
-**Enhanced hover (experimental)** is a separate per-view option, off by default. It maintains hover effects in compatible applications using a small native helper inside the application. On Windows 11 x64, Chrome's CSS hover and page previews remain active while the pointer rests in the view; leaving or disabling the option clears them. Native tooltips remain unavailable. Missing helpers, incompatible applications and unsupported architectures keep ordinary Interactive PiP available. It does not change popup placement or fix WinUI menu flicker.
+**Enhanced hover (experimental)** keeps hover effects showing while an app is used through a view, using a small native helper inside the application. It is off by default. **Settings → Picture-in-Picture → Enhanced hover** chooses which apps' views start with it on; each view's menu can still turn it on or off for that view, and a view follows Settings until it is changed there. Leaving the view or turning the option off clears the hover. Native tooltips remain unavailable. It does not change popup placement or fix WinUI menu flicker.
 
-| Enhanced hover environment | Status |
-|---|---|
-| Native x64 Chrome, Windows 11 | Verified CSS/DOM hover, previews, element changes, leave/return, disable/re-enable and suspension |
-| Windows 10 | Enhanced hover unavailable pending consistent renderer-visibility validation; ordinary Interactive PiP remains available |
-| Win32/WinForms native helper test target, x64 | Leave filtering, isolation, lease expiry and cleanup verified; application rollout remains limited to Chrome |
-| Edge / Chromium | Not enabled; enhanced hover unverified (Edge unavailable on the Windows 11 test desktop) |
-| Firefox / Gecko, VS Code / Electron | Native feasibility probes retained CSS/DOM hover and previews across element changes, then cleared on exit. Not enabled in the app; existing input regressions pass with the option selected |
-| Native ARM64, emulated x64 on ARM64, x86 targets | Not enabled; no runtime support claim. ARM64 and x86 helpers/hosting require further work |
+The helper is only ever used with the kinds of app below and with programs added by name under **Other programs**. Anything else, games included, is left alone. It needs Windows 11 on native x64, the app must be 64-bit, and a missing helper leaves ordinary Interactive PiP working.
 
-Enhanced visits keep the original at a side edge with the same two-pixel overlap and opacity, raised without activation within its existing window band. This keeps the tested browser page visible to its renderer; a fully occluded original can retain an old hover state while ignoring further moves. Ordinary parking returns when the visit ends. Caption styles, taskbar removal, popup placement and recorded restoration state are unchanged.
+| App | Setting | Status |
+|---|---|---|
+| Chrome | Chrome, Edge, Brave and Vivaldi | ✅ Verified on Windows 11 x64: CSS hover and page previews hold while the pointer rests, follow it to another element, and clear on leave, turning off and suspending |
+| Edge, Brave, Vivaldi | same | ❔ Enabled because they share Chrome's engine; not tested (none installed on the test desktop) |
+| VS Code (Electron) | VS Code, Discord and similar apps | ✅ Verified on Windows 11 x64: hover holds in a web view, shows in the view's picture, and clears on leave and turning off |
+| Discord and other Electron apps | same | ❔ Recognized by Electron's folder layout and window; not tested individually |
+| File Explorer (file list) | File Explorer | ✅ Verified on Windows 11: a hovered row is highlighted in the view and stays so; without the option it never highlights. The command bar, tabs and address bar are used through accessibility and don't get hover |
+| Firefox | — (can be added under Other programs) | ❌ The hover is kept, but Firefox does not redraw while its window is hidden, so the view doesn't show it |
+| Other programs added by name | Other programs | ❔ Depends on the app. Works only for windows that take posted mouse input; WinUI and Store content go through accessibility, and WPF apps can't be hidden at all. Don't add games that use anti-cheat |
+| Windows 10 | — | ❌ Not available; ordinary Interactive PiP is unchanged |
+| Native ARM64, x64 apps on ARM64, 32-bit apps | — | ❌ Not available |
 
-The helper filters only queued mouse-leave messages for the currently hovered window on its own UI thread. Automation controls keep their existing limitations. Games and arbitrary applications are excluded from the experimental rollout.
+Enhanced visits keep the original at a side edge with the same two-pixel overlap and opacity, raised without activation within its existing window band. This keeps a Chrome-based page visible to its renderer; a fully covered original can keep an old hover state while ignoring further moves. Ordinary parking returns when the visit ends. Caption styles, taskbar removal, popup placement and recorded restoration state are unchanged.
+
+The helper filters only queued mouse-leave messages for the currently hovered window on its own UI thread.
 
 Every press gets one outcome: delivered, reached a popup, moved the view, a caption button, unsupported (that kind of window has no way to take it; nothing is sent), unconfirmed (tried, but the app was busy or refused), or starting/cancelling optional middle-click scrolling.
 
 | Window under the pointer | Input path | Supported | Unsupported |
 |---|---|---|---|
-| Ordinary windows of the app (Win32, WinForms, browsers, Explorer's file list) | Posted mouse messages at the mapped point | Mapped pointer moves and pointer shape, button messages, double-click (and triple), drag and text selection, wheel, keys after a click | Chrome hover effects drop between moves unless Enhanced hover is enabled; tooltips remain suppressed. Native browser middle-click autoscroll does not scroll the parked page |
+| Ordinary windows of the app (Win32, WinForms, browsers, Explorer's file list) | Posted mouse messages at the mapped point | Mapped pointer moves and pointer shape, button messages, double-click (and triple), drag and text selection, wheel, keys after a click | Hover effects drop between moves unless Enhanced hover is on for that app; tooltips remain suppressed. Native browser middle-click autoscroll does not scroll the parked page |
 | Newer UI frameworks: WinUI 3 islands (Explorer's command bar, tabs and address bar on Windows 11) and Store app content (Calculator, Settings) | Accessibility (UI Automation) | Click (invoke, select, toggle, expand, focus a text box); right-click opens the control's own menu, next to the pointer; double-click only where it means two clicks (buttons, check boxes, links, menu items); wheel scrolls what scrolls; keys after a click | Hover, drag and text selection, middle and side buttons, a double-click that opens an item or selects a word |
 | Any other program's window inside the original | — | — | Everything |
 

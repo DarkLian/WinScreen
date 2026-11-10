@@ -29,20 +29,50 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
     internal double InstallMilliseconds { get; private set; }
     internal double UninstallMilliseconds { get; private set; }
 
-    internal static bool CanAttempt(nint window)
+    private static string HelperPath => Path.Combine(AppContext.BaseDirectory, "WinScreen.Hover.dll");
+
+    /// <summary>True where the helper runs at all: Windows 11 on native x64, with the helper installed.</summary>
+    internal static bool Supported =>
+        OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) && RuntimeInformation.OSArchitecture == Architecture.X64 &&
+        RuntimeInformation.ProcessArchitecture == Architecture.X64 && File.Exists(HelperPath);
+
+    /// <summary>The kind of program a window belongs to, and whether that program is a native 64-bit one.</summary>
+    internal static (PipHoverApp App, bool Native) Describe(nint window)
     {
-        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return false;
-        if (RuntimeInformation.OSArchitecture != Architecture.X64 || RuntimeInformation.ProcessArchitecture != Architecture.X64 || !File.Exists(Path.Combine(AppContext.BaseDirectory, "WinScreen.Hover.dll"))) return false;
         User32.GetWindowThreadProcessId(window, out uint pid);
         try
         {
             using var process = Process.GetProcessById((int)pid);
-            string product = FileVersionInfo.GetVersionInfo(process.MainModule!.FileName).ProductName ?? "";
-            return process.ProcessName.Equals("chrome", StringComparison.OrdinalIgnoreCase) &&
-                IsWow64Process2(process.Handle, out ushort machine, out _) && machine == 0 &&
-                (product.Contains("Chrome", StringComparison.OrdinalIgnoreCase) || product.Contains("Chromium", StringComparison.OrdinalIgnoreCase));
+            PipHoverApp app = PipHoverApps.Classify(process.ProcessName, WindowInfo.ClassName(User32.GetAncestor(window, User32.GA_ROOT)),
+                HasElectronLayout(Path.GetDirectoryName(process.MainModule!.FileName) ?? ""), PipHoverApps.Preferences.Programs);
+            return (app, IsWow64Process2(process.Handle, out ushort machine, out _) && machine == 0);
         }
-        catch (Exception e) when (e is Win32Exception or ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException) { return false; }
+        catch (Exception e) when (e is Win32Exception or ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            return (PipHoverApp.None, false);
+        }
+    }
+
+    /// <summary>Electron keeps an app's own files in a "resources" folder, as "app" or "app.asar": beside the
+    /// program, or one folder down when the program keeps each version in a folder of its own.</summary>
+    internal static bool HasElectronLayout(string folder)
+    {
+        static bool Has(string place) =>
+            File.Exists(Path.Combine(place, "resources", "app.asar")) || Directory.Exists(Path.Combine(place, "resources", "app"));
+        if (folder.Length == 0 || !Directory.Exists(folder)) return false;
+        return Has(folder) || Directory.EnumerateDirectories(folder).Take(64).Any(Has);
+    }
+
+    /// <summary>True when the helper may be used with this window's program. Never true for a program that is
+    /// neither a known kind nor listed in Settings, so games and arbitrary apps are left alone.</summary>
+    internal static bool CanAttempt(nint window) => Supported && Describe(window) is (not PipHoverApp.None, true);
+
+    /// <summary>True when a new view of this window starts with Enhanced hover on, as chosen in Settings.</summary>
+    internal static bool StartsOn(nint window)
+    {
+        if (window == 0 || !Supported) return false;
+        var (app, native) = Describe(window);
+        return native && PipHoverApps.StartsOn(app, PipHoverApps.Preferences);
     }
 
     internal void Update(nint target)
@@ -57,19 +87,14 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
         // Keep the experimental rollout at the runtime-validated Windows 11 environment.
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) { Status = "unavailable: requires Windows 11"; return; }
         if (RuntimeInformation.OSArchitecture != Architecture.X64 || RuntimeInformation.ProcessArchitecture != Architecture.X64) { Status = "unavailable: requires native x64 Windows"; return; }
-        uint thread = User32.GetWindowThreadProcessId(target, out uint pid);
+        uint thread = User32.GetWindowThreadProcessId(target, out _);
         try
         {
-            using var process = Process.GetProcessById((int)pid);
-            // Experimental rollout is limited to the validated browser. Never inject into arbitrary apps/games.
-            if (!string.Equals(process.ProcessName, "chrome", StringComparison.OrdinalIgnoreCase))
-            { Status = "unavailable: application not validated"; return; }
-            string product = FileVersionInfo.GetVersionInfo(process.MainModule!.FileName).ProductName ?? "";
-            if (!product.Contains("Chrome", StringComparison.OrdinalIgnoreCase) && !product.Contains("Chromium", StringComparison.OrdinalIgnoreCase))
-            { Status = "unavailable: application not validated"; return; }
-            if (!IsWow64Process2(process.Handle, out ushort machine, out _) || machine != 0)
-            { Status = "unavailable: target architecture"; return; }
-            string path = Path.Combine(AppContext.BaseDirectory, "WinScreen.Hover.dll");
+            // Only the kinds of program chosen for this, or ones listed in Settings. Never arbitrary apps or games.
+            var (app, native) = Describe(target);
+            if (app == PipHoverApp.None) { Status = "unavailable: application not enabled"; return; }
+            if (!native) { Status = "unavailable: target architecture"; return; }
+            string path = HelperPath;
             if (!File.Exists(path)) { Status = "unavailable: helper missing"; return; }
             lock (Threads)
             {

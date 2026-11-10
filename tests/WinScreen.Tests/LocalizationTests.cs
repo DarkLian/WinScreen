@@ -192,9 +192,9 @@ public sealed class LocalizationTests : IDisposable
     [Theory]
     // Reviewed catalog values, sorted by stable key with NUL separators.
     // Update deliberately when adding labels; existing values retain their migration output.
-    [InlineData("en", "5680C67BF6A4BBF2A44ABD3CB1B951AA9777EAC270854F9171845B32906C0BAF")]
-    [InlineData("zh-Hans", "B735E9CC44B04FF65F2A24731E38F2ED8FDC529EB6F8006AF2BEA004DC88942B")]
-    [InlineData("zh-Hant", "2D6C0F58BBF75972508C39B9B6E6BCAE5216523F6E80BA3693A8EE52153F802C")]
+    [InlineData("en", "55AF12F401549E568E37311DB34E96C9F9B5A0BF9FDB118188059779DCA10944")]
+    [InlineData("zh-Hans", "54A9D70C219D31DF254FAF858B34330C198D44AD688B7633762D5876C37AA110")]
+    [InlineData("zh-Hant", "CEED6B1EE67055B08BBC65A2200AEB6775BF76F9B6CAA875FFD4EABCC1A2F003")]
     public void Every_translation_matches_the_reviewed_catalog(string language, string expectedDigest)
     {
         UiText.Initialize(language);

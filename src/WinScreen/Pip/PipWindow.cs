@@ -87,6 +87,7 @@ public sealed class PipWindow : Form
     private readonly ToolStripMenuItem _interactiveItem;
     private readonly ToolStripMenuItem _middleScrollItem;
     private readonly ToolStripMenuItem _enhancedHoverItem;
+    private bool _hoverChosen;
     private bool _hiddenBeforeInteractive;
     private bool _wasScrolling;
     private SourcePopups? _popups;
@@ -131,7 +132,8 @@ public sealed class PipWindow : Form
         _middleScrollItem = new ToolStripMenuItem(T("pip.middleScroll"), null,
             (_, _) => SetMiddleClickScroll(!_middleScrollItem!.Checked));
         _enhancedHoverItem = new ToolStripMenuItem(T("pip.enhancedHover"), null,
-            (_, _) => SetEnhancedHover(!_enhancedHoverItem!.Checked)) { ToolTipText = T("pip.enhancedHover.description") };
+            (_, _) => { _hoverChosen = true; SetEnhancedHover(!_enhancedHoverItem!.Checked); })
+            { ToolTipText = T("pip.enhancedHover.description"), Checked = PipEnhancedHover.StartsOn(_source) };
         var options = new ToolStripMenuItem(T("pip.options"));
         options.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
         options.DropDownOpening += (_, _) => FillOptions(options);
@@ -163,6 +165,7 @@ public sealed class PipWindow : Form
             bool showInteractionOptions = canInteract && _interactiveItem.Checked;
             _middleScrollItem.Visible = showInteractionOptions;
             _enhancedHoverItem.Visible = showInteractionOptions;
+            _enhancedHoverItem.Enabled = _enhancedHoverItem.Checked || PipEnhancedHover.CanAttempt(_source);
             _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
             _removeCropItem.Enabled = !_crop.IsEmpty;
             // A menu only closes on an outside click while its program has the focus.
@@ -249,6 +252,9 @@ public sealed class PipWindow : Form
         _titleBar?.Dispose();
         _titleBar = null;
         DropHoverPreview();
+        // A view follows Settings for Enhanced hover until it is changed from its own menu.
+        if (!_hoverChosen && PipEnhancedHover.StartsOn(_source) is var hover && hover != _enhancedHoverItem.Checked)
+            SetEnhancedHover(hover);
     }
 
     internal bool IsSuspended => _suspended;

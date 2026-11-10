@@ -287,6 +287,38 @@ public sealed class SettingsWindowTests : IDisposable
     }
 
     [Fact]
+    public void Enhanced_hover_choices_are_shown_and_saved()
+    {
+        OnUiThread(() =>
+        {
+            var settings = new AppSettings
+            {
+                ExperimentalFeatures = true,
+                PipHover = new PipHoverPreferences { Electron = true, Programs = ["ExampleProgram"] },
+            };
+            AppSettings? applied = null;
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key), chosen =>
+            {
+                applied = chosen;
+                return [];
+            });
+            _ = window.Handle;
+            Assert.False(window.HasChanges);
+
+            window.SetOption(nameof(PipHoverPreferences.Browsers), true);
+            window.SetOption(nameof(PipHoverPreferences.Electron), false);
+            window.SetOption(nameof(PipHoverPreferences.FileExplorer), true);
+            Assert.True(window.SaveChanges());
+
+            Assert.NotNull(applied);
+            Assert.True(applied.PipHover.Browsers);
+            Assert.False(applied.PipHover.Electron);
+            Assert.True(applied.PipHover.FileExplorer);
+            Assert.Equal(["ExampleProgram"], applied.PipHover.Programs);
+        });
+    }
+
+    [Fact]
     public void A_setup_can_be_forgotten_and_one_saved_meanwhile_is_kept()
     {
         OnUiThread(() =>

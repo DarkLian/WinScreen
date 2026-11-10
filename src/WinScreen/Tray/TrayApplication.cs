@@ -69,6 +69,7 @@ public sealed class TrayApplication : ApplicationContext
         _placer = new WindowPlacer(windows);
         _modifierDrag = new MouseGestures(CanDrag, _placer.Remember);
         _settings = settings;
+        Pip.PipHoverApps.Preferences = settings.PipHover;
         _settingsPath = settingsPath;
         // Update news stays out of Last result, where it could replace a failure someone needs to read.
         _updates = new AutomaticUpdates(VelopackUpdateSession.Create, message =>
@@ -363,6 +364,7 @@ public sealed class TrayApplication : ApplicationContext
             _updateTimer.Interval = 30_000; // Check soon after it's turned on, then every few hours.
         _updatesWereOn = _settings.AutomaticUpdates;
         _updates.SetEnabled(_settings.AutomaticUpdates);
+        Pip.PipHoverApps.Preferences = _settings.PipHover;
         foreach (PipWindow pip in _viewsInOrder)
         {
             pip.ApplyPipPreferences(_settings.Pip);

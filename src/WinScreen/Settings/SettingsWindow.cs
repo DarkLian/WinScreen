@@ -128,6 +128,12 @@ private readonly ErrorProvider _errors = new();
 
     private readonly CheckBox _pipAutoMove = new()
         { Text = T("settings.pip.autoMove"), AutoSize = true };
+    private readonly CheckBox _hoverBrowsers = new() { Text = T("settings.pip.hover.browsers"), AutoSize = true };
+    private readonly CheckBox _hoverElectron = new() { Text = T("settings.pip.hover.electron"), AutoSize = true };
+    private readonly CheckBox _hoverExplorer = new() { Text = T("settings.pip.hover.explorer"), AutoSize = true };
+    private readonly ListBox _hoverPrograms = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ComboBox _newHoverProgram = ProgramPicker();
+    private Control? _hoverOptions;
 
     private readonly HashSet<ProgramSetup> _removedSetups = [];
     private readonly Button _applyButton = new() { Text = T("settings.apply"), AutoSize = true, Enabled = false };
@@ -151,6 +157,7 @@ private readonly ErrorProvider _errors = new();
         _experimental.CheckedChanged += (_, _) =>
         {
             _pipAutoMove.Enabled = _experimental.Checked;
+            _hoverOptions?.Enabled = _experimental.Checked && Pip.PipEnhancedHover.Supported;
             if (_hotkeys.Count > 0) RefreshFeatures();
         };
         _language.Items.AddRange([T("settings.language.system"), "English", "简体中文", "繁體中文"]);
@@ -214,6 +221,7 @@ private readonly ErrorProvider _errors = new();
 
         LoadValues();
         _pipAutoMove.Enabled = _experimental.Checked;
+        _hoverOptions?.Enabled = _experimental.Checked && Pip.PipEnhancedHover.Supported;
         WatchForChanges(this);
         foreach (TextBox box in _hotkeys.Values) box.TextChanged += (_, _) => QueueApplyRefresh();
         MarkSaved();
@@ -441,6 +449,11 @@ private readonly ErrorProvider _errors = new();
         draft.OpaqueOnHover = _opaqueOnHover.Checked;
         draft.HighlightPinned = _highlightPinned.Checked;
         draft.PipAutoMove = _pipAutoMove.Checked;
+        draft.PipHover = new PipHoverPreferences
+        {
+            Browsers = _hoverBrowsers.Checked, Electron = _hoverElectron.Checked,
+            FileExplorer = _hoverExplorer.Checked, Programs = Programs(_hoverPrograms, _newHoverProgram),
+        }.Validated();
         draft.DefaultOpacityPercent = Number(_defaultOpacity);
         draft.OpacityStepPercent = Number(_opacityStep);
         draft.OpacityWheel = _opacityWheel.Checked;
@@ -557,6 +570,9 @@ private readonly ErrorProvider _errors = new();
             nameof(AppSettings.OpaqueOnHover) => _opaqueOnHover,
             nameof(AppSettings.HighlightPinned) => _highlightPinned,
             nameof(AppSettings.PipAutoMove) => _pipAutoMove,
+            nameof(PipHoverPreferences.Browsers) => _hoverBrowsers,
+            nameof(PipHoverPreferences.Electron) => _hoverElectron,
+            nameof(PipHoverPreferences.FileExplorer) => _hoverExplorer,
             _ => _startWithWindows,
         };
         box.Checked = on;
@@ -616,6 +632,11 @@ private readonly ErrorProvider _errors = new();
         _opaqueOnHover.Checked = values.OpaqueOnHover;
         _highlightPinned.Checked = values.HighlightPinned;
         _pipAutoMove.Checked = values.PipAutoMove;
+        _hoverBrowsers.Checked = values.PipHover.Browsers;
+        _hoverElectron.Checked = values.PipHover.Electron;
+        _hoverExplorer.Checked = values.PipHover.FileExplorer;
+        _hoverPrograms.Items.Clear();
+        _hoverPrograms.Items.AddRange(values.PipHover.Programs.Cast<object>().ToArray());
         PipPreferences pip = values.Pip.Validated();
         if (!_pipRates.Contains(pip.FrameRate)) _pipRates.Add(pip.FrameRate);
         int refresh = Pip.PipDisplay.CachedRefresh(Handle);
@@ -777,6 +798,11 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(Note(T("pip.rendering.captureIndicatorHelp")));
         page.Controls.Add(Note(T("pip.diagnostics.retryHelp")));
         page.Controls.Add(Section(T("settings.experimental"), _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
+        _hoverOptions = Section(T("pip.enhancedHover"), Note(T("settings.pip.hover.help")), _hoverBrowsers, _hoverElectron,
+            _hoverExplorer, ProgramRules(T("settings.pip.hover.programs"), _hoverPrograms, _newHoverProgram),
+            Note(T("settings.pip.hover.programsHelp")));
+        page.Controls.Add(_hoverOptions);
+        if (!Pip.PipEnhancedHover.Supported) page.Controls.Add(Note(T("settings.pip.hover.unsupported")));
         page.Controls.Add(Section(T("pip.hover.title"), _pipTaskbar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));
         return page;
     }
