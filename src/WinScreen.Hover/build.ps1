@@ -20,6 +20,6 @@ if ($env:WINSCREEN_ZIG) {
     }
     $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
     $obj = [IO.Path]::ChangeExtension($Output, '.obj')
-    & cmd /d /s /c "`"`"$vcvars`" >nul && cl /nologo /std:c11 /LD /O2 /W4 /WX `"$source`" /Fo`"$obj`" /link /OUT:`"$Output`" user32.lib`""
+    & cmd /d /c "call `"$vcvars`" >nul && cl /nologo /std:c11 /LD /O2 /W4 /WX `"$source`" /Fo`"$obj`" /link /OUT:`"$Output`" user32.lib"
 }
 if ($LASTEXITCODE) { throw 'Native hover helper build failed' }
