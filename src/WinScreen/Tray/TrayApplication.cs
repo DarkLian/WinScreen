@@ -70,6 +70,7 @@ public sealed class TrayApplication : ApplicationContext
         _modifierDrag = new MouseGestures(CanDrag, _placer.Remember);
         _settings = settings;
         Pip.PipHoverApps.Preferences = settings.PipHover;
+        Pip.PipOriginalApps.Programs = settings.PipOriginalPrograms;
         _settingsPath = settingsPath;
         // Update news stays out of Last result, where it could replace a failure someone needs to read.
         _updates = new AutomaticUpdates(VelopackUpdateSession.Create, message =>
@@ -365,6 +366,7 @@ public sealed class TrayApplication : ApplicationContext
         _updatesWereOn = _settings.AutomaticUpdates;
         _updates.SetEnabled(_settings.AutomaticUpdates);
         Pip.PipHoverApps.Preferences = _settings.PipHover;
+        Pip.PipOriginalApps.Programs = _settings.PipOriginalPrograms;
         foreach (PipWindow pip in _viewsInOrder)
         {
             pip.ApplyPipPreferences(_settings.Pip);

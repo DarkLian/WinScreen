@@ -3,6 +3,9 @@ namespace WinScreen.Settings;
 /// <summary>Which programs' views start with Enhanced hover on. Each view can still be changed from its own menu.</summary>
 public sealed record PipHoverPreferences
 {
+    /// <summary>WinScreen picks the kinds it is known to work with; the four switches below are then not read.</summary>
+    public bool ChooseForMe { get; init; } = true;
+
     /// <summary>Chrome and the browsers built on it.</summary>
     public bool Browsers { get; init; }
     public bool Firefox { get; init; }

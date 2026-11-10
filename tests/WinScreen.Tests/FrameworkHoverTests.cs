@@ -16,11 +16,11 @@ public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper out
 {
     [NativeHoverFact(true)]
     public void Firefox_keeps_css_hover_when_chosen_in_settings() =>
-        Run(Path.Combine("firefox", "firefox.exe"), new PipHoverPreferences { Firefox = true }, PipHoverApp.Firefox);
+        Run(Path.Combine("firefox", "firefox.exe"), new PipHoverPreferences { ChooseForMe = false, Firefox = true }, PipHoverApp.Firefox);
 
     [NativeHoverFact(true)]
     public void An_electron_app_keeps_css_hover_when_chosen_in_settings() =>
-        Run(Path.Combine("vscode", "Code.exe"), new PipHoverPreferences { Electron = true }, PipHoverApp.Electron);
+        Run(Path.Combine("vscode", "Code.exe"), new PipHoverPreferences { ChooseForMe = false, Electron = true }, PipHoverApp.Electron);
 
     private void Run(string app, PipHoverPreferences preferences, PipHoverApp kind)
     {
@@ -82,7 +82,7 @@ public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper out
             WindowMenuBuilderTests.OnUiThread(() =>
             {
                 // Off in Settings: a view of this app starts without it.
-                PipHoverApps.Preferences = new PipHoverPreferences();
+                PipHoverApps.Preferences = new PipHoverPreferences { ChooseForMe = false };
                 Assert.False(PipEnhancedHover.StartsOn(window));
                 PipHoverApps.Preferences = preferences;
                 Assert.Equal(kind, PipEnhancedHover.Describe(window).App);

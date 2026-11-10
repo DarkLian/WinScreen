@@ -128,6 +128,9 @@ private readonly ErrorProvider _errors = new();
 
     private readonly CheckBox _pipAutoMove = new()
         { Text = T("settings.pip.autoMove"), AutoSize = true };
+    private readonly CheckBox _hoverAutomatic = new() { Text = T("settings.pip.hover.automatic"), AutoSize = true };
+    private readonly ListBox _originalPrograms = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ComboBox _newOriginalProgram = ProgramPicker();
     private readonly CheckBox _hoverBrowsers = new() { Text = T("settings.pip.hover.browsers"), AutoSize = true };
     private readonly CheckBox _hoverFirefox = new() { Text = T("settings.pip.hover.firefox"), AutoSize = true };
     private readonly CheckBox _hoverElectron = new() { Text = T("settings.pip.hover.electron"), AutoSize = true };
@@ -161,6 +164,7 @@ private readonly ErrorProvider _errors = new();
             _hoverOptions?.Enabled = _experimental.Checked && Pip.PipEnhancedHover.Supported;
             if (_hotkeys.Count > 0) RefreshFeatures();
         };
+        _hoverAutomatic.CheckedChanged += (_, _) => ShowHoverChoices();
         _language.Items.AddRange([T("settings.language.system"), "English", "简体中文", "繁體中文"]);
         _theme.Items.AddRange([T("settings.theme.system"), T("settings.theme.light"), T("settings.theme.dark")]);
 
@@ -450,11 +454,17 @@ private readonly ErrorProvider _errors = new();
         draft.OpaqueOnHover = _opaqueOnHover.Checked;
         draft.HighlightPinned = _highlightPinned.Checked;
         draft.PipAutoMove = _pipAutoMove.Checked;
+        draft.PipOriginalPrograms = Programs(_originalPrograms, _newOriginalProgram);
         draft.PipHover = new PipHoverPreferences
         {
-            Browsers = _hoverBrowsers.Checked, Firefox = _hoverFirefox.Checked, Electron = _hoverElectron.Checked,
-            FileExplorer = _hoverExplorer.Checked, Programs = Programs(_hoverPrograms, _newHoverProgram),
+            ChooseForMe = _hoverAutomatic.Checked, Browsers = _hover.Browsers, Firefox = _hover.Firefox, Electron = _hover.Electron,
+            FileExplorer = _hover.FileExplorer, Programs = Programs(_hoverPrograms, _newHoverProgram),
         }.Validated();
+        if (!_hoverAutomatic.Checked) draft.PipHover = draft.PipHover with
+        {
+            Browsers = _hoverBrowsers.Checked, Firefox = _hoverFirefox.Checked, Electron = _hoverElectron.Checked,
+            FileExplorer = _hoverExplorer.Checked,
+        };
         draft.DefaultOpacityPercent = Number(_defaultOpacity);
         draft.OpacityStepPercent = Number(_opacityStep);
         draft.OpacityWheel = _opacityWheel.Checked;
@@ -515,6 +525,27 @@ private readonly ErrorProvider _errors = new();
         newProgram.Text = "";
     }
 
+    private PipHoverPreferences _hover = new();
+    private bool _hoverShowsOwn = true, _loadingHover;
+
+    /// <summary>
+    /// With "choose for me" on, the four boxes show what WinScreen picks and can't be changed; the person's own
+    /// picks are kept for when it is turned off again.
+    /// </summary>
+    private void ShowHoverChoices()
+    {
+        bool own = !_hoverAutomatic.Checked;
+        if (!own && _hoverShowsOwn && !_loadingHover)
+            _hover = _hover with { Browsers = _hoverBrowsers.Checked, Firefox = _hoverFirefox.Checked,
+                Electron = _hoverElectron.Checked, FileExplorer = _hoverExplorer.Checked };
+        _hoverShowsOwn = own;
+        _hoverBrowsers.Enabled = _hoverFirefox.Enabled = _hoverElectron.Enabled = _hoverExplorer.Enabled = own;
+        _hoverBrowsers.Checked = own ? _hover.Browsers : Pip.PipHoverApps.Recommended(Pip.PipHoverApp.Browser);
+        _hoverFirefox.Checked = own ? _hover.Firefox : Pip.PipHoverApps.Recommended(Pip.PipHoverApp.Firefox);
+        _hoverElectron.Checked = own ? _hover.Electron : Pip.PipHoverApps.Recommended(Pip.PipHoverApp.Electron);
+        _hoverExplorer.Checked = own ? _hover.FileExplorer : Pip.PipHoverApps.Recommended(Pip.PipHoverApp.FileExplorer);
+    }
+
     private static ComboBox ProgramPicker()
     {
         var picker = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDown };
@@ -571,6 +602,7 @@ private readonly ErrorProvider _errors = new();
             nameof(AppSettings.OpaqueOnHover) => _opaqueOnHover,
             nameof(AppSettings.HighlightPinned) => _highlightPinned,
             nameof(AppSettings.PipAutoMove) => _pipAutoMove,
+            nameof(PipHoverPreferences.ChooseForMe) => _hoverAutomatic,
             nameof(PipHoverPreferences.Browsers) => _hoverBrowsers,
             nameof(PipHoverPreferences.Firefox) => _hoverFirefox,
             nameof(PipHoverPreferences.Electron) => _hoverElectron,
@@ -634,10 +666,13 @@ private readonly ErrorProvider _errors = new();
         _opaqueOnHover.Checked = values.OpaqueOnHover;
         _highlightPinned.Checked = values.HighlightPinned;
         _pipAutoMove.Checked = values.PipAutoMove;
-        _hoverBrowsers.Checked = values.PipHover.Browsers;
-        _hoverFirefox.Checked = values.PipHover.Firefox;
-        _hoverElectron.Checked = values.PipHover.Electron;
-        _hoverExplorer.Checked = values.PipHover.FileExplorer;
+        _loadingHover = true;
+        _hover = values.PipHover;
+        _hoverAutomatic.Checked = values.PipHover.ChooseForMe;
+        ShowHoverChoices();
+        _loadingHover = false;
+        _originalPrograms.Items.Clear();
+        _originalPrograms.Items.AddRange(values.PipOriginalPrograms.Cast<object>().ToArray());
         _hoverPrograms.Items.Clear();
         _hoverPrograms.Items.AddRange(values.PipHover.Programs.Cast<object>().ToArray());
         PipPreferences pip = values.Pip.Validated();
@@ -801,7 +836,9 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(Note(T("pip.rendering.captureIndicatorHelp")));
         page.Controls.Add(Note(T("pip.diagnostics.retryHelp")));
         page.Controls.Add(Section(T("settings.experimental"), _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
-        _hoverOptions = Section(T("pip.enhancedHover"), Note(T("settings.pip.hover.help")), _hoverBrowsers, _hoverFirefox,
+        page.Controls.Add(Section(T("settings.pip.original"), Note(T("settings.pip.original.help")),
+            ProgramRules(T("settings.pip.original.programs"), _originalPrograms, _newOriginalProgram)));
+        _hoverOptions = Section(T("pip.enhancedHover"), Note(T("settings.pip.hover.help")), _hoverAutomatic, _hoverBrowsers, _hoverFirefox,
             _hoverElectron, _hoverExplorer, ProgramRules(T("settings.pip.hover.programs"), _hoverPrograms, _newHoverProgram),
             Note(T("settings.pip.hover.programsHelp")));
         page.Controls.Add(_hoverOptions);

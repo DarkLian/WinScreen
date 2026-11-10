@@ -8,7 +8,8 @@ internal enum PipHoverApp { None, Browser, Firefox, Electron, FileExplorer, List
 internal static class PipHoverApps
 {
     private static readonly string[] Browsers = ["chrome", "msedge", "brave", "vivaldi"];
-    private static volatile PipHoverPreferences _preferences = new();
+    // Nothing is on until Settings has been read.
+    private static volatile PipHoverPreferences _preferences = new() { ChooseForMe = false };
 
     /// <summary>What Settings says now. Read by views and by the input worker.</summary>
     internal static PipHoverPreferences Preferences
@@ -34,11 +35,18 @@ internal static class PipHoverApps
     /// <summary>True when a new view of this kind of program starts with Enhanced hover on.</summary>
     internal static bool StartsOn(PipHoverApp app, PipHoverPreferences preferences) => app switch
     {
+        PipHoverApp.Listed => true,
+        _ when preferences.ChooseForMe => Recommended(app),
         PipHoverApp.Browser => preferences.Browsers,
         PipHoverApp.Firefox => preferences.Firefox,
         PipHoverApp.Electron => preferences.Electron,
         PipHoverApp.FileExplorer => preferences.FileExplorer,
-        PipHoverApp.Listed => true,
         _ => false,
     };
+
+    /// <summary>
+    /// What "choose for me" turns on: the kinds where hover was seen to hold and draw. File Explorer is left to the
+    /// person, because its tab menus stop responding with the helper on.
+    /// </summary>
+    internal static bool Recommended(PipHoverApp app) => app is PipHoverApp.Browser or PipHoverApp.Firefox or PipHoverApp.Electron;
 }

@@ -262,6 +262,9 @@ public sealed class AppSettings
     public PinBorderPreferences PinBorder { get; set; } = new();
     public PipViewPreferences PipViews { get; set; } = new();
     public PipHoverPreferences PipHover { get; set; } = new();
+
+    /// <summary>Programs whose views show the original on a click, for apps that don't work through a view.</summary>
+    public List<string> PipOriginalPrograms { get; set; } = [];
     public ToolbarPreferences Toolbar { get; set; } = new();
     public AnchorPreferences Anchors { get; set; } = new();
     public EffectPreferences Effects { get; set; } = new();
@@ -352,6 +355,8 @@ public sealed class AppSettings
         loaded.PinBorder = (loaded.PinBorder ?? new()).Validated();
         loaded.PipViews = (loaded.PipViews ?? new()).Validated();
         loaded.PipHover = (loaded.PipHover ?? new()).Validated();
+        loaded.PipOriginalPrograms = (loaded.PipOriginalPrograms ?? []).Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         loaded.Toolbar = (loaded.Toolbar ?? new()).Validated();
         loaded.Anchors = (loaded.Anchors ?? new()).Validated();
         loaded.Effects = (loaded.Effects ?? new()).Validated();

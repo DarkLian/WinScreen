@@ -32,29 +32,66 @@ public sealed class PipHoverAppsTests
     [Fact]
     public void A_view_starts_with_hover_on_only_for_the_kinds_chosen_in_settings()
     {
-        var nothing = new PipHoverPreferences();
+        var nothing = new PipHoverPreferences { ChooseForMe = false };
         foreach (PipHoverApp app in Enum.GetValues<PipHoverApp>())
             Assert.Equal(app == PipHoverApp.Listed, PipHoverApps.StartsOn(app, nothing));
 
-        var some = new PipHoverPreferences { Browsers = true, FileExplorer = true };
+        var some = new PipHoverPreferences { ChooseForMe = false, Browsers = true, FileExplorer = true };
         Assert.True(PipHoverApps.StartsOn(PipHoverApp.Browser, some));
         Assert.True(PipHoverApps.StartsOn(PipHoverApp.FileExplorer, some));
         Assert.False(PipHoverApps.StartsOn(PipHoverApp.Firefox, some));
         Assert.False(PipHoverApps.StartsOn(PipHoverApp.Electron, some));
         Assert.False(PipHoverApps.StartsOn(PipHoverApp.None, new PipHoverPreferences
-            { Browsers = true, Firefox = true, Electron = true, FileExplorer = true }));
+            { ChooseForMe = false, Browsers = true, Firefox = true, Electron = true, FileExplorer = true }));
     }
 
     [Fact]
-    public void Hover_choices_are_off_by_default_and_survive_saving()
+    public void Choosing_for_the_person_turns_on_the_kinds_known_to_work_and_ignores_their_own_picks()
+    {
+        // The default, and a settings file from before the choice existed.
+        Assert.True(new AppSettings().PipHover.ChooseForMe);
+        Assert.True(AppSettings.Parse("""{"PipHover":{"Browsers":false,"FileExplorer":true}}""").PipHover.ChooseForMe);
+
+        var automatic = new PipHoverPreferences { FileExplorer = true };
+        Assert.True(PipHoverApps.StartsOn(PipHoverApp.Browser, automatic));
+        Assert.True(PipHoverApps.StartsOn(PipHoverApp.Firefox, automatic));
+        Assert.True(PipHoverApps.StartsOn(PipHoverApp.Electron, automatic));
+        // File Explorer's tab menus stop responding with the helper on, so it is never picked for anyone.
+        Assert.False(PipHoverApps.StartsOn(PipHoverApp.FileExplorer, automatic));
+        Assert.True(PipHoverApps.StartsOn(PipHoverApp.Listed, automatic));
+        Assert.False(PipHoverApps.StartsOn(PipHoverApp.None, automatic));
+    }
+
+    [Fact]
+    public void Programs_to_use_directly_are_matched_by_name_and_survive_saving()
+    {
+        IReadOnlyList<string> before = PipOriginalApps.Programs;
+        try
+        {
+            PipOriginalApps.Programs = ["ExampleGame", " "];
+            Assert.True(PipOriginalApps.Includes("examplegame"));
+            Assert.False(PipOriginalApps.Includes("notepad"));
+            Assert.False(PipOriginalApps.Includes(""));
+        }
+        finally { PipOriginalApps.Programs = before; }
+
+        Assert.Empty(new AppSettings().PipOriginalPrograms);
+        var settings = new AppSettings { PipOriginalPrograms = ["game", " ", "GAME", "editor"] };
+        Assert.Equal(["game", "editor"], AppSettings.Parse(System.Text.Json.JsonSerializer.Serialize(settings)).PipOriginalPrograms);
+        Assert.Empty(AppSettings.Parse("""{"PipOriginalPrograms":null}""").PipOriginalPrograms);
+    }
+
+    [Fact]
+    public void Own_hover_choices_are_off_by_default_and_survive_saving()
     {
         var defaults = new AppSettings();
         Assert.Equal((false, false, false, false), (defaults.PipHover.Browsers, defaults.PipHover.Firefox,
             defaults.PipHover.Electron, defaults.PipHover.FileExplorer));
         Assert.Empty(defaults.PipHover.Programs);
 
-        defaults.PipHover = new PipHoverPreferences { Firefox = true, Electron = true, Programs = ["vlc", " ", "VLC", "mpv"] };
+        defaults.PipHover = new PipHoverPreferences { ChooseForMe = false, Firefox = true, Electron = true, Programs = ["vlc", " ", "VLC", "mpv"] };
         AppSettings loaded = AppSettings.Parse(System.Text.Json.JsonSerializer.Serialize(defaults));
+        Assert.False(loaded.PipHover.ChooseForMe);
         Assert.True(loaded.PipHover.Firefox);
         Assert.False(loaded.PipHover.FileExplorer);
         Assert.True(loaded.PipHover.Electron);

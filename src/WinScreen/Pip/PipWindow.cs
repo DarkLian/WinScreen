@@ -41,6 +41,11 @@ public sealed class PipWindow : Form
     private readonly System.Windows.Forms.Timer _autoMove = new() { Interval = 1000 };
     private readonly ToolStripMenuItem _hideItem;
     private readonly ToolStripItem _goToItem;
+    private readonly ToolStripItem _useOriginalItem;
+    private readonly string _program;
+    private bool _usingOriginal, _usingFromInteractive, _originalTookFocus;
+    private long _originalLeftAt;
+    private const long UseOriginalGrace = 400;
     private readonly ToolStripMenuItem _autoMoveItem;
     private readonly ToolStripMenuItem _removeCropItem;
     private readonly ContextMenuStrip _menu = new() { ShowItemToolTips = true };
@@ -115,6 +120,7 @@ public sealed class PipWindow : Form
         _origin = source;
         _source = source.Window;
         _windows = windows;
+        _program = source.IsWindow ? WindowInfo.ProgramOf(_source) : "";
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         BackColor = Color.Black; // Whatever briefly shows while resizing shouldn't flash.
@@ -145,6 +151,7 @@ public sealed class PipWindow : Form
         _menu.Items.Add(_middleScrollItem);
         _menu.Items.Add(_enhancedHoverItem);
         _goToItem = _menu.Items.Add(T("pip.goToOriginal"), null, (_, _) => GoToSource());
+        _useOriginalItem = _menu.Items.Add(T("pip.useOriginal"), null, (_, _) => UseOriginal());
         _removeCropItem = new ToolStripMenuItem(T("pip.removeCrop"), null, (_, _) => SetCrop(Rectangle.Empty));
         _menu.Items.Add(_removeCropItem);
         _menu.Items.Add(T("pip.diagnostics.title"), null, (_, _) => ShowDiagnostics());
@@ -167,6 +174,7 @@ public sealed class PipWindow : Form
             _enhancedHoverItem.Visible = showInteractionOptions;
             _enhancedHoverItem.Enabled = _enhancedHoverItem.Checked || PipEnhancedHover.CanAttempt(_source);
             _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
+            _useOriginalItem.Visible = _origin.IsWindow && _hideItem.Checked;
             _removeCropItem.Enabled = !_crop.IsEmpty;
             // A menu only closes on an outside click while its program has the focus.
             _foregroundBeforeMenu = User32.GetForegroundWindow();
@@ -280,6 +288,7 @@ public sealed class PipWindow : Form
     internal void SuspendView()
     {
         if (_suspended || _cleaned) return;
+        _usingOriginal = false; // A minimized view has no picture to hide the original behind; it stays shown.
         CancelPress();
         EndLive();
         CacheTaskbarPicture();
@@ -711,6 +720,7 @@ public sealed class PipWindow : Form
     // recovery; an interactive view never advertises a visible original as interactive.
     private void ChangeInteractionMode(bool interactive, bool hidden)
     {
+        _usingOriginal = false; // Any other choice about the original replaces "use it, then hide it again".
         if (!interactive || !hidden) EndLive();
         bool changed = SetConcealment(hidden);
         PublishInteractionMode(interactive && changed);
@@ -987,6 +997,12 @@ public sealed class PipWindow : Form
             return;
 
         _pressed = false;
+        // A program listed in Settings as not working through a view: a plain click shows its original instead.
+        if (!_selecting && !_dragged && !_controlAtPress && _live is null && OpensOriginalOnClick && PictureArea.Contains(e.Location))
+        {
+            UseOriginal();
+            return;
+        }
         if (_selecting)
         {
             EndSelection();
@@ -1100,6 +1116,55 @@ public sealed class PipWindow : Form
 
     internal PipInteraction? LiveInteraction => _live;
 
+    /// <summary>True for a hidden original whose program is listed in Settings as one to use directly.</summary>
+    internal bool OpensOriginalOnClick => _origin.IsWindow && _hideItem.Checked && PipOriginalApps.Includes(_program);
+
+    /// <summary>True while the original is on show to be used, and will be hidden again afterwards.</summary>
+    internal bool UsingOriginal => _usingOriginal;
+
+    /// <summary>
+    /// The answer for an app that doesn't work through a view: its hidden original comes back where it was, to be
+    /// used as it is, and goes away again once another window is in use. Nothing is sent to the app.
+    /// </summary>
+    internal void UseOriginal()
+    {
+        if (!_origin.IsWindow || !_hideItem.Checked || _usingOriginal) return;
+        bool interactive = _interactiveItem.Checked;
+        GoToSource();
+        if (IsDisposed || !_origin.IsAvailable || _windows.IsHidden(_source)) return;
+        _usingOriginal = true;
+        _usingFromInteractive = interactive;
+        _originalTookFocus = User32.GetForegroundWindow() == _source;
+        _originalLeftAt = 0;
+    }
+
+    /// <summary>
+    /// Hides the original again once the focus has been with it and has left for another window. Its own dialogs
+    /// and menus count as still using it; a moment with no window in front is only passing.
+    /// </summary>
+    private void FollowOriginalInUse()
+    {
+        if (!_usingOriginal) return;
+        if (_suspended || _thumbnail is null || _windows.IsHidden(_source)) { _usingOriginal = false; return; }
+        nint foreground = User32.GetForegroundWindow();
+        User32.GetWindowThreadProcessId(_source, out uint process);
+        if (foreground == _source || (foreground != 0 && SourcePopups.IsPopupOf(foreground, _source, process)))
+        {
+            _originalTookFocus = true;
+            _originalLeftAt = 0;
+            return;
+        }
+        if (!_originalTookFocus || foreground == 0 || _menu.Visible) return;
+        long now = Environment.TickCount64;
+        if (_originalLeftAt == 0) _originalLeftAt = now;
+        if (now - _originalLeftAt < UseOriginalGrace) return;
+        bool interactive = _usingFromInteractive && AllowInteractive;
+        ChangeInteractionMode(interactive, true);
+        if (_hideItem.Checked && User32.IsIconic(_source))
+            User32.ShowWindow(_source, User32.SW_SHOWNOACTIVATE); // Minimized while in use: it has no picture until restored.
+        StayOnTop();
+    }
+
     internal void SetEnhancedHover(bool enabled)
     {
         bool restart = _live is not null;
@@ -1155,7 +1220,7 @@ public sealed class PipWindow : Form
     private void BeginLive(Point pointer)
     {
         if (_live is not null || _thumbnail is null || _suspended || !_origin.IsAvailable || !_windows.IsHidden(_source) ||
-            _inputPaused || _menu.Visible || TopLayer.InputBlocked)
+            _inputPaused || _menu.Visible || TopLayer.InputBlocked || PipOriginalApps.Includes(_program))
             return;
         Rectangle area = PictureArea;
         if (!area.Contains(pointer))
@@ -1505,6 +1570,7 @@ public sealed class PipWindow : Form
         string title = T("pip.titlePrefix") + _origin.Title;
         if (Text != title) Text = title;
         RevealIfActivatedElsewhere();
+        FollowOriginalInUse();
         if (_suspended) return;
 
         try

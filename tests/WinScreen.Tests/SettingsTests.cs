@@ -294,7 +294,7 @@ public sealed class SettingsWindowTests : IDisposable
             var settings = new AppSettings
             {
                 ExperimentalFeatures = true,
-                PipHover = new PipHoverPreferences { Electron = true, Programs = ["ExampleProgram"] },
+                PipHover = new PipHoverPreferences { ChooseForMe = false, Electron = true, Programs = ["ExampleProgram"] },
             };
             AppSettings? applied = null;
             using var window = new SettingsWindow(settings, new StartWithWindows(_key), chosen =>
@@ -317,6 +317,19 @@ public sealed class SettingsWindowTests : IDisposable
             Assert.False(applied.PipHover.Electron);
             Assert.True(applied.PipHover.FileExplorer);
             Assert.Equal(["ExampleProgram"], applied.PipHover.Programs);
+
+            // Letting WinScreen choose keeps the person's own picks for later, and doesn't read the boxes.
+            window.SetOption(nameof(PipHoverPreferences.ChooseForMe), true);
+            window.SetOption(nameof(PipHoverPreferences.FileExplorer), false);
+            Assert.True(window.SaveChanges());
+            Assert.True(applied.PipHover.ChooseForMe);
+            Assert.True(applied.PipHover.Browsers);
+            Assert.True(applied.PipHover.FileExplorer);
+            window.SetOption(nameof(PipHoverPreferences.ChooseForMe), false);
+            Assert.True(window.SaveChanges());
+            Assert.False(applied.PipHover.ChooseForMe);
+            Assert.True(applied.PipHover.FileExplorer);
+            Assert.False(applied.PipHover.Electron);
         });
     }
 
