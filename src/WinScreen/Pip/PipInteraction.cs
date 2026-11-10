@@ -142,6 +142,12 @@ internal sealed class PipInteraction : IDisposable
     private volatile bool _middleClickScroll;
     internal bool MiddleClickScroll { get => _middleClickScroll; set => _middleClickScroll = value; }
     internal volatile bool EnhancedHover;
+
+    /// <summary>
+    /// The app has middle-click scrolling of its own that works while Enhanced hover holds the pointer in it
+    /// (browsers and Electron apps). The view's own scrolling then stands aside and the app gets the click.
+    /// </summary>
+    internal volatile bool AppScrollsWithHover;
     internal string HoverStatus => $"{(EnhancedHover && _messages.MoveRoute != InputRoute.Messages ? "unavailable: " + _messages.MoveRoute + " route" : _messages.Hover.Status)}; target=0x{_messages.MoveTarget:X}; busy={_appBusy}; outside={_outside}; popup={_inPopup}; enabled={EnhancedHover}; install={_messages.Hover.InstallMilliseconds:F3}ms uninstall={_messages.Hover.UninstallMilliseconds:F3}ms";
     private volatile bool _scrolling;
     internal bool Scrolling => _scrolling;
@@ -634,7 +640,7 @@ internal sealed class PipInteraction : IDisposable
             Record(PressOutcome.Unconfirmed, point, hit);
             return;
         }
-        if (!alt && button == MouseButtons.Middle && MiddleClickScroll &&
+        if (!alt && button == MouseButtons.Middle && MiddleClickScroll && !(AppScrollsWithHover && _messages.Hover.Installed) &&
             _heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None && _messages.CanScroll(point, view, shown))
         {
             _scrollAnchor = _scrollPoint = point;

@@ -26,6 +26,9 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
     private InspectHook? _inspect;
     internal long Filtered { get; private set; }
     internal string Status { get; private set; } = "inactive";
+
+    /// <summary>True while the helper is installed and filtering for a target.</summary>
+    internal bool Installed => _hook != 0 && !_disarmed && !_disabled;
     internal double InstallMilliseconds { get; private set; }
     internal double UninstallMilliseconds { get; private set; }
 

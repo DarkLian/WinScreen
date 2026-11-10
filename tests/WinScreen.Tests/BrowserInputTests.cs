@@ -619,6 +619,58 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         Assert.DoesNotContain("EXC ", log.ToString());
     }
 
+    /// <summary>
+    /// With Enhanced hover on, a browser's own middle-click scrolling works through a view: click, move away, click
+    /// again to stop. The view's own scrolling stands aside for it even when its option is on.
+    /// </summary>
+    [NativeHoverTheory(true)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_browsers_own_middle_click_scrolling_works_with_enhanced_hover(bool viewOptionOn)
+    {
+        string path = BrowserCases().Select(c => (string)c[0]).FirstOrDefault(p => Path.GetFileName(p) == "chrome.exe") ?? "";
+        if (!File.Exists(path)) return;
+        const string page = """
+            <!doctype html><title>AutoScroll y=0</title><style>body{margin:0;height:60000px;background:repeating-linear-gradient(white 0px,white 90px,gray 100px)}</style>
+            <script>const report=()=>document.title=`AutoScroll y=${Math.round(scrollY)}`;onscroll=report;setInterval(report,20)</script>
+            """;
+        var log = new StringBuilder();
+        var (browser, window, root) = Open(page, "AutoScroll", app: true, path);
+        try
+        {
+            Visit(window, (view, at, l) =>
+            {
+                view.Invoke(() => { view.SetEnhancedHover(true); view.SetMiddleClickScroll(viewOptionOn); });
+                Point anchor = new(view.Left + view.Width / 2, view.Top + view.Height / 2);
+                Desktop.SlideMouse(anchor);
+                Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.HoverStatus.StartsWith("active") == true, 3000), view.LiveInteraction?.HoverStatus);
+                int Y() => int.Parse(WindowInfo.Title(window).Split("y=")[1]);
+                mouse_event(0x20, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(0x40, 0, 0, 0, 0);
+                Thread.Sleep(300);
+                Assert.False(view.LiveInteraction?.Scrolling ?? false);
+                for (int i = 1; i <= 6; i++) { Desktop.SlideMouse(anchor + new Size(0, i * 10)); Thread.Sleep(30); }
+                Thread.Sleep(1200);
+                int down = Y();
+                l.AppendLine($"after 1.2 s below the click: y={down}");
+                Assert.True(down > 500, $"The page didn't scroll down: y={down}; {view.LiveInteraction?.HoverStatus}; {string.Join(",", view.PressOutcomes)}");
+                for (int i = 5; i >= -6; i--) { Desktop.SlideMouse(anchor + new Size(0, i * 10)); Thread.Sleep(30); }
+                Thread.Sleep(600);
+                int turned = Y(); Thread.Sleep(600);
+                Assert.True(Y() < turned, $"The page didn't scroll back up: {turned} then {Y()}");
+                Desktop.SlideMouse(anchor); Thread.Sleep(150);
+                mouse_event(0x20, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(0x40, 0, 0, 0, 0);
+                Thread.Sleep(500);
+                int stopped = Y();
+                Desktop.SlideMouse(anchor + new Size(0, 60)); Thread.Sleep(700);
+                Assert.Equal(stopped, Y());
+                Assert.DoesNotContain(PressOutcome.ScrollMode, view.PressOutcomes);
+            }, log);
+        }
+        finally { Close(browser, root); }
+        output.WriteLine(log.ToString());
+        Assert.DoesNotContain("EXC ", log.ToString());
+    }
+
     [Theory]
     [MemberData(nameof(BrowserCases))]
     public void Browser_middle_click_autoscroll_moves_content_and_cancels(string path)
