@@ -745,6 +745,7 @@ public sealed class PipWindow : Form
                 // would replace the original's own caption buttons in the view.
                 else if (!WindowController.TaskbarButtonOwnedByWindows(_source)) _windows.RemoveTaskbarButton(_source);
                 _windows.Park(_source);
+                PlaceForHover();
                 ConfigureParkedCapture();
                 if (User32.GetForegroundWindow() == _source)
                     User32.SetForegroundWindow(Handle); // Keys mustn't go to a window that can't be seen.
@@ -1105,6 +1106,23 @@ public sealed class PipWindow : Form
         if (restart) EndLive();
         _enhancedHoverItem.Checked = enabled;
         if (restart) BeginLive(PointToClient(Cursor.Position));
+        else PlaceForHover();
+    }
+
+    /// <summary>
+    /// A hidden browser or Electron app keeps its strip at a side edge the whole time, whether or not Enhanced hover
+    /// is on yet. Under the taskbar it finds itself covered, stops drawing and taking pointer moves, and doesn't look
+    /// again until it is clicked; moving it once the option is turned on, or at the start of a visit, is too late.
+    /// Other programs the helper can be used with go there only while the option is on.
+    /// </summary>
+    private bool HoverPlacementWanted => PipEnhancedHover.Supported && PipEnhancedHover.Describe(_source) is var (app, native) && native &&
+        (app is PipHoverApp.Browser or PipHoverApp.Firefox or PipHoverApp.Electron || (app != PipHoverApp.None && _enhancedHoverItem.Checked));
+
+    private void PlaceForHover()
+    {
+        if (!_origin.IsWindow || !_windows.IsParked(_source)) return;
+        try { _windows.SetParkedHoverSurface(_source, HoverPlacementWanted); }
+        catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); }
     }
 
     internal void SetMiddleClickScroll(bool enabled)
@@ -1158,7 +1176,7 @@ public sealed class PipWindow : Form
         try
         {
             _windows.Park(_source);
-            _windows.SetParkedHoverSurface(_source, _enhancedHoverItem.Checked && PipEnhancedHover.CanAttempt(_source));
+            _windows.SetParkedHoverSurface(_source, HoverPlacementWanted);
             live.Start(PointToScreen(pointer));
             _live = live;
             _windows.SetParkedReachable(_source, true);
@@ -1199,7 +1217,7 @@ public sealed class PipWindow : Form
             return;
         _live = null;
         _liveEndedAt = Environment.TickCount64;
-        try { if (_origin.IsAvailable) { _windows.SetParkedReachable(_source, false); _windows.SetParkedHoverSurface(_source, false); } }
+        try { if (_origin.IsAvailable) { _windows.SetParkedReachable(_source, false); _windows.SetParkedHoverSurface(_source, HoverPlacementWanted); } }
         catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); }
         live.Dispose();
         Cursor.Current = Cursors.Default;

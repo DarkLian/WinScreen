@@ -3,7 +3,7 @@ using WinScreen.Settings;
 namespace WinScreen.Pip;
 
 /// <summary>The kinds of program Enhanced hover knows. Anything else gets the helper only when it is listed by name.</summary>
-internal enum PipHoverApp { None, Browser, Electron, FileExplorer, Listed }
+internal enum PipHoverApp { None, Browser, Firefox, Electron, FileExplorer, Listed }
 
 internal static class PipHoverApps
 {
@@ -23,6 +23,7 @@ internal static class PipHoverApps
     internal static PipHoverApp Classify(string program, string rootClass, bool electronLayout, IEnumerable<string> listed)
     {
         if (Browsers.Contains(program, StringComparer.OrdinalIgnoreCase)) return PipHoverApp.Browser;
+        if (program.Equals("firefox", StringComparison.OrdinalIgnoreCase)) return PipHoverApp.Firefox;
         // The shell process also owns the desktop and the taskbar; only its folder windows count.
         if (program.Equals("explorer", StringComparison.OrdinalIgnoreCase))
             return rootClass == "CabinetWClass" ? PipHoverApp.FileExplorer : PipHoverApp.None;
@@ -34,6 +35,7 @@ internal static class PipHoverApps
     internal static bool StartsOn(PipHoverApp app, PipHoverPreferences preferences) => app switch
     {
         PipHoverApp.Browser => preferences.Browsers,
+        PipHoverApp.Firefox => preferences.Firefox,
         PipHoverApp.Electron => preferences.Electron,
         PipHoverApp.FileExplorer => preferences.FileExplorer,
         PipHoverApp.Listed => true,

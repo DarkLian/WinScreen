@@ -105,19 +105,21 @@ public sealed partial class WindowController
 
     private const byte ReachableOpacity = 1;
 
-    /// <summary>For native hover visits, keep the two-pixel strip clear of the usual bottom taskbar.
-    /// Chrome otherwise marks the page hidden and discards moves even while its leave messages are filtered.</summary>
+    /// <summary>For native hover, keep the two-pixel strip clear of the usual bottom taskbar. A browser that finds
+    /// its strip covered marks the page hidden and discards moves even while its leave messages are filtered, and
+    /// stays that way until it is activated. Asked again while already there, it only brings the strip forward.</summary>
     internal void SetParkedHoverSurface(nint window, bool enabled)
     {
         lock (_gate)
         {
-            if (!_changed.TryGetValue(window, out var state) || !state.Parked || !User32.IsWindow(window) || state.HoverParking == enabled) return;
+            if (!_changed.TryGetValue(window, out var state) || !state.Parked || !User32.IsWindow(window)) return;
+            if (!enabled && !state.HoverParking) return;
             state.Identity.Require();
             bool previous = state.HoverParking;
             state.HoverParking = enabled;
             try
             {
-                Repark(window);
+                if (previous != enabled) Repark(window);
                 if (enabled && !User32.SetWindowPos(window, 0, 0, 0, 0, 0,
                     User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE)) throw Failure(T("actions.move"), window);
             }

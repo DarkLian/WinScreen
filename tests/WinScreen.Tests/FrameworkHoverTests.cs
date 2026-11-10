@@ -15,6 +15,10 @@ namespace WinScreen.Tests;
 public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     [NativeHoverFact(true)]
+    public void Firefox_keeps_css_hover_when_chosen_in_settings() =>
+        Run(Path.Combine("firefox", "firefox.exe"), new PipHoverPreferences { Firefox = true }, PipHoverApp.Firefox);
+
+    [NativeHoverFact(true)]
     public void An_electron_app_keeps_css_hover_when_chosen_in_settings() =>
         Run(Path.Combine("vscode", "Code.exe"), new PipHoverPreferences { Electron = true }, PipHoverApp.Electron);
 
@@ -74,7 +78,6 @@ public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper out
             User32.ShowWindow(window, 9);
             User32.SetWindowPos(window, 0, 160, 100, 1000, 700, 0x14);
             Thread.Sleep(1200);
-            Assert.Equal(kind, PipEnhancedHover.Describe(window).App);
 
             WindowMenuBuilderTests.OnUiThread(() =>
             {
@@ -82,6 +85,7 @@ public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper out
                 PipHoverApps.Preferences = new PipHoverPreferences();
                 Assert.False(PipEnhancedHover.StartsOn(window));
                 PipHoverApps.Preferences = preferences;
+                Assert.Equal(kind, PipEnhancedHover.Describe(window).App);
                 Assert.True(PipEnhancedHover.StartsOn(window));
 
                 using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = true };
@@ -124,10 +128,14 @@ public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper out
                             {
                                 Point candidate = Map(new Point(x, y));
                                 Desktop.SlideMouse(candidate);
+                                Desktop.NudgeMouse(1, 0);
                                 // A page that believes it is out of sight reports only once a second.
-                                Thread.Sleep(Title().Contains("visibility=hidden") ? 1300 : 120);
+                                Thread.Sleep(Title().Contains("visibility=hidden") ? 1300 : 250);
+                                // Two readings that agree: the title can still hold the element the pointer just left.
                                 Match seen = Regex.Match(Title(), @"css=(a|b) dom=\1");
-                                if (seen.Success) found.TryAdd(seen.Groups[1].Value, candidate);
+                                Thread.Sleep(90);
+                                if (seen.Success && Regex.Match(Title(), @"css=(a|b) dom=\1").Value == seen.Value) found.TryAdd(seen.Groups[1].Value, candidate);
+                                log.AppendLine($"scan {x},{y} at {candidate}: {Title()}");
                             }
                         }
                         Assert.True(found.Count == 2, "Both elements were not found: " + Title() + "; " + Status());
@@ -156,7 +164,9 @@ public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper out
                         Color rest = Shown(found["a"]);
                         log.AppendLine($"left: shown={rest.R},{rest.G},{rest.B} {Title()}");
                         Assert.True(rest.R > 180 && rest.G < 60, $"The view still shows the hover effect: {rest}");
-                        Desktop.SlideMouse(found["a"]);
+                        // Back in, a little away from where it left: an app can ignore a move to the very same point.
+                        Desktop.SlideMouse(new Point(found["a"].X + 6, found["a"].Y + 4));
+                        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No visit started on the way back.");
                         Desktop.NudgeMouse(2, 0);
                         State("a");
                         view.Invoke(() => view.SetEnhancedHover(false));

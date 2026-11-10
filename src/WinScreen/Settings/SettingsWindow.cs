@@ -129,6 +129,7 @@ private readonly ErrorProvider _errors = new();
     private readonly CheckBox _pipAutoMove = new()
         { Text = T("settings.pip.autoMove"), AutoSize = true };
     private readonly CheckBox _hoverBrowsers = new() { Text = T("settings.pip.hover.browsers"), AutoSize = true };
+    private readonly CheckBox _hoverFirefox = new() { Text = T("settings.pip.hover.firefox"), AutoSize = true };
     private readonly CheckBox _hoverElectron = new() { Text = T("settings.pip.hover.electron"), AutoSize = true };
     private readonly CheckBox _hoverExplorer = new() { Text = T("settings.pip.hover.explorer"), AutoSize = true };
     private readonly ListBox _hoverPrograms = new() { Dock = DockStyle.Fill, IntegralHeight = false };
@@ -451,7 +452,7 @@ private readonly ErrorProvider _errors = new();
         draft.PipAutoMove = _pipAutoMove.Checked;
         draft.PipHover = new PipHoverPreferences
         {
-            Browsers = _hoverBrowsers.Checked, Electron = _hoverElectron.Checked,
+            Browsers = _hoverBrowsers.Checked, Firefox = _hoverFirefox.Checked, Electron = _hoverElectron.Checked,
             FileExplorer = _hoverExplorer.Checked, Programs = Programs(_hoverPrograms, _newHoverProgram),
         }.Validated();
         draft.DefaultOpacityPercent = Number(_defaultOpacity);
@@ -571,6 +572,7 @@ private readonly ErrorProvider _errors = new();
             nameof(AppSettings.HighlightPinned) => _highlightPinned,
             nameof(AppSettings.PipAutoMove) => _pipAutoMove,
             nameof(PipHoverPreferences.Browsers) => _hoverBrowsers,
+            nameof(PipHoverPreferences.Firefox) => _hoverFirefox,
             nameof(PipHoverPreferences.Electron) => _hoverElectron,
             nameof(PipHoverPreferences.FileExplorer) => _hoverExplorer,
             _ => _startWithWindows,
@@ -633,6 +635,7 @@ private readonly ErrorProvider _errors = new();
         _highlightPinned.Checked = values.HighlightPinned;
         _pipAutoMove.Checked = values.PipAutoMove;
         _hoverBrowsers.Checked = values.PipHover.Browsers;
+        _hoverFirefox.Checked = values.PipHover.Firefox;
         _hoverElectron.Checked = values.PipHover.Electron;
         _hoverExplorer.Checked = values.PipHover.FileExplorer;
         _hoverPrograms.Items.Clear();
@@ -798,8 +801,8 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(Note(T("pip.rendering.captureIndicatorHelp")));
         page.Controls.Add(Note(T("pip.diagnostics.retryHelp")));
         page.Controls.Add(Section(T("settings.experimental"), _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
-        _hoverOptions = Section(T("pip.enhancedHover"), Note(T("settings.pip.hover.help")), _hoverBrowsers, _hoverElectron,
-            _hoverExplorer, ProgramRules(T("settings.pip.hover.programs"), _hoverPrograms, _newHoverProgram),
+        _hoverOptions = Section(T("pip.enhancedHover"), Note(T("settings.pip.hover.help")), _hoverBrowsers, _hoverFirefox,
+            _hoverElectron, _hoverExplorer, ProgramRules(T("settings.pip.hover.programs"), _hoverPrograms, _newHoverProgram),
             Note(T("settings.pip.hover.programsHelp")));
         page.Controls.Add(_hoverOptions);
         if (!Pip.PipEnhancedHover.Supported) page.Controls.Add(Note(T("settings.pip.hover.unsupported")));

@@ -169,13 +169,13 @@ The helper is only ever used with the kinds of app below and with programs added
 | Edge, Brave, Vivaldi | same | ❔ Enabled because they share Chrome's engine; not tested (none installed on the test desktop) |
 | VS Code (Electron) | VS Code, Discord and similar apps | ✅ Verified on Windows 11 x64: hover holds in a web view, shows in the view's picture, and clears on leave and turning off |
 | Discord and other Electron apps | same | ❔ Recognized by Electron's folder layout and window; not tested individually |
-| File Explorer (file list) | File Explorer | ✅ Verified on Windows 11: a hovered row is highlighted in the view and stays so; without the option it never highlights. The command bar, tabs and address bar are used through accessibility and don't get hover |
-| Firefox | — (can be added under Other programs) | ❌ The hover is kept, but Firefox does not redraw while its window is hidden, so the view doesn't show it |
+| File Explorer (file list) | File Explorer | ⚠️ Verified on Windows 11: a hovered row is highlighted in the view and stays so; without the option it never highlights. With the option on, the right-click menu of a tab did not take its click in testing (Duplicate tab failed three times of three), so leave it off if you use tab menus. The command bar, tabs and address bar are used through accessibility and don't get hover |
+| Firefox | Firefox | ✅ Verified on Windows 11 x64: hover holds, shows in the view's picture, follows the pointer to another element, and clears on leave and turning off |
 | Other programs added by name | Other programs | ❔ Depends on the app. Works only for windows that take posted mouse input; WinUI and Store content go through accessibility, and WPF apps can't be hidden at all. Don't add games that use anti-cheat |
 | Windows 10 | — | ❌ Not available; ordinary Interactive PiP is unchanged |
 | Native ARM64, x64 apps on ARM64, 32-bit apps | — | ❌ Not available |
 
-Enhanced visits keep the original at a side edge with the same two-pixel overlap and opacity, raised without activation within its existing window band. This keeps a Chrome-based page visible to its renderer; a fully covered original can keep an old hover state while ignoring further moves. Ordinary parking returns when the visit ends. Caption styles, taskbar removal, popup placement and recorded restoration state are unchanged.
+On Windows 11 x64, a hidden browser or Electron app keeps its two-pixel strip at a side edge of the screen the whole time, raised without activation, instead of along the bottom, whether or not Enhanced hover is on. Under the taskbar a browser finds itself covered: it stops drawing and stops taking pointer moves, and does not check again until it is clicked, so hover never started when the option was turned on. File Explorer and programs added by name use the side edge only while the option is on for them. Other apps, and every app on Windows 10, park along the bottom as before. Caption styles, taskbar removal, popup placement and recorded restoration state are unchanged.
 
 The helper filters only queued mouse-leave messages for the currently hovered window on its own UI thread.
 

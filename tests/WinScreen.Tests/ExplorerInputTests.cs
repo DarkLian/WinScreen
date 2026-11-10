@@ -191,6 +191,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 view.ShowOnTop();
                 view.Location = new Point(900, 220);
                 view.SetInteractive(true);
+                if (Environment.GetEnvironmentVariable("WINSCREEN_TEST_ENHANCED_HOVER") == "1") view.SetEnhancedHover(true);
                 Exception? failure = null;
                 Point home = Desktop.CursorPosition();
                 var driver = new Thread(() =>

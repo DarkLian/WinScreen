@@ -12,8 +12,7 @@ public sealed class PipHoverAppsTests
     [InlineData("msedge", "Chrome_WidgetWin_1", false, PipHoverApp.Browser)]
     [InlineData("Brave", "Chrome_WidgetWin_1", false, PipHoverApp.Browser)]
     [InlineData("vivaldi", "Chrome_WidgetWin_1", false, PipHoverApp.Browser)]
-    // Not a known kind: its parked window keeps the hover but doesn't redraw it. It can still be listed by name.
-    [InlineData("firefox", "MozillaWindowClass", false, PipHoverApp.None)]
+    [InlineData("firefox", "MozillaWindowClass", false, PipHoverApp.Firefox)]
     [InlineData("Code", "Chrome_WidgetWin_1", true, PipHoverApp.Electron)]
     [InlineData("Discord", "Chrome_WidgetWin_1", true, PipHoverApp.Electron)]
     [InlineData("explorer", "CabinetWClass", false, PipHoverApp.FileExplorer)]
@@ -40,21 +39,24 @@ public sealed class PipHoverAppsTests
         var some = new PipHoverPreferences { Browsers = true, FileExplorer = true };
         Assert.True(PipHoverApps.StartsOn(PipHoverApp.Browser, some));
         Assert.True(PipHoverApps.StartsOn(PipHoverApp.FileExplorer, some));
+        Assert.False(PipHoverApps.StartsOn(PipHoverApp.Firefox, some));
         Assert.False(PipHoverApps.StartsOn(PipHoverApp.Electron, some));
         Assert.False(PipHoverApps.StartsOn(PipHoverApp.None, new PipHoverPreferences
-            { Browsers = true, Electron = true, FileExplorer = true }));
+            { Browsers = true, Firefox = true, Electron = true, FileExplorer = true }));
     }
 
     [Fact]
     public void Hover_choices_are_off_by_default_and_survive_saving()
     {
         var defaults = new AppSettings();
-        Assert.Equal((false, false, false), (defaults.PipHover.Browsers, defaults.PipHover.Electron, defaults.PipHover.FileExplorer));
+        Assert.Equal((false, false, false, false), (defaults.PipHover.Browsers, defaults.PipHover.Firefox,
+            defaults.PipHover.Electron, defaults.PipHover.FileExplorer));
         Assert.Empty(defaults.PipHover.Programs);
 
-        defaults.PipHover = new PipHoverPreferences { FileExplorer = true, Electron = true, Programs = ["vlc", " ", "VLC", "mpv"] };
+        defaults.PipHover = new PipHoverPreferences { Firefox = true, Electron = true, Programs = ["vlc", " ", "VLC", "mpv"] };
         AppSettings loaded = AppSettings.Parse(System.Text.Json.JsonSerializer.Serialize(defaults));
-        Assert.True(loaded.PipHover.FileExplorer);
+        Assert.True(loaded.PipHover.Firefox);
+        Assert.False(loaded.PipHover.FileExplorer);
         Assert.True(loaded.PipHover.Electron);
         Assert.False(loaded.PipHover.Browsers);
         Assert.Equal(["vlc", "mpv"], loaded.PipHover.Programs);

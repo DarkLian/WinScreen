@@ -306,12 +306,14 @@ public sealed class SettingsWindowTests : IDisposable
             Assert.False(window.HasChanges);
 
             window.SetOption(nameof(PipHoverPreferences.Browsers), true);
+            window.SetOption(nameof(PipHoverPreferences.Firefox), true);
             window.SetOption(nameof(PipHoverPreferences.Electron), false);
             window.SetOption(nameof(PipHoverPreferences.FileExplorer), true);
             Assert.True(window.SaveChanges());
 
             Assert.NotNull(applied);
             Assert.True(applied.PipHover.Browsers);
+            Assert.True(applied.PipHover.Firefox);
             Assert.False(applied.PipHover.Electron);
             Assert.True(applied.PipHover.FileExplorer);
             Assert.Equal(["ExampleProgram"], applied.PipHover.Programs);

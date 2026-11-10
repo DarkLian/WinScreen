@@ -5,6 +5,7 @@ public sealed record PipHoverPreferences
 {
     /// <summary>Chrome and the browsers built on it.</summary>
     public bool Browsers { get; init; }
+    public bool Firefox { get; init; }
 
     /// <summary>Apps built with Electron, such as code editors and chat apps.</summary>
     public bool Electron { get; init; }

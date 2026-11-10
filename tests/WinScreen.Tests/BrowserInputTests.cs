@@ -80,7 +80,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             view.ShowOnTop();
             view.Location = new Point(1000, 220);
             view.SetInteractive(true);
-            view.SetEnhancedHover(Environment.GetEnvironmentVariable("WINSCREEN_TEST_ENHANCED_HOVER") == "1");
+            if (Environment.GetEnvironmentVariable("WINSCREEN_TEST_ENHANCED_HOVER") == "1") view.SetEnhancedHover(true);
             Point home = Desktop.CursorPosition();
             var driver = new Thread(() =>
             {
@@ -237,7 +237,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 Point first = at(new Point(150, top + 140));
                 Point second = at(new Point(Desktop.BoundsOf(window).Width * 3 / 4, top + 140));
                 Point outside = new(view.Left - 50, view.Top + 100);
-                void State(string id) => Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains($"css={id} dom={id} preview={(id == "none" ? "none" : "block")}"), 3000), WindowInfo.Title(window) + "; " + view.LiveInteraction?.HoverStatus + "; pointer=" + Desktop.CursorPosition() + "; geometry=" + view.LiveInteraction?.CurrentGeometry);
+                void State(string id) => Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains($"css={id} dom={id} preview={(id == "none" ? "none" : "block")}"), 3000), WindowInfo.Title(window) + "; " + view.LiveInteraction?.HoverStatus + "; pointer=" + Desktop.CursorPosition() + "; geometry=" + view.LiveInteraction?.CurrentGeometry + "; " + Surroundings(window));
                 string Leaves() => System.Text.RegularExpressions.Regex.Match(WindowInfo.Title(window), @"leave=\d+").Value;
                 view.Invoke(() => view.SetEnhancedHover(true));
                 for (int visit = 0; visit < 3; visit++)
@@ -269,6 +269,170 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         finally { output.WriteLine(log.ToString()); Close(browser, root); }
         Assert.DoesNotContain("EXC ", log.ToString());
     }
+
+    /// <summary>What could be hiding a parked original from itself, for a failure message.</summary>
+    private static string Surroundings(nint window) =>
+        $"parked={Desktop.BoundsOf(window)} topmost={(Desktop.ExStyle(window) & 8) != 0} alpha={Desktop.Alpha(window)}; " +
+        $"foreground={WindowInfo.ClassName(User32.GetForegroundWindow())} zoomed={User32.IsZoomed(User32.GetForegroundWindow())}; above parked: {Above(window)}";
+
+    /// <summary>Every visible top-level window from the top down, until the one asked for.</summary>
+    private static string Above(nint window)
+    {
+        var seen = new List<string>();
+        for (nint top = User32.GetWindow(User32.GetDesktopWindow(), 5); top != 0 && top != window; top = User32.GetWindow(top, 2))
+        {
+            if (!User32.IsWindowVisible(top)) continue;
+            Rectangle bounds = Desktop.BoundsOf(top);
+            if (bounds.Width == 0 || bounds.Height == 0) continue;
+            seen.Add($"{WindowInfo.ClassName(top)}{((Desktop.ExStyle(top) & 8) != 0 ? "(topmost)" : "")}{bounds}");
+        }
+        return string.Join(" > ", seen);
+    }
+
+    /// <summary>
+    /// The everyday arrangement: another app maximized and in use, with a small view over it. A maximized window
+    /// reaches past every edge of its screen, where a hidden original keeps its strip; the original stays above it,
+    /// so the page goes on believing it can be seen. Checked with an ordinary window and with a second browser.
+    /// </summary>
+    [NativeHoverTheory(true)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Enhanced_hover_holds_with_another_window_maximized_in_front(bool anotherBrowser)
+    {
+        string path = BrowserCases().Select(c => (string)c[0]).First(p => Path.GetFileName(p) == "chrome.exe");
+        const string page = """
+            <!doctype html><title>CoveredState</title><style>body{margin:0}section{position:absolute;top:0;width:40vw;height:70vh}
+            #a{left:0}#b{left:50vw}.preview{display:none}section:hover .preview{display:block}</style>
+            <section id=a>A<div class=preview>Preview A</div></section><section id=b>B<div class=preview>Dropdown B</div></section>
+            <script>let dom='none',enter=0,leave=0;for(const x of [a,b]){x.onmouseenter=()=>{dom=x.id;enter++};x.onmouseleave=()=>{dom='none';leave++}}
+            setInterval(()=>{let x=document.querySelector('section:hover');document.title=`CoveredState css=${x?.id||'none'} dom=${dom} preview=${x?getComputedStyle(x.lastChild).display:'none'} visibility=${document.visibilityState} enter=${enter} leave=${leave}`},30)</script>
+            """;
+        var (browser, window, root) = Open(page, "CoveredState", app: true, path);
+        var log = new StringBuilder();
+        (Process Browser, nint Window, string Root)? other = null;
+        Form? cover = null;
+        var shown = new ManualResetEventSlim();
+        Exception? coverFailure = null;
+        var coverThread = new Thread(() =>
+        {
+            try
+            {
+                Desktop.GainForegroundRights(); // Before this thread shows a window.
+                cover = new Form { Text = "WinScreen test cover", WindowState = FormWindowState.Maximized, BackColor = Color.DimGray };
+                cover.Shown += (_, _) => { Desktop.Activate(cover.Handle); shown.Set(); };
+                Application.Run(cover);
+            }
+            catch (Exception e) { coverFailure = e; shown.Set(); }
+        });
+        coverThread.SetApartmentState(ApartmentState.STA);
+        try
+        {
+            nint coverWindow;
+            if (anotherBrowser)
+            {
+                // A second browser of the same kind, with its own profile, as the app in front.
+                other = Open("<!doctype html><title>CoverBrowser</title><body style='background:#444'>", "CoverBrowser", app: false, path);
+                coverWindow = other.Value.Window;
+                Desktop.GainForegroundRights();
+                User32.ShowWindow(coverWindow, 3);
+                Desktop.Activate(coverWindow);
+                Thread.Sleep(800);
+            }
+            else
+            {
+                coverThread.Start();
+                Assert.True(shown.Wait(130000), "The covering window did not open.");
+                Assert.Null(coverFailure);
+                coverWindow = cover!.Invoke(() => cover.Handle);
+            }
+            Visit(window, (view, at, l) =>
+            {
+                int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - Desktop.BoundsOf(window).Top;
+                Point first = at(new Point(150, top + 140));
+                Point second = at(new Point(Desktop.BoundsOf(window).Width * 3 / 4, top + 140));
+                string Describe() => $"{WindowInfo.Title(window)}; {Surroundings(window)}; {view.LiveInteraction?.HoverStatus}";
+                void State(string id) => Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains($"css={id} dom={id} preview={(id == "none" ? "none" : "block")}"), 3000), Describe());
+                Assert.Equal(coverWindow, User32.GetForegroundWindow());
+                view.Invoke(() => view.SetEnhancedHover(true));
+                Desktop.SlideMouse(first);
+                Thread.Sleep(600);
+                l.AppendLine("resting: " + Describe());
+                State("a");
+                for (int sample = 0; sample < 6; sample++) { Thread.Sleep(500); Assert.True(WindowInfo.Title(window).Contains("css=a dom=a preview=block visibility=visible"), Describe()); }
+                Desktop.SlideMouse(second); State("b");
+                // The person goes on using the app in front: it is brought forward again while the view is in use.
+                User32.SetForegroundWindow(coverWindow);
+                User32.SetWindowPos(coverWindow, 0, 0, 0, 0, 0, 0x13);
+                Thread.Sleep(400);
+                l.AppendLine("after the cover came forward: " + Describe());
+                Desktop.SlideMouse(first); State("a");
+                for (int sample = 0; sample < 6; sample++) { Thread.Sleep(500); Assert.True(WindowInfo.Title(window).Contains("css=a dom=a preview=block visibility=visible"), Describe()); }
+                Desktop.SlideMouse(new Point(view.Left - 50, view.Top + 100)); State("none");
+                Assert.Equal(coverWindow, User32.GetForegroundWindow());
+            }, log);
+        }
+        finally
+        {
+            output.WriteLine(log.ToString());
+            if (cover is { IsDisposed: false, IsHandleCreated: true }) cover.Invoke(cover.Close);
+            if (coverThread.IsAlive) coverThread.Join(5000);
+            if (other is { } front) Close(front.Browser, front.Root);
+            Close(browser, root);
+        }
+        Assert.DoesNotContain("EXC ", log.ToString());
+    }
+
+    /// <summary>
+    /// A browser that was just in front and is then hidden decides within a second whether it can still be seen,
+    /// and keeps that answer until it is clicked. On the strip under the taskbar the answer was "no": the page
+    /// stopped taking pointer moves and hover never started. Checked from a fresh browser each time, with the option
+    /// on in Settings before the view opens and turned on from the view's menu afterwards.
+    /// </summary>
+    [NativeHoverTheory(true)]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Enhanced_hover_starts_on_a_browser_hidden_a_moment_ago(bool fromSettings)
+    {
+        string path = BrowserCases().Select(c => (string)c[0]).First(p => Path.GetFileName(p) == "chrome.exe");
+        const string page = """
+            <!doctype html><title>FreshState</title><style>body{margin:0}section{position:absolute;top:0;width:40vw;height:70vh}
+            #a{left:0}#b{left:50vw}.preview{display:none}section:hover .preview{display:block}</style>
+            <section id=a>A<div class=preview>Preview A</div></section><section id=b>B<div class=preview>Dropdown B</div></section>
+            <script>let dom='none',enter=0,leave=0;for(const x of [a,b]){x.onmouseenter=()=>{dom=x.id;enter++};x.onmouseleave=()=>{dom='none';leave++}}
+            setInterval(()=>{let x=document.querySelector('section:hover');document.title=`FreshState css=${x?.id||'none'} dom=${dom} preview=${x?getComputedStyle(x.lastChild).display:'none'} visibility=${document.visibilityState} enter=${enter} leave=${leave}`},30)</script>
+            """;
+        var before = PipHoverApps.Preferences;
+        var failures = new StringBuilder();
+        try
+        {
+            if (fromSettings) PipHoverApps.Preferences = new WinScreen.Settings.PipHoverPreferences { Browsers = true };
+            for (int run = 0; run < 4; run++)
+            {
+                var (browser, window, root) = Open(page, "FreshState", app: true, path);
+                var log = new StringBuilder();
+                try
+                {
+                    Visit(window, (view, at, l) =>
+                    {
+                        int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - Desktop.BoundsOf(window).Top;
+                        if (!fromSettings) view.Invoke(() => view.SetEnhancedHover(true));
+                        Assert.True(view.LiveInteraction!.EnhancedHover);
+                        // One jump and then stillness, as when a pointer comes to rest: nothing later can repair a missed start.
+                        Desktop.SlideMouse(at(new Point(150, top + 140)));
+                        Thread.Sleep(2500);
+                        if (!WindowInfo.Title(window).Contains("css=a dom=a preview=block visibility=visible"))
+                            l.AppendLine($"NOT HELD {WindowInfo.Title(window)}; {Surroundings(window)}; {view.LiveInteraction?.HoverStatus}");
+                    }, log);
+                }
+                finally { Close(browser, root); }
+                if (log.ToString().Contains("NOT HELD") || log.ToString().Contains("EXC ")) failures.AppendLine($"run {run}: {log}");
+            }
+        }
+        finally { PipHoverApps.Preferences = before; }
+        output.WriteLine(failures.ToString());
+        Assert.True(failures.Length == 0, failures.ToString());
+    }
+
 
     [NativeHoverFact]
     public async Task A_hook_owner_crash_restores_a_parked_browser_and_clears_hover()

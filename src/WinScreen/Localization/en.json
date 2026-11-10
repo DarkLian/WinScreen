@@ -325,6 +325,7 @@
   "settings.pip.hover.browsers": "Chrome, Edge, Brave and Vivaldi",
   "settings.pip.hover.electron": "VS Code, Discord and similar apps",
   "settings.pip.hover.explorer": "File Explorer",
+  "settings.pip.hover.firefox": "Firefox",
   "settings.pip.hover.help": "Views of the apps you pick start with Enhanced hover on. You can still change it for one view from its menu.",
   "settings.pip.hover.programs": "Other programs",
   "settings.pip.hover.programsHelp": "Add a program to try it there. Leave out games that use anti-cheat.",

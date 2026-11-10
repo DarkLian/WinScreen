@@ -325,6 +325,7 @@
   "settings.pip.hover.browsers": "Chrome、Edge、Brave 和 Vivaldi",
   "settings.pip.hover.electron": "VS Code、Discord 等類似應用程式",
   "settings.pip.hover.explorer": "檔案總管",
+  "settings.pip.hover.firefox": "Firefox",
   "settings.pip.hover.help": "所選應用程式的檢視會預設開啟增強懸停。你仍可在某個檢視的功能表中個別變更。",
   "settings.pip.hover.programs": "其他程式",
   "settings.pip.hover.programsHelp": "新增程式即可在其中試用。請勿新增使用反作弊的遊戲。",
