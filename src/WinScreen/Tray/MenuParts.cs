@@ -16,7 +16,7 @@ internal static class MenuParts
         FullScreen = '', Undo = '', Copy = '', Folder = '', Save = '', More = '',
         Settings = '', Sync = '', Info = '', Power = '', View = '', Crop = '',
         Star = '', Help = '', Minimize = '', Close = '', Warning = '', Page = '',
-        Monitor = '', Sliders = '', Brightness = '', Repair = '', History = '';
+        Monitor = '', Home = '', Keyboard = '', Mouse = '', Bar = '', Palette = '', Apps = '', Search = '', Sliders = '', Brightness = '', Repair = '', History = '';
 
     internal static int SystemDpi
     {
@@ -26,11 +26,12 @@ internal static class MenuParts
     internal static int Scale(int value) => (int)Math.Round(value * SystemDpi / 96.0);
 
     /// <summary>A small picture of a glyph in the menu's text colour, or null where the icon font is missing.</summary>
-    internal static Image? Icon(char glyph)
+    internal static Image? Icon(char glyph) => Icon(glyph, MenuStyle.Text);
+
+    internal static Image? Icon(char glyph, Color color)
     {
         _hasFont ??= FontFamily.Families.Any(family => family.Name == IconFont);
         if (_hasFont != true) return null;
-        Color color = MenuStyle.Text;
         int size = Scale(16);
         if (Icons.TryGetValue((glyph, size, color.ToArgb()), out Image? cached)) return cached;
         var picture = new Bitmap(size, size);

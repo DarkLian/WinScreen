@@ -12,7 +12,7 @@ public sealed class SettingsLayoutTests
     [InlineData("en", 100)] [InlineData("en", 150)] [InlineData("en", 200)]
     [InlineData("zh-Hans", 100)] [InlineData("zh-Hans", 150)] [InlineData("zh-Hans", 200)]
     [InlineData("zh-Hant", 100)] [InlineData("zh-Hant", 150)] [InlineData("zh-Hant", 200)]
-    public void Scaled_layout_keeps_save_and_cancel_inside_the_work_area(string language, int percent)
+    public void Scaled_layout_keeps_save_and_discard_inside_the_window(string language, int percent)
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
@@ -26,14 +26,22 @@ public sealed class SettingsLayoutTests
                 window.Show();
                 Application.DoEvents();
                 Assert.True(Screen.FromControl(window).WorkingArea.Contains(window.Bounds));
+                // Save and Discard sit in a bar that is only there while something waits to be saved.
+                window.SetOption(nameof(AppSettings.ShowNotifications), false);
+                window.RefreshApply();
+                Assert.True(window.HasChanges);
+                Application.DoEvents();
                 TabControl tabs = Descendants(window).OfType<TabControl>().Single();
                 foreach (int page in Enumerable.Range(0, tabs.TabPages.Count))
                 {
                     tabs.SelectedIndex = page;
                     Application.DoEvents();
                     foreach (Button button in Descendants(window).OfType<Button>().Where(button =>
-                        button.Text == UiText.T("settings.save") || button.Text == UiText.T("common.cancel")))
+                        button.Text == UiText.T("settings.save") || button.Text == UiText.T("settings.discard")))
+                    {
+                        Assert.True(button.Visible, button.Text);
                         Assert.True(window.ClientRectangle.Contains(window.RectangleToClient(button.RectangleToScreen(button.ClientRectangle))));
+                    }
                     if (Environment.GetEnvironmentVariable("WINSCREEN_LAYOUT_EVIDENCE") is { } folder)
                     {
                         Directory.CreateDirectory(folder);

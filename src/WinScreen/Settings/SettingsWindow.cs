@@ -8,28 +8,28 @@ namespace WinScreen.Settings;
 /// <summary>The settings window. Apply puts the changes into effect and keeps it open; Save does that and closes it.</summary>
 public sealed class SettingsWindow : Form
 {
-    private const int ContentWidth = 490;
+    private const int ContentWidth = SwitchBox.RowWidth + 20;
 
     private readonly AppSettings _settings;
     private AppSettings? _pendingImport;
     private readonly NumericUpDown _opacityStep = new() { Minimum = 1, Maximum = 25, Width = 70 };
-    private readonly CheckBox _opacityWheel = new() { Text = T("settings.opacity.wheel"), AutoSize = true };
-    private readonly CheckBox _layeredGlass = new() { Text = T("settings.effects.layeredGlass"), AutoSize = true };
-    private readonly CheckBox _pictureSafeDark = new() { Text = T("settings.effects.pictureSafeDark"), AutoSize = true };
+    private readonly CheckBox _opacityWheel = new SwitchBox { Text = T("settings.opacity.wheel"), AutoSize = true };
+    private readonly CheckBox _layeredGlass = new SwitchBox { Text = T("settings.effects.layeredGlass"), AutoSize = true };
+    private readonly CheckBox _pictureSafeDark = new SwitchBox { Text = T("settings.effects.pictureSafeDark"), AutoSize = true };
     private readonly NumericUpDown _glassBackground = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _glassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _glassPictures = new() { Minimum = 20, Maximum = 100, Width = 70 };
-    private readonly CheckBox _detectDark = new() { Text = T("settings.dark.detect"), AutoSize = true };
+    private readonly CheckBox _detectDark = new SwitchBox { Text = T("settings.dark.detect"), AutoSize = true };
     private readonly TextBox _borderColor = new() { Width = 90 };
     private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _borderThickness = new() { Minimum = 1, Maximum = 12, Width = 70 };
-    private readonly CheckBox _autoAnchors = new() { Text = T("anchors.auto.enable"), AutoSize = true };
+    private readonly CheckBox _autoAnchors = new SwitchBox { Text = T("anchors.auto.enable"), AutoSize = true };
     private readonly ComboBox _anchorSide = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
     private readonly ComboBox _anchorLook = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
     private readonly NumericUpDown _anchorLimit = new() { Minimum = 1, Maximum = 10, Width = 70 };
     private readonly NumericUpDown _anchorSize = new() { Minimum = 32, Maximum = 72, Increment = 4, Width = 70 };
-    private readonly CheckBox _anchorRecency = new() { Text = T("anchors.recency"), AutoSize = true };
-    private readonly CheckBox _anchorAvoid = new() { Text = T("anchors.avoid"), AutoSize = true };
+    private readonly CheckBox _anchorRecency = new SwitchBox { Text = T("anchors.recency"), AutoSize = true };
+    private readonly CheckBox _anchorAvoid = new SwitchBox { Text = T("anchors.avoid"), AutoSize = true };
     private readonly ListBox _anchorOnly = new() { Dock = DockStyle.Fill, IntegralHeight = false };
     private readonly ListBox _anchorExcluded = new() { Dock = DockStyle.Fill, IntegralHeight = false };
     private readonly ComboBox _newAnchorOnly = ProgramPicker();
@@ -38,7 +38,11 @@ public sealed class SettingsWindow : Form
     private readonly ComboBox _toolbarTrigger = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
     private readonly NumericUpDown _toolbarDelay = new() { Minimum = 100, Maximum = 2000, Increment = 100, Width = 90 };
     private readonly CheckedListBox _toolbarButtons = new() { CheckOnClick = true, Width = 455, Height = 225, IntegralHeight = false };
-    private readonly TabControl _tabs = new() { Size = new Size(540, 520), Multiline = true };
+    // The pages. Its own row of tabs is hidden: the list on the left chooses the page.
+    private readonly TabControl _tabs = new PagesControl { Size = new Size(540, 520), TabStop = false, Multiline = true };
+    private readonly NavList _nav = new() { Dock = DockStyle.Fill };
+    private readonly TextBox _search = new();
+    private readonly Panel _saveBar = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly TextBox _actionSearch = new() { Dock = DockStyle.Top };
     private readonly Panel _shortcutEditor = new() { Dock = DockStyle.Fill, Height = 28 };
     private readonly Label _shortcutLabel = new() { AutoSize = true };
@@ -54,19 +58,19 @@ public sealed class SettingsWindow : Form
     private readonly ComboBox _pipRate = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
     private readonly ComboBox _pipScaling = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private readonly NumericUpDown _pipOpacity = new() { Minimum = 10, Maximum = 100, Width = 75 };
-    private readonly CheckBox _pipTaskbar = new() { Text = T("pip.taskbar.enable"), AutoSize = true };
+    private readonly CheckBox _pipTaskbar = new SwitchBox { Text = T("pip.taskbar.enable"), AutoSize = true };
     private readonly ComboBox _pipPreview = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
-    private readonly CheckBox _pipCaptureBorder = new() { Text = T("pip.captureBorder.hide"), AutoSize = true };
-    private readonly CheckBox _pipDiagnostics = new() { Text = T("pip.diagnostics.includeHardware"), AutoSize = true };
+    private readonly CheckBox _pipCaptureBorder = new SwitchBox { Text = T("pip.captureBorder.hide"), AutoSize = true };
+    private readonly CheckBox _pipDiagnostics = new SwitchBox { Text = T("pip.diagnostics.includeHardware"), AutoSize = true };
     private readonly List<int> _pipRates = [.. PipPreferences.FrameRates];
 
-    private readonly CheckBox _showNotifications = new()
+    private readonly CheckBox _showNotifications = new SwitchBox
         { Text = T("settings.notifications.enable"), AutoSize = true };
 
-    private readonly CheckBox _automaticUpdates = new()
+    private readonly CheckBox _automaticUpdates = new SwitchBox
         { Text = T("updates.enable"), AutoSize = true };
 
-    private readonly CheckBox _experimental = new()
+    private readonly CheckBox _experimental = new SwitchBox
         { Text = T("settings.experimental.enable"), AutoSize = true };
 
 private readonly ErrorProvider _errors = new();
@@ -93,51 +97,55 @@ private readonly ErrorProvider _errors = new();
         Width = 70,
     };
 
-    private readonly CheckBox _startWithWindows = new() { Text = T("settings.startWithWindows"), AutoSize = true };
+    private readonly CheckBox _startWithWindows = new SwitchBox { Text = T("settings.startWithWindows"), AutoSize = true };
 
-    private readonly CheckBox _showToolbar = new()
+    private readonly CheckBox _showToolbar = new SwitchBox
         { Text = T("settings.toolbar.enable"), AutoSize = true };
 
     private readonly CheckBox _pauseInFullScreen =
-        new() { Text = T("settings.fullScreen.pause"), AutoSize = true };
+        new SwitchBox { Text = T("settings.fullScreen.pause"), AutoSize = true };
 
     private readonly CheckBox _allowPip =
-        new() { Text = T("settings.fullScreen.allowPip"), AutoSize = true };
+        new SwitchBox { Text = T("settings.fullScreen.allowPip"), AutoSize = true };
 
-    private readonly CheckBox _modifierDrag = new()
+    private readonly CheckBox _modifierDrag = new SwitchBox
         { Text = T("gestures.moveResize.enable"), AutoSize = true };
 
-    private readonly CheckBox _snapWhileDragging = new() { Text = T("gestures.moveResize.snap"), AutoSize = true };
+    private readonly CheckBox _snapWhileDragging = new SwitchBox { Text = T("gestures.moveResize.snap"), AutoSize = true };
     private readonly ComboBox _modifierKey = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
 
     private readonly ListBox _modifierExclusions = new() { Dock = DockStyle.Fill, IntegralHeight = false };
     private readonly ComboBox _newModifierExclusion = ProgramPicker();
-    private readonly CheckBox _windowMenu = new() { Text = T("gestures.menu.enable"), AutoSize = true };
+    private readonly CheckBox _windowMenu = new SwitchBox { Text = T("gestures.menu.enable"), AutoSize = true };
     private readonly ComboBox _windowMenuGesture = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
     private readonly ListBox _windowMenuExclusions = new() { Dock = DockStyle.Fill, IntegralHeight = false };
     private readonly ComboBox _newMenuExclusion = ProgramPicker();
 
-    private readonly CheckBox _pausePin = new()
+    private readonly CheckBox _pausePin = new SwitchBox
         { Text = T("settings.pin.pauseMaximized"), AutoSize = true };
 
-    private readonly CheckBox _opaqueOnHover = new()
+    private readonly CheckBox _opaqueOnHover = new SwitchBox
         { Text = T("settings.opacity.solidOnHover"), AutoSize = true };
 
-    private readonly CheckBox _highlightPinned = new()
+    private readonly CheckBox _highlightPinned = new SwitchBox
         { Text = T("settings.pin.highlight"), AutoSize = true };
 
-    private readonly CheckBox _pipAutoMove = new()
+    private readonly CheckBox _pipAutoMove = new SwitchBox
         { Text = T("settings.pip.autoMove"), AutoSize = true };
-    private readonly CheckBox _hoverAutomatic = new() { Text = T("settings.pip.hover.automatic"), AutoSize = true };
+    private readonly CheckBox _hoverAutomatic = new SwitchBox { Text = T("settings.pip.hover.automatic"), AutoSize = true };
     private readonly ListBox _originalPrograms = new() { Dock = DockStyle.Fill, IntegralHeight = false };
     private readonly ComboBox _newOriginalProgram = ProgramPicker();
-    private readonly CheckBox _hoverBrowsers = new() { Text = T("settings.pip.hover.browsers"), AutoSize = true };
-    private readonly CheckBox _hoverFirefox = new() { Text = T("settings.pip.hover.firefox"), AutoSize = true };
-    private readonly CheckBox _hoverElectron = new() { Text = T("settings.pip.hover.electron"), AutoSize = true };
-    private readonly CheckBox _hoverExplorer = new() { Text = T("settings.pip.hover.explorer"), AutoSize = true };
+    private readonly CheckBox _hoverBrowsers = new SwitchBox { Text = T("settings.pip.hover.browsers"), AutoSize = true };
+    private readonly CheckBox _hoverFirefox = new SwitchBox { Text = T("settings.pip.hover.firefox"), AutoSize = true };
+    private readonly CheckBox _hoverElectron = new SwitchBox { Text = T("settings.pip.hover.electron"), AutoSize = true };
+    private readonly CheckBox _hoverExplorer = new SwitchBox { Text = T("settings.pip.hover.explorer"), AutoSize = true };
     private readonly ListBox _hoverPrograms = new() { Dock = DockStyle.Fill, IntegralHeight = false };
     private readonly ComboBox _newHoverProgram = ProgramPicker();
     private Control? _hoverOptions;
+    private readonly FlowLayoutPanel _appRows = new() { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowAndShrink, Margin = Padding.Empty, BackColor = SettingsStyle.Card };
+    private readonly ComboBox _newApp = ProgramPicker();
+    private readonly List<string> _addedApps = [];
 
     private readonly HashSet<ProgramSetup> _removedSetups = [];
     private readonly Button _applyButton = new() { Text = T("settings.apply"), AutoSize = true, Enabled = false };
@@ -174,9 +182,11 @@ private readonly ErrorProvider _errors = new();
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(800, 610);
-        MinimumSize = new Size(580, 360);
-        Padding = new Padding(12);
+        ClientSize = new Size(860, 640);
+        MinimumSize = new Size(640, 400);
+        Font = MenuStyle.Font;
+        BackColor = SettingsStyle.Page;
+        ForeColor = MenuStyle.Text;
 
         var tabs = _tabs;
         tabs.Dock = DockStyle.Fill;
@@ -192,7 +202,23 @@ private readonly ErrorProvider _errors = new();
         var toolbarPage = Tab(T("toolbar.settings.title"), BuildToolbar());
         var anchorsPage = Tab(T("anchors.settings.title"), BuildAnchors());
         tabs.TabPages.AddRange([pipPage, gesturePage, appearancePage, toolbarPage, anchorsPage]);
-        tabs.Selected += (_, _) => { if (tabs.SelectedTab == featuresPage) RefreshFeatures(); };
+        tabs.Selected += (_, _) => { if (tabs.SelectedTab == featuresPage) RefreshFeatures(); _nav.Selected = tabs.SelectedTab; };
+        _nav.Add(generalPage.Text, MenuParts.Home, generalPage);
+        _nav.AddHeading(T("settings.nav.windows"));
+        _nav.Add(featuresPage.Text, MenuParts.Keyboard, featuresPage);
+        _nav.Add(gesturePage.Text, MenuParts.Mouse, gesturePage);
+        _nav.Add(toolbarPage.Text, MenuParts.Bar, toolbarPage);
+        _nav.Add(anchorsPage.Text, MenuParts.Pinned, anchorsPage);
+        _nav.Add(appearancePage.Text, MenuParts.Palette, appearancePage);
+        _nav.AddHeading(T("settings.nav.views"));
+        _nav.Add(pipPage.Text, MenuParts.NewWindow, pipPage);
+        _nav.AddHeading(T("settings.nav.apps"));
+        _nav.Add(tabs.TabPages[2].Text, MenuParts.Apps, tabs.TabPages[2]);
+        _nav.Add(tabs.TabPages[3].Text, MenuParts.Save, tabs.TabPages[3]);
+        _nav.Selected = generalPage;
+        _nav.Chosen += chosen => { tabs.SelectedTab = (TabPage)chosen; ShowSearchMatch(); };
+        _search.PlaceholderText = _search.AccessibleName = T("settings.search");
+        _search.TextChanged += (_, _) => SearchSettings();
         _features.ItemActivate += (_, _) => // A double-click, or Enter from the keyboard.
         {
             if (_features.SelectedItems.Count == 0) return;
@@ -215,7 +241,12 @@ private readonly ErrorProvider _errors = new();
             };
         };
 
-        var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Dock = DockStyle.Fill };
+        var side = new Panel { Dock = DockStyle.Left, Width = 196, BackColor = SettingsStyle.Side, Padding = new Padding(8, 10, 8, 8) };
+        _nav.BackColor = SettingsStyle.Side;
+        side.Controls.Add(_nav);
+        side.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = SettingsStyle.Side });
+        side.Controls.Add(new SearchField(_search));
+        var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Dock = DockStyle.Fill, Padding = new Padding(16, 12, 12, 10) };
         page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -223,6 +254,7 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(_status, 0, 1);
         page.Controls.Add(BuildButtons(), 0, 2);
         Controls.Add(page);
+        Controls.Add(side);
 
         LoadValues();
         _pipAutoMove.Enabled = _experimental.Checked;
@@ -248,13 +280,51 @@ private readonly ErrorProvider _errors = new();
     {
         _savedState = CurrentState();
         _applyButton.Enabled = false;
+        _saveBar.Visible = false;
     }
 
     /// <summary>Rechecks whether there's anything to apply. Changing something and changing it back leaves nothing.</summary>
     internal void RefreshApply()
     {
         _refreshQueued = false;
-        if (!IsDisposed) _applyButton.Enabled = _pendingImport is not null || CurrentState() != _savedState;
+        if (IsDisposed) return;
+        _applyButton.Enabled = _pendingImport is not null || CurrentState() != _savedState;
+        _saveBar.Visible = _applyButton.Enabled; // The bar is only there while something waits to be saved.
+    }
+
+    /// <summary>Esc closes the window, as the Cancel button it used to have did.</summary>
+    protected override bool ProcessDialogKey(Keys keyData)
+    {
+        if (keyData != Keys.Escape) return base.ProcessDialogKey(keyData);
+        Close();
+        return true;
+    }
+
+    /// <summary>Every piece of text on a page, for finding a setting by a word in it.</summary>
+    private static IEnumerable<Control> WithText(Control parent) => parent.Controls.Cast<Control>()
+        .SelectMany(child => new[] { child }.Concat(WithText(child)))
+        .Where(control => control is Label or CheckBox or Button or SettingsCard && control.Text.Length > 0);
+
+    private bool Matches(Control control) => control.Text.Replace("&", "").Contains(_search.Text.Trim(), StringComparison.CurrentCultureIgnoreCase);
+
+    /// <summary>Leaves only the pages that mention what was typed, and goes to the first of them.</summary>
+    private void SearchSettings()
+    {
+        if (string.IsNullOrWhiteSpace(_search.Text)) { _nav.Filter(null); return; }
+        TabPage[] found = _tabs.TabPages.Cast<TabPage>().Where(page => Matches(page) || WithText(page).Any(Matches)).ToArray();
+        _nav.Filter(found);
+        if (found.Length == 0) return;
+        if (!found.Contains(_tabs.SelectedTab)) _tabs.SelectedTab = found[0];
+        ShowSearchMatch();
+    }
+
+    /// <summary>Scrolls the page to the first thing on it that matches the search.</summary>
+    private void ShowSearchMatch()
+    {
+        if (string.IsNullOrWhiteSpace(_search.Text) || _tabs.SelectedTab is not { } page) return;
+        if (WithText(page).FirstOrDefault(Matches) is { } match)
+            for (Control? up = match; up is not null && up != page; up = up.Parent)
+                if (up.Parent is ScrollableControl { AutoScroll: true } scroller) scroller.ScrollControlIntoView(match);
     }
 
     // Some controls report a change before it happens, so the check waits for the change to land.
@@ -539,11 +609,102 @@ private readonly ErrorProvider _errors = new();
             _hover = _hover with { Browsers = _hoverBrowsers.Checked, Firefox = _hoverFirefox.Checked,
                 Electron = _hoverElectron.Checked, FileExplorer = _hoverExplorer.Checked };
         _hoverShowsOwn = own;
-        _hoverBrowsers.Enabled = _hoverFirefox.Enabled = _hoverElectron.Enabled = _hoverExplorer.Enabled = own;
+        bool allowed = _hoverOptions?.Enabled != false;
+        _hoverAutomatic.Enabled = allowed;
+        _hoverBrowsers.Enabled = _hoverFirefox.Enabled = _hoverElectron.Enabled = _hoverExplorer.Enabled = own && allowed;
         _hoverBrowsers.Checked = own ? _hover.Browsers : Pip.PipHoverApps.Recommended(Pip.PipHoverApp.Browser);
         _hoverFirefox.Checked = own ? _hover.Firefox : Pip.PipHoverApps.Recommended(Pip.PipHoverApp.Firefox);
         _hoverElectron.Checked = own ? _hover.Electron : Pip.PipHoverApps.Recommended(Pip.PipHoverApp.Electron);
         _hoverExplorer.Checked = own ? _hover.FileExplorer : Pip.PipHoverApps.Recommended(Pip.PipHoverApp.FileExplorer);
+    }
+
+    /// <summary>
+    /// Fills the table of apps: the four kinds WinScreen knows, then every program named for Enhanced hover or for
+    /// showing its original. A program has one or the other, never both: with its original shown, nothing is sent to it.
+    /// </summary>
+    private void RebuildApps()
+    {
+        const int hoverAt = SwitchBox.RowWidth - 190, originalAt = SwitchBox.RowWidth - 100, removeAt = SwitchBox.RowWidth - 36;
+        bool hoverAllowed = _hoverOptions?.Enabled != false;
+        _appRows.SuspendLayout();
+        foreach (Control row in _appRows.Controls.Cast<Control>().ToArray())
+        {
+            foreach (CheckBox kind in new[] { _hoverBrowsers, _hoverFirefox, _hoverElectron, _hoverExplorer }) row.Controls.Remove(kind);
+            _appRows.Controls.Remove(row);
+            row.Dispose();
+        }
+        Panel Row(string name, bool heading)
+        {
+            var row = new Panel { Size = new Size(SwitchBox.RowWidth, heading ? 24 : 34), Margin = new Padding(3, 0, 3, 0), BackColor = SettingsStyle.Card };
+            row.Controls.Add(new Label { Text = name, AutoSize = false, Bounds = new Rectangle(1, 0, hoverAt - 8, row.Height),
+                TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, UseMnemonic = false,
+                ForeColor = heading ? MenuStyle.Muted : MenuStyle.Text, Font = heading ? MenuStyle.SmallFont : MenuStyle.Font });
+            return row;
+        }
+        void Place(Panel row, Control control, int at)
+        {
+            control.Location = new Point(at, (row.Height - control.Height) / 2);
+            row.Controls.Add(control);
+            control.BringToFront();
+        }
+        Panel head = Row(T("settings.pip.apps.app"), true);
+        foreach (var (text, at) in new[] { (T("menu.view.hover"), hoverAt), (T("settings.pip.apps.original"), originalAt) })
+            Place(head, new Label { Text = text, AutoSize = true, ForeColor = MenuStyle.Muted, Font = MenuStyle.SmallFont, UseMnemonic = false }, at - 4);
+        _appRows.Controls.Add(head);
+        foreach (CheckBox kind in new[] { _hoverBrowsers, _hoverFirefox, _hoverElectron, _hoverExplorer })
+        {
+            Panel row = Row(kind.Text, false);
+            kind.Size = kind.GetPreferredSize(Size.Empty);
+            Place(row, kind, hoverAt);
+            _appRows.Controls.Add(row);
+        }
+        bool Listed(ListBox list, string name) => list.Items.Cast<string>().Contains(name, StringComparer.OrdinalIgnoreCase);
+        void Unlist(ListBox list, string name)
+        {
+            foreach (string item in list.Items.Cast<string>().Where(item => item.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray())
+                list.Items.Remove(item);
+        }
+        string[] programs = _hoverPrograms.Items.Cast<string>().Concat(_originalPrograms.Items.Cast<string>()).Concat(_addedApps)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        foreach (string program in programs)
+        {
+            Panel row = Row(program, false);
+            var hover = new SwitchBox { Compact = true, Checked = Listed(_hoverPrograms, program), Enabled = hoverAllowed,
+                AccessibleName = program + ": " + T("menu.view.hover") };
+            var original = new SwitchBox { Compact = true, Checked = Listed(_originalPrograms, program),
+                AccessibleName = program + ": " + T("settings.pip.apps.original") };
+            hover.Size = hover.GetPreferredSize(Size.Empty);
+            original.Size = original.GetPreferredSize(Size.Empty);
+            hover.CheckedChanged += (_, _) =>
+            {
+                if (hover.Checked) { AddProgram(_hoverPrograms, program); original.Checked = false; }
+                else Unlist(_hoverPrograms, program);
+                if (!_addedApps.Contains(program, StringComparer.OrdinalIgnoreCase)) _addedApps.Add(program);
+                QueueApplyRefresh();
+            };
+            original.CheckedChanged += (_, _) =>
+            {
+                if (original.Checked) { AddProgram(_originalPrograms, program); hover.Checked = false; }
+                else Unlist(_originalPrograms, program);
+                if (!_addedApps.Contains(program, StringComparer.OrdinalIgnoreCase)) _addedApps.Add(program);
+                QueueApplyRefresh();
+            };
+            var remove = new PlainButton { Text = "\u00D7", AutoSize = false, Size = new Size(26, 24), Padding = Padding.Empty,
+                AccessibleName = T("common.remove") + ": " + program };
+            remove.Click += (_, _) =>
+            {
+                Unlist(_hoverPrograms, program);
+                Unlist(_originalPrograms, program);
+                _addedApps.RemoveAll(name => name.Equals(program, StringComparison.OrdinalIgnoreCase));
+                BeginInvoke(RebuildApps); // Not from inside the click of a button this removes.
+                QueueApplyRefresh();
+            };
+            Place(row, hover, hoverAt);
+            Place(row, original, originalAt);
+            Place(row, remove, removeAt);
+            _appRows.Controls.Add(row);
+        }
+        _appRows.ResumeLayout(true);
     }
 
     private static ComboBox ProgramPicker()
@@ -675,6 +836,8 @@ private readonly ErrorProvider _errors = new();
         _originalPrograms.Items.AddRange(values.PipOriginalPrograms.Cast<object>().ToArray());
         _hoverPrograms.Items.Clear();
         _hoverPrograms.Items.AddRange(values.PipHover.Programs.Cast<object>().ToArray());
+        _addedApps.Clear();
+        RebuildApps();
         PipPreferences pip = values.Pip.Validated();
         if (!_pipRates.Contains(pip.FrameRate)) _pipRates.Add(pip.FrameRate);
         int refresh = Pip.PipDisplay.CachedRefresh(Handle);
@@ -710,55 +873,63 @@ private readonly ErrorProvider _errors = new();
 
     private static TabPage Tab(string title, Control content)
     {
-        var tab = new TabPage(title) { Padding = new Padding(8) };
+        var tab = new TabPage(title) { Padding = new Padding(0, 4, 0, 0), UseVisualStyleBackColor = false, BackColor = SettingsStyle.Page };
         tab.Controls.Add(content);
         return tab;
     }
 
+    /// <summary>A line of explanation under the option it belongs to.</summary>
     private static Label Note(string text) => new()
     {
-        Text = text, AutoSize = true, MaximumSize = new Size(ContentWidth - 30, 0), Margin = new Padding(22, 0, 3, 3),
+        Text = text, AutoSize = true, MaximumSize = new Size(SwitchBox.RowWidth - 8, 0), Margin = new Padding(7, 0, 3, 8),
+        ForeColor = MenuStyle.Muted, Font = MenuStyle.SmallFont,
     };
 
     /// <summary>A titled group of options.</summary>
-    private static GroupBox Section(string title, params Control[] items)
+    private static SettingsCard Section(string title, params Control[] items) => Card(title, false, items);
+
+    private static SettingsCard Card(string title, bool experimental, params Control[] items)
     {
-        var options = new FlowLayoutPanel
-        {
-            FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Fill,
-        };
         foreach (Control item in items)
-        {
-            if (item is CheckBox option)
-            {
-                option.MaximumSize = new Size(ContentWidth - 30, 0);
-                option.Margin = new Padding(3, 1, 3, 1);
-            }
+            if (item is CheckBox option) option.Margin = new Padding(3, 0, 3, 0);
+        return new SettingsCard(title, experimental, T("settings.experimental"), ContentWidth, items);
+    }
 
-            options.Controls.Add(item);
-        }
+    /// <summary>One option: what it is on the left, the control that sets it on the right.</summary>
+    private static Control SettingRow(string text, Control control)
+    {
+        var row = new Panel { Size = new Size(SwitchBox.RowWidth, Math.Max(36, control.Height + 10)), Margin = new Padding(3, 0, 3, 0) };
+        control.Margin = Padding.Empty;
+        control.Location = new Point(row.Width - control.Width - 6, (row.Height - control.Height) / 2);
+        control.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        row.Controls.Add(control);
+        row.Controls.Add(new Label { Text = text, AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(2, 0, 0, 0) });
+        return row;
+    }
 
-        var group = new GroupBox
-        {
-            Text = title, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            MinimumSize = new Size(ContentWidth - 4, 0), Margin = new Padding(0, 0, 0, 6),
-        };
-        group.Controls.Add(options);
-        return group;
+    /// <summary>A page that scrolls: cards one under another.</summary>
+    private static FlowLayoutPanel ScrollingPage() => new()
+    {
+        FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true,
+        BackColor = SettingsStyle.Page, Padding = new Padding(0, 0, 6, 0),
+    };
+
+    /// <summary>A plain titled box for a page that is one big list.</summary>
+    private static Panel TitledBox(string title, Control content)
+    {
+        var box = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 0, 0, 8), Text = title };
+        content.Dock = DockStyle.Fill;
+        box.Controls.Add(content);
+        box.Controls.Add(new Label { Text = title, Dock = DockStyle.Top, AutoSize = false, Height = 26, Font = MenuStyle.TitleFont,
+            TextAlign = ContentAlignment.MiddleLeft });
+        return box;
     }
 
     private FlowLayoutPanel BuildGeneral()
     {
-        var language = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
-        language.Controls.Add(new Label
-            { Text = T("settings.language"), AutoSize = true, Margin = new Padding(3, 6, 8, 0) });
-        _language.Width = 150;
-        language.Controls.Add(_language);
-
-        var theme = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
-        theme.Controls.Add(new Label { Text = T("settings.theme"), AutoSize = true, Margin = new Padding(3, 6, 8, 0) });
-        theme.Controls.Add(_theme);
+        _language.Width = 170;
+        Control language = SettingRow(T("settings.language").TrimEnd(':', '：'), _language);
+        Control theme = SettingRow(T("settings.theme").TrimEnd(':', '：'), _theme);
 
         var startup = new List<Control> { language, theme, _startWithWindows, _showNotifications, _automaticUpdates };
         bool updatesWork = VelopackUpdateSession.IsConfigured && VelopackUpdateSession.IsInstalled;
@@ -768,8 +939,7 @@ private readonly ErrorProvider _errors = new();
         else if (!VelopackUpdateSession.IsInstalled)
             startup.Add(Note(T("updates.installedOnly")));
 
-        var page = new FlowLayoutPanel
-            { FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true };
+        FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("settings.startupAndUpdates"), startup.ToArray()));
         page.Controls.Add(Section(T("settings.windows"), _pauseInFullScreen, _allowPip));
         page.Controls.Add(Section(T("settings.experimental"), _experimental));
@@ -777,7 +947,7 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(new Label
         {
             Text = string.Format(T("app.version"), AppInfo.Version), AutoSize = true,
-            ForeColor = SystemColors.GrayText, Margin = new Padding(3, 2, 3, 0),
+            ForeColor = MenuStyle.Muted, Font = MenuStyle.SmallFont, Margin = new Padding(3, 2, 3, 0),
         });
         return page;
     }
@@ -785,16 +955,13 @@ private readonly ErrorProvider _errors = new();
     private FlowLayoutPanel BuildModifierDrag()
     {
         _modifierKey.Items.AddRange(["Alt", "Win"]);
-        var key = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
-        key.Controls.Add(new Label { Text = T("gestures.moveResize.modifier"), Width = 145, Height = 26, TextAlign = ContentAlignment.MiddleLeft });
-        key.Controls.Add(_modifierKey);
-        var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false,
-            Dock = DockStyle.Fill, AutoScroll = true };
+        Control key = SettingRow(T("gestures.moveResize.modifier").TrimEnd(':', '：'), _modifierKey);
+        FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("gestures.moveResize.title"), _modifierDrag, key, _snapWhileDragging,
             ProgramRules(T("gestures.exclusions"), _modifierExclusions, _newModifierExclusion)));
         page.Controls.Add(Note(T("gestures.moveResize.help")));
         _windowMenuGesture.Items.AddRange([T("gestures.menu.ctrlRight"), T("gestures.menu.ctrlShiftRight"), T("gestures.menu.ctrlMiddle")]);
-        page.Controls.Add(Section(T("window.menu"), _windowMenu, _windowMenuGesture,
+        page.Controls.Add(Section(T("window.menu"), _windowMenu, SettingRow(T("gestures.menu.gesture"), _windowMenuGesture),
             ProgramRules(T("gestures.exclusions"), _windowMenuExclusions, _newMenuExclusion)));
         page.Controls.Add(Note(T("gestures.menu.help")));
         page.Controls.Add(Note(T("gestures.hookHelp")));
@@ -821,28 +988,50 @@ private readonly ErrorProvider _errors = new();
             foreach (int rate in _pipRates) _pipRate.Items.Add(rate == 0 ? T("pip.frameRate.matchMonitor") : rate + " FPS");
             _pipRate.SelectedIndex = _pipRates.IndexOf(chosen);
         };
-        static Control Row(string label, Control control)
-        {
-            var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
-            row.Controls.Add(new Label { Text = label, Width = 145, AutoSize = false, Height = 26, TextAlign = ContentAlignment.MiddleLeft });
-            row.Controls.Add(control);
-            return row;
-        }
-        var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false,
-            Dock = DockStyle.Fill, AutoScroll = true };
+        static Control Row(string label, Control control) => SettingRow(label, control);
+        FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("pip.open"), Row(T("pip.rendering"), _pipBackend), Row(T("pip.frameRate"), _pipRate),
-            Row(T("pip.scaling"), _pipScaling), Row(T("pip.opacityPercent"), _pipOpacity), _pipCaptureBorder, _pipDiagnostics));
-        page.Controls.Add(Note(T("pip.rendering.compatibilityHelp")));
-        page.Controls.Add(Note(T("pip.rendering.captureIndicatorHelp")));
-        page.Controls.Add(Note(T("pip.diagnostics.retryHelp")));
-        page.Controls.Add(Section(T("settings.experimental"), _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
-        page.Controls.Add(Section(T("settings.pip.original"), Note(T("settings.pip.original.help")),
-            ProgramRules(T("settings.pip.original.programs"), _originalPrograms, _newOriginalProgram)));
-        _hoverOptions = Section(T("pip.enhancedHover"), Note(T("settings.pip.hover.help")), _hoverAutomatic, _hoverBrowsers, _hoverFirefox,
-            _hoverElectron, _hoverExplorer, ProgramRules(T("settings.pip.hover.programs"), _hoverPrograms, _newHoverProgram),
-            Note(T("settings.pip.hover.programsHelp")));
-        page.Controls.Add(_hoverOptions);
-        if (!Pip.PipEnhancedHover.Supported) page.Controls.Add(Note(T("settings.pip.hover.unsupported")));
+            Note(T("pip.rendering.compatibilityHelp")), Note(T("pip.rendering.captureIndicatorHelp")),
+            Row(T("pip.scaling"), _pipScaling), Row(T("pip.opacityPercent"), _pipOpacity), _pipCaptureBorder, _pipDiagnostics,
+            Note(T("pip.diagnostics.retryHelp"))));
+        page.Controls.Add(Card(T("settings.pip.moving"), true, _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
+        // One table says, for each kind of app and each program added, what a view of it does.
+        _hoverOptions = new Control();
+        _hoverOptions.EnabledChanged += (_, _) => { ShowHoverChoices(); RebuildApps(); };
+        foreach (CheckBox kind in new[] { _hoverBrowsers, _hoverFirefox, _hoverElectron, _hoverExplorer })
+        {
+            ((SwitchBox)kind).Compact = true;
+            kind.AccessibleName = kind.Text;
+        }
+        _newApp.Dock = DockStyle.None;
+        _newApp.Width = 300;
+        var add = new PlainButton { Text = T("common.add") };
+        void AddApp()
+        {
+            string name = ProgramName(_newApp.Text);
+            _newApp.Text = "";
+            if (name.Length == 0) return;
+            if (!_addedApps.Contains(name, StringComparer.OrdinalIgnoreCase)) _addedApps.Add(name);
+            // A program is added because it doesn't work through a view; Enhanced hover is the other choice on its row.
+            if (!_hoverPrograms.Items.Cast<string>().Contains(name, StringComparer.OrdinalIgnoreCase)) AddProgram(_originalPrograms, name);
+            RebuildApps();
+            QueueApplyRefresh();
+        }
+        add.Click += (_, _) => AddApp();
+        _newApp.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Enter) return;
+            e.SuppressKeyPress = true;
+            AddApp();
+        };
+        _newApp.Margin = new Padding(0, 2, 8, 0); // Level with the button beside it.
+        add.Margin = Padding.Empty;
+        var adding = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(4, 8, 3, 6), BackColor = SettingsStyle.Card };
+        adding.Controls.Add(_newApp);
+        adding.Controls.Add(add);
+        var parts = new List<Control> { Note(T("settings.pip.apps.help")), _hoverAutomatic, _appRows, adding, Note(T("settings.pip.hover.programsHelp")) };
+        if (!Pip.PipEnhancedHover.Supported) parts.Add(Note(T("settings.pip.hover.unsupported")));
+        page.Controls.Add(Card(T("settings.pip.apps"), true, parts.ToArray()));
         page.Controls.Add(Section(T("pip.hover.title"), _pipTaskbar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));
         return page;
     }
@@ -861,9 +1050,9 @@ private readonly ErrorProvider _errors = new();
         return page;
     }
 
-    private static GroupBox BuildProgramList(string title, ListBox list, ComboBox newProgram)
+    private static Panel BuildProgramList(string title, ListBox list, ComboBox newProgram)
     {
-        var add = new Button { Text = T("common.add"), AutoSize = true };
+        var add = new PlainButton { Text = T("common.add"), AutoSize = true, MinimumSize = new Size(80, 0) };
         add.Click += (_, _) => AddTyped(list, newProgram);
         newProgram.KeyDown += (_, e) =>
         {
@@ -872,7 +1061,7 @@ private readonly ErrorProvider _errors = new();
             e.SuppressKeyPress = true;
             AddTyped(list, newProgram);
         };
-        var remove = new Button { Text = T("common.remove"), AutoSize = true };
+        var remove = new PlainButton { Text = T("common.remove"), AutoSize = true, MinimumSize = new Size(80, 0) };
         remove.Click += (_, _) =>
         {
             if (list.SelectedItem is { } selected)
@@ -886,17 +1075,18 @@ private readonly ErrorProvider _errors = new();
         table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         table.Controls.Add(list, 0, 0);
         table.Controls.Add(remove, 1, 0);
+        // Level with the Add button beside it, whatever their heights.
+        newProgram.Dock = DockStyle.None;
+        newProgram.Anchor = AnchorStyles.Left | AnchorStyles.Right;
         table.Controls.Add(newProgram, 0, 1);
         table.Controls.Add(add, 1, 1);
 
-        var group = new GroupBox { Text = title, Dock = DockStyle.Fill };
-        group.Controls.Add(table);
-        return group;
+        return TitledBox(title, table);
     }
 
-    private GroupBox BuildSetups()
+    private Panel BuildSetups()
     {
-        var remove = new Button { Text = T("common.remove"), AutoSize = true };
+        var remove = new PlainButton { Text = T("common.remove"), AutoSize = true };
         remove.Click += (_, _) =>
         {
             if (_setups.SelectedItem is ProgramSetup selected)
@@ -909,7 +1099,7 @@ private readonly ErrorProvider _errors = new();
                 "settings.setups.help"),
             AutoSize = true,
             MaximumSize = new Size(ContentWidth, 0),
-            Margin = new Padding(0, 0, 0, 8),
+            Margin = new Padding(0, 0, 0, 8), ForeColor = MenuStyle.Muted,
         };
 
         var table = new TableLayoutPanel { ColumnCount = 2, RowCount = 2, Dock = DockStyle.Fill };
@@ -922,34 +1112,48 @@ private readonly ErrorProvider _errors = new();
         table.Controls.Add(_setups, 0, 1);
         table.Controls.Add(remove, 1, 1);
 
-        var group = new GroupBox { Text = T("settings.savedSetups"), Dock = DockStyle.Fill };
-        group.Controls.Add(table);
-        return group;
+        return TitledBox(T("settings.savedSetups"), table);
     }
 
-    private FlowLayoutPanel BuildButtons()
+    private Control BuildButtons()
     {
-        var save = new Button { Text = T("settings.save"), AutoSize = true };
-        save.Click += (_, _) =>
+        var save = new PlainButton { Text = T("settings.save"), Primary = true, Anchor = AnchorStyles.Right };
+        save.Click += (_, _) => ApplyChanges();
+        AcceptButton = null;
+        var discard = new PlainButton { Text = T("settings.discard"), Anchor = AnchorStyles.Right };
+        discard.Click += (_, _) =>
         {
-            if (SaveChanges())
-                Close();
+            _pendingImport = null;
+            _removedSetups.Clear();
+            LoadValues();
+            _status.Text = "";
+            RefreshApply();
         };
-        var cancel = new Button { Text = T("common.cancel"), AutoSize = true, DialogResult = DialogResult.Cancel };
-        cancel.Click += (_, _) => Close();
-        CancelButton = cancel;
         _applyButton.Click += (_, _) => ApplyChanges();
 
-        var row = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 8, 0, 0) };
-        row.Controls.Add(save);
-        row.Controls.Add(cancel);
-        row.Controls.Add(_applyButton);
-        return row;
+        var text = new Label { Text = T("settings.unsaved"), AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = MenuStyle.Accent,
+            BackColor = MenuStyle.AccentBack, Margin = new Padding(12, 0, 0, 0) };
+        var row = new TableLayoutPanel { ColumnCount = 3, RowCount = 1, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            BackColor = MenuStyle.AccentBack, Padding = new Padding(0, 6, 8, 6) };
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        row.Controls.Add(text, 0, 0);
+        row.Controls.Add(discard, 1, 0);
+        row.Controls.Add(save, 2, 0);
+        _saveBar.Controls.Add(row);
+        _saveBar.AutoSize = true; // As tall as its buttons, whatever the display scale.
+        _saveBar.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _saveBar.BackColor = MenuStyle.AccentBack;
+        _saveBar.Dock = DockStyle.None;
+        _saveBar.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _saveBar.Margin = new Padding(0, 8, 0, 0);
+        return _saveBar;
     }
 
     private Control BuildTransfer()
     {
-        var export = new Button { Text = T("settings.transfer.export"), AutoSize = true };
+        var export = new PlainButton { Text = T("settings.transfer.export"), AutoSize = true };
         export.Click += (_, _) =>
         {
             using var dialog = new SaveFileDialog { Filter = "JSON (*.json)|*.json", DefaultExt = "json", FileName = "WinScreen-settings.json" };
@@ -957,7 +1161,7 @@ private readonly ErrorProvider _errors = new();
             try { SettingsTransfer.Export(_settings, dialog.FileName); _status.Text = T("settings.transfer.exported"); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { _status.Text = e.Message; }
         };
-        var import = new Button { Text = T("settings.transfer.import"), AutoSize = true };
+        var import = new PlainButton { Text = T("settings.transfer.import"), AutoSize = true };
         import.Click += (_, _) =>
         {
             using var dialog = new OpenFileDialog { Filter = "JSON (*.json)|*.json" };
@@ -972,29 +1176,25 @@ private readonly ErrorProvider _errors = new();
             catch (Exception e) when (e is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
             { _status.Text = e.Message; }
         };
-        return Section(T("settings.transfer.title"), Note(T("settings.transfer.paths")), export, import);
+        export.Margin = new Padding(0, 0, 8, 0);
+        import.Margin = Padding.Empty;
+        var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(4, 8, 3, 8), BackColor = SettingsStyle.Card };
+        buttons.Controls.Add(export);
+        buttons.Controls.Add(import);
+        return Section(T("settings.transfer.title"), buttons, Note(T("settings.transfer.paths")));
     }
 
     private FlowLayoutPanel BuildCustomization()
     {
-        var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true };
+        FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("settings.opacity.title"), SettingRow(T("settings.opacity.default"), _defaultOpacity),
             SettingRow(T("settings.opacity.step"), _opacityStep), _opacityWheel, _opaqueOnHover));
         page.Controls.Add(Section(T("settings.pin.border"), _pausePin, _highlightPinned, SettingRow(T("settings.pin.color"), _borderColor),
             SettingRow(T("settings.pin.opacity"), _borderOpacity), SettingRow(T("settings.pin.thickness"), _borderThickness)));
-        page.Controls.Add(_detectDark);
-        page.Controls.Add(Section(T("settings.effects.title"), _layeredGlass,
+        page.Controls.Add(Section(T("settings.effects.title"), _detectDark, _layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.pictures"), _glassPictures), _pictureSafeDark, Note(T("settings.effects.help"))));
         return page;
-    }
-
-    private static Control SettingRow(string text, Control control)
-    {
-        var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
-        row.Controls.Add(new Label { Text = text, AutoSize = true, Margin = new Padding(3, 6, 8, 0) });
-        row.Controls.Add(control);
-        return row;
     }
 
     private Control BuildToolbar()
@@ -1002,7 +1202,7 @@ private readonly ErrorProvider _errors = new();
         _toolbarPlacement.Items.AddRange([T("toolbar.placement.left"), T("toolbar.placement.centre"), T("toolbar.placement.right")]);
         _toolbarTrigger.Items.AddRange([T("toolbar.trigger.titleBar"), T("toolbar.trigger.minimize")]);
         foreach (AppCommand command in ToolbarPreferences.DefaultButtons()) _toolbarButtons.Items.Add(new ToolbarChoice(command));
-        var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true };
+        FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("toolbar.settings.title"), _showToolbar, SettingRow(T("toolbar.placement.label"), _toolbarPlacement),
             SettingRow(T("toolbar.trigger.label"), _toolbarTrigger), SettingRow(T("toolbar.delay.label"), _toolbarDelay),
             Note(T("toolbar.trigger.help"))));
@@ -1019,7 +1219,7 @@ private readonly ErrorProvider _errors = new();
         page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        GroupBox options = Section(T("anchors.settings.title"), _autoAnchors, Note(T("anchors.auto.help")),
+        Control options = Section(T("anchors.settings.title"), _autoAnchors, Note(T("anchors.auto.help")),
             SettingRow(T("anchors.side.label"), _anchorSide), SettingRow(T("anchors.look.label"), _anchorLook),
             SettingRow(T("anchors.limit"), _anchorLimit), SettingRow(T("anchors.size"), _anchorSize),
             _anchorRecency, _anchorAvoid, Note(T("anchors.avoid.help")), Note(T("programs.alwaysLeftAlone")));
@@ -1032,9 +1232,10 @@ private readonly ErrorProvider _errors = new();
 
     private static Control ProgramRules(string title, ListBox list, ComboBox picker)
     {
-        GroupBox group = BuildProgramList(title, list, picker);
+        Panel group = BuildProgramList(title, list, picker);
         group.Dock = DockStyle.None;
-        group.Size = new Size(ContentWidth - 30, 140);
+        group.Size = new Size(SwitchBox.RowWidth, 150);
+        group.Margin = new Padding(3, 4, 3, 4);
         return group;
     }
 
@@ -1058,8 +1259,8 @@ private readonly ErrorProvider _errors = new();
             };
             _hotkeys[command] = box;
         }
-        var clear = new Button { Text = T("actions.clear"), AutoSize = true };
-        var reset = new Button { Text = T("actions.reset"), AutoSize = true };
+        var clear = new PlainButton { Text = T("actions.clear"), AutoSize = true };
+        var reset = new PlainButton { Text = T("actions.reset"), AutoSize = true };
         void SetSelected(bool defaults)
         {
             if (_features.SelectedItems.Count == 0 || _features.SelectedItems[0].Tag is not AppCommand command) return;
@@ -1082,9 +1283,10 @@ private readonly ErrorProvider _errors = new();
         var page = new Panel { Dock = DockStyle.Fill };
         page.Controls.Add(_features);
         page.Controls.Add(editor);
-        var help = new Label { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top };
+        var help = new Label { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top, ForeColor = MenuStyle.Muted, Padding = new Padding(0, 6, 0, 6) };
         page.Controls.Add(help);
-        page.Controls.Add(_actionSearch);
+        page.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 6 });
+        page.Controls.Add(new SearchField(_actionSearch));
         page.Resize += (_, _) => help.MaximumSize = new Size(page.ClientSize.Width, 0);
         _features.ShowItemToolTips = true;
         _features.Resize += (_, _) =>
