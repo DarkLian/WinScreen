@@ -15,6 +15,11 @@ internal static class MenuStyle
     internal static readonly Font Font = new(Face, 9.75f);
     internal static readonly Font SmallFont = new(Face, 8.25f);
     internal static readonly Font TitleFont = new(Face, 9.75f, FontStyle.Bold);
+    // Menus use Windows 11's own menu sizes: words at 14 px (10.5 pt at 100%), group headings at 12 px, the title in semibold.
+    internal static readonly Font MenuFont = new(Face, 10.5f);
+    internal static readonly Font MenuHeaderFont = new(Face, 9f);
+    internal static readonly Font MenuTitleFont = new(
+        FontFamily.Families.FirstOrDefault(family => family.Name.StartsWith("Segoe UI Variable Text Semib", StringComparison.Ordinal))?.Name ?? "Segoe UI Semibold", 10.5f);
     internal static Color Back => Dark ? Color.FromArgb(44, 44, 44) : Color.FromArgb(249, 249, 249);
     internal static Color Text => Dark ? Color.FromArgb(255, 255, 255) : Color.FromArgb(27, 27, 27);
     internal static Color Muted => Dark ? Color.FromArgb(160, 160, 160) : Color.FromArgb(110, 110, 110);
@@ -46,7 +51,7 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         Styled.Add(menu, menu);
         menu.Renderer = Instance;
         menu.BackColor = MenuStyle.Back;
-        menu.Font = MenuStyle.Font;
+        menu.Font = MenuStyle.MenuFont;
         menu.ForeColor = MenuStyle.Text;
         if (menu is ToolStripDropDownMenu withMargin) withMargin.ShowCheckMargin = false;
         menu.Opening += (_, _) => Prepare(menu);
@@ -54,18 +59,44 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         Prepare(menu);
     }
 
+    /// <summary>
+    /// Two layouts, measured at 100% from menus the owner chose. With icons, as File Explorer's: 14 px words, rows 31 px
+    /// apart, an icon 14 px in from the edge and words 40 px in. With no icons and nothing ticked there is no icon
+    /// column: 13 px words, rows 28 px apart, words and headings 18 px in.
+    /// </summary>
     private static void Prepare(ToolStripDropDown menu)
     {
-        int gap = MenuParts.Scale(4);
+        int gap = MenuParts.Scale(5);
+        bool icons = menu.Items.Cast<ToolStripItem>().Any(item => item.Image is not null ||
+            item is ToolStripMenuItem { Checked: true } or ToolStripMenuItem { CheckOnClick: true });
+        if (menu is ToolStripDropDownMenu withMargin && withMargin.ShowImageMargin != icons) withMargin.ShowImageMargin = icons;
+        int inset = MenuParts.Scale(icons ? 8 : 13);
+        // Beside icons the words are a size up, as in File Explorer's menu; a list of words alone is set a little smaller.
+        Font font = icons ? MenuStyle.MenuFont : MenuStyle.Font;
+        if (menu.Font != font) menu.Font = font;
         foreach (ToolStripItem item in menu.Items)
         {
+            // A title is measured in the font it is drawn in, or a long one runs off the menu's edge.
+            if (item.Name == TitleName && item.Font != MenuStyle.MenuTitleFont) item.Font = MenuStyle.MenuTitleFont;
             if (item is ToolStripMenuItem entry)
             {
-                if (entry.Padding.Top != gap) entry.Padding = new Padding(0, gap, 0, gap);
+                // As much room on the right as the words move right, so a long one is never cut off.
+                var padding = new Padding(0, gap, TextRoom(menu), gap);
+                if (entry.Padding != padding) entry.Padding = padding;
                 if (entry.HasDropDownItems) Apply(entry.DropDown);
             }
+            else if (item is ToolStripLabel label && label.Padding.Left != inset)
+                label.Padding = new Padding(inset, 0, 0, 0);
+            else if (item is ToolStripControlHost host && host.Margin.Left != MenuParts.Scale(4))
+                host.Margin = host.Margin with { Left = MenuParts.Scale(4) };
         }
     }
+
+    /// <summary>How far an icon moves right of where Windows places it, to sit 14 px in as Windows 11's own do.</summary>
+    private static int IconRoom => MenuParts.Scale(10);
+
+    /// <summary>How far the words move right of where Windows places them: to 40 px in beside icons, 18 px without.</summary>
+    private static int TextRoom(ToolStrip? menu) => MenuParts.Scale(menu is ToolStripDropDownMenu { ShowImageMargin: false } ? 7 : 4);
 
     private static void Round(ToolStripDropDown menu)
     {
@@ -112,11 +143,16 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
 
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
+        // Centred on the whole row, as the icon and the arrow are; Windows places the words a little high.
+        bool shortcut = e.Item is ToolStripMenuItem { ShortcutKeyDisplayString: { } shown } && e.Text == shown;
+        int shift = shortcut || e.Item is ToolStripLabel ? 0 : TextRoom(e.ToolStrip);
+        e.TextRectangle = new Rectangle(e.TextRectangle.Left + shift, 0, e.TextRectangle.Width, e.Item.Height);
+        e.TextFormat = (e.TextFormat & ~(TextFormatFlags.Top | TextFormatFlags.Bottom)) | TextFormatFlags.VerticalCenter;
         if (e.Item is ToolStripLabel) e.TextColor = MenuStyle.Muted;
         else if (e.Item.Name == TitleName)
         {
             // Drawn here: a line that can't be chosen would otherwise be greyed like an unavailable command.
-            TextRenderer.DrawText(e.Graphics, e.Text, MenuStyle.TitleFont, e.TextRectangle, MenuStyle.Text, e.TextFormat);
+            TextRenderer.DrawText(e.Graphics, e.Text, MenuStyle.MenuTitleFont, e.TextRectangle, MenuStyle.Text, e.TextFormat);
             return;
         }
         else if (!e.Item.Enabled) e.TextColor = MenuStyle.Disabled;
@@ -129,7 +165,8 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
     /// <summary>What is on gets a tinted square, with its icon in it or a tick when it has none.</summary>
     protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
     {
-        Rectangle box = Rectangle.Inflate(e.ImageRectangle, MenuParts.Scale(3), MenuParts.Scale(3));
+        Rectangle r = Centred(e.ImageRectangle, e.Item);
+        Rectangle box = Rectangle.Inflate(r, MenuParts.Scale(3), MenuParts.Scale(3));
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         using (GraphicsPath path = Rounded(box, MenuParts.Scale(4)))
         using (var back = new SolidBrush(MenuStyle.AccentBack))
@@ -137,13 +174,25 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         if (e.Item.Image is not null) return; // The icon is drawn over the square next.
         using var pen = new Pen(e.Item.Enabled ? MenuStyle.Accent : MenuStyle.Disabled, MenuParts.Scale(2) * 0.8f)
             { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
-        Rectangle r = e.ImageRectangle;
         e.Graphics.DrawLines(pen,
         [
             new PointF(r.Left + r.Width * 0.22f, r.Top + r.Height * 0.52f),
             new PointF(r.Left + r.Width * 0.42f, r.Top + r.Height * 0.72f),
             new PointF(r.Left + r.Width * 0.80f, r.Top + r.Height * 0.30f),
         ]);
+    }
+
+    /// <summary>An icon's place moved to the middle of its row: Windows puts it a little high.</summary>
+    private static Rectangle Centred(Rectangle image, ToolStripItem? item) =>
+        item is null ? image : image with { X = image.X + IconRoom, Y = (item.Height - image.Height) / 2 };
+
+    protected override void OnRenderItemImage(ToolStripItemImageRenderEventArgs e)
+    {
+        if (e.Image is null || e.Item is null) { base.OnRenderItemImage(e); return; }
+        Rectangle r = Centred(e.ImageRectangle, e.Item);
+        if (e.Item.Enabled) { e.Graphics.DrawImage(e.Image, r); return; }
+        using Image faded = CreateDisabledImage(e.Image);
+        e.Graphics.DrawImage(faded, r);
     }
 
     protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
@@ -153,10 +202,17 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         e.Graphics.DrawLine(pen, MenuParts.Scale(8), y, e.Item.Width - MenuParts.Scale(8), y);
     }
 
+    /// <summary>A thin chevron centred on the row, as Windows 11 draws one, in place of the small filled arrow.</summary>
     protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
     {
-        e.ArrowColor = e.Item is { Enabled: false } ? MenuStyle.Disabled : MenuStyle.Muted;
-        base.OnRenderArrow(e);
+        if (e.Direction != ArrowDirection.Right && e.Direction != ArrowDirection.Left) { base.OnRenderArrow(e); return; }
+        Rectangle area = e.ArrowRectangle;
+        float half = MenuParts.Scale(4), x = area.Left + area.Width / 2f, y = (e.Item?.ContentRectangle is { } row ? row.Top + row.Height / 2f : area.Top + area.Height / 2f);
+        float tip = e.Direction == ArrowDirection.Right ? half / 2 : -half / 2;
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = new Pen(e.Item is { Enabled: false } ? MenuStyle.Disabled : MenuStyle.Muted, Math.Max(1f, MenuParts.Scale(1) * 1.1f))
+            { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
+        e.Graphics.DrawLines(pen, [new PointF(x - tip, y - half), new PointF(x + tip, y), new PointF(x - tip, y + half)]);
     }
 
     private sealed class Colors : ProfessionalColorTable

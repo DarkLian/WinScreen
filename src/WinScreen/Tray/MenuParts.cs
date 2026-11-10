@@ -1,4 +1,3 @@
-using System.Drawing.Text;
 using WinScreen.Settings;
 
 namespace WinScreen.Tray;
@@ -7,10 +6,11 @@ namespace WinScreen.Tray;
 /// hold a control (an opacity slider and a grid of places).</summary>
 internal static class MenuParts
 {
-    // In Windows 10 and 11 alike. A glyph the font lacks would draw as an empty box, so only long-standing ones are used.
-    private const string IconFont = "Segoe MDL2 Assets";
-    private static readonly Dictionary<(char, int, int), Image> Icons = [];
-    private static bool? _hasFont;
+    // Windows 11's icon font, or on Windows 10 the older one it grew from: the same glyphs at the same code points.
+    // A glyph the font lacks would draw as an empty box, so only long-standing ones are used.
+    private static readonly string? IconFont =
+        new[] { "Segoe Fluent Icons", "Segoe MDL2 Assets" }.FirstOrDefault(name => FontFamily.Families.Any(family => family.Name == name));
+    private static readonly Dictionary<(char, int, int, bool), Image> Icons = [];
 
     internal const char Pin = '', Pointer = '', NewWindow = '', Pinned = '', Moon = '',
         FullScreen = '', Undo = '', Copy = '', Folder = '', Save = '', More = '',
@@ -25,25 +25,104 @@ internal static class MenuParts
 
     internal static int Scale(int value) => (int)Math.Round(value * SystemDpi / 96.0);
 
-    /// <summary>A small picture of a glyph in the menu's text colour, or null where the icon font is missing.</summary>
-    internal static Image? Icon(char glyph) => Icon(glyph, MenuStyle.Text);
+    /// <summary>A small picture of a glyph in its own colour, or null where the icon font is missing.</summary>
+    internal static Image? Icon(char glyph) => Icon(glyph, ColorOf(glyph), twoTone: true);
 
-    internal static Image? Icon(char glyph, Color color)
+    /// <summary>
+    /// The colour an icon is drawn in, as Windows 11 colours its own: a few families of colour by what the icon is
+    /// about, a lighter shade of each in the dark theme, and the text colour for plain ones.
+    /// </summary>
+    internal static Color ColorOf(char glyph)
     {
-        _hasFont ??= FontFamily.Families.Any(family => family.Name == IconFont);
-        if (_hasFont != true) return null;
+        bool dark = MenuStyle.Dark;
+        Color blue = dark ? Color.FromArgb(76, 194, 255) : Color.FromArgb(15, 108, 189);
+        Color teal = dark ? Color.FromArgb(68, 205, 196) : Color.FromArgb(3, 131, 135);
+        Color green = dark ? Color.FromArgb(108, 203, 95) : Color.FromArgb(16, 124, 16);
+        Color amber = dark ? Color.FromArgb(255, 200, 61) : Color.FromArgb(194, 124, 14);
+        Color orange = dark ? Color.FromArgb(255, 156, 90) : Color.FromArgb(202, 80, 16);
+        Color red = dark ? Color.FromArgb(255, 153, 164) : Color.FromArgb(196, 43, 28);
+        Color purple = dark ? Color.FromArgb(195, 166, 255) : Color.FromArgb(135, 100, 184);
+        return glyph switch
+        {
+            Pin or NewWindow or Copy or Save or Info or Help or Monitor or Home or Apps or Keyboard or Page => blue,
+            Pointer or FullScreen or View or Bar or Mouse => teal,
+            Undo or Sync or History => green,
+            Moon or Star or Folder or Brightness or Warning => amber,
+            Pinned or Repair => orange,
+            Power or Close => red,
+            Palette or Crop or Sliders => purple,
+            _ => MenuStyle.Text,
+        };
+    }
+
+    /// <summary>A glyph in one colour; with <paramref name="twoTone"/>, its inside washed with that colour too.</summary>
+    internal static Image? Icon(char glyph, Color color, bool twoTone = false)
+    {
+        if (IconFont is null) return null;
         int size = Scale(16);
-        if (Icons.TryGetValue((glyph, size, color.ToArgb()), out Image? cached)) return cached;
+        twoTone &= color != MenuStyle.Text;
+        if (Icons.TryGetValue((glyph, size, color.ToArgb(), twoTone), out Image? cached)) return cached;
         var picture = new Bitmap(size, size);
         using (Graphics graphics = Graphics.FromImage(picture))
-        using (var font = new Font(IconFont, size * 0.72f, FontStyle.Regular, GraphicsUnit.Pixel))
+        using (var family = new FontFamily(IconFont))
+        using (var shape = new System.Drawing.Drawing2D.GraphicsPath())
         using (var brush = new SolidBrush(color))
-        using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
         {
-            graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-            graphics.DrawString(glyph.ToString(), font, brush, new RectangleF(0, 0, size, size), format);
+            // The glyph at the size it was drawn for, placed by its own outline rather than by the font's line height
+            // (which sits it high), with its edges on whole pixels so it stays sharp.
+            shape.AddString(glyph.ToString(), family, (int)FontStyle.Regular, size, PointF.Empty, StringFormat.GenericTypographic);
+            RectangleF ink = shape.GetBounds();
+            if (ink.Width > 0 && ink.Height > 0)
+            {
+                using var move = new System.Drawing.Drawing2D.Matrix();
+                move.Translate(MathF.Round((size - ink.Width) / 2) - ink.Left, MathF.Round((size - ink.Height) / 2) - ink.Top);
+                shape.Transform(move);
+            }
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+            // Two tones, as Windows 11 draws its own: the shape filled with a soft wash of the colour, the outline over it.
+            if (twoTone && Silhouette(shape) is { } inside)
+            {
+                using (inside)
+                using (var wash = new SolidBrush(Color.FromArgb(MenuStyle.Dark ? 70 : 52, color)))
+                    graphics.FillPath(wash, inside);
+            }
+            graphics.FillPath(brush, shape);
         }
-        return Icons[(glyph, size, color.ToArgb())] = picture;
+        return Icons[(glyph, size, color.ToArgb(), twoTone)] = picture;
+    }
+
+    /// <summary>
+    /// The inside of an outline icon: its outer edges only, with the gaps between the lines filled. An outline glyph is
+    /// rings of ink; the rings' outer edges wind one way and their inner edges the other, so keeping the edges that wind
+    /// like the largest one keeps the outer ones.
+    /// </summary>
+    private static System.Drawing.Drawing2D.GraphicsPath? Silhouette(System.Drawing.Drawing2D.GraphicsPath glyph)
+    {
+        using var flat = (System.Drawing.Drawing2D.GraphicsPath)glyph.Clone();
+        flat.Flatten(null, 0.1f);
+        PointF[] points = flat.PathPoints;
+        var parts = new List<(PointF[] Points, double Area)>();
+        using (var walk = new System.Drawing.Drawing2D.GraphicsPathIterator(flat))
+        {
+            while (walk.NextSubpath(out int start, out int end, out _) > 0)
+            {
+                PointF[] part = points[start..(end + 1)];
+                double area = 0;
+                for (int i = 0; i < part.Length; i++)
+                {
+                    PointF a = part[i], b = part[(i + 1) % part.Length];
+                    area += (double)a.X * b.Y - (double)b.X * a.Y;
+                }
+                if (part.Length >= 3) parts.Add((part, area / 2));
+            }
+        }
+        if (parts.Count < 2) return null; // A solid glyph has no inside to fill.
+        double outer = Math.Sign(parts.MaxBy(part => Math.Abs(part.Area)).Area);
+        var inside = new System.Drawing.Drawing2D.GraphicsPath(System.Drawing.Drawing2D.FillMode.Winding);
+        foreach (var (part, area) in parts)
+            if (Math.Sign(area) == outer && Math.Abs(area) > 1.5) inside.AddPolygon(part);
+        return inside;
     }
 
     internal static T WithIcon<T>(this T item, char glyph) where T : ToolStripItem
@@ -56,7 +135,7 @@ internal static class MenuParts
     internal static ToolStripLabel Header(string text) => new(text)
     {
         ForeColor = MenuStyle.Muted,
-        Font = MenuStyle.SmallFont,
+        Font = MenuStyle.MenuHeaderFont,
         Margin = new Padding(0, Scale(8), 0, 0),
         AccessibleRole = AccessibleRole.Grouping,
         Tag = HeaderTag,
@@ -152,8 +231,8 @@ internal sealed class OpacityRow : ToolStripControlHost
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             Color text = Enabled ? MenuStyle.Text : MenuStyle.Disabled, accent = Enabled ? MenuStyle.Accent : MenuStyle.Disabled;
             var top = new Rectangle(Left0 - MenuParts.Scale(4), 0, Right0 - Left0 + MenuParts.Scale(8), MenuParts.Scale(22));
-            TextRenderer.DrawText(g, _title, MenuStyle.Font, top, text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, _value + "%", MenuStyle.Font, top, Enabled ? MenuStyle.Muted : MenuStyle.Disabled,
+            TextRenderer.DrawText(g, _title, MenuStyle.MenuFont, top, text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, _value + "%", MenuStyle.MenuFont, top, Enabled ? MenuStyle.Muted : MenuStyle.Disabled,
                 TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             int thick = MenuParts.Scale(4), radius = MenuParts.Scale(Focused ? 8 : 7);
             using (var rest = new Pen(MenuStyle.Line, thick) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round })
