@@ -5,6 +5,8 @@ namespace WinScreen.Windows;
 /// <summary>
 /// The order of everything kept on top, highest first:
 /// <list type="number">
+/// <item>Windows' own passing surfaces: the screen snip, Start, search, the taskbar's flyouts, task switching and
+/// notifications. WinScreen never lifts anything over these, or the two would take turns on top and flicker;</item>
 /// <item>WinScreen's own hover tips;</item>
 /// <item>WinScreen's open menus and Settings;</item>
 /// <item>the Windows taskbar, so its icons, WinScreen's included, can always be reached;</item>
@@ -24,9 +26,59 @@ internal static class TopLayer
     internal static Func<nint, bool> IsTip { get; set; } = window => WindowInfo.ClassName(window) == "tooltips_class32";
 
     private sealed record LayerState(List<nint> Order, List<nint> Taskbars, List<nint> Tips,
-        List<nint> Menus, bool OverflowOpen)
+        List<nint> Menus, List<nint> System, bool OverflowOpen)
     {
         internal bool Blocked => OverflowOpen || Menus.Count != 0;
+
+        /// <summary>
+        /// Where a lifted window goes: just under the lowest of Windows' own surfaces that is open, or at the top when
+        /// none is. Whatever is above that point is left where it is, since passing it would mean passing the surface.
+        /// The windows being lifted never count, even when they are Windows' own (an Explorer view's menus).
+        /// </summary>
+        internal nint InsertAfter(ICollection<nint> lifting) =>
+            Order.LastOrDefault(window => System.Contains(window) && !lifting.Contains(window)) is var lowest and not 0 ? lowest : User32.HWND_TOPMOST;
+
+        /// <summary>The windows above the point where a lifted window goes; none of them counts as covering it.</summary>
+        internal IEnumerable<nint> OutOfReach(ICollection<nint> lifting)
+        {
+            nint lowest = InsertAfter(lifting);
+            return lowest == User32.HWND_TOPMOST ? [] : Order.TakeWhile(window => window != lowest).Append(lowest);
+        }
+    }
+
+    /// <summary>Whether a window is one of Windows' own passing surfaces; a seam for tests.</summary>
+    internal static Func<nint, bool> IsSystemSurface { get; set; } = SystemSurface;
+
+    private static readonly string[] SystemClasses =
+    [
+        "Windows.UI.Core.CoreWindow", "XamlExplorerHostIslandWindow", "MultitaskingViewFrame", "ForegroundStaging",
+        "Shell_LightDismissOverlay", "ControlCenterWindow", "TaskListThumbnailWnd", "TaskSwitcherWnd", "SnipOverlayRootWindow",
+    ];
+
+    private static readonly string[] SystemPrograms =
+    [
+        "ShellExperienceHost", "StartMenuExperienceHost", "SearchHost", "SearchApp", "ScreenClippingHost", "SnippingTool",
+        "ShellHost", "TextInputHost", "LockApp", "Widgets", "WidgetBoard", "ScreenSketch",
+    ];
+
+    private static readonly Dictionary<uint, bool> SystemProcesses = [];
+
+    private static bool SystemSurface(nint window)
+    {
+        string name = WindowInfo.ClassName(window);
+        if (name is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" || IsOverflowClass(name)) return false; // Its own layer.
+        if (SystemClasses.Contains(name)) return true;
+        if (User32.GetWindowThreadProcessId(window, out uint process) == 0 || process == (uint)Environment.ProcessId) return false;
+        lock (SystemProcesses)
+        {
+            if (SystemProcesses.TryGetValue(process, out bool known)) return known;
+            if (SystemProcesses.Count > 256) SystemProcesses.Clear();
+            string program = WindowInfo.ProcessName(process);
+            // Explorer's other always-on-top windows are the taskbar's flyouts and menus.
+            bool system = program.Equals("explorer", StringComparison.OrdinalIgnoreCase) ||
+                SystemPrograms.Contains(program, StringComparer.OrdinalIgnoreCase);
+            return SystemProcesses[process] = system;
+        }
     }
 
     private static long _lifts;
@@ -55,7 +107,8 @@ internal static class TopLayer
         var members = group.ToHashSet();
         var state = Survey();
         nint[] above = ProtectedWindows(state);
-        var higher = state.Taskbars.Concat(above).Concat(state.Tips).Where(handle => !members.Contains(handle)).ToHashSet();
+        var higher = state.Taskbars.Concat(above).Concat(state.Tips).Concat(state.System).Concat(state.OutOfReach(members))
+            .Where(handle => !members.Contains(handle)).ToHashSet();
         bool covered = group.Any(window => !state.Order.Contains(window));
         int next = group.Length - 1; // The member expected next, walking down from the top.
         bool outsider = false;
@@ -71,10 +124,12 @@ internal static class TopLayer
         }
         if (covered)
         {
-            foreach (nint window in group) Lift(window);
+            nint after = state.InsertAfter(members);
+            // From the highest down, each just under the one before, so the group keeps its order.
+            for (int index = group.Length - 1; index >= 0; index--) after = Lift(group[index], after);
             state = Survey();
         }
-        if (LiftCovered(state.Taskbars.Where(handle => !members.Contains(handle)).ToArray(), above.Concat(state.Tips), state.Order))
+        if (LiftCovered(state.Taskbars.Where(handle => !members.Contains(handle)).ToArray(), above.Concat(state.Tips), state))
             state = Survey();
         RepairProtected(above, state);
     }
@@ -84,25 +139,27 @@ internal static class TopLayer
     {
         var state = Survey();
         nint[] above = ProtectedWindows(state);
-        if (state.OverflowOpen && LiftCovered(state.Taskbars, above.Concat(state.Tips), state.Order)) state = Survey();
+        if (state.OverflowOpen && LiftCovered(state.Taskbars, above.Concat(state.Tips), state)) state = Survey();
         RepairProtected(above, state);
     }
 
     private static void RepairProtected(nint[] above, LayerState state)
     {
-        if (LiftCovered(above, state.Tips, state.Order)) state = Survey();
-        LiftCovered(state.Tips, [], state.Order);
+        if (LiftCovered(above, state.Tips, state)) state = Survey();
+        LiftCovered(state.Tips, [], state);
     }
 
     private static nint[] ProtectedWindows(LayerState state) => (Above?.Invoke() ?? []).Concat(state.Menus.AsEnumerable().Reverse())
         .Where(window => window != 0 && User32.IsWindowVisible(window)).Distinct().ToArray();
 
-    private static bool LiftCovered(IEnumerable<nint> group, IEnumerable<nint> higher, List<nint> order)
+    private static bool LiftCovered(IEnumerable<nint> group, IEnumerable<nint> higher, LayerState state)
     {
+        List<nint> order = state.Order;
         nint[] windows = group.Where(window => window != 0 && User32.IsWindowVisible(window)).Distinct().ToArray();
         if (windows.Length == 0) return false;
         var own = windows.ToHashSet();
-        var allowed = higher.Concat(windows).ToHashSet();
+        var allowed = higher.Concat(windows).Concat(state.System.Where(window => !own.Contains(window)))
+            .Concat(state.OutOfReach(own)).ToHashSet();
         bool outsider = false, covered = windows.Any(window => !order.Contains(window));
         foreach (nint window in order)
         {
@@ -110,14 +167,22 @@ internal static class TopLayer
             if (!allowed.Contains(window)) outsider = true;
         }
         if (!covered) return false;
-        foreach (nint window in windows) Lift(window);
+        // The group is listed lowest first; from its highest down, each goes just under the one placed before it.
+        nint after = state.InsertAfter(own);
+        for (int index = windows.Length - 1; index >= 0; index--) after = Lift(windows[index], after);
         return true;
     }
 
-    private static void Lift(nint window)
+    /// <summary>Puts a window just under <paramref name="after"/> in the always-on-top band and returns it.</summary>
+    private static nint Lift(nint window, nint after)
     {
+        if (after == window) return window;
         Interlocked.Increment(ref _lifts);
-        User32.SetWindowPos(window, User32.HWND_TOPMOST, 0, 0, 0, 0, Flags);
+        // Under a window means above everything else; HWND_TOPMOST alone would put it over Windows' own surfaces.
+        bool topmost = (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0;
+        if (!topmost || after == User32.HWND_TOPMOST) User32.SetWindowPos(window, User32.HWND_TOPMOST, 0, 0, 0, 0, Flags);
+        if (after != User32.HWND_TOPMOST) User32.SetWindowPos(window, after, 0, 0, 0, 0, Flags);
+        return window;
     }
 
     private static LayerState Survey()
@@ -126,6 +191,7 @@ internal static class TopLayer
         var taskbars = new List<nint>();
         var tips = new List<nint>();
         var menus = new List<nint>();
+        var system = new List<nint>();
         bool overflowOpen = false;
         uint self = (uint)Environment.ProcessId;
         nint window = User32.GetWindow(User32.GetDesktopWindow(), 5);
@@ -137,11 +203,17 @@ internal static class TopLayer
             if ((style & User32.WS_EX_LAYERED) != 0 &&
                 User32.GetLayeredWindowAttributes(window, out _, out byte alpha, out uint flags) &&
                 (flags & User32.LWA_ALPHA) != 0 && alpha <= 1) continue;
-            order.Add(window);
             string name = WindowInfo.ClassName(window);
+            // A menu's drop shadow follows the menu on its own. Counting it as a window over the taskbar lifted the
+            // taskbar over the menu and the menu back again, over and over.
+            if (name == "SysShadow") continue;
+            // Nor does a window too small to cover anything, such as the tiny helpers Explorer keeps always-on-top.
+            if (!User32.GetWindowRect(window, out Rect bounds) || bounds.Right - bounds.Left < 8 || bounds.Bottom - bounds.Top < 8) continue;
+            order.Add(window);
             if (name is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" || IsOverflowClass(name))
                 taskbars.Add(window);
             if (IsOverflowClass(name)) overflowOpen = true;
+            if (IsSystemSurface(window)) { system.Add(window); continue; }
             if (User32.GetWindowThreadProcessId(window, out uint process) == 0 || process != self) continue;
             if (IsTip(window)) tips.Add(window);
             if (Control.FromHandle(window) is ToolStripDropDown || name == "#32768") menus.Add(window);
@@ -156,7 +228,7 @@ internal static class TopLayer
         }
         taskbars.Reverse();
         tips.Reverse();
-        return new LayerState(order, taskbars, tips, menus, overflowOpen);
+        return new LayerState(order, taskbars, tips, menus, system, overflowOpen);
     }
 
     /// <summary>A menu's own window and every submenu open under it, outermost first.</summary>

@@ -146,13 +146,73 @@ public sealed class TopLayerTests
         });
     }
 
+    /// <summary>
+    /// Windows' own passing surfaces, such as the screen snip or a taskbar flyout, stay over WinScreen's menus and
+    /// whatever it lifts. Lifting over them made the two take turns on top, which flickered.
+    /// </summary>
+    [Fact]
+    public void Windows_own_surfaces_stay_over_menus_and_lifted_windows()
+    {
+        Func<IEnumerable<nint>>? before = TopLayer.Above;
+        Func<nint, bool> wasSystem = TopLayer.IsSystemSurface;
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Rectangle screen = Screen.PrimaryScreen!.WorkingArea;
+            Form Make(Rectangle bounds, Color color) => new()
+            {
+                FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.Manual, ShowInTaskbar = false,
+                Bounds = bounds, BackColor = color,
+            };
+            using var menu = new ContextMenuStrip { AutoClose = false };
+            menu.Items.Add("Something");
+            menu.Items.Add("Something else");
+            using var view = Make(new(screen.Left + 150, screen.Top + 150, 500, 400), Color.Magenta);
+            using var overlay = Make(new(screen.Left + 100, screen.Top + 100, 700, 600), Color.Cyan);
+            try
+            {
+                menu.Show(new Point(screen.Left + 200, screen.Top + 200));
+                view.Show();
+                overlay.Show();
+                nint shell = overlay.Handle;
+                TopLayer.IsSystemSurface = window => window == shell;
+                TopLayer.Above = () => TopLayer.OpenDropDowns(menu);
+                const uint flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
+                User32.SetWindowPos(view.Handle, User32.HWND_TOPMOST, 0, 0, 0, 0, flags);
+                User32.SetWindowPos(overlay.Handle, User32.HWND_TOPMOST, 0, 0, 0, 0, flags);
+                Pump(50);
+
+                TopLayer.Raise(view.Handle);
+                TopLayer.KeepAbove();
+                Pump(50);
+                Assert.True(IsAbove(overlay.Handle, menu.Handle), "The menu went over Windows' own surface.");
+                Assert.True(IsAbove(overlay.Handle, view.Handle), "The view went over Windows' own surface.");
+                Assert.True(IsAbove(menu.Handle, view.Handle), "The menu went under the view.");
+
+                // Settled: the guard ticking over and over moves nothing.
+                long lifts = TopLayer.LiftCount;
+                for (int i = 0; i < 10; i++) { TopLayer.KeepAbove(); TopLayer.Raise(view.Handle); Pump(20); }
+                Assert.True(lifts == TopLayer.LiftCount, $"Still lifting ({TopLayer.LiftCount - lifts}): " +
+                    TopOrder(view.Handle, menu.Handle, overlay.Handle, User32.FindWindow("Shell_TrayWnd", null)));
+            }
+            finally
+            {
+                TopLayer.Above = before;
+                TopLayer.IsSystemSurface = wasSystem;
+                overlay.Close();
+                view.Close();
+                menu.Close();
+            }
+        });
+    }
+
     private static string TopOrder(nint view, nint menu, nint tip, nint taskbar)
     {
         var names = new List<string>();
         nint window = User32.GetWindow(User32.GetDesktopWindow(), 5);
-        for (int i = 0; window != 0 && i < 40; i++, window = User32.GetWindow(window, 2))
+        for (int i = 0; window != 0 && i < 40; window = User32.GetWindow(window, 2))
         {
             if (!User32.IsWindowVisible(window)) continue;
+            i++;
             string name = window == view ? "VIEW" : window == menu ? "MENU" : window == tip ? "TIP" : window == taskbar ? "TASKBAR" : WindowInfo.ClassName(window);
             bool top = (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0;
             names.Add(name + (top ? "*" : ""));
