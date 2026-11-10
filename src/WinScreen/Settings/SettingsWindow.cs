@@ -9,6 +9,8 @@ namespace WinScreen.Settings;
 public sealed class SettingsWindow : Form
 {
     private const int ContentWidth = SwitchBox.RowWidth + 20;
+    /// <summary>The widths of a number box and of a list that drops down, at 100% scaling, so they line up down a page.</summary>
+    private const int NumberWidth = 120, ChoiceWidth = 220;
 
     private readonly AppSettings _settings;
     private AppSettings? _pendingImport;
@@ -24,42 +26,44 @@ public sealed class SettingsWindow : Form
     private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _borderThickness = new() { Minimum = 1, Maximum = 12, Width = 70 };
     private readonly CheckBox _autoAnchors = new SwitchBox { Text = T("anchors.auto.enable"), AutoSize = true };
-    private readonly ComboBox _anchorSide = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
-    private readonly ComboBox _anchorLook = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
+    private readonly ComboBox _anchorSide = new ThemedCombo { Width = 200 };
+    private readonly ComboBox _anchorLook = new ThemedCombo { Width = 200 };
     private readonly NumericUpDown _anchorLimit = new() { Minimum = 1, Maximum = 10, Width = 70 };
     private readonly NumericUpDown _anchorSize = new() { Minimum = 32, Maximum = 72, Increment = 4, Width = 70 };
     private readonly CheckBox _anchorRecency = new SwitchBox { Text = T("anchors.recency"), AutoSize = true };
     private readonly CheckBox _anchorAvoid = new SwitchBox { Text = T("anchors.avoid"), AutoSize = true };
-    private readonly ListBox _anchorOnly = new() { Dock = DockStyle.Fill, IntegralHeight = false };
-    private readonly ListBox _anchorExcluded = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ThemedList _anchorOnly = new();
+    private readonly ThemedList _anchorExcluded = new();
     private readonly ComboBox _newAnchorOnly = ProgramPicker();
     private readonly ComboBox _newAnchorExcluded = ProgramPicker();
-    private readonly ComboBox _toolbarPlacement = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
-    private readonly ComboBox _toolbarTrigger = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
+    private readonly ComboBox _toolbarPlacement = new ThemedCombo { Width = 200 };
+    private readonly ComboBox _toolbarTrigger = new ThemedCombo { Width = 200 };
     private readonly NumericUpDown _toolbarDelay = new() { Minimum = 100, Maximum = 2000, Increment = 100, Width = 90 };
-    private readonly CheckedListBox _toolbarButtons = new() { CheckOnClick = true, Width = 455, Height = 225, IntegralHeight = false };
+    private readonly ThemedCheckList _toolbarButtons = new() { CheckOnClick = true, Width = SwitchBox.RowWidth - 8 };
     // The pages. Its own row of tabs is hidden: the list on the left chooses the page.
     private readonly TabControl _tabs = new PagesControl { Size = new Size(540, 520), TabStop = false, Multiline = true };
     private readonly NavList _nav = new() { Dock = DockStyle.Fill };
     private readonly TextBox _search = new();
+    private readonly Label _pageTitle = new() { AutoSize = true, Font = SettingsStyle.PageTitleFont, UseMnemonic = false, Margin = new Padding(0, 0, 0, 14) };
     private readonly Panel _saveBar = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly TextBox _actionSearch = new() { Dock = DockStyle.Top };
-    private readonly Panel _shortcutEditor = new() { Dock = DockStyle.Fill, Height = 28 };
-    private readonly Label _shortcutLabel = new() { AutoSize = true };
+    private readonly InputFrame _shortcutEditor = new(null) { Width = 240, ReserveEnd = 22, Anchor = AnchorStyles.Right };
+    private readonly Label _shortcutLabel = new() { AutoSize = true, Anchor = AnchorStyles.Left, Font = SettingsStyle.HeadingFont, UseMnemonic = false, AutoEllipsis = true };
     private readonly Dictionary<AppCommand, string> _shortcutProblems = [];
+    private bool _fillingFeatures;
     private readonly Func<AppCommand, bool>? _registered;
-    private readonly ListView _features = new() { View = View.Details, FullRowSelect = true, MultiSelect = false, Dock = DockStyle.Fill };
+    private readonly ThemedTable _features = new() { View = View.Details, FullRowSelect = true, MultiSelect = false, Dock = DockStyle.Fill };
 
     private sealed record ToolbarChoice(AppCommand Command)
     {
         public override string ToString() => CommandCatalog.Name(Command).Replace("&", "");
     }
-    private readonly ComboBox _pipBackend = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
-    private readonly ComboBox _pipRate = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
-    private readonly ComboBox _pipScaling = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
+    private readonly ComboBox _pipBackend = new ThemedCombo { Width = 240 };
+    private readonly ComboBox _pipRate = new ThemedCombo { Width = 160 };
+    private readonly ComboBox _pipScaling = new ThemedCombo { Width = 240 };
     private readonly NumericUpDown _pipOpacity = new() { Minimum = 10, Maximum = 100, Width = 75 };
     private readonly CheckBox _pipTaskbar = new SwitchBox { Text = T("pip.taskbar.enable"), AutoSize = true };
-    private readonly ComboBox _pipPreview = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
+    private readonly ComboBox _pipPreview = new ThemedCombo { Width = 240 };
     private readonly CheckBox _pipCaptureBorder = new SwitchBox { Text = T("pip.captureBorder.hide"), AutoSize = true };
     private readonly CheckBox _pipDiagnostics = new SwitchBox { Text = T("pip.diagnostics.includeHardware"), AutoSize = true };
     private readonly List<int> _pipRates = [.. PipPreferences.FrameRates];
@@ -74,18 +78,17 @@ public sealed class SettingsWindow : Form
         { Text = T("settings.experimental.enable"), AutoSize = true };
 
 private readonly ErrorProvider _errors = new();
-    private readonly ComboBox _language = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
+    private readonly ComboBox _language = new ThemedCombo { Width = 240 };
     private static readonly string[] Languages = ["system", "en", "zh-Hans", "zh-Hant"];
-    private readonly ComboBox _theme = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150 };
+    private readonly ComboBox _theme = new ThemedCombo { Width = 150 };
     private static readonly string[] Themes = ["system", "light", "dark"];
     private readonly StartWithWindows _startup;
     private readonly Func<AppSettings, IReadOnlyList<HotkeyProblem>> _apply;
     private readonly Dictionary<AppCommand, TextBox> _hotkeys = [];
-    private readonly ListBox _excluded = new() { Dock = DockStyle.Fill, IntegralHeight = false };
-    private readonly ListBox _included = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ThemedList _excluded = new();
+    private readonly ThemedList _included = new();
 
-    private readonly ListBox _setups = new()
-        { Dock = DockStyle.Fill, IntegralHeight = false, HorizontalScrollbar = true };
+    private readonly ThemedList _setups = new();
 
     private readonly ComboBox _newExcluded = ProgramPicker();
     private readonly ComboBox _newIncluded = ProgramPicker();
@@ -112,13 +115,13 @@ private readonly ErrorProvider _errors = new();
         { Text = T("gestures.moveResize.enable"), AutoSize = true };
 
     private readonly CheckBox _snapWhileDragging = new SwitchBox { Text = T("gestures.moveResize.snap"), AutoSize = true };
-    private readonly ComboBox _modifierKey = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
+    private readonly ComboBox _modifierKey = new ThemedCombo { Width = 110 };
 
-    private readonly ListBox _modifierExclusions = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ThemedList _modifierExclusions = new();
     private readonly ComboBox _newModifierExclusion = ProgramPicker();
     private readonly CheckBox _windowMenu = new SwitchBox { Text = T("gestures.menu.enable"), AutoSize = true };
-    private readonly ComboBox _windowMenuGesture = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
-    private readonly ListBox _windowMenuExclusions = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ComboBox _windowMenuGesture = new ThemedCombo { Width = 240 };
+    private readonly ThemedList _windowMenuExclusions = new();
     private readonly ComboBox _newMenuExclusion = ProgramPicker();
 
     private readonly CheckBox _pausePin = new SwitchBox
@@ -133,13 +136,13 @@ private readonly ErrorProvider _errors = new();
     private readonly CheckBox _pipAutoMove = new SwitchBox
         { Text = T("settings.pip.autoMove"), AutoSize = true };
     private readonly CheckBox _hoverAutomatic = new SwitchBox { Text = T("settings.pip.hover.automatic"), AutoSize = true };
-    private readonly ListBox _originalPrograms = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ThemedList _originalPrograms = new();
     private readonly ComboBox _newOriginalProgram = ProgramPicker();
     private readonly CheckBox _hoverBrowsers = new SwitchBox { Text = T("settings.pip.hover.browsers"), AutoSize = true };
     private readonly CheckBox _hoverFirefox = new SwitchBox { Text = T("settings.pip.hover.firefox"), AutoSize = true };
     private readonly CheckBox _hoverElectron = new SwitchBox { Text = T("settings.pip.hover.electron"), AutoSize = true };
     private readonly CheckBox _hoverExplorer = new SwitchBox { Text = T("settings.pip.hover.explorer"), AutoSize = true };
-    private readonly ListBox _hoverPrograms = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ThemedList _hoverPrograms = new();
     private readonly ComboBox _newHoverProgram = ProgramPicker();
     private Control? _hoverOptions;
     private readonly FlowLayoutPanel _appRows = new() { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true,
@@ -153,7 +156,7 @@ private readonly ErrorProvider _errors = new();
     private bool _refreshQueued;
 
     private readonly Label _status = new()
-        { AutoSize = true, ForeColor = SystemColors.WindowText, MaximumSize = new Size(500, 0) };
+        { AutoSize = true, ForeColor = SettingsStyle.Text, MaximumSize = new Size(500, 0), Margin = new Padding(0, 6, 0, 0) };
 
     public SettingsWindow(AppSettings settings, StartWithWindows startup,
         Func<AppSettings, IReadOnlyList<HotkeyProblem>> apply, Func<AppCommand, bool>? registered = null)
@@ -186,7 +189,7 @@ private readonly ErrorProvider _errors = new();
         MinimumSize = new Size(640, 400);
         Font = MenuStyle.Font;
         BackColor = SettingsStyle.Page;
-        ForeColor = MenuStyle.Text;
+        ForeColor = SettingsStyle.Text;
 
         var tabs = _tabs;
         tabs.Dock = DockStyle.Fill;
@@ -202,7 +205,12 @@ private readonly ErrorProvider _errors = new();
         var toolbarPage = Tab(T("toolbar.settings.title"), BuildToolbar());
         var anchorsPage = Tab(T("anchors.settings.title"), BuildAnchors());
         tabs.TabPages.AddRange([pipPage, gesturePage, appearancePage, toolbarPage, anchorsPage]);
-        tabs.Selected += (_, _) => { if (tabs.SelectedTab == featuresPage) RefreshFeatures(); _nav.Selected = tabs.SelectedTab; };
+        tabs.Selected += (_, _) =>
+        {
+            if (tabs.SelectedTab == featuresPage) RefreshFeatures();
+            _nav.Selected = tabs.SelectedTab;
+            _pageTitle.Text = tabs.SelectedTab?.Text ?? "";
+        };
         _nav.Add(generalPage.Text, MenuParts.Home, generalPage);
         _nav.AddHeading(T("settings.nav.windows"));
         _nav.Add(featuresPage.Text, MenuParts.Keyboard, featuresPage);
@@ -241,18 +249,21 @@ private readonly ErrorProvider _errors = new();
             };
         };
 
-        var side = new Panel { Dock = DockStyle.Left, Width = 196, BackColor = SettingsStyle.Side, Padding = new Padding(8, 10, 8, 8) };
+        var side = new Panel { Dock = DockStyle.Left, Width = 220, BackColor = SettingsStyle.Side, Padding = new Padding(10, 12, 10, 8) };
         _nav.BackColor = SettingsStyle.Side;
         side.Controls.Add(_nav);
-        side.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 8, BackColor = SettingsStyle.Side });
-        side.Controls.Add(new SearchField(_search));
-        var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Dock = DockStyle.Fill, Padding = new Padding(16, 12, 12, 10) };
+        side.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 10, BackColor = SettingsStyle.Side });
+        side.Controls.Add(new InputFrame(_search) { Glyph = MenuParts.Search, Dock = DockStyle.Top, Height = 34 });
+        var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 4, Dock = DockStyle.Fill, Padding = new Padding(20, 6, 12, 10) };
+        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        page.Controls.Add(tabs, 0, 0);
-        page.Controls.Add(_status, 0, 1);
-        page.Controls.Add(BuildButtons(), 0, 2);
+        _pageTitle.Text = generalPage.Text;
+        page.Controls.Add(_pageTitle, 0, 0);
+        page.Controls.Add(tabs, 0, 1);
+        page.Controls.Add(_status, 0, 2);
+        page.Controls.Add(BuildButtons(), 0, 3);
         Controls.Add(page);
         Controls.Add(side);
 
@@ -368,6 +379,18 @@ private readonly ErrorProvider _errors = new();
     {
         base.OnShown(e);
         FitWorkingArea();
+    }
+
+    /// <summary>The title bar takes the window's own colours instead of the accent colour, where Windows allows it.</summary>
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        static int ColorRef(Color color) => color.R | color.G << 8 | color.B << 16;
+        int dark = MenuStyle.Dark ? 1 : 0, caption = ColorRef(SettingsStyle.Page), text = ColorRef(SettingsStyle.Text);
+        Native.Dwmapi.DwmSetWindowAttribute(Handle, Native.Dwmapi.DWMWA_USE_IMMERSIVE_DARK_MODE, in dark, sizeof(int));
+        // Windows 11 only; Windows 10 refuses these and keeps its own caption colour.
+        Native.Dwmapi.DwmSetWindowAttribute(Handle, Native.Dwmapi.DWMWA_CAPTION_COLOR, in caption, sizeof(int));
+        Native.Dwmapi.DwmSetWindowAttribute(Handle, Native.Dwmapi.DWMWA_TEXT_COLOR, in text, sizeof(int));
     }
 
     protected override void OnDpiChanged(DpiChangedEventArgs e)
@@ -638,7 +661,7 @@ private readonly ErrorProvider _errors = new();
             var row = new Panel { Size = new Size(SwitchBox.RowWidth, heading ? 24 : 34), Margin = new Padding(3, 0, 3, 0), BackColor = SettingsStyle.Card };
             row.Controls.Add(new Label { Text = name, AutoSize = false, Bounds = new Rectangle(1, 0, hoverAt - 8, row.Height),
                 TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, UseMnemonic = false,
-                ForeColor = heading ? MenuStyle.Muted : MenuStyle.Text, Font = heading ? MenuStyle.SmallFont : MenuStyle.Font });
+                ForeColor = heading ? SettingsStyle.Secondary : SettingsStyle.Text, Font = heading ? MenuStyle.SmallFont : MenuStyle.Font });
             return row;
         }
         void Place(Panel row, Control control, int at)
@@ -649,7 +672,7 @@ private readonly ErrorProvider _errors = new();
         }
         Panel head = Row(T("settings.pip.apps.app"), true);
         foreach (var (text, at) in new[] { (T("menu.view.hover"), hoverAt), (T("settings.pip.apps.original"), originalAt) })
-            Place(head, new Label { Text = text, AutoSize = true, ForeColor = MenuStyle.Muted, Font = MenuStyle.SmallFont, UseMnemonic = false }, at - 4);
+            Place(head, new Label { Text = text, AutoSize = true, ForeColor = SettingsStyle.Secondary, Font = MenuStyle.SmallFont, UseMnemonic = false }, at - 4);
         _appRows.Controls.Add(head);
         foreach (CheckBox kind in new[] { _hoverBrowsers, _hoverFirefox, _hoverElectron, _hoverExplorer })
         {
@@ -709,7 +732,7 @@ private readonly ErrorProvider _errors = new();
 
     private static ComboBox ProgramPicker()
     {
-        var picker = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDown };
+        var picker = new ThemedPicker { Dock = DockStyle.Fill };
         picker.HandleCreated += (_, _) =>
             Native.User32.SendTextMessage(picker.Handle, Native.User32.CB_SETCUEBANNER, 0,
                 T("programs.nameHint"));
@@ -874,15 +897,15 @@ private readonly ErrorProvider _errors = new();
     private static TabPage Tab(string title, Control content)
     {
         var tab = new TabPage(title) { Padding = new Padding(0, 4, 0, 0), UseVisualStyleBackColor = false, BackColor = SettingsStyle.Page };
-        tab.Controls.Add(content);
+        tab.Controls.Add(content is ScrollPage page ? new ScrollHost(page) : content);
         return tab;
     }
 
     /// <summary>A line of explanation under the option it belongs to.</summary>
     private static Label Note(string text) => new()
     {
-        Text = text, AutoSize = true, MaximumSize = new Size(SwitchBox.RowWidth - 8, 0), Margin = new Padding(7, 0, 3, 8),
-        ForeColor = MenuStyle.Muted, Font = MenuStyle.SmallFont,
+        Text = text, AutoSize = true, MaximumSize = new Size(SwitchBox.RowWidth - 8, 0), Margin = new Padding(7, 0, 3, 10),
+        ForeColor = SettingsStyle.Secondary, Font = MenuStyle.SmallFont, UseMnemonic = false,
     };
 
     /// <summary>A titled group of options.</summary>
@@ -898,7 +921,12 @@ private readonly ErrorProvider _errors = new();
     /// <summary>One option: what it is on the left, the control that sets it on the right.</summary>
     private static Control SettingRow(string text, Control control)
     {
-        var row = new Panel { Size = new Size(SwitchBox.RowWidth, Math.Max(36, control.Height + 10)), Margin = new Padding(3, 0, 3, 0) };
+        // A box typed into gets the same rounded frame and width as every other one.
+        if (control is NumericUpDown number) control = new InputFrame(number) { Width = NumberWidth };
+        else if (control is TextBox box) control = new InputFrame(box);
+        else if (control is ComboBox) control.Width = ChoiceWidth;
+        text = text.TrimEnd(':', '：', ' ');
+        var row = new Panel { Size = new Size(SwitchBox.RowWidth, Math.Max(42, control.Height + 10)), Margin = new Padding(3, 0, 3, 0) };
         control.Margin = Padding.Empty;
         control.Location = new Point(row.Width - control.Width - 6, (row.Height - control.Height) / 2);
         control.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -908,22 +936,11 @@ private readonly ErrorProvider _errors = new();
     }
 
     /// <summary>A page that scrolls: cards one under another.</summary>
-    private static FlowLayoutPanel ScrollingPage() => new()
+    private static FlowLayoutPanel ScrollingPage() => new ScrollPage
     {
         FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true,
         BackColor = SettingsStyle.Page, Padding = new Padding(0, 0, 6, 0),
     };
-
-    /// <summary>A plain titled box for a page that is one big list.</summary>
-    private static Panel TitledBox(string title, Control content)
-    {
-        var box = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 0, 0, 8), Text = title };
-        content.Dock = DockStyle.Fill;
-        box.Controls.Add(content);
-        box.Controls.Add(new Label { Text = title, Dock = DockStyle.Top, AutoSize = false, Height = 26, Font = MenuStyle.TitleFont,
-            TextAlign = ContentAlignment.MiddleLeft });
-        return box;
-    }
 
     private FlowLayoutPanel BuildGeneral()
     {
@@ -947,7 +964,7 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(new Label
         {
             Text = string.Format(T("app.version"), AppInfo.Version), AutoSize = true,
-            ForeColor = MenuStyle.Muted, Font = MenuStyle.SmallFont, Margin = new Padding(3, 2, 3, 0),
+            ForeColor = SettingsStyle.Secondary, Font = MenuStyle.SmallFont, Margin = new Padding(3, 2, 3, 0),
         });
         return page;
     }
@@ -1036,83 +1053,26 @@ private readonly ErrorProvider _errors = new();
         return page;
     }
 
-    private TableLayoutPanel BuildPrograms()
+    private FlowLayoutPanel BuildPrograms()
     {
-        var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 3, Dock = DockStyle.Fill };
-        page.Controls.Add(Note(T("programs.precedence")), 0, 0);
-        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        page.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        page.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        page.Controls.Add(BuildProgramList(T("programs.exclusions"), _excluded, _newExcluded), 0, 1);
-        page.Controls.Add(
-            BuildProgramList(T("programs.inclusions"), _included, _newIncluded),
-            0, 2);
+        FlowLayoutPanel page = ScrollingPage();
+        page.Controls.Add(Section(T("programs.exclusions"), Programs(_excluded, _newExcluded, null, T("programs.empty.excluded"))));
+        page.Controls.Add(Section(T("programs.inclusions"), Programs(_included, _newIncluded, null, T("programs.empty.included"))));
+        page.Controls.Add(Note(T("programs.precedence")));
         return page;
     }
 
-    private static Panel BuildProgramList(string title, ListBox list, ComboBox newProgram)
+    /// <summary>A list of programs with a box to add one, as every page that has one shows it.</summary>
+    private static ProgramList Programs(ThemedList list, ComboBox picker, string? title, string empty) =>
+        new(list, picker, title, empty, T("common.add"), T("common.remove"));
+
+    private FlowLayoutPanel BuildSetups()
     {
-        var add = new PlainButton { Text = T("common.add"), AutoSize = true, MinimumSize = new Size(80, 0) };
-        add.Click += (_, _) => AddTyped(list, newProgram);
-        newProgram.KeyDown += (_, e) =>
-        {
-            if (e.KeyCode != Keys.Enter)
-                return;
-            e.SuppressKeyPress = true;
-            AddTyped(list, newProgram);
-        };
-        var remove = new PlainButton { Text = T("common.remove"), AutoSize = true, MinimumSize = new Size(80, 0) };
-        remove.Click += (_, _) =>
-        {
-            if (list.SelectedItem is { } selected)
-                list.Items.Remove(selected);
-        };
-
-        var table = new TableLayoutPanel { ColumnCount = 2, RowCount = 2, Dock = DockStyle.Fill };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        table.Controls.Add(list, 0, 0);
-        table.Controls.Add(remove, 1, 0);
-        // Level with the Add button beside it, whatever their heights.
-        newProgram.Dock = DockStyle.None;
-        newProgram.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        table.Controls.Add(newProgram, 0, 1);
-        table.Controls.Add(add, 1, 1);
-
-        return TitledBox(title, table);
-    }
-
-    private Panel BuildSetups()
-    {
-        var remove = new PlainButton { Text = T("common.remove"), AutoSize = true };
-        remove.Click += (_, _) =>
-        {
-            if (_setups.SelectedItem is ProgramSetup selected)
-                RemoveSetup(selected);
-        };
-
-        var hint = new Label
-        {
-            Text = T(
-                "settings.setups.help"),
-            AutoSize = true,
-            MaximumSize = new Size(ContentWidth, 0),
-            Margin = new Padding(0, 0, 0, 8), ForeColor = MenuStyle.Muted,
-        };
-
-        var table = new TableLayoutPanel { ColumnCount = 2, RowCount = 2, Dock = DockStyle.Fill };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        table.Controls.Add(hint, 0, 0);
-        table.SetColumnSpan(hint, 2);
-        table.Controls.Add(_setups, 0, 1);
-        table.Controls.Add(remove, 1, 1);
-
-        return TitledBox(T("settings.savedSetups"), table);
+        FlowLayoutPanel page = ScrollingPage();
+        var setups = new ProgramList(_setups, null, null, T("settings.setups.empty"), T("common.add"), T("common.remove"),
+            item => RemoveSetup((ProgramSetup)item));
+        page.Controls.Add(Section(T("settings.savedSetups"), Note(T("settings.setups.help")), setups));
+        return page;
     }
 
     private Control BuildButtons()
@@ -1131,10 +1091,10 @@ private readonly ErrorProvider _errors = new();
         };
         _applyButton.Click += (_, _) => ApplyChanges();
 
-        var text = new Label { Text = T("settings.unsaved"), AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = MenuStyle.Accent,
-            BackColor = MenuStyle.AccentBack, Margin = new Padding(12, 0, 0, 0) };
+        var text = new Label { Text = T("settings.unsaved"), AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = SettingsStyle.Accent,
+            BackColor = SettingsStyle.AccentBack, Margin = new Padding(12, 0, 0, 0) };
         var row = new TableLayoutPanel { ColumnCount = 3, RowCount = 1, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            BackColor = MenuStyle.AccentBack, Padding = new Padding(0, 6, 8, 6) };
+            BackColor = SettingsStyle.AccentBack, Padding = new Padding(0, 6, 8, 6) };
         row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -1144,7 +1104,7 @@ private readonly ErrorProvider _errors = new();
         _saveBar.Controls.Add(row);
         _saveBar.AutoSize = true; // As tall as its buttons, whatever the display scale.
         _saveBar.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        _saveBar.BackColor = MenuStyle.AccentBack;
+        _saveBar.BackColor = SettingsStyle.AccentBack;
         _saveBar.Dock = DockStyle.None;
         _saveBar.Anchor = AnchorStyles.Left | AnchorStyles.Right;
         _saveBar.Margin = new Padding(0, 8, 0, 0);
@@ -1189,13 +1149,21 @@ private readonly ErrorProvider _errors = new();
         FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("settings.opacity.title"), SettingRow(T("settings.opacity.default"), _defaultOpacity),
             SettingRow(T("settings.opacity.step"), _opacityStep), _opacityWheel, _opaqueOnHover));
-        page.Controls.Add(Section(T("settings.pin.border"), _pausePin, _highlightPinned, SettingRow(T("settings.pin.color"), _borderColor),
+        var color = new InputFrame(_borderColor) { Width = NumberWidth + 10, Swatch = () => HexColor(_borderColor.Text) };
+        _borderColor.TextChanged += (_, _) => color.Invalidate();
+        page.Controls.Add(Section(T("settings.pin.border"), _pausePin, _highlightPinned, SettingRow(T("settings.pin.color"), color),
             SettingRow(T("settings.pin.opacity"), _borderOpacity), SettingRow(T("settings.pin.thickness"), _borderThickness)));
         page.Controls.Add(Section(T("settings.effects.title"), _detectDark, _layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.pictures"), _glassPictures), _pictureSafeDark, Note(T("settings.effects.help"))));
         return page;
     }
+
+    /// <summary>The colour a #RRGGBB box holds, or null while what's typed isn't one yet.</summary>
+    private static Color? HexColor(string text) =>
+        text.Trim() is { Length: 7 } hex && hex[0] == '#' && int.TryParse(hex.AsSpan(1), System.Globalization.NumberStyles.HexNumber,
+            System.Globalization.CultureInfo.InvariantCulture, out int rgb)
+            ? Color.FromArgb(rgb >> 16 & 0xFF, rgb >> 8 & 0xFF, rgb & 0xFF) : null;
 
     private Control BuildToolbar()
     {
@@ -1206,7 +1174,12 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(Section(T("toolbar.settings.title"), _showToolbar, SettingRow(T("toolbar.placement.label"), _toolbarPlacement),
             SettingRow(T("toolbar.trigger.label"), _toolbarTrigger), SettingRow(T("toolbar.delay.label"), _toolbarDelay),
             Note(T("toolbar.trigger.help"))));
-        page.Controls.Add(Section(T("toolbar.buttons.label"), _toolbarButtons, Note(T("toolbar.buttons.help"))));
+        var buttons = new InputFrame(_toolbarButtons, InputFrame.Look.List) { Width = SwitchBox.RowWidth, Margin = new Padding(3, 6, 3, 8) };
+        void Fit() => buttons.Height = _toolbarButtons.RowHeight * _toolbarButtons.Items.Count + SettingsStyle.Unit(buttons, 8);
+        Fit();
+        _toolbarButtons.FontChanged += (_, _) => Fit();
+        buttons.DpiChangedAfterParent += (_, _) => Fit();
+        page.Controls.Add(Section(T("toolbar.buttons.label"), buttons, Note(T("toolbar.buttons.help"))));
         return page;
     }
 
@@ -1214,30 +1187,19 @@ private readonly ErrorProvider _errors = new();
     {
         _anchorSide.Items.AddRange([T("anchors.side.right"), T("anchors.side.left"), T("anchors.side.near")]);
         _anchorLook.Items.AddRange([T("anchors.look.dark"), T("anchors.look.light")]);
-        var page = new TableLayoutPanel { ColumnCount = 2, RowCount = 2, Dock = DockStyle.Fill };
-        page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        Control options = Section(T("anchors.settings.title"), _autoAnchors, Note(T("anchors.auto.help")),
+        FlowLayoutPanel page = ScrollingPage();
+        page.Controls.Add(Section(T("anchors.settings.title"), _autoAnchors, Note(T("anchors.auto.help")),
             SettingRow(T("anchors.side.label"), _anchorSide), SettingRow(T("anchors.look.label"), _anchorLook),
             SettingRow(T("anchors.limit"), _anchorLimit), SettingRow(T("anchors.size"), _anchorSize),
-            _anchorRecency, _anchorAvoid, Note(T("anchors.avoid.help")), Note(T("programs.alwaysLeftAlone")));
-        page.Controls.Add(options, 0, 0);
-        page.SetColumnSpan(options, 2);
-        page.Controls.Add(BuildProgramList(T("anchors.auto.only"), _anchorOnly, _newAnchorOnly), 0, 1);
-        page.Controls.Add(BuildProgramList(T("anchors.auto.excluded"), _anchorExcluded, _newAnchorExcluded), 1, 1);
+            _anchorRecency, _anchorAvoid, Note(T("anchors.avoid.help"))));
+        page.Controls.Add(Section(T("anchors.auto.only"), Programs(_anchorOnly, _newAnchorOnly, null, T("programs.empty.included"))));
+        page.Controls.Add(Section(T("anchors.auto.excluded"), Programs(_anchorExcluded, _newAnchorExcluded, null, T("programs.empty.excluded"))));
+        page.Controls.Add(Note(T("programs.alwaysLeftAlone")));
         return page;
     }
 
-    private static Control ProgramRules(string title, ListBox list, ComboBox picker)
-    {
-        Panel group = BuildProgramList(title, list, picker);
-        group.Dock = DockStyle.None;
-        group.Size = new Size(SwitchBox.RowWidth, 150);
-        group.Margin = new Padding(3, 4, 3, 4);
-        return group;
-    }
+    private static Control ProgramRules(string title, ThemedList list, ComboBox picker) =>
+        Programs(list, picker, title.TrimEnd(':', '：'), T("programs.empty.excluded"));
 
     private Control BuildFeatures()
     {
@@ -1249,8 +1211,7 @@ private readonly ErrorProvider _errors = new();
         _features.Columns.Add(T("features.state"), 160);
         foreach (AppCommand command in CommandCatalog.All)
         {
-            var box = new TextBox { ReadOnly = true, Dock = DockStyle.Fill, ShortcutsEnabled = false,
-                AccessibleName = CommandCatalog.Name(command) };
+            var box = new TextBox { ReadOnly = true, ShortcutsEnabled = false, AccessibleName = CommandCatalog.Name(command) };
             box.KeyDown += (_, e) =>
             {
                 if (e.KeyCode == Keys.Tab) return;
@@ -1259,8 +1220,8 @@ private readonly ErrorProvider _errors = new();
             };
             _hotkeys[command] = box;
         }
-        var clear = new PlainButton { Text = T("actions.clear"), AutoSize = true };
-        var reset = new PlainButton { Text = T("actions.reset"), AutoSize = true };
+        var clear = new PlainButton { Text = T("actions.clear") };
+        var reset = new PlainButton { Text = T("actions.reset") };
         void SetSelected(bool defaults)
         {
             if (_features.SelectedItems.Count == 0 || _features.SelectedItems[0].Tag is not AppCommand command) return;
@@ -1269,48 +1230,156 @@ private readonly ErrorProvider _errors = new();
         }
         clear.Click += (_, _) => SetSelected(false);
         reset.Click += (_, _) => SetSelected(true);
-        var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Bottom };
-        buttons.Controls.AddRange([clear, reset]);
-        var editor = new TableLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, ColumnCount = 1 };
-        editor.Controls.Add(_shortcutLabel);
-        editor.Controls.Add(_shortcutEditor);
-        editor.Controls.Add(buttons);
-        editor.Controls.Add(Note(T("settings.hotkeys.captureHelp")));
+
+        // The chosen action's shortcut, in a card under the table: its name, the box to press keys in, and the buttons.
+        var editor = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 4, RowCount = 2, BackColor = SettingsStyle.Card };
+        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        for (int i = 0; i < 3; i++) editor.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _shortcutLabel.Margin = new Padding(2, 0, 8, 0);
+        _shortcutEditor.Margin = new Padding(0, 0, 8, 0);
+        clear.Margin = new Padding(0, 0, 6, 0);
+        reset.Margin = Padding.Empty;
+        clear.Anchor = reset.Anchor = AnchorStyles.Right;
+        editor.Controls.Add(_shortcutLabel, 0, 0);
+        editor.Controls.Add(_shortcutEditor, 1, 0);
+        editor.Controls.Add(clear, 2, 0);
+        editor.Controls.Add(reset, 3, 0);
+        Label help = Note(T("settings.hotkeys.captureHelp"));
+        help.Margin = new Padding(2, 8, 0, 0);
+        editor.Controls.Add(help, 0, 1);
+        editor.SetColumnSpan(help, 4);
+        var card = new CardPanel { Dock = DockStyle.Bottom, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(12, 10, 12, 10) };
+        card.Controls.Add(editor);
         _features.SelectedIndexChanged += (_, _) => ShowShortcutEditor();
         _actionSearch.AccessibleName = T("actions.search");
         _actionSearch.PlaceholderText = T("actions.search");
         _actionSearch.TextChanged += (_, _) => RefreshFeatures();
+
+        DrawFeatures();
+        var table = new InputFrame(_features, InputFrame.Look.List) { Dock = DockStyle.Fill };
         var page = new Panel { Dock = DockStyle.Fill };
-        page.Controls.Add(_features);
-        page.Controls.Add(editor);
-        var help = new Label { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top, ForeColor = MenuStyle.Muted, Padding = new Padding(0, 6, 0, 6) };
-        page.Controls.Add(help);
-        page.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 6 });
-        page.Controls.Add(new SearchField(_actionSearch));
-        page.Resize += (_, _) => help.MaximumSize = new Size(page.ClientSize.Width, 0);
+        page.Controls.Add(table);
+        page.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 8 });
+        page.Controls.Add(card);
+        var intro = new Label { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top, ForeColor = SettingsStyle.Secondary, Padding = new Padding(1, 8, 0, 8) };
+        page.Controls.Add(intro);
+        page.Controls.Add(new InputFrame(_actionSearch) { Glyph = MenuParts.Search, Dock = DockStyle.Top, Height = 34 });
+        page.Resize += (_, _) => intro.MaximumSize = new Size(page.ClientSize.Width, 0);
         _features.ShowItemToolTips = true;
-        _features.Resize += (_, _) =>
-        {
-            int width = Math.Max(200, _features.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 4);
-            double[] shares = [0.28, 0.15, 0.18, 0.18, 0.21];
-            for (int i = 0; i < shares.Length; i++) _features.Columns[i].Width = (int)(width * shares[i]);
-        };
+        _features.Resize += (_, _) => FitFeatureColumns();
+        _features.ClientSizeChanged += (_, _) => FitFeatureColumns();
         return page;
+    }
+
+    /// <summary>
+    /// Draws the table of actions in the window's colours: Windows draws its headings unreadable in the dark theme,
+    /// and its chosen row hard to tell apart.
+    /// </summary>
+    private void DrawFeatures()
+    {
+        _features.OwnerDraw = true;
+        _features.BackColor = SettingsStyle.Card;
+        _features.ForeColor = SettingsStyle.Text;
+        int Unit(int value) => SettingsStyle.Unit(_features, value);
+        // A list of tiny pictures is the way to set the height of a row.
+        void RowHeight() => _features.SmallImageList = new ImageList { ImageSize = new Size(1, Math.Max(Unit(32), _features.Font.Height + Unit(14))) };
+        _features.HandleCreated += (_, _) => RowHeight();
+        _features.DrawColumnHeader += (_, e) =>
+        {
+            Graphics g = e.Graphics;
+            using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, e.Bounds);
+            TextRenderer.DrawText(g, e.Header?.Text, MenuStyle.SmallFont,
+                new Rectangle(e.Bounds.Left + Unit(e.ColumnIndex == 0 ? 14 : 8), e.Bounds.Top, e.Bounds.Width - Unit(16), e.Bounds.Height),
+                SettingsStyle.Secondary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            using var line = new Pen(SettingsStyle.Divider);
+            g.DrawLine(line, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+        };
+        _features.DrawItem += (_, _) => { }; // Each cell draws itself, the first one the row's background too.
+        _features.DrawSubItem += (_, e) =>
+        {
+            if (e.Item is not { } item || e.SubItem is null) return;
+            Graphics g = e.Graphics;
+            Rectangle cell = e.Bounds;
+            if (e.ColumnIndex == 0)
+            {
+                Rectangle row = item.Bounds;
+                using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, row);
+                var wash = new Rectangle(row.Left + Unit(2), row.Top + Unit(1), row.Width - Unit(4), row.Height - Unit(2));
+                if (item.Selected)
+                {
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    using var path = SettingsStyle.Rounded(wash, Unit(4));
+                    using var brush = new SolidBrush(SettingsStyle.RowSelectedOn(SettingsStyle.Card));
+                    g.FillPath(brush, path);
+                    SettingsStyle.SelectionBar(g, wash, _features);
+                    if (item.Focused && _features.Focused) SettingsStyle.FocusRing(g, wash, Unit(4), _features);
+                }
+                cell = new Rectangle(row.Left, row.Top, _features.Columns[0].Width, row.Height);
+            }
+            bool problem = e.ColumnIndex == 4 && item.Tag is AppCommand command && _shortcutProblems.ContainsKey(command);
+            Color color = problem ? SettingsStyle.Error : e.ColumnIndex is 0 or 3 ? SettingsStyle.Text : SettingsStyle.Secondary;
+            int inset = Unit(e.ColumnIndex == 0 ? 14 : 8);
+            TextRenderer.DrawText(g, e.SubItem.Text, _features.Font,
+                new Rectangle(cell.Left + inset, cell.Top, Math.Max(0, cell.Width - inset - Unit(4)), cell.Height),
+                color, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        };
+    }
+
+    /// <summary>
+    /// Gives each column of the table the room its longest entry needs and the name column the rest, so nothing is cut
+    /// short while there is room. Columns can still be dragged wider; a cut-short entry shows in full when pointed at.
+    /// </summary>
+    private void FitFeatureColumns()
+    {
+        // Sizes still change while the window closes, when the table's rows are already being taken apart.
+        if (_fillingFeatures || Disposing || IsDisposed || _features.Disposing || !_features.IsHandleCreated) return;
+        // What shows: Windows' scroll bar is hidden past the edge, so the table may be wider than that.
+        int width = Math.Min(_features.ClientSize.Width, _features.Parent?.ClientSize.Width ?? int.MaxValue);
+        width -= SettingsStyle.Unit(_features, ThinScrollBar.BarWidth);
+        if (width <= 0 || _features.Columns.Count < 5) return;
+        int pad = SettingsStyle.Unit(_features, 24);
+        var need = new int[5];
+        for (int column = 1; column < 5; column++)
+        {
+            int widest = TextRenderer.MeasureText(_features.Columns[column].Text, MenuStyle.SmallFont).Width;
+            foreach (ListViewItem? item in _features.Items)
+                if (item is not null && column < item.SubItems.Count)
+                    widest = Math.Max(widest, TextRenderer.MeasureText(item.SubItems[column].Text, _features.Font).Width);
+            need[column] = widest + pad;
+        }
+        // A problem can be a whole sentence; the state column stays short and shows it in full when pointed at.
+        need[4] = Math.Min(need[4], SettingsStyle.Unit(_features, 150));
+        int least = SettingsStyle.Unit(_features, 150);
+        int rest = need.Skip(1).Sum();
+        if (width - rest < least)
+        {
+            double share = Math.Max(0, width - least) / (double)rest;
+            for (int column = 1; column < 5; column++) need[column] = (int)(need[column] * share);
+        }
+        need[0] = width - need.Skip(1).Sum();
+        for (int column = 0; column < 5; column++)
+            if (_features.Columns[column].Width != need[column]) _features.Columns[column].Width = need[column];
     }
 
     private void ShowShortcutEditor()
     {
-        _shortcutEditor.Controls.Clear();
         _shortcutLabel.Text = "";
-        if (_features.SelectedItems.Count == 0 || _features.SelectedItems[0].Tag is not AppCommand command) return;
-        _shortcutLabel.Text = CommandCatalog.Name(command);
-        _shortcutEditor.Controls.Add(_hotkeys[command]);
+        if (_features.SelectedItems.Count == 0 || _features.SelectedItems[0].Tag is not AppCommand command)
+        {
+            _shortcutEditor.Host(null);
+            _shortcutEditor.Enabled = false;
+            return;
+        }
+        _shortcutLabel.Text = CommandCatalog.Name(command).Replace("&", "");
+        _shortcutEditor.Enabled = true;
+        _shortcutEditor.Host(_hotkeys[command]);
     }
 
     internal void RefreshFeatures()
     {
         object? selected = _features.SelectedItems.Count > 0 ? _features.SelectedItems[0].Tag : null;
         _features.BeginUpdate();
+        _fillingFeatures = true; // The rows are half there until the end; the columns are fitted then.
         _features.Items.Clear();
         var defaults = new AppSettings();
         foreach (AppCommand command in CommandCatalog.All)
@@ -1336,7 +1405,7 @@ private readonly ErrorProvider _errors = new();
                 enabled ? T("features.enabled") : T("features.disabled")];
             if (!string.IsNullOrWhiteSpace(_actionSearch.Text) && !values.Any(value =>
                 value.Contains(_actionSearch.Text, StringComparison.CurrentCultureIgnoreCase))) return;
-            var row = new ListViewItem(values) { Tag = page };
+            var row = new ListViewItem(values) { Tag = page, ToolTipText = string.Join(Environment.NewLine, values) };
             _features.Items.Add(row);
             if (Equals(selected, page)) row.Selected = true;
         }
@@ -1358,6 +1427,8 @@ private readonly ErrorProvider _errors = new();
         Option(_pipTaskbar.Text, none, _pipTaskbar.Checked, "pip");
         Option(T("pip.hover.mode"), none, _pipPreview.SelectedIndex > 0, "pip");
         _features.EndUpdate();
+        _fillingFeatures = false;
+        FitFeatureColumns();
         if (_features.SelectedItems.Count == 0 && _features.Items.Count > 0) _features.Items[0].Selected = true;
         ShowShortcutEditor();
     }

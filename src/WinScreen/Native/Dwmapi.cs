@@ -29,6 +29,8 @@ internal static partial class Dwmapi
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     public const int DWMWA_CLOAKED = 14;
     public const int DWMWA_BORDER_COLOR = 34;
+    public const int DWMWA_CAPTION_COLOR = 35;
+    public const int DWMWA_TEXT_COLOR = 36;
     public const int DWMWA_COLOR_DEFAULT = unchecked((int)0xFFFFFFFF);
     public const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
 

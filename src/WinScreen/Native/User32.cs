@@ -226,6 +226,9 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetWindowRect(nint hWnd, out Rect rect);
 
+    [LibraryImport("user32.dll", EntryPoint = "FindWindowExW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint FindWindowEx(nint parent, nint after, string? className, string? title);
+
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetWindowPlacement(nint hWnd, ref WindowPlacement placement);
@@ -277,6 +280,9 @@ internal static partial class User32
     public static partial bool IsWindowVisible(nint hWnd);
 
     public const uint CB_SETCUEBANNER = 0x1703;
+
+    [LibraryImport("user32.dll", EntryPoint = "SendMessageW")]
+    public static partial nint SendMessage(nint window, uint message, nint wParam, nint lParam);
 
     [LibraryImport("user32.dll", EntryPoint = "SendMessageW", StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint SendTextMessage(nint window, uint message, nint wParam, string text);
