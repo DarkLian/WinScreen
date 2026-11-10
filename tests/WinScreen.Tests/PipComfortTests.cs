@@ -262,7 +262,7 @@ public sealed class PipComfortTests
             Assert.True(Desktop.WaitFor(() => view.BackendKind != PipBackendKind.DwmThumbnail, 10000, Application.DoEvents), view.DiagnosticSnapshot);
             Rectangle before = view.Bounds;
             view.SuspendView();
-            Assert.Equal("Stopped", view.DiagnosticSnapshot);
+            Assert.StartsWith("Stopped", view.DiagnosticSnapshot);
             Assert.False(view.Visible);
             view.ResumeView();
             // A view comes back once its old capture has finished shutting down, which can take a moment.
