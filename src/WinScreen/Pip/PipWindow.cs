@@ -157,9 +157,12 @@ public sealed class PipWindow : Form
             _menu.Items["inputStatus"]!.Text = InputDescription;
             _retryItem.Visible = CanRetryCapture;
             _autoMoveItem.Visible = AllowAutoMove;
-            _interactiveItem.Visible = AllowInteractive && _origin.IsWindow;
-            _middleScrollItem.Visible = _interactiveItem.Visible && _interactiveItem.Checked;
-            _enhancedHoverItem.Visible = _middleScrollItem.Visible;
+            bool canInteract = AllowInteractive && _origin.IsWindow;
+            _interactiveItem.Visible = canInteract;
+            // Visible also reflects the parent menu, which is still hidden during Opening.
+            bool showInteractionOptions = canInteract && _interactiveItem.Checked;
+            _middleScrollItem.Visible = showInteractionOptions;
+            _enhancedHoverItem.Visible = showInteractionOptions;
             _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
             _removeCropItem.Enabled = !_crop.IsEmpty;
             // A menu only closes on an outside click while its program has the focus.

@@ -24,6 +24,42 @@ public sealed class PipStateChipTests
 [Trait("Category", "RealWindows")]
 public sealed class PipOpenTests
 {
+    [Fact]
+    public void Interactive_options_are_visible_on_first_and_repeated_menu_openings()
+    {
+        using var source = new TargetProcess(new(200, 160, 400, 300));
+        OnUiThread(pump =>
+        {
+            using var pip = new PipWindow(source.Handle, new WindowController([])) { AllowInteractive = true };
+            try
+            {
+                pip.ShowOnTop();
+                pip.SetInteractive(true);
+                var menu = pip.ContextMenuStrip!;
+                ToolStripMenuItem Item(string key) => menu.Items.OfType<ToolStripMenuItem>()
+                    .Single(item => item.Name != "inputStatus" && item.Text == WinScreen.Localization.UiText.T(key));
+                for (int visit = 0; visit < 3; visit++)
+                {
+                    menu.Show(pip, new Point(20, 20));
+                    pump(30);
+                    Assert.True(menu.Visible);
+                    Assert.True(Item("pip.interactive").Checked);
+                    Assert.True(Item("pip.middleScroll").Visible, "Middle-click scrolling must appear in the open menu.");
+                    Assert.True(Item("pip.enhancedHover").Visible, "Enhanced hover must appear in the open menu.");
+                    menu.Close();
+                }
+                pip.SetInteractive(false);
+                menu.Show(pip, new Point(20, 20));
+                pump(30);
+                Assert.True(Item("pip.interactive").Visible);
+                Assert.False(Item("pip.middleScroll").Visible);
+                Assert.False(Item("pip.enhancedHover").Visible);
+                menu.Close();
+            }
+            finally { pip.Close(); }
+        });
+    }
+
     private static void OnUiThread(Action<Action<int>> test)
     {
         Exception? failure = null;
