@@ -140,6 +140,7 @@ public sealed class TrayApplication : ApplicationContext
                 OpenSettings();
         };
         _tray.Visible = true;
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += FollowWindowsTheme;
         ShowStatus();
 
         bool firstRun = !_settings.WelcomeShown;
@@ -340,6 +341,7 @@ public sealed class TrayApplication : ApplicationContext
     private IReadOnlyList<HotkeyProblem> Apply(AppSettings settings)
     {
         bool experimentalBefore = _settings.ExperimentalFeatures;
+        string themeBefore = _settings.Theme;
         List<HotkeyProblem> problems = ReadHotkeys(settings, out var desired);
         if (problems.Count > 0)
             return problems;
@@ -369,8 +371,44 @@ public sealed class TrayApplication : ApplicationContext
         _settings.CopyFrom(settings);
         _setupNone.Clear();
         ApplyPreferences(experimentalBefore);
+        if (_settings.Theme != themeBefore) ChangeTheme();
         return [];
     }
+
+    /// <summary>
+    /// Changes between light and dark without restarting. Menus follow the next time they open; Settings sets its
+    /// colours as it is made, so it is opened again on the same page, once the save that changed the look is done.
+    /// </summary>
+    private void ChangeTheme()
+    {
+        bool darkBefore = MenuStyle.Dark;
+        MenuStyle.UseTheme(_settings.Theme);
+        if (MenuStyle.Dark != darkBefore) ReopenSettings();
+    }
+
+    private void ReopenSettings()
+    {
+        if (_settingsWindow is not { IsDisposed: false, IsHandleCreated: true } old) return;
+        old.BeginInvoke(() =>
+        {
+            if (old.IsDisposed) return;
+            int page = old.PageIndex;
+            Rectangle bounds = old.Bounds;
+            old.Close();
+            OpenSettings(bounds, page);
+        });
+    }
+
+    /// <summary>With the look set to follow Windows, Settings is made again when Windows changes between light and dark.</summary>
+    private void FollowWindowsTheme(object? sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != Microsoft.Win32.UserPreferenceCategory.General || _settings.Theme is "light" or "dark") return;
+        if (MenuStyle.Dark == _wasDark) return;
+        _wasDark = MenuStyle.Dark;
+        ReopenSettings();
+    }
+
+    private bool _wasDark = MenuStyle.Dark;
 
     private void ApplyPreferences(bool experimentalBefore)
     {
@@ -850,7 +888,8 @@ public sealed class TrayApplication : ApplicationContext
             yield return window;
     }
 
-    private void OpenSettings()
+    /// <summary>Opens Settings, or brings it forward; <paramref name="bounds"/> and <paramref name="page"/> reopen it where it was.</summary>
+    private void OpenSettings(Rectangle? bounds = null, int page = 0)
     {
         if (_settingsWindow is { IsDisposed: false })
         {
@@ -860,7 +899,8 @@ public sealed class TrayApplication : ApplicationContext
 
         EndVisits();
         _settingsWindow = new SettingsWindow(_settings, _startup, Apply, command => _hotkeys.IsRegistered((int)command))
-            { TopMost = true };
+            { TopMost = true, PageIndex = page };
+        if (bounds is { } where) { _settingsWindow.StartPosition = FormStartPosition.Manual; _settingsWindow.Bounds = where; }
         _settingsWindow.Show();
         _settingsWindow.Activate();
     }
@@ -893,6 +933,7 @@ public sealed class TrayApplication : ApplicationContext
         _anchors.RemoveAll();
         _updateTimer.Dispose();
         _menuGuard.Dispose();
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged -= FollowWindowsTheme;
         _watch.Dispose();
         _borders.Dispose();
         _dark.Dispose();

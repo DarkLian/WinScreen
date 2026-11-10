@@ -276,6 +276,14 @@ private readonly ErrorProvider _errors = new();
         ResumeLayout(true);
     }
 
+    /// <summary>The page showing, for opening the window again where it was.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal int PageIndex
+    {
+        get => _tabs.SelectedIndex;
+        set => _tabs.SelectedIndex = Math.Clamp(value, 0, _tabs.TabCount - 1);
+    }
+
     /// <summary>True when what's on screen differs from what's in effect, so Apply has something to do.</summary>
     internal bool HasChanges => _applyButton.Enabled;
 

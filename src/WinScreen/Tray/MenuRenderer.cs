@@ -9,6 +9,22 @@ internal static class MenuStyle
 {
     internal static bool Dark => Application.IsDarkModeEnabled;
 
+    /// <summary>
+    /// Light, dark or as Windows is ("system"). It can change while WinScreen runs: windows made afterwards and
+    /// everything WinScreen draws itself follow at once.
+    /// </summary>
+    internal static void UseTheme(string theme)
+    {
+#pragma warning disable WFO5001 // WinForms marks dark mode as experimental; anything it doesn't draw dark stays readable.
+        Application.SetColorMode(theme switch
+        {
+            "light" => SystemColorMode.Classic,
+            "dark" => SystemColorMode.Dark,
+            _ => SystemColorMode.System,
+        });
+#pragma warning restore WFO5001
+    }
+
     // Windows 11's own interface face where it exists, and the face Windows 10 uses otherwise.
     private static readonly string Face =
         FontFamily.Families.Any(family => family.Name == "Segoe UI Variable Text") ? "Segoe UI Variable Text" : "Segoe UI";
@@ -66,6 +82,9 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
     /// </summary>
     private static void Prepare(ToolStripDropDown menu)
     {
+        // The light or dark look may have changed since the menu was made.
+        if (menu.BackColor != MenuStyle.Back) menu.BackColor = MenuStyle.Back;
+        if (menu.ForeColor != MenuStyle.Text) menu.ForeColor = MenuStyle.Text;
         int gap = MenuParts.Scale(5);
         bool icons = menu.Items.Cast<ToolStripItem>().Any(item => item.Image is not null ||
             item is ToolStripMenuItem { Checked: true } or ToolStripMenuItem { CheckOnClick: true });
@@ -190,8 +209,9 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
     {
         if (e.Image is null || e.Item is null) { base.OnRenderItemImage(e); return; }
         Rectangle r = Centred(e.ImageRectangle, e.Item);
-        if (e.Item.Enabled) { e.Graphics.DrawImage(e.Image, r); return; }
-        using Image faded = CreateDisabledImage(e.Image);
+        Image image = MenuParts.ForCurrentTheme(e.Image);
+        if (e.Item.Enabled) { e.Graphics.DrawImage(image, r); return; }
+        using Image faded = CreateDisabledImage(image);
         e.Graphics.DrawImage(faded, r);
     }
 

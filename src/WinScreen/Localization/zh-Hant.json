@@ -361,7 +361,7 @@
   "settings.setups.help": "已儲存的配置會記住你對某個程式視窗的設定：置頂、半透明、深色或子母畫面。該程式的視窗首次進入前景時會依同樣的方式開始。",
   "settings.startWithWindows": "登入時啟動 WinScreen",
   "settings.startupAndUpdates": "啟動與更新",
-  "settings.theme": "外觀（重新啟動 WinScreen 後生效）",
+  "settings.theme": "外觀",
   "settings.theme.dark": "深色",
   "settings.theme.light": "淺色",
   "settings.theme.system": "跟隨 Windows",

@@ -361,7 +361,7 @@
   "settings.setups.help": "A saved setup remembers how you set up a program's window: pinned, see-through, dark, or with a view. That program's windows start the same way when they first come forward.",
   "settings.startWithWindows": "Start WinScreen when I sign in",
   "settings.startupAndUpdates": "Startup and updates",
-  "settings.theme": "Look (restart WinScreen to apply)",
+  "settings.theme": "Look",
   "settings.theme.dark": "Dark",
   "settings.theme.light": "Light",
   "settings.theme.system": "Same as Windows",

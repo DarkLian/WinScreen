@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using WinScreen.Settings;
 
 namespace WinScreen.Tray;
@@ -26,7 +27,19 @@ internal static class MenuParts
     internal static int Scale(int value) => (int)Math.Round(value * SystemDpi / 96.0);
 
     /// <summary>A small picture of a glyph in its own colour, or null where the icon font is missing.</summary>
-    internal static Image? Icon(char glyph) => Icon(glyph, ColorOf(glyph), twoTone: true);
+    internal static Image? Icon(char glyph)
+    {
+        Image? picture = Icon(glyph, ColorOf(glyph), twoTone: true);
+        if (picture is not null) Themed.AddOrUpdate(picture, new StrongBox<char>(glyph));
+        return picture;
+    }
+
+    /// <summary>Icons drawn in their own colour, by glyph: their colour depends on the light or dark look.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Image, StrongBox<char>> Themed = [];
+
+    /// <summary>The same icon in the look in use now, for one made before the look changed.</summary>
+    internal static Image ForCurrentTheme(Image image) =>
+        Themed.TryGetValue(image, out StrongBox<char>? glyph) && Icon(glyph.Value) is { } current ? current : image;
 
     /// <summary>
     /// The colour an icon is drawn in, as Windows 11 colours its own: a few families of colour by what the icon is

@@ -361,7 +361,7 @@
   "settings.setups.help": "已保存的配置会记住你对某个程序窗口的设置：置顶、半透明、深色或画中画。该程序的窗口首次进入前台时会按同样的方式开始。",
   "settings.startWithWindows": "登录时启动 WinScreen",
   "settings.startupAndUpdates": "启动与更新",
-  "settings.theme": "外观（重启 WinScreen 后生效）",
+  "settings.theme": "外观",
   "settings.theme.dark": "深色",
   "settings.theme.light": "浅色",
   "settings.theme.system": "跟随 Windows",
