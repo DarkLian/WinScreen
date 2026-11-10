@@ -10,6 +10,11 @@ If you find a security problem in WinScreen, please tell us privately first:
 
 We'll reply as soon as we can and let you know when it's fixed.
 
+## Supported versions
+
+Fixes go into the newest release, which is for Windows 10 and 11 on 64-bit Intel or AMD PCs (x64). The earlier ARM64
+builds are no longer updated.
+
 ## Updates
 
 WinScreen only installs an update after checking it against a signature built into the app, so an update can't be

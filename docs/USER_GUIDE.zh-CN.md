@@ -162,7 +162,7 @@ Windows 无法隐藏捕获边框时，隐藏的原窗口会改用标准捕获。
 
 ## 小提示
 
-- WinScreen 支持 Windows 10（2004 版或更高版本）和 Windows 11，以及 x64 和 ARM 电脑。ARM 版本需要 Windows 11。
+- WinScreen 支持 64 位 Intel 或 AMD 电脑（x64）上的 Windows 10（2004 版或更高版本）和 Windows 11。不支持 ARM 电脑和 32 位 Windows。
 - 要更改以管理员身份运行的应用（包括用 Alt 拖动移动它们），请同样以管理员身份启动 WinScreen
   （右键单击它，然后选择 **以管理员身份运行**）。随 Windows 启动时不会带有这些权限。
 - 游戏或全屏应用在前台时，命令会暂停。视图无法显示在独占全屏的游戏上方。

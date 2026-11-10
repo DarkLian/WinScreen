@@ -13,7 +13,7 @@
   <a href="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml"><img src="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?include_prereleases&label=release" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 and 11">
-  <img src="https://img.shields.io/badge/arch-x64%20%7C%20ARM64-4c8bf5" alt="x64 and ARM64">
+  <img src="https://img.shields.io/badge/arch-x64-4c8bf5" alt="x64">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/DarkLian/WinScreen" alt="MIT license"></a>
 </p>
 
@@ -59,10 +59,11 @@ live view, or bring a buried window back with one click. No account, no trial, n
 
 ## Install
 
-Download the installer from [Releases](https://github.com/DarkLian/WinScreen/releases) and run it:
+Download **WinScreen-…-x64-Setup.exe** from [Releases](https://github.com/DarkLian/WinScreen/releases) and run it. It works on
+Windows 10 (version 2004 or later) and Windows 11, on 64-bit Intel or AMD PCs (x64).
 
-- **WinScreen-…-x64-Setup.exe** for Windows 10 (version 2004 or later) and Windows 11 on most PCs.
-- **WinScreen-…-arm64-Setup.exe** for Windows 11 on ARM.
+ARM PCs aren't supported for now. We don't have one to test on, so new releases have no ARM version, and earlier ARM
+versions won't get updates.
 
 You don't need anything else installed, and it runs without administrator rights. WinScreen lives in the system tray.
 To use it on apps that run as administrator, start WinScreen as administrator too.

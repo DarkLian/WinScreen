@@ -6,6 +6,28 @@ What each WinScreen feature does with each kind of window, as the code behaves t
 
 Paths are relative to `src/WinScreen/` unless they start with `tests/`.
 
+## Supported systems
+
+| System | Status |
+|---|---|
+| Windows 10 (version 2004 or later) and Windows 11 on x64 | ✅ Supported. The only architecture that is tested, released and updated. Everything below describes it. |
+| Windows 11 on ARM64 | ❌ Not officially supported; experimental. No installer, portable package or update feed is published for it. |
+| The x64 build on an ARM64 PC (emulation) | ❔ Unverified. Enhanced hover is refused there. |
+| 32-bit Windows (x86) | ❌ Unsupported. There is no 32-bit build. |
+
+**Why ARM64 is suspended.** There is no ARM64 device or signed-in ARM64 desktop to test on, and too little demand
+to justify keeping a second architecture going. WinScreen leans on native Windows APIs, window capture, input hooks
+and shell behavior, and each of those has to be checked on the architecture it runs on. Enhanced hover already works
+on Windows 11 x64 only. A second set of installers, update feeds and signatures adds work to every release.
+
+**What remains.** The source still compiles for ARM64. An automated job builds it and runs the logic tests on ARM64
+hardware for every push. That job is a best-effort portability check: it opens no windows and drives no desktop, a
+failure there doesn't hold up x64 work or releases, and a passing run does not show that WinScreen works on ARM64.
+
+**Earlier ARM64 releases.** Releases up to 0.8.1 beta included ARM64 files, and those stay on the Releases page as
+they were. An installed ARM64 copy gets no further updates. It can't be given an x64 update either: each architecture
+reads its own update feed (`Updates/UpdateChannel.cs`), and only the x64 feed is published now.
+
 ## Key
 
 | Mark | Meaning |
@@ -161,7 +183,7 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 
 **Enhanced hover (experimental)** keeps hover effects showing while an app is used through a view, using a small native helper inside the application. It is off by default. **Settings → Picture-in-Picture → Enhanced hover** chooses which apps' views start with it on; each view's menu can still turn it on or off for that view, and a view follows Settings until it is changed there. Leaving the view or turning the option off clears the hover. Native tooltips remain unavailable. It does not change popup placement or fix WinUI menu flicker.
 
-The helper is only ever used with the kinds of app below and with programs added by name under **Other programs**. Anything else, games included, is left alone. It needs Windows 11 on native x64, the app must be 64-bit, and a missing helper leaves ordinary Interactive PiP working.
+The helper is only ever used with the kinds of app below and with programs added by name under **Other programs**. Anything else, games included, is left alone. It needs Windows 11 on an x64 PC (not an ARM64 PC, even for the x64 build), the app must be 64-bit, and a missing helper leaves ordinary Interactive PiP working.
 
 | App | Setting | Status |
 |---|---|---|
@@ -173,7 +195,7 @@ The helper is only ever used with the kinds of app below and with programs added
 | Firefox | Firefox | ✅ Verified on Windows 11 x64: hover holds, shows in the view's picture, follows the pointer to another element, and clears on leave and turning off |
 | Other programs added by name | Other programs | ❔ Depends on the app. Works only for windows that take posted mouse input; WinUI and Store content go through accessibility, and WPF apps can't be hidden at all. Don't add games that use anti-cheat |
 | Windows 10 | — | ❌ Not available; ordinary Interactive PiP is unchanged |
-| Native ARM64, x64 apps on ARM64, 32-bit apps | — | ❌ Not available |
+| ARM64 PCs (the ARM64 build, and the x64 build or x64 apps under emulation), 32-bit apps | — | ❌ Not available |
 
 On Windows 11 x64, a hidden browser or Electron app keeps its two-pixel strip at a side edge of the screen the whole time, raised without activation, instead of along the bottom, whether or not Enhanced hover is on. Under the taskbar a browser finds itself covered: it stops drawing and stops taking pointer moves, and does not check again until it is clicked, so hover never started when the option was turned on. File Explorer and programs added by name use the side edge only while the option is on for them. Other apps, and every app on Windows 10, park along the bottom as before. Caption styles, taskbar removal, popup placement and recorded restoration state are unchanged.
 

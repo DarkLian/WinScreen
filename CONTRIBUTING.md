@@ -31,6 +31,14 @@ Include whatever you can. A short report is still better than none.
 
 Check that a screenshot doesn't show anything private before you post it.
 
+## Which PCs we can help with
+
+WinScreen is supported on Windows 10 (version 2004 or later) and Windows 11, on 64-bit Intel or AMD PCs (x64).
+
+ARM PCs aren't supported for now. We have no ARM device to test on, so we can't confirm a problem there or check a
+fix. You're still welcome to tell us what you see, but we can't promise to act on it. An automatic check still
+compiles WinScreen for ARM64; when it passes, that only means the code builds, not that the app works there.
+
 ## Editing translations
 
 The catalogs are in `src/WinScreen/Localization/en.json`, `zh-Hans.json`, and `zh-Hant.json`.

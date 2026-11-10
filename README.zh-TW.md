@@ -13,7 +13,7 @@
   <a href="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml"><img src="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml/badge.svg" alt="建置"></a>
   <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?include_prereleases&label=release" alt="最新版本"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 與 11">
-  <img src="https://img.shields.io/badge/arch-x64%20%7C%20ARM64-4c8bf5" alt="x64 與 ARM64">
+  <img src="https://img.shields.io/badge/arch-x64-4c8bf5" alt="x64">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/DarkLian/WinScreen" alt="MIT 授權"></a>
 </p>
 
@@ -59,10 +59,10 @@ WinScreen 是一個免費的視窗小幫手。可以讓視窗保持置頂、變�
 
 ## 安裝
 
-從 [Releases](https://github.com/DarkLian/WinScreen/releases) 下載安裝程式並執行：
+從 [Releases](https://github.com/DarkLian/WinScreen/releases) 下載 **WinScreen-…-x64-Setup.exe** 並執行。
+適用於 64 位元 Intel 或 AMD 電腦（x64）上的 Windows 10（2004 版或更新版本）與 Windows 11。
 
-- **WinScreen-…-x64-Setup.exe**：適用於大多數電腦上的 Windows 10（2004 版或更新版本）與 Windows 11。
-- **WinScreen-…-arm64-Setup.exe**：適用於 ARM 電腦上的 Windows 11。
+目前不支援 ARM 電腦。我們沒有 ARM 裝置可供測試，因此新版本不再提供 ARM 版，先前的 ARM 版本也不會再收到更新。
 
 不用另外安裝任何東西，也無須系統管理員權限即可執行。WinScreen 會顯示在系統匣中。
 要操作以系統管理員身分執行的應用程式，請同樣以系統管理員身分啟動 WinScreen。
