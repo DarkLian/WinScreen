@@ -27,9 +27,14 @@ jobs:
           name: WinScreen-Setup
           path: dist/local/*/x64/WinScreen-*-local-x64-Setup.exe
 
-  # Tests the native ARM64 build on ARM hardware. Releases build ARM64 too, so keep this passing.
+  # ARM64 is not officially supported and has no releases. This job is a best-effort portability check: it compiles
+  # the app natively and runs the logic tests, nothing more. A green run does not show that WinScreen works on ARM64;
+  # nobody has an ARM64 desktop to check that on. It is independent of the x64 job and never blocks it: when it fails
+  # the job shows as failed, but the workflow run still passes. Don't hide a failure, and don't add coverage here.
   build-arm64:
+    name: ARM64 compile check (best effort, unsupported)
     runs-on: windows-11-arm
+    continue-on-error: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -39,7 +44,7 @@ jobs:
           global-json-file: global.json
       - run: ./build.ps1 -CI -Architecture arm64
         shell: pwsh
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: WinScreen-arm64-Setup
-          path: dist/local/*/arm64/WinScreen-*-local-arm64-Setup.exe
+      - name: Say so when it fails
+        if: failure()
+        shell: pwsh
+        run: Write-Output '::warning::The ARM64 compile check failed. ARM64 is unsupported, so this does not block x64 work or releases, but it is worth a look.'

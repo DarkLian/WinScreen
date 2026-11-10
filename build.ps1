@@ -13,8 +13,9 @@
     .\build.ps1 -Release -Version 0.8.0-beta
                                     A published release, as the Release workflow builds it from the tag v0.8.0-beta.
     .\build.ps1 -Version 1.2.3      Use this version instead of the one in Directory.Build.props.
-    .\build.ps1 -Architecture arm64 Native ARM64. Tests run only on a machine that can run them;
-                                    built elsewhere, it compiles and packages without testing.
+    .\build.ps1 -Architecture arm64 A compile check only: ARM64 isn't officially supported. Builds the program into
+                                    dist\win-arm64 and stops; no installer, portable zip or update feed. Tests run
+                                    only on a machine that can run ARM64 code.
     .\build.ps1 -Stage Publish      Stops once the program is in dist\win-<arch>, so its files can be
                                     code-signed before they go into the installer.
     .\build.ps1 -Stage Pack         Makes the installer from what's already in dist\win-<arch>.
@@ -22,9 +23,10 @@
   Every build is local unless -Release is given. A local build goes to dist\local\<version>\<arch>, and its installer
   and portable zip are named with the version, the release type and the architecture, for example
   WinScreen-0.8.0-beta.4-local-x64-Setup.exe. Its program's file description says "WinScreen (local build)".
-  A release goes to dist\release (x64) or dist\release-arm64 with Velopack's own names (WinScreen-win-Setup.exe), which
-  code signing expects; the Release workflow renames them to WinScreen-<version>-release-<arch>-Setup.exe after signing.
-  Each architecture has its own update channel, so an installed copy can't take the other's update.
+  A release goes to dist\release with Velopack's own names (WinScreen-win-Setup.exe), which code signing expects; the
+  Release workflow renames them to WinScreen-<version>-release-x64-Setup.exe after signing.
+  Only x64 is packaged and released, on the update channel "win". The ARM64 copies of 0.8.1-beta and earlier look for
+  their own channel ("win-arm64"), which is no longer published, so they can never take an x64 update.
 #>
 param(
     [switch]$SkipInteractive,
@@ -74,16 +76,21 @@ if (-not $Version) {
 $releaseType = if ($Release) { 'release' } else { 'local' }
 $releaseTypeProperty = "-p:WinScreenReleaseType=$releaseType"
 
+$packaged = $Architecture -eq 'x64'
+if (-not $packaged) {
+    if ($Release -or $Stage -eq 'Pack') { throw "Only x64 is packaged and released. -Architecture $Architecture is a compile check." }
+    $Stage = 'Publish'
+}
 $runtime = "win-$Architecture"
-$channel = if ($Architecture -eq 'x64') { 'win' } else { $runtime }
+$channel = 'win'
 $architectureProperty = "-p:WinScreenArchitecture=$Architecture"
 $canTest = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant() -eq $Architecture
 $program = Join-Path $PSScriptRoot "dist\$runtime"
-$packageFolder = Join-Path $PSScriptRoot $(if (-not $Release) { "dist\local\$Version\$Architecture" } elseif ($Architecture -eq 'x64') { 'dist\release' } else { "dist\release-$Architecture" })
-if ($Beta -and $Stage -ne 'Pack' -and (Test-Path (Join-Path $packageFolder '*-Setup.exe'))) {
+$packageFolder = Join-Path $PSScriptRoot $(if ($Release) { 'dist\release' } else { "dist\local\$Version\$Architecture" })
+if ($Beta -and $packaged -and $Stage -ne 'Pack' -and (Test-Path (Join-Path $packageFolder '*-Setup.exe'))) {
     throw "$Version is already built in $packageFolder. Local betas aren't rebuilt: use the next number."
 }
-foreach ($folder in $program, $packageFolder) {
+foreach ($folder in $(if ($packaged) { $program, $packageFolder } else { , $program })) {
     $resolvedOutput = [IO.Path]::GetFullPath($folder)
     if (-not $resolvedOutput.StartsWith([IO.Path]::GetFullPath($PSScriptRoot) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Build output is outside the workspace: $resolvedOutput"
