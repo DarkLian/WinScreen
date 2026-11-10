@@ -168,23 +168,30 @@ public sealed class TrayApplication : ApplicationContext
     private ContextMenuStrip BuildMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add(T("pip.open") + "...", null, (_, _) => Run(AppCommand.PickPipSource, 0));
-        menu.Items.Add(BuildViewsMenu());
-        menu.Items.Add(T("window.restoreAll"), null, (_, _) => Run(AppCommand.RestoreAll, 0));
-        menu.Items.Add(T("settings.title"), null, (_, _) => OpenSettings());
-        menu.Items.Add(new ToolStripSeparator());
+        var newView = new ToolStripMenuItem(T("menu.tray.newView"), MenuParts.Icon(MenuParts.NewWindow),
+            (_, _) => Run(AppCommand.PickPipSource, 0));
+        menu.Items.Add(newView);
+        // Open views are listed here directly, between these two headings, each time the menu opens.
+        ToolStripLabel viewsStart = MenuParts.Header(T("tray.openViews")), viewsEnd = MenuParts.Header(T("tray.lastWindow"));
+        menu.Items.Add(viewsStart);
+        menu.Items.Add(viewsEnd);
+        _targetTitle.Image = MenuParts.Icon(MenuParts.Page);
         menu.Items.Add(_targetTitle);
+        var builder = CreateWindowMenuBuilder(() => _menuIdentity);
+        builder.Populate(_targetTitle.DropDownItems, true);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem(T("window.restoreAll"), MenuParts.Icon(MenuParts.Undo), (_, _) => Run(AppCommand.RestoreAll, 0)));
+        _statusItem.Image = MenuParts.Icon(MenuParts.Warning);
         menu.Items.Add(_statusItem);
         _statusItem.Click += (_, _) =>
             MessageBox.Show(_lastStatus, "WinScreen", MessageBoxButtons.OK, MessageBoxIcon.Information);
         menu.Items.Add(new ToolStripSeparator());
-        var builder = CreateWindowMenuBuilder(() => _menuIdentity);
-        builder.Populate(_targetTitle.DropDownItems, true);
-        menu.Items.Add(T("updates.check"), null, async (_, _) => await CheckForUpdates());
-        menu.Items.Add(T("app.about"), null, (_, _) => MessageBox.Show(
+        menu.Items.Add(new ToolStripMenuItem(T("settings.title"), MenuParts.Icon(MenuParts.Settings), (_, _) => OpenSettings()));
+        menu.Items.Add(new ToolStripMenuItem(T("updates.check"), MenuParts.Icon(MenuParts.Sync), async (_, _) => await CheckForUpdates()));
+        menu.Items.Add(new ToolStripMenuItem(T("app.about"), MenuParts.Icon(MenuParts.Info), (_, _) => MessageBox.Show(
             string.Format(T("app.version"), AppInfo.Version), "WinScreen", MessageBoxButtons.OK,
-            MessageBoxIcon.Information));
-        menu.Items.Add(T("app.exit"), null, (_, _) => ExitThread());
+            MessageBoxIcon.Information)));
+        menu.Items.Add(new ToolStripMenuItem(T("app.exit"), MenuParts.Icon(MenuParts.Power), (_, _) => ExitThread()));
 
         menu.Opening += (_, _) =>
         {
@@ -195,14 +202,28 @@ public sealed class TrayApplication : ApplicationContext
                 catch (WindowOperationException) { _menuIdentity = null; }
             }
             _menuWindow = _menuIdentity?.Window ?? 0;
-            _targetTitle.Text = T("tray.targetPrefix") +
-                (_menuWindow == 0 ? T("tray.noTarget") : MenuText(WindowInfo.Title(_menuWindow))) +
-                (_menuWindow != 0 ? " " + T("tray.lastEligible") : "");
+            _targetTitle.Text = _menuWindow == 0 ? T("tray.noTarget") : MenuText(WindowInfo.Title(_menuWindow));
             _targetTitle.Enabled = _menuWindow != 0;
             builder.Refresh(_targetTitle.DropDownItems);
+            newView.ShortcutKeyDisplayString = MenuHotkey(AppCommand.PickPipSource);
+            // Nothing to read until something has been reported.
+            _statusItem.Available = _lastStatus != T("tray.noActions");
+            for (int index = menu.Items.IndexOf(viewsEnd) - 1; index > menu.Items.IndexOf(viewsStart); index--)
+            {
+                ToolStripItem old = menu.Items[index];
+                menu.Items.RemoveAt(index);
+                old.Dispose();
+            }
+            int at = menu.Items.IndexOf(viewsEnd);
+            foreach (ToolStripItem item in ViewItems()) menu.Items.Insert(at++, item);
         };
+        MenuRenderer.Apply(menu);
         return menu;
     }
+
+    /// <summary>The hotkey to show beside a command in a menu: nothing when it has none.</summary>
+    private string? MenuHotkey(AppCommand command) =>
+        _settings.Hotkeys.TryGetValue(command, out string? keys) && !string.IsNullOrWhiteSpace(keys) ? keys : null;
 
     private WindowMenuBuilder CreateWindowMenuBuilder(Func<WindowIdentity?> target) => new(target,
         Run, (window, bounds) => RunOnDisplay(AppCommand.ToggleBorderlessFill, window, bounds), IsAvailable,
@@ -210,7 +231,16 @@ public sealed class TrayApplication : ApplicationContext
                              FullScreenDecision(command, window) == FullScreenAction.Run && _windows.CanControl(window),
         IsOn, () => Alert(T("errors.operation.title"),
             T("errors.window.targetUnavailable")))
-        { MoveToDisplay = (window, device) => Attempt(() => _placer.MoveToDisplay(window, device)) };
+        {
+            MoveToDisplay = (window, device) => Attempt(() => _placer.MoveToDisplay(window, device)),
+            Hotkey = command => MenuHotkey(command) ?? "",
+            OpacityPercent = window => (int)Math.Round(_windows.OpacityOf(window) * 100.0 / 255),
+            SetOpacityPercent = (window, percent) => Attempt(() =>
+            {
+                if (FullScreenDecision(AppCommand.OpacityUp, window) != FullScreenAction.Run || !_windows.CanControl(window)) return;
+                _windows.SetOpacity(window, (byte)Math.Round(percent * 255 / 100.0));
+            }),
+        };
 
     private void ShowWindowMenu(nint window, Point point)
     {
@@ -220,10 +250,12 @@ public sealed class TrayApplication : ApplicationContext
         {
             WindowIdentity identity = WindowIdentity.Capture(window);
             var menu = new ContextMenuStrip();
-            menu.Items.Add(new ToolStripMenuItem(MenuText(WindowInfo.Title(window))) { Enabled = false });
+            menu.Items.Add(new ToolStripMenuItem(MenuText(WindowInfo.Title(window))) { Enabled = false, Name = MenuRenderer.TitleName });
+            menu.Items.Add(new ToolStripSeparator());
             var builder = CreateWindowMenuBuilder(() => identity);
             builder.Populate(menu.Items, false);
             builder.Refresh(menu.Items);
+            MenuRenderer.Apply(menu);
             var host = new WindowMenuHost(menu, point);
             _windowMenu = host;
             // A keyboard-opened menu normally needs no mouse hook. If Windows refuses activation,
@@ -235,52 +267,47 @@ public sealed class TrayApplication : ApplicationContext
         });
     }
 
-    /// <summary>What can be opened, and the views that are open, which may have no original to act from.</summary>
-    private ToolStripMenuItem BuildViewsMenu()
+    /// <summary>The views that are open, which may have no original to act from, and what can be opened again.</summary>
+    private List<ToolStripItem> ViewItems()
     {
-        var views = new ToolStripMenuItem(T("pip.views"));
-        views.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
-        views.DropDownOpening += (_, _) =>
+        var items = new List<ToolStripItem>();
+        foreach (PipWindow view in _viewsInOrder)
         {
-            views.DropDownItems.Clear();
-            foreach (PipWindow view in _viewsInOrder)
-            {
-                var item = new ToolStripMenuItem(MenuText(view.Text) + " - " + view.StateDescription);
-                if (view.IsSuspended)
-                    item.DropDownItems.Add(T("pip.restoreView"), null, (_, _) => view.ResumeView());
-                if (view.SourceIsWindow)
-                    item.DropDownItems.Add(T("pip.goToOriginal"), null, (_, _) => view.GoToSource());
-                if (view.Overrides.ClickThrough)
-                    item.DropDownItems.Add(T("pip.reenableClicks"), null,
-                        (_, _) => view.Overrides = view.Overrides with { ClickThrough = false });
-                if (view.CanRetryCapture)
-                    item.DropDownItems.Add(T("pip.backend.retry"), null, (_, _) => view.RetryCapture());
-                item.DropDownItems.Add(T("common.close"), null, (_, _) => view.Close());
-                views.DropDownItems.Add(item);
-            }
-            foreach (var (source, tile) in _shrunk)
-            {
-                var item = new ToolStripMenuItem(MenuText(tile.Text) + " - " + T("pip.state.originalHidden"));
-                item.DropDownItems.Add(T("window.show"), null, (_, _) => tile.Close());
-                views.DropDownItems.Add(item);
-            }
-            foreach (nint source in _content.Sources)
-            {
-                var item = new ToolStripMenuItem(MenuText(WindowInfo.Title(source)) + " - " + T("settings.effects.title"));
-                item.DropDownItems.Add(T("window.restore"), null, (_, _) => Run(AppCommand.RestoreWindow, source));
-                views.DropDownItems.Add(item);
-            }
-            if (_settings.PipBookmarks.Count > 0)
-            {
-                var saved = new ToolStripMenuItem(T("pip.bookmarks.title"));
-                foreach (PipSourceBookmark bookmark in _settings.PipBookmarks)
-                    saved.DropDownItems.Add(bookmark.Name.Replace("&", "&&"), null, (_, _) => OpenBookmark(bookmark));
-                views.DropDownItems.Add(saved);
-            }
-            if (views.DropDownItems.Count == 0)
-                views.DropDownItems.Add(new ToolStripMenuItem(T("pip.views.empty")) { Enabled = false });
-        };
-        return views;
+            var item = new ToolStripMenuItem(view.MenuTitle).WithIcon(MenuParts.Monitor);
+            if (view.IsSuspended)
+                item.DropDownItems.Add(T("pip.restoreView"), null, (_, _) => view.ResumeView());
+            if (view.SourceIsWindow)
+                item.DropDownItems.Add(T("pip.goToOriginal"), null, (_, _) => view.GoToSource());
+            if (view.Overrides.ClickThrough)
+                item.DropDownItems.Add(T("pip.reenableClicks"), null,
+                    (_, _) => view.Overrides = view.Overrides with { ClickThrough = false });
+            if (view.CanRetryCapture)
+                item.DropDownItems.Add(T("pip.backend.retry"), null, (_, _) => view.RetryCapture());
+            item.DropDownItems.Add(T("common.close"), null, (_, _) => view.Close());
+            items.Add(item);
+        }
+        foreach (var (source, tile) in _shrunk)
+        {
+            var item = new ToolStripMenuItem(MenuText(tile.Text) + " - " + T("pip.state.originalHidden"));
+            item.DropDownItems.Add(T("window.show"), null, (_, _) => tile.Close());
+            items.Add(item);
+        }
+        foreach (nint source in _content.Sources)
+        {
+            var item = new ToolStripMenuItem(MenuText(WindowInfo.Title(source)) + " - " + T("settings.effects.title"));
+            item.DropDownItems.Add(T("window.restore"), null, (_, _) => Run(AppCommand.RestoreWindow, source));
+            items.Add(item);
+        }
+        if (items.Count == 0)
+            items.Add(new ToolStripMenuItem(T("pip.views.empty")) { Enabled = false });
+        if (_settings.PipBookmarks.Count > 0)
+        {
+            var saved = new ToolStripMenuItem(T("pip.bookmarks.title")).WithIcon(MenuParts.Star);
+            foreach (PipSourceBookmark bookmark in _settings.PipBookmarks)
+                saved.DropDownItems.Add(bookmark.Name.Replace("&", "&&"), null, (_, _) => OpenBookmark(bookmark));
+            items.Add(saved);
+        }
+        return items;
     }
 
     /// <summary>

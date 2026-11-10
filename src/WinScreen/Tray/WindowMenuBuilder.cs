@@ -15,18 +15,35 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     private sealed record DisplayMove(string Device);
     internal Action<nint, string>? MoveToDisplay { get; init; }
 
+    /// <summary>The hotkey to show beside a command, or empty.</summary>
+    internal Func<AppCommand, string>? Hotkey { get; init; }
+
+    /// <summary>The window's opacity in percent, and the way to set it; without both there is no slider.</summary>
+    internal Func<nint, int>? OpacityPercent { get; init; }
+    internal Action<nint, int>? SetOpacityPercent { get; init; }
+
+    private sealed record Group;
+
     public void Populate(ToolStripItemCollection items, bool tray)
     {
-        foreach (AppCommand command in CommandCatalog.Ordered)
-        {
-            if (command == AppCommand.RestoreAll || !tray && command == AppCommand.RestoreWindow) continue;
-            ToolStripMenuItem item = Command(command);
-            if (command == AppCommand.Arrange) PopulateArrange(item.DropDownItems);
-            items.Add(item);
-            if (CommandCatalog.EndsGroup(command)) items.Add(new ToolStripSeparator());
-        }
+        items.Add(Command(AppCommand.TogglePin));
+        if (OpacityPercent is not null && SetOpacityPercent is { } setOpacity)
+            items.Add(new OpacityRow(T("pip.opacity"), percent => WithTarget(window => setOpacity(window, percent))));
+        items.Add(Command(AppCommand.ToggleClickThrough));
+
+        items.Add(MenuParts.Header(T("menu.group.elsewhere")));
+        items.Add(Command(AppCommand.OpenPip));
+        items.Add(Command(AppCommand.ToggleAnchor));
+
+        items.Add(MenuParts.Header(T("menu.group.place")));
+        items.Add(new PlacementRow(place => WithTarget(window => run(place, window))) { Tag = AppCommand.AlignCenter });
+        ToolStripMenuItem arrange = Command(AppCommand.Arrange);
+        PopulateArrange(arrange.DropDownItems);
+        items.Add(arrange);
+
+        items.Add(MenuParts.Header(T("menu.group.look")));
         items.Add(Command(AppCommand.ToggleDarkTitleBar));
-        var borderless = new ToolStripMenuItem(T("window.borderless"));
+        var borderless = new ToolStripMenuItem(T("window.borderless")).WithIcon(MenuParts.FullScreen);
         borderless.DropDownItems.Add(Command(AppCommand.ToggleBorderless));
         var fillItem = new ToolStripMenuItem(T("window.fillDisplay"), null, (_, _) =>
         {
@@ -51,7 +68,23 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         fillItem.Tag = AppCommand.ToggleBorderlessFill;
         borderless.DropDownItems.Add(fillItem);
         items.Add(borderless);
-        var copy = new ToolStripMenuItem(T("common.copy"));
+        // Effects that are still experimental sit together, and the whole entry goes when none is turned on in Settings.
+        var experimental = new ToolStripMenuItem(T("settings.experimental")) { Tag = new Group() }.WithIcon(MenuParts.Repair);
+        foreach (AppCommand command in new[] { AppCommand.ToggleDark, AppCommand.ToggleGlass, AppCommand.ToggleShrink, AppCommand.ToggleCrop })
+            experimental.DropDownItems.Add(Command(command));
+        items.Add(experimental);
+
+        items.Add(new ToolStripSeparator());
+        var more = new ToolStripMenuItem(T("menu.more")).WithIcon(MenuParts.More);
+        if (OpacityPercent is null || SetOpacityPercent is null)
+        {
+            more.DropDownItems.Add(Command(AppCommand.OpacityDown));
+            more.DropDownItems.Add(Command(AppCommand.OpacityUp));
+        }
+        more.DropDownItems.Add(Command(AppCommand.ToggleDefaultOpacity));
+        more.DropDownItems.Add(Command(AppCommand.SaveWindowSetup));
+        more.DropDownItems.Add(new ToolStripSeparator());
+        var copy = new ToolStripMenuItem(T("common.copy")).WithIcon(MenuParts.Copy);
         foreach (var (label, index) in new[] { (T("window.info.title"), 0), (T("window.info.hwnd"), 3), (T("window.info.processId"), 4), (T("window.info.path"), 2) })
         {
             var item = new ToolStripMenuItem(label, null, (_, _) => WithTarget(window =>
@@ -60,9 +93,11 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         }
         copy.DropDownItems.Add(T("window.copy.all"), null, (_, _) => WithTarget(window =>
             WindowUtilities.CopyText(WindowUtilities.Information(window)))).Tag = new Utility(false);
-        items.Add(copy);
-        items.Add(T("window.openLocation"), null, (_, _) => WithTarget(WindowUtilities.OpenLocation)).Tag = new Utility(true);
-        if (!tray) items.Add(Command(AppCommand.RestoreWindow));
+        more.DropDownItems.Add(copy);
+        more.DropDownItems.Add(new ToolStripMenuItem(T("window.openLocation"), MenuParts.Icon(MenuParts.Folder),
+            (_, _) => WithTarget(WindowUtilities.OpenLocation)) { Tag = new Utility(true) });
+        items.Add(more);
+        items.Add(Command(AppCommand.RestoreWindow));
     }
 
     internal void PopulateArrange(ToolStripItemCollection items)
@@ -82,11 +117,12 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         }
     }
 
-    private ToolStripMenuItem Command(AppCommand command) => new(CommandCatalog.Name(command), null, (_, _) =>
+    private ToolStripMenuItem Command(AppCommand command) => new(CommandCatalog.Name(command),
+        MenuParts.IconOf(command) is { } glyph ? MenuParts.Icon(glyph) : null, (_, _) =>
     {
         if (command == AppCommand.RestoreAll) run(command, 0);
         else WithTarget(window => run(command, window));
-    }) { Tag = command };
+    }) { Tag = command, ShortcutKeyDisplayString = Hotkey?.Invoke(command) is { Length: > 0 } keys ? keys : null };
 
     private void WithTarget(Action<nint> action)
     {
@@ -97,13 +133,22 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     public void Refresh(ToolStripItemCollection items)
     {
         nint window = target()?.Window ?? 0;
-        foreach (ToolStripMenuItem item in items.OfType<ToolStripMenuItem>())
+        foreach (ToolStripItem entry in items)
         {
+            if (entry is OpacityRow opacity)
+            {
+                opacity.Enabled = window != 0 && enabled(AppCommand.OpacityUp, window);
+                if (window != 0 && OpacityPercent is { } read) opacity.Value = read(window);
+            }
+            else if (entry is PlacementRow places)
+                places.Enabled = window != 0 && enabled(AppCommand.AlignCenter, window);
+            if (entry is not ToolStripMenuItem item) continue;
             if (item.Tag is AppCommand command)
             {
-                item.Visible = available(command);
+                item.Available = available(command);
                 item.Checked = window != 0 && isOn(command, window);
                 item.Enabled = command == AppCommand.RestoreAll || window != 0 && enabled(command, window);
+                item.ShortcutKeyDisplayString = Hotkey?.Invoke(command) is { Length: > 0 } keys ? keys : null;
             }
             else if (item.Tag is Utility utility)
                 item.Enabled = window != 0 && (!utility.NeedsPath || WindowInfo.ExecutablePath(window).Length > 0);
@@ -111,6 +156,8 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
                 item.Enabled = window != 0 && enabled(AppCommand.MoveToNextDisplay, window) &&
                     Screen.AllScreens.Any(screen => screen.DeviceName == display.Device);
             if (item.HasDropDownItems) Refresh(item.DropDownItems);
+            // Available is what was asked for; Visible would also say whether the menu is open.
+            if (item.Tag is Group) item.Available = item.DropDownItems.OfType<ToolStripMenuItem>().Any(child => child.Available);
         }
     }
 }

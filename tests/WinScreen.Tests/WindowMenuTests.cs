@@ -46,7 +46,10 @@ public sealed class WindowMenuBuilderTests
                 Assert.Equal(CommandCatalog.ArrangeMenu.OfType<AppCommand>(),
                     Commands(menu.Items).Single(item => Equals(item.Tag, AppCommand.Arrange)).DropDownItems
                         .OfType<ToolStripMenuItem>().Select(item => (AppCommand)item.Tag!));
-                Assert.Contains(menu.Items.OfType<ToolStripMenuItem>(), item => item.Text == UiText.T("common.copy"));
+                Assert.Contains(Commands(menu.Items), item => item.Text == UiText.T("common.copy"));
+                // Group headings and the two rows that hold a control are not commands, and nothing lists them as such.
+                Assert.Equal(3, menu.Items.OfType<ToolStripLabel>().Count());
+                Assert.Single(menu.Items.OfType<PlacementRow>());
             }
         });
     }

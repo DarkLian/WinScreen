@@ -3,6 +3,7 @@ using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using WinScreen.Native;
 using WinScreen.Settings;
+using WinScreen.Tray;
 using WinScreen.Windows;
 
 namespace WinScreen.Pip;
@@ -48,6 +49,9 @@ public sealed class PipWindow : Form
     private const long UseOriginalGrace = 400;
     private readonly ToolStripMenuItem _autoMoveItem;
     private readonly ToolStripMenuItem _removeCropItem;
+    private readonly ToolStripMenuItem _viewOnlyItem;
+    private readonly ToolStripMenuItem _helpItem;
+    private readonly ToolStripItem _useHeader, _originalHeader;
     private readonly ContextMenuStrip _menu = new() { ShowItemToolTips = true };
     private PipTitleBar? _titleBar;
     private PipHoverPreview? _hoverPreview;
@@ -129,57 +133,85 @@ public sealed class PipWindow : Form
         Text = T("pip.titlePrefix") + source.Title;
         _longSide = Dpi.Scale(StartLongSide, source.Dpi);
 
-        _hideItem = new ToolStripMenuItem(T("pip.keepUpdating"), null,
+        _hideItem = new ToolStripMenuItem(T("menu.original.keepHidden"), null,
             (_, _) => SetOriginalHidden(!_hideItem!.Checked));
         _autoMoveItem = new ToolStripMenuItem(T("pip.autoMove"), null,
             (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
-        _interactiveItem = new ToolStripMenuItem(T("pip.interactive"), null,
+        _interactiveItem = new ToolStripMenuItem(T("menu.view.interactive"), null,
             (_, _) => SetInteractive(!_interactiveItem!.Checked));
-        _middleScrollItem = new ToolStripMenuItem(T("pip.middleScroll"), null,
-            (_, _) => SetMiddleClickScroll(!_middleScrollItem!.Checked));
-        _enhancedHoverItem = new ToolStripMenuItem(T("pip.enhancedHover"), null,
+        _middleScrollItem = new ToolStripMenuItem(T("menu.view.middleScroll"), null,
+            (_, _) => SetMiddleClickScroll(!_middleScrollItem!.Checked)) { ToolTipText = T("menu.view.middleScroll.tip") };
+        _enhancedHoverItem = new ToolStripMenuItem(T("menu.view.hover"), null,
             (_, _) => { _hoverChosen = true; SetEnhancedHover(!_enhancedHoverItem!.Checked); })
             { ToolTipText = T("pip.enhancedHover.description"), Checked = PipEnhancedHover.StartsOn(_source) };
-        var options = new ToolStripMenuItem(T("pip.options"));
+        _viewOnlyItem = new ToolStripMenuItem(T("menu.view.watch"), null, (_, _) => SetInteractive(false)) { Name = "viewOnly" };
+        // The two options that only mean something while the picture is being used sit under Interactive PiP, set in.
+        _middleScrollItem.Margin = _enhancedHoverItem.Margin = new Padding(MenuParts.Scale(16), 0, 0, 0);
+        var options = new ToolStripMenuItem(T("menu.picture.options")).WithIcon(MenuParts.Sliders);
         options.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
         options.DropDownOpening += (_, _) => FillOptions(options);
+        var presets = new ToolStripMenuItem(T("pip.presets")).WithIcon(MenuParts.Star);
+        presets.DropDownItems.Add(new ToolStripSeparator());
+        presets.DropDownOpening += (_, _) => FillPresets(presets);
         _menu.Items.Add(new ToolStripMenuItem { Name = "inputStatus", Enabled = false });
-        _menu.Items.Add(options);
-        _menu.Items.Add(_hideItem);
-        _menu.Items.Add(_autoMoveItem);
+        _menu.Items.Add(new ToolStripSeparator());
+
+        _menu.Items.Add(_useHeader = MenuParts.Header(T("menu.group.use")));
+        _menu.Items.Add(_viewOnlyItem);
         _menu.Items.Add(_interactiveItem);
-        _menu.Items.Add(_middleScrollItem);
         _menu.Items.Add(_enhancedHoverItem);
-        _goToItem = _menu.Items.Add(T("pip.goToOriginal"), null, (_, _) => GoToSource());
-        _useOriginalItem = _menu.Items.Add(T("pip.useOriginal"), null, (_, _) => UseOriginal());
-        _removeCropItem = new ToolStripMenuItem(T("pip.removeCrop"), null, (_, _) => SetCrop(Rectangle.Empty));
+        _menu.Items.Add(_middleScrollItem);
+        _menu.Items.Add(_autoMoveItem);
+
+        _menu.Items.Add(_originalHeader = MenuParts.Header(T("menu.group.original")));
+        _hideItem.Image = MenuParts.Icon(MenuParts.View);
+        _menu.Items.Add(_hideItem);
+        _useOriginalItem = _menu.Items.Add(T("menu.original.use"), MenuParts.Icon(MenuParts.Undo), (_, _) => UseOriginal());
+        _goToItem = _menu.Items.Add(T("menu.original.goTo"), MenuParts.Icon(MenuParts.NewWindow), (_, _) => GoToSource());
+
+        _menu.Items.Add(MenuParts.Header(T("menu.group.picture")));
+        _removeCropItem = new ToolStripMenuItem(T("pip.zoom.reset"), MenuParts.Icon(MenuParts.Crop),
+            (_, _) => { ResetZoom(); SetCrop(Rectangle.Empty); });
         _menu.Items.Add(_removeCropItem);
-        _menu.Items.Add(T("pip.diagnostics.title"), null, (_, _) => ShowDiagnostics());
+        _menu.Items.Add(options);
+        _menu.Items.Add(presets);
+
+        _menu.Items.Add(new ToolStripSeparator());
+        _helpItem = new ToolStripMenuItem(T("menu.help")).WithIcon(MenuParts.Help);
         _retryItem = new ToolStripMenuItem(T("pip.backend.retry"), null, (_, _) => RetryCapture());
-        _menu.Items.Add(_retryItem);
-        _menu.Items.Add(T("pip.minimize"), null, (_, _) => SuspendView());
-        _menu.Items.Add(T("pip.close"), null, (_, _) => Close());
+        _helpItem.DropDownItems.Add(new ToolStripMenuItem { Name = "controlsHelp", Enabled = false });
+        _helpItem.DropDownItems.Add(T("pip.diagnostics.title"), null, (_, _) => ShowDiagnostics());
+        _helpItem.DropDownItems.Add(_retryItem);
+        _menu.Items.Add(_helpItem);
+        _menu.Items.Add(T("pip.minimize"), MenuParts.Icon(MenuParts.Minimize), (_, _) => SuspendView());
+        _menu.Items.Add(T("pip.close"), MenuParts.Icon(MenuParts.Close), (_, _) => Close());
         _menu.Opening += (_, _) =>
         {
             PauseInput(true, keepTitleBar: true);
             _titleBar?.HoldVisible();
-            _menu.Items["inputStatus"]!.Text = InputDescription;
-            _retryItem.Visible = CanRetryCapture;
-            _autoMoveItem.Visible = AllowAutoMove;
+            _menu.Items["inputStatus"]!.Text = MenuTitle;
+            _helpItem.DropDownItems["controlsHelp"]!.Text = _interactiveItem.Checked ? T("pip.controls.directHelp") : T("pip.controls.help");
+            _retryItem.Available = CanRetryCapture;
+            _autoMoveItem.Available = AllowAutoMove;
             bool canInteract = AllowInteractive && _origin.IsWindow;
-            _interactiveItem.Visible = canInteract;
-            // Visible also reflects the parent menu, which is still hidden during Opening.
+            _viewOnlyItem.Available = _interactiveItem.Available = canInteract;
+            _viewOnlyItem.Checked = !_interactiveItem.Checked;
+            // Available is what is asked for; Visible would also say whether the menu is open, and it isn't yet.
             bool showInteractionOptions = canInteract && _interactiveItem.Checked;
-            _middleScrollItem.Visible = showInteractionOptions;
-            _enhancedHoverItem.Visible = showInteractionOptions;
+            _middleScrollItem.Available = showInteractionOptions;
+            _enhancedHoverItem.Available = showInteractionOptions;
+            _useHeader.Available = canInteract || AllowAutoMove;
             _enhancedHoverItem.Enabled = _enhancedHoverItem.Checked || PipEnhancedHover.CanAttempt(_source);
-            _hideItem.Visible = _goToItem.Visible = _origin.IsWindow;
-            _useOriginalItem.Visible = _origin.IsWindow && _hideItem.Checked;
-            _removeCropItem.Enabled = !_crop.IsEmpty;
+            // With Enhanced hover on, a browser's own middle-click scrolling works and is the better one.
+            _middleScrollItem.Enabled = !(showInteractionOptions && _enhancedHoverItem.Checked && AppScrollsWithHover);
+            _originalHeader.Available = _hideItem.Available = _goToItem.Available = _origin.IsWindow;
+            _useOriginalItem.Available = _origin.IsWindow && _hideItem.Checked;
+            _removeCropItem.Enabled = !_crop.IsEmpty || _zoom != PipGeometry.WholeView;
             // A menu only closes on an outside click while its program has the focus.
             _foregroundBeforeMenu = User32.GetForegroundWindow();
             User32.SetForegroundWindow(Handle);
         };
+        MenuRenderer.Apply(_menu);
         _menu.Closed += (_, _) => { ReturnFocusAfterMenu(); PauseInput(TopLayer.InputBlocked); };
         ContextMenuStrip = _menu;
 
@@ -272,6 +304,17 @@ public sealed class PipWindow : Form
     internal string InputDescription => _overrides.ClickThrough ? T("pip.state.clickThrough") :
         !_origin.IsWindow ? T("pip.input.viewOnly") :
         _interactiveItem.Checked ? T("pip.interactive") : T("pip.input.viewOnly");
+    /// <summary>The first line of the view's menu: what it shows, and how it stands.</summary>
+    internal string MenuTitle
+    {
+        get
+        {
+            string title = _origin.Title.ReplaceLineEndings(" ");
+            if (title.Length > 40) title = title[..(char.IsHighSurrogate(title[39]) ? 39 : 40)] + "…";
+            return title.Replace("&", "&&") + " - " + (_suspended ? T("pip.state.suspended") : _thumbnail?.StatusText ?? T("common.unavailable"));
+        }
+    }
+
     internal string StateDescription => string.Join(", ", new[]
     {
         _suspended ? T("pip.state.suspended") : _thumbnail?.StatusText ?? T("common.unavailable"),
@@ -462,8 +505,6 @@ public sealed class PipWindow : Form
         options.DropDownItems.Add(new ToolStripMenuItem(
             _overrides.FrameRate is null && _overrides.Scaling is null && _overrides.OpacityPercent is null
                 ? T("pip.defaults.inherited") : T("pip.defaults.overridden")) { Enabled = false });
-        options.DropDownItems.Add(new ToolStripMenuItem(_interactiveItem.Checked ? T("pip.controls.directHelp") : T("pip.controls.help")) { Enabled = false });
-        options.DropDownItems.Add(T("pip.zoom.reset"), null, (_, _) => { ResetZoom(); SetCrop(Rectangle.Empty); });
         bool capture = BackendKind != PipBackendKind.DwmThumbnail;
         ToolStripMenuItem rate = Choices(T("pip.frameRate"), _overrides.FrameRate,
             [(T("pip.useSettings"), null), (T("pip.frameRate.matchMonitor"), 0), ("15 FPS", 15), ("30 FPS", 30), ("60 FPS", 60), ("120 FPS", 120)],
@@ -493,7 +534,13 @@ public sealed class PipWindow : Form
         size.DropDownItems.Add(T("pip.size.large"), null, (_, _) => ResizeTo(Dpi.Scale(LargeLongSide, DeviceDpi)));
         size.DropDownItems.Add(T("pip.size.fitSource"), null, (_, _) => FitToSourceSize());
         options.DropDownItems.Add(size);
-        var presets = new ToolStripMenuItem(T("pip.presets"));
+        if (_origin is ScreenPipSource)
+            options.DropDownItems.Add(T("pip.bookmarks.save"), null, (_, _) => SaveSourceBookmark());
+    }
+
+    private void FillPresets(ToolStripMenuItem presets)
+    {
+        presets.DropDownItems.Clear();
         IReadOnlyList<PipPreset> saved = Presets?.Invoke() ?? [];
         foreach (PipPreset preset in saved)
         {
@@ -512,10 +559,6 @@ public sealed class PipWindow : Form
                 remove.DropDownItems.Add(preset.Name.Replace("&", "&&"), null, (_, _) => PresetRemoved?.Invoke(preset.Name));
             presets.DropDownItems.Add(remove);
         }
-
-        options.DropDownItems.Add(presets);
-        if (_origin is ScreenPipSource)
-            options.DropDownItems.Add(T("pip.bookmarks.save"), null, (_, _) => SaveSourceBookmark());
     }
 
     private void SaveSourceBookmark()
@@ -1183,6 +1226,9 @@ public sealed class PipWindow : Form
     private bool HoverPlacementWanted => PipEnhancedHover.Supported && PipEnhancedHover.Describe(_source) is var (app, native) && native &&
         (app is PipHoverApp.Browser or PipHoverApp.Firefox or PipHoverApp.Electron || (app != PipHoverApp.None && _enhancedHoverItem.Checked));
 
+    private bool AppScrollsWithHover => PipEnhancedHover.Supported && PipEnhancedHover.Describe(_source) is var (app, native) && native &&
+        PipHoverApps.Recommended(app);
+
     private void PlaceForHover()
     {
         if (!_origin.IsWindow || !_windows.IsParked(_source)) return;
@@ -1231,6 +1277,7 @@ public sealed class PipWindow : Form
         _popups ??= CreateSourcePopups();
         var live = new PipInteraction(_source, RectangleToScreen(area), ShownPart(_thumbnail.SourceSize), Handle, _popups);
         live.MiddleClickScroll = _middleScrollItem.Checked;
+        live.AppScrollsWithHover = AppScrollsWithHover;
         live.EnhancedHover = _enhancedHoverItem.Checked;
         live.Left += () => BeginInvokeIfAlive(() => { LastVisitEnd = "the pointer left"; EndLive(); });
         live.Pressed += _pressOutcomes.Enqueue;

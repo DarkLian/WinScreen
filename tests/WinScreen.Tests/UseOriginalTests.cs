@@ -54,7 +54,7 @@ public sealed class UseOriginalTests
             Assert.False(windows.IsHidden(source.Handle));
             Assert.False(WindowInfo.IsConcealed(source.Handle));
             Assert.Equal(home, Desktop.BoundsOf(source.Handle));
-            Assert.False(Item(view, "pip.interactive").Checked);
+            Assert.False(Item(view, "menu.view.interactive").Checked);
             Activate(source.Handle);
 
             // It stays for as long as it is the window in use.
@@ -66,8 +66,8 @@ public sealed class UseOriginalTests
             Assert.True(Desktop.WaitFor(() => windows.IsHidden(source.Handle), 3000, Application.DoEvents), "It wasn't hidden again.");
             Assert.False(view.UsingOriginal);
             Assert.True(windows.IsParked(source.Handle));
-            Assert.Equal(interactive, Item(view, "pip.interactive").Checked);
-            Assert.True(Item(view, "pip.keepUpdating").Checked);
+            Assert.Equal(interactive, Item(view, "menu.view.interactive").Checked);
+            Assert.True(Item(view, "menu.original.keepHidden").Checked);
 
             // Going to the original afterwards is a plain choice again: it stays shown.
             view.UseOriginal();
@@ -114,7 +114,7 @@ public sealed class UseOriginalTests
 
                 Activate(other.Handle);
                 Assert.True(Desktop.WaitFor(() => windows.IsHidden(source.Handle), 3000, Application.DoEvents), "It wasn't hidden again.");
-                Assert.True(Item(view, "pip.interactive").Checked);
+                Assert.True(Item(view, "menu.view.interactive").Checked);
                 view.Close();
             }
             finally { PipOriginalApps.Programs = before; }

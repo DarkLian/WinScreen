@@ -28,23 +28,23 @@ public sealed class PipInteractionStateTests
             {
                 view.SetInteractive(true);
                 view.SetInteractive(true); // Idempotent: must not replace the saved preference.
-                Assert.True(Item(view, "pip.interactive").Checked);
-                Assert.True(Item(view, "pip.keepUpdating").Checked);
-                Assert.False(Item(view, "pip.keepUpdating").Enabled);
+                Assert.True(Item(view, "menu.view.interactive").Checked);
+                Assert.True(Item(view, "menu.original.keepHidden").Checked);
+                Assert.False(Item(view, "menu.original.keepHidden").Enabled);
                 view.SetOriginalHidden(false);
                 Assert.True(windows.IsHidden(source.Handle));
                 view.SetInteractive(false);
-                Assert.False(Item(view, "pip.interactive").Checked);
-                Assert.True(Item(view, "pip.keepUpdating").Enabled);
-                Assert.Equal(previouslyHidden, Item(view, "pip.keepUpdating").Checked);
+                Assert.False(Item(view, "menu.view.interactive").Checked);
+                Assert.True(Item(view, "menu.original.keepHidden").Enabled);
+                Assert.Equal(previouslyHidden, Item(view, "menu.original.keepHidden").Checked);
                 Assert.Equal(previouslyHidden, windows.IsHidden(source.Handle));
             }
             view.SetInteractive(true);
             view.GoToSource();
             Assert.False(windows.IsHidden(source.Handle));
-            Assert.False(Item(view, "pip.interactive").Checked);
-            Assert.False(Item(view, "pip.keepUpdating").Checked);
-            Assert.True(Item(view, "pip.keepUpdating").Enabled);
+            Assert.False(Item(view, "menu.view.interactive").Checked);
+            Assert.False(Item(view, "menu.original.keepHidden").Checked);
+            Assert.True(Item(view, "menu.original.keepHidden").Enabled);
             view.Close();
         });
     }
@@ -61,10 +61,10 @@ public sealed class PipInteractionStateTests
             view.SetInteractive(true);
             view.SuspendView();
             windows.RestoreAll();
-            Assert.True(Desktop.WaitFor(() => !Item(view, "pip.interactive").Checked, 2000,
+            Assert.True(Desktop.WaitFor(() => !Item(view, "menu.view.interactive").Checked, 2000,
                 () => { Application.DoEvents(); Thread.Sleep(10); }));
-            Assert.False(Item(view, "pip.keepUpdating").Checked);
-            Assert.True(Item(view, "pip.keepUpdating").Enabled);
+            Assert.False(Item(view, "menu.original.keepHidden").Checked);
+            Assert.True(Item(view, "menu.original.keepHidden").Enabled);
         });
     }
 
@@ -77,9 +77,9 @@ public sealed class PipInteractionStateTests
             var windows = new WindowController([]);
             using var view = new PipWindow(source.Handle, windows) { AllowInteractive = true };
             view.SetInteractive(true);
-            Assert.False(Item(view, "pip.interactive").Checked);
-            Assert.False(Item(view, "pip.keepUpdating").Checked);
-            Assert.True(Item(view, "pip.keepUpdating").Enabled);
+            Assert.False(Item(view, "menu.view.interactive").Checked);
+            Assert.False(Item(view, "menu.original.keepHidden").Checked);
+            Assert.True(Item(view, "menu.original.keepHidden").Enabled);
             Assert.False(windows.IsHidden(source.Handle));
         });
     }
@@ -96,10 +96,10 @@ public sealed class PipInteractionStateTests
             view.ShowOnTop();
             view.SetInteractive(true);
             windows.RestoreAll();
-            Assert.True(Desktop.WaitFor(() => !Item(view, "pip.interactive").Checked, 2000,
+            Assert.True(Desktop.WaitFor(() => !Item(view, "menu.view.interactive").Checked, 2000,
                 () => { Application.DoEvents(); Thread.Sleep(10); }));
-            Assert.False(Item(view, "pip.keepUpdating").Checked);
-            Assert.True(Item(view, "pip.keepUpdating").Enabled);
+            Assert.False(Item(view, "menu.original.keepHidden").Checked);
+            Assert.True(Item(view, "menu.original.keepHidden").Enabled);
             view.SetInteractive(true);
             view.Close();
             Assert.False(windows.IsHidden(source.Handle));

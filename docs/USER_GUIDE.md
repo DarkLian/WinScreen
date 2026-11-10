@@ -8,7 +8,7 @@ After you install WinScreen, its icon sits in the system tray (look under the sm
 
 - **Click** the icon to open Settings.
 - **Right-click** it for every command, including putting windows back and exiting.
-- **Hotkeys** work on the window you're using. The tray menu works on the window named at its top.
+- **Hotkeys** work on the window you're using. The tray menu works on the window named under **Last window**.
 - **Rest the pointer** on the middle of a window's title bar to show the toolbar.
 
 Some features are marked *experimental*. Turn them on in **Settings → General → Experimental**.
@@ -50,7 +50,7 @@ In **Settings → Appearance** you can change the opacity step, give pinned wind
 ## Picture-in-Picture views
 
 Press **Ctrl+Alt+P** to open a small live view of the window you're using. Press it again to close it.
-To show a whole display or part of the screen, right-click the tray icon and choose **Picture-in-Picture...**.
+To show a whole display or part of the screen, right-click the tray icon and choose **New view...**.
 You can save a display or area there and open it again later from **Picture-in-Picture views → Saved sources**.
 
 | On a view | What happens |
@@ -59,18 +59,18 @@ You can save a display or area there and open it again later from **Picture-in-P
 | Wheel | Resize the view |
 | Ctrl+wheel | Zoom in; Ctrl+double-click to zoom out |
 | Ctrl+drag | Crop to the part you want; Ctrl+double-click to remove the crop |
-| Right-click | Open the view's menu, with **Go to original window** |
+| Right-click | Open the view's menu, with **Go to it** under **Original window** |
 
 Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. Drag an edge or corner to resize. **Keep aspect ratio** in View options is on by default. The bar fades away after you leave.
 
 **Useful options in the view's menu**
 
-- **Keep updating (hide original):** some apps, such as browsers, stop drawing when they're covered. This hides the original
+- **Keep hidden:** some apps, such as browsers, stop drawing when they're covered. This hides the original
   so the view stays live. It also removes the original from the taskbar and Alt+Tab where supported. Showing the original or closing the view restores its entry.
-- **View options:** frame limit, opacity, size, position lock and click-through, just for this view.
+- **Size and options:** frame limit, opacity, size, position lock and click-through, just for this view.
 - **Presets:** save the crop, size and place under a name and use it again later.
-- **Interactive PiP (experimental)** lets you point, click, select text, drag and scroll in the picture.
-  Hide original stays checked and locked while this is on. Turning it off restores your previous hiding choice.
+- **Interactive (experimental)** lets you point, click, select text, drag and scroll in the picture.
+  **Keep hidden** stays checked and locked while this is on. Turning it off restores your previous hiding choice.
   Drag the view's title bar to move it, or hold Alt and drag the picture.
   Menus open near the pointer. If the app asks you something, the original comes back so you can answer.
   Keys return to your previous window when you leave.
@@ -79,10 +79,11 @@ Every view has a title bar above the picture, or below it near the top of the sc
   but not hover, drag or select.
   By default, browser pointer shapes work, but hover effects and tooltips may not stay active.
   **Enhanced hover (experimental)** keeps hover effects showing while you use an app through a view. WinScreen turns it on for the apps it works well with: Chrome, Edge, Brave and Vivaldi; Firefox; and apps like VS Code and Discord. In **Settings → Picture-in-Picture** you can pick the apps yourself, including File Explorer and any other program you add, and each view's menu can change it for that view. It needs Windows 11 on a 64-bit Intel or AMD PC. See the [compatibility table](FEATURE_COMPATIBILITY.md) for what has been tested. Native tooltips may still be unavailable.
-  For continuous scrolling, enable **Middle-click scrolling (replaces app action)** in this view, middle-click, then move away from that point. Middle-click again, left-click or press Escape to stop. Leave it off to keep the app's normal middle-click actions.
+  With Enhanced hover on, a browser's own middle-click scrolling works in the view, and so does VS Code's or Discord's.
+  Where it doesn't, enable **Middle-click scrolling** in this view, middle-click, then move away from that point. Middle-click again, left-click or press Escape to stop. Leave it off to keep the app's normal middle-click actions.
   Some modern menus can still flicker; show the original if a menu is difficult to use.
   A few apps can't be hidden, such as PowerShell ISE, and WinScreen tells you.
-- **Use original, then hide it again** is for an app that doesn't work well through a view, such as a game.
+- **Use it, then hide again** is for an app that doesn't work well through a view, such as a game.
   The original window comes back where it was, and hides again when you switch to another window.
   To have a click on the view do this every time, add the program under
   **Settings → Picture-in-Picture → Apps that don't work through a view**.
@@ -121,7 +122,7 @@ Turn on **Settings → Mouse gestures → Move and resize** to hold Alt (or Win)
 moves it, the right button resizes it. It works on maximized windows too, and Esc puts the window back. Drag a window to the
 left or right edge of the screen to fill that half, to a corner for a quarter, or to the top to maximize it. Turn on **Window menu** there for a menu of commands on **Ctrl+right-click**.
 
-The tray and window menus also have **Borderless**, **Fill display**, **Dark title bar**, **Copy** and **Open file location**.
+The tray and window menus also have an **Opacity** slider, a grid of nine places to put the window, **Borderless**, **Fill display** and **Dark title bar**. **Copy** and **Open file location** are under **More**.
 
 ## Effects *(experimental)*
 

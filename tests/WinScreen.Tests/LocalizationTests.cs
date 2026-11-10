@@ -172,7 +172,7 @@ public sealed class LocalizationTests : IDisposable
         var partial = new Dictionary<string, string> { ["settings.title"] = "Custom" };
         Assert.Equal("Custom", UiText.Translate("settings.title", partial, english));
         Assert.Equal("&Save", UiText.Translate("settings.save", partial, english));
-        Assert.Equal("Target: ", UiText.Translate("tray.targetPrefix", partial, english));
+        Assert.Equal("Last result: ", UiText.Translate("tray.resultPrefix", partial, english));
         Assert.Equal("unknown.key", UiText.Translate("unknown.key", partial, english));
     }
 
@@ -192,9 +192,9 @@ public sealed class LocalizationTests : IDisposable
     [Theory]
     // Reviewed catalog values, sorted by stable key with NUL separators.
     // Update deliberately when adding labels; existing values retain their migration output.
-    [InlineData("en", "F0476EB96E86263F198907FFD2B7D1CFB67CFDCCCC87A44FF9A9F555565AF816")]
-    [InlineData("zh-Hans", "17D68E087F02FD821444CA0CA9D51B0F248F8B262AFA63ACACEBF868930AB846")]
-    [InlineData("zh-Hant", "5040C4B8D3EC03BF2905655FC5BE3BD9A89B3E8736854088FBAABE5B9021DC34")]
+    [InlineData("en", "02B82E68E30FB005F219A724051B347A5C03AADD57965D0D5DBE15269828ED1C")]
+    [InlineData("zh-Hans", "0B8FEDA4BC4635800DCEED397026676DCFA990A8C696A525DB1C09CDD6631614")]
+    [InlineData("zh-Hant", "93AD1F9704F31F9FE233B24E97D1ED24D65C6EFE9B7236A39BB5663F5D1A1FEE")]
     public void Every_translation_matches_the_reviewed_catalog(string language, string expectedDigest)
     {
         UiText.Initialize(language);
@@ -232,15 +232,20 @@ public sealed class LocalizationSurfaceTests
                 var builder = new Tray.WindowMenuBuilder(() => null, (_, _) => { }, (_, _) => { }, _ => true,
                     (_, _) => true, (_, _) => false, () => { });
                 builder.Populate(menu.Items, false);
-                foreach (string key in new[] { "window.restore", "window.borderless", "pip.open", "common.copy", "window.openLocation", "window.arrange" })
+                foreach (string key in new[] { "window.restore", "window.borderless", "pip.open", "menu.more", "settings.experimental", "window.arrange" })
                     Assert.Contains(menu.Items.OfType<ToolStripMenuItem>(), item => item.Text == catalog[key]);
+                foreach (string key in new[] { "menu.group.elsewhere", "menu.group.place", "menu.group.look" })
+                    Assert.Contains(menu.Items.OfType<ToolStripLabel>(), item => item.Text == catalog[key]);
+                ToolStripMenuItem more = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == catalog["menu.more"]);
+                foreach (string key in new[] { "common.copy", "window.openLocation" })
+                    Assert.Contains(more.DropDownItems.OfType<ToolStripMenuItem>(), item => item.Text == catalog[key]);
                 ToolStripMenuItem arrange = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == catalog["window.arrange"]);
                 Assert.Contains(arrange.DropDownItems.OfType<ToolStripMenuItem>(), item => item.Text == catalog["window.info"]);
 
                 var windows = new Windows.WindowController([]);
                 using var pip = new Pip.PipWindow(target.Handle, windows);
                 Assert.Equal(catalog["pip.titlePrefix"] + "Localization & test target", pip.Text);
-                foreach (string key in new[] { "pip.keepUpdating", "pip.options", "pip.close", "pip.goToOriginal" })
+                foreach (string key in new[] { "menu.original.keepHidden", "menu.picture.options", "pip.close", "menu.original.goTo" })
                     Assert.Contains(pip.ContextMenuStrip!.Items.OfType<ToolStripMenuItem>(), item => item.Text == catalog[key]);
 
                 using var anchor = new Anchors.AnchorButton(target.Handle);

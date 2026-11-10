@@ -43,17 +43,17 @@ public sealed class PipOpenTests
                     menu.Show(pip, new Point(20, 20));
                     pump(30);
                     Assert.True(menu.Visible);
-                    Assert.True(Item("pip.interactive").Checked);
-                    Assert.True(Item("pip.middleScroll").Visible, "Middle-click scrolling must appear in the open menu.");
-                    Assert.True(Item("pip.enhancedHover").Visible, "Enhanced hover must appear in the open menu.");
+                    Assert.True(Item("menu.view.interactive").Checked);
+                    Assert.True(Item("menu.view.middleScroll").Visible, "Middle-click scrolling must appear in the open menu.");
+                    Assert.True(Item("menu.view.hover").Visible, "Enhanced hover must appear in the open menu.");
                     menu.Close();
                 }
                 pip.SetInteractive(false);
                 menu.Show(pip, new Point(20, 20));
                 pump(30);
-                Assert.True(Item("pip.interactive").Visible);
-                Assert.False(Item("pip.middleScroll").Visible);
-                Assert.False(Item("pip.enhancedHover").Visible);
+                Assert.True(Item("menu.view.interactive").Visible);
+                Assert.False(Item("menu.view.middleScroll").Visible);
+                Assert.False(Item("menu.view.hover").Visible);
                 menu.Close();
             }
             finally { pip.Close(); }
