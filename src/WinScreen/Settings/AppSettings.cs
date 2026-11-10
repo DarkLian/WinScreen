@@ -223,6 +223,8 @@ public sealed class AppSettings
     public bool OpaqueOnHover { get; set; }
     public bool HighlightPinned { get; set; }
     public bool PipAutoMove { get; set; }
+    /// <summary>New views start with middle-click scrolling on while they are used directly; each view's menu still changes it.</summary>
+    public bool PipMiddleClickScroll { get; set; }
     public bool ExperimentalFeatures { get; set; }
 
     /// <summary>Hold a key and drag anywhere in a window to move or resize it. Off until someone asks for it.</summary>

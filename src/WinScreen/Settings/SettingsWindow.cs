@@ -135,6 +135,8 @@ private readonly ErrorProvider _errors = new();
 
     private readonly CheckBox _pipAutoMove = new SwitchBox
         { Text = T("settings.pip.autoMove"), AutoSize = true };
+    private readonly CheckBox _pipMiddleScroll = new SwitchBox
+        { Text = T("settings.pip.middleScroll"), AutoSize = true };
     private readonly CheckBox _hoverAutomatic = new SwitchBox { Text = T("settings.pip.hover.automatic"), AutoSize = true };
     private readonly ThemedList _originalPrograms = new();
     private readonly ComboBox _newOriginalProgram = ProgramPicker();
@@ -171,7 +173,7 @@ private readonly ErrorProvider _errors = new();
         _errors.ContainerControl = this;
         _experimental.CheckedChanged += (_, _) =>
         {
-            _pipAutoMove.Enabled = _experimental.Checked;
+            _pipAutoMove.Enabled = _pipMiddleScroll.Enabled = _experimental.Checked;
             _hoverOptions?.Enabled = _experimental.Checked && Pip.PipEnhancedHover.Supported;
             if (_hotkeys.Count > 0) RefreshFeatures();
         };
@@ -268,7 +270,7 @@ private readonly ErrorProvider _errors = new();
         Controls.Add(side);
 
         LoadValues();
-        _pipAutoMove.Enabled = _experimental.Checked;
+        _pipAutoMove.Enabled = _pipMiddleScroll.Enabled = _experimental.Checked;
         _hoverOptions?.Enabled = _experimental.Checked && Pip.PipEnhancedHover.Supported;
         WatchForChanges(this);
         foreach (TextBox box in _hotkeys.Values) box.TextChanged += (_, _) => QueueApplyRefresh();
@@ -555,6 +557,7 @@ private readonly ErrorProvider _errors = new();
         draft.OpaqueOnHover = _opaqueOnHover.Checked;
         draft.HighlightPinned = _highlightPinned.Checked;
         draft.PipAutoMove = _pipAutoMove.Checked;
+        draft.PipMiddleClickScroll = _pipMiddleScroll.Checked;
         draft.PipOriginalPrograms = Programs(_originalPrograms, _newOriginalProgram);
         draft.PipHover = new PipHoverPreferences
         {
@@ -740,16 +743,14 @@ private readonly ErrorProvider _errors = new();
 
     private static ComboBox ProgramPicker()
     {
-        var picker = new ThemedPicker { Dock = DockStyle.Fill };
-        picker.HandleCreated += (_, _) =>
-            Native.User32.SendTextMessage(picker.Handle, Native.User32.CB_SETCUEBANNER, 0,
-                T("programs.nameHint"));
-        picker.DropDown += (_, _) =>
+        return new ThemedPicker
         {
-            picker.Items.Clear();
-            picker.Items.AddRange(RunningPrograms().Cast<object>().ToArray());
+            Dock = DockStyle.Fill,
+            Placeholder = T("programs.nameHint"),
+            AccessibleName = T("programs.nameHint"),
+            Choices = RunningPrograms,
+            IconOf = ProgramIcons.Of,
         };
-        return picker;
     }
 
     /// <summary>The programs with a window open right now, under the names the lists use.</summary>
@@ -762,8 +763,8 @@ private readonly ErrorProvider _errors = new();
             {
                 try
                 {
-                    if (process.MainWindowHandle != 0 && process.Id != Environment.ProcessId)
-                        names.Add(process.ProcessName);
+                    if (process.MainWindowHandle != 0 && process.Id != Environment.ProcessId && names.Add(process.ProcessName))
+                        ProgramIcons.Remember(process.ProcessName, process.MainWindowHandle);
                 }
                 catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
                 {
@@ -794,6 +795,7 @@ private readonly ErrorProvider _errors = new();
             nameof(AppSettings.OpaqueOnHover) => _opaqueOnHover,
             nameof(AppSettings.HighlightPinned) => _highlightPinned,
             nameof(AppSettings.PipAutoMove) => _pipAutoMove,
+            nameof(AppSettings.PipMiddleClickScroll) => _pipMiddleScroll,
             nameof(PipHoverPreferences.ChooseForMe) => _hoverAutomatic,
             nameof(PipHoverPreferences.Browsers) => _hoverBrowsers,
             nameof(PipHoverPreferences.Firefox) => _hoverFirefox,
@@ -858,6 +860,7 @@ private readonly ErrorProvider _errors = new();
         _opaqueOnHover.Checked = values.OpaqueOnHover;
         _highlightPinned.Checked = values.HighlightPinned;
         _pipAutoMove.Checked = values.PipAutoMove;
+        _pipMiddleScroll.Checked = values.PipMiddleClickScroll;
         _loadingHover = true;
         _hover = values.PipHover;
         _hoverAutomatic.Checked = values.PipHover.ChooseForMe;
@@ -923,7 +926,7 @@ private readonly ErrorProvider _errors = new();
     {
         foreach (Control item in items)
             if (item is CheckBox option) option.Margin = new Padding(3, 0, 3, 0);
-        return new SettingsCard(title, experimental, T("settings.experimental"), ContentWidth, items);
+        return new SettingsCard(title, experimental, ContentWidth, items);
     }
 
     /// <summary>One option: what it is on the left, the control that sets it on the right.</summary>
@@ -1020,6 +1023,7 @@ private readonly ErrorProvider _errors = new();
             Row(T("pip.scaling"), _pipScaling), Row(T("pip.opacityPercent"), _pipOpacity), _pipCaptureBorder, _pipDiagnostics,
             Note(T("pip.diagnostics.retryHelp"))));
         page.Controls.Add(Card(T("settings.pip.moving"), true, _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
+        page.Controls.Add(Card(T("pip.interactive"), true, _pipMiddleScroll, Note(T("settings.pip.middleScrollHelp"))));
         // One table says, for each kind of app and each program added, what a view of it does.
         _hoverOptions = new Control();
         _hoverOptions.EnabledChanged += (_, _) => { ShowHoverChoices(); RebuildApps(); };
@@ -1030,7 +1034,8 @@ private readonly ErrorProvider _errors = new();
         }
         _newApp.Dock = DockStyle.None;
         _newApp.Width = 300;
-        var add = new PlainButton { Text = T("common.add") };
+        var add = new PlainButton { Text = T("common.add"), Enabled = false };
+        _newApp.TextChanged += (_, _) => add.Enabled = _newApp.Text.Trim().Length > 0; // Nothing to add until a name is typed.
         void AddApp()
         {
             string name = ProgramName(_newApp.Text);
@@ -1047,6 +1052,7 @@ private readonly ErrorProvider _errors = new();
         {
             if (e.KeyCode != Keys.Enter) return;
             e.SuppressKeyPress = true;
+            if (_newApp.DroppedDown) _newApp.DroppedDown = false; // Enter on a suggestion takes it and adds it.
             AddApp();
         };
         _newApp.Margin = new Padding(0, 2, 8, 0); // Level with the button beside it.
@@ -1161,7 +1167,7 @@ private readonly ErrorProvider _errors = new();
         _borderColor.TextChanged += (_, _) => color.Invalidate();
         page.Controls.Add(Section(T("settings.pin.border"), _pausePin, _highlightPinned, SettingRow(T("settings.pin.color"), color),
             SettingRow(T("settings.pin.opacity"), _borderOpacity), SettingRow(T("settings.pin.thickness"), _borderThickness)));
-        page.Controls.Add(Section(T("settings.effects.title"), _detectDark, _layeredGlass,
+        page.Controls.Add(Card(T("settings.effects.title"), true, _detectDark, _layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.pictures"), _glassPictures), _pictureSafeDark, Note(T("settings.effects.help"))));
         return page;
@@ -1178,6 +1184,7 @@ private readonly ErrorProvider _errors = new();
         _toolbarPlacement.Items.AddRange([T("toolbar.placement.left"), T("toolbar.placement.centre"), T("toolbar.placement.right")]);
         _toolbarTrigger.Items.AddRange([T("toolbar.trigger.titleBar"), T("toolbar.trigger.minimize")]);
         foreach (AppCommand command in ToolbarPreferences.DefaultButtons()) _toolbarButtons.Items.Add(new ToolbarChoice(command));
+        _toolbarButtons.Tagged = item => item is ToolbarChoice { Command: var command } && CommandCatalog.IsExperimental(command);
         FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("toolbar.settings.title"), _showToolbar, SettingRow(T("toolbar.placement.label"), _toolbarPlacement),
             SettingRow(T("toolbar.trigger.label"), _toolbarTrigger), SettingRow(T("toolbar.delay.label"), _toolbarDelay),
@@ -1297,8 +1304,8 @@ private readonly ErrorProvider _errors = new();
             Graphics g = e.Graphics;
             using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, e.Bounds);
             TextRenderer.DrawText(g, e.Header?.Text, MenuStyle.SmallFont,
-                new Rectangle(e.Bounds.Left + Unit(e.ColumnIndex == 0 ? 14 : 8), e.Bounds.Top, e.Bounds.Width - Unit(16), e.Bounds.Height),
-                SettingsStyle.Secondary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                new Rectangle(e.Bounds.Left + Unit(FeatureInset(e.ColumnIndex)), e.Bounds.Top, e.Bounds.Width - Unit(FeatureInset(e.ColumnIndex) + 4), e.Bounds.Height),
+                SettingsStyle.Secondary, FeatureText);
             using var line = new Pen(SettingsStyle.Divider);
             g.DrawLine(line, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
         };
@@ -1326,12 +1333,29 @@ private readonly ErrorProvider _errors = new();
             }
             bool problem = e.ColumnIndex == 4 && item.Tag is AppCommand command && _shortcutProblems.ContainsKey(command);
             Color color = problem ? SettingsStyle.Error : e.ColumnIndex is 0 or 3 ? SettingsStyle.Text : SettingsStyle.Secondary;
-            int inset = Unit(e.ColumnIndex == 0 ? 14 : 8);
-            TextRenderer.DrawText(g, e.SubItem.Text, _features.Font,
-                new Rectangle(cell.Left + inset, cell.Top, Math.Max(0, cell.Width - inset - Unit(4)), cell.Height),
-                color, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            int inset = Unit(FeatureInset(e.ColumnIndex));
+            // An experimental action's name has the tag after it, as in the menus; the name gives way to it if short of room.
+            bool tagged = e.ColumnIndex == 0 && item.Tag is AppCommand action && CommandCatalog.IsExperimental(action);
+            int tag = tagged ? Unit(8) + MenuParts.TagSize(Unit).Width : 0;
+            const TextFormatFlags format = FeatureText;
+            var words = new Rectangle(cell.Left + inset, cell.Top, Math.Max(0, cell.Width - inset - Unit(4) - tag), cell.Height);
+            TextRenderer.DrawText(g, e.SubItem.Text, _features.Font, words, color, format);
+            if (tagged && words.Width > 0)
+            {
+                int width = Math.Min(words.Width, TextRenderer.MeasureText(g, e.SubItem.Text, _features.Font, words.Size, format).Width);
+                MenuParts.DrawTag(g, words.Left + width + Unit(8), cell.Top + cell.Height / 2, Unit);
+            }
         };
     }
+
+    /// <summary>How the table's words are set, measured the same way as drawn so a column fits its words exactly.</summary>
+    private const TextFormatFlags FeatureText = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
+        TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
+
+    private const TextFormatFlags FeatureMeasure = FeatureText & ~TextFormatFlags.EndEllipsis; // Measuring with it would cut them short.
+
+    /// <summary>Where a column's words start, at 100% scaling: the first further in, past the bar of a chosen row.</summary>
+    private static int FeatureInset(int column) => column == 0 ? 18 : 12;
 
     /// <summary>
     /// Gives each column of the table the room its longest entry needs and the name column the rest, so nothing is cut
@@ -1345,19 +1369,24 @@ private readonly ErrorProvider _errors = new();
         int width = Math.Min(_features.ClientSize.Width, _features.Parent?.ClientSize.Width ?? int.MaxValue);
         width -= SettingsStyle.Unit(_features, ThinScrollBar.BarWidth);
         if (width <= 0 || _features.Columns.Count < 5) return;
-        int pad = SettingsStyle.Unit(_features, 24);
+        int pad = SettingsStyle.Unit(_features, FeatureInset(1) + 4);
         var need = new int[5];
         for (int column = 1; column < 5; column++)
         {
-            int widest = TextRenderer.MeasureText(_features.Columns[column].Text, MenuStyle.SmallFont).Width;
+            int widest = TextRenderer.MeasureText(_features.Columns[column].Text, MenuStyle.SmallFont, Size.Empty, FeatureMeasure).Width;
             foreach (ListViewItem? item in _features.Items)
                 if (item is not null && column < item.SubItems.Count)
-                    widest = Math.Max(widest, TextRenderer.MeasureText(item.SubItems[column].Text, _features.Font).Width);
+                    widest = Math.Max(widest, TextRenderer.MeasureText(item.SubItems[column].Text, _features.Font, Size.Empty, FeatureMeasure).Width);
             need[column] = widest + pad;
         }
         // A problem can be a whole sentence; the state column stays short and shows it in full when pointed at.
         need[4] = Math.Min(need[4], SettingsStyle.Unit(_features, 150));
+        // The name column keeps room for an experimental action's whole name and its tag; the others give way first.
         int least = SettingsStyle.Unit(_features, 150);
+        int tag = SettingsStyle.Unit(_features, FeatureInset(0) + 8 + 4) + MenuParts.TagSize(value => SettingsStyle.Unit(_features, value)).Width;
+        foreach (ListViewItem? item in _features.Items)
+            if (item?.Tag is AppCommand command && CommandCatalog.IsExperimental(command))
+                least = Math.Max(least, TextRenderer.MeasureText(item.Text, _features.Font, Size.Empty, FeatureMeasure).Width + tag);
         int rest = need.Skip(1).Sum();
         if (width - rest < least)
         {

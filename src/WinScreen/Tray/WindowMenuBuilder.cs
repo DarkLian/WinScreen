@@ -69,7 +69,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         borderless.DropDownItems.Add(fillItem);
         items.Add(borderless);
         // Effects that are still experimental sit together, and the whole entry goes when none is turned on in Settings.
-        var experimental = new ToolStripMenuItem(T("settings.experimental")) { Tag = new Group() }.WithIcon(MenuParts.Repair);
+        var experimental = new ToolStripMenuItem(T("menu.effects")) { Tag = new Group() }.WithIcon(MenuParts.Repair).Experimental();
         foreach (AppCommand command in new[] { AppCommand.ToggleDark, AppCommand.ToggleGlass, AppCommand.ToggleShrink, AppCommand.ToggleCrop })
             experimental.DropDownItems.Add(Command(command));
         items.Add(experimental);
@@ -103,7 +103,8 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     internal void PopulateArrange(ToolStripItemCollection items)
     {
         foreach (AppCommand? action in CommandCatalog.ArrangeMenu)
-            items.Add(action is { } entry ? Command(entry) : new ToolStripSeparator());
+            items.Add(action is not { } entry ? new ToolStripSeparator()
+                : CommandCatalog.IsExperimental(entry) ? Command(entry).Experimental() : Command(entry));
         if (MoveToDisplay is { } move)
         {
             var displays = new ToolStripMenuItem(T("placement.moveToDisplay"));
@@ -148,7 +149,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
                 item.Available = available(command);
                 item.Checked = window != 0 && isOn(command, window);
                 item.Enabled = command == AppCommand.RestoreAll || window != 0 && enabled(command, window);
-                item.ShortcutKeyDisplayString = Hotkey?.Invoke(command) is { Length: > 0 } keys ? keys : null;
+                MenuParts.ShowKeys(item, Hotkey?.Invoke(command));
             }
             else if (item.Tag is Utility utility)
                 item.Enabled = window != 0 && (!utility.NeedsPath || WindowInfo.ExecutablePath(window).Length > 0);

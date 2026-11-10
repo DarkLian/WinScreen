@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using WinScreen.Tray;
 
 namespace WinScreen.Settings;
@@ -328,29 +329,118 @@ internal sealed class ThemedCombo : ComboBox
 }
 
 /// <summary>
-/// A box to type a name in, with a list that drops down to choose one. Windows draws its edge and arrow in the light
-/// theme's colours, so they are drawn over after it paints; the typing part is its own window and is left alone.
+/// A box to search for a program or type its name, as Windows 11's search boxes are: a search icon, words saying what
+/// to do that stay readable, and suggestions from the programs running now as soon as typing starts. Its arrow opens
+/// all of them. Windows draws the box's edge and arrow in the light theme's colours, so they are drawn over after it
+/// paints; the typing part is its own window, and only the icon and the waiting words are drawn into it.
 /// </summary>
 internal sealed class ThemedPicker : ComboBox
 {
-    private bool _hot;
+    private const int EM_SETMARGINS = 0x00D3, EC_LEFTMARGIN = 0x1, MostSuggestions = 12;
+    private bool _hot, _suggesting;
+    private List<string>? _choices;
+    private TypingPart? _typing;
+    private nint _listWindow;
+
+    /// <summary>What the box says while nothing is typed in it.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal string Placeholder { get; set; } = "";
+
+    /// <summary>The names it offers, read again each time the list opens or typing starts.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<IEnumerable<string>>? Choices { get; set; }
+
+    /// <summary>The picture beside a name in the list, at a size in pixels, or null for none.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<string, int, Image?>? IconOf { get; set; }
 
     public ThemedPicker()
     {
         DropDownStyle = ComboBoxStyle.DropDown;
+        DrawMode = DrawMode.OwnerDrawFixed;
         FlatStyle = FlatStyle.Flat;
         ForeColor = SettingsStyle.Text;
+        FitHeight();
     }
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
     private Color Surface => Parent?.BackColor ?? SettingsStyle.Card;
     private Color Fill => !Enabled ? SettingsStyle.DisabledOn(Surface) : Focused || ContainsFocus ? SettingsStyle.ActiveOn(Surface)
         : _hot ? SettingsStyle.HoverOn(Surface) : SettingsStyle.FillOn(Surface);
+    /// <summary>The room before the words, where the search icon is.</summary>
+    private int IconRoom => Unit(30);
+
+    /// <summary>As tall as the buttons beside it: one row of the list plus the box's edges.</summary>
+    private void FitHeight() => ItemHeight = Math.Max(TextRenderer.MeasureText("Ag", Font).Height + Unit(10), Unit(26));
 
     private void Restyle()
     {
         if (BackColor != Fill) BackColor = Fill;
         Invalidate();
+        _typing?.Redraw();
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        var info = new ComboInfo { Size = Marshal.SizeOf<ComboInfo>() };
+        _listWindow = GetComboBoxInfo(Handle, ref info) ? info.List : 0;
+        nint typing = Native.User32.FindWindowEx(Handle, 0, "Edit", null);
+        if (typing == 0) return;
+        _typing = new TypingPart(this);
+        _typing.AssignHandle(typing);
+        SetMargin();
+        PlaceTyping(); // Placed before it was watched.
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ComboInfo
+    {
+        public int Size;
+        public Native.Rect Item, Button;
+        public int ButtonState;
+        public nint Combo, Edit, List;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetComboBoxInfo(nint combo, ref ComboInfo info);
+
+    /// <summary>
+    /// Fits the open list to what it offers: Windows opens it at its full height whatever it holds. Kept against the
+    /// box when it opened upward for want of room below.
+    /// </summary>
+    private void FitList()
+    {
+        if (!DroppedDown || _listWindow == 0 || !Native.User32.GetWindowRect(_listWindow, out Native.Rect r)) return;
+        int height = Math.Clamp(Items.Count, 1, MaxDropDownItems) * ItemHeight + 2;
+        if (r.Bottom - r.Top == height) return;
+        int top = r.Top < RectangleToScreen(ClientRectangle).Top ? r.Bottom - height : r.Top;
+        Native.User32.SetWindowPos(_listWindow, 0, r.Left, top, r.Right - r.Left, height,
+            Native.User32.SWP_NOZORDER | Native.User32.SWP_NOACTIVATE);
+    }
+
+    protected override void OnHandleDestroyed(EventArgs e)
+    {
+        _typing = null; // It lets go of the typing part by itself as that goes, after WinForms' own hold on it.
+        _listWindow = 0;
+        base.OnHandleDestroyed(e);
+    }
+
+    /// <summary>Moves the typing part to where <see cref="CenterTyping"/> keeps it, after anything that changes the box.</summary>
+    private void PlaceTyping()
+    {
+        if (_typing is not { Handle: not 0 } typing || !Native.User32.GetWindowRect(typing.Handle, out Native.Rect r)) return;
+        Rectangle at = RectangleToClient(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom));
+        Native.User32.SetWindowPos(typing.Handle, 0, at.X, 0, at.Width, Math.Max(at.Height, ClientSize.Height),
+            Native.User32.SWP_NOZORDER | Native.User32.SWP_NOACTIVATE);
+    }
+
+    protected override void OnSizeChanged(EventArgs e) { base.OnSizeChanged(e); PlaceTyping(); }
+
+    private void SetMargin()
+    {
+        if (_typing is { Handle: not 0 } typing) Native.User32.SendMessage(typing.Handle, EM_SETMARGINS, EC_LEFTMARGIN, IconRoom);
     }
 
     protected override void WndProc(ref Message m)
@@ -362,12 +452,8 @@ internal sealed class ThemedPicker : ComboBox
     private void DrawOver()
     {
         using Graphics g = CreateGraphics();
-        nint typing = Native.User32.FindWindowEx(Handle, 0, "Edit", null);
-        if (typing != 0 && Native.User32.GetWindowRect(typing, out Native.Rect r))
-        {
-            Rectangle edit = RectangleToClient(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom));
-            g.ExcludeClip(edit);
-        }
+        if (_typing is { Handle: not 0 } typing && Native.User32.GetWindowRect(typing.Handle, out Native.Rect r))
+            g.ExcludeClip(RectangleToClient(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom)));
         g.Clear(Surface);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         var area = new Rectangle(0, 0, Width - 1, Height - 1);
@@ -386,7 +472,207 @@ internal sealed class ThemedPicker : ComboBox
         SettingsStyle.Chevron(g, new Point(Width - Unit(14), Height / 2), Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, this);
     }
 
+    /// <summary>The search icon, and the waiting words while nothing is typed, drawn into the typing part after it paints.</summary>
+    private void DrawInTyping(nint typing)
+    {
+        if (!Native.User32.GetClientRect(typing, out Native.Rect r)) return;
+        var area = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
+        // The blinking caret is drawn by inverting what's under it, so it is taken away while anything is drawn there.
+        bool caret = Native.User32.HideCaret(typing);
+        try
+        {
+            using Graphics g = Graphics.FromHwnd(typing);
+            Color quiet = Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled;
+            if (MenuParts.Icon(MenuParts.Search, quiet) is { } icon)
+            {
+                int size = Math.Min(icon.Height, area.Height);
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(icon, new Rectangle(Unit(6), area.Top + (area.Height - size) / 2, size, size));
+            }
+            // Where typed words start, so they take the waiting words' place; gone while a character is being composed.
+            if (Text.Length > 0 || Placeholder.Length == 0 || _typing?.Composing == true) return;
+            TextRenderer.DrawText(g, Placeholder, Font, Rectangle.FromLTRB(IconRoom, area.Top, area.Right, area.Bottom), quiet, BackColor,
+                TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+        }
+        finally
+        {
+            if (caret) Native.User32.ShowCaret(typing);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowPos
+    {
+        public nint Window, InsertAfter;
+        public int X, Y, Width, Height;
+        public uint Flags;
+    }
+
+    /// <summary>
+    /// Keeps the typing part at most one line tall and centred in the box: Windows puts it near the top and writes at
+    /// its top, which leaves the words high.
+    /// </summary>
+    private void CenterTyping(nint place)
+    {
+        const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2;
+        WindowPos position = Marshal.PtrToStructure<WindowPos>(place);
+        if ((position.Flags & SWP_NOSIZE) != 0 || !Native.User32.GetClientRect(Handle, out Native.Rect box)) return;
+        int line = Math.Min(position.Height, TextRenderer.MeasureText("Ag", Font, Size.Empty, TextFormatFlags.NoPadding).Height);
+        if ((position.Flags & SWP_NOMOVE) != 0)
+        {
+            if (_typing is not { Handle: not 0 } typing || !Native.User32.GetWindowRect(typing.Handle, out Native.Rect now)) return;
+            position.X = PointToClient(new Point(now.Left, now.Top)).X;
+            position.Flags &= ~SWP_NOMOVE;
+        }
+        // Placed so its capitals sit in the middle of the box, as the words in the other boxes do; a line's capitals sit
+        // high in it, above the room kept for descenders.
+        position.Y = Math.Clamp((box.Bottom - box.Top) / 2 - CapitalsMiddle(Font), 0, Math.Max(0, box.Bottom - box.Top - line));
+        position.Height = line;
+        Marshal.StructureToPtr(position, place, false);
+    }
+
+    private static readonly Dictionary<(string, float, FontStyle), int> Capitals = [];
+
+    /// <summary>How far down a line of this font the middle of its capitals is, found by writing one and looking.</summary>
+    private static int CapitalsMiddle(Font font)
+    {
+        if (Capitals.TryGetValue((font.Name, font.Size, font.Style), out int middle)) return middle;
+        Size cell = TextRenderer.MeasureText("H", font, Size.Empty, TextFormatFlags.NoPadding);
+        using var picture = new Bitmap(Math.Max(1, cell.Width), Math.Max(1, cell.Height));
+        using (Graphics g = Graphics.FromImage(picture))
+        {
+            g.Clear(Color.White);
+            TextRenderer.DrawText(g, "H", font, Point.Empty, Color.Black, Color.White, TextFormatFlags.NoPadding);
+        }
+        int top = -1, bottom = -1;
+        for (int y = 0; y < picture.Height; y++)
+            for (int x = 0; x < picture.Width; x++)
+                if (picture.GetPixel(x, y).R < 128)
+                {
+                    if (top < 0) top = y;
+                    bottom = y;
+                    break;
+                }
+        middle = top < 0 ? cell.Height / 2 : (top + bottom + 1) / 2;
+        return Capitals[(font.Name, font.Size, font.Style)] = middle;
+    }
+
+    private sealed class TypingPart(ThemedPicker owner) : NativeWindow
+    {
+        private const int WM_IME_STARTCOMPOSITION = 0x010D, WM_IME_ENDCOMPOSITION = 0x010E, WM_WINDOWPOSCHANGING = 0x0046;
+
+        /// <summary>While a character is being put together in an input method, before it reaches the box.</summary>
+        internal bool Composing { get; private set; }
+
+        internal void Redraw()
+        {
+            if (Handle != 0) Native.User32.InvalidateRect(Handle, 0, true);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg is WM_IME_STARTCOMPOSITION or WM_IME_ENDCOMPOSITION)
+            {
+                Composing = m.Msg == WM_IME_STARTCOMPOSITION;
+                Redraw();
+            }
+            else if (m.Msg == WM_WINDOWPOSCHANGING && m.LParam != 0) owner.CenterTyping(m.LParam);
+            base.WndProc(ref m);
+            if (m.Msg == ListRows.WM_PAINT) owner.DrawInTyping(Handle);
+        }
+    }
+
+    protected override void OnTextChanged(EventArgs e)
+    {
+        base.OnTextChanged(e);
+        _typing?.Redraw(); // The waiting words come and go with what's typed.
+    }
+
+    protected override void OnDropDown(EventArgs e)
+    {
+        // Opened with the arrow: every program. Opened by typing: what matches, already in the list.
+        if (!_suggesting) Offer(_choices = Choices?.Invoke().ToList() ?? []);
+        base.OnDropDown(e);
+    }
+
+    /// <summary>As a name is typed, the running programs whose names hold it are offered under the box.</summary>
+    protected override void OnTextUpdate(EventArgs e)
+    {
+        base.OnTextUpdate(e);
+        if (Choices is null) return;
+        string typed = Text;
+        int caret = SelectionStart;
+        _choices ??= Choices().ToList();
+        string wanted = typed.Trim();
+        List<string> matches = wanted.Length == 0 ? [] : _choices
+            .Where(name => name.Contains(wanted, StringComparison.CurrentCultureIgnoreCase))
+            .OrderBy(name => !name.StartsWith(wanted, StringComparison.CurrentCultureIgnoreCase))
+            .Take(MostSuggestions).ToList();
+        _suggesting = true;
+        try
+        {
+            // Changing the list wipes the box's words, so it is left alone when it would stay empty.
+            if (matches.Count > 0 || Items.Count > 0) Offer(matches);
+            if (matches.Count > 0 && !DroppedDown)
+            {
+                DroppedDown = true;
+                Cursor.Current = Cursors.Default; // Opening the list hides the pointer otherwise.
+            }
+            else if (matches.Count == 0 && DroppedDown) DroppedDown = false;
+            FitList();
+            // Changing the list and opening it both take over the box's words; what was typed is put back.
+            if (Text != typed) Text = typed;
+            Select(Math.Min(caret, typed.Length), 0);
+        }
+        finally { _suggesting = false; }
+    }
+
+    private void Offer(List<string> names)
+    {
+        BeginUpdate();
+        Items.Clear();
+        Items.AddRange(names.Cast<object>().ToArray());
+        EndUpdate();
+    }
+
+    protected override void OnEnter(EventArgs e)
+    {
+        base.OnEnter(e);
+        _choices = null; // Programs started since last time are offered too.
+        Restyle();
+    }
+
+    protected override void OnDrawItem(DrawItemEventArgs e)
+    {
+        if (e.Index < 0 || e.Index >= Items.Count) return;
+        Graphics g = e.Graphics;
+        using (var back = new SolidBrush(SettingsStyle.Flyout)) g.FillRectangle(back, e.Bounds);
+        var row = Rectangle.Inflate(e.Bounds, -Unit(3), -Unit(1));
+        if ((e.State & DrawItemState.Selected) != 0)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using GraphicsPath path = SettingsStyle.Rounded(row, Unit(3));
+            using var brush = new SolidBrush(SettingsStyle.RowHoverOn(SettingsStyle.Flyout));
+            g.FillPath(brush, path);
+        }
+        string name = GetItemText(Items[e.Index]) ?? "";
+        int size = Unit(16), left = row.Left + Unit(8);
+        if (IconOf?.Invoke(name, size) is { } icon)
+        {
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(icon, new Rectangle(left, row.Top + (row.Height - size) / 2, size, size));
+        }
+        left += size + Unit(10);
+        TextRenderer.DrawText(g, name, Font, new Rectangle(left, row.Top, row.Right - left - Unit(4), row.Height), SettingsStyle.Text,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+            TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+    }
+
+    protected override void OnFontChanged(EventArgs e) { base.OnFontChanged(e); FitHeight(); SetMargin(); PlaceTyping(); }
+    protected override void OnDpiChangedAfterParent(EventArgs e) { base.OnDpiChangedAfterParent(e); FitHeight(); SetMargin(); PlaceTyping(); }
     protected override void OnParentChanged(EventArgs e) { base.OnParentChanged(e); Restyle(); }
+    protected override void OnParentBackColorChanged(EventArgs e) { base.OnParentBackColorChanged(e); Restyle(); } // Placed on a card.
     protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Restyle(); }
     protected override void OnMouseLeave(EventArgs e)
     {
@@ -395,10 +681,39 @@ internal sealed class ThemedPicker : ComboBox
         _hot = false;
         Restyle();
     }
-    protected override void OnEnter(EventArgs e) { base.OnEnter(e); Restyle(); }
     protected override void OnLeave(EventArgs e) { base.OnLeave(e); Restyle(); }
     protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Restyle(); }
     protected override void OnDropDownClosed(EventArgs e) { base.OnDropDownClosed(e); Invalidate(); }
+}
+
+/// <summary>The pictures of running programs, by the names the program lists use, each made once.</summary>
+internal static class ProgramIcons
+{
+    private static readonly Dictionary<string, nint> Windows = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<(string, int), Image?> Made = [];
+
+    /// <summary>Remembers a window of the program, to find its file from when its picture is first wanted.</summary>
+    internal static void Remember(string name, nint window) => Windows[name] = window;
+
+    internal static Image? Of(string name, int size)
+    {
+        if (Made.TryGetValue((name, size), out Image? made)) return made;
+        if (!Windows.TryGetValue(name, out nint window)) return null; // Not running; asked again once it is.
+        Image? picture = null;
+        string path = WinScreen.Windows.WindowInfo.ExecutablePath(window);
+        try
+        {
+            if (path.Length > 0 && Icon.ExtractAssociatedIcon(path) is { } icon)
+                using (icon)
+                using (var sized = new Icon(icon, size, size))
+                    picture = sized.ToBitmap();
+        }
+        catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            // No picture then; the name is still there.
+        }
+        return Made[(name, size)] = picture;
+    }
 }
 
 /// <summary>Rows drawn the Windows 11 way for <see cref="ThemedList"/> and <see cref="ThemedCheckList"/>.</summary>
@@ -522,6 +837,10 @@ internal sealed class ThemedCheckList : CheckedListBox
     /// <summary>The height of one row. The list's own ItemHeight follows the font only, so the rows are set to this instead.</summary>
     internal int RowHeight => ListRows.RowHeight(this);
 
+    /// <summary>Which entries are experimental, to show the tag after their words.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<object, bool>? Tagged { get; set; }
+
     private void ApplyRowHeight()
     {
         if (IsHandleCreated) Native.User32.SendMessage(Handle, ListRows.LB_SETITEMHEIGHT, 0, RowHeight);
@@ -563,9 +882,14 @@ internal sealed class ThemedCheckList : CheckedListBox
             }
         }
         int textLeft = box.Right + SettingsStyle.Unit(this, 10);
-        TextRenderer.DrawText(g, GetItemText(Items[e.Index]), Font, new Rectangle(textLeft, row.Top, row.Right - textLeft, row.Height),
-            Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+        string text = GetItemText(Items[e.Index]) ?? "";
+        const TextFormatFlags format = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
+            TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+        TextRenderer.DrawText(g, text, Font, new Rectangle(textLeft, row.Top, row.Right - textLeft, row.Height),
+            Enabled ? SettingsStyle.Text : SettingsStyle.Disabled, format);
+        if (Tagged?.Invoke(Items[e.Index]) == true)
+            MenuParts.DrawTag(g, textLeft + TextRenderer.MeasureText(g, text, Font, Size.Empty, format & ~TextFormatFlags.EndEllipsis).Width + SettingsStyle.Unit(this, 8),
+                row.Top + row.Height / 2, value => SettingsStyle.Unit(this, value), Enabled);
         if ((e.State & DrawItemState.Focus) != 0 && Focused && ShowFocusCues) SettingsStyle.FocusRing(g, row, SettingsStyle.Unit(this, 4), this);
     }
 
@@ -624,13 +948,15 @@ internal sealed class ProgramList : Panel
             _picker = picker;
             _picker.Dock = DockStyle.None;
             _picker.Anchor = AnchorStyles.None;
-            _add = new PlainButton { Text = addText };
+            _add = new PlainButton { Text = addText, Enabled = false };
             _add.Click += (_, _) => Add();
+            _picker.TextChanged += (_, _) => _add.Enabled = _picker.Text.Trim().Length > 0; // Nothing to add until a name is typed.
             _picker.KeyDown += (_, e) =>
             {
                 if (e.KeyCode != Keys.Enter) return;
                 e.SuppressKeyPress = true;
-                _add.PerformClick();
+                if (_picker.DroppedDown) _picker.DroppedDown = false; // Enter on a suggestion takes it and adds it.
+                Add();
             };
             Controls.Add(_picker);
             Controls.Add(_add);

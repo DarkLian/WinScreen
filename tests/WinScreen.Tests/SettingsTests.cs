@@ -261,6 +261,7 @@ public sealed class SettingsWindowTests : IDisposable
             window.SetOption("StartWithWindows", true);
             window.SetOption(nameof(AppSettings.HighlightPinned), true);
             window.SetOption(nameof(AppSettings.PipAutoMove), true);
+            window.SetOption(nameof(AppSettings.PipMiddleClickScroll), true);
             window.SetOption(nameof(AppSettings.ShowNotifications), false);
             window.SetOption(nameof(AppSettings.AutomaticUpdates), true);
             window.AddIncluded("AnotherProgram.EXE");
@@ -279,6 +280,7 @@ public sealed class SettingsWindowTests : IDisposable
             Assert.True(applied.StartWithWindows);
             Assert.True(applied.HighlightPinned);
             Assert.True(applied.PipAutoMove);
+            Assert.True(applied.PipMiddleClickScroll);
             Assert.False(applied.ShowNotifications);
             Assert.True(applied.AutomaticUpdates);
             Assert.Equal(["AnotherProgram"], applied.IncludedPrograms);

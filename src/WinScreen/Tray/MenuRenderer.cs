@@ -44,6 +44,9 @@ internal static class MenuStyle
     internal static Color Line => Dark ? Color.FromArgb(70, 70, 70) : Color.FromArgb(222, 222, 222);
     internal static Color Accent => Dark ? Color.FromArgb(96, 205, 255) : Color.FromArgb(0, 95, 184);
     internal static Color AccentBack => Dark ? Color.FromArgb(40, 62, 76) : Color.FromArgb(221, 235, 247);
+    /// <summary>The tag on what is experimental, in menus and in Settings: Windows 11's caution colours.</summary>
+    internal static Color TagBack => Dark ? Color.FromArgb(67, 53, 25) : Color.FromArgb(255, 244, 206);
+    internal static Color TagText => Dark ? Color.FromArgb(252, 225, 0) : Color.FromArgb(121, 82, 0);
 }
 
 /// <summary>
@@ -117,6 +120,9 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
     /// <summary>How far the words move right of where Windows places them: to 40 px in beside icons, 18 px without.</summary>
     private static int TextRoom(ToolStrip? menu) => MenuParts.Scale(menu is ToolStripDropDownMenu { ShowImageMargin: false } ? 7 : 4);
 
+    /// <summary>The space between an experimental command's words and its tag.</summary>
+    private static int TagGap => MenuParts.Scale(8);
+
     private static void Round(ToolStripDropDown menu)
     {
         if (!menu.IsHandleCreated) return;
@@ -165,6 +171,12 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         // Centred on the whole row, as the icon and the arrow are; Windows places the words a little high.
         bool shortcut = e.Item is ToolStripMenuItem { ShortcutKeyDisplayString: { } shown } && e.Text == shown;
         int shift = shortcut || e.Item is ToolStripLabel ? 0 : TextRoom(e.ToolStrip);
+        if (shortcut)
+        {
+            // Only the keys are drawn; the room kept for an experimental command's tag stays empty.
+            e.Text = MenuParts.KeysOnly(e.Text);
+            if (e.Text.Length == 0) return;
+        }
         e.TextRectangle = new Rectangle(e.TextRectangle.Left + shift, 0, e.TextRectangle.Width, e.Item.Height);
         e.TextFormat = (e.TextFormat & ~(TextFormatFlags.Top | TextFormatFlags.Bottom)) | TextFormatFlags.VerticalCenter;
         if (e.Item is ToolStripLabel) e.TextColor = MenuStyle.Muted;
@@ -179,6 +191,9 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         else if (e.Item is ToolStripMenuItem { Checked: true }) e.TextColor = MenuStyle.Accent;
         else e.TextColor = MenuStyle.Text;
         base.OnRenderItemText(e);
+        if (shortcut || !MenuParts.IsExperimental(e.Item) || string.IsNullOrEmpty(e.Text)) return;
+        int words = TextRenderer.MeasureText(e.Graphics, e.Text, e.TextFont, e.TextRectangle.Size, e.TextFormat).Width;
+        MenuParts.DrawTag(e.Graphics, e.TextRectangle.Left + words + TagGap, e.Item.Height / 2, MenuParts.Scale, e.Item.Enabled);
     }
 
     /// <summary>What is on gets a tinted square, with its icon in it or a tick when it has none.</summary>

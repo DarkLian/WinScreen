@@ -136,9 +136,9 @@ public sealed class PipWindow : Form
         _hideItem = new ToolStripMenuItem(T("menu.original.keepHidden"), null,
             (_, _) => SetOriginalHidden(!_hideItem!.Checked));
         _autoMoveItem = new ToolStripMenuItem(T("pip.autoMove"), null,
-            (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
+            (_, _) => SetAutoMove(!_autoMoveItem!.Checked)).Experimental();
         _interactiveItem = new ToolStripMenuItem(T("menu.view.interactive"), null,
-            (_, _) => SetInteractive(!_interactiveItem!.Checked));
+            (_, _) => SetInteractive(!_interactiveItem!.Checked)).Experimental();
         _middleScrollItem = new ToolStripMenuItem(T("menu.view.middleScroll"), null,
             (_, _) => SetMiddleClickScroll(!_middleScrollItem!.Checked)) { ToolTipText = T("menu.view.middleScroll.tip") };
         _enhancedHoverItem = new ToolStripMenuItem(T("menu.view.hover"), null,

@@ -57,9 +57,6 @@ internal static class SettingsStyle
     internal static Color OnAccent => Dark ? Color.Black : Color.White;
     internal static Color AccentBack => Blend(Accent, Page, Dark ? 0.18 : 0.14);
 
-    internal static Color BadgeBack => Dark ? Color.FromArgb(67, 53, 25) : Color.FromArgb(255, 244, 206);
-    internal static Color BadgeText => Dark ? Color.FromArgb(252, 225, 0) : Color.FromArgb(121, 82, 0);
-
     private static (Color Dark, Color Light)? ReadAccent()
     {
         try
@@ -203,12 +200,10 @@ internal sealed class SettingsCard : Panel
     private readonly Label _title = new() { AutoSize = true, Margin = Padding.Empty };
     private readonly Body _body = new();
     private readonly bool _experimental;
-    private readonly string _badge;
 
-    internal SettingsCard(string title, bool experimental, string badge, int width, IEnumerable<Control> items)
+    internal SettingsCard(string title, bool experimental, int width, IEnumerable<Control> items)
     {
         _experimental = experimental;
-        _badge = badge;
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
         Margin = new Padding(0, 0, 0, 18);
@@ -238,14 +233,9 @@ internal sealed class SettingsCard : Panel
     private void DrawBadge(Graphics g)
     {
         if (!_experimental) return;
-        Size text = TextRenderer.MeasureText(_badge, MenuStyle.SmallFont, Size.Empty, TextFormatFlags.NoPadding);
-        var area = new Rectangle(_title.Right + 8, _title.Top + 1, text.Width + 12, text.Height + 4);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        using GraphicsPath path = SettingsStyle.Rounded(area, 4);
-        using var back = new SolidBrush(SettingsStyle.BadgeBack);
-        g.FillPath(back, path);
-        TextRenderer.DrawText(g, _badge, MenuStyle.SmallFont, area, SettingsStyle.BadgeText,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        // Level with the title's words, which sit above the room left under them.
+        MenuParts.DrawTag(g, _title.Right + SettingsStyle.Unit(this, 8), _title.Top + (_title.Height - _title.Padding.Bottom) / 2,
+            value => SettingsStyle.Unit(this, value));
     }
 
     private sealed class Body : FlowLayoutPanel

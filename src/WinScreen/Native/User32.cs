@@ -249,6 +249,14 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool InvalidateRect(nint hWnd, nint rect, [MarshalAs(UnmanagedType.Bool)] bool erase);
 
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool HideCaret(nint window);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ShowCaret(nint window);
+
     /// <summary>The bounding box of a window's region in window coordinates; 0 when it has no region.</summary>
     [LibraryImport("user32.dll")]
     public static partial int GetWindowRgnBox(nint hWnd, out Rect box);

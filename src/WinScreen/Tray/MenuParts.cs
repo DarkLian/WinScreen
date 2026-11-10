@@ -144,6 +144,60 @@ internal static class MenuParts
         return item;
     }
 
+    private static readonly ConditionalWeakTable<ToolStripItem, object> Experimentals = [];
+
+    /// <summary>Marks a command as experimental: it shows the same tag after its words as Settings does.</summary>
+    internal static T Experimental<T>(this T item) where T : ToolStripItem
+    {
+        Experimentals.AddOrUpdate(item, item);
+        if (item is ToolStripMenuItem entry) ShowKeys(entry, entry.ShortcutKeyDisplayString);
+        return item;
+    }
+
+    /// <summary>
+    /// Shows a command's shortcut keys. A menu is only as wide as its words and keys, so an experimental command's keys
+    /// carry the tag's words in front, unseen, to leave room for the tag; only the keys after them are drawn.
+    /// </summary>
+    internal static void ShowKeys(ToolStripMenuItem item, string? keys)
+    {
+        keys = KeysOnly(keys);
+        item.ShortcutKeyDisplayString = IsExperimental(item) ? TagRoom + keys : keys.Length > 0 ? keys : null;
+    }
+
+    /// <summary>The keys a command shows, without the room kept for a tag.</summary>
+    internal static string KeysOnly(string? shown) => shown is null ? "" : shown.StartsWith(TagRoom, StringComparison.Ordinal) ? shown[TagRoom.Length..] : shown;
+
+    private static string TagRoom => TagText + "\u2003\u2003"; // Two wide spaces: the gap before the tag.
+
+    internal static bool IsExperimental(ToolStripItem item) => Experimentals.TryGetValue(item, out _);
+
+    /// <summary>The words on the tag, the same everywhere: in every menu and in Settings.</summary>
+    internal static string TagText => Localization.UiText.T("common.experimental");
+
+    private const TextFormatFlags TagFormat = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+        TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+
+    /// <summary>How big the tag is, for a size in pixels at 100% scaling turned into this display's.</summary>
+    internal static Size TagSize(Func<int, int> unit)
+    {
+        Size text = TextRenderer.MeasureText(TagText, MenuStyle.SmallFont, Size.Empty, TagFormat);
+        return new Size(text.Width + unit(12), text.Height + unit(4));
+    }
+
+    /// <summary>Draws the tag with its left edge at <paramref name="left"/>, centred on <paramref name="middle"/>.</summary>
+    internal static void DrawTag(Graphics g, int left, int middle, Func<int, int> unit, bool enabled = true)
+    {
+        Size size = TagSize(unit);
+        var area = new Rectangle(left, middle - size.Height / 2, size.Width, size.Height);
+        var smoothing = g.SmoothingMode;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        using (System.Drawing.Drawing2D.GraphicsPath path = SettingsStyle.Rounded(area, unit(4)))
+        using (var back = new SolidBrush(enabled ? MenuStyle.TagBack : MenuStyle.Hover))
+            g.FillPath(back, path);
+        g.SmoothingMode = smoothing;
+        TextRenderer.DrawText(g, TagText, MenuStyle.SmallFont, area, enabled ? MenuStyle.TagText : MenuStyle.Disabled, TagFormat);
+    }
+
     /// <summary>A quiet line naming the group of commands under it. It can't be chosen.</summary>
     internal static ToolStripLabel Header(string text) => new(text)
     {

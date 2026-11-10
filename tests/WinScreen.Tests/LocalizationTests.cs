@@ -192,9 +192,9 @@ public sealed class LocalizationTests : IDisposable
     [Theory]
     // Reviewed catalog values, sorted by stable key with NUL separators.
     // Update deliberately when adding labels; existing values retain their migration output.
-    [InlineData("en", "C2893AFEBFBAEE20EB0B4E5060E12A0E7E2F2F328B2AD292F4D7F0832CD943FC")]
-    [InlineData("zh-Hans", "47DB9AB878DBE41A74171FE2B3A3F29F7EB41E17ADE4623A0D80DEEF4C190B22")]
-    [InlineData("zh-Hant", "922582391C353BD5231BE0E2068CC1E104BF6B834C98BA8E45D233690D82C2B2")]
+    [InlineData("en", "C9B34A158B6ADC3EE5C832224CB154366B9452913D8F3D3567DDB8810303BA4E")]
+    [InlineData("zh-Hans", "367CB3BD48A889D3C124CC07E06ED0E3CA26B88C1BAEE4BF455B6C203AE60B60")]
+    [InlineData("zh-Hant", "F130FFFE5399719CE01FA3A7C1CCC2B9EA19926086666D1F5AEDAB76FFF105A0")]
     public void Every_translation_matches_the_reviewed_catalog(string language, string expectedDigest)
     {
         UiText.Initialize(language);
@@ -232,7 +232,7 @@ public sealed class LocalizationSurfaceTests
                 var builder = new Tray.WindowMenuBuilder(() => null, (_, _) => { }, (_, _) => { }, _ => true,
                     (_, _) => true, (_, _) => false, () => { });
                 builder.Populate(menu.Items, false);
-                foreach (string key in new[] { "window.restore", "window.borderless", "pip.open", "menu.more", "settings.experimental", "window.arrange" })
+                foreach (string key in new[] { "window.restore", "window.borderless", "pip.open", "menu.more", "menu.effects", "window.arrange" })
                     Assert.Contains(menu.Items.OfType<ToolStripMenuItem>(), item => item.Text == catalog[key]);
                 foreach (string key in new[] { "menu.group.elsewhere", "menu.group.place", "menu.group.look" })
                     Assert.Contains(menu.Items.OfType<ToolStripLabel>(), item => item.Text == catalog[key]);

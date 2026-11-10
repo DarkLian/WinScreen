@@ -295,7 +295,7 @@ public sealed class TrayApplication : ApplicationContext
         }
         foreach (nint source in _content.Sources)
         {
-            var item = new ToolStripMenuItem(MenuText(WindowInfo.Title(source)) + " - " + T("settings.effects.title"));
+            var item = new ToolStripMenuItem(MenuText(WindowInfo.Title(source)) + " - " + T("settings.effects.title")).Experimental();
             item.DropDownItems.Add(T("window.restore"), null, (_, _) => Run(AppCommand.RestoreWindow, source));
             items.Add(item);
         }
@@ -1254,6 +1254,8 @@ public sealed class TrayApplication : ApplicationContext
         _dark.Ignore(pip.Handle);
         if (_settings.ExperimentalFeatures && _settings.PipAutoMove)
             pip.SetAutoMove(true);
+        if (_settings.ExperimentalFeatures && _settings.PipMiddleClickScroll)
+            pip.SetMiddleClickScroll(true); // Takes effect once the view is used directly.
     }
 
     private void ChangePresets(Action<List<PipPreset>> change)
