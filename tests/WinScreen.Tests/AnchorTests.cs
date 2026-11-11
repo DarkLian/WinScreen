@@ -29,6 +29,32 @@ public sealed class AnchorTests
             throw new Xunit.Sdk.XunitException(failure.ToString());
     }
 
+    /// <summary>Hiding all Anchors keeps them, and keeps a new one out of sight too, until they're shown again.</summary>
+    [Fact]
+    public void Hidden_anchors_stay_hidden_until_shown_again()
+    {
+        OnUiThread(() =>
+        {
+            using var first = new Form { Text = "Anchor hide test 1", ShowInTaskbar = false };
+            using var second = new Form { Text = "Anchor hide test 2", ShowInTaskbar = false };
+            first.Show();
+            second.Show();
+            using var anchors = new AnchorSet();
+            anchors.Toggle(first.Handle);
+            anchors.Hidden = true;
+            anchors.Toggle(second.Handle);
+            // OpenForms lists only forms that have been shown, so the set itself is asked.
+            AnchorButton[] buttons = ((Dictionary<nint, AnchorButton>)typeof(AnchorSet).GetField("_anchors",
+                BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(anchors)!).Values.ToArray();
+            Assert.Equal(2, buttons.Length);
+            Assert.All(buttons, button => Assert.False(User32.IsWindowVisible(button.Handle)));
+            Assert.True(anchors.Has(first.Handle) && anchors.Has(second.Handle));
+
+            anchors.Hidden = false;
+            Assert.All(buttons, button => Assert.True(User32.IsWindowVisible(button.Handle)));
+        });
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

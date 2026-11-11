@@ -42,6 +42,10 @@ public enum AppCommand
     ToggleBorderless,
     ToggleBorderlessFill,
     ToggleDarkTitleBar,
+    ClickThroughOffEverywhere,
+    UnpinEverywhere,
+    HideAnchors,
+    HideToolbar,
 }
 
 /// <summary>The key to hold for modifier move and resize.</summary>
@@ -108,6 +112,16 @@ public static class CommandCatalog
         AppCommand.ShowWindowMenu, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.ToggleDarkTitleBar,
     ];
 
+    /// <summary>Commands for every window at once, in the tray and Hotkeys only. None has a key until one is chosen.</summary>
+    public static readonly AppCommand[] Everywhere =
+    [
+        AppCommand.ClickThroughOffEverywhere, AppCommand.UnpinEverywhere, AppCommand.HideAnchors, AppCommand.HideToolbar,
+    ];
+
+    /// <summary>True for a command that works on no window in particular.</summary>
+    public static bool ForAllWindows(AppCommand command) =>
+        command is AppCommand.RestoreAll or AppCommand.PickPipSource || Everywhere.Contains(command);
+
     /// <summary>What the Arrange menu offers, in order, with null where a divider goes.</summary>
     public static readonly AppCommand?[] ArrangeMenu =
     [
@@ -124,7 +138,7 @@ public static class CommandCatalog
             : null;
 
     /// <summary>Everything that can have a hotkey.</summary>
-    public static IEnumerable<AppCommand> All => Ordered.Concat(Extra);
+    public static IEnumerable<AppCommand> All => Ordered.Concat(Extra).Concat(Everywhere);
 
     /// <summary>The last command of each group, where a divider follows.</summary>
     public static bool EndsGroup(AppCommand command) =>
@@ -171,6 +185,10 @@ public static class CommandCatalog
         AppCommand.ToggleBorderless => T("window.borderless"),
         AppCommand.ToggleBorderlessFill => T("window.fillDisplay"),
         AppCommand.ToggleDarkTitleBar => T("window.darkTitleBar"),
+        AppCommand.ClickThroughOffEverywhere => T("everywhere.clickThroughOff"),
+        AppCommand.UnpinEverywhere => T("everywhere.unpin"),
+        AppCommand.HideAnchors => T("everywhere.anchors"),
+        AppCommand.HideToolbar => T("everywhere.toolbar"),
         _ => command.ToString(),
     };
 }

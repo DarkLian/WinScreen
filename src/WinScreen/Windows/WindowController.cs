@@ -595,6 +595,63 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
+    /// <summary>How many open windows WinScreen has made click-through.</summary>
+    public int ClickThroughCount
+    {
+        get { lock (_gate) return _changed.Values.Count(state => state.ClickThrough && state.Identity.Matches()); }
+    }
+
+    /// <summary>How many open windows WinScreen pinned. A window that was already on top by itself isn't counted.</summary>
+    public int PinnedCount
+    {
+        get { lock (_gate) return _changed.Values.Count(state => PinnedHere(state) && state.Identity.Matches()); }
+    }
+
+    private static bool PinnedHere(ChangedWindow state) => state.Pinned && (state.OriginalExStyle & User32.WS_EX_TOPMOST) == 0;
+
+    /// <summary>
+    /// Lets clicks reach every window again. Opacity and everything else stay as they are, except the
+    /// see-through level click-through added by itself. Returns how many windows refused.
+    /// </summary>
+    public int TurnOffClickThroughEverywhere() =>
+        Everywhere(state => state.ClickThrough, (window, state) =>
+        {
+            if (!state.Hidden)
+            {
+                ToggleClickThrough(window);
+                return;
+            }
+            // Hidden for a view: the window must stay click-through while hidden, so only what it goes back to changes.
+            if (state.AlphaFromClickThrough == state.AlphaBeforeHiding) state.AlphaBeforeHiding = 255;
+            state.AlphaFromClickThrough = null;
+            state.ClickThrough = false;
+        });
+
+    /// <summary>Unpins every window WinScreen pinned. Windows that keep themselves on top stay so. Returns how many refused.</summary>
+    public int UnpinEverywhere() =>
+        Everywhere(PinnedHere, (window, state) =>
+        {
+            if (state.Hidden) state.Pinned = false; // Hidden for a view: it goes back unpinned when shown.
+            else TogglePin(window);
+        });
+
+    private int Everywhere(Func<ChangedWindow, bool> wanted, Action<nint, ChangedWindow> change)
+    {
+        lock (_gate)
+        {
+            var problems = new List<string>();
+            foreach ((nint window, ChangedWindow state) in _changed.ToArray())
+            {
+                if (!wanted(state) || !state.Identity.Matches()) continue;
+                try { change(window, state); }
+                catch (WindowOperationException failure) { problems.Add(WindowInfo.Title(window) + ": " + failure.Message); }
+            }
+            SaveJournal();
+            RestoreFailures = problems;
+            return problems.Count;
+        }
+    }
+
     public bool IsHidden(nint window)
     {
         lock (_gate)

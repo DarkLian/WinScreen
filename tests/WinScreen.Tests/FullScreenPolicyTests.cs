@@ -35,6 +35,21 @@ public sealed class FullScreenPolicyTests
     public void Other_commands_stay_paused_by_default(FullScreenState state) =>
         Assert.Equal(FullScreenAction.Refuse, Decide(AppCommand.TogglePin, state));
 
+    /// <summary>Taking click-through, pins, Anchors or the toolbar away never waits for a game to end.</summary>
+    [Theory]
+    [InlineData(AppCommand.ClickThroughOffEverywhere)]
+    [InlineData(AppCommand.UnpinEverywhere)]
+    [InlineData(AppCommand.HideAnchors)]
+    [InlineData(AppCommand.HideToolbar)]
+    public void Commands_for_every_window_always_run(AppCommand command)
+    {
+        foreach (FullScreenState state in Enum.GetValues<FullScreenState>())
+            Assert.Equal(FullScreenAction.Run, Decide(command, state));
+        Assert.True(CommandCatalog.ForAllWindows(command));
+        Assert.Contains(command, CommandCatalog.All);
+        Assert.False(new AppSettings().Hotkeys.ContainsKey(command));
+    }
+
     [Fact]
     public void Exclusive_mode_explains_itself_instead_of_opening_a_view() =>
         Assert.Equal(FullScreenAction.ExplainExclusive, Decide(AppCommand.OpenPip, FullScreenState.Exclusive));

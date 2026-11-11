@@ -228,6 +228,53 @@ public class WindowControllerTests
         windows.RestoreAll();
     }
 
+    /// <summary>
+    /// Clicks reach every window again, and a level only click-through chose goes with it. A level the person
+    /// chose stays.
+    /// </summary>
+    [Fact]
+    public void Click_through_goes_off_everywhere_at_once()
+    {
+        using var first = new TargetProcess(Spot);
+        using var second = new TargetProcess(new Rectangle(560, 220, 200, 200), "1E64C8");
+        var windows = NewController();
+        windows.DefaultOpacity = 128;
+        windows.ToggleClickThrough(first.Handle);
+        windows.ChangeOpacity(second.Handle, -100);
+        windows.ToggleClickThrough(second.Handle);
+        Assert.Equal(2, windows.ClickThroughCount);
+
+        Assert.Equal(0, windows.TurnOffClickThroughEverywhere());
+
+        Assert.Equal(0, windows.ClickThroughCount);
+        Assert.Equal(0, Desktop.ExStyle(first.Handle) & User32.WS_EX_TRANSPARENT);
+        Assert.Equal(0, Desktop.ExStyle(second.Handle) & User32.WS_EX_TRANSPARENT);
+        Assert.Equal(255, windows.OpacityOf(first.Handle));
+        Assert.Equal(155, windows.OpacityOf(second.Handle));
+        windows.RestoreAll();
+    }
+
+    /// <summary>Every window WinScreen pinned comes down; one that was on top by itself stays there.</summary>
+    [Fact]
+    public void Unpinning_everywhere_leaves_windows_that_were_on_top_by_themselves()
+    {
+        using var pinned = new TargetProcess(Spot);
+        using var ownTop = new TargetProcess(new Rectangle(560, 220, 200, 200), "1E64C8");
+        Desktop.GainForegroundRights();
+        WindowController.Pin(ownTop.Handle);
+        var windows = NewController();
+        windows.TogglePin(pinned.Handle);
+        windows.ChangeOpacity(ownTop.Handle, -50); // Known to WinScreen, but pinned by itself.
+        Assert.Equal(1, windows.PinnedCount);
+
+        Assert.Equal(0, windows.UnpinEverywhere());
+
+        Assert.Equal(0, Desktop.ExStyle(pinned.Handle) & User32.WS_EX_TOPMOST);
+        Assert.NotEqual(0, Desktop.ExStyle(ownTop.Handle) & User32.WS_EX_TOPMOST);
+        Assert.Equal(0, windows.PinnedCount);
+        windows.RestoreAll();
+    }
+
     [Fact]
     public void Restore_all_undoes_every_change()
     {

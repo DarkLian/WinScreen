@@ -1504,7 +1504,7 @@ private readonly ErrorProvider _errors = new();
         foreach (AppCommand command in CommandCatalog.All)
         {
             string name = CommandCatalog.Name(command).Replace("&", "");
-            string target = command is AppCommand.RestoreAll or AppCommand.PickPipSource
+            string target = CommandCatalog.ForAllWindows(command)
                 ? T("actions.target.app") : T("actions.target.window");
             string saved = _settings.Hotkeys.GetValueOrDefault(command, "");
             string state = _shortcutProblems.GetValueOrDefault(command) ??

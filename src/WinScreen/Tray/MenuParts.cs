@@ -228,8 +228,10 @@ internal static class MenuParts
 
     internal static char? IconOf(AppCommand command) => command switch
     {
-        AppCommand.TogglePin => Pin,
-        AppCommand.ToggleClickThrough => Pointer,
+        AppCommand.TogglePin or AppCommand.UnpinEverywhere => Pin,
+        AppCommand.ToggleClickThrough or AppCommand.ClickThroughOffEverywhere => Pointer,
+        AppCommand.HideAnchors => Pinned,
+        AppCommand.HideToolbar => Bar,
         AppCommand.OpenPip or AppCommand.PickPipSource => NewWindow,
         AppCommand.ToggleAnchor => Pinned,
         AppCommand.ToggleDarkTitleBar => Moon,

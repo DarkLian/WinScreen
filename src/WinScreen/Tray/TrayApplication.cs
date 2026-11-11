@@ -182,6 +182,10 @@ public sealed class TrayApplication : ApplicationContext
         builder.Populate(_targetTitle.DropDownItems, true);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem(T("window.restoreAll"), MenuParts.Icon(MenuParts.Undo), (_, _) => Run(AppCommand.RestoreAll, 0)));
+        var everywhere = CommandCatalog.Everywhere.ToDictionary(command => command, command =>
+            new ToolStripMenuItem(CommandCatalog.Name(command), MenuParts.IconOf(command) is { } glyph ? MenuParts.Icon(glyph) : null,
+                (_, _) => Run(command, 0)));
+        foreach (ToolStripMenuItem item in everywhere.Values) menu.Items.Add(item);
         _statusItem.Image = MenuParts.Icon(MenuParts.Warning);
         menu.Items.Add(_statusItem);
         _statusItem.Click += (_, _) =>
@@ -207,6 +211,13 @@ public sealed class TrayApplication : ApplicationContext
             _targetTitle.Enabled = _menuWindow != 0;
             builder.Refresh(_targetTitle.DropDownItems);
             newView.ShortcutKeyDisplayString = MenuHotkey(AppCommand.PickPipSource);
+            foreach ((AppCommand command, ToolStripMenuItem item) in everywhere)
+                item.ShortcutKeyDisplayString = MenuHotkey(command);
+            // Only offered while there is something to take away; the two that hide stay, ticked while hidden.
+            everywhere[AppCommand.ClickThroughOffEverywhere].Available = _windows.ClickThroughCount > 0;
+            everywhere[AppCommand.UnpinEverywhere].Available = _windows.PinnedCount > 0;
+            everywhere[AppCommand.HideAnchors].Checked = _anchors.Hidden;
+            everywhere[AppCommand.HideToolbar].Checked = _toolbarHidden;
             // Nothing to read until something has been reported.
             _statusItem.Available = _lastStatus != T("tray.noActions");
             for (int index = menu.Items.IndexOf(viewsEnd) - 1; index > menu.Items.IndexOf(viewsStart); index--)
@@ -421,7 +432,7 @@ public sealed class TrayApplication : ApplicationContext
         _windows.DefaultOpacity = _settings.DefaultAlpha;
         _borders.Configure(_settings.PinBorder);
         _dark.DetectAlreadyDark = _settings.DetectAlreadyDark;
-        _toolbar.Enable(_settings.ShowToolbar);
+        _toolbar.Enable(_settings.ShowToolbar && !_toolbarHidden);
         _toolbar.Configure(_settings.Toolbar);
         _anchors.Configure(_settings.Anchors);
         _automaticAnchors.Configure(_settings.Anchors.Automatic, _settings.Anchors.AvoidContent);
@@ -970,6 +981,11 @@ public sealed class TrayApplication : ApplicationContext
 
     private void RunOnDisplay(AppCommand command, nint window, Rectangle? display)
     {
+        if (CommandCatalog.Everywhere.Contains(command))
+        {
+            RunEverywhere(command);
+            return;
+        }
         if (command == AppCommand.ShowWindowMenu)
         {
             Point point = Cursor.Position;
@@ -1145,6 +1161,42 @@ public sealed class TrayApplication : ApplicationContext
             Alert(T("errors.operation.title"), failure.Message);
         }
     }
+
+    /// <summary>The commands for every window at once. They only take things away, so they work at any time.</summary>
+    private void RunEverywhere(AppCommand command)
+    {
+        string name = CommandCatalog.Name(command);
+        switch (command)
+        {
+            case AppCommand.ClickThroughOffEverywhere:
+                Report(_windows.TurnOffClickThroughEverywhere(), T("everywhere.clickThroughOff.done"));
+                break;
+            case AppCommand.UnpinEverywhere:
+                Report(_windows.UnpinEverywhere(), T("everywhere.unpin.done"));
+                break;
+            case AppCommand.HideAnchors:
+                _anchors.Hidden = !_anchors.Hidden;
+                Confirm(name, _anchors.Hidden ? T("everywhere.anchors.hidden") : T("everywhere.anchors.shown"));
+                break;
+            case AppCommand.HideToolbar:
+                _toolbarHidden = !_toolbarHidden;
+                _toolbar.Enable(_settings.ShowToolbar && !_toolbarHidden);
+                Confirm(name, _toolbarHidden ? T("everywhere.toolbar.hidden") : T("everywhere.toolbar.shown"));
+                break;
+        }
+
+        void Report(int failed, string done)
+        {
+            if (failed > 0)
+                Alert(T("errors.recovery.someFailed"), string.Format(T("errors.window.changeRefusedCount"), failed) +
+                    Environment.NewLine + string.Join(Environment.NewLine, _windows.RestoreFailures));
+            else
+                Confirm(name, done);
+        }
+    }
+
+    /// <summary>True while the toolbar is put away until it's asked for again or WinScreen starts again.</summary>
+    private bool _toolbarHidden;
 
     private void Attempt(Action action)
     {

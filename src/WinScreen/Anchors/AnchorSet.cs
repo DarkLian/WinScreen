@@ -39,6 +39,24 @@ public sealed class AnchorSet : IDisposable
     public event Action<nint>? Created;
     public event Action<nint>? ShowRequested;
 
+    /// <summary>
+    /// True while every Anchor is put out of sight for a moment. They are still kept, and new ones are added out of
+    /// sight too, so all of them come back as they were.
+    /// </summary>
+    public bool Hidden
+    {
+        get => _hidden;
+        set
+        {
+            if (_hidden == value) return;
+            _hidden = value;
+            foreach (AnchorButton anchor in _anchors.Values.Where(anchor => !anchor.IsDisposed))
+                anchor.Visible = !value;
+        }
+    }
+
+    private bool _hidden;
+
     internal void Configure(AnchorPreferences preferences)
     {
         _preferences = preferences.Validated();
@@ -124,7 +142,7 @@ public sealed class AnchorSet : IDisposable
         };
         Created?.Invoke(anchor.Handle);
         Style(anchor);
-        anchor.Show();
+        if (!_hidden) anchor.Show();
         _watch.Enabled = true;
     }
 

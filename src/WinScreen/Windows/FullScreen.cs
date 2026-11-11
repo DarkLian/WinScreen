@@ -49,7 +49,8 @@ public static class FullScreenPolicy
     public static FullScreenAction Decide(AppCommand command, FullScreenState state, bool pause, bool allowPip,
         bool targetHasView, bool anyViewOpen, bool targetIsBorderless = false)
     {
-        if (command is AppCommand.RestoreAll or AppCommand.RestoreWindow ||
+        // Taking something away always works, so nothing WinScreen added can be left stuck over a game.
+        if (command is AppCommand.RestoreAll or AppCommand.RestoreWindow || Settings.CommandCatalog.Everywhere.Contains(command) ||
             (targetIsBorderless && command is AppCommand.ToggleBorderless or AppCommand.ToggleBorderlessFill))
             return FullScreenAction.Run;
         if (state == FullScreenState.Exclusive && command is AppCommand.ToggleBorderless or AppCommand.ToggleBorderlessFill)
