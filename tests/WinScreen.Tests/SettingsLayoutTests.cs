@@ -324,6 +324,73 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    /// <summary>
+    /// Every setting's icon, and the first letter of its name, sit at exactly the same place from the left on every
+    /// page: at the usual size, wider, maximized, after the experimental settings are turned off and while a search
+    /// filters the pages. And every setting in a card has an icon, so no name starts further left than the others.
+    /// </summary>
+    [Fact]
+    public void Every_setting_lines_up_its_icon_and_name_to_the_pixel()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            var settings = new AppSettings { Language = "en", ExperimentalFeatures = true };
+            using var window = new SettingsWindow(settings, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+            window.StartPosition = FormStartPosition.Manual;
+            window.Location = new Point(20, 20);
+            window.Show();
+            window.WindowState = FormWindowState.Normal;
+            void Pump() { for (int i = 0; i < 8; i++) { Application.DoEvents(); Thread.Sleep(15); } }
+            Pump();
+            TabControl tabs = Descendants(window).OfType<TabControl>().Single();
+            var places = new Dictionary<(int Icon, int Words), List<string>>();
+            void Measure(string when)
+            {
+                foreach (TabPage page in tabs.TabPages)
+                {
+                    tabs.SelectedTab = page;
+                    Pump();
+                    foreach (Control row in Descendants(page).Where(row => row.Visible && row.Parent is { Visible: true } &&
+                                 row is SwitchBox { Compact: false } or SettingRowPanel && Descendants(page).OfType<SettingsCard>().Any(card => card.Contains(row))))
+                    {
+                        char glyph = row is SwitchBox option ? option.Glyph : ((SettingRowPanel)row).Glyph;
+                        Assert.True(glyph != '\0', $"{when}, {page.Text}: \"{row.Text}\" has no icon.");
+                        int left = row.RectangleToScreen(row.ClientRectangle).Left - window.RectangleToScreen(window.ClientRectangle).Left
+                            - (ScrollShift(row));
+                        var place = (left + SettingsStyle.Unit(row, SettingText.IconLeft), left + SettingText.Left(row, glyph));
+                        if (!places.TryGetValue(place, out List<string>? rows)) places[place] = rows = [];
+                        rows.Add($"{when}, {page.Text}: {row.Text}");
+                    }
+                }
+            }
+            // The column moves in a wider window; what is measured is the place within the column.
+            int ScrollShift(Control row)
+            {
+                for (Control? up = row; up is not null; up = up.Parent)
+                    if (up is ScrollPage page) return page.Shift;
+                return 0;
+            }
+            Measure("usual");
+            window.Width += 260;
+            Pump();
+            Measure("wider");
+            window.WindowState = FormWindowState.Maximized;
+            Pump();
+            Measure("maximized");
+            window.WindowState = FormWindowState.Normal;
+            window.SetOption(nameof(AppSettings.ExperimentalFeatures), false);
+            Pump();
+            Measure("experimental off");
+            Descendants(window).OfType<TextBox>().First(box => box.AccessibleName == UiText.T("settings.search")).Text = "anchor";
+            Pump();
+            Measure("searching");
+            Assert.True(places.Count == 1, "Icons and names start at more than one place: " +
+                string.Join("; ", places.Select(pair => $"{pair.Key}: {pair.Value.Count} rows, such as {pair.Value[0]}")));
+            window.Close();
+        });
+    }
+
     private static IEnumerable<Control> Descendants(Control root) => root.Controls.Cast<Control>()
         .SelectMany(child => new[] { child }.Concat(Descendants(child)));
 }
