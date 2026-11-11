@@ -39,7 +39,7 @@ public sealed class ThemeChangeTests
                     Assert.False(second.IsDisposed);
                     Assert.Equal(4, second.PageIndex);
                     Assert.Equal(SettingsStyle.Page, second.BackColor);
-                    Assert.NotSame(lightIcon, MenuParts.ForCurrentTheme(lightIcon)); // Menus made earlier show it in dark.
+                    Assert.Same(lightIcon, MenuParts.ForCurrentTheme(lightIcon)); // Coloured icons are drawn to suit both looks.
 
                     Theme(second).SelectedIndex = 1; // Light.
                     Assert.True(second.ApplyChanges());
