@@ -873,19 +873,33 @@ internal static class ProgramIcons
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { } // Found again next time it runs.
     }
 
+    private static Dictionary<string, nint> _running = new(StringComparer.OrdinalIgnoreCase);
+    private static long _runningAt = long.MinValue;
+
+    /// <summary>A window of each program running now, looked up at most every half minute: rows are drawn often.</summary>
+    private static Dictionary<string, nint> Running()
+    {
+        if (Environment.TickCount64 - _runningAt < 30000) return _running;
+        _runningAt = Environment.TickCount64;
+        var found = new Dictionary<string, nint>(StringComparer.OrdinalIgnoreCase);
+        foreach (Process process in Process.GetProcesses())
+            using (process)
+            {
+                try { if (process.MainWindowHandle != 0) found.TryAdd(process.ProcessName, process.MainWindowHandle); }
+                catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+            }
+        return _running = found;
+    }
+
     /// <summary>The program's file: remembered, from a copy running now, or from where Windows says it is installed.</summary>
     private static string? Find(string name)
     {
         if (Paths.TryGetValue(name, out string? known) && System.IO.File.Exists(known)) return known;
-        foreach (Process process in Process.GetProcessesByName(name))
-            using (process)
-            {
-                try
-                {
-                    if (process.MainWindowHandle != 0) { Remember(name, process.MainWindowHandle); if (Paths.TryGetValue(name, out known)) return known; }
-                }
-                catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
-            }
+        if (Running().TryGetValue(name, out nint window))
+        {
+            Remember(name, window);
+            if (Paths.TryGetValue(name, out known)) return known;
+        }
         foreach (Microsoft.Win32.RegistryKey root in new[] { Microsoft.Win32.Registry.CurrentUser, Microsoft.Win32.Registry.LocalMachine })
         {
             using Microsoft.Win32.RegistryKey? key = root.OpenSubKey($@"Software\Microsoft\Windows\CurrentVersion\App Paths\{name}.exe");
