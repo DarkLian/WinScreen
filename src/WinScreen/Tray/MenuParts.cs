@@ -353,7 +353,7 @@ internal sealed class OpacityRow : ToolStripControlHost
             }
         }
 
-        private int Left0 => MenuParts.Scale(8);
+        private int Left0 => MenuParts.Scale(6); // Lines the title up with the words of the rows around it.
         private int Right0 => Width - MenuParts.Scale(14);
         private int TrackY => MenuParts.Scale(32);
         private int ThumbX => Left0 + (int)Math.Round((Right0 - Left0) * (_value - Minimum) / (double)(Maximum - Minimum));
