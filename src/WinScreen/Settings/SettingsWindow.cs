@@ -192,10 +192,10 @@ private readonly ErrorProvider _errors = new();
         MaximizeBox = true;
         MinimizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(860, 640);
+        ClientSize = new Size(940, 660); // Room for the table of actions at Windows 11's text size.
         // No narrower than this, the narrowest its rows fit: they grow in a wider window but never shrink.
         MinimumSize = new Size(Width, 400);
-        Font = MenuStyle.Font;
+        Font = SettingsStyle.BodyFont;
         BackColor = SettingsStyle.Page;
         ForeColor = SettingsStyle.Text;
 
@@ -764,7 +764,7 @@ private readonly ErrorProvider _errors = new();
             row.Controls.Add(new SoftLabel { Text = name, AutoSize = false, Bounds = new Rectangle(1, 0, hoverAt - 8, row.Height),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right, // Wider rows give names more room.
                 TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, UseMnemonic = false,
-                ForeColor = heading ? SettingsStyle.Secondary : SettingsStyle.Text, Font = heading ? MenuStyle.SmallFont : MenuStyle.Font });
+                ForeColor = heading ? SettingsStyle.Secondary : SettingsStyle.Text, Font = heading ? SettingsStyle.CaptionFont : SettingsStyle.BodyFont });
             return row;
         }
         void Place(Panel row, Control control, int at)
@@ -776,7 +776,7 @@ private readonly ErrorProvider _errors = new();
         }
         Panel head = Row(T("settings.pip.apps.app"), true);
         foreach (var (text, at) in new[] { (T("menu.view.hover"), hoverAt), (T("settings.pip.apps.original"), originalAt) })
-            Place(head, new SoftLabel { Text = text, AutoSize = true, ForeColor = SettingsStyle.Secondary, Font = MenuStyle.SmallFont, UseMnemonic = false }, at - 4);
+            Place(head, new SoftLabel { Text = text, AutoSize = true, ForeColor = SettingsStyle.Secondary, Font = SettingsStyle.CaptionFont, UseMnemonic = false }, at - 4);
         _appRows.Controls.Add(head);
         foreach (CheckBox kind in new[] { _hoverBrowsers, _hoverFirefox, _hoverElectron, _hoverExplorer })
         {
@@ -1021,7 +1021,7 @@ private readonly ErrorProvider _errors = new();
     private static Label Note(string text) => new SoftLabel()
     {
         Text = text, AutoSize = true, MaximumSize = new Size(SwitchBox.RowWidth - 8, 0), Margin = new Padding(7, 0, 3, 10),
-        ForeColor = SettingsStyle.Secondary, Font = MenuStyle.SmallFont, UseMnemonic = false,
+        ForeColor = SettingsStyle.Secondary, Font = SettingsStyle.CaptionFont, UseMnemonic = false,
     };
 
     /// <summary>A titled group of options.</summary>
@@ -1083,7 +1083,7 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(new SoftLabel
         {
             Text = string.Format(T("app.version"), AppInfo.Version), AutoSize = true,
-            ForeColor = SettingsStyle.Secondary, Font = MenuStyle.SmallFont, Margin = new Padding(3, 2, 3, 0),
+            ForeColor = SettingsStyle.Secondary, Font = SettingsStyle.CaptionFont, Margin = new Padding(3, 2, 3, 0),
         });
         return page;
     }
@@ -1414,7 +1414,7 @@ private readonly ErrorProvider _errors = new();
             Graphics g = e.Graphics;
             SettingsStyle.SoftText(g);
             using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, e.Bounds);
-            TextRenderer.DrawText(g, e.Header?.Text, MenuStyle.SmallFont,
+            TextRenderer.DrawText(g, e.Header?.Text, SettingsStyle.CaptionFont,
                 new Rectangle(e.Bounds.Left + Unit(FeatureInset(e.ColumnIndex)), e.Bounds.Top, e.Bounds.Width - Unit(FeatureInset(e.ColumnIndex) + 4), e.Bounds.Height),
                 SettingsStyle.Secondary, FeatureText);
             using var line = new Pen(SettingsStyle.Divider);
@@ -1474,7 +1474,7 @@ private readonly ErrorProvider _errors = new();
 
     /// <summary>
     /// Gives each column of the table the room its longest entry needs and the name column the rest, so nothing is cut
-    /// short while there is room. Columns can still be dragged wider; a cut-short entry shows in full when pointed at.
+    /// short while there is room. Columns can still be dragged wider.
     /// </summary>
     private void FitFeatureColumns()
     {
@@ -1488,13 +1488,13 @@ private readonly ErrorProvider _errors = new();
         var need = new int[5];
         for (int column = 1; column < 5; column++)
         {
-            int widest = TextRenderer.MeasureText(_features.Columns[column].Text, MenuStyle.SmallFont, Size.Empty, FeatureMeasure).Width;
+            int widest = TextRenderer.MeasureText(_features.Columns[column].Text, SettingsStyle.CaptionFont, Size.Empty, FeatureMeasure).Width;
             foreach (ListViewItem? item in _features.Items)
                 if (item is not null && column < item.SubItems.Count)
                     widest = Math.Max(widest, TextRenderer.MeasureText(item.SubItems[column].Text, _features.Font, Size.Empty, FeatureMeasure).Width);
             need[column] = widest + pad;
         }
-        // A problem can be a whole sentence; the state column stays short and shows it in full when pointed at.
+        // A problem can be a whole sentence; the state column stays short, and it shows in full under the page.
         need[4] = Math.Min(need[4], SettingsStyle.Unit(_features, 150));
         // The name column keeps room for an experimental action's whole name and its tag; the others give way first.
         int least = SettingsStyle.Unit(_features, 150);

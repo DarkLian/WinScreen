@@ -26,7 +26,7 @@ internal static class MenuStyle
     }
 
     // Windows 11's own interface face where it exists, and the face Windows 10 uses otherwise.
-    private static readonly string Face =
+    internal static readonly string Face =
         FontFamily.Families.Any(family => family.Name == "Segoe UI Variable Text") ? "Segoe UI Variable Text" : "Segoe UI";
     internal static readonly Font Font = new(Face, 9.75f);
     internal static readonly Font SmallFont = new(Face, 8.25f);

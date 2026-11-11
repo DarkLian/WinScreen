@@ -86,8 +86,12 @@ internal static class SettingsStyle
     internal static void SoftText(Graphics g) => g.TextRenderingHint = Dark
         ? System.Drawing.Text.TextRenderingHint.AntiAliasGridFit : System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-    internal static readonly Font HeadingFont = new(Face("Segoe UI Variable Text Semib", "Segoe UI Semibold"), 9.75f);
-    internal static readonly Font PageTitleFont = new(Face("Segoe UI Variable Display Semib", "Segoe UI Semibold"), 20f);
+    // Windows 11's type sizes, measured against its own Settings: body 14 pixels, captions 12, section headings 14 in
+    // semibold and page titles 28. Settings and the window for a new view use them; menus keep their own.
+    internal static readonly Font BodyFont = new(MenuStyle.Face, 10.5f);
+    internal static readonly Font CaptionFont = new(MenuStyle.Face, 9f);
+    internal static readonly Font HeadingFont = new(Face("Segoe UI Variable Text Semib", "Segoe UI Semibold"), 10.5f);
+    internal static readonly Font PageTitleFont = new(Face("Segoe UI Variable Display Semib", "Segoe UI Semibold"), 21f);
 
     internal static GraphicsPath Rounded(Rectangle area, int radius)
     {
@@ -407,7 +411,7 @@ internal sealed class NavList : Control
         {
             if (entry.Page is null)
             {
-                TextRenderer.DrawText(g, entry.Text, MenuStyle.SmallFont, new Rectangle(bounds.Left + Unit(12), bounds.Top + Unit(10), bounds.Width, bounds.Height - Unit(10)),
+                TextRenderer.DrawText(g, entry.Text, SettingsStyle.CaptionFont, new Rectangle(bounds.Left + Unit(12), bounds.Top + Unit(10), bounds.Width, bounds.Height - Unit(10)),
                     SettingsStyle.Tertiary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
             else
@@ -423,7 +427,7 @@ internal sealed class NavList : Control
                 if (selected) SettingsStyle.SelectionBar(g, row, this);
                 if (MenuParts.Icon(entry.Glyph) is { } icon)
                     g.DrawImage(icon, bounds.Left + Unit(14), bounds.Top + (bounds.Height - icon.Height) / 2);
-                TextRenderer.DrawText(g, entry.Text, MenuStyle.Font, new Rectangle(bounds.Left + Unit(42), bounds.Top, bounds.Width - Unit(44), bounds.Height),
+                TextRenderer.DrawText(g, entry.Text, SettingsStyle.BodyFont, new Rectangle(bounds.Left + Unit(42), bounds.Top, bounds.Width - Unit(44), bounds.Height),
                     SettingsStyle.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
                 if (selected && Focused && ShowFocusCues) SettingsStyle.FocusRing(g, row, Unit(4), this);
             }

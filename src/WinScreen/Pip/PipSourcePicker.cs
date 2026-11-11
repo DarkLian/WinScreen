@@ -50,7 +50,7 @@ internal sealed class PipSourcePicker : Form
         KeyPreview = true;
         MaximizeBox = false;
         MinimizeBox = false;
-        Font = MenuStyle.Font;
+        Font = SettingsStyle.BodyFont;
         BackColor = SettingsStyle.Page;
         ForeColor = SettingsStyle.Text;
         Padding = new Padding(14, 12, 14, 12);
@@ -229,7 +229,7 @@ internal sealed class PipSourcePicker : Form
         _list.OwnerDraw = true;
         _list.BackColor = SettingsStyle.Card;
         _list.ForeColor = SettingsStyle.Text;
-        _list.Font = MenuStyle.Font;
+        _list.Font = SettingsStyle.BodyFont;
         _list.DrawColumnHeader += (_, e) => e.DrawDefault = true;
         _list.DrawSubItem += (_, _) => { };
         _list.DrawItem += (_, e) =>
@@ -275,11 +275,11 @@ internal sealed class PipSourcePicker : Form
             const TextFormatFlags line = TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
                 TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
             int nameHeight = TextRenderer.MeasureText(g, "Ag", _list.Font, Size.Empty, line).Height;
-            int detailHeight = TextRenderer.MeasureText(g, "Ag", MenuStyle.SmallFont, Size.Empty, line).Height;
+            int detailHeight = TextRenderer.MeasureText(g, "Ag", SettingsStyle.CaptionFont, Size.Empty, line).Height;
             int top = row.Top + (row.Height - nameHeight - Unit(2) - detailHeight) / 2;
             int width = Math.Max(0, right - left);
             TextRenderer.DrawText(g, item.Text, _list.Font, new Rectangle(left, top, width, nameHeight), SettingsStyle.Text, line);
-            TextRenderer.DrawText(g, Detail(item.Tag), MenuStyle.SmallFont, new Rectangle(left, top + nameHeight + Unit(2), width, detailHeight),
+            TextRenderer.DrawText(g, Detail(item.Tag), SettingsStyle.CaptionFont, new Rectangle(left, top + nameHeight + Unit(2), width, detailHeight),
                 SettingsStyle.Secondary, line);
         };
         _list.MouseMove += (_, e) => Hover(_list.GetItemAt(e.X, e.Y)?.Index ?? -1);
