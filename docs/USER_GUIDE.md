@@ -61,7 +61,7 @@ You can save a display or area there and open it again later from **Picture-in-P
 | Ctrl+drag | Crop to the part you want; Ctrl+double-click to remove the crop |
 | Right-click | Open the view's menu, with **Go to it** under **Original window** |
 
-Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. Drag an edge or corner to resize. **Keep aspect ratio** in View options is on by default. The bar fades away after you leave.
+Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. Drag an edge or corner to resize. **Keep aspect ratio** in **Size and options** is on by default. The bar fades away after you leave.
 
 **Useful options in the view's menu**
 
@@ -80,7 +80,7 @@ Every view has a title bar above the picture, or below it near the top of the sc
   By default, browser pointer shapes work, but hover effects and tooltips may not stay active.
   **Enhanced hover (experimental)** keeps hover effects showing while you use an app through a view. WinScreen turns it on for the apps it works well with: Chrome, Edge, Brave and Vivaldi; Firefox; and apps like VS Code and Discord. In **Settings → Picture-in-Picture → Using apps through a view**, turn off **Choose for me** to pick the apps yourself, including File Explorer and any program you add, and each view's menu can change it for that view. It needs Windows 11 on a 64-bit Intel or AMD PC. See the [compatibility table](FEATURE_COMPATIBILITY.md) for what has been tested. Native tooltips may still be unavailable.
   With Enhanced hover on, a browser's own middle-click scrolling works in the view, and so does VS Code's or Discord's.
-  Where it doesn't, enable **Middle-click scrolling** in this view, middle-click, then move away from that point. Middle-click again, left-click or press Escape to stop. Leave it off to keep the app's normal middle-click actions.
+  Where it doesn't, enable **Middle-click scrolling** in this view (or for new views in **Settings → Picture-in-Picture**), middle-click, then move away from that point. Middle-click again, left-click or press Escape to stop. Leave it off to keep the app's normal middle-click actions.
   Some modern menus can still flicker; show the original if a menu is difficult to use.
   A few apps can't be hidden, such as PowerShell ISE, and WinScreen tells you.
 - **Use it, then hide again** is for an app that doesn't work well through a view, such as a game.
@@ -90,7 +90,7 @@ Every view has a title bar above the picture, or below it near the top of the sc
 
 Views pause direct use while a WinScreen menu or the tray overflow panel is open.
 
-When Windows cannot hide the capture border, a hidden original uses Standard capture. Showing it restores your capture choice.
+When Windows can't hide the capture border, a hidden original uses standard mode. Showing it brings back your choice.
 
 **In Settings → Picture-in-Picture** you can choose a hover preview (for small views only) or reading lens, and keep minimized views on the taskbar.
 
@@ -122,7 +122,7 @@ Turn on **Settings → Mouse gestures → Move and resize** to hold Alt (or Win)
 moves it, the right button resizes it. It works on maximized windows too, and Esc puts the window back. Drag a window to the
 left or right edge of the screen to fill that half, to a corner for a quarter, or to the top to maximize it. Turn on **Window menu** there for a menu of commands on **Ctrl+right-click**.
 
-The tray and window menus also have an **Opacity** slider, a grid of nine places to put the window, **Borderless**, **Fill display** and **Dark title bar**. **Copy** and **Open file location** are under **More**.
+The tray and window menus also have an **Opacity** slider, a grid of nine places to put the window (so their **Arrange window** lists only the other commands), **Borderless**, **Fill display** and **Dark title bar**. **Copy** and **Open file location** are under **More**.
 
 ## Effects *(experimental)*
 
@@ -145,7 +145,7 @@ Press it again on a plain window to forget the setup, or remove it in **Settings
 
 | Page | What you'll find |
 | --- | --- |
-| General | Language, notifications, starting with Windows, updates, experimental effects, and moving your settings to another PC |
+| General | Language, notifications, starting with Windows, updates, experimental features, and moving your settings to another PC |
 | Actions and shortcuts | Everything WinScreen can do, with its shortcut. Select an action to change its shortcut |
 | Programs | Programs WinScreen should leave alone, or the only ones it should work on |
 | Saved setups | Program setups you've remembered |

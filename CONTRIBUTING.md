@@ -54,6 +54,7 @@ Preserve format arguments such as `{0}` and `{1}` (their order may change), inte
 punctuation, and menu accelerator markers such as `&Save`. Escape quotes and backslashes using standard JSON syntax.
 Use UTF-8 and keep entries sorted by key. Each catalog must contain unique keys and nonempty string values.
 Remove a key from all three files when its last lookup is removed.
+In the view's help lines (`pip.controls.*`), `\n` starts a new line and `\t` separates what you do from how.
 
 Run the checks after editing:
 
@@ -64,5 +65,5 @@ dotnet test WinScreen.slnx -c Release --filter 'Category!=RealWindows&Category!=
 
 The first command includes isolated test windows to check Settings, menus, PiP, Anchors, and error text in all three
 languages. Validation rejects missing or unused keys, duplicate keys, invalid JSON, empty translations, and changed
-format arguments. The legacy-output digest test records the migration's exact output, including spaces and accelerators.
+format arguments. A digest test records each catalog's exact text, including spaces and accelerators.
 For an intentional wording change, review the catalog diff and update the affected expected digest in `LocalizationTests.cs`.
