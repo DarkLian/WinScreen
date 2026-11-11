@@ -218,7 +218,7 @@ internal sealed class ScrollHost : Panel
 /// <summary>The table of actions, saying whenever it may have scrolled.</summary>
 internal sealed class ThemedTable : ListView
 {
-    private const int WM_PAINT = 0x000F, LVM_SCROLL = 0x1014;
+    private const int WM_PAINT = 0x000F, WM_VSCROLL = 0x0115, WM_MOUSEWHEEL = 0x020A, LVM_SCROLL = 0x1014;
     internal event Action? Moved;
 
     // Windows redraws a row as the pointer passes over it; drawn straight onto the screen, its words blinked.
@@ -228,6 +228,9 @@ internal sealed class ThemedTable : ListView
     {
         base.WndProc(ref m);
         if (m.Msg == WM_PAINT) Moved?.Invoke();
+        // Scrolling moves what is already on screen, including a row only partly drawn; all of it is drawn again
+        // instead, in one go, so nothing is left behind.
+        else if (m.Msg is WM_VSCROLL or WM_MOUSEWHEEL or LVM_SCROLL) Invalidate();
     }
 
     /// <summary>Puts the row at <paramref name="row"/> at the top, the way the table's own scroll bar would.</summary>

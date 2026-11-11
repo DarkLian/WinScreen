@@ -80,6 +80,28 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    /// <summary>
+    /// Every box people type in or choose from, and every button, is as tall as the others, as in Windows 11: lists that
+    /// drop down were taller than the number boxes beside them, and the search boxes taller again.
+    /// </summary>
+    [Fact]
+    public void Every_box_and_button_is_the_same_height()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            using var window = new SettingsWindow(new AppSettings { Language = "en", ExperimentalFeatures = true }, new StartWithWindows(), _ => []);
+            window.Show();
+            Application.DoEvents();
+            int standard = SettingsStyle.Unit(window, BoxHeight.Standard);
+            var boxes = Descendants(window).Where(control => control is ComboBox { Parent: not InputFrame } or PlainButton { AutoSize: true }
+                or InputFrame && !Descendants(control).Any(inner => inner is ListBox or ListView)).ToList();
+            Assert.True(boxes.Count > 40, $"Only {boxes.Count} found.");
+            Assert.All(boxes, box => Assert.True(box.Height == standard, $"{box.GetType().Name} '{box.Text}' is {box.Height}, not {standard}."));
+            window.Close();
+        });
+    }
+
     /// <summary>Made again while something else is being used, Settings comes back without taking the keyboard from it.</summary>
     [Fact]
     public void Settings_made_again_quietly_leaves_the_keyboard_where_it_is()

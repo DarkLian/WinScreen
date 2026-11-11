@@ -256,7 +256,7 @@ private readonly ErrorProvider _errors = new();
         side.Controls.Add(_nav);
         side.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 10, BackColor = SettingsStyle.Side });
         // Its edges line up with the highlighted page below, which sits a little in from the side's edges.
-        var searchRoom = new Panel { Dock = DockStyle.Top, Height = 34, Padding = new Padding(2, 0, 2, 0), BackColor = SettingsStyle.Side };
+        var searchRoom = new Panel { Dock = DockStyle.Top, Height = BoxHeight.Standard, Padding = new Padding(2, 0, 2, 0), BackColor = SettingsStyle.Side };
         searchRoom.Controls.Add(new InputFrame(_search) { Glyph = MenuParts.Search, Dock = DockStyle.Fill });
         side.Controls.Add(searchRoom);
         var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 4, Dock = DockStyle.Fill, Padding = new Padding(20, 6, 12, 10) };
@@ -1331,7 +1331,7 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(card);
         var intro = new SoftLabel { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top, ForeColor = SettingsStyle.Secondary, Padding = new Padding(1, 8, 0, 8) };
         page.Controls.Add(intro);
-        page.Controls.Add(new InputFrame(_actionSearch) { Glyph = MenuParts.Search, Dock = DockStyle.Top, Height = 34 });
+        page.Controls.Add(new InputFrame(_actionSearch) { Glyph = MenuParts.Search, Dock = DockStyle.Top, Height = BoxHeight.Standard });
         page.Resize += (_, _) => intro.MaximumSize = new Size(page.ClientSize.Width, 0);
         _features.ShowItemToolTips = true;
         _features.Resize += (_, _) => FitFeatureColumns();
@@ -1363,44 +1363,47 @@ private readonly ErrorProvider _errors = new();
             using var line = new Pen(SettingsStyle.Divider);
             g.DrawLine(line, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
         };
-        _features.DrawItem += (_, _) => { }; // Each cell draws itself, the first one the row's background too.
-        _features.DrawSubItem += (_, e) =>
+        // A row is drawn whole each time Windows asks for any part of it. Windows redraws only the first cell as the
+        // pointer passes, and its background is the whole row's: drawn alone, it wiped out the other cells.
+        _features.DrawItem += (_, e) => { if (e.Item is { } item) DrawFeatureRow(e.Graphics, item); };
+        _features.DrawSubItem += (_, _) => { };
+        void DrawFeatureRow(Graphics g, ListViewItem item)
         {
-            if (e.Item is not { } item || e.SubItem is null) return;
-            Graphics g = e.Graphics;
             SettingsStyle.SoftText(g);
-            Rectangle cell = e.Bounds;
-            if (e.ColumnIndex == 0)
+            Rectangle row = item.Bounds;
+            using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, row);
+            var wash = new Rectangle(row.Left + Unit(2), row.Top + Unit(1), row.Width - Unit(4), row.Height - Unit(2));
+            if (item.Selected)
             {
-                Rectangle row = item.Bounds;
-                using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, row);
-                var wash = new Rectangle(row.Left + Unit(2), row.Top + Unit(1), row.Width - Unit(4), row.Height - Unit(2));
-                if (item.Selected)
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var path = SettingsStyle.Rounded(wash, Unit(4));
+                using var brush = new SolidBrush(SettingsStyle.RowSelectedOn(SettingsStyle.Card));
+                g.FillPath(brush, path);
+                SettingsStyle.SelectionBar(g, wash, _features);
+                if (item.Focused && _features.Focused) SettingsStyle.FocusRing(g, wash, Unit(4), _features);
+            }
+            int left = row.Left;
+            for (int index = 0; index < _features.Columns.Count && index < item.SubItems.Count; index++)
+            {
+                var cell = new Rectangle(left, row.Top, _features.Columns[index].Width, row.Height);
+                left += cell.Width;
+                bool problem = index == 4 && item.Tag is AppCommand command && _shortcutProblems.ContainsKey(command);
+                Color color = problem ? SettingsStyle.Error : index is 0 or 3 ? SettingsStyle.Text : SettingsStyle.Secondary;
+                int inset = Unit(FeatureInset(index));
+                // An experimental action's name has the tag after it, as in the menus; the name gives way to it if short of room.
+                bool tagged = index == 0 && item.Tag is AppCommand action && CommandCatalog.IsExperimental(action);
+                int tag = tagged ? Unit(8) + MenuParts.TagSize(Unit).Width : 0;
+                const TextFormatFlags format = FeatureText;
+                string text = item.SubItems[index].Text;
+                var words = new Rectangle(cell.Left + inset, cell.Top, Math.Max(0, cell.Width - inset - Unit(4) - tag), cell.Height);
+                TextRenderer.DrawText(g, text, _features.Font, words, color, format);
+                if (tagged && words.Width > 0)
                 {
-                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                    using var path = SettingsStyle.Rounded(wash, Unit(4));
-                    using var brush = new SolidBrush(SettingsStyle.RowSelectedOn(SettingsStyle.Card));
-                    g.FillPath(brush, path);
-                    SettingsStyle.SelectionBar(g, wash, _features);
-                    if (item.Focused && _features.Focused) SettingsStyle.FocusRing(g, wash, Unit(4), _features);
+                    int width = Math.Min(words.Width, TextRenderer.MeasureText(g, text, _features.Font, words.Size, format).Width);
+                    MenuParts.DrawTag(g, words.Left + width + Unit(8), cell.Top + cell.Height / 2, Unit);
                 }
-                cell = new Rectangle(row.Left, row.Top, _features.Columns[0].Width, row.Height);
             }
-            bool problem = e.ColumnIndex == 4 && item.Tag is AppCommand command && _shortcutProblems.ContainsKey(command);
-            Color color = problem ? SettingsStyle.Error : e.ColumnIndex is 0 or 3 ? SettingsStyle.Text : SettingsStyle.Secondary;
-            int inset = Unit(FeatureInset(e.ColumnIndex));
-            // An experimental action's name has the tag after it, as in the menus; the name gives way to it if short of room.
-            bool tagged = e.ColumnIndex == 0 && item.Tag is AppCommand action && CommandCatalog.IsExperimental(action);
-            int tag = tagged ? Unit(8) + MenuParts.TagSize(Unit).Width : 0;
-            const TextFormatFlags format = FeatureText;
-            var words = new Rectangle(cell.Left + inset, cell.Top, Math.Max(0, cell.Width - inset - Unit(4) - tag), cell.Height);
-            TextRenderer.DrawText(g, e.SubItem.Text, _features.Font, words, color, format);
-            if (tagged && words.Width > 0)
-            {
-                int width = Math.Min(words.Width, TextRenderer.MeasureText(g, e.SubItem.Text, _features.Font, words.Size, format).Width);
-                MenuParts.DrawTag(g, words.Left + width + Unit(8), cell.Top + cell.Height / 2, Unit);
-            }
-        };
+        }
     }
 
     /// <summary>How the table's words are set, measured the same way as drawn so a column fits its words exactly.</summary>
@@ -1449,8 +1452,11 @@ private readonly ErrorProvider _errors = new();
             for (int column = 1; column < 5; column++) need[column] = (int)(need[column] * share);
         }
         need[0] = width - need.Skip(1).Sum();
+        bool moved = false;
         for (int column = 0; column < 5; column++)
-            if (_features.Columns[column].Width != need[column]) _features.Columns[column].Width = need[column];
+            if (_features.Columns[column].Width != need[column]) { _features.Columns[column].Width = need[column]; moved = true; }
+        // Windows redraws only part of a row whose columns moved, leaving words where the columns used to be.
+        if (moved) _features.Invalidate();
         // The columns fit now, but a table that was wider a moment ago keeps the sideways scroll bar it showed then,
         // drawn in Windows' own colours, until something else redraws it. Taking it away resizes the table, which
         // fits the columns again: only while it shows, and not from within this.

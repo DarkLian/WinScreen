@@ -41,7 +41,7 @@ internal sealed class InputFrame : Panel
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         _look = look;
         Margin = Padding.Empty;
-        Size = new Size(inner?.Width ?? 200, look == Look.Text ? 32 : inner?.Height ?? 100);
+        Size = new Size(inner?.Width ?? 200, look == Look.Text ? BoxHeight.Standard : inner?.Height ?? 100);
         Host(inner);
     }
 
@@ -158,14 +158,14 @@ internal sealed class InputFrame : Panel
         }
         int height = _inner.Height;
         int width = Math.Max(10, Width - StartRoom - EndRoom);
+        // A text box writes at its top and keeps room below for descenders; centring the box left its words low.
+        int top = Math.Clamp(Height / 2 - ThemedPicker.CapitalsMiddle(_inner.Font), 0, Math.Max(0, Height - height));
         if (_inner is NumericUpDown)
         {
-            _clip.SetBounds(StartRoom, (Height - height) / 2, width, height);
+            _clip.SetBounds(StartRoom, top, width, height);
             _inner.SetBounds(0, 0, width + SystemInformation.VerticalScrollBarWidth + Unit(4), height);
         }
-        // A text box writes at its top and keeps room below for descenders; centring the box left its words low.
-        else if (_inner is TextBox) _inner.SetBounds(StartRoom, Math.Clamp(Height / 2 - ThemedPicker.CapitalsMiddle(_inner.Font), 0,
-            Math.Max(0, Height - height)), width, height);
+        else if (_inner is TextBox) _inner.SetBounds(StartRoom, top, width, height);
         else _inner.SetBounds(StartRoom, (Height - height) / 2, width, height);
     }
 
@@ -276,9 +276,14 @@ internal sealed class ThemedCombo : ComboBox
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
 
-    /// <summary>As tall as a text box beside it: the box is one row of the list plus its edges.</summary>
-    private void FitHeight() => ItemHeight = Math.Max(TextRenderer.MeasureText("Ag", Font).Height + Unit(12), Unit(26));
+    /// <summary>Rows of the open list with room around the words; the box itself is as tall as every other box.</summary>
+    private void FitHeight()
+    {
+        ItemHeight = Math.Max(TextRenderer.MeasureText("Ag", Font).Height + Unit(12), Unit(26));
+        BoxHeight.Fit(this);
+    }
 
+    protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); BoxHeight.Fit(this); }
     protected override void OnFontChanged(EventArgs e) { base.OnFontChanged(e); FitHeight(); }
     protected override void OnDpiChangedAfterParent(EventArgs e) { base.OnDpiChangedAfterParent(e); FitHeight(); }
 
@@ -378,8 +383,12 @@ internal sealed class ThemedPicker : ComboBox
     /// <summary>The room before the words, where the search icon is.</summary>
     private int IconRoom => Unit(30);
 
-    /// <summary>As tall as the buttons beside it: one row of the list plus the box's edges.</summary>
-    private void FitHeight() => ItemHeight = Math.Max(TextRenderer.MeasureText("Ag", Font).Height + Unit(10), Unit(26));
+    /// <summary>Rows of the open list with room around the words; the box itself is as tall as every other box.</summary>
+    private void FitHeight()
+    {
+        ItemHeight = Math.Max(TextRenderer.MeasureText("Ag", Font).Height + Unit(12), Unit(26));
+        BoxHeight.Fit(this);
+    }
 
     private void Restyle()
     {
@@ -391,6 +400,7 @@ internal sealed class ThemedPicker : ComboBox
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
+        BoxHeight.Fit(this);
         var info = new ComboInfo { Size = Marshal.SizeOf<ComboInfo>() };
         _listWindow = GetComboBoxInfo(Handle, ref info) ? info.List : 0;
         nint typing = Native.User32.FindWindowEx(Handle, 0, "Edit", null);
@@ -747,6 +757,27 @@ internal sealed class ThemedPicker : ComboBox
     protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Restyle(); }
     protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Restyle(); }
     protected override void OnDropDownClosed(EventArgs e) { base.OnDropDownClosed(e); Invalidate(); }
+}
+
+/// <summary>
+/// The height every box in Settings has, at 100% scaling, as Windows 11 makes its text boxes, lists and buttons; and a
+/// way to give it to a list that drops down, whose own height follows its rows.
+/// </summary>
+internal static class BoxHeight
+{
+    internal const int Standard = 32;
+    private const int CB_SETITEMHEIGHT = 0x0153, CB_GETITEMHEIGHT = 0x0154;
+
+    /// <summary>Sets the height of the part that shows the choice, leaving the rows of the open list as they are.</summary>
+    internal static void Fit(ComboBox box)
+    {
+        if (!box.IsHandleCreated) return;
+        int field = (int)Native.User32.SendMessage(box.Handle, CB_GETITEMHEIGHT, -1, 0);
+        if (!Native.User32.GetWindowRect(box.Handle, out Native.Rect r) || field <= 0) return;
+        int edges = r.Bottom - r.Top - field; // Its frame, above and below the choice.
+        int wanted = SettingsStyle.Unit(box, Standard) - edges;
+        if (wanted > 0 && wanted != field) Native.User32.SendMessage(box.Handle, CB_SETITEMHEIGHT, -1, wanted);
+    }
 }
 
 /// <summary>The pictures of running programs, by the names the program lists use, each made once.</summary>
