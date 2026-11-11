@@ -480,6 +480,13 @@ internal sealed class PlainButton : Button
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal char Glyph { get; set { field = value; Invalidate(); } }
 
+    /// <summary>
+    /// A button that takes something away: only its grey icon shows, and a light red wash and red icon come up under
+    /// the pointer.
+    /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal bool Removes { get; set { field = value; Invalidate(); } }
+
     public PlainButton()
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
@@ -510,10 +517,12 @@ internal sealed class PlainButton : Button
         using GraphicsPath path = SettingsStyle.Rounded(area, Unit(4));
         Color back = !Enabled ? SettingsStyle.DisabledOn(surface)
             : Primary ? (_hot ? SettingsStyle.AccentHover : SettingsStyle.Accent)
+            : Removes ? (_pressed ? SettingsStyle.Blend(SettingsStyle.Error, surface, 0.22) : _hot ? SettingsStyle.Blend(SettingsStyle.Error, surface, 0.14) : surface)
             : _pressed ? SettingsStyle.PressedOn(surface) : _hot ? SettingsStyle.HoverOn(surface) : SettingsStyle.FillOn(surface);
         using (var fill = new SolidBrush(back)) g.FillPath(fill, path);
-        if (!Primary || !Enabled) { using var edge = new Pen(SettingsStyle.StrokeOn(back)); g.DrawPath(edge, path); }
-        Color text = !Enabled ? SettingsStyle.Disabled : Primary ? SettingsStyle.OnAccent : _pressed ? SettingsStyle.Secondary : SettingsStyle.Text;
+        if ((!Primary && !Removes) || !Enabled) { using var edge = new Pen(SettingsStyle.StrokeOn(back)); g.DrawPath(edge, path); }
+        Color text = !Enabled ? SettingsStyle.Disabled : Primary ? SettingsStyle.OnAccent
+            : Removes ? (_hot ? SettingsStyle.Error : SettingsStyle.Secondary) : _pressed ? SettingsStyle.Secondary : SettingsStyle.Text;
         if (Glyph != '\0' && Tray.MenuParts.Icon(Glyph, text) is { } icon)
         {
             int size = Unit(16);

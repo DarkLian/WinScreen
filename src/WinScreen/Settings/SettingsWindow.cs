@@ -151,6 +151,7 @@ private readonly ErrorProvider _errors = new();
         AutoSizeMode = AutoSizeMode.GrowAndShrink, Margin = Padding.Empty, BackColor = SettingsStyle.Card };
     private readonly ComboBox _newApp = ProgramPicker();
     private readonly List<string> _addedApps = [];
+    private readonly ToolTip _tips = new();
 
     private readonly HashSet<ProgramSetup> _removedSetups = [];
     private readonly Button _applyButton = new() { Text = T("settings.apply"), AutoSize = true, Enabled = false };
@@ -473,6 +474,7 @@ private readonly ErrorProvider _errors = new();
         if (disposing)
         {
             _errors.Dispose();
+            _tips.Dispose();
             foreach (TextBox box in _hotkeys.Values) box.Dispose();
         }
         base.Dispose(disposing);
@@ -710,6 +712,7 @@ private readonly ErrorProvider _errors = new();
     private void RebuildApps()
     {
         const int hoverAt = SwitchBox.RowWidth - 190, originalAt = SwitchBox.RowWidth - 100, removeAt = SwitchBox.RowWidth - 36;
+        _tips.RemoveAll();
         bool hoverAllowed = _hoverOptions?.Enabled != false;
         _appRows.SuspendLayout();
         foreach (Control row in _appRows.Controls.Cast<Control>().ToArray())
@@ -774,8 +777,13 @@ private readonly ErrorProvider _errors = new();
                 if (!_addedApps.Contains(program, StringComparer.OrdinalIgnoreCase)) _addedApps.Add(program);
                 QueueApplyRefresh();
             };
-            var remove = new PlainButton { Text = "\u00D7", AutoSize = false, Size = new Size(26, 24), Padding = Padding.Empty,
-                AccessibleName = T("common.remove") + ": " + program };
+            // Only programs added here can go: the kinds above them are always listed. The button sits in a column of
+            // its own, so the switches stay where they are whatever is added or taken away.
+            string removeText = string.Format(T("settings.pip.apps.remove"), program);
+            var remove = new PlainButton { Glyph = MenuParts.Delete, Removes = true, AutoSize = false, Padding = Padding.Empty,
+                AccessibleName = removeText };
+            remove.Size = remove.GetPreferredSize(Size.Empty);
+            _tips.SetToolTip(remove, removeText);
             remove.Click += (_, _) =>
             {
                 Unlist(_hoverPrograms, program);

@@ -933,13 +933,15 @@ internal static class ListRows
 
     /// <summary>
     /// Draws a row off screen and puts it up whole: drawn straight onto the screen, the background showed for a moment
-    /// before the words.
+    /// before the words. The row is drawn at the buffer's own top left, since words go through Windows, which does not
+    /// follow the buffer's shift to where the row sits.
     /// </summary>
-    internal static void DrawBuffered(DrawItemEventArgs e, Action<Graphics> draw)
+    internal static void DrawBuffered(DrawItemEventArgs e, Action<Graphics, Rectangle> draw)
     {
         using BufferedGraphics buffer = BufferedGraphicsManager.Current.Allocate(e.Graphics, e.Bounds);
+        buffer.Graphics.ResetTransform();
         SettingsStyle.SoftText(buffer.Graphics);
-        draw(buffer.Graphics);
+        draw(buffer.Graphics, new Rectangle(Point.Empty, e.Bounds.Size));
         buffer.Render(e.Graphics);
     }
 }
@@ -970,9 +972,9 @@ internal class ThemedList : ListBox
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
         if (e.Index < 0 || e.Index >= Items.Count) return;
-        ListRows.DrawBuffered(e, g =>
+        ListRows.DrawBuffered(e, (g, bounds) =>
         {
-            Rectangle row = ListRows.Background(g, this, e.Bounds, (e.State & DrawItemState.Selected) != 0, e.Index == _hot);
+            Rectangle row = ListRows.Background(g, this, bounds, (e.State & DrawItemState.Selected) != 0, e.Index == _hot);
             TextRenderer.DrawText(g, GetItemText(Items[e.Index]), Font,
                 new Rectangle(row.Left + SettingsStyle.Unit(this, 12), row.Top, row.Width - SettingsStyle.Unit(this, 16), row.Height),
                 Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
@@ -1038,12 +1040,12 @@ internal sealed class ThemedCheckList : CheckedListBox
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
         if (e.Index < 0 || e.Index >= Items.Count) return;
-        ListRows.DrawBuffered(e, g => DrawRow(g, e));
+        ListRows.DrawBuffered(e, (g, bounds) => DrawRow(g, bounds, e));
     }
 
-    private void DrawRow(Graphics g, DrawItemEventArgs e)
+    private void DrawRow(Graphics g, Rectangle bounds, DrawItemEventArgs e)
     {
-        Rectangle row = ListRows.Background(g, this, e.Bounds, false, e.Index == _hot);
+        Rectangle row = ListRows.Background(g, this, bounds, false, e.Index == _hot);
         bool on = GetItemChecked(e.Index);
         int size = SettingsStyle.Unit(this, 18);
         var box = new Rectangle(row.Left + SettingsStyle.Unit(this, 10), row.Top + (row.Height - size) / 2, size, size);

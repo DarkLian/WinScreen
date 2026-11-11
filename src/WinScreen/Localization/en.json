@@ -352,6 +352,7 @@
   "settings.pip.apps.app": "App",
   "settings.pip.apps.help": "Enhanced hover keeps hover effects showing while you use an app through a view. If an app doesn't work through a view, turn on Show original for it: a click on its view brings the original window back, and it hides again when you switch away.",
   "settings.pip.apps.original": "Show original",
+  "settings.pip.apps.remove": "Remove {0} from this list",
   "settings.pip.autoMove": "Move Picture-in-Picture views away from text and images",
   "settings.pip.autoMoveHelp": "Views that move themselves don't appear in screenshots or screen sharing.",
   "settings.pip.hover.automatic": "Choose for me",

@@ -17,7 +17,7 @@ internal static class MenuParts
         FullScreen = '', Undo = '', Copy = '', Folder = '', Save = '', More = '',
         Settings = '', Sync = '', Info = '', Power = '', View = '', Crop = '',
         Star = '', Help = '', Minimize = '', Close = '', Warning = '', Page = '',
-        Monitor = '', Home = '', Keyboard = '', Mouse = '', Bar = '', Palette = '', Apps = '', Search = '', Sliders = '', Brightness = '', Repair = '', History = '';
+        Monitor = '', Home = '', Keyboard = '', Mouse = '', Bar = '', Palette = '', Apps = '', Search = '', Sliders = '', Brightness = '', Repair = '', History = '', Delete = '';
 
     internal static int SystemDpi
     {

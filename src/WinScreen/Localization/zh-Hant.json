@@ -352,6 +352,7 @@
   "settings.pip.apps.app": "應用程式",
   "settings.pip.apps.help": "增強懸停可在透過檢視使用應用程式時保持懸停效果。如果某個應用程式無法透過檢視操作，請為它開啟「顯示原視窗」：按一下它的檢視會顯示原視窗，切換到別的視窗後它會再次隱藏。",
   "settings.pip.apps.original": "顯示原視窗",
+  "settings.pip.apps.remove": "從此清單中移除 {0}",
   "settings.pip.autoMove": "讓子母畫面避開文字和影像",
   "settings.pip.autoMoveHelp": "自動移動的子母畫面不會出現在螢幕擷取和螢幕分享中。",
   "settings.pip.hover.automatic": "由 WinScreen 選擇",

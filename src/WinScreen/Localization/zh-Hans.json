@@ -352,6 +352,7 @@
   "settings.pip.apps.app": "应用",
   "settings.pip.apps.help": "增强悬停可在通过视图使用应用时保持悬停效果。如果某个应用无法通过视图操作，请为它开启“显示原窗口”：点击它的视图会显示原窗口，切换到别的窗口后它会再次隐藏。",
   "settings.pip.apps.original": "显示原窗口",
+  "settings.pip.apps.remove": "从此列表中删除 {0}",
   "settings.pip.autoMove": "让画中画避开文字和图像",
   "settings.pip.autoMoveHelp": "自动移动的画中画不会出现在截图和屏幕共享中。",
   "settings.pip.hover.automatic": "由 WinScreen 选择",
