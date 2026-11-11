@@ -62,7 +62,8 @@ You can save a display or area there and open it again later from **Picture-in-P
 | Ctrl+drag | Crop to the part you want; Ctrl+double-click to remove the crop |
 | Right-click | Open the view's menu, with **Go to it** under **Original window** |
 
-Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. Drag an edge or corner to resize. **Keep aspect ratio** in **Size and options** is on by default. The bar fades away after you leave.
+Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. Drag an edge or corner to resize. **Keep aspect ratio** in **Size and options** is on by default. The bar fades away after you leave. To keep it showing,
+turn on **Always show title bar** in **Size and options**, or for every new view in **Settings → Picture-in-Picture**.
 
 **Useful options in the view's menu**
 
@@ -103,10 +104,12 @@ An Anchor is a small floating button for a window. Press **Ctrl+Alt+A** to add o
 - **Right-click** opens a menu to show, minimize or close it.
 - **Middle-click** asks the window to close.
 - **Drag a file over it** to bring the window forward and drop the file there.
+- **Rest the pointer** on it to see the window. Anchors of the same program show their window titles.
 
 In **Settings → Anchors**, WinScreen can add Anchors by itself for windows that are completely covered, and take them away
 again when you can see the window. You can also choose where Anchors appear, how many, their size and style, and whether
-they move off text and pictures. A small notch on an Anchor means its window has a view.
+they move off text and pictures, and take windows with an Anchor you added off the taskbar. A small notch on an Anchor
+means its window has a view. **Hide all Anchors** in the tray menu puts them away until you show them again.
 
 ## Arrange windows
 
@@ -146,7 +149,7 @@ Press it again on a plain window to forget the setup, or remove it in **Settings
 
 | Page | What you'll find |
 | --- | --- |
-| General | Language, notifications, starting with Windows, updates, experimental features, and moving your settings to another PC |
+| General | Language, notifications, starting with Windows, running as administrator, updates, experimental features, and moving your settings to another PC |
 | Actions and shortcuts | Everything WinScreen can do, with its shortcut. Select an action to change its shortcut |
 | Programs | Programs WinScreen should leave alone, or the only ones it should work on |
 | Saved setups | Program setups you've remembered |
@@ -160,6 +163,7 @@ Press it again on a plain window to forget the setup, or remove it in **Settings
 
 - **Ctrl+Alt+U** puts the window you're using back to normal.
 - **Ctrl+Alt+R**, or **Restore all windows** in the tray menu, puts every window back.
+- **Turn off click-through everywhere** and **Unpin all windows** in the tray menu undo just that, for every window.
 - Closing WinScreen puts every window back too.
 - If WinScreen stops unexpectedly, hidden windows come back within a couple of seconds, and the rest when it starts again.
 
@@ -175,8 +179,9 @@ the newer installer. Your settings stay as they are.
 
 - WinScreen runs on Windows 10 (version 2004 or later) and Windows 11, on 64-bit Intel or AMD PCs (x64). ARM PCs and
   32-bit Windows aren't supported.
-- To change apps running as administrator, including moving them with Alt-drag, start WinScreen as administrator
-  too (right-click it, then **Run as administrator**). Starting with Windows starts it without those rights.
+- To change apps running as administrator, such as Task Manager, turn on **Run as administrator** in
+  **Settings → General**. WinScreen restarts with those rights after Windows asks, and keeps them when it starts with
+  Windows.
 - Commands pause while a game or full-screen app is in front. Views can't appear over games in exclusive full screen.
 - A minimized app stops drawing, so its view shows the last picture.
 - Protected video may show as black in a view.
