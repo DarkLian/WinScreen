@@ -192,10 +192,10 @@ public sealed class SettingsLayoutTests
             int usual = Assert.Single(Widths());
             Assert.True(window.MinimumSize.Width >= window.Width);
 
-            window.Width += 300;
+            window.Width += 200; // Still short of the widest a row gets.
             Application.DoEvents();
             int wider = Assert.Single(Widths());
-            Assert.Equal(usual + 300, wider);
+            Assert.Equal(usual + 200, wider);
 
             window.WindowState = FormWindowState.Maximized;
             Application.DoEvents();
@@ -212,8 +212,9 @@ public sealed class SettingsLayoutTests
     }
 
     /// <summary>
-    /// As in Windows 11's Settings, every page's title and cards share one column: the same left and right edges on
-    /// every page, filling the room at the usual size, and at most a readable width, centred, in a maximized window.
+    /// As in Windows 11's Settings, every page's title and cards, and the bar for saving, share one column: the same
+    /// left and right edges on every page, filling the room at the usual size, and at most a readable width, centred, in
+    /// a maximized window, whether it was maximized before or after it showed.
     /// </summary>
     [Fact]
     public void Every_page_lines_up_in_one_column_centred_when_maximized()
@@ -223,13 +224,26 @@ public sealed class SettingsLayoutTests
             UiText.Initialize("en");
             var settings = new AppSettings { Language = "en", ExperimentalFeatures = true, ExcludedPrograms = ["notepad"] };
             settings.SavedSetups.Add(new ProgramSetup { Program = "notepad", Pinned = true });
-            foreach (bool maximized in new[] { false, true })
+            foreach ((string how, bool maximized, bool first) in new[] { ("usual", false, false), ("maximized", true, false),
+                         ("maximized before showing", true, true) })
             {
                 using var window = new SettingsWindow(settings, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+                window.StartPosition = FormStartPosition.Manual; // As when it opens where it was last left.
+                window.Bounds = new Rectangle(new Point(20, 20), window.Size);
+                window.TopMost = true;
+                if (first) window.WindowState = FormWindowState.Maximized;
                 window.Show();
-                if (maximized) window.WindowState = FormWindowState.Maximized;
+                // Windows may show the first window of a process maximized, as the program that started it asked.
+                window.WindowState = maximized ? FormWindowState.Maximized : FormWindowState.Normal;
                 void Pump() { for (int i = 0; i < 8; i++) { Application.DoEvents(); Thread.Sleep(15); } }
                 Pump();
+                // A change not saved yet shows the bar for saving under every page.
+                SwitchBox option = Descendants(window).OfType<SwitchBox>().First(box => !box.Compact && box.Enabled);
+                option.Checked = !option.Checked;
+                Pump();
+                Control saveBar = Descendants(window).OfType<PlainButton>().Single(button => button.Text == UiText.T("settings.save"))
+                    .Parent!.Parent!;
+                Assert.True(saveBar.Visible);
                 TabControl tabs = Descendants(window).OfType<TabControl>().Single();
                 Control title = Descendants(window).OfType<Label>().Single(label => label.Font == SettingsStyle.PageTitleFont);
                 Control side = Descendants(window).OfType<NavList>().Single().Parent!;
@@ -245,10 +259,10 @@ public sealed class SettingsLayoutTests
                         column = Descendants(page).OfType<InputFrame>().Where(frame => frame.Dock is DockStyle.Top or DockStyle.Fill).ToArray();
                     Assert.NotEmpty(column);
                     Rectangle titleOnScreen = title.RectangleToScreen(title.ClientRectangle);
-                    foreach (Control part in column)
+                    foreach (Control part in column.Append(saveBar))
                     {
                         Rectangle r = part.RectangleToScreen(part.ClientRectangle);
-                        edges.Add((r.Left, r.Right, $"{(maximized ? "maximized" : "usual")} {page.Text}: {part.Text}"));
+                        edges.Add((r.Left, r.Right, $"{how} {page.Text}: {(part == saveBar ? "the bar for saving" : part.Text)}"));
                         Assert.InRange(r.Left - titleOnScreen.Left, -Unit(4), Unit(4)); // The title's big letters stand a little in.
                     }
                 }
@@ -258,7 +272,7 @@ public sealed class SettingsLayoutTests
                     Assert.True(Math.Abs(l - left) <= Unit(2), $"{what} starts at {l}, not {left}.");
                     Assert.True(Math.Abs(r - right) <= Unit(2), $"{what} ends at {r}, not {right}.");
                 }
-                if (!maximized) continue;
+                if (!maximized) { window.Close(); continue; }
                 Assert.True(right - left <= Unit(ScrollPage.WidestCard) + Unit(2), $"{right - left} wide.");
                 Rectangle room = window.RectangleToScreen(window.ClientRectangle);
                 int roomLeft = side.RectangleToScreen(side.ClientRectangle).Right;
@@ -266,6 +280,47 @@ public sealed class SettingsLayoutTests
                 Assert.True(Math.Abs(before - after) <= Unit(24), $"Not centred: {before} before, {after} after.");
                 window.Close();
             }
+        });
+    }
+
+    /// <summary>
+    /// At the usual size every action in the table shows whole, in each language, with what it works on, its
+    /// shortcuts and its state: nothing is cut short with an ellipsis. Options listed with them may be cut short.
+    /// </summary>
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-Hans")]
+    [InlineData("zh-Hant")]
+    public void Every_entry_in_the_table_of_actions_shows_whole(string language)
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize(language);
+            try
+            {
+                using var window = new SettingsWindow(new AppSettings { Language = language, ExperimentalFeatures = true },
+                    new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+                window.Show();
+                window.WindowState = FormWindowState.Normal; // Windows may show a process's first window maximized.
+                TabControl tabs = Descendants(window).OfType<TabControl>().Single();
+                tabs.SelectedIndex = 1;
+                for (int i = 0; i < 8; i++) { Application.DoEvents(); Thread.Sleep(15); }
+                ListView table = Descendants(window).OfType<ListView>().Single();
+                const TextFormatFlags measure = TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
+                foreach (ListViewItem row in table.Items)
+                    for (int column = row.Tag is AppCommand ? 0 : 1; column < table.Columns.Count; column++)
+                    {
+                        int inset = SettingsStyle.Unit(table, (column == 0 ? 18 : 12) + 4);
+                        if (column == 0 && CommandCatalog.IsExperimental((AppCommand)row.Tag!))
+                            inset += SettingsStyle.Unit(table, 8) + MenuParts.TagSize(value => SettingsStyle.Unit(table, value)).Width;
+                        int needs = TextRenderer.MeasureText(row.SubItems[column].Text, table.Font, Size.Empty, measure).Width + inset;
+                        Assert.True(needs <= table.Columns[column].Width,
+                            $"{language}: \"{row.SubItems[column].Text}\" needs {needs}, has {table.Columns[column].Width}; columns " +
+                            string.Join(", ", table.Columns.Cast<ColumnHeader>().Select(header => header.Width)) + $" in {table.ClientSize.Width}.");
+                    }
+                window.Close();
+            }
+            finally { UiText.Initialize("en"); }
         });
     }
 

@@ -192,7 +192,7 @@ private readonly ErrorProvider _errors = new();
         MaximizeBox = true;
         MinimizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(940, 660); // Room for the table of actions at Windows 11's text size.
+        ClientSize = new Size(970, 660); // Room for every entry in the table of actions at Windows 11's text size.
         // No narrower than this, the narrowest its rows fit: they grow in a wider window but never shrink.
         MinimumSize = new Size(Width, 400);
         Font = SettingsStyle.BodyFont;
@@ -222,6 +222,7 @@ private readonly ErrorProvider _errors = new();
         };
         foreach (TabPage tab in tabs.TabPages)
             if (ColumnOf(tab) is { } column) column.Shifted += FollowColumn;
+        tabs.SizeChanged += (_, _) => FollowColumn(); // Where the pages sit in it is known once it has a size.
         _nav.Add(generalPage.Text, MenuParts.Home, generalPage);
         _nav.AddHeading(T("settings.nav.windows"));
         _nav.Add(featuresPage.Text, MenuParts.Keyboard, featuresPage);
@@ -300,9 +301,12 @@ private readonly ErrorProvider _errors = new();
     /// <summary>The title, and the bar for saving under the page, line up with the page's column wherever it is.</summary>
     private void FollowColumn()
     {
-        int shift = ColumnOf(_tabs.SelectedTab)?.Shift ?? 0;
-        int right = shift + SettingsStyle.Unit(this, PageColumn.RightGap);
-        var bar = new Padding(shift, _saveBar.Margin.Top, right, 0);
+        // The pages sit a little in from the edges of the space they are shown in.
+        Rectangle page = _tabs.DisplayRectangle; // A page just chosen may not have its size yet.
+        int left = _tabs.Margin.Left + page.Left, gap = _tabs.Margin.Right + _tabs.Width - page.Right;
+        int column = ColumnOf(_tabs.SelectedTab)?.Shift ?? 0;
+        int shift = column + left;
+        var bar = new Padding(shift, _saveBar.Margin.Top, column + gap + SettingsStyle.Unit(this, PageColumn.RightGap), 0);
         if (_pageTitle.Margin.Left == shift && _status.Margin.Left == shift && _saveBar.Margin == bar) return;
         _pageTitle.Margin = _pageTitle.Margin with { Left = shift };
         _status.Margin = _status.Margin with { Left = shift };
@@ -472,6 +476,7 @@ private readonly ErrorProvider _errors = new();
     {
         base.OnShown(e);
         FitWorkingArea();
+        FollowColumn();
     }
 
     /// <summary>The title bar takes the window's own colours instead of the accent colour, where Windows allows it.</summary>
@@ -1421,6 +1426,7 @@ private readonly ErrorProvider _errors = new();
         };
         _features.Resize += (_, _) => FitFeatureColumns();
         _features.ClientSizeChanged += (_, _) => FitFeatureColumns();
+        table.Resize += (_, _) => FitFeatureColumns(); // The room that shows can change without the table's own size.
         return page;
     }
 
@@ -1626,6 +1632,8 @@ private readonly ErrorProvider _errors = new();
         _features.EndUpdate();
         _fillingFeatures = false;
         FitFeatureColumns();
+        // Filled as its page first shows, the table is fitted again once that page has its final size.
+        if (IsHandleCreated) BeginInvoke(() => { if (!IsDisposed) FitFeatureColumns(); });
         if (_features.SelectedItems.Count == 0 && _features.Items.Count > 0) _features.Items[0].Selected = true;
         ShowShortcutEditor();
     }
