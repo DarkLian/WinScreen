@@ -43,7 +43,7 @@ public sealed class ShrinkTile : Form
         _width = Dpi.Scale(TileWidth, dpi);
         Size = new Size(_width, Dpi.Scale(TileHeight, dpi));
         AccessibleDescription = T("shrink.controls"); // Said by a screen reader; nothing pops up on hover.
-        _menu.Items.Add(T("window.show"), null, (_, _) => Close());
+        _menu.Items.Add(T("window.show"), null, (_, _) => ShowWindowAndClose());
         Tray.MenuRenderer.Apply(_menu);
         ContextMenuStrip = _menu;
         _watch.Tick += (_, _) => FollowSource();
@@ -158,7 +158,32 @@ public sealed class ShrinkTile : Form
 
         _pressed = false;
         if (!_dragged)
-            Close();
+            ShowWindowAndClose();
+    }
+
+    /// <summary>
+    /// Brings the window back in front of the others, then closes the tile. Done while the click is still the last
+    /// thing the person did, which is when Windows lets WinScreen put a window in front; after the tile has gone,
+    /// Windows refused, and the window came back behind whatever was open.
+    /// </summary>
+    private void ShowWindowAndClose()
+    {
+        if (_hid && _identity.Matches())
+        {
+            try
+            {
+                _windows.ShowOwned(_source, this);
+                _hid = false;
+                User32.SetWindowPos(_source, 0, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE); // To the top of the others.
+                User32.SetForegroundWindow(_source);
+            }
+            catch (WindowOperationException failure)
+            {
+                Problem?.Invoke(failure.Message);
+                return;
+            }
+        }
+        Close();
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)

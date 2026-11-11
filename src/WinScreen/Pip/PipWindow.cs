@@ -189,38 +189,48 @@ public sealed class PipWindow : Form
         {
             PauseInput(true, keepTitleBar: true);
             _titleBar?.HoldVisible();
-            _menu.Items["inputStatus"]!.Text = MenuTitle;
-            FillHelp();
-            _retryItem.Available = CanRetryCapture;
-            _autoMoveItem.Available = AllowAutoMove;
-            bool canInteract = AllowInteractive && _origin.IsWindow;
-            _viewOnlyItem.Available = _interactiveItem.Available = canInteract;
-            _viewOnlyItem.Checked = !_interactiveItem.Checked;
-            // Available is what is asked for; Visible would also say whether the menu is open, and it isn't yet.
-            bool showInteractionOptions = canInteract && _interactiveItem.Checked;
-            _middleScrollItem.Available = showInteractionOptions;
-            _enhancedHoverItem.Available = showInteractionOptions;
-            _useHeader.Available = canInteract || AllowAutoMove;
-            _enhancedHoverItem.Enabled = _enhancedHoverItem.Checked || PipEnhancedHover.CanAttempt(_source);
-            // With Enhanced hover on, a browser's own middle-click scrolling works and is the better one.
-            _middleScrollItem.Enabled = !(showInteractionOptions && _enhancedHoverItem.Checked && AppScrollsWithHover);
-            _originalHeader.Available = _hideItem.Available = _goToItem.Available = _origin.IsWindow;
-            _useOriginalItem.Available = _origin.IsWindow && _hideItem.Checked;
-            // The view closes soon after its window does; until then nothing offers to act on a window that is gone.
-            bool there = _origin.IsAvailable;
-            _goToItem.Enabled = _useOriginalItem.Enabled = _interactiveItem.Enabled = there;
-            if (!there) _hideItem.Enabled = false;
-            _removeCropItem.Enabled = !_crop.IsEmpty || _zoom != PipGeometry.WholeView;
+            RefreshMenuItems();
             // A menu only closes on an outside click while its program has the focus.
             _foregroundBeforeMenu = User32.GetForegroundWindow();
             User32.SetForegroundWindow(Handle);
         };
         MenuRenderer.Apply(_menu);
+        // Turning the view's options on and off leaves the menu open for the next one.
+        foreach (ToolStripItem item in new ToolStripItem[] { _hideItem, _autoMoveItem, _interactiveItem, _viewOnlyItem, _middleScrollItem, _enhancedHoverItem })
+            StayingOpen.Keep(item);
+        StayingOpen.Follow(_menu, RefreshMenuItems);
         _menu.Closed += (_, _) => { ReturnFocusAfterMenu(); PauseInput(TopLayer.InputBlocked); };
         ContextMenuStrip = _menu;
 
         _watch.Tick += (_, _) => FollowSource();
         _autoMove.Tick += (_, _) => MoveAwayFromContent();
+    }
+
+    /// <summary>What the menu offers and ticks, for the view as it is now: when it opens, and after a choice that keeps it open.</summary>
+    private void RefreshMenuItems()
+    {
+        _menu.Items["inputStatus"]!.Text = MenuTitle;
+        FillHelp();
+        _retryItem.Available = CanRetryCapture;
+        _autoMoveItem.Available = AllowAutoMove;
+        bool canInteract = AllowInteractive && _origin.IsWindow;
+        _viewOnlyItem.Available = _interactiveItem.Available = canInteract;
+        _viewOnlyItem.Checked = !_interactiveItem.Checked;
+        // Available is what is asked for; Visible would also say whether the menu is open, and it isn't yet.
+        bool showInteractionOptions = canInteract && _interactiveItem.Checked;
+        _middleScrollItem.Available = showInteractionOptions;
+        _enhancedHoverItem.Available = showInteractionOptions;
+        _useHeader.Available = canInteract || AllowAutoMove;
+        _enhancedHoverItem.Enabled = _enhancedHoverItem.Checked || PipEnhancedHover.CanAttempt(_source);
+        // With Enhanced hover on, a browser's own middle-click scrolling works and is the better one.
+        _middleScrollItem.Enabled = !(showInteractionOptions && _enhancedHoverItem.Checked && AppScrollsWithHover);
+        _originalHeader.Available = _hideItem.Available = _goToItem.Available = _origin.IsWindow;
+        _useOriginalItem.Available = _origin.IsWindow && _hideItem.Checked;
+        // The view closes soon after its window does; until then nothing offers to act on a window that is gone.
+        bool there = _origin.IsAvailable;
+        _goToItem.Enabled = _useOriginalItem.Enabled = _interactiveItem.Enabled = there;
+        if (!there) _hideItem.Enabled = false;
+        _removeCropItem.Enabled = !_crop.IsEmpty || _zoom != PipGeometry.WholeView;
     }
 
     /// <summary>Raised when Windows refuses something, with a message for the person.</summary>
@@ -536,15 +546,12 @@ public sealed class PipWindow : Form
         options.DropDownItems.Add(Choices(T("pip.opacity"), _overrides.OpacityPercent,
             [(T("pip.useSettings"), null), ("100%", 100), ("75%", 75), ("50%", 50), ("25%", 25)],
             value => Overrides = _overrides with { OpacityPercent = value }));
-        options.DropDownItems.Add(new ToolStripMenuItem(T("pip.keepAspectRatio"), null,
-            (_, _) => Overrides = _overrides with { KeepAspectRatio = !_overrides.KeepAspectRatio })
-            { Checked = _overrides.KeepAspectRatio });
-        options.DropDownItems.Add(new ToolStripMenuItem(T("pip.lockPosition"), null,
-            (_, _) => Overrides = _overrides with { PositionLocked = !_overrides.PositionLocked })
-            { Checked = _overrides.PositionLocked });
-        options.DropDownItems.Add(new ToolStripMenuItem(T("pip.titleBarAlways"), null,
-            (_, _) => Overrides = _overrides with { TitleBarAlways = !TitleBarAlways })
-            { Checked = TitleBarAlways });
+        options.DropDownItems.Add(Toggle(T("pip.keepAspectRatio"), _overrides.KeepAspectRatio,
+            () => Overrides = _overrides with { KeepAspectRatio = !_overrides.KeepAspectRatio }));
+        options.DropDownItems.Add(Toggle(T("pip.lockPosition"), _overrides.PositionLocked,
+            () => Overrides = _overrides with { PositionLocked = !_overrides.PositionLocked }));
+        options.DropDownItems.Add(Toggle(T("pip.titleBarAlways"), TitleBarAlways,
+            () => Overrides = _overrides with { TitleBarAlways = !TitleBarAlways }));
         options.DropDownItems.Add(new ToolStripMenuItem(T("pip.clickThrough"), null,
             (_, _) => Overrides = _overrides with { ClickThrough = true }));
         options.DropDownItems.Add(new ToolStripSeparator());
@@ -631,14 +638,26 @@ public sealed class PipWindow : Form
         return changes.Count == 0 ? T("pip.presets.noChanges") : string.Join("; ", changes);
     }
 
+    /// <summary>A choice of several that leaves the menu open, ticked where it is now.</summary>
     private static ToolStripMenuItem Choices<T1>(string title, T1 current, (string Label, T1 Value)[] choices, Action<T1> choose)
     {
         var menu = new ToolStripMenuItem(title);
         foreach ((string label, T1 value) in choices)
-            menu.DropDownItems.Add(new ToolStripMenuItem(label, null, (_, _) => choose(value))
-                { Checked = EqualityComparer<T1>.Default.Equals(value, current) }.OneOf());
+            menu.DropDownItems.Add(StayingOpen.Keep(new ToolStripMenuItem(label, null, (sender, _) =>
+            {
+                choose(value);
+                foreach (ToolStripMenuItem other in menu.DropDownItems.OfType<ToolStripMenuItem>()) other.Checked = other == sender;
+            }) { Checked = EqualityComparer<T1>.Default.Equals(value, current) }.OneOf()));
         return menu;
     }
+
+    /// <summary>An option turned on and off from the menu, which stays open for the next one.</summary>
+    private static ToolStripMenuItem Toggle(string text, bool on, Action flip) =>
+        StayingOpen.Keep(new ToolStripMenuItem(text, null, (sender, _) =>
+        {
+            flip();
+            ((ToolStripMenuItem)sender!).Checked ^= true;
+        }) { Checked = on });
 
     private void ResizeTo(int longSide)
     {
@@ -713,19 +732,15 @@ public sealed class PipWindow : Form
     internal PipSessionState BackendState => _thumbnail?.State ?? PipSessionState.Stopped;
     internal string DiagnosticSnapshot => (_thumbnail?.Snapshot() ?? "Stopped") + $"\nEnhanced hover: {_live?.HoverStatus ?? (_enhancedHoverItem.Checked ? "inactive" : "off")}";
 
+    /// <summary>Opens the view's diagnostics in front, leaving the view usable while they are open.</summary>
     private void ShowDiagnostics()
     {
-        var dialog = new Form { Text = T("pip.diagnostics.title"), Size = new Size(700, 380), StartPosition = FormStartPosition.CenterParent };
-        var text = new TextBox { Multiline = true, ReadOnly = true, Dock = DockStyle.Fill,
-            ScrollBars = ScrollBars.Both, Text = DiagnosticSnapshot.Replace("\n", Environment.NewLine) };
-        var copy = new Button { Text = T("pip.diagnostics.copy"), Dock = DockStyle.Bottom };
-        copy.Click += (_, _) =>
+        string text = DiagnosticSnapshot;
+        new Settings.InfoWindow(T("pip.diagnostics.title"), text, (T("pip.diagnostics.copy"), () =>
         {
-            try { Clipboard.SetText(text.Text); }
+            try { Clipboard.SetText(text.Replace("\n", Environment.NewLine)); }
             catch (ExternalException) { Problem?.Invoke(T("errors.clipboard.busy")); }
-        };
-        dialog.Controls.Add(text); dialog.Controls.Add(copy);
-        using (dialog) dialog.ShowDialog();
+        }, true)).ShowInFront();
     }
 
     /// <summary>

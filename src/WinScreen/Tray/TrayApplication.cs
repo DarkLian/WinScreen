@@ -204,6 +204,15 @@ public sealed class TrayApplication : ApplicationContext
             MessageBoxIcon.Information)));
         menu.Items.Add(new ToolStripMenuItem(T("app.exit"), MenuParts.Icon(MenuParts.Power), (_, _) => ExitThread()));
 
+        void Ticks()
+        {
+            builder.Refresh(_targetTitle.DropDownItems);
+            everywhere[AppCommand.ClickThroughOffEverywhere].Available = _windows.ClickThroughCount > 0;
+            everywhere[AppCommand.UnpinEverywhere].Available = _windows.PinnedCount > 0;
+            everywhere[AppCommand.HideAnchors].Checked = _anchors.Hidden;
+            everywhere[AppCommand.HideToolbar].Checked = _toolbarHidden;
+        }
+        StayingOpen.Follow(menu, Ticks);
         menu.Opening += (_, _) =>
         {
             _menuIdentity = _lastIdentity?.IsSameWindow() == true ? _lastIdentity : null;
@@ -274,6 +283,7 @@ public sealed class TrayApplication : ApplicationContext
             builder.Populate(menu.Items, false);
             builder.Refresh(menu.Items);
             MenuRenderer.Apply(menu);
+            StayingOpen.Follow(menu, () => builder.Refresh(menu.Items));
             var host = new WindowMenuHost(menu, point);
             _windowMenu = host;
             // A keyboard-opened menu normally needs no mouse hook. If Windows refuses activation,
@@ -1306,6 +1316,7 @@ public sealed class TrayApplication : ApplicationContext
         builder.PopulateArrange(menu.Items);
         builder.Refresh(menu.Items);
         MenuRenderer.Apply(menu);
+        StayingOpen.Follow(menu, () => builder.Refresh(menu.Items));
 
         // A menu only closes on an outside click while its program has the focus.
         menu.Closed += (_, _) =>
@@ -1335,22 +1346,10 @@ public sealed class TrayApplication : ApplicationContext
     private static void ShowWindowInfo(nint window)
     {
         string text = WindowUtilities.Information(window);
-        using var dialog = new Form
-        {
-            Text = CommandCatalog.Name(AppCommand.ShowWindowInfo), Size = new Size(620, 340),
-            StartPosition = FormStartPosition.CenterScreen, TopMost = true,
-        };
-        var box = new TextBox { Multiline = true, ReadOnly = true, Dock = DockStyle.Fill, Text = text, ScrollBars = ScrollBars.Both, WordWrap = false };
-        var copy = new Button { Text = T("common.copy"), AutoSize = true };
-        copy.Click += (_, _) => WindowUtilities.CopyText(text);
         string path = WindowInfo.ExecutablePath(window);
-        var folder = new Button { Text = T("window.openLocation"), AutoSize = true, Enabled = path.Length > 0 };
-        folder.Click += (_, _) => WindowUtilities.OpenLocation(window);
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true };
-        buttons.Controls.AddRange([copy, folder]);
-        dialog.Controls.Add(box);
-        dialog.Controls.Add(buttons);
-        dialog.ShowDialog();
+        new InfoWindow(CommandCatalog.Name(AppCommand.ShowWindowInfo), text,
+            (T("window.openLocation"), () => WindowUtilities.OpenLocation(window), path.Length > 0),
+            (T("common.copy"), () => WindowUtilities.CopyText(text), true)).ShowInFront();
     }
 
     /// <summary>Opens a view of a window, or returns null when the person chose not to restore a minimized one.</summary>

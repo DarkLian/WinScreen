@@ -397,6 +397,16 @@ internal sealed class OpacityRow : ToolStripControlHost
             _dragging = Capture = false;
         }
 
+        /// <summary>
+        /// The wheel moves the slider a step at a time. Left to the menu, it went on to the window under it, which
+        /// took the focus and closed the menu.
+        /// </summary>
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            Value += Math.Sign(e.Delta) * Step;
+            if (e is HandledMouseEventArgs handled) handled.Handled = true;
+        }
+
         protected override bool IsInputKey(Keys keyData) =>
             (keyData & Keys.KeyCode) is Keys.Left or Keys.Right or Keys.Home or Keys.End || base.IsInputKey(keyData);
 
@@ -600,5 +610,74 @@ internal sealed class PlacementRow : ToolStripControlHost
             if (disposing) _tips.Dispose();
             base.Dispose(disposing);
         }
+    }
+}
+
+/// <summary>
+/// Keeps a menu open after a choice that is often followed by another, such as turning something on or off, so the
+/// menu needn't be opened again for each. Choices that open a window or are done with the menu close it as usual.
+/// </summary>
+internal static class StayingOpen
+{
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ToolStripItem, object> Marked = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ToolStripDropDown, object> Hooked = new();
+
+    /// <summary>Window commands that change something and leave the person where they were.</summary>
+    private static readonly HashSet<AppCommand> Commands =
+    [
+        AppCommand.TogglePin, AppCommand.ToggleClickThrough, AppCommand.ToggleAnchor, AppCommand.ToggleDarkTitleBar,
+        AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.ToggleDark, AppCommand.ToggleGlass,
+        AppCommand.ToggleDefaultOpacity, AppCommand.OpacityUp, AppCommand.OpacityDown, AppCommand.RestoreWindow,
+        AppCommand.RestoreAll, AppCommand.ClickThroughOffEverywhere, AppCommand.UnpinEverywhere, AppCommand.HideAnchors,
+        AppCommand.HideToolbar,
+    ];
+
+    /// <summary>Marks a choice that leaves its menu open.</summary>
+    internal static T Keep<T>(T item) where T : ToolStripItem
+    {
+        Marked.AddOrUpdate(item, true);
+        return item;
+    }
+
+    internal static bool Keeps(ToolStripItem item) =>
+        Marked.TryGetValue(item, out _) || item.Tag is AppCommand command && (Commands.Contains(command) || CommandCatalog.AnchorOf(command) is not null);
+
+    /// <summary>
+    /// Follows <paramref name="menu"/> and every menu that opens from it; after a choice that keeps it open,
+    /// <paramref name="refresh"/> brings its ticks up to date.
+    /// </summary>
+    internal static void Follow(ToolStripDropDown menu, Action refresh) => Hook(menu, new Choice(refresh));
+
+    private sealed class Choice(Action refresh)
+    {
+        internal ToolStripItem? Clicked;
+        internal readonly Action Refresh = refresh;
+    }
+
+    private static void Hook(ToolStripDropDown menu, Choice choice)
+    {
+        if (Hooked.TryGetValue(menu, out _)) return;
+        Hooked.Add(menu, choice);
+        menu.ItemClicked += (_, e) => choice.Clicked = e.ClickedItem;
+        menu.Closing += (_, e) =>
+        {
+            if (e.CloseReason != ToolStripDropDownCloseReason.ItemClicked || choice.Clicked is not { } item || !Keeps(item)) return;
+            e.Cancel = true;
+            if (!menu.IsHandleCreated) return;
+            menu.BeginInvoke(() =>
+            {
+                if (choice.Clicked is null) return; // Another menu of the same chain did it already.
+                choice.Clicked = null;
+                choice.Refresh();
+            });
+        };
+        menu.Opened += (_, _) => HookInside(menu, choice);
+        HookInside(menu, choice);
+    }
+
+    private static void HookInside(ToolStripDropDown menu, Choice choice)
+    {
+        foreach (ToolStripMenuItem item in menu.Items.OfType<ToolStripMenuItem>())
+            if (item.HasDropDownItems) Hook(item.DropDown, choice);
     }
 }
