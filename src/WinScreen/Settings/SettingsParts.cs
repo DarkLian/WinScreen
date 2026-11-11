@@ -476,6 +476,10 @@ internal sealed class PlainButton : Button
     [System.ComponentModel.DefaultValue(false)]
     public bool Primary { get; set; }
 
+    /// <summary>An icon instead of words, for a small square button whose purpose its icon and tooltip say.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal char Glyph { get; set { field = value; Invalidate(); } }
+
     public PlainButton()
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
@@ -490,6 +494,7 @@ internal sealed class PlainButton : Button
     /// <summary>As big as its words need and no bigger: a standard button leaves far more room around them.</summary>
     public override Size GetPreferredSize(Size proposedSize)
     {
+        if (Glyph != '\0') return new Size(Unit(32), Unit(32));
         Size text = TextRenderer.MeasureText(Text, Font, Size.Empty, TextFormatFlags.SingleLine);
         return new Size(Math.Max(text.Width + Unit(22), Unit(72)), Math.Max(text.Height + Unit(12), Unit(32)));
     }
@@ -509,7 +514,13 @@ internal sealed class PlainButton : Button
         using (var fill = new SolidBrush(back)) g.FillPath(fill, path);
         if (!Primary || !Enabled) { using var edge = new Pen(SettingsStyle.StrokeOn(back)); g.DrawPath(edge, path); }
         Color text = !Enabled ? SettingsStyle.Disabled : Primary ? SettingsStyle.OnAccent : _pressed ? SettingsStyle.Secondary : SettingsStyle.Text;
-        TextRenderer.DrawText(g, Text, Font, area, text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+        if (Glyph != '\0' && Tray.MenuParts.Icon(Glyph, text) is { } icon)
+        {
+            int size = Unit(16);
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(icon, new Rectangle((Width - size) / 2, (Height - size) / 2, size, size));
+        }
+        else TextRenderer.DrawText(g, Text, Font, area, text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
             (ShowKeyboardCues ? TextFormatFlags.Default : TextFormatFlags.HidePrefix));
         if (Focused && ShowFocusCues) SettingsStyle.FocusRing(g, area, Unit(4), this);
     }

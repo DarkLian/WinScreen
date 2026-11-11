@@ -50,7 +50,8 @@ In **Settings → Appearance** you can change the opacity step, give pinned wind
 ## Picture-in-Picture views
 
 Press **Ctrl+Alt+P** to open a small live view of the window you're using. Press it again to close it.
-To show a whole display or part of the screen, right-click the tray icon and choose **New view...**.
+To show a whole display or part of the screen, right-click the tray icon and choose **New view...**. For part of the
+screen, choose **Region** and drag over the area.
 You can save a display or area there and open it again later from **Picture-in-Picture views → Saved sources**.
 
 | On a view | What happens |

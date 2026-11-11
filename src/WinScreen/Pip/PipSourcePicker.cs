@@ -42,8 +42,8 @@ internal sealed class PipSourcePicker : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         Text = T("pip.chooseSource");
         Icon = TrayApplication.LoadIcon();
-        ClientSize = new Size(460, 420);
-        MinimumSize = new Size(320, 280);
+        ClientSize = new Size(480, 460);
+        MinimumSize = new Size(380, 320);
         StartPosition = FormStartPosition.CenterScreen;
         ShowInTaskbar = true;
         TopMost = true;
@@ -53,18 +53,16 @@ internal sealed class PipSourcePicker : Form
         Font = MenuStyle.Font;
         BackColor = SettingsStyle.Page;
         ForeColor = SettingsStyle.Text;
-        Padding = new Padding(12, 12, 12, 10);
+        Padding = new Padding(14, 12, 14, 12);
         _allowed = allowed;
         _windows = PipSourceList.Windows(allowed);
+        // Choosing part of a display is one more kind of thing to show, not a button of its own.
         _kind.Items.AddRange([T("pip.sources.window"), T("pip.sources.displays"), T("pip.sources.region"), T("pip.bookmarks.title")]);
         _kind.AccessibleName = T("pip.sources.kind");
-        _kind.TabIndex = 0;
-        _search.TabIndex = 1;
-        _list.TabIndex = 2;
         _kind.SelectedIndex = 0;
-        _kind.SelectedIndexChanged += (_, _) => Fill();
+        _kind.SelectedIndexChanged += (_, _) => { ShowActions(); Fill(); };
 
-        _rowHeight.ImageSize = new Size(1, Unit(34));
+        _rowHeight.ImageSize = new Size(1, Unit(46));
         _list.SmallImageList = _rowHeight;
         _list.Columns.Add("", 420);
         DrawRows();
@@ -72,6 +70,7 @@ internal sealed class PipSourcePicker : Form
         _list.SelectedIndexChanged += (_, _) =>
         {
             _open.Enabled = Selected is not null || SelectedBookmark is not null;
+            _exact.Enabled = Selected?.Device is not null;
             if (Selected is not { Window: not 0 } choice) return;
             try
             {
@@ -83,6 +82,17 @@ internal sealed class PipSourcePicker : Form
         _list.ItemActivate += (_, _) => Choose();
         _list.Resize += (_, _) => FitColumn();
         _list.ClientSizeChanged += (_, _) => FitColumn();
+        // A saved source is forgotten from its own row: the button on it, or Delete.
+        _list.MouseClick += (_, e) =>
+        {
+            if (_list.GetItemAt(e.X, e.Y) is { Tag: PipSourceBookmark bookmark } row && RemoveSpot(row.Bounds).Contains(e.Location)) Forget(bookmark);
+        };
+        _list.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Delete || SelectedBookmark is not { } bookmark) return;
+            e.Handled = true;
+            Forget(bookmark);
+        };
         _search.AccessibleName = T("pip.sources.search");
         _search.TextChanged += (_, _) => Fill();
         _search.KeyDown += (_, e) =>
@@ -93,52 +103,77 @@ internal sealed class PipSourcePicker : Form
             _list.Items[0].Selected = true;
         };
 
-        var refresh = new PlainButton { Text = T("pip.sources.refresh") };
+        // Reading the list again belongs with the search box; F5 does it too.
+        var refresh = new PlainButton { Glyph = MenuParts.Sync, AccessibleName = T("pip.sources.refresh"), Margin = new Padding(8, 0, 0, 0) };
         refresh.Click += (_, _) => RefreshSources();
-        var preview = new PlainButton { Text = T("pip.sources.preview") };
-        preview.Click += (_, _) => Preview();
-        var region = new PlainButton { Text = T("pip.sources.selectRegion") };
-        region.Click += (_, _) => AskForRegion();
-        var remove = new PlainButton { Text = T("common.remove") };
-        remove.Click += (_, _) =>
-        {
-            if (SelectedBookmark is not { } bookmark) return;
-            BookmarkRemoved?.Invoke(bookmark.Name);
-            Fill();
-        };
+        _tips.SetToolTip(refresh, T("pip.sources.refresh"));
+        _preview.Click += (_, _) => Preview();
+        _exact.Click += (_, _) => ChooseExactArea();
         _open.Click += (_, _) => Choose();
         var cancel = new PlainButton { Text = T("common.cancel") };
         cancel.Click += (_, _) => Close();
         AcceptButton = _open;
         CancelButton = cancel;
-        var buttons = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(0, 10, 0, 0),
-            BackColor = SettingsStyle.Page,
-        };
-        buttons.WrapContents = true;
-        foreach (Button button in new Button[] { cancel, _open, preview, refresh, region, remove })
-        {
-            button.Margin = new Padding(6, 0, 0, 6);
-            buttons.Controls.Add(button);
-        }
-        buttons.TabIndex = 3;
 
-        // The kind of thing, the search box and the list, one under another, with the buttons below.
+        // How many there are on the left; on the right what to do with the one chosen, the main action last.
+        var actions = new FlowLayoutPanel
+        {
+            AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.RightToLeft, WrapContents = false,
+            Anchor = AnchorStyles.Right, Margin = Padding.Empty, BackColor = SettingsStyle.Page,
+        };
+        foreach (Button button in new Button[] { _open, cancel, _preview, _exact })
+        {
+            button.Margin = new Padding(8, 0, 0, 0);
+            actions.Controls.Add(button);
+        }
+        // Laid out from the right; the keyboard still goes through them left to right.
+        (_exact.TabIndex, _preview.TabIndex, cancel.TabIndex, _open.TabIndex) = (0, 1, 2, 3);
+        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 12, 0, 0), BackColor = SettingsStyle.Page };
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _count.Anchor = AnchorStyles.Left;
+        footer.Controls.Add(_count, 0, 0);
+        footer.Controls.Add(actions, 1, 0);
+
+        var searchRow = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 8, 0, 8), BackColor = SettingsStyle.Page };
+        searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        searchRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        searchRow.Controls.Add(new InputFrame(_search) { Glyph = MenuParts.Search, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = Padding.Empty }, 0, 0);
+        searchRow.Controls.Add(refresh, 1, 0);
+
+        // The kind of thing, the search box and the list, one under another, with the actions below.
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, BackColor = SettingsStyle.Page };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var search = new InputFrame(_search) { Glyph = MenuParts.Search, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(0, 8, 0, 8) };
         layout.Controls.Add(_kind, 0, 0);
-        layout.Controls.Add(search, 0, 1);
+        layout.Controls.Add(searchRow, 0, 1);
         layout.Controls.Add(new InputFrame(_list, InputFrame.Look.List) { Dock = DockStyle.Fill, Margin = Padding.Empty }, 0, 2);
-        layout.Controls.Add(buttons, 0, 3);
+        layout.Controls.Add(footer, 0, 3);
         Controls.Add(layout);
+        ShowActions();
         Fill();
         Shown += (_, _) => _search.Focus();
         ResumeLayout(true);
+    }
+
+    private readonly PlainButton _preview = new() { Text = T("pip.sources.preview") };
+    private readonly PlainButton _exact = new() { Text = T("pip.sources.exactArea"), Enabled = false };
+    private readonly SoftLabel _count = new() { AutoSize = true, ForeColor = SettingsStyle.Secondary, Margin = Padding.Empty };
+    private readonly ToolTip _tips = new();
+
+    private bool ChoosingRegion => _kind.SelectedIndex == 2;
+
+    /// <summary>
+    /// What the buttons offer for this kind of thing. Part of a display is dragged out on it, or typed in as exact
+    /// numbers; anything else opens as it is, after a look at it if wanted.
+    /// </summary>
+    private void ShowActions()
+    {
+        _open.Text = ChoosingRegion ? T("pip.sources.selectRegion") : T("common.open");
+        _exact.Visible = ChoosingRegion;
+        _preview.Visible = !ChoosingRegion;
     }
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
@@ -163,9 +198,31 @@ internal sealed class PipSourcePicker : Form
         if (_list.Columns[0].Width != width) _list.Columns[0].Width = width;
     }
 
+    /// <summary>The button on a saved source's row that forgets it.</summary>
+    private Rectangle RemoveSpot(Rectangle row)
+    {
+        int size = Unit(28);
+        return new Rectangle(row.Right - Unit(10) - size, row.Top + (row.Height - size) / 2, size, size);
+    }
+
+    private void Forget(PipSourceBookmark bookmark)
+    {
+        BookmarkRemoved?.Invoke(bookmark.Name);
+        Fill();
+    }
+
+    /// <summary>The line under a row's name: the program, the display, or where a saved source was.</summary>
+    private static string Detail(object? tag) => tag switch
+    {
+        PipChoice { Device: null } window => window.Minimized ? window.Program + " " + T("pip.sources.minimized") : window.Program,
+        PipChoice display => display.Program,
+        PipSourceBookmark bookmark => bookmark.Device,
+        _ => "",
+    };
+
     /// <summary>
-    /// Rows as Settings draws them: a wash under the pointer, the accent wash and bar when chosen, and the program's
-    /// icon. A row is drawn whole whenever any part of it is asked for.
+    /// Rows as Settings draws them: a wash under the pointer, the accent wash and bar when chosen; the program's icon,
+    /// the name, and under it in smaller words what it is. A row is drawn whole whenever any part of it is asked for.
     /// </summary>
     private void DrawRows()
     {
@@ -182,8 +239,9 @@ internal sealed class PipSourcePicker : Form
             SettingsStyle.SoftText(g);
             Rectangle row = item.Bounds;
             using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, row);
-            var wash = new Rectangle(row.Left + Unit(2), row.Top + Unit(1), row.Width - Unit(4), row.Height - Unit(2));
-            if (item.Selected || item.Index == _hot)
+            var wash = new Rectangle(row.Left + Unit(4), row.Top + Unit(2), row.Width - Unit(8), row.Height - Unit(4));
+            bool hot = item.Index == _hot;
+            if (item.Selected || hot)
             {
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 using var path = SettingsStyle.Rounded(wash, Unit(4));
@@ -192,16 +250,37 @@ internal sealed class PipSourcePicker : Form
                 if (item.Selected) SettingsStyle.SelectionBar(g, wash, _list);
                 if (item.Selected && item.Focused && _list.Focused) SettingsStyle.FocusRing(g, wash, Unit(4), _list);
             }
-            int left = row.Left + Unit(12), size = Unit(16);
-            if (item.ImageKey is { Length: > 0 } key && _icons.Images.ContainsKey(key) && _icons.Images[key] is { } icon)
+            int left = row.Left + Unit(16), size = Unit(20);
+            Image? icon = item.ImageKey is { Length: > 0 } key && _icons.Images.ContainsKey(key) ? _icons.Images[key]
+                : MenuParts.Icon(item.Tag switch
+                {
+                    PipSourceBookmark => MenuParts.Star,
+                    PipChoice { Device: not null } => MenuParts.Monitor,
+                    _ => MenuParts.Page,
+                }, SettingsStyle.Secondary);
+            if (icon is not null)
             {
                 g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
                 g.DrawImage(icon, new Rectangle(left, row.Top + (row.Height - size) / 2, size, size));
             }
-            left += size + Unit(10);
-            TextRenderer.DrawText(g, item.Text, _list.Font, new Rectangle(left, row.Top, Math.Max(0, row.Right - left - Unit(8)), row.Height),
-                SettingsStyle.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
-                TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+            left += size + Unit(12);
+            int right = row.Right - Unit(12);
+            if (item.Tag is PipSourceBookmark && (item.Selected || hot))
+            {
+                Rectangle remove = RemoveSpot(row);
+                if (MenuParts.Icon(MenuParts.Close, SettingsStyle.Secondary) is { } close)
+                    g.DrawImage(close, new Rectangle(remove.Left + (remove.Width - Unit(14)) / 2, remove.Top + (remove.Height - Unit(14)) / 2, Unit(14), Unit(14)));
+                right = remove.Left - Unit(4);
+            }
+            const TextFormatFlags line = TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
+            int nameHeight = TextRenderer.MeasureText(g, "Ag", _list.Font, Size.Empty, line).Height;
+            int detailHeight = TextRenderer.MeasureText(g, "Ag", MenuStyle.SmallFont, Size.Empty, line).Height;
+            int top = row.Top + (row.Height - nameHeight - Unit(2) - detailHeight) / 2;
+            int width = Math.Max(0, right - left);
+            TextRenderer.DrawText(g, item.Text, _list.Font, new Rectangle(left, top, width, nameHeight), SettingsStyle.Text, line);
+            TextRenderer.DrawText(g, Detail(item.Tag), MenuStyle.SmallFont, new Rectangle(left, top + nameHeight + Unit(2), width, detailHeight),
+                SettingsStyle.Secondary, line);
         };
         _list.MouseMove += (_, e) => Hover(_list.GetItemAt(e.X, e.Y)?.Index ?? -1);
         _list.MouseLeave += (_, _) => Hover(-1);
@@ -230,7 +309,7 @@ internal sealed class PipSourcePicker : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _icons.Dispose(); _rowHeight.Dispose(); }
+        if (disposing) { _icons.Dispose(); _rowHeight.Dispose(); _tips.Dispose(); }
         base.Dispose(disposing);
     }
 
@@ -275,17 +354,22 @@ internal sealed class PipSourcePicker : Form
                 bookmark.Name.Contains(_search.Text, StringComparison.CurrentCultureIgnoreCase)))
                 _list.Items.Add(new ListViewItem(bookmark.Name, _bookmarksGroup) { Tag = bookmark, ToolTipText = bookmark.Device });
         _list.EndUpdate();
-        _open.Enabled = false;
-    }
-
-    private ListViewItem Row(PipChoice choice, ListViewGroup group)
-    {
-        string note = choice.Minimized ? " " + T("pip.sources.minimized") : "";
-        return new ListViewItem($"{choice.Title} ({choice.Program}){note}", group)
+        _open.Enabled = _exact.Enabled = false;
+        int count = _list.Items.Count;
+        // With one display there is nothing to choose between.
+        if (count == 1 && _kind.SelectedIndex is 1 or 2) _list.Items[0].Selected = true;
+        _count.Text = _kind.SelectedIndex switch
         {
-            Tag = choice, ToolTipText = choice.Title, ImageKey = IconFor(choice),
+            0 => count == 1 ? T("pip.sources.count.oneWindow") : string.Format(T("pip.sources.count.windows"), count),
+            3 => count == 1 ? T("pip.sources.count.oneSaved") : string.Format(T("pip.sources.count.saved"), count),
+            _ => count == 1 ? T("pip.sources.count.oneDisplay") : string.Format(T("pip.sources.count.displays"), count),
         };
     }
+
+    private ListViewItem Row(PipChoice choice, ListViewGroup group) => new(choice.Title, group)
+    {
+        Tag = choice, ToolTipText = choice.Title, ImageKey = IconFor(choice),
+    };
 
     private string IconFor(PipChoice choice)
     {
@@ -383,19 +467,8 @@ internal sealed class PipSourcePicker : Form
         if (Selected is not { } choice || !Validate(choice)) return;
         if (choice.Device is { } device)
         {
-            if (_kind.SelectedIndex == 2)
-            {
-                var source = new ScreenPipSource(device, null);
-                Rectangle display = source.Screen.Bounds;
-                using var dialog = new PlacementDialog(T("pip.sources.regionBounds"), new Rectangle(Point.Empty, display.Size));
-                if (dialog.ShowDialog(this) != DialogResult.OK) return;
-                if (!Validate(choice) || source.Screen.Bounds != display) { RefreshSources(); return; }
-                Rectangle region = Rectangle.Intersect(dialog.Frame, new Rectangle(Point.Empty, display.Size));
-                if (region.Width <= 0 || region.Height <= 0) return;
-                Close();
-                RegionChosen?.Invoke(device, region);
-                return;
-            }
+            // Part of a display is dragged out on the display itself.
+            if (ChoosingRegion) { AskForRegion(); return; }
             Close();
             ScreenChosen?.Invoke(device);
         }
@@ -405,5 +478,20 @@ internal sealed class PipSourcePicker : Form
             Close();
             WindowChosen?.Invoke(choice.Window);
         }
+    }
+
+    /// <summary>Part of the chosen display, typed in as numbers instead of dragged out.</summary>
+    private void ChooseExactArea()
+    {
+        if (Selected is not { Device: { } device } choice || !Validate(choice)) return;
+        var source = new ScreenPipSource(device, null);
+        Rectangle display = source.Screen.Bounds;
+        using var dialog = new PlacementDialog(T("pip.sources.regionBounds"), new Rectangle(Point.Empty, display.Size));
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (!Validate(choice) || source.Screen.Bounds != display) { RefreshSources(); return; }
+        Rectangle region = Rectangle.Intersect(dialog.Frame, new Rectangle(Point.Empty, display.Size));
+        if (region.Width <= 0 || region.Height <= 0) return;
+        Close();
+        RegionChosen?.Invoke(device, region);
     }
 }
