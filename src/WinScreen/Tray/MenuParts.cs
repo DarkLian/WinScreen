@@ -29,6 +29,8 @@ internal static class MenuParts
     /// <summary>A small picture of a glyph in its own colour, or null where the icon font is missing.</summary>
     internal static Image? Icon(char glyph)
     {
+        // WinScreen's own coloured drawing where there is one; the font's outline, coloured, otherwise.
+        if (ColorIcons.Of(glyph, Scale(16)) is { } drawn) return drawn;
         Image? picture = Icon(glyph, ColorOf(glyph), twoTone: true);
         if (picture is not null) Themed.AddOrUpdate(picture, new StrongBox<char>(glyph));
         return picture;
@@ -239,6 +241,13 @@ internal static class MenuParts
         AppCommand.SaveWindowSetup => Save,
         AppCommand.ToggleDefaultOpacity => Brightness,
         AppCommand.ShowWindowInfo => Info,
+        AppCommand.ToggleDark => ColorIcons.DarkMode,
+        AppCommand.ToggleGlass => ColorIcons.Glass,
+        AppCommand.ToggleShrink => ColorIcons.Shrink,
+        AppCommand.ToggleCrop => Crop,
+        AppCommand.Arrange => ColorIcons.Move,
+        AppCommand.OpacityUp => ColorIcons.Plus,
+        AppCommand.OpacityDown => ColorIcons.Minus,
         _ => null,
     };
 }

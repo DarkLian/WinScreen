@@ -26,7 +26,7 @@ public sealed class WindowToolbar : Form
 
     private static readonly Color Background = Color.FromArgb(32, 32, 32);
     private static readonly Color Hover = Color.FromArgb(70, 70, 70);
-    private static readonly Color On = Color.FromArgb(79, 140, 255);
+    private static readonly Color OnBack = Color.FromArgb(40, 62, 86);
 
     private readonly Func<nint, bool> _canUse;
     private readonly Func<AppCommand, nint, bool> _isOn;
@@ -41,7 +41,6 @@ public sealed class WindowToolbar : Form
     private Point _hoverPoint;
     private Rectangle _targetBounds;
     private Rectangle _hoverZone;
-    private Font? _glyphs;
     private string _arrangement = "";
     private ToolbarPreferences _preferences = new();
     private bool _enabled;
@@ -74,8 +73,8 @@ public sealed class WindowToolbar : Form
             string name = CommandCatalog.Name(command);
             var button = new Button
             {
-                Text = Glyph(command),
                 FlatStyle = FlatStyle.Flat,
+                ImageAlign = ContentAlignment.MiddleCenter,
                 ForeColor = Color.White,
                 BackColor = Background,
                 TabStop = false,
@@ -146,30 +145,14 @@ public sealed class WindowToolbar : Form
         {
             _watch.Dispose();
             _tips.Dispose();
-            _glyphs?.Dispose();
         }
 
         base.Dispose(disposing);
     }
 
-    private static string Glyph(AppCommand command) => command switch
-    {
-        AppCommand.TogglePin => "",
-        AppCommand.OpacityDown => "",
-        AppCommand.ToggleDefaultOpacity => "",
-        AppCommand.OpacityUp => "",
-        AppCommand.ToggleClickThrough => "",
-        AppCommand.OpenPip => "",
-        AppCommand.ToggleAnchor => "",
-        AppCommand.ToggleDark => "",
-        AppCommand.ToggleGlass => "",
-        AppCommand.ToggleShrink => "",
-        AppCommand.Arrange => "\uE7C2",
-        AppCommand.ToggleCrop => "",
-        AppCommand.SaveWindowSetup => "",
-        AppCommand.RestoreWindow => "",
-        _ => "",
-    };
+    /// <summary>The coloured icon each button shows.</summary>
+    private static char ButtonIcon(AppCommand command) => MenuParts.IconOf(command) ?? MenuParts.More;
+
 
     /// <summary>Sizes the buttons for this monitor and lays out the ones currently available.</summary>
     private void Arrange(int dpi)
@@ -180,11 +163,7 @@ public sealed class WindowToolbar : Form
             return;
 
         _arrangement = arrangement;
-        // An equal font doesn't replace the one a button holds, so disposing it would break the buttons.
-        int glyphPixels = Dpi.Scale(GlyphSize, dpi);
-        Font? previous = _glyphs is null || _glyphs.Size != glyphPixels ? _glyphs : null;
-        if (_glyphs is null || previous is not null)
-            _glyphs = new Font("Segoe MDL2 Assets", glyphPixels, GraphicsUnit.Pixel);
+        int iconPixels = Dpi.Scale(GlyphSize + 3, dpi);
         int size = Dpi.Scale(ButtonSize, dpi);
         int gap = Dpi.Scale(GroupGap, dpi);
         int left = 0, right = 0;
@@ -193,7 +172,7 @@ public sealed class WindowToolbar : Form
         {
             // Read from the list: a button reports itself as hidden until the toolbar is on screen.
             bool shown = available.Contains(command);
-            button.Font = _glyphs;
+            button.Image = ColorIcons.Of(ButtonIcon(command), iconPixels);
             button.Visible = shown;
             if (shown)
             {
@@ -212,7 +191,6 @@ public sealed class WindowToolbar : Form
 
         HasButtons = available.Length > 0;
         ClientSize = new Size(Math.Max(1, right), size);
-        previous?.Dispose();
     }
 
     private void Watch()
@@ -302,10 +280,14 @@ public sealed class WindowToolbar : Form
             (trigger == ToolbarTrigger.MinimizeButton ? User32.HTMINBUTTON : User32.HTCAPTION);
     }
 
+    /// <summary>What is on shows on a tinted button, as the coloured icons keep their own colours.</summary>
     private void ShowStates()
     {
         foreach ((AppCommand command, Button button) in _buttons)
-            button.ForeColor = _isOn(command, _window) ? On : Color.White;
+        {
+            Color back = _isOn(command, _window) ? OnBack : Background;
+            if (button.BackColor != back) button.BackColor = back;
+        }
     }
 
     private bool TargetIsCurrent() => _identity?.IsSameWindow() == true &&
