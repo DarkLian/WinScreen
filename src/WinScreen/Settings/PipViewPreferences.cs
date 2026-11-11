@@ -7,6 +7,8 @@ public sealed record PipViewPreferences
     public PipHoverPreview HoverPreview { get; init; }
     public int HoverDelayMilliseconds { get; init; } = 600;
     public bool MinimizeToTaskbar { get; init; }
+    /// <summary>New views keep their title bar showing instead of only while the pointer is over them.</summary>
+    public bool AlwaysShowTitleBar { get; init; }
 
     internal PipViewPreferences Validated() => this with
     {

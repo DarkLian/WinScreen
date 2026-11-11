@@ -46,7 +46,7 @@ public sealed class PipPreferences
 
 /// <summary>What one view does differently from Settings. It ends with the view unless saved as a preset.</summary>
 internal sealed record PipOverrides(int? FrameRate = null, int? OpacityPercent = null, PipScaling? Scaling = null,
-    bool PositionLocked = false, bool ClickThrough = false, bool KeepAspectRatio = true);
+    bool PositionLocked = false, bool ClickThrough = false, bool KeepAspectRatio = true, bool? TitleBarAlways = null);
 
 /// <summary>A crop as shares of the whole source, so it still fits after the window is resized.</summary>
 public sealed record PipCropShares(double X, double Y, double Width, double Height)
@@ -88,6 +88,7 @@ public sealed class PipPreset
     public PipScaling? Scaling { get; set; }
     public PipCropShares? CropShares { get; set; }
     public bool? PositionLocked { get; set; }
+    public bool? TitleBarAlways { get; set; }
 
     [JsonIgnore]
     public Rectangle Crop => CropWidth > 0 && CropHeight > 0
@@ -116,6 +117,7 @@ public sealed class PipPreset
             Scaling = Scaling is { } scaling && Enum.IsDefined(scaling) ? scaling : null,
             CropShares = CropShares?.Validated(),
             PositionLocked = PositionLocked,
+            TitleBarAlways = TitleBarAlways,
         };
     }
 }

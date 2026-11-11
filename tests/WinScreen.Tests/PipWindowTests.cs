@@ -2,6 +2,7 @@ using WinScreen.Native;
 using WinScreen.Pip;
 using WinScreen.Tests.Support;
 using WinScreen.Windows;
+using WinScreen.Settings;
 using Xunit;
 
 namespace WinScreen.Tests;
@@ -64,6 +65,49 @@ public class PipWindowTests
     {
         return Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Middle(window)), color), 3000,
             () => pump(20));
+    }
+
+    /// <summary>
+    /// A view can keep its title bar up with the pointer far away; it still follows the view, and a view's own
+    /// choice wins over the one in Settings and is kept in a preset.
+    /// </summary>
+    [Fact]
+    public void A_title_bar_kept_up_stays_with_its_view()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        OnUiThread(pump =>
+        {
+            using PipWindow pip = OpenAwayFromToasts(source.Handle);
+            pip.ApplyViewPreferences(new PipViewPreferences { AlwaysShowTitleBar = true });
+            pump(200);
+            var far = new Point(pip.Left - 400, pip.Bottom + 300);
+            long now = Environment.TickCount64;
+            void AwayFor(long milliseconds)
+            {
+                pip.UpdateHover(far, now);
+                pip.UpdateHover(far, now + milliseconds);
+                pump(500);
+            }
+
+            AwayFor(5000);
+            Rectangle bar = Assert.IsType<Rectangle>(pip.TitleBarBounds);
+            Assert.Equal(pip.Left, bar.Left);
+            Assert.True(bar.Bottom == pip.Top || bar.Top == pip.Bottom, $"Bar {bar}, view {pip.Bounds}");
+
+            pip.Location = new Point(pip.Left + 60, pip.Top + 40);
+            pump(100);
+            AwayFor(5000);
+            Assert.Equal(pip.Left, Assert.IsType<Rectangle>(pip.TitleBarBounds).Left);
+            Assert.True(pip.CurrentPreset("test").TitleBarAlways is null); // Still following Settings.
+
+            pip.Overrides = pip.Overrides with { TitleBarAlways = false };
+            now = Environment.TickCount64;
+            AwayFor(1500);
+            pip.UpdateHover(far, now + 3000);
+            pump(500);
+            Assert.Null(pip.TitleBarBounds);
+            Assert.False(pip.CurrentPreset("test").TitleBarAlways);
+        });
     }
 
     [Fact]

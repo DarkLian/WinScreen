@@ -298,6 +298,8 @@
   "pip.state.starting": "Starting",
   "pip.state.suspended": "Suspended",
   "pip.taskbar.enable": "Keep minimized views on the taskbar",
+  "pip.titleBarAlways": "Always show title bar",
+  "pip.titleBarAlways.default": "Always show the title bar on new views",
   "pip.titlePrefix": "PiP - ",
   "pip.useSettings": "Use Settings",
   "pip.views.empty": "No open views",

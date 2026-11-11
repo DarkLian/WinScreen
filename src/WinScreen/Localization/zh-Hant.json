@@ -298,6 +298,8 @@
   "pip.state.starting": "正在啟動",
   "pip.state.suspended": "已暫停",
   "pip.taskbar.enable": "將最小化的檢視保留在工作列上",
+  "pip.titleBarAlways": "一律顯示標題列",
+  "pip.titleBarAlways.default": "新檢視一律顯示標題列",
   "pip.titlePrefix": "子母畫面 - ",
   "pip.useSettings": "使用設定",
   "pip.views.empty": "沒有開啟的檢視",

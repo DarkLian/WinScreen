@@ -542,6 +542,9 @@ public sealed class PipWindow : Form
         options.DropDownItems.Add(new ToolStripMenuItem(T("pip.lockPosition"), null,
             (_, _) => Overrides = _overrides with { PositionLocked = !_overrides.PositionLocked })
             { Checked = _overrides.PositionLocked });
+        options.DropDownItems.Add(new ToolStripMenuItem(T("pip.titleBarAlways"), null,
+            (_, _) => Overrides = _overrides with { TitleBarAlways = !TitleBarAlways })
+            { Checked = TitleBarAlways });
         options.DropDownItems.Add(new ToolStripMenuItem(T("pip.clickThrough"), null,
             (_, _) => Overrides = _overrides with { ClickThrough = true }));
         options.DropDownItems.Add(new ToolStripSeparator());
@@ -624,6 +627,7 @@ public sealed class PipWindow : Form
         if (preset.OpacityPercent != current.OpacityPercent) changes.Add(T("pip.opacity") + ": " + (preset.OpacityPercent?.ToString() ?? T("pip.useSettings")));
         if (preset.Scaling != current.Scaling) changes.Add(T("pip.scaling"));
         if (preset.PositionLocked is { } locked && locked != current.PositionLocked) changes.Add(T("pip.lockPosition") + ": " + (locked ? T("common.yes") : T("common.no")));
+        if (preset.TitleBarAlways is { } always && always != TitleBarAlways) changes.Add(T("pip.titleBarAlways") + ": " + (always ? T("common.yes") : T("common.no")));
         return changes.Count == 0 ? T("pip.presets.noChanges") : string.Join("; ", changes);
     }
 
@@ -660,6 +664,7 @@ public sealed class PipWindow : Form
             LongSide = _longSide, Device = Screen.FromControl(this).DeviceName, Left = left, Top = top,
             FrameRate = _overrides.FrameRate, OpacityPercent = _overrides.OpacityPercent, Scaling = _overrides.Scaling,
             CropShares = PipCropShares.Of(_crop, whole), PositionLocked = _overrides.PositionLocked,
+            TitleBarAlways = _overrides.TitleBarAlways,
         };
     }
 
@@ -675,6 +680,7 @@ public sealed class PipWindow : Form
         {
             FrameRate = preset.FrameRate, OpacityPercent = preset.OpacityPercent, Scaling = preset.Scaling,
             PositionLocked = preset.PositionLocked ?? _overrides.PositionLocked,
+            TitleBarAlways = preset.TitleBarAlways ?? _overrides.TitleBarAlways,
         };
         _crop = preset.CropFor(WholeSize());
         _zoom = PipGeometry.WholeView;
@@ -1735,11 +1741,14 @@ public sealed class PipWindow : Form
         if (_titleBar.Width != _titleBar.FittedWidth(Width)) PositionTitleBar(); // Titles change, as tabs do.
         bool over = Bounds.Contains(pointer) || _titleBar.Dragging ||
             (_titleBar.Visible && _titleBar.Bounds.Contains(pointer));
-        if (_menu.Visible || _titleBar.Dragging) _titleBar.HoldVisible();
+        if (_menu.Visible || _titleBar.Dragging || TitleBarAlways) _titleBar.HoldVisible();
         else _titleBar.FollowHover(over, now);
         if (over && !_pressed && !_menu.Visible) FollowHoverPreview(pointer, now);
         else DropHoverPreview();
     }
+
+    /// <summary>The title bar stays up for this view: its own choice, or else the one in Settings.</summary>
+    internal bool TitleBarAlways => _overrides.TitleBarAlways ?? _viewPreferences.AlwaysShowTitleBar;
 
     private Rectangle PictureArea => PipGeometry.FitPicture(PipGeometry.ViewArea(ClientSize), _lastShown);
 
