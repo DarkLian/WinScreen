@@ -269,10 +269,10 @@ public sealed partial class WindowController
     {
         lock (_gate)
         {
+            if (TaskbarButtonOwnedByWindows(window)) // Checked first, so nothing is kept about a window left as it was.
+                throw new WindowOperationException(T("errors.switcher.windowsManaged"));
             ChangedWindow state = Track(window);
             if (state.TaskbarButtonRemoved || state.SwitcherBits is not null) return;
-            if (TaskbarButtonOwnedByWindows(window))
-                throw new WindowOperationException(T("errors.switcher.windowsManaged"));
             state.TaskbarButtonRemoved = true;
             Prepare(window, state);
             SaveJournal(); // Written before the button goes, so a crash right after still brings it back.
