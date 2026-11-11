@@ -36,9 +36,9 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         items.Add(Command(AppCommand.ToggleAnchor));
 
         items.Add(MenuParts.Header(T("menu.group.place")));
-        items.Add(new PlacementRow(place => WithTarget(window => run(place, window))) { Tag = AppCommand.AlignCenter });
+        items.Add(new PlacementRow(place => WithTarget(window => run(place, window)), command => Hotkey?.Invoke(command)) { Tag = AppCommand.AlignCenter });
         ToolStripMenuItem arrange = Command(AppCommand.Arrange);
-        PopulateArrange(arrange.DropDownItems);
+        PopulateArrange(arrange.DropDownItems, places: false); // The grid above already offers the nine places.
         items.Add(arrange);
 
         items.Add(MenuParts.Header(T("menu.group.look")));
@@ -100,9 +100,15 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         items.Add(Command(AppCommand.RestoreWindow));
     }
 
-    internal void PopulateArrange(ToolStripItemCollection items)
+    /// <summary>
+    /// The Arrange commands. With <paramref name="places"/> off the nine corners, edges and centre are left out, for a
+    /// menu that shows the placement grid; the commands and their shortcuts stay the same.
+    /// </summary>
+    internal void PopulateArrange(ToolStripItemCollection items, bool places = true)
     {
-        foreach (AppCommand? action in CommandCatalog.ArrangeMenu)
+        IEnumerable<AppCommand?> actions = places ? CommandCatalog.ArrangeMenu
+            : CommandCatalog.ArrangeMenu.SkipWhile(action => action is { } entry && CommandCatalog.AnchorOf(entry) is not null).Skip(1);
+        foreach (AppCommand? action in actions)
             items.Add(action is not { } entry ? new ToolStripSeparator()
                 : CommandCatalog.IsExperimental(entry) ? Command(entry).Experimental() : Command(entry));
         if (MoveToDisplay is { } move)
@@ -114,7 +120,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
                 displays.DropDownItems.Add($"{device} ({screen.Bounds.Width}×{screen.Bounds.Height})", null,
                     (_, _) => WithTarget(window => move(window, device))).Tag = new DisplayMove(device);
             }
-            items.Insert(10, displays);
+            items.Insert(places ? 10 : 0, displays);
         }
     }
 

@@ -36,22 +36,69 @@ public sealed class WindowMenuBuilderTests
                 builder.Populate(menu.Items, tray);
                 builder.Refresh(menu.Items);
                 var commands = Commands(menu.Items).Where(item => item.Tag is AppCommand).ToArray();
+                // The nine places are in the grid, not listed again under Arrange; everything else is a command row.
                 foreach (AppCommand command in CommandCatalog.Ordered.Where(command => command != AppCommand.RestoreAll))
                     Assert.Contains(commands, item => Equals(item.Tag, command));
+                Assert.DoesNotContain(commands, item => item.Tag is AppCommand command && CommandCatalog.AnchorOf(command) is not null);
+                AccessibleObject places = menu.Items.OfType<PlacementRow>().Single().Control.AccessibilityObject;
+                Assert.Equal(CommandCatalog.All.Where(command => CommandCatalog.AnchorOf(command) is not null).Select(CommandCatalog.Name).Order(),
+                    Enumerable.Range(0, places.GetChildCount()).Select(index => places.GetChild(index)!.Name).Order());
                 foreach (AppCommand command in new[] { AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.ToggleDarkTitleBar, AppCommand.ShowWindowInfo })
                     Assert.Contains(commands, item => Equals(item.Tag, command));
                 Assert.All(commands.Where(item => !Equals(item.Tag, AppCommand.RestoreAll)), item => Assert.False(item.Enabled));
                 Assert.DoesNotContain(commands, item => Equals(item.Tag, AppCommand.RestoreAll));
                 Assert.Single(commands, item => Equals(item.Tag, AppCommand.ShowWindowInfo));
-                Assert.Equal(CommandCatalog.ArrangeMenu.OfType<AppCommand>(),
+                Assert.Equal(CommandCatalog.ArrangeMenu.OfType<AppCommand>().Where(command => CommandCatalog.AnchorOf(command) is null),
                     Commands(menu.Items).Single(item => Equals(item.Tag, AppCommand.Arrange)).DropDownItems
                         .OfType<ToolStripMenuItem>().Select(item => (AppCommand)item.Tag!));
+                using var toolbar = new ContextMenuStrip();
+                builder.PopulateArrange(toolbar.Items); // The toolbar's Arrange button has no grid, so it keeps all nine.
+                Assert.Equal(CommandCatalog.ArrangeMenu.OfType<AppCommand>(),
+                    toolbar.Items.OfType<ToolStripMenuItem>().Select(item => (AppCommand)item.Tag!));
                 Assert.Contains(Commands(menu.Items), item => item.Text == UiText.T("common.copy"));
                 // Group headings and the two rows that hold a control are not commands, and nothing lists them as such.
                 Assert.Equal(3, menu.Items.OfType<ToolStripLabel>().Count());
                 Assert.Single(menu.Items.OfType<PlacementRow>());
             }
         });
+    }
+
+    [Fact]
+    public void The_placement_grid_reads_as_nine_named_buttons()
+    {
+        OnUiThread(() =>
+        {
+            AppCommand? chosen = null;
+            using var row = new PlacementRow(place => chosen = place);
+            AccessibleObject grid = row.Control.AccessibilityObject;
+            Assert.Equal(9, grid.GetChildCount());
+            AccessibleObject corner = grid.GetChild(8)!;
+            Assert.Equal(AccessibleRole.PushButton, corner.Role);
+            Assert.Equal(CommandCatalog.Name(AppCommand.AlignBottomRight), corner.Name);
+            Assert.Equal(CommandCatalog.Name(AppCommand.AlignTopLeft), grid.GetChild(0)!.Name);
+            corner.DoDefaultAction();
+            Assert.Equal(AppCommand.AlignBottomRight, chosen);
+        });
+    }
+
+    [Fact]
+    public void Help_text_splits_into_one_note_per_gesture()
+    {
+        try
+        {
+            foreach (string language in new[] { "en", "zh-Hans", "zh-Hant" })
+            {
+                UiText.Initialize(language);
+                foreach (string key in new[] { "pip.controls.help", "pip.controls.directHelp" })
+                    Assert.All(MenuParts.Notes(UiText.T(key)).ToArray(), note =>
+                    {
+                        Assert.NotEmpty(note.Text!);
+                        Assert.NotEmpty(note.How);
+                        note.Dispose();
+                    });
+            }
+        }
+        finally { UiText.Initialize("en"); }
     }
 
     [Fact]

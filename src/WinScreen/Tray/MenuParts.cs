@@ -210,6 +210,22 @@ internal static class MenuParts
 
     internal static readonly object HeaderTag = new();
 
+    private static readonly ConditionalWeakTable<ToolStripItem, object> Choices = [];
+
+    /// <summary>Marks one of several commands of which only one is on: it shows a dot when on, not a tick.</summary>
+    internal static T OneOf<T>(this T item) where T : ToolStripItem
+    {
+        Choices.AddOrUpdate(item, item);
+        return item;
+    }
+
+    internal static bool IsOneOf(ToolStripItem item) => Choices.TryGetValue(item, out _);
+
+    /// <summary>Quiet lines that say something in a menu, one per line; a tab splits a line into what and how.</summary>
+    internal static IEnumerable<NoteRow> Notes(string text) => text.Split('\n')
+        .Select(line => line.Split('\t', 2))
+        .Select(parts => new NoteRow(parts[0], parts.Length > 1 ? parts[1] : ""));
+
     internal static char? IconOf(AppCommand command) => command switch
     {
         AppCommand.TogglePin => Pin,
@@ -223,6 +239,45 @@ internal static class MenuParts
         AppCommand.ShowWindowInfo => Info,
         _ => null,
     };
+}
+
+/// <summary>
+/// A quiet line in a menu that says something rather than does something: what on the left and, when given, how in a
+/// second column shared by the menu's notes. It can't be chosen, so it is never greyed like a command that is off.
+/// </summary>
+internal sealed class NoteRow : ToolStripLabel
+{
+    internal NoteRow(string text, string how = "") : base(text)
+    {
+        How = how;
+        TextAlign = ContentAlignment.MiddleLeft;
+        Margin = new Padding(0, MenuParts.Scale(2), 0, MenuParts.Scale(2));
+        AccessibleName = how.Length == 0 ? text : text + ", " + how;
+    }
+
+    internal string How { get; }
+
+    /// <summary>The space between what and how, as wide as the gap before a command's keys.</summary>
+    internal static int Gap => MenuParts.Scale(32);
+
+    /// <summary>The room right of how, where a command's keys end.</summary>
+    internal static int RightRoom => MenuParts.Scale(16);
+
+    private const TextFormatFlags Measure = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+
+    private int Measured(string text) => TextRenderer.MeasureText(text, Font, Size.Empty, Measure).Width;
+
+    private IEnumerable<NoteRow> Siblings => Owner?.Items.OfType<NoteRow>() ?? [this];
+
+    /// <summary>Where how starts, from the row's left: one column for every note in the menu, so they line up.</summary>
+    internal int HowLeft => Padding.Left + Siblings.Max(note => note.Measured(note.Text ?? "")) + Gap;
+
+    public override Size GetPreferredSize(Size constrainingSize)
+    {
+        Size size = base.GetPreferredSize(constrainingSize);
+        if (!Siblings.Any(note => note.How.Length > 0)) return size;
+        return size with { Width = HowLeft + Siblings.Max(note => note.Measured(note.How)) + RightRoom };
+    }
 }
 
 /// <summary>A menu row with a slider: the window's opacity, changed as the slider moves.</summary>
@@ -240,7 +295,7 @@ internal sealed class OpacityRow : ToolStripControlHost
         _slider.ValueChanged += () => { if (!_setting) changed(_slider.Value); };
     }
 
-    /// <summary>Percent solid, 10 to 100.</summary>
+    /// <summary>Percent solid, 20 to 100.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal int Value
     {
@@ -256,7 +311,8 @@ internal sealed class OpacityRow : ToolStripControlHost
     /// <summary>Drawn here rather than by Windows, so it sits in the menu like the rows around it.</summary>
     private sealed class Slider : Control
     {
-        private const int Minimum = 10, Maximum = 100, Step = 5;
+        // A window never goes below 20% (WindowController.MinimumOpacity), so neither does the slider.
+        private const int Minimum = AppSettings.LowestOpacityPercent, Maximum = 100, Step = 5;
         private readonly string _title;
         private int _value = Maximum;
         private bool _dragging;
@@ -363,11 +419,13 @@ internal sealed class OpacityRow : ToolStripControlHost
 /// <summary>A menu row with nine small places to put the window: each corner, each edge and the centre.</summary>
 internal sealed class PlacementRow : ToolStripControlHost
 {
-    public PlacementRow(Action<AppCommand> chosen) : base(new Grid())
+    /// <param name="keys">The shortcut for a place, or empty; it is shown in the place's tip.</param>
+    public PlacementRow(Action<AppCommand> chosen, Func<AppCommand, string?>? keys = null) : base(new Grid())
     {
         var grid = (Grid)Control;
+        grid.ShortcutOf = keys;
         AutoSize = false;
-        Size = grid.Size = new Size(MenuParts.Scale(236), MenuParts.Scale(66));
+        Size = grid.Size = new Size(MenuParts.Scale(236), MenuParts.Scale(86));
         Margin = Padding.Empty;
         grid.Chosen += place =>
         {
@@ -388,6 +446,7 @@ internal sealed class PlacementRow : ToolStripControlHost
         private readonly ToolTip _tips = new();
         private int _hot = -1, _chosen = 4;
         internal event Action<AppCommand>? Chosen;
+        internal Func<AppCommand, string?>? ShortcutOf;
 
         internal Grid()
         {
@@ -400,7 +459,7 @@ internal sealed class PlacementRow : ToolStripControlHost
 
         private Rectangle Cell(int index)
         {
-            int width = MenuParts.Scale(34), height = MenuParts.Scale(18), gap = MenuParts.Scale(3);
+            int width = MenuParts.Scale(44), height = MenuParts.Scale(24), gap = MenuParts.Scale(4);
             return new Rectangle(MenuParts.Scale(4) + index % 3 * (width + gap), MenuParts.Scale(3) + index / 3 * (height + gap), width, height);
         }
 
@@ -439,8 +498,58 @@ internal sealed class PlacementRow : ToolStripControlHost
             int hot = At(e.Location);
             if (hot == _hot) return;
             _hot = hot;
-            _tips.SetToolTip(this, hot < 0 ? "" : CommandCatalog.Name(Places[hot]));
+            // The keys carry on from the place under the pointer, so only one place is ever lit.
+            if (hot >= 0) _chosen = hot;
+            _tips.SetToolTip(this, hot < 0 ? "" : TipAt(hot));
             Invalidate();
+        }
+
+        /// <summary>The place the keys are on; a screen reader hears its name as it moves.</summary>
+        private void Choose(int index)
+        {
+            _chosen = index;
+            _hot = -1; // The pointer's place gives way to the keys'.
+            Invalidate();
+            if (!Focused) return;
+            AccessibilityNotifyClients(AccessibleEvents.Focus, index);
+            // The pointer's tip names the place under it; the keys get the same, beside the grid on that place's row,
+            // where it covers none of the other places.
+            Rectangle cell = Cell(index);
+            _tips.Show(TipAt(index), this, Cell(Places.Length - 1).Right + MenuParts.Scale(8), cell.Top, 2000);
+        }
+
+        internal int Count => Places.Length;
+        internal string NameAt(int index) => CommandCatalog.Name(Places[index]);
+        internal string KeysAt(int index) => ShortcutOf?.Invoke(Places[index]) ?? "";
+        private string TipAt(int index) => KeysAt(index) is { Length: > 0 } keys ? $"{NameAt(index)}  ({keys})" : NameAt(index);
+        internal Rectangle CellOnScreen(int index) => RectangleToScreen(Cell(index));
+        internal bool IsChosen(int index) => Focused && index == _chosen;
+        internal void Run(int index) { if (Enabled) Chosen?.Invoke(Places[index]); }
+
+        protected override AccessibleObject CreateAccessibilityInstance() => new GridAccessible(this);
+
+        /// <summary>The nine places as nine buttons, each named for where it puts the window.</summary>
+        private sealed class GridAccessible(Grid grid) : ControlAccessibleObject(grid)
+        {
+            private readonly Place[] _places = Enumerable.Range(0, grid.Count).Select(index => new Place(grid, index)).ToArray();
+            public override int GetChildCount() => _places.Length;
+            public override AccessibleObject? GetChild(int index) => index >= 0 && index < _places.Length ? _places[index] : null;
+            public override AccessibleObject? GetFocused() => grid.Focused ? _places[grid._chosen] : base.GetFocused();
+            public override AccessibleRole Role => AccessibleRole.Grouping;
+        }
+
+        private sealed class Place(Grid grid, int index) : AccessibleObject
+        {
+            public override string? Name => grid.NameAt(index);
+            public override AccessibleRole Role => AccessibleRole.PushButton;
+            public override string DefaultAction => Localization.UiText.T("common.apply");
+            public override string? KeyboardShortcut => grid.KeysAt(index) is { Length: > 0 } keys ? keys : null;
+            public override AccessibleObject? Parent => grid.AccessibilityObject;
+            public override Rectangle Bounds => grid.CellOnScreen(index);
+            public override AccessibleStates State => AccessibleStates.Focusable |
+                (grid.IsChosen(index) ? AccessibleStates.Focused : AccessibleStates.None) |
+                (grid.Enabled ? AccessibleStates.None : AccessibleStates.Unavailable);
+            public override void DoDefaultAction() => grid.Run(index);
         }
 
         protected override void OnMouseLeave(EventArgs e)
@@ -456,25 +565,32 @@ internal sealed class PlacementRow : ToolStripControlHost
             if (e.Button == MouseButtons.Left && At(e.Location) is >= 0 and var index) Chosen?.Invoke(Places[index]);
         }
 
-        protected override bool IsInputKey(Keys keyData) =>
-            (keyData & Keys.KeyCode) is Keys.Left or Keys.Right || base.IsInputKey(keyData);
+        // Up and Down move between the rows; from the top or bottom row they go on to the menu's other commands.
+        protected override bool IsInputKey(Keys keyData) => (keyData & Keys.KeyCode) switch
+        {
+            Keys.Left or Keys.Right => true,
+            Keys.Up => _chosen >= 3,
+            Keys.Down => _chosen < 6,
+            _ => base.IsInputKey(keyData),
+        };
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
             switch (e.KeyCode)
             {
-                case Keys.Left: _chosen = (_chosen + 8) % 9; break;
-                case Keys.Right: _chosen = (_chosen + 1) % 9; break;
-                case Keys.Enter or Keys.Space: e.Handled = true; Chosen?.Invoke(Places[_chosen]); return;
+                case Keys.Left: Choose((_chosen + 8) % 9); break;
+                case Keys.Right: Choose((_chosen + 1) % 9); break;
+                case Keys.Up when _chosen >= 3: Choose(_chosen - 3); break;
+                case Keys.Down when _chosen < 6: Choose(_chosen + 3); break;
+                case Keys.Enter or Keys.Space: e.Handled = true; Run(_chosen); return;
                 default: return;
             }
             e.Handled = true;
-            Invalidate();
         }
 
-        protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
-        protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+        protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Choose(_chosen); }
+        protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); _tips.Hide(this); Invalidate(); }
         protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
 
         protected override void Dispose(bool disposing)

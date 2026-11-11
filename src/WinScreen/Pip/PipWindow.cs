@@ -138,13 +138,13 @@ public sealed class PipWindow : Form
         _autoMoveItem = new ToolStripMenuItem(T("pip.autoMove"), null,
             (_, _) => SetAutoMove(!_autoMoveItem!.Checked)).Experimental();
         _interactiveItem = new ToolStripMenuItem(T("menu.view.interactive"), null,
-            (_, _) => SetInteractive(!_interactiveItem!.Checked)).Experimental();
+            (_, _) => SetInteractive(!_interactiveItem!.Checked)).Experimental().OneOf();
         _middleScrollItem = new ToolStripMenuItem(T("menu.view.middleScroll"), null,
             (_, _) => SetMiddleClickScroll(!_middleScrollItem!.Checked)) { ToolTipText = T("menu.view.middleScroll.tip") };
         _enhancedHoverItem = new ToolStripMenuItem(T("menu.view.hover"), null,
             (_, _) => { _hoverChosen = true; SetEnhancedHover(!_enhancedHoverItem!.Checked); })
             { ToolTipText = T("pip.enhancedHover.description"), Checked = PipEnhancedHover.StartsOn(_source) };
-        _viewOnlyItem = new ToolStripMenuItem(T("menu.view.watch"), null, (_, _) => SetInteractive(false)) { Name = "viewOnly" };
+        _viewOnlyItem = new ToolStripMenuItem(T("menu.view.watch"), null, (_, _) => SetInteractive(false)) { Name = "viewOnly" }.OneOf();
         // The two options that only mean something while the picture is being used sit under Interactive PiP, set in.
         _middleScrollItem.Margin = _enhancedHoverItem.Margin = new Padding(MenuParts.Scale(16), 0, 0, 0);
         var options = new ToolStripMenuItem(T("menu.picture.options")).WithIcon(MenuParts.Sliders);
@@ -179,7 +179,7 @@ public sealed class PipWindow : Form
         _menu.Items.Add(new ToolStripSeparator());
         _helpItem = new ToolStripMenuItem(T("menu.help")).WithIcon(MenuParts.Help);
         _retryItem = new ToolStripMenuItem(T("pip.backend.retry"), null, (_, _) => RetryCapture());
-        _helpItem.DropDownItems.Add(new ToolStripMenuItem { Name = "controlsHelp", Enabled = false });
+        _helpItem.DropDownItems.Add(new ToolStripSeparator());
         _helpItem.DropDownItems.Add(T("pip.diagnostics.title"), null, (_, _) => ShowDiagnostics());
         _helpItem.DropDownItems.Add(_retryItem);
         _menu.Items.Add(_helpItem);
@@ -190,7 +190,7 @@ public sealed class PipWindow : Form
             PauseInput(true, keepTitleBar: true);
             _titleBar?.HoldVisible();
             _menu.Items["inputStatus"]!.Text = MenuTitle;
-            _helpItem.DropDownItems["controlsHelp"]!.Text = _interactiveItem.Checked ? T("pip.controls.directHelp") : T("pip.controls.help");
+            FillHelp();
             _retryItem.Available = CanRetryCapture;
             _autoMoveItem.Available = AllowAutoMove;
             bool canInteract = AllowInteractive && _origin.IsWindow;
@@ -206,6 +206,10 @@ public sealed class PipWindow : Form
             _middleScrollItem.Enabled = !(showInteractionOptions && _enhancedHoverItem.Checked && AppScrollsWithHover);
             _originalHeader.Available = _hideItem.Available = _goToItem.Available = _origin.IsWindow;
             _useOriginalItem.Available = _origin.IsWindow && _hideItem.Checked;
+            // The view closes soon after its window does; until then nothing offers to act on a window that is gone.
+            bool there = _origin.IsAvailable;
+            _goToItem.Enabled = _useOriginalItem.Enabled = _interactiveItem.Enabled = there;
+            if (!there) _hideItem.Enabled = false;
             _removeCropItem.Enabled = !_crop.IsEmpty || _zoom != PipGeometry.WholeView;
             // A menu only closes on an outside click while its program has the focus.
             _foregroundBeforeMenu = User32.GetForegroundWindow();
@@ -499,12 +503,25 @@ public sealed class PipWindow : Form
             User32.SetLayeredWindowAttributes(Handle, 0, _overrides.ClickThrough ? _preferences.Alpha : (byte)255, User32.LWA_ALPHA);
     }
 
+    /// <summary>One quiet line for each way to handle the picture, for how the view is being used now.</summary>
+    private void FillHelp()
+    {
+        foreach (NoteRow old in _helpItem.DropDownItems.OfType<NoteRow>().ToArray())
+        {
+            _helpItem.DropDownItems.Remove(old);
+            old.Dispose();
+        }
+        int at = 0;
+        foreach (NoteRow line in MenuParts.Notes(_interactiveItem.Checked ? T("pip.controls.directHelp") : T("pip.controls.help")))
+            _helpItem.DropDownItems.Insert(at++, line);
+    }
+
     private void FillOptions(ToolStripMenuItem options)
     {
         options.DropDownItems.Clear();
-        options.DropDownItems.Add(new ToolStripMenuItem(
+        options.DropDownItems.Add(new NoteRow(
             _overrides.FrameRate is null && _overrides.Scaling is null && _overrides.OpacityPercent is null
-                ? T("pip.defaults.inherited") : T("pip.defaults.overridden")) { Enabled = false });
+                ? T("pip.defaults.inherited") : T("pip.defaults.overridden")));
         bool capture = BackendKind != PipBackendKind.DwmThumbnail;
         ToolStripMenuItem rate = Choices(T("pip.frameRate"), _overrides.FrameRate,
             [(T("pip.useSettings"), null), (T("pip.frameRate.matchMonitor"), 0), ("15 FPS", 15), ("30 FPS", 30), ("60 FPS", 60), ("120 FPS", 120)],
@@ -545,7 +562,8 @@ public sealed class PipWindow : Form
         foreach (PipPreset preset in saved)
         {
             var entry = new ToolStripMenuItem(preset.Name.Replace("&", "&&"));
-            entry.DropDownItems.Add(new ToolStripMenuItem(PresetChanges(preset)) { Enabled = false });
+            entry.DropDownItems.Add(new NoteRow(PresetChanges(preset)));
+            entry.DropDownItems.Add(new ToolStripSeparator());
             entry.DropDownItems.Add(T("common.apply"), null, (_, _) => ApplyPreset(preset));
             presets.DropDownItems.Add(entry);
         }
@@ -614,7 +632,7 @@ public sealed class PipWindow : Form
         var menu = new ToolStripMenuItem(title);
         foreach ((string label, T1 value) in choices)
             menu.DropDownItems.Add(new ToolStripMenuItem(label, null, (_, _) => choose(value))
-                { Checked = EqualityComparer<T1>.Default.Equals(value, current) });
+                { Checked = EqualityComparer<T1>.Default.Equals(value, current) }.OneOf());
         return menu;
     }
 

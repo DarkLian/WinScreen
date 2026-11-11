@@ -179,6 +179,16 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         }
         e.TextRectangle = new Rectangle(e.TextRectangle.Left + shift, 0, e.TextRectangle.Width, e.Item.Height);
         e.TextFormat = (e.TextFormat & ~(TextFormatFlags.Top | TextFormatFlags.Bottom)) | TextFormatFlags.VerticalCenter;
+        if (e.Item is NoteRow note)
+        {
+            e.TextColor = MenuStyle.Muted;
+            base.OnRenderItemText(e);
+            if (note.How.Length == 0) return;
+            var how = new Rectangle(note.HowLeft, 0, Math.Max(0, e.Item.Width - note.HowLeft), e.Item.Height);
+            TextRenderer.DrawText(e.Graphics, note.How, e.TextFont, how, MenuStyle.Text,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+            return;
+        }
         if (e.Item is ToolStripLabel) e.TextColor = MenuStyle.Muted;
         else if (e.Item.Name == TitleName)
         {
@@ -206,6 +216,14 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         using (var back = new SolidBrush(MenuStyle.AccentBack))
             e.Graphics.FillPath(back, path);
         if (e.Item.Image is not null) return; // The icon is drawn over the square next.
+        if (MenuParts.IsOneOf(e.Item))
+        {
+            // One of several: a dot, as Windows marks the choice made among others.
+            float size = MenuParts.Scale(6);
+            using var dot = new SolidBrush(e.Item.Enabled ? MenuStyle.Accent : MenuStyle.Disabled);
+            e.Graphics.FillEllipse(dot, r.Left + (r.Width - size) / 2f, r.Top + (r.Height - size) / 2f, size, size);
+            return;
+        }
         using var pen = new Pen(e.Item.Enabled ? MenuStyle.Accent : MenuStyle.Disabled, MenuParts.Scale(2) * 0.8f)
             { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
         e.Graphics.DrawLines(pen,
