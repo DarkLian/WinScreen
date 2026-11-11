@@ -7,7 +7,8 @@
 After you install WinScreen, its icon sits in the system tray (look under the small arrow if you don't see it).
 
 - **Click** the icon to open Settings.
-- **Right-click** it for every command, including putting windows back and exiting.
+- **Right-click** it for every command, including putting windows back and exiting. Menus stay open while you turn
+  things on and off, so you can change several at once.
 - **Hotkeys** work on the window you're using. The tray menu works on the window named under **Last window**.
 - **Rest the pointer** on the middle of a window's title bar to show the toolbar.
 
@@ -185,6 +186,7 @@ the newer installer. Your settings stay as they are.
 - Commands pause while a game or full-screen app is in front. Views can't appear over games in exclusive full screen.
 - A minimized app stops drawing, so its view shows the last picture.
 - Protected video may show as black in a view.
+- When **Transparency effects** is on in Windows' own Settings, WinScreen's menus are see-through too.
 - In smooth mode Windows draws a yellow border around the window being shown. On Windows 11 WinScreen asks to leave it
   off; you can change that in **Settings → Picture-in-Picture**. Windows 10 always shows it, so choose standard mode there if
   it bothers you.

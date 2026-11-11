@@ -24,6 +24,16 @@
 WinScreen is a free helper for the windows on your screen. Keep a window on top, make it see-through, watch it in a small
 live view, or bring a buried window back with one click. No account, no trial, no activation key.
 
+## A look
+
+<p align="center">
+  <img src="docs/assets/screenshots/settings-general.png" width="720" alt="WinScreen Settings, General page, in the dark look">
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/window-menu.png" width="330" alt="A window's menu, with the Effects menu open">
+  <img src="docs/assets/screenshots/settings-anchors.png" width="470" alt="Settings, Anchors page">
+</p>
+
 ## Highlights
 
 **Keep windows where you need them**

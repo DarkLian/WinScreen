@@ -24,6 +24,16 @@
 WinScreen 是一個免費的視窗小幫手。可以讓視窗保持置頂、變成半透明、用小視窗即時查看，或一鍵找回被擋住的視窗。
 無須帳號、試用期或啟用碼。
 
+## 介面一覽
+
+<p align="center">
+  <img src="docs/assets/screenshots/settings-general.png" width="720" alt="WinScreen 設定的「一般」頁面（深色）">
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/window-menu.png" width="330" alt="視窗選單，已開啟「效果」子選單">
+  <img src="docs/assets/screenshots/settings-anchors.png" width="470" alt="設定的「錨點」頁面">
+</p>
+
 ## 亮點
 
 **讓視窗待在需要的地方**

@@ -24,6 +24,16 @@
 WinScreen 是一个免费的窗口小帮手。可以让窗口保持置顶、变成半透明、用小窗口实时查看，或一键找回被挡住的窗口。
 无需账号、试用期或激活码。
 
+## 界面一览
+
+<p align="center">
+  <img src="docs/assets/screenshots/settings-general.png" width="720" alt="WinScreen 设置的“常规”页面（深色）">
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/window-menu.png" width="330" alt="窗口菜单，已打开“效果”子菜单">
+  <img src="docs/assets/screenshots/settings-anchors.png" width="470" alt="设置的“锚点”页面">
+</p>
+
 ## 亮点
 
 **让窗口待在需要的地方**
