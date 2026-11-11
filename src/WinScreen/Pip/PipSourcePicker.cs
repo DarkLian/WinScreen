@@ -38,6 +38,7 @@ internal sealed class PipSourcePicker : Form
     public PipSourcePicker(Func<nint, bool> allowed)
     {
         SuspendLayout();
+        FocusVisuals.Watch();
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
         Text = T("pip.chooseSource");
@@ -248,7 +249,7 @@ internal sealed class PipSourcePicker : Form
                 using var brush = new SolidBrush(item.Selected ? SettingsStyle.RowSelectedOn(SettingsStyle.Card) : SettingsStyle.RowHoverOn(SettingsStyle.Card));
                 g.FillPath(brush, path);
                 if (item.Selected) SettingsStyle.SelectionBar(g, wash, _list);
-                if (item.Selected && item.Focused && _list.Focused) SettingsStyle.FocusRing(g, wash, Unit(4), _list);
+                if (item.Selected && item.Focused && SettingsStyle.ShowsFocus(_list)) SettingsStyle.FocusRing(g, wash, Unit(4), _list);
             }
             int left = row.Left + Unit(16), size = Unit(20);
             Image? icon = item.ImageKey is { Length: > 0 } key && _icons.Images.ContainsKey(key) ? _icons.Images[key]

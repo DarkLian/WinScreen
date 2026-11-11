@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using WinScreen.Tray;
@@ -216,8 +217,8 @@ internal sealed class InputFrame : Panel
         Color fill = Fill;
         using GraphicsPath path = SettingsStyle.Rounded(area, radius);
         using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
-        Color edge = _look == Look.List && Active ? SettingsStyle.Accent
-            : _look == Look.List ? SettingsStyle.StrokeOn(SettingsStyle.Blend(SettingsStyle.Text, fill, 0.03)) : SettingsStyle.StrokeOn(fill);
+        // A list keeps its quiet edge while it has the keyboard, as in Windows 11: its chosen row shows where it is.
+        Color edge = _look == Look.List ? SettingsStyle.StrokeOn(SettingsStyle.Blend(SettingsStyle.Text, fill, 0.03)) : SettingsStyle.StrokeOn(fill);
         using (var pen = new Pen(edge)) g.DrawPath(pen, path);
         if (_look == Look.Text && enabled)
         {
@@ -311,6 +312,7 @@ internal sealed class HintTextBox : TextBox
 internal sealed class ThemedCombo : ComboBox
 {
     private bool _hot;
+    private int _chosen = -1;
 
     public ThemedCombo()
     {
@@ -357,7 +359,7 @@ internal sealed class ThemedCombo : ComboBox
         TextRenderer.DrawText(g, text, Font, new Rectangle(Unit(11), 0, Width - Unit(44), Height), Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
         SettingsStyle.Chevron(g, new Point(Width - Unit(18), Height / 2), Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, this);
-        if (Focused && ShowFocusCues && !DroppedDown) SettingsStyle.FocusRing(g, area, Unit(4), this);
+        if (SettingsStyle.ShowsFocus(this) && !DroppedDown) SettingsStyle.FocusRing(g, area, Unit(4), this);
     }
 
     protected override void OnDrawItem(DrawItemEventArgs e)
@@ -375,7 +377,9 @@ internal sealed class ThemedCombo : ComboBox
             using var brush = new SolidBrush(SettingsStyle.RowHoverOn(SettingsStyle.Flyout));
             g.FillPath(brush, path);
         }
-        if (e.Index == SelectedIndex) SettingsStyle.SelectionBar(g, row, this);
+        // While the list is open, Windows reports the row under the pointer as the chosen one; the bar stays on the
+        // choice made before it opened, as in Windows 11, instead of being left on every row the pointer passed.
+        if (e.Index == (DroppedDown ? _chosen : SelectedIndex)) SettingsStyle.SelectionBar(g, row, this);
         TextRenderer.DrawText(g, GetItemText(Items[e.Index]), Font, new Rectangle(row.Left + Unit(10), row.Top, row.Width - Unit(12), row.Height),
             SettingsStyle.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
     }
@@ -383,7 +387,7 @@ internal sealed class ThemedCombo : ComboBox
     protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Invalidate(); }
     protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hot = false; Invalidate(); }
     protected override void OnSelectedIndexChanged(EventArgs e) { base.OnSelectedIndexChanged(e); Invalidate(); }
-    protected override void OnDropDown(EventArgs e) { base.OnDropDown(e); Invalidate(); }
+    protected override void OnDropDown(EventArgs e) { _chosen = SelectedIndex; base.OnDropDown(e); Invalidate(); }
     protected override void OnDropDownClosed(EventArgs e) { base.OnDropDownClosed(e); Invalidate(); }
     protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
     protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
@@ -829,21 +833,74 @@ internal static class BoxHeight
     }
 }
 
-/// <summary>The pictures of running programs, by the names the program lists use, each made once.</summary>
+/// <summary>
+/// The pictures of programs, by the names the program lists use, each made once. A program's file is found from its
+/// window while it runs, and remembered in a small file so its picture still shows after it has closed.
+/// </summary>
 internal static class ProgramIcons
 {
-    private static readonly Dictionary<string, nint> Windows = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> Paths = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<(string, int), Image?> Made = [];
+    private static readonly Dictionary<string, long> Missed = new(StringComparer.OrdinalIgnoreCase);
+    private static string? _file;
 
-    /// <summary>Remembers a window of the program, to find its file from when its picture is first wanted.</summary>
-    internal static void Remember(string name, nint window) => Windows[name] = window;
+    /// <summary>Where the programs' files are remembered between runs; read when set.</summary>
+    internal static string? File
+    {
+        get => _file;
+        set
+        {
+            _file = value;
+            if (value is null || !System.IO.File.Exists(value)) return;
+            try
+            {
+                var known = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(System.IO.File.ReadAllText(value));
+                foreach ((string name, string path) in known ?? []) Paths.TryAdd(name, path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { }
+        }
+    }
+
+    /// <summary>Remembers where a running program's file is, from one of its windows.</summary>
+    internal static void Remember(string name, nint window)
+    {
+        string path = WinScreen.Windows.WindowInfo.ExecutablePath(window);
+        if (path.Length == 0 || Paths.TryGetValue(name, out string? known) && string.Equals(known, path, StringComparison.OrdinalIgnoreCase)) return;
+        Paths[name] = path;
+        Missed.Remove(name);
+        if (_file is null) return;
+        try { System.IO.File.WriteAllText(_file, System.Text.Json.JsonSerializer.Serialize(Paths)); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { } // Found again next time it runs.
+    }
+
+    /// <summary>The program's file: remembered, from a copy running now, or from where Windows says it is installed.</summary>
+    private static string? Find(string name)
+    {
+        if (Paths.TryGetValue(name, out string? known) && System.IO.File.Exists(known)) return known;
+        foreach (Process process in Process.GetProcessesByName(name))
+            using (process)
+            {
+                try
+                {
+                    if (process.MainWindowHandle != 0) { Remember(name, process.MainWindowHandle); if (Paths.TryGetValue(name, out known)) return known; }
+                }
+                catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+            }
+        foreach (Microsoft.Win32.RegistryKey root in new[] { Microsoft.Win32.Registry.CurrentUser, Microsoft.Win32.Registry.LocalMachine })
+        {
+            using Microsoft.Win32.RegistryKey? key = root.OpenSubKey($@"Software\Microsoft\Windows\CurrentVersion\App Paths\{name}.exe");
+            if (key?.GetValue(null) is string path && System.IO.File.Exists(path = path.Trim('"'))) return path;
+        }
+        return null;
+    }
 
     internal static Image? Of(string name, int size)
     {
         if (Made.TryGetValue((name, size), out Image? made)) return made;
-        if (!Windows.TryGetValue(name, out nint window)) return null; // Not running; asked again once it is.
+        // Looking costs a little, and rows are drawn often: a program not found is looked for again a while later.
+        if (Missed.TryGetValue(name, out long when) && Environment.TickCount64 - when < 15000) return null;
+        if (Find(name) is not { } path) { Missed[name] = Environment.TickCount64; return null; }
         Image? picture = null;
-        string path = WinScreen.Windows.WindowInfo.ExecutablePath(window);
         try
         {
             if (path.Length > 0 && Icon.ExtractAssociatedIcon(path) is { } icon)
@@ -956,6 +1013,10 @@ internal class ThemedList : ListBox
     /// <summary>After every repaint, which is when it may have scrolled.</summary>
     internal event Action? Painted;
 
+    /// <summary>A picture before each entry, such as its program's icon, at the size asked for; none when null.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<object, int, Image?>? IconOf { get; set; }
+
     public ThemedList()
     {
         BorderStyle = BorderStyle.None;
@@ -975,8 +1036,19 @@ internal class ThemedList : ListBox
         ListRows.DrawBuffered(e, (g, bounds) =>
         {
             Rectangle row = ListRows.Background(g, this, bounds, (e.State & DrawItemState.Selected) != 0, e.Index == _hot);
+            int left = row.Left + SettingsStyle.Unit(this, 12);
+            if (IconOf is not null)
+            {
+                int size = SettingsStyle.Unit(this, 16);
+                if (IconOf(Items[e.Index], size) is { } icon)
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.DrawImage(icon, new Rectangle(left, row.Top + (row.Height - size) / 2, size, size));
+                }
+                left += size + SettingsStyle.Unit(this, 10); // The words line up whether or not a picture was found.
+            }
             TextRenderer.DrawText(g, GetItemText(Items[e.Index]), Font,
-                new Rectangle(row.Left + SettingsStyle.Unit(this, 12), row.Top, row.Width - SettingsStyle.Unit(this, 16), row.Height),
+                new Rectangle(left, row.Top, row.Right - left - SettingsStyle.Unit(this, 4), row.Height),
                 Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
         });
@@ -1082,7 +1154,7 @@ internal sealed class ThemedCheckList : CheckedListBox
         if (Tagged?.Invoke(Items[e.Index]) == true)
             MenuParts.DrawTag(g, textLeft + TextRenderer.MeasureText(g, text, Font, Size.Empty, format & ~TextFormatFlags.EndEllipsis).Width + SettingsStyle.Unit(this, 8),
                 row.Top + row.Height / 2, value => SettingsStyle.Unit(this, value), Enabled);
-        if ((e.State & DrawItemState.Focus) != 0 && Focused && ShowFocusCues) SettingsStyle.FocusRing(g, row, SettingsStyle.Unit(this, 4), this);
+        if ((e.State & DrawItemState.Focus) != 0 && SettingsStyle.ShowsFocus(this)) SettingsStyle.FocusRing(g, row, SettingsStyle.Unit(this, 4), this);
     }
 
     protected override void OnItemCheck(ItemCheckEventArgs ice)
@@ -1129,6 +1201,7 @@ internal sealed class ProgramList : Panel
     {
         _list = list;
         _list.EmptyText = empty;
+        _list.IconOf ??= (item, size) => item is string name ? ProgramIcons.Of(name, size) : null;
         _frame = new InputFrame(list, InputFrame.Look.List);
         if (title is not null)
         {
@@ -1191,6 +1264,7 @@ internal sealed class ProgramList : Panel
         string name = _picker.Text.Trim();
         if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
         if (name.Length > 0 && !_list.Items.Contains(name)) _list.Items.Add(name);
+        _list.ClearSelected(); // Adding chooses nothing: there is nothing to do with the new entry yet.
         _picker.Text = "";
     }
 

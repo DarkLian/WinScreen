@@ -313,8 +313,17 @@ internal sealed class ThemedTable : ListView
     private const int WM_PAINT = 0x000F, WM_VSCROLL = 0x0115, WM_MOUSEWHEEL = 0x020A, LVM_SCROLL = 0x1014;
     internal event Action? Moved;
 
+    private const int WM_CHANGEUISTATE = 0x0127, UIS_SET = 1, UISF_HIDEFOCUS = 0x1;
+
     // Windows redraws a row as the pointer passes over it; drawn straight onto the screen, its words blinked.
     public ThemedTable() => DoubleBuffered = true;
+
+    /// <summary>Windows' own dotted focus box stays hidden; the table draws Windows 11's ring itself, for the keyboard only.</summary>
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        Native.User32.SendMessage(Handle, WM_CHANGEUISTATE, UISF_HIDEFOCUS << 16 | UIS_SET, 0);
+    }
 
     protected override void WndProc(ref Message m)
     {

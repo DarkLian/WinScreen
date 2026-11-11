@@ -171,6 +171,7 @@ private readonly ErrorProvider _errors = new();
         SuspendLayout();
         AutoScaleDimensions = new SizeF(96F, 96F); // Every size below is written for 100% display scaling.
         AutoScaleMode = AutoScaleMode.Dpi;
+        FocusVisuals.Watch();
         _settings = settings;
         _startup = startup;
         _apply = apply;
@@ -1222,6 +1223,7 @@ private readonly ErrorProvider _errors = new();
     private FlowLayoutPanel BuildSetups()
     {
         FlowLayoutPanel page = ScrollingPage();
+        _setups.IconOf = (item, size) => item is ProgramSetup setup ? ProgramIcons.Of(setup.Program, size) : null;
         var setups = new ProgramList(_setups, null, null, T("settings.setups.empty"), T("common.add"), T("common.remove"),
             item => RemoveSetup((ProgramSetup)item));
         page.Controls.Add(Section(T("settings.savedSetups"), Note(T("settings.setups.help")), setups));
@@ -1457,7 +1459,8 @@ private readonly ErrorProvider _errors = new();
         // A row is drawn whole each time Windows asks for any part of it. Windows redraws only the first cell as the
         // pointer passes, and its background is the whole row's: drawn alone, it wiped out the other cells.
         _features.DrawItem += (_, e) => { if (e.Item is { } item) DrawFeatureRow(e.Graphics, item); };
-        _features.DrawSubItem += (_, _) => { };
+        // Windows may draw its own chosen-row box under a single cell; the whole row is drawn over it again.
+        _features.DrawSubItem += (_, e) => { if (e.Item is { } item) DrawFeatureRow(e.Graphics, item); };
         void DrawFeatureRow(Graphics g, ListViewItem item)
         {
             SettingsStyle.SoftText(g);
@@ -1471,7 +1474,7 @@ private readonly ErrorProvider _errors = new();
                 using var brush = new SolidBrush(SettingsStyle.RowSelectedOn(SettingsStyle.Card));
                 g.FillPath(brush, path);
                 SettingsStyle.SelectionBar(g, wash, _features);
-                if (item.Focused && _features.Focused) SettingsStyle.FocusRing(g, wash, Unit(4), _features);
+                if (item.Focused && SettingsStyle.ShowsFocus(_features)) SettingsStyle.FocusRing(g, Rectangle.Inflate(wash, Unit(1), Unit(1)), Unit(5), _features);
             }
             int left = row.Left;
             for (int index = 0; index < _features.Columns.Count && index < item.SubItems.Count; index++)

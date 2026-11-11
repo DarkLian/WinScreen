@@ -48,8 +48,8 @@ internal static class SettingsStyle
     internal static Color Underline => Dark ? Rgb(0x9A9A9A) : Rgb(0x868686);
     /// <summary>A row under the pointer, in a list or in the list of pages.</summary>
     internal static Color RowHoverOn(Color surface) => Dark ? Blend(Color.White, surface, 0.0419) : Blend(Color.Black, surface, 0.0373);
-    /// <summary>The chosen row of a list: a light wash of the accent colour, with a bar of it at the start.</summary>
-    internal static Color RowSelectedOn(Color surface) => Blend(Accent, surface, Dark ? 0.16 : 0.12);
+    /// <summary>The chosen row of a list: a soft grey wash, as Windows 11 has, with a bar of the accent colour at the start.</summary>
+    internal static Color RowSelectedOn(Color surface) => Dark ? Blend(Color.White, surface, 0.0605) : Blend(Color.Black, surface, 0.0373);
     internal static Color NavSelected => Dark ? Blend(Color.White, Page, 0.0605) : Blend(Color.Black, Page, 0.0373);
 
     // Accent: the one chosen in Windows, as Windows' own Settings shows it.
@@ -106,6 +106,12 @@ internal static class SettingsStyle
     }
 
     internal static int Unit(Control control, int value) => (int)Math.Round(value * control.DeviceDpi / 96.0);
+
+    /// <summary>
+    /// Whether to ring <paramref name="control"/> as where the keyboard is. As in Windows 11, the ring shows only
+    /// while the keyboard is being used to move around, not after a click.
+    /// </summary>
+    internal static bool ShowsFocus(Control control) => control.Focused && FocusVisuals.Keyboard;
 
     /// <summary>The ring that shows where the keyboard is, as Windows 11 draws it.</summary>
     internal static void FocusRing(Graphics g, Rectangle area, int radius, Control control)
@@ -212,7 +218,7 @@ internal sealed class SwitchBox : CheckBox
         int x = Checked ? track.Right - Unit(10) - knob / 2 : track.Left + Unit(10) - knob / 2;
         using var dot = new SolidBrush(Checked ? (Enabled ? SettingsStyle.OnAccent : surface) : Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled);
         g.FillEllipse(dot, x, track.Top + (height - knob) / 2f, knob, knob);
-        if (Focused && ShowFocusCues)
+        if (SettingsStyle.ShowsFocus(this))
             SettingsStyle.FocusRing(g, Rectangle.Inflate(track, Unit(3), Unit(3)), Unit(13), this);
     }
 
@@ -429,7 +435,7 @@ internal sealed class NavList : Control
                     g.DrawImage(icon, bounds.Left + Unit(14), bounds.Top + (bounds.Height - icon.Height) / 2);
                 TextRenderer.DrawText(g, entry.Text, SettingsStyle.BodyFont, new Rectangle(bounds.Left + Unit(42), bounds.Top, bounds.Width - Unit(44), bounds.Height),
                     SettingsStyle.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-                if (selected && Focused && ShowFocusCues) SettingsStyle.FocusRing(g, row, Unit(4), this);
+                if (selected && SettingsStyle.ShowsFocus(this)) SettingsStyle.FocusRing(g, row, Unit(4), this);
             }
             index++;
         }
@@ -549,7 +555,7 @@ internal sealed class PlainButton : Button
         }
         else TextRenderer.DrawText(g, Text, Font, area, text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
             (ShowKeyboardCues ? TextFormatFlags.Default : TextFormatFlags.HidePrefix));
-        if (Focused && ShowFocusCues) SettingsStyle.FocusRing(g, area, Unit(4), this);
+        if (SettingsStyle.ShowsFocus(this)) SettingsStyle.FocusRing(g, area, Unit(4), this);
     }
 
     protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Invalidate(); }
@@ -569,5 +575,62 @@ internal sealed class PagesControl : TabControl
         // Saying the pages take the whole control leaves no room for tabs or a border.
         if (m.Msg == TCM_ADJUSTRECT && !DesignMode) { m.Result = 1; return; }
         base.WndProc(ref m);
+    }
+}
+
+/// <summary>
+/// Whether the keyboard or the pointer was used last in WinScreen's windows. Windows 11 shows where the keyboard is
+/// only while it is used to move around: a click hides the ring again.
+/// </summary>
+internal static class FocusVisuals
+{
+    private const int WM_KEYDOWN = 0x0100, WM_SYSKEYDOWN = 0x0104, WM_LBUTTONDOWN = 0x0201, WM_RBUTTONDOWN = 0x0204,
+        WM_MBUTTONDOWN = 0x0207, WM_NCLBUTTONDOWN = 0x00A1;
+    private static bool _watching;
+
+    internal static bool Keyboard { get; private set; }
+
+    /// <summary>Starts following the keyboard and the pointer, once for the whole app.</summary>
+    internal static void Watch()
+    {
+        if (_watching) return;
+        _watching = true;
+        Application.AddMessageFilter(new Filter());
+    }
+
+    private static void Set(bool keyboard)
+    {
+        if (Keyboard == keyboard) return;
+        Keyboard = keyboard;
+        // The control that has the keyboard draws its ring, or takes it away.
+        if (Form.ActiveForm?.ActiveControl is { } focused) Deepest(focused).Invalidate();
+    }
+
+    private static Control Deepest(Control control) =>
+        control is ContainerControl { ActiveControl: { } inner } ? Deepest(inner) : control;
+
+    /// <summary>Takes in one message: a key that moves around shows the ring, a click hides it.</summary>
+    internal static void Saw(int message, nint wParam)
+    {
+        switch (message)
+        {
+            case WM_KEYDOWN or WM_SYSKEYDOWN:
+                var key = (Keys)(int)wParam;
+                if (key is Keys.Tab or Keys.Up or Keys.Down or Keys.Left or Keys.Right or Keys.Home or Keys.End
+                    or Keys.PageUp or Keys.PageDown or Keys.Space or Keys.Enter or Keys.F6) Set(true);
+                break;
+            case WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN or WM_NCLBUTTONDOWN:
+                Set(false);
+                break;
+        }
+    }
+
+    private sealed class Filter : IMessageFilter
+    {
+        public bool PreFilterMessage(ref Message m)
+        {
+            Saw(m.Msg, m.WParam);
+            return false;
+        }
     }
 }

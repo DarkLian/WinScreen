@@ -42,6 +42,7 @@ internal static class Program
         ApplicationConfiguration.Initialize();
         string settingsPath = Path.Combine(DataFolder, "settings.json");
         AppSettings settings = AppSettings.Load(settingsPath);
+        Settings.ProgramIcons.File = Path.Combine(DataFolder, "program-paths.json");
         UiText.Initialize(settings.Language);
         MenuStyle.UseTheme(settings.Theme);
 
