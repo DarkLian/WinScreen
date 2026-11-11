@@ -17,7 +17,7 @@
     <Product>WinScreen</Product>
     <Copyright>Copyright (c) 2026 WinScreen</Copyright>
     <!-- The published version line. Local betas add a number (0.8.0-beta.4); see build.ps1 -Beta. -->
-    <Version>0.9.1-beta</Version>
+    <Version>0.10.0-beta</Version>
     <!-- local: built on a developer's PC; release: built from a version tag by the Release workflow (build.ps1 -Release). -->
     <WinScreenReleaseType Condition="'$(WinScreenReleaseType)' == ''">local</WinScreenReleaseType>
     <!-- Keep the commit out of the product version, so every signed file reports the same version. -->
