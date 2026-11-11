@@ -258,6 +258,55 @@ internal sealed class InputFrame : Panel
     }
 }
 
+/// <summary>
+/// A text box that says what to type while it is empty, also while it has the keyboard, as Windows 11's search boxes
+/// do. WinForms' own waiting words go when the box is clicked, and Windows' own are not drawn in a box with no border.
+/// </summary>
+internal sealed class HintTextBox : TextBox
+{
+    private const int WM_PAINT = 0x000F, EM_GETMARGINS = 0x00D4;
+    private bool _wasEmpty = true;
+
+    /// <summary>What the box says while nothing is typed in it.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal string Hint { get; set { field = value; Invalidate(); } } = "";
+
+    protected override void WndProc(ref Message m)
+    {
+        base.WndProc(ref m);
+        if (m.Msg == WM_PAINT && TextLength == 0 && Hint.Length > 0 && IsHandleCreated) DrawHint();
+    }
+
+    // Typing writes straight onto the box, so it is drawn again when it stops or starts being empty.
+    protected override void OnTextChanged(EventArgs e)
+    {
+        base.OnTextChanged(e);
+        bool empty = TextLength == 0;
+        if (empty != _wasEmpty) Invalidate();
+        _wasEmpty = empty;
+    }
+
+    private void DrawHint()
+    {
+        int left = (int)(Native.User32.SendMessage(Handle, EM_GETMARGINS, 0, 0) & 0xFFFF);
+        // The blinking caret is drawn by inverting what's under it, so it is taken away while the words are drawn.
+        bool caret = Native.User32.HideCaret(Handle);
+        try
+        {
+            using Graphics g = CreateGraphics();
+            SettingsStyle.SoftText(g);
+            TextRenderer.DrawText(g, Hint, Font, Rectangle.FromLTRB(left, 0, ClientSize.Width, ClientSize.Height),
+                Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, BackColor,
+                TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+        }
+        finally
+        {
+            if (caret) Native.User32.ShowCaret(Handle);
+        }
+    }
+}
+
 /// <summary>A list that drops down to choose one thing, drawn as Windows 11 draws one.</summary>
 internal sealed class ThemedCombo : ComboBox
 {

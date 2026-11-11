@@ -43,10 +43,10 @@ public sealed class SettingsWindow : Form
     // The pages. Its own row of tabs is hidden: the list on the left chooses the page.
     private readonly TabControl _tabs = new PagesControl { Size = new Size(540, 520), TabStop = false, Multiline = true };
     private readonly NavList _nav = new() { Dock = DockStyle.Fill };
-    private readonly TextBox _search = new();
+    private readonly HintTextBox _search = new();
     private readonly Label _pageTitle = new SoftLabel() { AutoSize = true, Font = SettingsStyle.PageTitleFont, UseMnemonic = false, Margin = new Padding(0, 0, 0, 14) };
     private readonly Panel _saveBar = new() { Dock = DockStyle.Fill, Visible = false };
-    private readonly TextBox _actionSearch = new() { Dock = DockStyle.Top };
+    private readonly HintTextBox _actionSearch = new() { Dock = DockStyle.Top };
     private readonly InputFrame _shortcutEditor = new(null) { Width = 240, ReserveEnd = 22, Anchor = AnchorStyles.Right };
     private readonly Label _shortcutLabel = new SoftLabel() { AutoSize = true, Anchor = AnchorStyles.Left, Font = SettingsStyle.HeadingFont, UseMnemonic = false, AutoEllipsis = true };
     private readonly Dictionary<AppCommand, string> _shortcutProblems = [];
@@ -227,7 +227,7 @@ private readonly ErrorProvider _errors = new();
         _nav.Add(tabs.TabPages[3].Text, MenuParts.Save, tabs.TabPages[3]);
         _nav.Selected = generalPage;
         _nav.Chosen += chosen => { tabs.SelectedTab = (TabPage)chosen; ShowSearchMatch(); };
-        _search.PlaceholderText = _search.AccessibleName = T("settings.search");
+        _search.Hint = _search.AccessibleName = T("settings.search");
         _search.TextChanged += (_, _) => SearchSettings();
         _features.ItemActivate += (_, _) => // A double-click, or Enter from the keyboard.
         {
@@ -1320,7 +1320,7 @@ private readonly ErrorProvider _errors = new();
         card.Controls.Add(editor);
         _features.SelectedIndexChanged += (_, _) => ShowShortcutEditor();
         _actionSearch.AccessibleName = T("actions.search");
-        _actionSearch.PlaceholderText = T("actions.search");
+        _actionSearch.Hint = T("actions.search");
         _actionSearch.TextChanged += (_, _) => RefreshFeatures();
 
         DrawFeatures();

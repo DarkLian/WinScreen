@@ -75,7 +75,59 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         if (menu is ToolStripDropDownMenu withMargin) withMargin.ShowCheckMargin = false;
         menu.Opening += (_, _) => Prepare(menu);
         menu.Opened += (_, _) => Round(menu);
+        SubmenuEdge.Watch(menu);
         Prepare(menu);
+    }
+
+    /// <summary>
+    /// Places a submenu against the edge of the menu it opens from. Windows leaves a few pixels between them, and
+    /// where a menu lay under that gap, the pointer crossing it chose that menu's row instead, which closed the
+    /// submenus on the way. It is moved before it shows, so nothing jumps.
+    /// </summary>
+    private sealed class SubmenuEdge : NativeWindow
+    {
+        private const int WM_WINDOWPOSCHANGING = 0x0046;
+        private const uint SWP_NOMOVE = 0x2;
+        private readonly ToolStripDropDown _menu;
+
+        private SubmenuEdge(ToolStripDropDown menu) => _menu = menu;
+
+        internal static void Watch(ToolStripDropDown menu)
+        {
+            var edge = new SubmenuEdge(menu);
+            // Made now: a menu made as it first opens is put in its place as it is made, before this could move it.
+            edge.AssignHandle(menu.Handle);
+            menu.HandleCreated += (_, _) => edge.AssignHandle(menu.Handle);
+            menu.HandleDestroyed += (_, _) => edge.ReleaseHandle();
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct WindowPos
+        {
+            public nint Window, InsertAfter;
+            public int X, Y, Width, Height;
+            public uint Flags;
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_WINDOWPOSCHANGING && m.LParam != 0) Meet(m.LParam);
+            base.WndProc(ref m);
+        }
+
+        private void Meet(nint place)
+        {
+            if (_menu.OwnerItem?.Owner is not ToolStripDropDown { Visible: true, IsHandleCreated: true } parent) return;
+            var position = System.Runtime.InteropServices.Marshal.PtrToStructure<WindowPos>(place);
+            if ((position.Flags & SWP_NOMOVE) != 0 || position.Width <= 0) return;
+            if (!User32.GetWindowRect(parent.Handle, out Rect from)) return;
+            int most = MenuParts.Scale(8), x = position.X;
+            if (x > from.Right && x - from.Right <= most) x = from.Right; // Opened to the right.
+            else if (x + position.Width < from.Left && from.Left - (x + position.Width) <= most) x = from.Left - position.Width; // To the left.
+            if (x == position.X) return;
+            position.X = x;
+            System.Runtime.InteropServices.Marshal.StructureToPtr(position, place, false);
+        }
     }
 
     /// <summary>
