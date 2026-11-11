@@ -434,15 +434,55 @@ public sealed class TrayApplication : ApplicationContext
         if (_settingsWindow is not { IsDisposed: false, IsHandleCreated: true } old) return;
         old.BeginInvoke(() =>
         {
-            if (old.IsDisposed) return;
+            if (old.IsDisposed || old.MadeDark == MenuStyle.Dark) return;
+            bool active = Form.ActiveForm == old;
+            // Showing a minimized window, or a maximized one, always takes the keyboard. So one minimized, or filling
+            // the screen behind what is being used, is made again when it is next brought back instead.
+            if (old.WindowState == FormWindowState.Minimized || old.FillsScreen && !active)
+            {
+                ReopenWhenBack(old);
+                return;
+            }
             int page = old.PageIndex;
-            Rectangle bounds = old.Bounds;
+            FormWindowState state = old.WindowState;
+            Rectangle bounds = state == FormWindowState.Normal ? old.Bounds : old.RestoreBounds;
             SettingsWindow.UnsavedEdits? unsaved = old.Unsaved(); // Windows can change its look while changes wait to be saved.
             // Made again behind whatever is being used when Windows changed its look, rather than taking the keyboard.
-            bool active = Form.ActiveForm == old;
             old.Close();
-            OpenSettings(bounds, page, reopening: true, unsaved, quietly: !active);
+            OpenSettings(bounds, page, reopening: true, unsaved, quietly: !active, state);
         });
+    }
+
+    private bool _reopenWhenBack;
+
+    private void ReopenWhenBack(SettingsWindow old)
+    {
+        if (_reopenWhenBack) return;
+        _reopenWhenBack = true;
+        void Back(object? sender, EventArgs e)
+        {
+            // Back from the taskbar or brought forward; one still in the background waits again if it fills the screen.
+            if (old.IsDisposed || old.WindowState == FormWindowState.Minimized) return;
+            old.Activated -= Back;
+            old.SizeChanged -= Back;
+            _reopenWhenBack = false;
+            ReopenSettings();
+        }
+        old.Activated += Back;
+        old.SizeChanged += Back;
+        old.FormClosed += (_, _) => _reopenWhenBack = false;
+    }
+
+    /// <summary>Keeps where Settings was and whether it was maximized, for the next time it opens.</summary>
+    private void RememberPlacement(SettingsWindow window)
+    {
+        if (!window.IsHandleCreated) return;
+        Rectangle normal = window.WindowState == FormWindowState.Normal ? window.Bounds : window.RestoreBounds;
+        var placement = new SettingsPlacement(normal.X, normal.Y, normal.Width, normal.Height, window.FillsScreen);
+        if (placement == _settings.SettingsWindowPlacement) return;
+        _settings.SettingsWindowPlacement = placement;
+        try { _settings.Save(_settingsPath); }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { } // Opens centred next time instead.
     }
 
     /// <summary>With the look set to follow Windows, Settings is made again when Windows changes between light and dark.</summary>
@@ -917,7 +957,8 @@ public sealed class TrayApplication : ApplicationContext
     /// </summary>
     private IEnumerable<nint> AppWindowsAbove()
     {
-        if (_settingsWindow is { IsDisposed: false, Visible: true, IsHandleCreated: true } settings)
+        // Maximized it fills the screen, so it stays with ordinary windows instead of over every view.
+        if (_settingsWindow is { IsDisposed: false, Visible: true, IsHandleCreated: true, FillsScreen: false } settings)
         {
             yield return settings.Handle;
             foreach (Form owned in settings.OwnedForms)
@@ -939,12 +980,22 @@ public sealed class TrayApplication : ApplicationContext
     /// <param name="unsaved">Changes the window it replaces had not saved.</param>
     /// <param name="quietly">Shown without taking the keyboard from what has it.</param>
     private void OpenSettings(Rectangle? bounds = null, int page = 0, bool reopening = false, SettingsWindow.UnsavedEdits? unsaved = null,
-        bool quietly = false)
+        bool quietly = false, FormWindowState state = FormWindowState.Normal)
     {
         if (_settingsWindow is { IsDisposed: false })
         {
+            // Back from the taskbar as it was, maximized or not.
+            if (_settingsWindow.IsHandleCreated && _settingsWindow.WindowState == FormWindowState.Minimized)
+                User32.ShowWindow(_settingsWindow.Handle, User32.SW_RESTORE);
             _settingsWindow.Activate();
             return;
+        }
+
+        if (bounds is null && !reopening &&
+            _settings.SettingsWindowPlacement?.OnScreen(Screen.AllScreens.Select(screen => screen.WorkingArea)) is { } last)
+        {
+            bounds = last.Bounds;
+            if (last.Maximized) state = FormWindowState.Maximized;
         }
 
         // A view being used is put back to watching when Settings opens, but not when Settings is only made again in
@@ -954,7 +1005,11 @@ public sealed class TrayApplication : ApplicationContext
             { TopMost = !quietly, PageIndex = page, Quiet = quietly };
         _settingsWindow.TakeUnsaved(unsaved);
         if (bounds is { } where) { _settingsWindow.StartPosition = FormStartPosition.Manual; _settingsWindow.Bounds = where; }
+        SettingsWindow opened = _settingsWindow;
+        opened.FormClosing += (_, _) => RememberPlacement(opened);
         _settingsWindow.Show();
+        // Only once shown: a state set before is lost as Settings is shown. Never reached quietly (see ReopenSettings).
+        if (state == FormWindowState.Maximized) _settingsWindow.WindowState = FormWindowState.Maximized;
         if (!quietly) _settingsWindow.Activate();
     }
 

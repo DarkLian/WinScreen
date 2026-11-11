@@ -1,4 +1,5 @@
 using WinScreen.Localization;
+using WinScreen.Native;
 using WinScreen.Settings;
 using WinScreen.Tray;
 using Xunit;
@@ -142,7 +143,8 @@ public sealed class SettingsLayoutTests
                 window.Scale(new SizeF(percent / 100f, percent / 100f));
                 window.Show();
                 Application.DoEvents();
-                Assert.True(Screen.FromControl(window).WorkingArea.Contains(window.Bounds));
+                // Too big for the screen, Windows shows it maximized, which always fits.
+                Assert.True(window.WindowState == FormWindowState.Maximized || Screen.FromControl(window).WorkingArea.Contains(window.Bounds));
                 // Save and Discard sit in a bar that is only there while something waits to be saved.
                 window.SetOption(nameof(AppSettings.ShowNotifications), false);
                 window.RefreshApply();
@@ -173,6 +175,57 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    /// <summary>
+    /// A wider window gives every row the same extra room, up to a width still easy to read; maximized, Settings
+    /// stops staying above other windows and views, and stays above them again when made smaller.
+    /// </summary>
+    [Fact]
+    public void A_wider_window_widens_every_row_and_maximized_it_stops_staying_on_top()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(), _ => []) { TopMost = true };
+            window.Show();
+            Application.DoEvents();
+            int[] Widths() => [.. Descendants(window).OfType<SwitchBox>().Where(option => !option.Compact && option.Visible)
+                .Select(option => option.Width).Distinct()];
+            int usual = Assert.Single(Widths());
+            Assert.True(window.MinimumSize.Width >= window.Width);
+
+            window.Width += 300;
+            Application.DoEvents();
+            int wider = Assert.Single(Widths());
+            Assert.Equal(usual + 300, wider);
+
+            window.WindowState = FormWindowState.Maximized;
+            Application.DoEvents();
+            Assert.True(window.FillsScreen);
+            int widest = Assert.Single(Widths());
+            Assert.True(widest <= SettingsStyle.Unit(window, ScrollPage.WidestCard), $"{widest}");
+            Assert.Equal(0, User32.GetWindowLongPtr(window.Handle, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST);
+
+            window.WindowState = FormWindowState.Normal;
+            Application.DoEvents();
+            Assert.NotEqual(0, User32.GetWindowLongPtr(window.Handle, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST);
+            window.Close();
+        });
+    }
+
     private static IEnumerable<Control> Descendants(Control root) => root.Controls.Cast<Control>()
         .SelectMany(child => new[] { child }.Concat(Descendants(child)));
+}
+
+/// <summary>Where Settings may open again: anywhere its title bar is on a screen.</summary>
+public sealed class SettingsPlacementTests
+{
+    private static readonly Rectangle[] Screens = [new(0, 0, 1920, 1040), new(1920, 0, 1280, 984)];
+
+    [Theory]
+    [InlineData(100, 100, 900, 650, true)]
+    [InlineData(2000, 50, 900, 650, true)] // On the second screen.
+    [InlineData(-2000, 100, 900, 650, false)] // A screen no longer there.
+    [InlineData(100, -400, 900, 650, false)] // Title bar above every screen.
+    [InlineData(100, 100, 50, 40, false)] // Too small to be a real size.
+    public void Settings_opens_where_it_was_only_while_that_is_on_a_screen(int x, int y, int width, int height, bool kept) =>
+        Assert.Equal(kept, new SettingsPlacement(x, y, width, height, false).OnScreen(Screens) is not null);
 }

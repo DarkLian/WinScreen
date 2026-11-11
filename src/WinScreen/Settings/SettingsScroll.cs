@@ -167,7 +167,37 @@ internal sealed class ThinScrollBar : Control
 internal sealed class ScrollPage : FlowLayoutPanel
 {
     private const int WM_PAINT = 0x000F, WM_VSCROLL = 0x0115, WM_MOUSEWHEEL = 0x020A;
+    /// <summary>The widest the cards get, at 100% scaling: past this a line of words gets too long to read easily.</summary>
+    internal const int WidestCard = 1000;
+    /// <summary>The height a page has in a Settings window of the usual size, at 100% scaling.</summary>
+    private const int UsualHeight = 560;
     internal event Action? Moved;
+
+    /// <summary>How much wider than usual its rows are now, in pixels.</summary>
+    internal int Extra { get; private set; }
+
+    protected override void OnClientSizeChanged(EventArgs e)
+    {
+        base.OnClientSizeChanged(e);
+        Restretch();
+    }
+
+    /// <summary>
+    /// Widens the rows to the room there is, up to <see cref="WidestCard"/>, and lets lists show more rows in a taller
+    /// window. Called again when a part of the page is made anew.
+    /// </summary>
+    internal void Restretch()
+    {
+        if (Controls.Count == 0) return;
+        // The widest card as it would be at the usual width, measured each time, so a change of display scaling counts.
+        int usual = Controls.Cast<Control>().Max(control => control.Width + control.Margin.Horizontal) - Extra;
+        int room = ClientSize.Width - Padding.Horizontal - SettingsStyle.Unit(this, 4);
+        Extra = Math.Clamp(room - usual, 0, Math.Max(0, SettingsStyle.Unit(this, WidestCard) - usual));
+        int rows = 6 + Math.Clamp((ClientSize.Height - SettingsStyle.Unit(this, UsualHeight)) / SettingsStyle.Unit(this, 70), 0, 8);
+        SuspendLayout();
+        PageStretch.Apply(this, Extra, SettingsStyle.Unit(this, SwitchBox.RowWidth), rows);
+        ResumeLayout(true);
+    }
 
     protected override void WndProc(ref Message m)
     {

@@ -1114,7 +1114,6 @@ internal sealed class ThemedCheckList : CheckedListBox
 /// </summary>
 internal sealed class ProgramList : Panel
 {
-    private const int MostRows = 6;
     private readonly Label? _title;
     private readonly ThemedList _list;
     private readonly InputFrame _frame;
@@ -1172,6 +1171,19 @@ internal sealed class ProgramList : Panel
     }
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
+
+    /// <summary>The most rows it shows before it scrolls: more in a taller Settings window.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal int MostRows
+    {
+        get;
+        set
+        {
+            if (field == value) return;
+            field = value;
+            PerformLayout();
+        }
+    } = 6;
 
     private void Add()
     {

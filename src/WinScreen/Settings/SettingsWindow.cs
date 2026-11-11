@@ -189,11 +189,12 @@ private readonly ErrorProvider _errors = new();
         Text = T("settings.window.title");
         Icon = TrayApplication.LoadIcon();
         FormBorderStyle = FormBorderStyle.Sizable;
-        MaximizeBox = false;
-        MinimizeBox = false;
+        MaximizeBox = true;
+        MinimizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(860, 640);
-        MinimumSize = new Size(640, 400);
+        // No narrower than this, the narrowest its rows fit: they grow in a wider window but never shrink.
+        MinimumSize = new Size(Width, 400);
         Font = MenuStyle.Font;
         BackColor = SettingsStyle.Page;
         ForeColor = SettingsStyle.Text;
@@ -306,6 +307,9 @@ private readonly ErrorProvider _errors = new();
     private readonly bool _quiet;
 
     protected override bool ShowWithoutActivation => Quiet;
+
+    /// <summary>Whether it was made in the dark colours, so a later switch knows if it needs making again.</summary>
+    internal bool MadeDark { get; } = MenuStyle.Dark;
 
     private void StayOnTopQuietly()
     {
@@ -459,6 +463,31 @@ private readonly ErrorProvider _errors = new();
         Native.Dwmapi.DwmSetWindowAttribute(Handle, Native.Dwmapi.DWMWA_TEXT_COLOR, in text, sizeof(int));
     }
 
+    protected override void OnSizeChanged(EventArgs e)
+    {
+        base.OnSizeChanged(e);
+        FollowWindowState();
+    }
+
+    private bool _belowOthers;
+
+    /// <summary>True while it fills the screen, when it stops keeping above other windows and views.</summary>
+    internal bool FillsScreen => WindowState == FormWindowState.Maximized;
+
+    /// <summary>
+    /// Maximized, Settings would hide every view and pinned window, so it stops staying on top until it is made
+    /// smaller again. Done without activating it, as WinForms' own TopMost would.
+    /// </summary>
+    private void FollowWindowState()
+    {
+        if (!IsHandleCreated || !(TopMost || Quiet)) return;
+        bool below = FillsScreen;
+        if (below == _belowOthers) return;
+        _belowOthers = below;
+        Native.User32.SetWindowPos(Handle, below ? Native.User32.HWND_NOTOPMOST : Native.User32.HWND_TOPMOST, 0, 0, 0, 0,
+            Native.User32.SWP_NOMOVE | Native.User32.SWP_NOSIZE | Native.User32.SWP_NOACTIVATE);
+    }
+
     protected override void OnDpiChanged(DpiChangedEventArgs e)
     {
         base.OnDpiChanged(e);
@@ -467,6 +496,7 @@ private readonly ErrorProvider _errors = new();
 
     private void FitWorkingArea()
     {
+        if (WindowState != FormWindowState.Normal) return; // Windows sizes a maximized one itself.
         Rectangle area = Screen.FromControl(this).WorkingArea;
         Size = new Size(Math.Min(Width, area.Width), Math.Min(Height, area.Height));
         Location = new Point(Math.Clamp(Left, area.Left, Math.Max(area.Left, area.Right - Width)),
@@ -732,6 +762,7 @@ private readonly ErrorProvider _errors = new();
         {
             var row = new Panel { Size = new Size(SwitchBox.RowWidth, heading ? 24 : 34), Margin = new Padding(3, 0, 3, 0), BackColor = SettingsStyle.Card };
             row.Controls.Add(new SoftLabel { Text = name, AutoSize = false, Bounds = new Rectangle(1, 0, hoverAt - 8, row.Height),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right, // Wider rows give names more room.
                 TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, UseMnemonic = false,
                 ForeColor = heading ? SettingsStyle.Secondary : SettingsStyle.Text, Font = heading ? MenuStyle.SmallFont : MenuStyle.Font });
             return row;
@@ -739,6 +770,7 @@ private readonly ErrorProvider _errors = new();
         void Place(Panel row, Control control, int at)
         {
             control.Location = new Point(at, (row.Height - control.Height) / 2);
+            control.Anchor = AnchorStyles.Top | AnchorStyles.Right; // The columns stay at the right edge as rows widen.
             row.Controls.Add(control);
             control.BringToFront();
         }
@@ -805,6 +837,8 @@ private readonly ErrorProvider _errors = new();
             _appRows.Controls.Add(row);
         }
         _appRows.ResumeLayout(true);
+        for (Control? parent = _appRows.Parent; parent is not null; parent = parent.Parent)
+            if (parent is ScrollPage page) { page.Restretch(); break; } // The new rows widen like the others.
     }
 
     private static ComboBox ProgramPicker()

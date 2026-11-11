@@ -152,13 +152,27 @@ internal sealed class SwitchBox : CheckBox
     }
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
-    private int TextWidth => Unit(RowWidth) - Unit(64);
+    private int TextWidth => Unit(RowWidth) + Extra - Unit(64);
+
+    /// <summary>How much wider than usual the row is, in pixels, for a Settings window made wider.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal int Extra
+    {
+        get;
+        set
+        {
+            if (field == value || Compact) return;
+            field = value;
+            if (AutoSize) Size = GetPreferredSize(Size.Empty);
+            Invalidate();
+        }
+    }
 
     public override Size GetPreferredSize(Size proposedSize)
     {
         if (Compact) return new Size(Unit(50), Unit(30));
         Size text = TextRenderer.MeasureText(Text, Font, new Size(TextWidth, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
-        return new Size(Unit(RowWidth), Math.Max(Unit(36), text.Height + Unit(14)));
+        return new Size(Unit(RowWidth) + Extra, Math.Max(Unit(36), text.Height + Unit(14)));
     }
 
     protected override void OnPaint(PaintEventArgs e)

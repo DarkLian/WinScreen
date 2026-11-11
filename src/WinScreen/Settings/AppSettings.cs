@@ -87,6 +87,23 @@ public sealed class ProgramSetup
     }
 }
 
+/// <summary>Where the Settings window was: its size when not maximized, and whether it was maximized.</summary>
+public sealed record SettingsPlacement(int X, int Y, int Width, int Height, bool Maximized)
+{
+    public Rectangle Bounds => new(X, Y, Width, Height);
+
+    /// <summary>
+    /// The place to open at, or null when it would be mostly off every screen now, as after a display was unplugged.
+    /// Its title bar must be on a screen, so it can always be moved.
+    /// </summary>
+    internal SettingsPlacement? OnScreen(IEnumerable<Rectangle> workingAreas)
+    {
+        if (Width < 200 || Height < 150) return null;
+        var title = new Rectangle(X + 40, Y, Math.Max(1, Width - 80), 30);
+        return workingAreas.Any(area => area.IntersectsWith(title)) ? this : null;
+    }
+}
+
 /// <summary>What is wrong with one command's hotkey, in words for the person.</summary>
 public sealed record HotkeyProblem(AppCommand Command, string Message);
 
@@ -270,6 +287,9 @@ public sealed class AppSettings
 
     /// <summary>WinScreen runs as administrator, so it can also change administrator apps' windows.</summary>
     public bool RunAsAdministrator { get; set; }
+
+    /// <summary>Where Settings was last, and whether it filled the screen, to open it the same way next time.</summary>
+    public SettingsPlacement? SettingsWindowPlacement { get; set; }
 
     /// <summary>True once the first-run hint has been shown, so it doesn't return at every sign-in.</summary>
     public bool WelcomeShown { get; set; }
