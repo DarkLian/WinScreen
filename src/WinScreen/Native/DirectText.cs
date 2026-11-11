@@ -366,8 +366,15 @@ internal static unsafe class DirectText
     {
         if (drawn.Image is null) return;
         System.Drawing.Drawing2D.CompositingMode mode = graphics.CompositingMode;
+        System.Drawing.Drawing2D.InterpolationMode interpolation = graphics.InterpolationMode;
+        System.Drawing.Drawing2D.PixelOffsetMode offset = graphics.PixelOffsetMode;
         graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
-        graphics.DrawImage(drawn.Image, new Rectangle(inner.Left + drawn.X, inner.Top + drawn.Y, drawn.Image.Width, drawn.Image.Height)); // Pixel for pixel at any scaling.
+        // Pixel for pixel at any scaling, never smoothed by what the graphics was set up to draw.
+        graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+        graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+        graphics.DrawImage(drawn.Image, new Rectangle(inner.Left + drawn.X, inner.Top + drawn.Y, drawn.Image.Width, drawn.Image.Height));
+        graphics.PixelOffsetMode = offset;
+        graphics.InterpolationMode = interpolation;
         graphics.CompositingMode = mode;
     }
 

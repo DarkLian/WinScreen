@@ -466,6 +466,62 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    /// <summary>A value chosen on a slider is what gets saved.</summary>
+    [Fact]
+    public void A_value_chosen_on_a_slider_is_saved()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            var settings = new AppSettings { Language = "en" };
+            int before = settings.Anchors.Size;
+            AppSettings? saved = null;
+            using var window = new SettingsWindow(settings, new StartWithWindows(tasks: NoTasks.Instance), draft => { saved = draft; return []; });
+            window.Show();
+            for (int i = 0; i < 5; i++) Application.DoEvents();
+            NumberSlider slider = Descendants(window).OfType<NumberSlider>().Single(s => s.Number.Minimum == 32 && s.Number.Maximum == 72);
+            typeof(Control).GetMethod("OnKeyDown", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(slider,
+                [new KeyEventArgs(before >= 72 ? Keys.Left : Keys.Right)]);
+            for (int i = 0; i < 5; i++) Application.DoEvents();
+            Assert.True(window.ApplyChanges());
+            Assert.Equal(before >= 72 ? before - 4 : before + 4, saved!.Anchors.Size);
+            window.Close();
+        });
+    }
+
+    /// <summary>Each list that drops down is wide enough for its longest choice, in every language.</summary>
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-Hans")]
+    [InlineData("zh-Hant")]
+    public void Every_list_is_wide_enough_for_its_longest_choice(string language)
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize(language);
+            using var window = new SettingsWindow(new AppSettings { Language = language, ExperimentalFeatures = true }, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+            window.Show();
+            TabControl tabs = Descendants(window).OfType<TabControl>().Single();
+            var short_ = new List<string>();
+            for (int page = 0; page < tabs.TabCount; page++)
+            {
+                tabs.SelectedIndex = page;
+                for (int i = 0; i < 5; i++) Application.DoEvents();
+                foreach (SettingRowPanel row in Descendants(tabs.SelectedTab!).OfType<SettingRowPanel>())
+                    if (row.Setting is ComboBox box)
+                    {
+                        int widest = box.Items.Cast<object>().Select(item => DirectText.MeasureText(box.GetItemText(item), box.Font, Size.Empty,
+                            TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width).DefaultIfEmpty(0).Max();
+                        int room = box.Width - SettingsStyle.Unit(box, 11 + 44);
+                        if (widest > room) short_.Add($"{row.Text}: {widest} > {room}");
+                        if (box.Right > row.ClientSize.Width) short_.Add($"{row.Text}: past the row's edge");
+                    }
+            }
+            Assert.True(short_.Count == 0, string.Join("; ", short_));
+            window.Close();
+        });
+    }
+
     private static IEnumerable<Control> Descendants(Control root) => root.Controls.Cast<Control>()
         .SelectMany(child => new[] { child }.Concat(Descendants(child)));
 }
