@@ -287,6 +287,12 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsWindowVisible(nint hWnd);
 
+    public const int SB_HORZ = 0;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ShowScrollBar(nint hWnd, int bar, [MarshalAs(UnmanagedType.Bool)] bool show);
+
     public const uint CB_SETCUEBANNER = 0x1703;
 
     [LibraryImport("user32.dll", EntryPoint = "SendMessageW")]

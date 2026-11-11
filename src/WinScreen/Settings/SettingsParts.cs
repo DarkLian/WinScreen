@@ -23,13 +23,15 @@ internal static class SettingsStyle
     internal static Color Side => Page;
     internal static Color Card => Dark ? Rgb(0x2B2B2B) : Rgb(0xFBFBFB);
     internal static Color CardStroke => Dark ? Rgb(0x1D1D1D) : Rgb(0xE5E5E5);
-    internal static Color Divider => Dark ? Rgb(0x1D1D1D) : Rgb(0xEAEAEA);
+    /// <summary>The line between options on a card: a shade lighter than the card, so options read as one group.</summary>
+    internal static Color Divider => Dark ? Blend(Color.White, Card, 0.055) : Rgb(0xEBEBEB);
     /// <summary>The background of a list that drops down, the same as the menus'.</summary>
     internal static Color Flyout => MenuStyle.Back;
 
     // Text.
-    internal static Color Text => Dark ? Rgb(0xFFFFFF) : Rgb(0x1B1B1B);
-    internal static Color Secondary => Dark ? Rgb(0xCFCFCF) : Rgb(0x5F5F5F);
+    // In the dark theme, a little short of pure white: full white on a dark grey glares at reading size.
+    internal static Color Text => Dark ? Rgb(0xEDEDED) : Rgb(0x1B1B1B);
+    internal static Color Secondary => Dark ? Rgb(0xC5C5C5) : Rgb(0x5F5F5F);
     internal static Color Tertiary => Dark ? Rgb(0x9E9E9E) : Rgb(0x6E6E6E);
     internal static Color Disabled => Dark ? Rgb(0x8A8A8A) : Rgb(0x9A9A9A);
     internal static Color Error => Dark ? Rgb(0xFF99A4) : Rgb(0xC42B1C);
@@ -76,6 +78,13 @@ internal static class SettingsStyle
     // Type. Windows 11's own faces where they exist (some names are cut short by Windows), Segoe UI otherwise.
     private static string Face(string prefix, string fallback) =>
         FontFamily.Families.FirstOrDefault(family => family.Name.StartsWith(prefix, StringComparison.Ordinal))?.Name ?? fallback;
+    /// <summary>
+    /// Smooths text in grey rather than in colour, as Windows 11's own Settings does. Windows' colour smoothing, the
+    /// default for text drawn here, makes small text look thin and sharp, with coloured edges on a dark background.
+    /// Text drawn on <paramref name="g"/> afterwards follows it.
+    /// </summary>
+    internal static void SoftText(Graphics g) => g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
     internal static readonly Font HeadingFont = new(Face("Segoe UI Variable Text Semib", "Segoe UI Semibold"), 9.75f);
     internal static readonly Font PageTitleFont = new(Face("Segoe UI Variable Display Semib", "Segoe UI Semibold"), 20f);
 
@@ -153,6 +162,7 @@ internal sealed class SwitchBox : CheckBox
 
     protected override void OnPaint(PaintEventArgs e)
     {
+        SettingsStyle.SoftText(e.Graphics);
         Graphics g = e.Graphics;
         Color surface = Parent?.BackColor ?? SettingsStyle.Card;
         g.Clear(surface);
@@ -197,7 +207,7 @@ internal sealed class SwitchBox : CheckBox
 /// <summary>A titled group of options: the title above, the options in a card with a line between them.</summary>
 internal sealed class SettingsCard : Panel
 {
-    private readonly Label _title = new() { AutoSize = true, Margin = Padding.Empty };
+    private readonly Label _title = new SoftLabel() { AutoSize = true, Margin = Padding.Empty };
     private readonly Body _body = new();
     private readonly bool _experimental;
 
@@ -216,7 +226,7 @@ internal sealed class SettingsCard : Panel
         foreach (Control item in items) _body.Controls.Add(item);
         Controls.Add(_title);
         Controls.Add(_body);
-        Paint += (_, e) => DrawBadge(e.Graphics);
+        Paint += (_, e) => { SettingsStyle.SoftText(e.Graphics); DrawBadge(e.Graphics); };
     }
 
     /// <summary>The card's title, for anything looking a section up by name.</summary>
@@ -256,9 +266,23 @@ internal sealed class SettingsCard : Panel
         protected override void OnControlAdded(ControlEventArgs e)
         {
             base.OnControlAdded(e);
+            // A pixel between options, where the line between them is drawn: an option covers whatever is under it, so
+            // without it only the ends of the line showed, as short dashes at the card's edges.
+            if (Controls.Count > 1 && e.Control is not Label && e.Control!.Margin.Top < 1)
+                e.Control.Margin = e.Control.Margin with { Top = 1 };
             e.Control!.LocationChanged += (_, _) => Invalidate();
             e.Control.VisibleChanged += (_, _) => Invalidate();
         }
+    }
+}
+
+/// <summary>A label whose words are smoothed like the rest of Settings (<see cref="SettingsStyle.SoftText"/>).</summary>
+internal class SoftLabel : Label
+{
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        SettingsStyle.SoftText(e.Graphics);
+        base.OnPaint(e);
     }
 }
 
@@ -359,6 +383,7 @@ internal sealed class NavList : Control
 
     protected override void OnPaint(PaintEventArgs e)
     {
+        SettingsStyle.SoftText(e.Graphics);
         Graphics g = e.Graphics;
         g.Clear(BackColor);
         g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -470,6 +495,7 @@ internal sealed class PlainButton : Button
 
     protected override void OnPaint(PaintEventArgs e)
     {
+        SettingsStyle.SoftText(e.Graphics);
         Graphics g = e.Graphics;
         Color surface = Parent?.BackColor ?? SettingsStyle.Page;
         g.Clear(surface);

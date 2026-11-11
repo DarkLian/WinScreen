@@ -44,11 +44,11 @@ public sealed class SettingsWindow : Form
     private readonly TabControl _tabs = new PagesControl { Size = new Size(540, 520), TabStop = false, Multiline = true };
     private readonly NavList _nav = new() { Dock = DockStyle.Fill };
     private readonly TextBox _search = new();
-    private readonly Label _pageTitle = new() { AutoSize = true, Font = SettingsStyle.PageTitleFont, UseMnemonic = false, Margin = new Padding(0, 0, 0, 14) };
+    private readonly Label _pageTitle = new SoftLabel() { AutoSize = true, Font = SettingsStyle.PageTitleFont, UseMnemonic = false, Margin = new Padding(0, 0, 0, 14) };
     private readonly Panel _saveBar = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly TextBox _actionSearch = new() { Dock = DockStyle.Top };
     private readonly InputFrame _shortcutEditor = new(null) { Width = 240, ReserveEnd = 22, Anchor = AnchorStyles.Right };
-    private readonly Label _shortcutLabel = new() { AutoSize = true, Anchor = AnchorStyles.Left, Font = SettingsStyle.HeadingFont, UseMnemonic = false, AutoEllipsis = true };
+    private readonly Label _shortcutLabel = new SoftLabel() { AutoSize = true, Anchor = AnchorStyles.Left, Font = SettingsStyle.HeadingFont, UseMnemonic = false, AutoEllipsis = true };
     private readonly Dictionary<AppCommand, string> _shortcutProblems = [];
     private bool _fillingFeatures;
     private readonly Func<AppCommand, bool>? _registered;
@@ -157,7 +157,7 @@ private readonly ErrorProvider _errors = new();
     private string _savedState = "";
     private bool _refreshQueued;
 
-    private readonly Label _status = new()
+    private readonly Label _status = new SoftLabel()
         { AutoSize = true, ForeColor = SettingsStyle.Text, MaximumSize = new Size(500, 0), Margin = new Padding(0, 6, 0, 0) };
 
     public SettingsWindow(AppSettings settings, StartWithWindows startup,
@@ -670,7 +670,7 @@ private readonly ErrorProvider _errors = new();
         Panel Row(string name, bool heading)
         {
             var row = new Panel { Size = new Size(SwitchBox.RowWidth, heading ? 24 : 34), Margin = new Padding(3, 0, 3, 0), BackColor = SettingsStyle.Card };
-            row.Controls.Add(new Label { Text = name, AutoSize = false, Bounds = new Rectangle(1, 0, hoverAt - 8, row.Height),
+            row.Controls.Add(new SoftLabel { Text = name, AutoSize = false, Bounds = new Rectangle(1, 0, hoverAt - 8, row.Height),
                 TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, UseMnemonic = false,
                 ForeColor = heading ? SettingsStyle.Secondary : SettingsStyle.Text, Font = heading ? MenuStyle.SmallFont : MenuStyle.Font });
             return row;
@@ -683,7 +683,7 @@ private readonly ErrorProvider _errors = new();
         }
         Panel head = Row(T("settings.pip.apps.app"), true);
         foreach (var (text, at) in new[] { (T("menu.view.hover"), hoverAt), (T("settings.pip.apps.original"), originalAt) })
-            Place(head, new Label { Text = text, AutoSize = true, ForeColor = SettingsStyle.Secondary, Font = MenuStyle.SmallFont, UseMnemonic = false }, at - 4);
+            Place(head, new SoftLabel { Text = text, AutoSize = true, ForeColor = SettingsStyle.Secondary, Font = MenuStyle.SmallFont, UseMnemonic = false }, at - 4);
         _appRows.Controls.Add(head);
         foreach (CheckBox kind in new[] { _hoverBrowsers, _hoverFirefox, _hoverElectron, _hoverExplorer })
         {
@@ -913,7 +913,7 @@ private readonly ErrorProvider _errors = new();
     }
 
     /// <summary>A line of explanation under the option it belongs to.</summary>
-    private static Label Note(string text) => new()
+    private static Label Note(string text) => new SoftLabel()
     {
         Text = text, AutoSize = true, MaximumSize = new Size(SwitchBox.RowWidth - 8, 0), Margin = new Padding(7, 0, 3, 10),
         ForeColor = SettingsStyle.Secondary, Font = MenuStyle.SmallFont, UseMnemonic = false,
@@ -942,7 +942,7 @@ private readonly ErrorProvider _errors = new();
         control.Location = new Point(row.Width - control.Width - 6, (row.Height - control.Height) / 2);
         control.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         row.Controls.Add(control);
-        row.Controls.Add(new Label { Text = text, AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(2, 0, 0, 0) });
+        row.Controls.Add(new SoftLabel { Text = text, AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(2, 0, 0, 0) });
         return row;
     }
 
@@ -972,7 +972,7 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(Section(T("settings.windows"), _pauseInFullScreen, _allowPip));
         page.Controls.Add(Section(T("settings.experimental"), _experimental));
         page.Controls.Add(BuildTransfer());
-        page.Controls.Add(new Label
+        page.Controls.Add(new SoftLabel
         {
             Text = string.Format(T("app.version"), AppInfo.Version), AutoSize = true,
             ForeColor = SettingsStyle.Secondary, Font = MenuStyle.SmallFont, Margin = new Padding(3, 2, 3, 0),
@@ -1105,7 +1105,7 @@ private readonly ErrorProvider _errors = new();
         };
         _applyButton.Click += (_, _) => ApplyChanges();
 
-        var text = new Label { Text = T("settings.unsaved"), AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = SettingsStyle.Accent,
+        var text = new SoftLabel { Text = T("settings.unsaved"), AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = SettingsStyle.Accent,
             BackColor = SettingsStyle.AccentBack, Margin = new Padding(12, 0, 0, 0) };
         var row = new TableLayoutPanel { ColumnCount = 3, RowCount = 1, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
             BackColor = SettingsStyle.AccentBack, Padding = new Padding(0, 6, 8, 6) };
@@ -1276,7 +1276,7 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(table);
         page.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 8 });
         page.Controls.Add(card);
-        var intro = new Label { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top, ForeColor = SettingsStyle.Secondary, Padding = new Padding(1, 8, 0, 8) };
+        var intro = new SoftLabel { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top, ForeColor = SettingsStyle.Secondary, Padding = new Padding(1, 8, 0, 8) };
         page.Controls.Add(intro);
         page.Controls.Add(new InputFrame(_actionSearch) { Glyph = MenuParts.Search, Dock = DockStyle.Top, Height = 34 });
         page.Resize += (_, _) => intro.MaximumSize = new Size(page.ClientSize.Width, 0);
@@ -1302,6 +1302,7 @@ private readonly ErrorProvider _errors = new();
         _features.DrawColumnHeader += (_, e) =>
         {
             Graphics g = e.Graphics;
+            SettingsStyle.SoftText(g);
             using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, e.Bounds);
             TextRenderer.DrawText(g, e.Header?.Text, MenuStyle.SmallFont,
                 new Rectangle(e.Bounds.Left + Unit(FeatureInset(e.ColumnIndex)), e.Bounds.Top, e.Bounds.Width - Unit(FeatureInset(e.ColumnIndex) + 4), e.Bounds.Height),
@@ -1314,6 +1315,7 @@ private readonly ErrorProvider _errors = new();
         {
             if (e.Item is not { } item || e.SubItem is null) return;
             Graphics g = e.Graphics;
+            SettingsStyle.SoftText(g);
             Rectangle cell = e.Bounds;
             if (e.ColumnIndex == 0)
             {
@@ -1396,7 +1398,20 @@ private readonly ErrorProvider _errors = new();
         need[0] = width - need.Skip(1).Sum();
         for (int column = 0; column < 5; column++)
             if (_features.Columns[column].Width != need[column]) _features.Columns[column].Width = need[column];
+        // The columns fit now, but a table that was wider a moment ago keeps the sideways scroll bar it showed then,
+        // drawn in Windows' own colours, until something else redraws it. Taking it away resizes the table, which
+        // fits the columns again: only while it shows, and not from within this.
+        const long WS_HSCROLL = 0x00100000;
+        if (!_hidingSideways && need.Sum() <= _features.ClientSize.Width &&
+            (Native.User32.GetWindowLongPtr(_features.Handle, Native.User32.GWL_STYLE) & WS_HSCROLL) != 0)
+        {
+            _hidingSideways = true;
+            try { Native.User32.ShowScrollBar(_features.Handle, Native.User32.SB_HORZ, false); }
+            finally { _hidingSideways = false; }
+        }
     }
+
+    private bool _hidingSideways;
 
     private void ShowShortcutEditor()
     {

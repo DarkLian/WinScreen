@@ -8,6 +8,35 @@ namespace WinScreen.Tests;
 [Trait("Category", "RealWindows")]
 public sealed class SettingsLayoutTests
 {
+    /// <summary>
+    /// The actions table never keeps a sideways scroll bar once its columns fit: after the window narrows, the bar it
+    /// showed while the old columns were too wide went only when something else redrew the table.
+    /// </summary>
+    [Fact]
+    public void The_actions_table_drops_its_sideways_scroll_bar_once_the_window_narrows()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(), _ => []);
+            window.StartPosition = FormStartPosition.Manual;
+            window.Bounds = new Rectangle(0, 0, 1100, Screen.PrimaryScreen!.WorkingArea.Height);
+            window.Show();
+            TabControl tabs = Descendants(window).OfType<TabControl>().Single();
+            tabs.SelectedIndex = 1;
+            void Pump() { for (int i = 0; i < 10; i++) { Application.DoEvents(); Thread.Sleep(20); } }
+            Pump();
+            window.Bounds = new Rectangle(0, 0, 855, 670);
+            Pump();
+            ListView table = Descendants(window).OfType<ListView>().Single();
+            int columns = table.Columns.Cast<ColumnHeader>().Sum(column => column.Width);
+            Assert.True(columns <= table.ClientSize.Width, $"Columns {columns} wider than the table {table.ClientSize.Width}.");
+            Assert.True((Native.User32.GetWindowLongPtr(table.Handle, Native.User32.GWL_STYLE) & 0x00100000) == 0,
+                "The table kept its sideways scroll bar.");
+            window.Close();
+        });
+    }
+
     [Theory]
     [InlineData("en", 100)] [InlineData("en", 150)] [InlineData("en", 200)]
     [InlineData("zh-Hans", 100)] [InlineData("zh-Hans", 150)] [InlineData("zh-Hans", 200)]

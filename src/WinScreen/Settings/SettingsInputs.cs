@@ -201,6 +201,7 @@ internal sealed class InputFrame : Panel
 
     protected override void OnPaint(PaintEventArgs e)
     {
+        SettingsStyle.SoftText(e.Graphics);
         Graphics g = e.Graphics;
         g.Clear(Surface);
         g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -278,6 +279,7 @@ internal sealed class ThemedCombo : ComboBox
 
     protected override void OnPaint(PaintEventArgs e)
     {
+        SettingsStyle.SoftText(e.Graphics);
         Graphics g = e.Graphics;
         Color surface = Parent?.BackColor ?? SettingsStyle.Card;
         g.Clear(surface);
@@ -301,6 +303,7 @@ internal sealed class ThemedCombo : ComboBox
 
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
+        SettingsStyle.SoftText(e.Graphics);
         if (e.Index < 0) return;
         Graphics g = e.Graphics;
         using (var back = new SolidBrush(SettingsStyle.Flyout)) g.FillRectangle(back, e.Bounds);
@@ -645,6 +648,7 @@ internal sealed class ThemedPicker : ComboBox
 
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
+        SettingsStyle.SoftText(e.Graphics);
         if (e.Index < 0 || e.Index >= Items.Count) return;
         Graphics g = e.Graphics;
         using (var back = new SolidBrush(SettingsStyle.Flyout)) g.FillRectangle(back, e.Bounds);
@@ -786,6 +790,7 @@ internal class ThemedList : ListBox
 
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
+        SettingsStyle.SoftText(e.Graphics);
         if (e.Index < 0 || e.Index >= Items.Count) return;
         Rectangle row = ListRows.Background(e.Graphics, this, e.Bounds, (e.State & DrawItemState.Selected) != 0, e.Index == _hot);
         TextRenderer.DrawText(e.Graphics, GetItemText(Items[e.Index]), Font,
@@ -851,6 +856,7 @@ internal sealed class ThemedCheckList : CheckedListBox
 
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
+        SettingsStyle.SoftText(e.Graphics);
         if (e.Index < 0 || e.Index >= Items.Count) return;
         Graphics g = e.Graphics;
         Rectangle row = ListRows.Background(g, this, e.Bounds, false, e.Index == _hot);
@@ -936,7 +942,7 @@ internal sealed class ProgramList : Panel
         _frame = new InputFrame(list, InputFrame.Look.List);
         if (title is not null)
         {
-            _title = new Label { Text = title, AutoSize = true, UseMnemonic = false, Margin = Padding.Empty, ForeColor = SettingsStyle.Text };
+            _title = new SoftLabel { Text = title, AutoSize = true, UseMnemonic = false, Margin = Padding.Empty, ForeColor = SettingsStyle.Text };
             Controls.Add(_title);
         }
         Controls.Add(_frame);
