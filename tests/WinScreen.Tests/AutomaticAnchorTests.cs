@@ -128,7 +128,7 @@ public sealed class AnchorPolishTests
                 Automatic = true, Side = AnchorSide.NearWindow, Style = AnchorLook.Light, MaxAutomatic = 3, Size = 60,
                 RecencyEmphasis = false, AvoidContent = true, OnlyPrograms = ["one"], ExcludedPrograms = ["two"],
             } };
-            using var window = new SettingsWindow(settings, new StartWithWindows(@"Software\WinScreenTests\Anchors"),
+            using var window = new SettingsWindow(settings, new StartWithWindows(@"Software\WinScreenTests\Anchors", NoTasks.Instance),
                 draft => { saved = draft; return []; });
             Assert.True(window.SaveChanges());
             AnchorPreferences kept = saved!.Anchors;

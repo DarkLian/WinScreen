@@ -180,7 +180,7 @@ the newer installer. Your settings stay as they are.
 - WinScreen runs on Windows 10 (version 2004 or later) and Windows 11, on 64-bit Intel or AMD PCs (x64). ARM PCs and
   32-bit Windows aren't supported.
 - To change apps running as administrator, such as Task Manager, turn on **Run as administrator** in
-  **Settings → General**. WinScreen restarts with those rights after Windows asks, and keeps them when it starts with
+  **Settings → General**. WinScreen restarts with those rights (Windows may ask first) and keeps them when it starts with
   Windows.
 - Commands pause while a game or full-screen app is in front. Views can't appear over games in exclusive full screen.
 - A minimized app stops drawing, so its view shows the last picture.

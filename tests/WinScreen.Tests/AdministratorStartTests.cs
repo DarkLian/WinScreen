@@ -122,3 +122,15 @@ public sealed class AdministratorStartTests : IDisposable
         finally { File.Delete(file); }
     }
 }
+
+/// <summary>
+/// A Task Scheduler with no tasks, so tests of starting with Windows don't see the task a copy of WinScreen running as
+/// administrator on this PC made.
+/// </summary>
+internal sealed class NoTasks : ITaskScheduler
+{
+    public static readonly NoTasks Instance = new();
+    public bool Exists(string name) => false;
+    public void Create(string name, string xml) { }
+    public void Delete(string name) { }
+}

@@ -24,13 +24,35 @@ internal static partial class ProcessInfo
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetTokenInformation(nint token, int kind, out int value, int size, out int returned);
 
+    /// <summary>Whether WinScreen itself was started as administrator, which lets it work with such apps too.</summary>
+    public static bool SelfElevated { get; } = IsElevated((uint)Environment.ProcessId);
+
+    /// <summary>
+    /// Whether this person can run WinScreen as administrator: they already do, or Windows holds back rights their
+    /// account has. A standard account would be asked for someone else's password, and run as that person.
+    /// </summary>
+    public static bool CanElevate { get; } = SelfElevated || ElevationType() == TokenElevationTypeLimited;
+
+    private const int TokenElevationTypeKind = 18;
+    private const int TokenElevationTypeLimited = 3;
+
+    private static int ElevationType()
+    {
+        nint process = OpenProcess(ProcessQueryLimited, false, (uint)Environment.ProcessId);
+        if (process == 0) return 0;
+        try
+        {
+            if (!OpenProcessToken(process, TokenQuery, out nint token)) return 0;
+            try { return GetTokenInformation(token, TokenElevationTypeKind, out int type, sizeof(int), out _) ? type : 0; }
+            finally { CloseHandle(token); }
+        }
+        finally { CloseHandle(process); }
+    }
+
     /// <summary>
     /// True when a process runs as administrator. A normal process isn't allowed to look at an elevated
     /// one's token, so being refused counts as yes. That's also the answer that keeps WinScreen away from it.
     /// </summary>
-    /// <summary>Whether WinScreen itself was started as administrator, which lets it work with such apps too.</summary>
-    public static bool SelfElevated { get; } = IsElevated((uint)Environment.ProcessId);
-
     public static bool IsElevated(uint processId)
     {
         nint process = OpenProcess(ProcessQueryLimited, false, processId);

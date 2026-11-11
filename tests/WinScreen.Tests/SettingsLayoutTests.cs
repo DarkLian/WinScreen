@@ -19,7 +19,7 @@ public sealed class SettingsLayoutTests
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             UiText.Initialize("en");
-            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(), _ => []);
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
             window.StartPosition = FormStartPosition.Manual;
             window.Bounds = new Rectangle(0, 0, 1100, Screen.PrimaryScreen!.WorkingArea.Height);
             window.Show();
@@ -56,7 +56,7 @@ public sealed class SettingsLayoutTests
             IReadOnlyList<HotkeyProblem> Save(AppSettings draft) { saved = draft; return []; }
 
             SettingsWindow.UnsavedEdits? unsaved;
-            using (var old = new SettingsWindow(settings, new StartWithWindows(), Save))
+            using (var old = new SettingsWindow(settings, new StartWithWindows(tasks: NoTasks.Instance), Save))
             {
                 Assert.Null(old.Unsaved());
                 old.SetOption(nameof(AppSettings.ShowNotifications), false);
@@ -68,7 +68,7 @@ public sealed class SettingsLayoutTests
             }
             Assert.NotNull(unsaved);
 
-            using var window = new SettingsWindow(settings, new StartWithWindows(), Save);
+            using var window = new SettingsWindow(settings, new StartWithWindows(tasks: NoTasks.Instance), Save);
             window.TakeUnsaved(unsaved);
             Assert.True(window.HasChanges);
             Assert.True(window.SaveChanges());
@@ -91,7 +91,7 @@ public sealed class SettingsLayoutTests
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             UiText.Initialize("en");
-            using var window = new SettingsWindow(new AppSettings { Language = "en", ExperimentalFeatures = true }, new StartWithWindows(), _ => []);
+            using var window = new SettingsWindow(new AppSettings { Language = "en", ExperimentalFeatures = true }, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
             window.Show();
             Application.DoEvents();
             int standard = SettingsStyle.Unit(window, BoxHeight.Standard);
@@ -116,7 +116,7 @@ public sealed class SettingsLayoutTests
             Support.Desktop.Activate(inUse.Handle);
             Application.DoEvents();
             Assert.Equal(inUse.Handle, Native.User32.GetForegroundWindow());
-            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(), _ => []) { Quiet = true };
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(tasks: NoTasks.Instance), _ => []) { Quiet = true };
             window.Show();
             for (int i = 0; i < 10; i++) { Application.DoEvents(); Thread.Sleep(20); }
             Assert.True(window.Visible);
@@ -137,7 +137,7 @@ public sealed class SettingsLayoutTests
             try
             {
                 UiText.Initialize(language);
-                using var window = new SettingsWindow(new AppSettings { Language = language }, new StartWithWindows(), _ => []);
+                using var window = new SettingsWindow(new AppSettings { Language = language }, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
                 using var scaledFont = new Font(window.Font.FontFamily, window.Font.Size * percent / 100f);
                 window.Font = scaledFont;
                 window.Scale(new SizeF(percent / 100f, percent / 100f));
@@ -184,7 +184,7 @@ public sealed class SettingsLayoutTests
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
-            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(), _ => []) { TopMost = true };
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(tasks: NoTasks.Instance), _ => []) { TopMost = true };
             window.Show();
             Application.DoEvents();
             int[] Widths() => [.. Descendants(window).OfType<SwitchBox>().Where(option => !option.Compact && option.Visible)

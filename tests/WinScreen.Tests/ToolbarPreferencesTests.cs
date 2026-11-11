@@ -88,7 +88,7 @@ public sealed class ToolbarPreferencesTests
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             var preferences = new AppSettings();
-            using var settings = new SettingsWindow(preferences, new StartWithWindows(@"Software\WinScreenTests\Toolbar"), _ => []);
+            using var settings = new SettingsWindow(preferences, new StartWithWindows(@"Software\WinScreenTests\Toolbar", NoTasks.Instance), _ => []);
             settings.CaptureHotkey(AppCommand.TogglePin, Keys.Control | Keys.F9);
             settings.SetOption(nameof(AppSettings.OpacityWheel), true);
             settings.SetOption(nameof(AppSettings.ShowToolbar), false);
@@ -111,7 +111,7 @@ public sealed class ToolbarPreferencesTests
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             var preferences = new AppSettings { Toolbar = new() { Buttons = [AppCommand.ToggleDark] } };
-            using var settings = new SettingsWindow(preferences, new StartWithWindows(@"Software\WinScreenTests\Toolbar"), _ => []);
+            using var settings = new SettingsWindow(preferences, new StartWithWindows(@"Software\WinScreenTests\Toolbar", NoTasks.Instance), _ => []);
             settings.RefreshFeatures();
             var table = Descendants(settings).OfType<ListView>().Single();
             string State() => table.Items.Cast<ListViewItem>().Single(row => Equals(row.Tag, "toolbar")).SubItems[4].Text;
@@ -166,7 +166,7 @@ public sealed class ToolbarPreferencesTests
                 Placement = ToolbarPlacement.Right, Trigger = ToolbarTrigger.MinimizeButton,
                 HoverDelayMilliseconds = 1200, Buttons = [AppCommand.TogglePin, AppCommand.Arrange],
             } };
-            using var settings = new SettingsWindow(preferences, new StartWithWindows(@"Software\WinScreenTests\Toolbar"),
+            using var settings = new SettingsWindow(preferences, new StartWithWindows(@"Software\WinScreenTests\Toolbar", NoTasks.Instance),
                 draft => { saved = draft; return []; });
             Assert.True(settings.SaveChanges());
             Assert.NotNull(saved);
@@ -182,7 +182,7 @@ public sealed class ToolbarPreferencesTests
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
-            using var settings = new SettingsWindow(new AppSettings(), new StartWithWindows(@"Software\WinScreenTests\Toolbar"), _ => []);
+            using var settings = new SettingsWindow(new AppSettings(), new StartWithWindows(@"Software\WinScreenTests\Toolbar", NoTasks.Instance), _ => []);
             settings.RefreshFeatures();
             TabControl tabs = Descendants(settings).OfType<TabControl>().Single();
             ListView table = Descendants(settings).OfType<ListView>().Single();

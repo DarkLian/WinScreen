@@ -922,6 +922,7 @@ private readonly ErrorProvider _errors = new();
         _setups.Items.AddRange(values.SavedSetups.Cast<object>().ToArray());
         _startWithWindows.Checked = _startup.IsOn;
         _runAsAdministrator.Checked = values.RunAsAdministrator;
+        _runAsAdministrator.Enabled = Native.ProcessInfo.CanElevate || values.RunAsAdministrator; // Still able to turn off.
         _showToolbar.Checked = values.ShowToolbar;
         ToolbarPreferences toolbar = values.Toolbar.Validated();
         _toolbarPlacement.SelectedIndex = (int)toolbar.Placement;
@@ -1063,8 +1064,10 @@ private readonly ErrorProvider _errors = new();
         Control language = SettingRow(T("settings.language").TrimEnd(':', '：'), _language);
         Control theme = SettingRow(T("settings.theme").TrimEnd(':', '：'), _theme);
 
-        var startup = new List<Control> { language, theme, _startWithWindows, _runAsAdministrator, Note(T("settings.admin.help")),
-            _showNotifications, _automaticUpdates };
+        // A standard account can't have it: Windows would ask for another person's password and run WinScreen as them.
+        bool adminWorks = Native.ProcessInfo.CanElevate;
+        var startup = new List<Control> { language, theme, _startWithWindows, _runAsAdministrator,
+            Note(adminWorks ? T("settings.admin.help") : T("settings.admin.unavailable")), _showNotifications, _automaticUpdates };
         bool updatesWork = VelopackUpdateSession.IsConfigured && VelopackUpdateSession.IsInstalled;
         _automaticUpdates.Enabled = updatesWork;
         if (!VelopackUpdateSession.IsConfigured)
@@ -1388,7 +1391,6 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(intro);
         page.Controls.Add(new InputFrame(_actionSearch) { Glyph = MenuParts.Search, Dock = DockStyle.Top, Height = BoxHeight.Standard });
         page.Resize += (_, _) => intro.MaximumSize = new Size(page.ClientSize.Width, 0);
-        _features.ShowItemToolTips = true;
         _features.Resize += (_, _) => FitFeatureColumns();
         _features.ClientSizeChanged += (_, _) => FitFeatureColumns();
         return page;
@@ -1561,7 +1563,7 @@ private readonly ErrorProvider _errors = new();
             string[] values = [name, target, defaults.Hotkeys.GetValueOrDefault(command, ""), saved, state];
             if (!string.IsNullOrWhiteSpace(_actionSearch.Text) && !values.Any(value =>
                 value.Contains(_actionSearch.Text, StringComparison.CurrentCultureIgnoreCase))) continue;
-            var row = new ListViewItem(values) { Tag = command, ToolTipText = string.Join(Environment.NewLine, values) };
+            var row = new ListViewItem(values) { Tag = command };
             _features.Items.Add(row);
             if (Equals(selected, command)) row.Selected = true;
         }
@@ -1571,7 +1573,7 @@ private readonly ErrorProvider _errors = new();
                 enabled ? T("features.enabled") : T("features.disabled")];
             if (!string.IsNullOrWhiteSpace(_actionSearch.Text) && !values.Any(value =>
                 value.Contains(_actionSearch.Text, StringComparison.CurrentCultureIgnoreCase))) return;
-            var row = new ListViewItem(values) { Tag = page, ToolTipText = string.Join(Environment.NewLine, values) };
+            var row = new ListViewItem(values) { Tag = page };
             _features.Items.Add(row);
             if (Equals(selected, page)) row.Selected = true;
         }

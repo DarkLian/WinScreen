@@ -244,7 +244,7 @@ public sealed class SettingsWindowTests : IDisposable
         {
             var settings = new AppSettings();
             AppSettings? applied = null;
-            var startup = new StartWithWindows(_key);
+            var startup = new StartWithWindows(_key, NoTasks.Instance);
             using var window = new SettingsWindow(settings, startup, chosen =>
             {
                 applied = chosen;
@@ -299,7 +299,7 @@ public sealed class SettingsWindowTests : IDisposable
                 PipHover = new PipHoverPreferences { ChooseForMe = false, Electron = true, Programs = ["ExampleProgram"] },
             };
             AppSettings? applied = null;
-            using var window = new SettingsWindow(settings, new StartWithWindows(_key), chosen =>
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), chosen =>
             {
                 applied = chosen;
                 return [];
@@ -342,7 +342,7 @@ public sealed class SettingsWindowTests : IDisposable
         {
             var forgotten = new ProgramSetup { Program = "exampleprogram", Pinned = true };
             var settings = new AppSettings { SavedSetups = [forgotten] };
-            using var window = new SettingsWindow(settings, new StartWithWindows(_key), draft => { settings.CopyFrom(draft); return []; });
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), draft => { settings.CopyFrom(draft); return []; });
             _ = window.Handle;
 
             var savedByHotkey = new ProgramSetup { Program = "anotherprogram", Dark = true };
@@ -368,7 +368,7 @@ public sealed class SettingsWindowTests : IDisposable
             {
                 UiText.Initialize(language);
                 var settings = new AppSettings { Language = language, ShowNotifications = false };
-                using var window = new SettingsWindow(settings, new StartWithWindows(_key), draft => { settings.CopyFrom(draft); return []; });
+                using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), draft => { settings.CopyFrom(draft); return []; });
                 _ = window.Handle;
                 Control[] controls = Descendants(window).ToArray();
                 Assert.Equal(title, window.Text);
@@ -404,7 +404,7 @@ public sealed class SettingsWindowTests : IDisposable
     {
         OnUiThread(() =>
         {
-            using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key),
+            using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key, NoTasks.Instance),
                 _ => [new HotkeyProblem(AppCommand.TogglePin, "Ctrl+Alt+T")]);
             _ = window.Handle;
             Assert.False(window.SaveChanges());
@@ -418,7 +418,7 @@ public sealed class SettingsWindowTests : IDisposable
         {
             var settings = new AppSettings { ShowToolbar = true };
             int applied = 0;
-            using var window = new SettingsWindow(settings, new StartWithWindows(_key), draft =>
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), draft =>
             {
                 applied++;
                 settings.CopyFrom(draft);
@@ -458,7 +458,7 @@ public sealed class SettingsWindowTests : IDisposable
         OnUiThread(() =>
         {
             var settings = new AppSettings();
-            using var window = new SettingsWindow(settings, new StartWithWindows(_key),
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance),
                 _ => [new HotkeyProblem(AppCommand.TogglePin, "Ctrl+Alt+T")]);
             _ = window.Handle;
             window.SetDefaultOpacity(60);
@@ -475,7 +475,7 @@ public sealed class SettingsWindowTests : IDisposable
         OnUiThread(() =>
         {
             AppSettings? applied = null;
-            using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key), chosen =>
+            using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key, NoTasks.Instance), chosen =>
             {
                 applied = chosen;
                 return [];
@@ -492,7 +492,7 @@ public sealed class SettingsWindowTests : IDisposable
     {
         OnUiThread(() =>
         {
-            using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key), _ => []);
+            using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key, NoTasks.Instance), _ => []);
             _ = window.Handle;
             window.CaptureHotkey(AppCommand.RestoreAll, Keys.K);
             Assert.Contains(Descendants(window),
@@ -500,7 +500,7 @@ public sealed class SettingsWindowTests : IDisposable
             window.CaptureHotkey(AppCommand.RestoreAll, Keys.F9);
             window.CaptureHotkey(AppCommand.TogglePin, Keys.Control | Keys.Alt | Keys.Back);
             AppSettings? applied = null;
-            using var second = new SettingsWindow(new AppSettings(), new StartWithWindows(_key), chosen =>
+            using var second = new SettingsWindow(new AppSettings(), new StartWithWindows(_key, NoTasks.Instance), chosen =>
             {
                 applied = chosen;
                 return [];
@@ -520,7 +520,7 @@ public sealed class SettingsWindowTests : IDisposable
         OnUiThread(() =>
         {
             var settings = new AppSettings();
-            var startup = new StartWithWindows(_key);
+            var startup = new StartWithWindows(_key, NoTasks.Instance);
             using var window = new SettingsWindow(settings, startup, _ =>
                 [new HotkeyProblem(AppCommand.RestoreAll, "Ctrl+Alt+F21")]);
             window.CaptureHotkey(AppCommand.RestoreAll, Keys.Control | Keys.Alt | Keys.F21);
@@ -538,7 +538,7 @@ public sealed class SettingsWindowTests : IDisposable
     [Fact]
     public void Start_with_windows_can_be_turned_off_again()
     {
-        var startup = new StartWithWindows(_key);
+        var startup = new StartWithWindows(_key, NoTasks.Instance);
         Assert.False(startup.IsOn);
         startup.IsOn = true;
         Assert.True(startup.IsOn);

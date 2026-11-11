@@ -59,8 +59,9 @@ internal static class Program
         }
 
         // Asked once: a copy started as administrator that Windows still ran without the rights carries on as it is.
-        if (settings.RunAsAdministrator && !Native.ProcessInfo.SelfElevated && !arguments.Contains(Elevation.ElevatedArgument) &&
-            Elevation.StartElevatedCopy())
+        // A standard account isn't asked: Windows would want another person's password and run WinScreen as them.
+        if (settings.RunAsAdministrator && !Native.ProcessInfo.SelfElevated && Native.ProcessInfo.CanElevate &&
+            !arguments.Contains(Elevation.ElevatedArgument) && Elevation.StartElevatedCopy())
             return;
 
         var windows = new WindowController(settings.ExcludedPrograms,
