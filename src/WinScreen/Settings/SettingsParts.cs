@@ -143,9 +143,54 @@ internal static class SettingsStyle
     }
 }
 
-/// <summary>An on/off option drawn as a row: what it does on the left, a switch on the right. Still a check box to
-/// everything that reads or sets it.</summary>
-internal sealed class SwitchBox : CheckBox
+/// <summary>A setting that can say more about itself under its name, which a search also looks through.</summary>
+internal interface IDescribed
+{
+    string Description { get; }
+}
+
+/// <summary>
+/// Where a setting's icon, name and description go in its card, as Windows 11 lays them out, and how they are drawn.
+/// </summary>
+internal static class SettingText
+{
+    /// <summary>Where the icon starts, at 100% scaling, from the row's left edge.</summary>
+    internal const int IconLeft = 6;
+    /// <summary>Where the words start with an icon before them, and without one, at 100% scaling.</summary>
+    internal const int WithIcon = 47, WithoutIcon = 4;
+    private const TextFormatFlags Words = TextFormatFlags.WordBreak | TextFormatFlags.Left | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+
+    internal static int Left(Control row, char glyph) => SettingsStyle.Unit(row, glyph != '\0' ? WithIcon : WithoutIcon);
+
+    /// <summary>How tall the name and the description are together, at this width.</summary>
+    internal static int Height(Control row, string title, string description, int width)
+    {
+        int height = TextRenderer.MeasureText(title, row.Font, new Size(width, 0), Words).Height;
+        if (description.Length > 0)
+            height += SettingsStyle.Unit(row, 2) + TextRenderer.MeasureText(description, SettingsStyle.CaptionFont, new Size(width, 0), Words).Height;
+        return height;
+    }
+
+    /// <summary>Draws the icon, the name and, under it in grey, the description, all centred on the row's height.</summary>
+    internal static void Draw(Graphics g, Control row, char glyph, string title, string description, int width, bool enabled)
+    {
+        int left = Left(row, glyph);
+        int height = Height(row, title, description, width);
+        int top = (row.Height - height) / 2;
+        if (glyph != '\0' && MenuParts.Icon(glyph, enabled ? SettingsStyle.Text : SettingsStyle.Disabled) is { } icon)
+            g.DrawImage(icon, SettingsStyle.Unit(row, IconLeft) + (SettingsStyle.Unit(row, 20) - icon.Width) / 2, (row.Height - icon.Height) / 2);
+        int titleHeight = TextRenderer.MeasureText(title, row.Font, new Size(width, 0), Words).Height;
+        TextRenderer.DrawText(g, title, row.Font, new Rectangle(left, top, width, titleHeight), enabled ? SettingsStyle.Text : SettingsStyle.Disabled, Words);
+        if (description.Length == 0) return;
+        int below = top + titleHeight + SettingsStyle.Unit(row, 2);
+        TextRenderer.DrawText(g, description, SettingsStyle.CaptionFont, new Rectangle(left, below, width, row.Height - below),
+            enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, Words);
+    }
+}
+
+/// <summary>An on/off option drawn as a row: its icon, name and description on the left, a switch on the right. Still
+/// a check box to everything that reads or sets it.</summary>
+internal sealed class SwitchBox : CheckBox, IDescribed
 {
     /// <summary>The width a row takes inside a card, at 100% scaling.</summary>
     internal const int RowWidth = 524;
@@ -162,7 +207,29 @@ internal sealed class SwitchBox : CheckBox
     }
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
-    private int TextWidth => Unit(RowWidth) + Extra - Unit(64);
+    private int TextWidth => Unit(RowWidth) + Extra - Unit(64) - (SettingText.Left(this, Glyph) - Unit(SettingText.WithoutIcon));
+
+    /// <summary>The icon before its name, or none.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal char Glyph
+    {
+        get;
+        set { field = value; Fit(); }
+    }
+
+    /// <summary>More about the option, in grey under its name.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public string Description
+    {
+        get;
+        set { field = value ?? ""; Fit(); }
+    } = "";
+
+    private void Fit()
+    {
+        if (AutoSize && !Compact) Size = GetPreferredSize(Size.Empty);
+        Invalidate();
+    }
 
     /// <summary>How much wider than usual the row is, in pixels, for a Settings window made wider.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -181,8 +248,8 @@ internal sealed class SwitchBox : CheckBox
     public override Size GetPreferredSize(Size proposedSize)
     {
         if (Compact) return new Size(Unit(50), Unit(30));
-        Size text = TextRenderer.MeasureText(Text, Font, new Size(TextWidth, 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
-        return new Size(Unit(RowWidth) + Extra, Math.Max(Unit(36), text.Height + Unit(14)));
+        int text = SettingText.Height(this, Text, Description, TextWidth);
+        return new Size(Unit(RowWidth) + Extra, Math.Max(Unit(36), text + Unit(Description.Length > 0 ? 18 : 14)));
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -192,11 +259,7 @@ internal sealed class SwitchBox : CheckBox
         Color surface = Parent?.BackColor ?? SettingsStyle.Card;
         g.Clear(surface);
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        Color text = Enabled ? SettingsStyle.Text : SettingsStyle.Disabled;
-        var area = new Rectangle(Unit(4), 0, TextWidth, Height);
-        if (!Compact)
-            TextRenderer.DrawText(g, Text, Font, area, text,
-                TextFormatFlags.WordBreak | TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPadding);
+        if (!Compact) SettingText.Draw(g, this, Glyph, Text, Description, TextWidth, Enabled);
         int width = Unit(40), height = Unit(20);
         var track = new Rectangle(Width - width - Unit(6), (Height - height) / 2, width, height);
         using (GraphicsPath path = SettingsStyle.Rounded(track, height / 2))
@@ -229,7 +292,10 @@ internal sealed class SwitchBox : CheckBox
     protected override void OnTextChanged(EventArgs e) { base.OnTextChanged(e); Invalidate(); }
 }
 
-/// <summary>A titled group of options: the title above, the options in a card with a line between them.</summary>
+/// <summary>
+/// A titled group of settings: the title above, each setting in a card of its own under it, as Windows 11 has them.
+/// A note belongs to the setting above it and shares its card.
+/// </summary>
 internal sealed class SettingsCard : Panel
 {
     private readonly Label _title = new SoftLabel() { AutoSize = true, Margin = Padding.Empty };
@@ -273,30 +339,90 @@ internal sealed class SettingsCard : Panel
             value => SettingsStyle.Unit(this, value));
     }
 
+    /// <summary>
+    /// The settings, each in a card of its own with a small gap between them. The parts keep the card's colour as
+    /// their own, and the room around and between them is painted here.
+    /// </summary>
     private sealed class Body : FlowLayoutPanel
     {
+        /// <summary>The room inside a card above and below what it holds, and the gap between cards, at 100% scaling.</summary>
+        private const int Inside = 8, Gap = 4;
+        private bool _regrouping;
+
         internal Body()
         {
             FlowDirection = FlowDirection.TopDown;
             WrapContents = false;
             AutoSize = true;
             AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            Padding = new Padding(8, 4, 8, 4);
+            Padding = new Padding(8, Inside, 8, Inside);
             BackColor = SettingsStyle.Card;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         }
 
-        protected override void OnPaint(PaintEventArgs e) => CardPanel.Draw(e.Graphics, this, drawRows: true);
+        private int Unit(int value) => SettingsStyle.Unit(this, value);
+
+        /// <summary>The settings in order, each with the notes and parts that share its card.</summary>
+        private List<List<Control>> Groups()
+        {
+            var groups = new List<List<Control>>();
+            foreach (Control child in Controls.Cast<Control>().Where(child => child.Visible))
+            {
+                if (groups.Count == 0 || !SettingGroups.SharesCardAbove(child)) groups.Add([]);
+                groups[^1].Add(child);
+            }
+            return groups;
+        }
+
+        /// <summary>Spaces the cards apart: room inside each card above and below, and a gap between them.</summary>
+        private void Regroup()
+        {
+            if (_regrouping) return;
+            _regrouping = true;
+            try
+            {
+                List<List<Control>> groups = Groups();
+                for (int index = 0; index < groups.Count; index++)
+                    for (int at = 0; at < groups[index].Count; at++)
+                    {
+                        Control child = groups[index][at];
+                        var margin = child.Margin;
+                        if (at == 0) margin.Top = index == 0 ? 0 : Unit(Inside * 2 + Gap);
+                        if (at == groups[index].Count - 1) margin.Bottom = 0;
+                        if (child.Margin != margin) child.Margin = margin;
+                    }
+            }
+            finally { _regrouping = false; }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Parent?.BackColor ?? SettingsStyle.Page);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using var fill = new SolidBrush(SettingsStyle.Card);
+            using var edge = new Pen(SettingsStyle.CardStroke);
+            foreach (List<Control> group in Groups())
+            {
+                var area = Rectangle.FromLTRB(0, group[0].Top - Unit(Inside), Width - 1, group[^1].Bottom + Unit(Inside) - 1);
+                using GraphicsPath path = SettingsStyle.Rounded(area, Unit(6));
+                g.FillPath(fill, path);
+                g.DrawPath(edge, path);
+            }
+        }
 
         protected override void OnControlAdded(ControlEventArgs e)
         {
             base.OnControlAdded(e);
-            // A pixel between options, where the line between them is drawn: an option covers whatever is under it, so
-            // without it only the ends of the line showed, as short dashes at the card's edges.
-            if (Controls.Count > 1 && e.Control is not Label && e.Control!.Margin.Top < 1)
-                e.Control.Margin = e.Control.Margin with { Top = 1 };
+            Regroup();
             e.Control!.LocationChanged += (_, _) => Invalidate();
-            e.Control.VisibleChanged += (_, _) => Invalidate();
+            e.Control.VisibleChanged += (_, _) => { Regroup(); Invalidate(); };
+        }
+
+        protected override void OnLayout(LayoutEventArgs levent)
+        {
+            Regroup();
+            base.OnLayout(levent);
         }
     }
 }
@@ -349,7 +475,89 @@ internal class CardPanel : Panel
     }
 }
 
-/// <summary>The list of pages down the left of the Settings window, under group headings.</summary>
+/// <summary>Which parts of a group of settings share the card of the setting above them.</summary>
+internal static class SettingGroups
+{
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Control, object> Joined = new();
+
+    /// <summary>Puts <paramref name="part"/> in the same card as what comes before it, such as a button under a table.</summary>
+    internal static T JoinAbove<T>(T part) where T : Control
+    {
+        Joined.AddOrUpdate(part, true);
+        return part;
+    }
+
+    /// <summary>A note shares the card of the setting above it, and so does a part joined to it.</summary>
+    internal static bool SharesCardAbove(Control part) => part is NoteLabel || Joined.TryGetValue(part, out _);
+}
+
+/// <summary>A line of explanation in grey: under the setting it belongs to, in the same card.</summary>
+internal sealed class NoteLabel : SoftLabel;
+
+/// <summary>
+/// One setting chosen with a box, a list or a number: its icon, name and description on the left, what sets it on the
+/// right, centred on the row.
+/// </summary>
+internal sealed class SettingRowPanel : Panel, IDescribed
+{
+    private readonly Control _control;
+
+    /// <summary>What sets it: a box, a list or a number.</summary>
+    internal Control Setting => _control;
+
+    internal SettingRowPanel(string text, Control control)
+    {
+        _control = control;
+        Text = text;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        Size = new Size(SwitchBox.RowWidth, Math.Max(42, control.Height + 10));
+        Margin = new Padding(3, 0, 3, 0);
+        control.Margin = Padding.Empty;
+        control.EnabledChanged += (_, _) => Invalidate();
+        Controls.Add(control);
+    }
+
+    private int Unit(int value) => SettingsStyle.Unit(this, value);
+
+    /// <summary>The icon before its name, or none.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal char Glyph
+    {
+        get;
+        set { field = value; PerformLayout(); Invalidate(); }
+    }
+
+    /// <summary>More about the setting, in grey under its name.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public string Description
+    {
+        get;
+        set { field = value ?? ""; PerformLayout(); Invalidate(); }
+    } = "";
+
+    private int TextWidth => Math.Max(Unit(60), Width - _control.Width - Unit(6 + 16) - SettingText.Left(this, Glyph));
+
+    protected override void OnLayout(LayoutEventArgs levent)
+    {
+        base.OnLayout(levent);
+        if (_control is null) return; // Still being built.
+        int height = Math.Max(Math.Max(Unit(42), _control.Height + Unit(10)),
+            SettingText.Height(this, Text, Description, TextWidth) + Unit(Description.Length > 0 ? 18 : 14));
+        if (Height != height) Height = height;
+        _control.Location = new Point(Width - _control.Width - Unit(6), (Height - _control.Height) / 2);
+    }
+
+    protected override void OnTextChanged(EventArgs e) { base.OnTextChanged(e); PerformLayout(); Invalidate(); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        SettingsStyle.SoftText(e.Graphics);
+        e.Graphics.Clear(Parent?.BackColor ?? SettingsStyle.Card);
+        SettingText.Draw(e.Graphics, this, Glyph, Text, Description, TextWidth, Enabled && _control.Enabled);
+    }
+}
+
+/// <summary>The list of pages down the left of the Settings window.</summary>
 internal sealed class NavList : Control
 {
     internal sealed record Entry(string Text, char Glyph, object? Page);

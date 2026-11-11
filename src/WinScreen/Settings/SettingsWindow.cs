@@ -225,15 +225,12 @@ private readonly ErrorProvider _errors = new();
             if (ColumnOf(tab) is { } column) column.Shifted += FollowColumn;
         tabs.SizeChanged += (_, _) => FollowColumn(); // Where the pages sit in it is known once it has a size.
         _nav.Add(generalPage.Text, MenuParts.Home, generalPage);
-        _nav.AddHeading(T("settings.nav.windows"));
         _nav.Add(featuresPage.Text, MenuParts.Keyboard, featuresPage);
         _nav.Add(gesturePage.Text, MenuParts.Mouse, gesturePage);
         _nav.Add(toolbarPage.Text, MenuParts.Bar, toolbarPage);
         _nav.Add(anchorsPage.Text, MenuParts.Pinned, anchorsPage);
         _nav.Add(appearancePage.Text, MenuParts.Palette, appearancePage);
-        _nav.AddHeading(T("settings.nav.views"));
         _nav.Add(pipPage.Text, MenuParts.NewWindow, pipPage);
-        _nav.AddHeading(T("settings.nav.apps"));
         _nav.Add(tabs.TabPages[2].Text, MenuParts.Apps, tabs.TabPages[2]);
         _nav.Add(tabs.TabPages[3].Text, MenuParts.Save, tabs.TabPages[3]);
         _nav.Selected = generalPage;
@@ -283,6 +280,7 @@ private readonly ErrorProvider _errors = new();
         Controls.Add(page);
         Controls.Add(side);
 
+        GiveIcons();
         LoadValues();
         _pipAutoMove.Enabled = _pipMiddleScroll.Enabled = _experimental.Checked;
         _hoverOptions?.Enabled = _experimental.Checked && Pip.PipEnhancedHover.Supported;
@@ -314,6 +312,37 @@ private readonly ErrorProvider _errors = new();
         _saveBar.Margin = bar;
         // The page moves its column while the window is being laid out, which doesn't lay the title out again.
         if (IsHandleCreated) BeginInvoke(() => { if (!IsDisposed) _pageTitle.Parent?.PerformLayout(); });
+    }
+
+    /// <summary>Each setting's icon, before its name in its card, as Windows 11 shows its settings.</summary>
+    private void GiveIcons()
+    {
+        var icons = new Dictionary<Control, char>
+        {
+            [_language] = '\uE774', [_theme] = '\uE790', [_startWithWindows] = '\uE7E8', [_runAsAdministrator] = '\uE7EF',
+            [_showNotifications] = '\uEA8F', [_automaticUpdates] = '\uE896', [_pauseInFullScreen] = '\uE7FC', [_allowPip] = '\uE8A7',
+            [_experimental] = '\uE945',
+            [_modifierDrag] = '\uE7C2', [_modifierKey] = '\uE765', [_snapWhileDragging] = '\uE90C', [_windowMenu] = '\uE712',
+            [_windowMenuGesture] = '\uE962',
+            [_pipBackend] = '\uE7F4', [_pipRate] = '\uE916', [_pipScaling] = '\uE9A6', [_pipOpacity] = '\uE706',
+            [_pipCaptureBorder] = '\uE7A8', [_pipDiagnostics] = '\uE9D9', [_pipAutoMove] = '\uE7C2', [_pipMiddleScroll] = '\uE962',
+            [_hoverAutomatic] = '\uE713', [_pipTaskbar] = '\uE7C4', [_pipTitleBar] = '\uE8A0', [_pipPreview] = '\uE890',
+            [_defaultOpacity] = '\uE706', [_opacityStep] = '\uE9E9', [_opacityWheel] = '\uE962', [_opaqueOnHover] = '\uE890',
+            [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
+            [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
+            [_glassText] = '\uE8D2', [_glassPictures] = '\uEB9F', [_pictureSafeDark] = '\uE708',
+            [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
+            [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
+            [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',
+            [_anchorOffTaskbar] = '\uE7C4',
+        };
+        foreach (Control control in Every(this))
+        {
+            if (control is SwitchBox { Compact: false } option && icons.TryGetValue(option, out char glyph)) option.Glyph = glyph;
+            else if (control is SettingRowPanel row && icons.FirstOrDefault(pair => pair.Key == row.Setting || row.Setting.Contains(pair.Key)) is { Value: not '\0' } found)
+                row.Glyph = found.Value;
+        }
+        static IEnumerable<Control> Every(Control parent) => parent.Controls.Cast<Control>().SelectMany(child => new[] { child }.Concat(Every(child)));
     }
 
     /// <summary>The page showing, for opening the window again where it was.</summary>
@@ -412,9 +441,11 @@ private readonly ErrorProvider _errors = new();
     /// <summary>Every piece of text on a page, for finding a setting by a word in it.</summary>
     private static IEnumerable<Control> WithText(Control parent) => parent.Controls.Cast<Control>()
         .SelectMany(child => new[] { child }.Concat(WithText(child)))
-        .Where(control => control is Label or CheckBox or Button or SettingsCard && control.Text.Length > 0);
+        .Where(control => control is Label or CheckBox or Button or SettingsCard or SettingRowPanel && control.Text.Length > 0);
 
-    private bool Matches(Control control) => control.Text.Replace("&", "").Contains(_search.Text.Trim(), StringComparison.CurrentCultureIgnoreCase);
+    private bool Matches(Control control) =>
+        (control.Text.Replace("&", "") + (control is IDescribed described ? " " + described.Description : ""))
+        .Contains(_search.Text.Trim(), StringComparison.CurrentCultureIgnoreCase);
 
     /// <summary>Leaves only the pages that mention what was typed, and goes to the first of them.</summary>
     private void SearchSettings()
@@ -1047,10 +1078,13 @@ private readonly ErrorProvider _errors = new();
         return tab;
     }
 
-    /// <summary>A line of explanation under the option it belongs to.</summary>
-    private static Label Note(string text) => new SoftLabel()
+    /// <summary>
+    /// A line of explanation. In a group of settings it becomes the description under the setting above it, in the
+    /// same card; after anything else it stays a line of its own in that card.
+    /// </summary>
+    private static Label Note(string text) => new NoteLabel()
     {
-        Text = text, AutoSize = true, MaximumSize = new Size(SwitchBox.RowWidth - 8, 0), Margin = new Padding(7, 0, 3, 10),
+        Text = text, AutoSize = true, MaximumSize = new Size(SwitchBox.RowWidth - 8, 0), Margin = new Padding(7, 6, 3, 2),
         ForeColor = SettingsStyle.Secondary, Font = SettingsStyle.CaptionFont, UseMnemonic = false,
     };
 
@@ -1059,9 +1093,20 @@ private readonly ErrorProvider _errors = new();
 
     private static SettingsCard Card(string title, bool experimental, params Control[] items)
     {
+        var kept = new List<Control>();
         foreach (Control item in items)
-            if (item is CheckBox option) option.Margin = new Padding(3, 0, 3, 0);
-        return new SettingsCard(title, experimental, ContentWidth, items);
+        {
+            // A note under a setting says more about it: it goes in under the setting's name, as Windows 11 has it.
+            if (item is NoteLabel note && kept.Count > 0)
+            {
+                string Joined(string before) => before.Length == 0 ? note.Text : before + Environment.NewLine + note.Text;
+                if (kept[^1] is SwitchBox { Compact: false } option) { option.Description = Joined(option.Description); continue; }
+                if (kept[^1] is SettingRowPanel row) { row.Description = Joined(row.Description); continue; }
+            }
+            if (item is CheckBox box) box.Margin = new Padding(3, 0, 3, 0);
+            kept.Add(item);
+        }
+        return new SettingsCard(title, experimental, ContentWidth, kept);
     }
 
     /// <summary>One option: what it is on the left, the control that sets it on the right.</summary>
@@ -1071,14 +1116,7 @@ private readonly ErrorProvider _errors = new();
         if (control is NumericUpDown number) control = new InputFrame(number) { Width = NumberWidth };
         else if (control is TextBox box) control = new InputFrame(box);
         else if (control is ComboBox) control.Width = ChoiceWidth;
-        text = text.TrimEnd(':', '：', ' ');
-        var row = new Panel { Size = new Size(SwitchBox.RowWidth, Math.Max(42, control.Height + 10)), Margin = new Padding(3, 0, 3, 0) };
-        control.Margin = Padding.Empty;
-        control.Location = new Point(row.Width - control.Width - 6, (row.Height - control.Height) / 2);
-        control.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        row.Controls.Add(control);
-        row.Controls.Add(new SoftLabel { Text = text, AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(2, 0, 0, 0) });
-        return row;
+        return new SettingRowPanel(text.TrimEnd(':', '：', ' '), control);
     }
 
     /// <summary>A page that scrolls: cards one under another.</summary>
@@ -1123,15 +1161,12 @@ private readonly ErrorProvider _errors = new();
         _modifierKey.Items.AddRange(["Alt", "Win"]);
         Control key = SettingRow(T("gestures.moveResize.modifier").TrimEnd(':', '：'), _modifierKey);
         FlowLayoutPanel page = ScrollingPage();
-        page.Controls.Add(Section(T("gestures.moveResize.title"), _modifierDrag, key, _snapWhileDragging,
-            ProgramRules(T("gestures.exclusions"), _modifierExclusions, _newModifierExclusion)));
-        page.Controls.Add(Note(T("gestures.moveResize.help")));
+        page.Controls.Add(Section(T("gestures.moveResize.title"), _modifierDrag, Note(T("gestures.moveResize.help")), key, _snapWhileDragging,
+            ProgramRules(T("gestures.exclusions"), _modifierExclusions, _newModifierExclusion), Note(T("programs.alwaysLeftAlone"))));
         _windowMenuGesture.Items.AddRange([T("gestures.menu.ctrlRight"), T("gestures.menu.ctrlShiftRight"), T("gestures.menu.ctrlMiddle")]);
-        page.Controls.Add(Section(T("window.menu"), _windowMenu, SettingRow(T("gestures.menu.gesture"), _windowMenuGesture),
-            ProgramRules(T("gestures.exclusions"), _windowMenuExclusions, _newMenuExclusion)));
-        page.Controls.Add(Note(T("gestures.menu.help")));
-        page.Controls.Add(Note(T("gestures.hookHelp")));
-        page.Controls.Add(Note(T("programs.alwaysLeftAlone")));
+        page.Controls.Add(Section(T("window.menu"), _windowMenu, Note(T("gestures.menu.help")), Note(T("gestures.hookHelp")),
+            SettingRow(T("gestures.menu.gesture"), _windowMenuGesture),
+            ProgramRules(T("gestures.exclusions"), _windowMenuExclusions, _newMenuExclusion), Note(T("programs.alwaysLeftAlone"))));
         return page;
     }
 
@@ -1197,7 +1232,7 @@ private readonly ErrorProvider _errors = new();
         _newApp.Margin = new Padding(0, 0, 8, 0);
         add.Margin = Padding.Empty;
         _newApp.Anchor = add.Anchor = AnchorStyles.Left;
-        var adding = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(4, 8, 3, 6), BackColor = SettingsStyle.Card };
+        var adding = SettingGroups.JoinAbove(new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(4, 8, 3, 6), BackColor = SettingsStyle.Card });
         adding.Controls.Add(_newApp);
         adding.Controls.Add(add);
         var parts = new List<Control> { Note(T("settings.pip.apps.help")), _hoverAutomatic, _appRows, adding, Note(T("settings.pip.hover.programsHelp")) };
@@ -1211,8 +1246,8 @@ private readonly ErrorProvider _errors = new();
     {
         FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("programs.exclusions"), Programs(_excluded, _newExcluded, null, T("programs.empty.excluded"))));
-        page.Controls.Add(Section(T("programs.inclusions"), Programs(_included, _newIncluded, null, T("programs.empty.included"))));
-        page.Controls.Add(Note(T("programs.precedence")));
+        page.Controls.Add(Section(T("programs.inclusions"), Programs(_included, _newIncluded, null, T("programs.empty.included")),
+            Note(T("programs.precedence"))));
         return page;
     }
 
@@ -1350,8 +1385,8 @@ private readonly ErrorProvider _errors = new();
             _anchorRecency, _anchorAvoid, Note(T("anchors.avoid.help"))));
         page.Controls.Add(Section(T("anchors.every.title"), _anchorPreview, _anchorOffTaskbar, Note(T("anchors.offTaskbar.help"))));
         page.Controls.Add(Section(T("anchors.auto.only"), Programs(_anchorOnly, _newAnchorOnly, null, T("programs.empty.included"))));
-        page.Controls.Add(Section(T("anchors.auto.excluded"), Programs(_anchorExcluded, _newAnchorExcluded, null, T("programs.empty.excluded"))));
-        page.Controls.Add(Note(T("programs.alwaysLeftAlone")));
+        page.Controls.Add(Section(T("anchors.auto.excluded"), Programs(_anchorExcluded, _newAnchorExcluded, null, T("programs.empty.excluded")),
+            Note(T("programs.alwaysLeftAlone"))));
         return page;
     }
 
