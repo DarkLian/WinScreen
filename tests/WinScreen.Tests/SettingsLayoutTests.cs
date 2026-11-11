@@ -1,3 +1,4 @@
+using System.Reflection;
 using WinScreen.Localization;
 using WinScreen.Native;
 using WinScreen.Settings;
@@ -387,6 +388,80 @@ public sealed class SettingsLayoutTests
             Measure("searching");
             Assert.True(places.Count == 1, "Icons and names start at more than one place: " +
                 string.Join("; ", places.Select(pair => $"{pair.Key}: {pair.Value.Count} rows, such as {pair.Value[0]}")));
+            window.Close();
+        });
+    }
+
+    /// <summary>
+    /// After the window is maximized and put back, no page keeps a dark sideways scroll bar for the width it had, and
+    /// a page that fits shows no scroll bar at all.
+    /// </summary>
+    [Fact]
+    public void Pages_never_scroll_sideways_and_show_a_scroll_bar_only_when_they_overflow()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+            window.StartPosition = FormStartPosition.Manual;
+            window.Bounds = new Rectangle(0, 0, 1100, 800);
+            window.Show();
+            void Pump() { for (int i = 0; i < 10; i++) { Application.DoEvents(); Thread.Sleep(20); } }
+            TabControl tabs = Descendants(window).OfType<TabControl>().Single();
+            var problems = new List<string>();
+            for (int page = 0; page < tabs.TabCount; page++)
+            {
+                tabs.SelectedIndex = page;
+                foreach (FormWindowState state in new[] { FormWindowState.Normal, FormWindowState.Maximized, FormWindowState.Normal })
+                {
+                    window.WindowState = state;
+                    Pump();
+                    foreach (ScrollHost host in Descendants(tabs.SelectedTab!).OfType<ScrollHost>())
+                    {
+                        ScrollPage scrolling = host.Page;
+                        if ((User32.GetWindowLongPtr(scrolling.Handle, User32.GWL_STYLE) & 0x00100000) != 0)
+                            problems.Add($"page {page} {state}: scrolls sideways");
+                        int bottom = scrolling.Controls.Cast<Control>().Where(c => c.Visible).Select(c => c.Bottom + c.Margin.Bottom).DefaultIfEmpty(0).Max();
+                        bool fits = bottom - scrolling.AutoScrollPosition.Y <= host.ClientSize.Height;
+                        bool bar = host.Controls.OfType<ThinScrollBar>().Any(b => b.Visible);
+                        if (fits && bar) problems.Add($"page {page} {state}: shows a scroll bar though it fits");
+                    }
+                }
+            }
+            Assert.True(problems.Count == 0, string.Join("; ", problems));
+            window.Close();
+        });
+    }
+
+    /// <summary>Numbers are set with a slider: the wheel and the arrow keys move it a step, never past its ends.</summary>
+    [Fact]
+    public void Number_sliders_move_by_steps_within_their_range()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+            window.Show();
+            Application.DoEvents();
+            NumberSlider[] sliders = Descendants(window).OfType<NumberSlider>().ToArray();
+            Assert.NotEmpty(sliders);
+            Assert.DoesNotContain(Descendants(window).OfType<NumericUpDown>(), number => number.Visible);
+            foreach (NumberSlider slider in sliders)
+            {
+                NumericUpDown number = slider.Number;
+                decimal step = Math.Max(1, number.Increment);
+                number.Value = number.Minimum;
+                typeof(Control).GetMethod("OnKeyDown", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(slider, [new KeyEventArgs(Keys.Right)]);
+                Assert.Equal(number.Minimum + step, number.Value);
+                typeof(Control).GetMethod("OnMouseWheel", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(slider,
+                    [new HandledMouseEventArgs(MouseButtons.None, 0, 0, 0, -120)]);
+                Assert.Equal(number.Minimum, number.Value);
+                typeof(Control).GetMethod("OnMouseWheel", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(slider,
+                    [new HandledMouseEventArgs(MouseButtons.None, 0, 0, 0, -120)]);
+                Assert.Equal(number.Minimum, number.Value);
+                typeof(Control).GetMethod("OnKeyDown", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(slider, [new KeyEventArgs(Keys.End)]);
+                Assert.Equal(number.Maximum, number.Value);
+            }
             window.Close();
         });
     }

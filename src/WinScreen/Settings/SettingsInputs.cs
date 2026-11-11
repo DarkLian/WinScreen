@@ -272,10 +272,37 @@ internal sealed class HintTextBox : TextBox
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal string Hint { get; set { field = value; Invalidate(); } } = "";
 
+    private const int WM_ERASEBKGND = 0x0014;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PaintStruct
+    {
+        public nint Dc;
+        public int Erase, Left, Top, Right, Bottom, Restore, IncUpdate;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)] public byte[] Reserved;
+    }
+
+    [DllImport("user32.dll")] private static extern nint BeginPaint(nint window, out PaintStruct paint);
+    [DllImport("user32.dll")] private static extern bool EndPaint(nint window, ref PaintStruct paint);
+
+    /// <summary>
+    /// An empty box is drawn whole by itself, background and hint in one go: Windows wiping it first and the hint
+    /// following made it blink as the pointer passed and its colour changed.
+    /// </summary>
     protected override void WndProc(ref Message m)
     {
+        // Asked only for these two: asking how long the text is sends a message of its own.
+        bool hinting = m.Msg is WM_ERASEBKGND or WM_PAINT && Hint.Length > 0 && IsHandleCreated && TextLength == 0;
+        if (hinting && m.Msg == WM_ERASEBKGND) { m.Result = 1; return; }
+        if (hinting && m.Msg == WM_PAINT)
+        {
+            BeginPaint(Handle, out PaintStruct paint);
+            try { DrawHint(paint.Dc); }
+            finally { EndPaint(Handle, ref paint); }
+            m.Result = 0;
+            return;
+        }
         base.WndProc(ref m);
-        if (m.Msg == WM_PAINT && TextLength == 0 && Hint.Length > 0 && IsHandleCreated) DrawHint();
     }
 
     // Typing writes straight onto the box, so it is drawn again when it stops or starts being empty.
@@ -287,19 +314,26 @@ internal sealed class HintTextBox : TextBox
         _wasEmpty = empty;
     }
 
-    private void DrawHint()
+    private void DrawHint(nint dc)
     {
         int left = (int)(Native.User32.SendMessage(Handle, EM_GETMARGINS, 0, 0) & 0xFFFF);
         // The blinking caret is drawn by inverting what's under it, so it is taken away while the words are drawn.
         bool caret = Native.User32.HideCaret(Handle);
         try
         {
-            using Graphics g = CreateGraphics();
-            SettingsStyle.SoftText(g);
-            Native.DirectText.DrawText(g, Hint, Font, Rectangle.FromLTRB(left, 0, ClientSize.Width, ClientSize.Height),
-                Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, BackColor,
-                TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
-                TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+            if (ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
+            using var picture = new Bitmap(ClientSize.Width, ClientSize.Height);
+            using (Graphics g = Graphics.FromImage(picture))
+            {
+                g.Clear(BackColor);
+                SettingsStyle.SoftText(g);
+                Native.DirectText.DrawText(g, Hint, Font, Rectangle.FromLTRB(left, 0, ClientSize.Width, ClientSize.Height),
+                    Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled,
+                    TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+                    TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+            }
+            using Graphics screen = Graphics.FromHdc(dc);
+            screen.DrawImage(picture, new Rectangle(Point.Empty, picture.Size));
         }
         finally
         {
@@ -536,7 +570,7 @@ internal sealed class ThemedPicker : ComboBox
         using Graphics screen = CreateGraphics();
         if (_typing is { Handle: not 0 } typing && Native.User32.GetWindowRect(typing.Handle, out Native.Rect r))
             screen.ExcludeClip(RectangleToClient(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom)));
-        screen.DrawImageUnscaled(picture, 0, 0);
+        screen.DrawImage(picture, new Rectangle(Point.Empty, picture.Size));
     }
 
     private void DrawBox(Graphics g)
@@ -587,7 +621,7 @@ internal sealed class ThemedPicker : ComboBox
                 DrawInTyping(g, Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom), typed);
             }
             using Graphics screen = Graphics.FromHwnd(typing);
-            screen.DrawImageUnscaled(picture, 0, 0);
+            screen.DrawImage(picture, new Rectangle(Point.Empty, picture.Size));
         }
         finally
         {
@@ -1310,5 +1344,223 @@ internal sealed class ProgramList : Panel
         }
         int height = y + rowHeight;
         if (Height != height) Height = height;
+    }
+}
+
+/// <summary>
+/// A number chosen by sliding, as in Windows 11's Settings: the value beside a track that fills up to a round thumb.
+/// The thumb's dot grows under the pointer and shrinks while held. The wheel and the arrow keys move it a step at a
+/// time. The number box it stands for stays inside, hidden, and holds the value.
+/// </summary>
+internal sealed class NumberSlider : Control
+{
+    private readonly NumericUpDown _number;
+    private readonly System.Windows.Forms.Timer _animation = new() { Interval = 15 };
+    private bool _hot, _held;
+    private float _scale = Rest, _from = Rest, _to = Rest;
+    private long _since;
+    private const float Rest = 0.86f, Hover = 1.167f, Pressed = 0.71f;
+    private const int Duration = 167;
+
+    internal NumericUpDown Number => _number;
+
+    internal NumberSlider(NumericUpDown number)
+    {
+        _number = number;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
+        TabStop = true;
+        AccessibleRole = AccessibleRole.Slider;
+        number.Visible = false;
+        number.TabStop = false;
+        Controls.Add(number);
+        number.ValueChanged += (_, _) => { Invalidate(); AccessibilityNotifyClients(AccessibleEvents.ValueChange, -1); };
+        number.EnabledChanged += (_, _) => Invalidate();
+        _animation.Tick += (_, _) => Animate();
+        Fit();
+    }
+
+    private int Unit(int value) => SettingsStyle.Unit(this, value);
+    private bool Usable => Enabled && _number.Enabled;
+
+    /// <summary>Room for the longest value, then a track about as long as Windows 11's.</summary>
+    internal void Fit()
+    {
+        var size = new Size(NumberRoom + Unit(TrackLength + 20), Unit(BoxHeight.Standard));
+        if (Size != size) Size = size;
+    }
+
+    private const int TrackLength = 160;
+
+    private int NumberRoom => Math.Max(Native.DirectText.MeasureText(Shown(_number.Maximum), Font).Width,
+        Native.DirectText.MeasureText(Shown(_number.Minimum), Font).Width) + Unit(4);
+
+    private static string Shown(decimal value) => ((int)value).ToString(System.Globalization.CultureInfo.CurrentCulture);
+
+    private (int Left, int Right) Track => (NumberRoom + Unit(18), Width - Unit(10));
+
+    private float Share => _number.Maximum <= _number.Minimum ? 0 : (float)((_number.Value - _number.Minimum) / (_number.Maximum - _number.Minimum));
+
+    protected override void OnDpiChangedAfterParent(EventArgs e) { base.OnDpiChangedAfterParent(e); Fit(); }
+    protected override void OnFontChanged(EventArgs e) { base.OnFontChanged(e); Fit(); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        Graphics g = e.Graphics;
+        g.Clear(Parent?.BackColor ?? SettingsStyle.Card);
+        SettingsStyle.SoftText(g);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        bool usable = Usable;
+        Native.DirectText.DrawText(g, Shown(_number.Value), Font, new Rectangle(0, 0, NumberRoom, Height),
+            usable ? SettingsStyle.Text : SettingsStyle.Disabled,
+            TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+        (int left, int right) = Track;
+        float middle = Height / 2f, thick = Unit(4), x = left + (right - left) * Share;
+        Color rest = MenuStyle.Dark ? Color.FromArgb(0x8B, 255, 255, 255) : Color.FromArgb(0x72, 0, 0, 0);
+        Color fill = usable ? SettingsStyle.Accent : SettingsStyle.Disabled;
+        using (var brush = new SolidBrush(usable ? rest : Color.FromArgb(0x50, rest)))
+            FillBar(g, brush, left, right, middle, thick);
+        using (var brush = new SolidBrush(fill))
+            FillBar(g, brush, left, x, middle, thick);
+        // The thumb: a round face with a faint edge, and the accent dot in it.
+        float outer = Unit(10);
+        var face = new RectangleF(x - outer, middle - outer, outer * 2, outer * 2);
+        Color faceColor = MenuStyle.Dark ? Color.FromArgb(0x45, 0x45, 0x45) : Color.White;
+        using (var brush = new SolidBrush(faceColor)) g.FillEllipse(brush, face);
+        using (var edge = new Pen(MenuStyle.Dark ? Color.FromArgb(0x18, 255, 255, 255) : Color.FromArgb(0x29, 0, 0, 0), 1f))
+            g.DrawEllipse(edge, RectangleF.Inflate(face, -0.5f, -0.5f));
+        float dot = Unit(6) * (usable ? _scale : Rest);
+        using (var brush = new SolidBrush(fill)) g.FillEllipse(brush, x - dot, middle - dot, dot * 2, dot * 2);
+        if (SettingsStyle.ShowsFocus(this))
+            SettingsStyle.FocusRing(g, Rectangle.Round(RectangleF.Inflate(face, Unit(3), Unit(3))), Unit(13), this);
+    }
+
+    private static void FillBar(Graphics g, Brush brush, float from, float to, float middle, float thick)
+    {
+        if (to - from < 1) return;
+        using GraphicsPath path = SettingsStyle.Rounded(Rectangle.Round(new RectangleF(from, middle - thick / 2, to - from, thick)), Math.Max(1, (int)(thick / 2)));
+        g.FillPath(brush, path);
+    }
+
+    /// <summary>Starts the dot growing or shrinking towards the size for the pointer's state.</summary>
+    private void Become()
+    {
+        float target = !Usable ? Rest : _held ? Pressed : _hot ? Hover : Rest;
+        if (target == _to) return;
+        (_from, _to, _since) = (_scale, target, Environment.TickCount64);
+        _animation.Start();
+    }
+
+    private void Animate()
+    {
+        float t = Math.Clamp((Environment.TickCount64 - _since) / (float)Duration, 0, 1);
+        float eased = 1 - (1 - t) * (1 - t) * (1 - t);
+        _scale = _from + (_to - _from) * eased;
+        if (t >= 1) _animation.Stop();
+        Invalidate();
+    }
+
+    private void Set(decimal value)
+    {
+        decimal step = Math.Max(1, _number.Increment);
+        value = _number.Minimum + Math.Round((value - _number.Minimum) / step) * step;
+        value = Math.Clamp(value, _number.Minimum, _number.Maximum);
+        if (_number.Value != value) _number.Value = value;
+    }
+
+    private void SetFrom(int x)
+    {
+        (int left, int right) = Track;
+        float share = Math.Clamp((x - left) / (float)Math.Max(1, right - left), 0, 1);
+        Set(_number.Minimum + (decimal)share * (_number.Maximum - _number.Minimum));
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Become(); }
+    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hot = false; Become(); }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button != MouseButtons.Left || !Usable || e.X < Track.Left - Unit(10)) return;
+        Focus();
+        _held = Capture = true;
+        SetFrom(e.X);
+        Become();
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (_held) SetFrom(e.X);
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (!_held) return;
+        _held = Capture = false;
+        _hot = ClientRectangle.Contains(e.Location);
+        Become();
+    }
+
+    protected override void OnMouseCaptureChanged(EventArgs e)
+    {
+        base.OnMouseCaptureChanged(e);
+        if (_held && !Capture) { _held = false; Become(); }
+    }
+
+    /// <summary>A notch of the wheel moves it a step, and the page doesn't scroll as well.</summary>
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        if (!Usable) return;
+        Set(_number.Value + Math.Sign(e.Delta) * Math.Max(1, _number.Increment));
+        if (e is HandledMouseEventArgs handled) handled.Handled = true;
+    }
+
+    protected override bool IsInputKey(Keys keyData) =>
+        (keyData & Keys.KeyCode) is Keys.Left or Keys.Right or Keys.Up or Keys.Down or Keys.Home or Keys.End or Keys.PageUp or Keys.PageDown
+        || base.IsInputKey(keyData);
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (!Usable) return;
+        decimal step = Math.Max(1, _number.Increment);
+        decimal big = Math.Max(step, Math.Round((_number.Maximum - _number.Minimum) / 10 / step) * step);
+        decimal? to = e.KeyCode switch
+        {
+            Keys.Left or Keys.Down => _number.Value - step,
+            Keys.Right or Keys.Up => _number.Value + step,
+            Keys.PageDown => _number.Value - big,
+            Keys.PageUp => _number.Value + big,
+            Keys.Home => _number.Minimum,
+            Keys.End => _number.Maximum,
+            _ => null,
+        };
+        if (to is not { } value) return;
+        Set(value);
+        e.Handled = true;
+    }
+
+    protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+    protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+    protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Become(); Invalidate(); }
+
+    protected override AccessibleObject CreateAccessibilityInstance() => new SliderAccessible(this);
+
+    private sealed class SliderAccessible(NumberSlider owner) : ControlAccessibleObject(owner)
+    {
+        public override string? Value
+        {
+            get => Shown(owner._number.Value);
+            set { if (decimal.TryParse(value, out decimal number)) owner.Set(number); }
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _animation.Dispose();
+        base.Dispose(disposing);
     }
 }

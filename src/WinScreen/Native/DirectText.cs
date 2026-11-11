@@ -268,18 +268,41 @@ internal static unsafe class DirectText
         lock (Gate) Draw(graphics, text, font, bounds, color, flags);
     }
 
+    /// <summary>
+    /// Words drawn before, kept as pictures: Direct2D takes over a millisecond to draw each piece of text, so a page
+    /// redrawn as it scrolls or the pointer moves would lag. The most recently used are kept, up to a set size.
+    /// </summary>
+    private sealed record Drawn(Bitmap? Image, int X, int Y, long Bytes);
+
+    private readonly record struct DrawnKey(string Text, string Family, float Size, int Style, int Color, int Width, int Height, TextFormatFlags Flags);
+
+    private static readonly Dictionary<DrawnKey, LinkedListNode<(DrawnKey Key, Drawn Value)>> Kept = [];
+    private static readonly LinkedList<(DrawnKey Key, Drawn Value)> KeptOrder = [];
+    private static long _keptBytes;
+    private const long KeptMost = 24L * 1024 * 1024;
+
     private static void Draw(Graphics graphics, string text, Font font, Rectangle bounds, Color color, TextFormatFlags flags)
     {
         IDeviceContext dc = graphics;
         int padding = Padding(font, flags);
         var inner = Rectangle.FromLTRB(bounds.Left + padding, bounds.Top, bounds.Right - padding, bounds.Bottom);
+        if (inner.Width <= 0 || inner.Height <= 0) return;
         bool single = (flags & TextFormatFlags.SingleLine) != 0 || (flags & TextFormatFlags.WordBreak) == 0;
-        nint layout = Layout(Shown(text, flags), font, inner.Width, inner.Height,
-            single ? flags | TextFormatFlags.SingleLine : flags);
+        string shown = Shown(text, flags);
+        (string family, int weight) = Face(font);
+        var key = new DrawnKey(shown, family, PixelSize(font), weight * 4 + (font.Italic ? 2 : 0), color.ToArgb(), inner.Width, inner.Height, flags);
+        if (Kept.TryGetValue(key, out var node))
+        {
+            KeptOrder.Remove(node);
+            KeptOrder.AddFirst(node);
+            Lay(graphics, node.Value.Value, inner);
+            return;
+        }
+        nint layout = Layout(shown, font, inner.Width, inner.Height, single ? flags | TextFormatFlags.SingleLine : flags);
         if (layout == 0) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; }
         try
         {
-            if (inner.Width <= 0 || inner.Height <= 0 || !Surface(inner.Width, inner.Height)) return;
+            if (!Surface(inner.Width, inner.Height)) return;
             var area = new Rect(0, 0, inner.Width, inner.Height);
             if (Call(Target, 57, (void*)_surfaceDc, &area) < 0) return; // BindDC
             ((delegate* unmanaged[Stdcall]<nint, void>)Slot(Target, 48))(Target); // BeginDraw
@@ -291,14 +314,61 @@ internal static unsafe class DirectText
             int result = ((delegate* unmanaged[Stdcall]<nint, ulong*, ulong*, int>)Slot(Target, 49))(Target, &tag1, &tag2); // EndDraw
             Release(brush);
             if (result < 0) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; } // Drawn the old way once.
-            // Laid over what is there, following the graphics' own clip and shift.
-            using var words = new Bitmap(inner.Width, inner.Height, _surfaceWidth * 4, System.Drawing.Imaging.PixelFormat.Format32bppPArgb, _bits);
-            System.Drawing.Drawing2D.CompositingMode mode = graphics.CompositingMode;
-            graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
-            graphics.DrawImageUnscaled(words, inner.Left, inner.Top);
-            graphics.CompositingMode = mode;
+            Drawn drawn = Keep(inner.Width, inner.Height);
+            var made = new LinkedListNode<(DrawnKey, Drawn)>((key, drawn));
+            KeptOrder.AddFirst(made);
+            Kept[key] = made;
+            _keptBytes += drawn.Bytes;
+            while (_keptBytes > KeptMost && KeptOrder.Last is { } oldest)
+            {
+                KeptOrder.RemoveLast();
+                Kept.Remove(oldest.Value.Key);
+                _keptBytes -= oldest.Value.Value.Bytes;
+                oldest.Value.Value.Image?.Dispose();
+            }
+            Lay(graphics, drawn, inner);
         }
         finally { Release(layout); }
+    }
+
+    /// <summary>The words just drawn on the surface, cut to the pixels they cover and copied out.</summary>
+    private static Drawn Keep(int width, int height)
+    {
+        int left = width, top = height, right = -1, bottom = -1;
+        for (int y = 0; y < height; y++)
+        {
+            uint* row = (uint*)((byte*)_bits + (long)y * _surfaceWidth * 4);
+            for (int x = 0; x < width; x++)
+                if (row[x] != 0)
+                {
+                    if (x < left) left = x;
+                    if (x > right) right = x;
+                    if (y < top) top = y;
+                    bottom = y;
+                }
+        }
+        if (right < 0) return new Drawn(null, 0, 0, 64);
+        int w = right - left + 1, h = bottom - top + 1;
+        var image = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        var data = image.LockBits(new Rectangle(0, 0, w, h), System.Drawing.Imaging.ImageLockMode.WriteOnly, image.PixelFormat);
+        try
+        {
+            for (int y = 0; y < h; y++)
+                new Span<byte>((byte*)_bits + ((long)(top + y) * _surfaceWidth + left) * 4, w * 4)
+                    .CopyTo(new Span<byte>((byte*)data.Scan0 + (long)y * data.Stride, w * 4));
+        }
+        finally { image.UnlockBits(data); }
+        return new Drawn(image, left, top, (long)w * h * 4 + 64);
+    }
+
+    /// <summary>Laid over what is there, following the graphics' own clip and shift.</summary>
+    private static void Lay(Graphics graphics, Drawn drawn, Rectangle inner)
+    {
+        if (drawn.Image is null) return;
+        System.Drawing.Drawing2D.CompositingMode mode = graphics.CompositingMode;
+        graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
+        graphics.DrawImage(drawn.Image, new Rectangle(inner.Left + drawn.X, inner.Top + drawn.Y, drawn.Image.Width, drawn.Image.Height)); // Pixel for pixel at any scaling.
+        graphics.CompositingMode = mode;
     }
 
     [StructLayout(LayoutKind.Sequential)]

@@ -9,8 +9,8 @@ namespace WinScreen.Settings;
 public sealed class SettingsWindow : Form
 {
     private const int ContentWidth = SwitchBox.RowWidth + 20;
-    /// <summary>The widths of a number box and of a list that drops down, at 100% scaling, so they line up down a page.</summary>
-    private const int NumberWidth = 120, ChoiceWidth = 220;
+    /// <summary>The width of a box a number or colour is typed into, at 100% scaling.</summary>
+    private const int NumberWidth = 120;
 
     private readonly AppSettings _settings;
     private AppSettings? _pendingImport;
@@ -809,7 +809,19 @@ private readonly ErrorProvider _errors = new();
     /// </summary>
     private void RebuildApps()
     {
-        const int hoverAt = SwitchBox.RowWidth - 190, originalAt = SwitchBox.RowWidth - 100, removeAt = SwitchBox.RowWidth - 36;
+        // Sizes here are at 100% scaling; rows made after the window has scaled itself are scaled to match below.
+        double scale = _appRows.DeviceDpi / 96.0;
+        bool scaled = IsHandleCreated;
+        int Measured(string text) => (int)Math.Ceiling(Native.DirectText.MeasureText(text, SettingsStyle.CaptionFont, Size.Empty,
+            TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width / scale);
+        // Each switch sits in the middle of a column as wide as its heading, however long that is in the language
+        // shown, with clear room between the two columns.
+        string hoverText = T("menu.view.hover"), originalText = T("settings.pip.apps.original");
+        const int switchWidth = 40, between = 32, removeAt = SwitchBox.RowWidth - 36;
+        int originalColumn = Math.Max(Measured(originalText), switchWidth), hoverColumn = Math.Max(Measured(hoverText), switchWidth);
+        int originalMiddle = removeAt - 16 - originalColumn / 2;
+        int hoverMiddle = originalMiddle - originalColumn / 2 - between - hoverColumn / 2;
+        int namesEnd = hoverMiddle - hoverColumn / 2 - 12;
         _tips.RemoveAll();
         bool hoverAllowed = _hoverOptions?.Enabled != false;
         _appRows.SuspendLayout();
@@ -822,11 +834,16 @@ private readonly ErrorProvider _errors = new();
         Panel Row(string name, bool heading)
         {
             var row = new Panel { Size = new Size(SwitchBox.RowWidth, heading ? 24 : 34), Margin = new Padding(3, 0, 3, 0), BackColor = SettingsStyle.Card };
-            row.Controls.Add(new SoftLabel { Text = name, AutoSize = false, Bounds = new Rectangle(1, 0, hoverAt - 8, row.Height),
+            row.Controls.Add(new SoftLabel { Text = name, AutoSize = false, Bounds = new Rectangle(1, 0, Math.Max(60, namesEnd), row.Height),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right, // Wider rows give names more room.
                 TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, UseMnemonic = false,
                 ForeColor = heading ? SettingsStyle.Secondary : SettingsStyle.Text, Font = heading ? SettingsStyle.CaptionFont : SettingsStyle.BodyFont });
             return row;
+        }
+        void Add(Panel row)
+        {
+            if (scaled) row.Scale(new SizeF((float)scale, (float)scale));
+            _appRows.Controls.Add(row);
         }
         void Place(Panel row, Control control, int at)
         {
@@ -836,15 +853,17 @@ private readonly ErrorProvider _errors = new();
             control.BringToFront();
         }
         Panel head = Row(T("settings.pip.apps.app"), true);
-        foreach (var (text, at) in new[] { (T("menu.view.hover"), hoverAt), (T("settings.pip.apps.original"), originalAt) })
-            Place(head, new SoftLabel { Text = text, AutoSize = true, ForeColor = SettingsStyle.Secondary, Font = SettingsStyle.CaptionFont, UseMnemonic = false }, at - 4);
-        _appRows.Controls.Add(head);
+        foreach (var (text, middle) in new[] { (hoverText, hoverMiddle), (originalText, originalMiddle) })
+            Place(head, new SoftLabel { Text = text, AutoSize = true, ForeColor = SettingsStyle.Secondary, Font = SettingsStyle.CaptionFont, UseMnemonic = false },
+                middle - Measured(text) / 2);
+        Add(head);
         foreach (CheckBox kind in new[] { _hoverBrowsers, _hoverFirefox, _hoverElectron, _hoverExplorer })
         {
             Panel row = Row(kind.Text, false);
             kind.Size = kind.GetPreferredSize(Size.Empty);
-            Place(row, kind, hoverAt);
-            _appRows.Controls.Add(row);
+            if (scaled) kind.Size = new Size((int)Math.Round(kind.Width / scale), (int)Math.Round(kind.Height / scale));
+            Place(row, kind, hoverMiddle - kind.Width / 2);
+            Add(row);
         }
         bool Listed(ListBox list, string name) => list.Items.Cast<string>().Contains(name, StringComparer.OrdinalIgnoreCase);
         void Unlist(ListBox list, string name)
@@ -892,10 +911,13 @@ private readonly ErrorProvider _errors = new();
                 BeginInvoke(RebuildApps); // Not from inside the click of a button this removes.
                 QueueApplyRefresh();
             };
-            Place(row, hover, hoverAt);
-            Place(row, original, originalAt);
+            if (scaled)
+                foreach (Control part in new Control[] { hover, original, remove })
+                    part.Size = new Size((int)Math.Round(part.Width / scale), (int)Math.Round(part.Height / scale));
+            Place(row, hover, hoverMiddle - hover.Width / 2);
+            Place(row, original, originalMiddle - original.Width / 2);
             Place(row, remove, removeAt);
-            _appRows.Controls.Add(row);
+            Add(row);
         }
         _appRows.ResumeLayout(true);
         for (Control? parent = _appRows.Parent; parent is not null; parent = parent.Parent)
@@ -1112,10 +1134,10 @@ private readonly ErrorProvider _errors = new();
     /// <summary>One option: what it is on the left, the control that sets it on the right.</summary>
     private static Control SettingRow(string text, Control control)
     {
-        // A box typed into gets the same rounded frame and width as every other one.
-        if (control is NumericUpDown number) control = new InputFrame(number) { Width = NumberWidth };
+        // A box typed into gets the same rounded frame as every other one.
+        // A number is chosen with a slider, and a list is as wide as its longest choice, as in Windows 11.
+        if (control is NumericUpDown number) control = new NumberSlider(number) { AccessibleName = text.TrimEnd(':', '：', ' ') };
         else if (control is TextBox box) control = new InputFrame(box);
-        else if (control is ComboBox) control.Width = ChoiceWidth;
         return new SettingRowPanel(text.TrimEnd(':', '：', ' '), control);
     }
 
@@ -1491,16 +1513,22 @@ private readonly ErrorProvider _errors = new();
             using var line = new Pen(SettingsStyle.Divider);
             g.DrawLine(line, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
         };
-        // A row is drawn whole each time Windows asks for any part of it. Windows redraws only the first cell as the
-        // pointer passes, and its background is the whole row's: drawn alone, it wiped out the other cells.
-        _features.DrawItem += (_, e) => { if (e.Item is { } item) DrawFeatureRow(e.Graphics, item); };
-        // Windows may draw its own chosen-row box under a single cell; the whole row is drawn over it again.
-        _features.DrawSubItem += (_, e) => { if (e.Item is { } item) DrawFeatureRow(e.Graphics, item); };
-        void DrawFeatureRow(Graphics g, ListViewItem item)
+        // Each cell is drawn on its own, once, with its part of the row's background: Windows redraws only the first
+        // cell as the pointer passes, and a row drawn whole for each cell made the table lag.
+        _features.DrawItem += (_, _) => { };
+        _features.DrawSubItem += (_, e) => { if (e.Item is { } item) DrawFeatureRow(e.Graphics, item, e.ColumnIndex); };
+        void DrawFeatureRow(Graphics g, ListViewItem item, int only)
         {
             SettingsStyle.SoftText(g);
             Rectangle row = item.Bounds;
-            using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, row);
+            int start = row.Left;
+            for (int index = 0; index < only && index < _features.Columns.Count; index++) start += _features.Columns[index].Width;
+            if (only >= _features.Columns.Count) return;
+            var part = new Rectangle(start, row.Top, only == _features.Columns.Count - 1 ? Math.Max(0, row.Right - start) : _features.Columns[only].Width, row.Height);
+            if (part.Width <= 0) return;
+            System.Drawing.Drawing2D.GraphicsState state = g.Save();
+            g.SetClip(part, System.Drawing.Drawing2D.CombineMode.Intersect);
+            using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, part);
             var wash = new Rectangle(row.Left + Unit(2), row.Top + Unit(1), row.Width - Unit(4), row.Height - Unit(2));
             if (item.Selected)
             {
@@ -1516,6 +1544,7 @@ private readonly ErrorProvider _errors = new();
             {
                 var cell = new Rectangle(left, row.Top, _features.Columns[index].Width, row.Height);
                 left += cell.Width;
+                if (index != only) continue;
                 bool problem = index == 4 && item.Tag is AppCommand command && _shortcutProblems.ContainsKey(command);
                 Color color = problem ? SettingsStyle.Error : index is 0 or 3 ? SettingsStyle.Text : SettingsStyle.Secondary;
                 int inset = Unit(FeatureInset(index));
@@ -1532,6 +1561,7 @@ private readonly ErrorProvider _errors = new();
                     MenuParts.DrawTag(g, words.Left + width + Unit(8), cell.Top + cell.Height / 2, Unit);
                 }
             }
+            g.Restore(state);
         }
     }
 

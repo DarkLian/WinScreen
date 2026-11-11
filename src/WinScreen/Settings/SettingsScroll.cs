@@ -58,7 +58,11 @@ internal sealed class ThinScrollBar : Control
     {
         if (!_target.IsHandleCreated || IsDisposed) return;
         var info = new ScrollInfo { Size = (uint)Marshal.SizeOf<ScrollInfo>(), Mask = SIF_RANGE | SIF_PAGE | SIF_POS };
-        if (!GetScrollInfo(_target.Handle, SB_VERT, ref info)) info = default;
+        // Windows keeps the range of a scroll bar it has hidden, so a page that fits after growing still read as one
+        // that scrolls.
+        const long WS_VSCROLL = 0x00200000;
+        if ((Native.User32.GetWindowLongPtr(_target.Handle, Native.User32.GWL_STYLE) & WS_VSCROLL) == 0 ||
+            !GetScrollInfo(_target.Handle, SB_VERT, ref info)) info = default;
         bool changed = info.Min != _min || info.Max != _max || (int)info.Page != _page || info.Pos != _pos;
         (_min, _max, _page, _pos) = (info.Min, info.Max, (int)info.Page, info.Pos);
         if (Visible != Needed) Visible = Needed;
@@ -254,9 +258,38 @@ internal sealed class ScrollPage : FlowLayoutPanel, IColumnPage
         PageStretch.Apply(this, Extra, SettingsStyle.Unit(this, SwitchBox.RowWidth), rows);
         if (Padding.Left != _usualLeft + shift) Padding = Padding with { Left = _usualLeft + shift };
         ResumeLayout(true);
+        DropSidewaysScroll();
         if (shift == Shift) return;
         Shift = shift;
         Shifted?.Invoke();
+    }
+
+    private bool _dropping;
+
+    /// <summary>
+    /// The page never scrolls sideways, as its rows always fit. Windows Forms remembers how wide the page once was,
+    /// though, and after the window shrinks it kept a dark sideways scroll bar for that old width; the page is made to
+    /// measure itself afresh, staying where it was scrolled to.
+    /// </summary>
+    private void DropSidewaysScroll()
+    {
+        const long WS_HSCROLL = 0x00100000;
+        if (_dropping || !IsHandleCreated || (Native.User32.GetWindowLongPtr(Handle, Native.User32.GWL_STYLE) & WS_HSCROLL) == 0) return;
+        int rightmost = Controls.Cast<Control>().Where(control => control.Visible)
+            .Select(control => control.Right + control.Margin.Right).DefaultIfEmpty(0).Max() + Padding.Right;
+        if (rightmost > ClientSize.Width) return;
+        _dropping = true;
+        try
+        {
+            int down = -AutoScrollPosition.Y;
+            SuspendLayout();
+            AutoScroll = false;
+            AutoScroll = true;
+            ResumeLayout(true);
+            AutoScrollPosition = new Point(0, down);
+        }
+        finally { _dropping = false; }
+        Moved?.Invoke();
     }
 
     protected override void WndProc(ref Message m)

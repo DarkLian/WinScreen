@@ -570,10 +570,26 @@ internal sealed class SettingRowPanel : Panel, IDescribed
     {
         base.OnLayout(levent);
         if (_control is null) return; // Still being built.
+        if (_control is ComboBox choices) FitChoices(choices);
         int height = Math.Max(Math.Max(Unit(42), _control.Height + Unit(10)),
             SettingText.Height(this, Text, Description, TextWidth) + Unit(Description.Length > 0 ? 18 : 14));
         if (Height != height) Height = height;
         _control.Location = new Point(Width - _control.Width - Unit(6), (Height - _control.Height) / 2);
+    }
+
+    /// <summary>
+    /// A list of choices as wide as its longest one, with room for the arrow, as Windows 11's are; never narrower than
+    /// Windows 11's narrowest. Measured each time, so another language or display scaling fits too.
+    /// </summary>
+    private void FitChoices(ComboBox box)
+    {
+        int widest = 0;
+        foreach (object? item in box.Items)
+            widest = Math.Max(widest, Native.DirectText.MeasureText(box.GetItemText(item), box.Font, Size.Empty,
+                TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width);
+        int most = Math.Max(Unit(120), Width - Unit(6 + 16 + 160) - SettingText.Left(this, Glyph));
+        int width = Math.Clamp(widest + Unit(11 + 44), Unit(120), most);
+        if (box.Width != width) box.Width = width;
     }
 
     protected override void OnTextChanged(EventArgs e) { base.OnTextChanged(e); PerformLayout(); Invalidate(); }
@@ -637,7 +653,7 @@ internal sealed class NavList : Control
                 if (!any) continue;
             }
             else if (_shown?.Contains(entry.Page!) == false) continue;
-            int height = Unit(heading ? 32 : 36);
+            int height = Unit(heading ? 32 : 40); // As far apart as in Windows 11's Settings, each highlight 36 tall.
             yield return (entry, new Rectangle(Unit(2), y, Width - Unit(4), height));
             y += height;
         }
