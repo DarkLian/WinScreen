@@ -25,7 +25,7 @@ public sealed class ThemeChangeTests
                 try
                 {
                     Image lightIcon = MenuParts.Icon(MenuParts.Pin)!;
-                    typeof(TrayApplication).GetMethod("OpenSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(app, [null, 0]);
+                    typeof(TrayApplication).GetMethod("OpenSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(app, [null, 0, false, null, false]);
                     SettingsWindow first = Current(app);
                     first.PageIndex = 4;
                     Pump();

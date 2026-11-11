@@ -292,6 +292,53 @@ private readonly ErrorProvider _errors = new();
     /// <summary>True when what's on screen differs from what's in effect, so Apply has something to do.</summary>
     internal bool HasChanges => _applyButton.Enabled;
 
+    /// <summary>
+    /// Shown without taking the keyboard, for when it is made again while something else is being used. It still stays
+    /// on top as Settings does, put there without being activated: WinForms' own TopMost activates the window.
+    /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal bool Quiet { get => _quiet; init { _quiet = value; StayOnTopQuietly(); } }
+    private readonly bool _quiet;
+
+    protected override bool ShowWithoutActivation => Quiet;
+
+    private void StayOnTopQuietly()
+    {
+        if (Quiet && IsHandleCreated)
+            Native.User32.SetWindowPos(Handle, Native.User32.HWND_TOPMOST, 0, 0, 0, 0,
+                Native.User32.SWP_NOMOVE | Native.User32.SWP_NOSIZE | Native.User32.SWP_NOACTIVATE);
+    }
+
+    /// <summary>What was changed here but not saved, with what saving needs to know about it.</summary>
+    internal sealed record UnsavedEdits(AppSettings Values, bool Imported, ProgramSetup[] RemovedSetups, string[] AddedApps);
+
+    /// <summary>The changes not saved yet, or null when there are none; read before the window closes.</summary>
+    internal UnsavedEdits? Unsaved()
+    {
+        RefreshApply();
+        if (!HasChanges) return null;
+        AppSettings values = Draft((_pendingImport ?? _settings).Clone(), commitTyped: false);
+        values.SavedSetups = _setups.Items.Cast<ProgramSetup>().ToList();
+        return new UnsavedEdits(values, _pendingImport is not null, [.. _removedSetups], [.. _addedApps]);
+    }
+
+    /// <summary>
+    /// Shows changes another Settings window had not saved, still waiting to be saved: Settings is made again when the
+    /// look changes between light and dark, and closing the old window would otherwise drop them.
+    /// </summary>
+    internal void TakeUnsaved(UnsavedEdits? edits)
+    {
+        if (edits is null) return;
+        _pendingImport = edits.Imported ? edits.Values : null;
+        _removedSetups.UnionWith(edits.RemovedSetups);
+        LoadValues(edits.Values);
+        _startWithWindows.Checked = edits.Values.StartWithWindows ?? _startup.IsOn;
+        foreach (string app in edits.AddedApps)
+            if (!_addedApps.Contains(app, StringComparer.OrdinalIgnoreCase)) _addedApps.Add(app);
+        RebuildApps();
+        RefreshApply();
+    }
+
     /// <summary>Applies the changes and keeps the window open, the way the Apply button does.</summary>
     internal bool ApplyChanges()
     {
@@ -398,6 +445,7 @@ private readonly ErrorProvider _errors = new();
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
+        StayOnTopQuietly();
         static int ColorRef(Color color) => color.R | color.G << 8 | color.B << 16;
         int dark = MenuStyle.Dark ? 1 : 0, caption = ColorRef(SettingsStyle.Page), text = ColorRef(SettingsStyle.Text);
         Native.Dwmapi.DwmSetWindowAttribute(Handle, Native.Dwmapi.DWMWA_USE_IMMERSIVE_DARK_MODE, in dark, sizeof(int));
@@ -809,9 +857,9 @@ private readonly ErrorProvider _errors = new();
         box.Checked = on;
     }
 
-    private void LoadValues()
+    private void LoadValues(AppSettings? values = null)
     {
-        AppSettings values = _pendingImport ?? _settings;
+        values ??= _pendingImport ?? _settings;
         _excluded.Items.Clear();
         _included.Items.Clear();
         _setups.Items.Clear();

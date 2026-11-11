@@ -394,8 +394,11 @@ public sealed class TrayApplication : ApplicationContext
             if (old.IsDisposed) return;
             int page = old.PageIndex;
             Rectangle bounds = old.Bounds;
+            SettingsWindow.UnsavedEdits? unsaved = old.Unsaved(); // Windows can change its look while changes wait to be saved.
+            // Made again behind whatever is being used when Windows changed its look, rather than taking the keyboard.
+            bool active = Form.ActiveForm == old;
             old.Close();
-            OpenSettings(bounds, page);
+            OpenSettings(bounds, page, reopening: true, unsaved, quietly: !active);
         });
     }
 
@@ -889,7 +892,11 @@ public sealed class TrayApplication : ApplicationContext
     }
 
     /// <summary>Opens Settings, or brings it forward; <paramref name="bounds"/> and <paramref name="page"/> reopen it where it was.</summary>
-    private void OpenSettings(Rectangle? bounds = null, int page = 0)
+    /// <param name="reopening">True when Settings is only made again in the other colours, replacing the one open.</param>
+    /// <param name="unsaved">Changes the window it replaces had not saved.</param>
+    /// <param name="quietly">Shown without taking the keyboard from what has it.</param>
+    private void OpenSettings(Rectangle? bounds = null, int page = 0, bool reopening = false, SettingsWindow.UnsavedEdits? unsaved = null,
+        bool quietly = false)
     {
         if (_settingsWindow is { IsDisposed: false })
         {
@@ -897,12 +904,15 @@ public sealed class TrayApplication : ApplicationContext
             return;
         }
 
-        EndVisits();
+        // A view being used is put back to watching when Settings opens, but not when Settings is only made again in
+        // the other colours: nothing was asked of the view.
+        if (!reopening) EndVisits();
         _settingsWindow = new SettingsWindow(_settings, _startup, Apply, command => _hotkeys.IsRegistered((int)command))
-            { TopMost = true, PageIndex = page };
+            { TopMost = !quietly, PageIndex = page, Quiet = quietly };
+        _settingsWindow.TakeUnsaved(unsaved);
         if (bounds is { } where) { _settingsWindow.StartPosition = FormStartPosition.Manual; _settingsWindow.Bounds = where; }
         _settingsWindow.Show();
-        _settingsWindow.Activate();
+        if (!quietly) _settingsWindow.Activate();
     }
 
     private async Task CheckForUpdates()

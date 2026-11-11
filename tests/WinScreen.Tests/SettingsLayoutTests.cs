@@ -37,6 +37,72 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    /// <summary>
+    /// Settings is made again when the look changes between light and dark; changes not saved yet came along instead of
+    /// being dropped with the old window, and are still waiting to be saved.
+    /// </summary>
+    [Fact]
+    public void Changes_not_saved_yet_survive_Settings_being_made_again()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            var kept = new ProgramSetup { Program = "notepad" };
+            var removed = new ProgramSetup { Program = "mspaint" };
+            var settings = new AppSettings { Language = "en", ShowNotifications = true, ExcludedPrograms = ["calc"], DefaultOpacityPercent = 80 };
+            settings.SavedSetups.AddRange([kept, removed]);
+            AppSettings? saved = null;
+            IReadOnlyList<HotkeyProblem> Save(AppSettings draft) { saved = draft; return []; }
+
+            SettingsWindow.UnsavedEdits? unsaved;
+            using (var old = new SettingsWindow(settings, new StartWithWindows(), Save))
+            {
+                Assert.Null(old.Unsaved());
+                old.SetOption(nameof(AppSettings.ShowNotifications), false);
+                old.AddExcluded("notepad");
+                old.RemoveSetup(removed);
+                old.SetDefaultOpacity(55);
+                unsaved = old.Unsaved();
+                old.Close();
+            }
+            Assert.NotNull(unsaved);
+
+            using var window = new SettingsWindow(settings, new StartWithWindows(), Save);
+            window.TakeUnsaved(unsaved);
+            Assert.True(window.HasChanges);
+            Assert.True(window.SaveChanges());
+            Assert.NotNull(saved);
+            Assert.False(saved.ShowNotifications);
+            Assert.Equal(["calc", "notepad"], saved.ExcludedPrograms);
+            Assert.Equal(["notepad"], saved.SavedSetups.Select(setup => setup.Program));
+            Assert.Equal(55, saved.DefaultOpacityPercent);
+            window.Close();
+        });
+    }
+
+    /// <summary>Made again while something else is being used, Settings comes back without taking the keyboard from it.</summary>
+    [Fact]
+    public void Settings_made_again_quietly_leaves_the_keyboard_where_it_is()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            Support.Desktop.GainForegroundRights();
+            using var inUse = new Form { StartPosition = FormStartPosition.Manual, Bounds = new Rectangle(50, 50, 300, 200) };
+            inUse.Show();
+            Support.Desktop.Activate(inUse.Handle);
+            Application.DoEvents();
+            Assert.Equal(inUse.Handle, Native.User32.GetForegroundWindow());
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(), _ => []) { Quiet = true };
+            window.Show();
+            for (int i = 0; i < 10; i++) { Application.DoEvents(); Thread.Sleep(20); }
+            Assert.True(window.Visible);
+            Assert.True((Native.User32.GetWindowLongPtr(window.Handle, Native.User32.GWL_EXSTYLE) & 0x8) != 0, "Not on top."); // WS_EX_TOPMOST
+            Assert.Equal(inUse.Handle, Native.User32.GetForegroundWindow());
+            window.Close();
+        });
+    }
+
     [Theory]
     [InlineData("en", 100)] [InlineData("en", 150)] [InlineData("en", 200)]
     [InlineData("zh-Hans", 100)] [InlineData("zh-Hans", 150)] [InlineData("zh-Hans", 200)]
