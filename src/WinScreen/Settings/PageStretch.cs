@@ -34,7 +34,10 @@ internal static class PageStretch
                     list.Width = UsualWidth(list, list.Width) + extra;
                     break;
                 case { AutoSize: true }:
-                    // Cards and groups of rows grow with what they hold.
+                    // Cards and groups of rows grow with what they hold, and a card holding only short parts, such as
+                    // a row of buttons, keeps the full width all the same.
+                    if (child.MinimumSize.Width > 0 && UsualWidth(child, child.MinimumSize.Width) is var least && least >= near)
+                        child.MinimumSize = child.MinimumSize with { Width = least + extra };
                     Apply(child, extra, full, rows);
                     break;
                 default:

@@ -211,6 +211,64 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    /// <summary>
+    /// As in Windows 11's Settings, every page's title and cards share one column: the same left and right edges on
+    /// every page, filling the room at the usual size, and at most a readable width, centred, in a maximized window.
+    /// </summary>
+    [Fact]
+    public void Every_page_lines_up_in_one_column_centred_when_maximized()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            var settings = new AppSettings { Language = "en", ExperimentalFeatures = true, ExcludedPrograms = ["notepad"] };
+            settings.SavedSetups.Add(new ProgramSetup { Program = "notepad", Pinned = true });
+            foreach (bool maximized in new[] { false, true })
+            {
+                using var window = new SettingsWindow(settings, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+                window.Show();
+                if (maximized) window.WindowState = FormWindowState.Maximized;
+                void Pump() { for (int i = 0; i < 8; i++) { Application.DoEvents(); Thread.Sleep(15); } }
+                Pump();
+                TabControl tabs = Descendants(window).OfType<TabControl>().Single();
+                Control title = Descendants(window).OfType<Label>().Single(label => label.Font == SettingsStyle.PageTitleFont);
+                Control side = Descendants(window).OfType<NavList>().Single().Parent!;
+                int Unit(int value) => SettingsStyle.Unit(window, value);
+                var edges = new List<(int Left, int Right, string What)>();
+                foreach (TabPage page in tabs.TabPages)
+                {
+                    tabs.SelectedTab = page;
+                    Pump();
+                    // The cards on a page that scrolls; the search box and the table on the page of actions.
+                    Control[] column = Descendants(page).OfType<SettingsCard>().Where(card => card.Visible).Cast<Control>().ToArray();
+                    if (column.Length == 0)
+                        column = Descendants(page).OfType<InputFrame>().Where(frame => frame.Dock is DockStyle.Top or DockStyle.Fill).ToArray();
+                    Assert.NotEmpty(column);
+                    Rectangle titleOnScreen = title.RectangleToScreen(title.ClientRectangle);
+                    foreach (Control part in column)
+                    {
+                        Rectangle r = part.RectangleToScreen(part.ClientRectangle);
+                        edges.Add((r.Left, r.Right, $"{(maximized ? "maximized" : "usual")} {page.Text}: {part.Text}"));
+                        Assert.InRange(r.Left - titleOnScreen.Left, -Unit(4), Unit(4)); // The title's big letters stand a little in.
+                    }
+                }
+                int left = edges[0].Left, right = edges[0].Right;
+                foreach ((int l, int r, string what) in edges)
+                {
+                    Assert.True(Math.Abs(l - left) <= Unit(2), $"{what} starts at {l}, not {left}.");
+                    Assert.True(Math.Abs(r - right) <= Unit(2), $"{what} ends at {r}, not {right}.");
+                }
+                if (!maximized) continue;
+                Assert.True(right - left <= Unit(ScrollPage.WidestCard) + Unit(2), $"{right - left} wide.");
+                Rectangle room = window.RectangleToScreen(window.ClientRectangle);
+                int roomLeft = side.RectangleToScreen(side.ClientRectangle).Right;
+                int before = left - roomLeft, after = room.Right - right;
+                Assert.True(Math.Abs(before - after) <= Unit(24), $"Not centred: {before} before, {after} after.");
+                window.Close();
+            }
+        });
+    }
+
     private static IEnumerable<Control> Descendants(Control root) => root.Controls.Cast<Control>()
         .SelectMany(child => new[] { child }.Concat(Descendants(child)));
 }

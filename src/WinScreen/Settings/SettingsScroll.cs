@@ -163,18 +163,70 @@ internal sealed class ThinScrollBar : Control
     }
 }
 
+/// <summary>
+/// A Settings page laid out in one column, as in Windows 11's Settings: as wide as the room up to a width still easy
+/// to read, and centred in a window wider than that. The page title follows where the column starts.
+/// </summary>
+internal interface IColumnPage
+{
+    /// <summary>How far the column is moved in from its usual place, to centre it, in pixels.</summary>
+    int Shift { get; }
+    event Action? Shifted;
+}
+
+/// <summary>Where the column goes in a page of a given width, shared by every page so their edges line up.</summary>
+internal static class PageColumn
+{
+    /// <summary>The widest the column gets, at 100% scaling: past this a line of words gets too long to read easily.</summary>
+    internal const int Widest = 1000;
+    /// <summary>The room kept on the right, at 100% scaling, where the scroll bar shows over a page.</summary>
+    internal const int RightGap = 10;
+
+    /// <summary>The room for the column in a page this wide, and how far it moves in to be centred there.</summary>
+    internal static (int Room, int Shift) In(Control page, int width, int content)
+    {
+        int room = Math.Max(0, width - SettingsStyle.Unit(page, RightGap));
+        return (room, Math.Max(0, (room - content) / 2));
+    }
+}
+
+/// <summary>A page that holds one column of its own, such as the table of actions, kept to the width of the others.</summary>
+internal sealed class ColumnPanel : Panel, IColumnPage
+{
+    public int Shift { get; private set; }
+    public event Action? Shifted;
+
+    protected override void OnClientSizeChanged(EventArgs e)
+    {
+        base.OnClientSizeChanged(e);
+        int widest = SettingsStyle.Unit(this, PageColumn.Widest);
+        (int room, _) = PageColumn.In(this, ClientSize.Width, 0);
+        int width = Math.Min(room, widest);
+        int shift = PageColumn.In(this, ClientSize.Width, width).Shift;
+        var padding = new Padding(shift, Padding.Top, Math.Max(0, ClientSize.Width - shift - width), Padding.Bottom);
+        if (Padding != padding) Padding = padding;
+        if (shift == Shift) return;
+        Shift = shift;
+        Shifted?.Invoke();
+    }
+}
+
 /// <summary>A page of cards that scrolls, and says so whenever what it shows may have moved.</summary>
-internal sealed class ScrollPage : FlowLayoutPanel
+internal sealed class ScrollPage : FlowLayoutPanel, IColumnPage
 {
     private const int WM_PAINT = 0x000F, WM_VSCROLL = 0x0115, WM_MOUSEWHEEL = 0x020A;
     /// <summary>The widest the cards get, at 100% scaling: past this a line of words gets too long to read easily.</summary>
-    internal const int WidestCard = 1000;
+    internal const int WidestCard = PageColumn.Widest;
     /// <summary>The height a page has in a Settings window of the usual size, at 100% scaling.</summary>
     private const int UsualHeight = 560;
     internal event Action? Moved;
+    public event Action? Shifted;
+    private int _usualLeft = -1;
 
     /// <summary>How much wider than usual its rows are now, in pixels.</summary>
     internal int Extra { get; private set; }
+
+    public int Shift { get; private set; }
 
     protected override void OnClientSizeChanged(EventArgs e)
     {
@@ -191,12 +243,20 @@ internal sealed class ScrollPage : FlowLayoutPanel
         if (Controls.Count == 0) return;
         // The widest card as it would be at the usual width, measured each time, so a change of display scaling counts.
         int usual = Controls.Cast<Control>().Max(control => control.Width + control.Margin.Horizontal) - Extra;
-        int room = ClientSize.Width - Padding.Horizontal - SettingsStyle.Unit(this, 4);
+        if (_usualLeft < 0) _usualLeft = Padding.Left;
+        // What shows: Windows' scroll bar is hidden past the edge, so the page is wider than that when it has none.
+        int visible = Math.Min(ClientSize.Width, Parent?.ClientSize.Width ?? ClientSize.Width) - _usualLeft;
+        (int room, _) = PageColumn.In(this, visible, 0);
         Extra = Math.Clamp(room - usual, 0, Math.Max(0, SettingsStyle.Unit(this, WidestCard) - usual));
+        int shift = PageColumn.In(this, visible, usual + Extra).Shift;
         int rows = 6 + Math.Clamp((ClientSize.Height - SettingsStyle.Unit(this, UsualHeight)) / SettingsStyle.Unit(this, 70), 0, 8);
         SuspendLayout();
         PageStretch.Apply(this, Extra, SettingsStyle.Unit(this, SwitchBox.RowWidth), rows);
+        if (Padding.Left != _usualLeft + shift) Padding = Padding with { Left = _usualLeft + shift };
         ResumeLayout(true);
+        if (shift == Shift) return;
+        Shift = shift;
+        Shifted?.Invoke();
     }
 
     protected override void WndProc(ref Message m)
@@ -219,6 +279,8 @@ internal sealed class ScrollHost : Panel
 {
     private readonly ScrollPage _page;
     private readonly ThinScrollBar _bar;
+
+    internal ScrollPage Page => _page;
 
     internal ScrollHost(ScrollPage page)
     {

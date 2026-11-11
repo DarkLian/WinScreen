@@ -218,7 +218,10 @@ private readonly ErrorProvider _errors = new();
             if (tabs.SelectedTab == featuresPage) RefreshFeatures();
             _nav.Selected = tabs.SelectedTab;
             _pageTitle.Text = tabs.SelectedTab?.Text ?? "";
+            FollowColumn();
         };
+        foreach (TabPage tab in tabs.TabPages)
+            if (ColumnOf(tab) is { } column) column.Shifted += FollowColumn;
         _nav.Add(generalPage.Text, MenuParts.Home, generalPage);
         _nav.AddHeading(T("settings.nav.windows"));
         _nav.Add(featuresPage.Text, MenuParts.Keyboard, featuresPage);
@@ -285,6 +288,27 @@ private readonly ErrorProvider _errors = new();
         foreach (TextBox box in _hotkeys.Values) box.TextChanged += (_, _) => QueueApplyRefresh();
         MarkSaved();
         ResumeLayout(true);
+    }
+
+    private static IColumnPage? ColumnOf(TabPage? tab) => tab is { Controls.Count: > 0 } ? tab.Controls[0] switch
+    {
+        ScrollHost host => host.Page,
+        IColumnPage page => page,
+        _ => null,
+    } : null;
+
+    /// <summary>The title, and the bar for saving under the page, line up with the page's column wherever it is.</summary>
+    private void FollowColumn()
+    {
+        int shift = ColumnOf(_tabs.SelectedTab)?.Shift ?? 0;
+        int right = shift + SettingsStyle.Unit(this, PageColumn.RightGap);
+        var bar = new Padding(shift, _saveBar.Margin.Top, right, 0);
+        if (_pageTitle.Margin.Left == shift && _status.Margin.Left == shift && _saveBar.Margin == bar) return;
+        _pageTitle.Margin = _pageTitle.Margin with { Left = shift };
+        _status.Margin = _status.Margin with { Left = shift };
+        _saveBar.Margin = bar;
+        // The page moves its column while the window is being laid out, which doesn't lay the title out again.
+        if (IsHandleCreated) BeginInvoke(() => { if (!IsDisposed) _pageTitle.Parent?.PerformLayout(); });
     }
 
     /// <summary>The page showing, for opening the window again where it was.</summary>
@@ -1383,14 +1407,18 @@ private readonly ErrorProvider _errors = new();
 
         DrawFeatures();
         var table = new InputFrame(_features, InputFrame.Look.List) { Dock = DockStyle.Fill };
-        var page = new Panel { Dock = DockStyle.Fill };
+        var page = new ColumnPanel { Dock = DockStyle.Fill };
         page.Controls.Add(table);
         page.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 8 });
         page.Controls.Add(card);
         var intro = new SoftLabel { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top, ForeColor = SettingsStyle.Secondary, Padding = new Padding(1, 8, 0, 8) };
         page.Controls.Add(intro);
         page.Controls.Add(new InputFrame(_actionSearch) { Glyph = MenuParts.Search, Dock = DockStyle.Top, Height = BoxHeight.Standard });
-        page.Resize += (_, _) => intro.MaximumSize = new Size(page.ClientSize.Width, 0);
+        page.Layout += (_, _) =>
+        {
+            var most = new Size(Math.Max(1, page.ClientSize.Width - page.Padding.Horizontal), 0);
+            if (intro.MaximumSize != most) intro.MaximumSize = most;
+        };
         _features.Resize += (_, _) => FitFeatureColumns();
         _features.ClientSizeChanged += (_, _) => FitFeatureColumns();
         return page;
