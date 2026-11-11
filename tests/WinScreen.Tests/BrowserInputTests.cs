@@ -958,6 +958,290 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     }
 
     /// <summary>
+    /// Two windows, each used directly through its own view, side by side and on one thread as in the app. The steps
+    /// run on a worker with that thread pumping; <c>enter</c> moves the pointer straight into a view and waits for its
+    /// visit, and <c>at</c> maps a point of a window to the screen through its view.
+    /// </summary>
+    private static void TwoViews(nint windowA, nint windowB, Action<PipWindow, PipWindow> setUp,
+        Action<PipWindow, PipWindow, Action<PipWindow>, Func<PipWindow, Point, Point>> steps, StringBuilder log)
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var viewA = new PipWindow(windowA, windows) { AllowInteractive = true };
+            using var viewB = new PipWindow(windowB, windows) { AllowInteractive = true };
+            viewA.ShowOnTop();
+            viewA.Location = new Point(160, 220);
+            viewA.SetInteractive(true);
+            viewB.ShowOnTop();
+            viewB.Location = new Point(viewA.Right + 12, 220);
+            viewB.SetInteractive(true);
+            setUp(viewA, viewB);
+            Assert.True(viewA.KeepsUpdating && viewB.KeepsUpdating, $"Not both hidden: {viewA.StateDescription}; {viewB.StateDescription}");
+            Point home = Desktop.CursorPosition();
+            void Enter(PipWindow view)
+            {
+                Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
+                if (!Desktop.WaitFor(() => view.LiveInteraction is not null))
+                    throw new InvalidOperationException($"No visit started: {view.StateDescription}; last end '{view.LastVisitEnd}'; " +
+                        $"revealed {(view.LastReveal == 0 ? "never" : $"{Environment.TickCount64 - view.LastReveal} ms ago")}; front {WindowInfo.ClassName(User32.GetForegroundWindow())} '{WindowInfo.Title(User32.GetForegroundWindow())}'");
+                Thread.Sleep(150);
+            }
+            Point At(PipWindow view, Point offset)
+            {
+                var (area, shown) = view.LiveInteraction!.CurrentGeometry;
+                return new Point(area.Left + (int)Math.Round((offset.X - shown.Left) * (double)area.Width / shown.Width),
+                    area.Top + (int)Math.Round((offset.Y - shown.Top) * (double)area.Height / shown.Height));
+            }
+            var driver = new Thread(() =>
+            {
+                try { steps(viewA, viewB, Enter, At); }
+                catch (Exception e) { log.AppendLine("EXC " + e); }
+                finally { Desktop.MouseButton(false); Desktop.MoveMouse(home); }
+            });
+            driver.Start();
+            while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
+            log.AppendLine("outcomes A " + string.Join(",", viewA.PressOutcomes) + " B " + string.Join(",", viewB.PressOutcomes));
+            viewA.Close();
+            viewB.Close();
+        });
+        log.AppendLine($"after closing: A hidden={WindowInfo.IsConcealed(windowA)} B hidden={WindowInfo.IsConcealed(windowB)}");
+    }
+
+    private static void ClickHere(int down = 0x02, int up = 0x04)
+    {
+        Thread.Sleep(100);
+        mouse_event((uint)down, 0, 0, 0, 0); Thread.Sleep(40); mouse_event((uint)up, 0, 0, 0, 0);
+        Thread.Sleep(350);
+    }
+
+    /// <summary>The open menu of a window's thread, if there is one: Windows' own or the app's.</summary>
+    private static Rectangle? OpenMenu(nint owner)
+    {
+        Rectangle? found = null;
+        uint thread = User32.GetWindowThreadProcessId(owner, out _);
+        EnumThreadWindows(thread, (window, _) =>
+        {
+            if (window != owner && User32.IsWindowVisible(window) &&
+                (WindowInfo.ClassName(window) == "#32768" ||
+                 WindowInfo.IsOwnedBy(window, owner) && SourcePopups.KindOf(window) == SourcePopups.Kind.Interactive)) found = Desktop.BoundsOf(window);
+            return true;
+        }, 0);
+        return found;
+    }
+
+    /// <summary>
+    /// Two pages in two views at once: a drag selects text, a double-click selects a word and a right-click opens the
+    /// page's own menu beside the pointer, in each page, there and back, and none of it reaches the other page.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BrowserCases))]
+    public void Two_pages_in_two_views_take_drags_double_clicks_and_menus_each_on_its_own(string path)
+    {
+        const string page = """
+            <!doctype html><title>NAME sel=0 menus=0</title>
+            <style>body{margin:0;font:20px sans-serif}#t{position:fixed;left:30px;top:30px;width:420px}
+            #w{position:fixed;left:40px;top:260px;font-size:40px}</style>
+            <p id=t>Some ordinary text to select with the pointer. It runs over several lines so a drag can cover a good part of it.</p>
+            <span id=w>Wonderful</span>
+            <script>let menus=0;const r=()=>document.title=`NAME sel=${getSelection().toString().length} menus=${menus}`;
+            document.addEventListener('selectionchange',r);oncontextmenu=()=>{menus++;r()};setInterval(r,100);</script>
+            """;
+        var log = new StringBuilder();
+        var (browserA, windowA, rootA) = Open(page.Replace("NAME", "PageA"), "PageA", app: true, path);
+        Process? browserB = null;
+        string rootB = "";
+        try
+        {
+            (browserB, nint windowB, rootB) = Open(page.Replace("NAME", "PageB"), "PageB", app: true, path);
+            int PageTop(nint window) => BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - Desktop.BoundsOf(window).Top;
+            int topA = PageTop(windowA), topB = PageTop(windowB);
+            string Titles() => $"A '{WindowInfo.Title(windowA)}' B '{WindowInfo.Title(windowB)}'";
+            TwoViews(windowA, windowB, (_, _) => { }, (viewA, viewB, enter, at) =>
+            {
+                void Use(PipWindow view, nint window, int top, string step)
+                {
+                    enter(view);
+                    // A drag across the text.
+                    Desktop.SlideMouse(at(view, new Point(40, top + 45)));
+                    Thread.Sleep(100);
+                    Desktop.MouseButton(true);
+                    for (int i = 1; i <= 8; i++) { Desktop.SlideMouse(at(view, new Point(40 + i * 45, top + 45 + i * 8))); Thread.Sleep(60); }
+                    Desktop.MouseButton(false);
+                    Thread.Sleep(400);
+                    log.AppendLine($"{step} drag: {Titles()}");
+                    // A double-click on one word.
+                    Desktop.SlideMouse(at(view, new Point(120, top + 285)));
+                    Thread.Sleep(150);
+                    for (int i = 0; i < 2; i++) { mouse_event(0x02, 0, 0, 0, 0); Thread.Sleep(30); mouse_event(0x04, 0, 0, 0, 0); Thread.Sleep(60); }
+                    Thread.Sleep(400);
+                    log.AppendLine($"{step} double: {Titles()}");
+                    // A right-click on the page: its menu, next to the pointer.
+                    Point spot = at(view, new Point(300, top + 400));
+                    Desktop.SlideMouse(spot);
+                    ClickHere(0x08, 0x10);
+                    Rectangle? menu = null;
+                    Desktop.WaitFor(() => (menu = OpenMenu(window)) is not null, 3000);
+                    bool near = menu is { } shown && Rectangle.Inflate(shown, 60, 60).Contains(spot);
+                    log.AppendLine($"{step} menu: {Titles()} open={menu is not null} near={near} at {menu} pointer {spot} other open={OpenMenu(window == windowA ? windowB : windowA) is not null}");
+                    Desktop.Press(Keys.Escape);
+                    Desktop.WaitFor(() => OpenMenu(window) is null, 2000);
+                    Thread.Sleep(300);
+                }
+                Use(viewA, windowA, topA, "A1");
+                Use(viewB, windowB, topB, "B1");
+                Use(viewA, windowA, topA, "A2");
+            }, log);
+        }
+        finally
+        {
+            Close(browserA, rootA);
+            if (browserB is not null) Close(browserB, rootB);
+        }
+
+        string report = log.ToString();
+        output.WriteLine(report);
+        Assert.DoesNotContain("EXC ", report);
+        int Number(string step, string what, char which)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(report, $@"{step} {what}: .*?Page{which} sel=(\d+) menus=(\d+)");
+            Assert.True(match.Success, $"No {which} at {step} {what}: {report}");
+            return int.Parse(match.Groups[what == "menu" ? 2 : 1].Value);
+        }
+        foreach (string step in new[] { "A1", "B1", "A2" })
+        {
+            char used = step[0], other = used == 'A' ? 'B' : 'A';
+            Assert.True(Number(step, "drag", used) > 20, $"{step}: the drag selected too little: {report}");
+            Assert.True(Number(step, "double", used) == "Wonderful".Length, $"{step}: the double-click didn't select the word: {report}");
+            Assert.Matches($@"{step} menu: .*open=True near=True .*other open=False", report);
+        }
+        // Each page's menu count goes up only while its own view is used.
+        Assert.Equal(1, Number("A1", "menu", 'A')); Assert.Equal(0, Number("A1", "menu", 'B'));
+        Assert.Equal(1, Number("B1", "menu", 'A')); Assert.Equal(1, Number("B1", "menu", 'B'));
+        Assert.Equal(2, Number("A2", "menu", 'A')); Assert.Equal(1, Number("A2", "menu", 'B'));
+        Assert.Contains("after closing: A hidden=False B hidden=False", report);
+    }
+
+    /// <summary>
+    /// Enhanced hover in two browsers at once: the page under the pointer keeps its hover, the one just left loses it,
+    /// there and back, although both hidden browsers park in the same place.
+    /// </summary>
+    [NativeHoverFact(true)]
+    public void Enhanced_hover_follows_the_pointer_between_two_views()
+    {
+        string path = BrowserCases().Select(c => (string)c[0]).First(p => Path.GetFileName(p) == "chrome.exe");
+        Assert.True(File.Exists(Path.Combine(AppContext.BaseDirectory, "WinScreen.Hover.dll")), "Build the native x64 helper before this runtime test.");
+        const string page = """
+            <!doctype html><title>NAME css=none</title><style>body{margin:0}#a{position:fixed;left:0;top:0;width:60vw;height:70vh}</style>
+            <section id=a>A</section>
+            <script>setInterval(()=>{let x=document.querySelector('section:hover');document.title=`NAME css=${x?.id||'none'} visibility=${document.visibilityState}`},30)</script>
+            """;
+        var log = new StringBuilder();
+        var (browserA, windowA, rootA) = Open(page.Replace("NAME", "HoverA"), "HoverA", app: true, path);
+        Process? browserB = null;
+        string rootB = "";
+        try
+        {
+            (browserB, nint windowB, rootB) = Open(page.Replace("NAME", "HoverB"), "HoverB", app: true, path);
+            int PageTop(nint window) => BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - Desktop.BoundsOf(window).Top;
+            int topA = PageTop(windowA), topB = PageTop(windowB);
+            TwoViews(windowA, windowB, (viewA, viewB) => { viewA.SetEnhancedHover(true); viewB.SetEnhancedHover(true); }, (viewA, viewB, enter, at) =>
+            {
+                bool Shows(nint window, string id) => WindowInfo.Title(window).Contains($"css={id}");
+                void Hover(PipWindow view, nint window, int top, nint other, string step)
+                {
+                    enter(view);
+                    Desktop.SlideMouse(at(view, new Point(150, top + 140)));
+                    bool on = Desktop.WaitFor(() => Shows(window, "a"), 3000);
+                    bool held = on;
+                    for (int sample = 0; sample < 6 && held; sample++) { Thread.Sleep(400); held = Shows(window, "a"); }
+                    bool otherCleared = Desktop.WaitFor(() => Shows(other, "none"), 3000);
+                    log.AppendLine($"{step}: on={on} held={held} otherCleared={otherCleared} A '{WindowInfo.Title(windowA)}' B '{WindowInfo.Title(windowB)}' status {view.LiveInteraction?.HoverStatus}");
+                }
+                Hover(viewA, windowA, topA, windowB, "A1");
+                Hover(viewB, windowB, topB, windowA, "B1");
+                Hover(viewA, windowA, topA, windowB, "A2");
+            }, log);
+        }
+        finally
+        {
+            Close(browserA, rootA);
+            if (browserB is not null) Close(browserB, rootB);
+        }
+        string report = log.ToString();
+        output.WriteLine(report);
+        Assert.DoesNotContain("EXC ", report);
+        foreach (string step in new[] { "A1", "B1", "A2" })
+            Assert.Matches($@"{step}: on=True held=True otherCleared=True", report);
+    }
+
+    /// <summary>
+    /// A page and a Store app, each in its own view at once. They take input in different ways (posted messages and
+    /// UI Automation); clicks and keys still reach only the one under the pointer, there and back.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BrowserCases))]
+    public void A_page_and_a_store_app_in_two_views_each_get_only_their_own_input(string path)
+    {
+        nint calculator = StoreAppInputTests.OpenCalculator();
+        if (calculator == 0) return; // No calculator, or one that's someone else's.
+        const string page = """
+            <!doctype html><title>PageA c=0 val=</title>
+            <style>body{margin:0;font:20px sans-serif}#b{position:fixed;left:40px;top:40px;width:220px;height:70px}
+            #i{position:fixed;left:40px;top:160px;width:240px;font-size:24px}</style>
+            <button id=b>Press</button><input id=i>
+            <script>let c=0;const r=()=>document.title=`PageA c=${c} val=${i.value}`;b.onclick=()=>{c++;r()};i.oninput=r;setInterval(r,100);</script>
+            """;
+        var log = new StringBuilder();
+        Process? browser = null;
+        string root = "";
+        try
+        {
+            (browser, nint window, root) = Open(page, "PageA", app: true, path);
+            int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - Desktop.BoundsOf(window).Top;
+            string State() => $"page '{WindowInfo.Title(window)}' calculator '{StoreAppInputTests.Display(calculator)}'";
+            TwoViews(window, calculator, (_, _) => { }, (viewA, viewB, enter, at) =>
+            {
+                Point Button(string name)
+                {
+                    var control = Assert.Single(BrowserAccessibility.Read(calculator), c => c.Name == name && c.Bounds.Width > 0);
+                    Rectangle frame = Desktop.BoundsOf(calculator);
+                    return at(viewB, new Point(control.Bounds.Left + control.Bounds.Width / 2 - frame.Left, control.Bounds.Top + control.Bounds.Height / 2 - frame.Top));
+                }
+                void Page(string keys, string step)
+                {
+                    enter(viewA);
+                    Desktop.SlideMouse(at(viewA, new Point(150, top + 75))); ClickHere();
+                    Desktop.SlideMouse(at(viewA, new Point(150, top + 175))); ClickHere();
+                    foreach (char key in keys) Desktop.Press((Keys)char.ToUpperInvariant(key));
+                    Thread.Sleep(400);
+                    log.AppendLine($"{step}: {State()}");
+                    log.AppendLine($"  {step} views: A {viewA.StateDescription}; B {viewB.StateDescription}; front {WindowInfo.ClassName(User32.GetForegroundWindow())} '{WindowInfo.Title(User32.GetForegroundWindow())}'");
+                }
+                Page("ab", "A1");
+                enter(viewB);
+                foreach (string name in new[] { "Clear", "Seven", "Plus", "Eight", "Equals" }) { Desktop.SlideMouse(Button(name)); ClickHere(); }
+                Desktop.Press(Keys.Multiply); Desktop.Press(Keys.D2); Desktop.Press(Keys.Enter);
+                Desktop.WaitFor(() => StoreAppInputTests.Display(calculator) == "Display is 30", 3000);
+                log.AppendLine($"B1: {State()}");
+                Page("c", "A2");
+            }, log);
+        }
+        finally
+        {
+            if (browser is not null) Close(browser, root);
+            StoreAppInputTests.Close(calculator);
+        }
+        string report = log.ToString();
+        output.WriteLine(report);
+        Assert.DoesNotContain("EXC ", report);
+        Assert.Contains("A1: page 'PageA c=1 val=ab' calculator 'Display is 0'", report);
+        Assert.Contains("B1: page 'PageA c=1 val=ab' calculator 'Display is 30'", report);
+        Assert.Contains("A2: page 'PageA c=2 val=abc' calculator 'Display is 30'", report);
+        Assert.Contains("after closing: A hidden=False B hidden=False", report);
+    }
+
+    /// <summary>
     /// Windows drops a low-level mouse hook that answers slowly, and every pointer move on the desktop waits for
     /// it. The hook must stay cheap while a busy page is used through a view: moves, presses and wheel turns.
     /// </summary>

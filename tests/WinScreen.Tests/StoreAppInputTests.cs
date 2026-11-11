@@ -17,7 +17,7 @@ namespace WinScreen.Tests;
 public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     /// <summary>Opens a calculator of its own, or returns 0 when there is none or one is already open.</summary>
-    private static nint OpenCalculator()
+    internal static nint OpenCalculator()
     {
         // One a previous test closed can take a moment to go.
         if (!Desktop.WaitFor(() => Desktop.FindWindow("ApplicationFrameWindow", "Calculator") == 0, 5000)) return 0;
@@ -32,14 +32,14 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
         return window;
     }
 
-    private static void Close(nint window)
+    internal static void Close(nint window)
     {
         if (window == 0 || !User32.IsWindow(window)) return;
         User32.PostMessage(window, User32.WM_CLOSE, 0, 0);
         Desktop.WaitFor(() => !User32.IsWindow(window) || !User32.IsWindowVisible(window), 5000);
     }
 
-    private static string Display(nint window) =>
+    internal static string Display(nint window) =>
         BrowserAccessibility.Read(window).FirstOrDefault(c => c.Name.StartsWith("Display is", StringComparison.Ordinal))?.Name ?? "(none)";
 
     /// <summary>Runs the steps on a worker with the view's thread pumping, as in the app.</summary>
