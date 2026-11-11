@@ -41,6 +41,15 @@ internal static class MenuStyle
     internal static Color Muted => Dark ? Color.FromArgb(160, 160, 160) : Color.FromArgb(110, 110, 110);
     internal static Color Disabled => Dark ? Color.FromArgb(120, 120, 120) : Color.FromArgb(160, 160, 160);
     internal static Color Hover => Dark ? Color.FromArgb(61, 61, 61) : Color.FromArgb(234, 234, 234);
+
+    /// <summary>Whether menus show a blurred glimpse of what is behind them, as Windows' Transparency effects asks.</summary>
+    internal static bool Translucent => Native.Translucency.On;
+    /// <summary>What a menu's background is painted: see-through over the blur when translucent, its colour otherwise.</summary>
+    internal static Color Ground => Translucent ? Color.Transparent : Back;
+    /// <summary>The highlight under the pointer: a soft wash over the blur, as Windows 11's menus have.</summary>
+    internal static Color HoverWash => !Translucent ? Hover : Dark ? Color.FromArgb(26, 255, 255, 255) : Color.FromArgb(20, 0, 0, 0);
+    /// <summary>The tint over the blur, lighter than a solid menu so what is behind shows through a little.</summary>
+    internal static Color Tint => Dark ? Color.FromArgb(0xD8, 40, 40, 40) : Color.FromArgb(0xE0, 245, 245, 245);
     internal static Color Line => Dark ? Color.FromArgb(70, 70, 70) : Color.FromArgb(222, 222, 222);
     internal static Color Accent => Dark ? Color.FromArgb(96, 205, 255) : Color.FromArgb(0, 95, 184);
     internal static Color AccentBack => Dark ? Color.FromArgb(40, 62, 76) : Color.FromArgb(221, 235, 247);
@@ -77,6 +86,7 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         menu.Opened += (_, _) => Round(menu);
         SubmenuEdge.Watch(menu);
         Prepare(menu);
+        menu.HandleCreated += (_, _) => { if (Blurred.TryGetValue(menu, out StrongBox<Color?>? applied)) applied.Value = null; };
     }
 
     /// <summary>
@@ -175,11 +185,20 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
     /// <summary>The space between an experimental command's words and its tag.</summary>
     private static int TagGap => MenuParts.Scale(8);
 
+    private static readonly ConditionalWeakTable<ToolStripDropDown, StrongBox<Color?>> Blurred = [];
+
     private static void Round(ToolStripDropDown menu)
     {
         if (!menu.IsHandleCreated) return;
         int round = DWMWCP_ROUND;
         Dwmapi.DwmSetWindowAttribute(menu.Handle, DWMWA_WINDOW_CORNER_PREFERENCE, in round, sizeof(int)); // Windows 11; refused before it.
+        // The blur behind follows Transparency effects and the light or dark look, which may have changed since.
+        Color? tint = MenuStyle.Translucent ? MenuStyle.Tint : null;
+        StrongBox<Color?> applied = Blurred.GetValue(menu, _ => new StrongBox<Color?>(null));
+        if (applied.Value == tint) return;
+        applied.Value = tint;
+        Native.Translucency.Apply(menu.Handle, tint);
+        menu.Invalidate(true);
     }
 
     private static GraphicsPath Rounded(Rectangle area, int radius)
@@ -196,8 +215,23 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
 
     protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
     {
-        using var brush = new SolidBrush(MenuStyle.Back);
+        // See-through over the blur Windows draws behind a translucent menu.
+        e.Graphics.CompositingMode = CompositingMode.SourceCopy;
+        using var brush = new SolidBrush(MenuStyle.Ground);
         e.Graphics.FillRectangle(brush, e.AffectedBounds);
+        e.Graphics.CompositingMode = CompositingMode.SourceOver;
+    }
+
+    /// <summary>
+    /// A row's words, drawn with DirectWrite: smoother, and see-through where they should be over a translucent menu,
+    /// which Windows' own text drawing isn't. Words set from the left may run a little past the room Windows measured.
+    /// </summary>
+    private static void DrawWords(ToolStripItemTextRenderEventArgs e)
+    {
+        Rectangle area = e.TextRectangle;
+        if ((e.TextFormat & (TextFormatFlags.Right | TextFormatFlags.HorizontalCenter)) == 0 && e.Item is not null)
+            area.Width = Math.Max(area.Width, e.Item.Width - area.Left);
+        Native.DirectText.DrawText(e.Graphics, e.Text, e.TextFont ?? MenuStyle.MenuFont, area, e.TextColor, e.TextFormat);
     }
 
     protected override void OnRenderImageMargin(ToolStripRenderEventArgs e) { } // No gutter behind the icons.
@@ -214,7 +248,7 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         var area = new Rectangle(MenuParts.Scale(4), 0, e.Item.Width - MenuParts.Scale(8), e.Item.Height);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         using GraphicsPath path = Rounded(area, MenuParts.Scale(4));
-        using var brush = new SolidBrush(MenuStyle.Hover);
+        using var brush = new SolidBrush(MenuStyle.HoverWash);
         e.Graphics.FillPath(brush, path);
     }
 
@@ -234,10 +268,10 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         if (e.Item is NoteRow note)
         {
             e.TextColor = MenuStyle.Muted;
-            base.OnRenderItemText(e);
+            DrawWords(e);
             if (note.How.Length == 0) return;
             var how = new Rectangle(note.HowLeft, 0, Math.Max(0, e.Item.Width - note.HowLeft), e.Item.Height);
-            TextRenderer.DrawText(e.Graphics, note.How, e.TextFont, how, MenuStyle.Text,
+            Native.DirectText.DrawText(e.Graphics, note.How, e.TextFont ?? MenuStyle.MenuFont, how, MenuStyle.Text,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
             return;
         }
@@ -245,16 +279,16 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         else if (e.Item.Name == TitleName)
         {
             // Drawn here: a line that can't be chosen would otherwise be greyed like an unavailable command.
-            TextRenderer.DrawText(e.Graphics, e.Text, MenuStyle.MenuTitleFont, e.TextRectangle, MenuStyle.Text, e.TextFormat);
+            Native.DirectText.DrawText(e.Graphics, e.Text, MenuStyle.MenuTitleFont, e.TextRectangle, MenuStyle.Text, e.TextFormat);
             return;
         }
         else if (!e.Item.Enabled) e.TextColor = MenuStyle.Disabled;
         else if (e.Item is ToolStripMenuItem { ShortcutKeyDisplayString: { } keys } && e.Text == keys) e.TextColor = MenuStyle.Muted;
         else if (e.Item is ToolStripMenuItem { Checked: true }) e.TextColor = MenuStyle.Accent;
         else e.TextColor = MenuStyle.Text;
-        base.OnRenderItemText(e);
+        DrawWords(e);
         if (shortcut || !MenuParts.IsExperimental(e.Item) || string.IsNullOrEmpty(e.Text)) return;
-        int words = TextRenderer.MeasureText(e.Graphics, e.Text, e.TextFont, e.TextRectangle.Size, e.TextFormat).Width;
+        int words = Native.DirectText.MeasureText(e.Text, e.TextFont ?? MenuStyle.MenuFont, e.TextRectangle.Size, e.TextFormat).Width;
         MenuParts.DrawTag(e.Graphics, e.TextRectangle.Left + words + TagGap, e.Item.Height / 2, MenuParts.Scale, e.Item.Enabled);
     }
 

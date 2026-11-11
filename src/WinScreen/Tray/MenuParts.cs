@@ -180,7 +180,7 @@ internal static class MenuParts
     /// <summary>How big the tag is, for a size in pixels at 100% scaling turned into this display's.</summary>
     internal static Size TagSize(Func<int, int> unit)
     {
-        Size text = TextRenderer.MeasureText(TagText, MenuStyle.SmallFont, Size.Empty, TagFormat);
+        Size text = Native.DirectText.MeasureText(TagText, MenuStyle.SmallFont, Size.Empty, TagFormat);
         return new Size(text.Width + unit(12), text.Height + unit(4));
     }
 
@@ -195,7 +195,7 @@ internal static class MenuParts
         using (var back = new SolidBrush(enabled ? MenuStyle.TagBack : MenuStyle.Hover))
             g.FillPath(back, path);
         g.SmoothingMode = smoothing;
-        TextRenderer.DrawText(g, TagText, MenuStyle.SmallFont, area, enabled ? MenuStyle.TagText : MenuStyle.Disabled, TagFormat);
+        Native.DirectText.DrawText(g, TagText, MenuStyle.SmallFont, area, enabled ? MenuStyle.TagText : MenuStyle.Disabled, TagFormat);
     }
 
     /// <summary>A quiet line naming the group of commands under it. It can't be chosen.</summary>
@@ -267,7 +267,7 @@ internal sealed class NoteRow : ToolStripLabel
 
     private const TextFormatFlags Measure = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
 
-    private int Measured(string text) => TextRenderer.MeasureText(text, Font, Size.Empty, Measure).Width;
+    private int Measured(string text) => Native.DirectText.MeasureText(text, Font, Size.Empty, Measure).Width;
 
     private IEnumerable<NoteRow> Siblings => Owner?.Items.OfType<NoteRow>() ?? [this];
 
@@ -352,12 +352,12 @@ internal sealed class OpacityRow : ToolStripControlHost
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(MenuStyle.Back);
+            g.Clear(MenuStyle.Ground);
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             Color text = Enabled ? MenuStyle.Text : MenuStyle.Disabled, accent = Enabled ? MenuStyle.Accent : MenuStyle.Disabled;
             var top = new Rectangle(Left0 - MenuParts.Scale(4), 0, Right0 - Left0 + MenuParts.Scale(8), MenuParts.Scale(22));
-            TextRenderer.DrawText(g, _title, MenuStyle.MenuFont, top, text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, _value + "%", MenuStyle.MenuFont, top, Enabled ? MenuStyle.Muted : MenuStyle.Disabled,
+            Native.DirectText.DrawText(g, _title, MenuStyle.MenuFont, top, text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            Native.DirectText.DrawText(g, _value + "%", MenuStyle.MenuFont, top, Enabled ? MenuStyle.Muted : MenuStyle.Disabled,
                 TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             int thick = MenuParts.Scale(4), radius = MenuParts.Scale(Focused ? 8 : 7);
             using (var rest = new Pen(MenuStyle.Line, thick) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round })
@@ -485,7 +485,7 @@ internal sealed class PlacementRow : ToolStripControlHost
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(MenuStyle.Back);
+            g.Clear(MenuStyle.Ground);
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             for (int index = 0; index < Places.Length; index++)
             {

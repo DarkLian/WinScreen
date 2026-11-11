@@ -874,7 +874,7 @@ internal static class ProgramIcons
     }
 
     private static Dictionary<string, nint> _running = new(StringComparer.OrdinalIgnoreCase);
-    private static long _runningAt = long.MinValue;
+    private static long _runningAt = -100_000; // Long enough ago that the first look runs.
 
     /// <summary>A window of each program running now, looked up at most every half minute: rows are drawn often.</summary>
     private static Dictionary<string, nint> Running()
