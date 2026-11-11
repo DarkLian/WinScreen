@@ -25,6 +25,7 @@ internal static class Program
             RecoveryWatcher.WatchUntilRecovered(parent, RecoverLeftWindows);
             return;
         }
+        if (Elevation.WaitingFor(arguments) is { } previous) Elevation.WaitForExit(previous);
 
         VelopackApp.Build()
             .SetAutoApplyOnStartup(false)
@@ -32,7 +33,8 @@ internal static class Program
             .OnBeforeUninstallFastCallback(_ =>
             {
                 // First, so WinScreen stops starting at sign-in even if the running copy won't close.
-                new StartWithWindows().IsOn = false;
+                try { new StartWithWindows().IsOn = false; }
+                catch (IOException) { } // A task only an administrator can remove; it fails harmlessly once the app is gone.
                 RunningInstance.Close();
             })
             .Run();
@@ -55,6 +57,11 @@ internal static class Program
             MessageBox.Show(T("errors.app.alreadyRunning"), "WinScreen");
             return;
         }
+
+        // Asked once: a copy started as administrator that Windows still ran without the rights carries on as it is.
+        if (settings.RunAsAdministrator && !Native.ProcessInfo.SelfElevated && !arguments.Contains(Elevation.ElevatedArgument) &&
+            Elevation.StartElevatedCopy())
+            return;
 
         var windows = new WindowController(settings.ExcludedPrograms,
             new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")));

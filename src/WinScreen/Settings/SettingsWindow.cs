@@ -104,6 +104,7 @@ private readonly ErrorProvider _errors = new();
     };
 
     private readonly CheckBox _startWithWindows = new SwitchBox { Text = T("settings.startWithWindows"), AutoSize = true };
+    private readonly CheckBox _runAsAdministrator = new SwitchBox { Text = T("settings.admin"), AutoSize = true };
 
     private readonly CheckBox _showToolbar = new SwitchBox
         { Text = T("settings.toolbar.enable"), AutoSize = true };
@@ -600,6 +601,7 @@ private readonly ErrorProvider _errors = new();
         draft.AutomaticUpdates = _automaticUpdates.Checked;
         draft.ExperimentalFeatures = _experimental.Checked;
         draft.StartWithWindows = _startWithWindows.Checked;
+        draft.RunAsAdministrator = _runAsAdministrator.Checked;
         draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
         draft.Theme = Themes[Math.Max(0, _theme.SelectedIndex)];
         draft.PauseInFullScreen = _pauseInFullScreen.Checked;
@@ -870,7 +872,7 @@ private readonly ErrorProvider _errors = new();
         box.Checked = on;
     }
 
-    private void LoadValues(AppSettings? values = null)
+    internal void LoadValues(AppSettings? values = null)
     {
         values ??= _pendingImport ?? _settings;
         _excluded.Items.Clear();
@@ -885,6 +887,7 @@ private readonly ErrorProvider _errors = new();
         _included.Items.AddRange(values.IncludedPrograms.Cast<object>().ToArray());
         _setups.Items.AddRange(values.SavedSetups.Cast<object>().ToArray());
         _startWithWindows.Checked = _startup.IsOn;
+        _runAsAdministrator.Checked = values.RunAsAdministrator;
         _showToolbar.Checked = values.ShowToolbar;
         ToolbarPreferences toolbar = values.Toolbar.Validated();
         _toolbarPlacement.SelectedIndex = (int)toolbar.Placement;
@@ -1026,7 +1029,8 @@ private readonly ErrorProvider _errors = new();
         Control language = SettingRow(T("settings.language").TrimEnd(':', '：'), _language);
         Control theme = SettingRow(T("settings.theme").TrimEnd(':', '：'), _theme);
 
-        var startup = new List<Control> { language, theme, _startWithWindows, _showNotifications, _automaticUpdates };
+        var startup = new List<Control> { language, theme, _startWithWindows, _runAsAdministrator, Note(T("settings.admin.help")),
+            _showNotifications, _automaticUpdates };
         bool updatesWork = VelopackUpdateSession.IsConfigured && VelopackUpdateSession.IsInstalled;
         _automaticUpdates.Enabled = updatesWork;
         if (!VelopackUpdateSession.IsConfigured)

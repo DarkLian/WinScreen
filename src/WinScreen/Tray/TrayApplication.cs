@@ -340,6 +340,7 @@ public sealed class TrayApplication : ApplicationContext
 
         try
         {
+            _startup.AsAdministrator = _settings.RunAsAdministrator;
             if (_settings.StartWithWindows is { } startup) _startup.IsOn = startup;
             _settings.WelcomeShown = true;
             _settings.Save(_settingsPath);
@@ -364,7 +365,9 @@ public sealed class TrayApplication : ApplicationContext
             return problems;
 
         object? startupValue = _startup.ReadValue();
-        bool startupChanged = settings.StartWithWindows is { } requestedStartup && requestedStartup != (startupValue is not null);
+        bool adminChanged = settings.RunAsAdministrator != _settings.RunAsAdministrator;
+        bool startupChanged = settings.StartWithWindows is { } requestedStartup &&
+            (adminChanged || requestedStartup != (startupValue is not null));
         if (!_hotkeys.TryReplaceBindings(desired, () =>
             {
                 try
@@ -374,11 +377,13 @@ public sealed class TrayApplication : ApplicationContext
                         File.Copy(_settingsPath, _settingsPath + ".before-import-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"));
                         BackupFiles.Prune(_settingsPath, ".before-import-");
                     }
+                    _startup.AsAdministrator = settings.RunAsAdministrator;
                     if (startupChanged) _startup.IsOn = settings.StartWithWindows!.Value;
                     settings.Save(_settingsPath);
                 }
                 catch
                 {
+                    _startup.AsAdministrator = _settings.RunAsAdministrator;
                     if (startupChanged) _startup.RestoreValue(startupValue);
                     throw;
                 }
@@ -389,7 +394,28 @@ public sealed class TrayApplication : ApplicationContext
         _setupNone.Clear();
         ApplyPreferences(experimentalBefore);
         if (_settings.Theme != themeBefore) ChangeTheme();
+        if (adminChanged && _settings.RunAsAdministrator && !ProcessInfo.SelfElevated)
+            _toolbar.BeginInvoke(RestartAsAdministrator); // After Settings has finished saving.
         return [];
+    }
+
+    /// <summary>
+    /// Hands over to a copy running as administrator, which Windows asks about first. If the person says no, the
+    /// choice goes back to off, since it can't be had without that.
+    /// </summary>
+    private void RestartAsAdministrator()
+    {
+        if (Elevation.StartElevatedCopy())
+        {
+            ExitThread();
+            return;
+        }
+        _settings.RunAsAdministrator = false;
+        _startup.AsAdministrator = false;
+        try { _settings.Save(_settingsPath); }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { }
+        if (_settingsWindow is { IsDisposed: false } open) open.LoadValues(_settings);
+        Alert(T("settings.admin"), T("settings.admin.declined"), ToolTipIcon.Info);
     }
 
     /// <summary>

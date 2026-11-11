@@ -268,6 +268,9 @@ public sealed class AppSettings
     public List<PipSourceBookmark> PipBookmarks { get; set; } = [];
     public bool? StartWithWindows { get; set; }
 
+    /// <summary>WinScreen runs as administrator, so it can also change administrator apps' windows.</summary>
+    public bool RunAsAdministrator { get; set; }
+
     /// <summary>True once the first-run hint has been shown, so it doesn't return at every sign-in.</summary>
     public bool WelcomeShown { get; set; }
 
