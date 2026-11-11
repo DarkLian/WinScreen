@@ -45,6 +45,7 @@ public sealed class ShrinkTile : Form
         Size = new Size(_width, Dpi.Scale(TileHeight, dpi));
         _tip.SetToolTip(this, T("shrink.controls"));
         _menu.Items.Add(T("window.show"), null, (_, _) => Close());
+        Tray.MenuRenderer.Apply(_menu);
         ContextMenuStrip = _menu;
         _watch.Tick += (_, _) => FollowSource();
 

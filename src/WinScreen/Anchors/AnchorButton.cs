@@ -57,6 +57,7 @@ internal sealed class AnchorButton : Form
         _menu.Items.Add(T("anchor.closeWindow"), null, (_, _) => CloseTarget());
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(T("anchor.remove"), null, (_, _) => Close());
+        Tray.MenuRenderer.Apply(_menu);
         ContextMenuStrip = _menu;
     }
 

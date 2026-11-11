@@ -1156,6 +1156,7 @@ public sealed class TrayApplication : ApplicationContext
         var builder = CreateWindowMenuBuilder(() => identity);
         builder.PopulateArrange(menu.Items);
         builder.Refresh(menu.Items);
+        MenuRenderer.Apply(menu);
 
         // A menu only closes on an outside click while its program has the focus.
         menu.Closed += (_, _) =>
