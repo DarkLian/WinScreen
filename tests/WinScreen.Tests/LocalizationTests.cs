@@ -189,12 +189,27 @@ public sealed class LocalizationTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// No button or menu entry ends in "..." or "…": the words alone say what it does, as in Windows 11's own menus. A
+    /// title cut short where it is shown still ends in "…", and that is added where it is cut, not here.
+    /// </summary>
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-Hans")]
+    [InlineData("zh-Hant")]
+    public void No_label_ends_in_an_ellipsis(string language)
+    {
+        string[] trailing = UiText.GetCatalog(language).Where(entry => entry.Value.TrimEnd().EndsWith("...", StringComparison.Ordinal) ||
+            entry.Value.TrimEnd().EndsWith('…')).Select(entry => entry.Key).ToArray();
+        Assert.Empty(trailing);
+    }
+
     [Theory]
     // Reviewed catalog values, sorted by stable key with NUL separators.
     // Update deliberately when adding labels; existing values retain their migration output.
-    [InlineData("en", "D728C056A5FEA3418D9984B64C2A79E989F8998E7D00664DB0ACA9C39760149C")]
-    [InlineData("zh-Hans", "0323896CD4C36C7BE15805ABA3541D190C54F3772DAAE58246F0F6B37FDFDCFA")]
-    [InlineData("zh-Hant", "FEA5E1FE7E8EAA02E622D6B00388280D8B48AB0972E477985A84E6B5F17AF230")]
+    [InlineData("en", "690AC1CC7F7EF4C88CB7591BCE4A5FE1AAD6FB8F3D8C30AC4155D98DA938A15A")]
+    [InlineData("zh-Hans", "116281371629D2694ED11C0A329CA814F1E8AC2DFC17604BCC88A6DCE78BE532")]
+    [InlineData("zh-Hant", "1DE80984915D1FEA5E4C4F40833787F7929100FA0DA17CD4C82A9B48CC896BE7")]
     public void Every_translation_matches_the_reviewed_catalog(string language, string expectedDigest)
     {
         UiText.Initialize(language);
