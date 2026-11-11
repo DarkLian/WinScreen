@@ -123,7 +123,22 @@ internal static unsafe class DirectText
         return (name, weight);
     }
 
-    private static float PixelSize(Font font) => font.SizeInPoints * 96f / 72f;
+    /// <summary>
+    /// Pixels per inch for type, as Windows' own text drawing uses it: the screen's, so a font is just as big drawn
+    /// either way, at any display scaling.
+    /// </summary>
+    private static readonly float TypeDpi = ReadTypeDpi();
+
+    private static float ReadTypeDpi()
+    {
+        try { using Graphics screen = Graphics.FromHwnd(0); return screen.DpiY; }
+        catch (Exception e) when (e is ExternalException or ArgumentException) { return 96f; }
+    }
+
+    private static float PixelSize(Font font) => font.Unit == GraphicsUnit.Pixel ? font.Size : font.SizeInPoints * TypeDpi / 72f;
+
+    /// <summary>One drawing at a time: the surface and the cached layouts are shared, and Direct2D's here is for one thread.</summary>
+    private static readonly Lock Gate = new();
 
     private static nint Format(Font font, TextFormatFlags flags)
     {
@@ -191,6 +206,11 @@ internal static unsafe class DirectText
     internal static Size MeasureText(string? text, Font font, Size proposed, TextFormatFlags flags)
     {
         if (!Available) return TextRenderer.MeasureText(text, font, proposed, flags);
+        lock (Gate) return Measured(text, font, proposed, flags);
+    }
+
+    private static Size Measured(string? text, Font font, Size proposed, TextFormatFlags flags)
+    {
         string words = Shown(string.IsNullOrEmpty(text) ? " " : text, flags);
         bool wraps = (flags & TextFormatFlags.WordBreak) != 0 && (flags & TextFormatFlags.SingleLine) == 0 && proposed.Width > 0;
         int padding = Padding(font, flags);
@@ -245,6 +265,12 @@ internal static unsafe class DirectText
     {
         if (string.IsNullOrEmpty(text) || bounds.Width <= 0 || bounds.Height <= 0) return;
         if (!Available || dc is not Graphics graphics) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; }
+        lock (Gate) Draw(graphics, text, font, bounds, color, flags);
+    }
+
+    private static void Draw(Graphics graphics, string text, Font font, Rectangle bounds, Color color, TextFormatFlags flags)
+    {
+        IDeviceContext dc = graphics;
         int padding = Padding(font, flags);
         var inner = Rectangle.FromLTRB(bounds.Left + padding, bounds.Top, bounds.Right - padding, bounds.Bottom);
         bool single = (flags & TextFormatFlags.SingleLine) != 0 || (flags & TextFormatFlags.WordBreak) == 0;
