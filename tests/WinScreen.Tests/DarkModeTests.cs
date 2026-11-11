@@ -23,10 +23,16 @@ public class DarkModeTests
     private static BlockingCollection<Action> StartUiThread()
     {
         var work = new BlockingCollection<Action>();
+        // Its windows outlive each test, so it keeps answering their messages between tests. A thread that only waited
+        // left them unanswered, and anything that writes to every window of the process waited on them for good:
+        // changing between light and dark in another test (WinForms' colour mode) stopped there.
         var thread = new Thread(() =>
         {
-            foreach (Action action in work.GetConsumingEnumerable())
-                action();
+            while (!work.IsCompleted)
+            {
+                if (work.TryTake(out Action? action, 10)) action();
+                Application.DoEvents();
+            }
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
