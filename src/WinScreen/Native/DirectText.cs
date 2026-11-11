@@ -44,6 +44,44 @@ internal static unsafe class DirectText
     }
 
     private static readonly nint Factory, Write, Target;
+
+    // The surface text is drawn on first: see-through, then laid over what is being drawn. Drawing straight onto a
+    // device context went wrong where the context doesn't carry the colours under it, as for a picture.
+    private static nint _surfaceDc, _surface, _bits;
+    private static int _surfaceWidth, _surfaceHeight;
+
+    [DllImport("gdi32.dll")] private static extern nint CreateCompatibleDC(nint dc);
+    [DllImport("gdi32.dll")] private static extern nint SelectObject(nint dc, nint thing);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(nint thing);
+    [DllImport("gdi32.dll")] private static extern nint CreateDIBSection(nint dc, in BitmapInfo info, uint usage, out nint bits, nint section, uint offset);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BitmapInfo
+    {
+        public int Size, Width, Height;
+        public short Planes, BitCount;
+        public int Compression, SizeImage, XPelsPerMeter, YPelsPerMeter, ClrUsed, ClrImportant;
+    }
+
+    /// <summary>A surface at least this big, its pixels see-through.</summary>
+    private static bool Surface(int width, int height)
+    {
+        if (width > _surfaceWidth || height > _surfaceHeight)
+        {
+            int w = Math.Max(width, _surfaceWidth), h = Math.Max(height, _surfaceHeight);
+            var info = new BitmapInfo { Size = Marshal.SizeOf<BitmapInfo>(), Width = w, Height = -h, Planes = 1, BitCount = 32 };
+            nint made = CreateDIBSection(0, info, 0, out nint bits, 0, 0);
+            if (made == 0) return false;
+            if (_surfaceDc == 0) _surfaceDc = CreateCompatibleDC(0);
+            SelectObject(_surfaceDc, made);
+            if (_surface != 0) DeleteObject(_surface);
+            (_surface, _bits, _surfaceWidth, _surfaceHeight) = (made, bits, w, h);
+        }
+        for (int row = 0; row < height; row++)
+            new Span<byte>((byte*)_bits + (long)row * _surfaceWidth * 4, width * 4).Clear();
+        return true;
+    }
+
     private static readonly Dictionary<(string, float, int, int), nint> Formats = [];
     private static readonly Dictionary<nint, nint> Ellipses = [];
 
@@ -55,10 +93,7 @@ internal static unsafe class DirectText
         try
         {
             if (D2D1CreateFactory(0, FactoryId, 0, out Factory) < 0 || DWriteCreateFactory(0, WriteId, out Write) < 0) return;
-            var properties = new RenderTargetProperties
-            {
-                Type = 0, Format = 87 /* B8G8R8A8_UNORM */, AlphaMode = 1 /* premultiplied */, DpiX = 96, DpiY = 96,
-            };
+            var properties = new RenderTargetProperties { Type = 0, Format = 87 /* B8G8R8A8_UNORM */, AlphaMode = 1 /* premultiplied */, DpiX = 96, DpiY = 96 };
             nint target;
             if (Call(Factory, 16, &properties, &target) < 0) return; // CreateDCRenderTarget
             Target = target;
@@ -183,14 +218,28 @@ internal static unsafe class DirectText
         DrawText(dc, text, font, new Rectangle(at, size), color, flags);
     }
 
-    internal static void DrawText(IDeviceContext dc, string? text, Font font, Point at, Color color, Color back, TextFormatFlags flags = TextFormatFlags.Default) =>
-        DrawText(dc, text, font, at, color, flags);
+    internal static void DrawText(IDeviceContext dc, string? text, Font font, Point at, Color color, Color back, TextFormatFlags flags = TextFormatFlags.Default)
+    {
+        Size size = MeasureText(text, font, Size.Empty, flags | TextFormatFlags.SingleLine);
+        DrawText(dc, text, font, new Rectangle(at, size), color, back, flags);
+    }
 
     internal static void DrawText(IDeviceContext dc, string? text, Font font, Rectangle bounds, Color color) =>
         DrawText(dc, text, font, bounds, color, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
-    internal static void DrawText(IDeviceContext dc, string? text, Font font, Rectangle bounds, Color color, Color back, TextFormatFlags flags) =>
+    /// <summary>
+    /// With a background colour, the box is painted in it first, as Windows' own text drawing does: drawn again and
+    /// again over itself, as text in a box Windows paints is, the words would otherwise grow darker each time.
+    /// </summary>
+    internal static void DrawText(IDeviceContext dc, string? text, Font font, Rectangle bounds, Color color, Color back, TextFormatFlags flags)
+    {
+        if (back.A > 0 && dc is Graphics graphics && Available)
+        {
+            using var brush = new SolidBrush(back);
+            graphics.FillRectangle(brush, bounds);
+        }
         DrawText(dc, text, font, bounds, color, flags);
+    }
 
     internal static void DrawText(IDeviceContext dc, string? text, Font font, Rectangle bounds, Color color, TextFormatFlags flags)
     {
@@ -202,40 +251,28 @@ internal static unsafe class DirectText
         nint layout = Layout(Shown(text, flags), font, inner.Width, inner.Height,
             single ? flags | TextFormatFlags.SingleLine : flags);
         if (layout == 0) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; }
-        // Where the graphics has been moved to, as Windows' own text drawing doesn't follow that.
-        var offset = Point.Empty;
-        if (!graphics.Transform.IsIdentity)
-        {
-            float[] elements = graphics.Transform.Elements;
-            offset = new Point((int)elements[4], (int)elements[5]);
-        }
-        Rectangle clip = Rectangle.Intersect(Rectangle.Ceiling(graphics.VisibleClipBounds), inner);
-        if (clip.Width <= 0 || clip.Height <= 0) { Release(layout); return; }
-        nint hdc = graphics.GetHdc();
         try
         {
-            // The render target covers only the words' box: it blends the text over what is already there.
-            var area = new Rect(inner.Left + offset.X, inner.Top + offset.Y, inner.Right + offset.X, inner.Bottom + offset.Y);
-            if (Call(Target, 57, (void*)hdc, &area) < 0) return; // BindDC
+            if (inner.Width <= 0 || inner.Height <= 0 || !Surface(inner.Width, inner.Height)) return;
+            var area = new Rect(0, 0, inner.Width, inner.Height);
+            if (Call(Target, 57, (void*)_surfaceDc, &area) < 0) return; // BindDC
             ((delegate* unmanaged[Stdcall]<nint, void>)Slot(Target, 48))(Target); // BeginDraw
             nint brush = 0;
             var paint = new ColorF { R = color.R / 255f, G = color.G / 255f, B = color.B / 255f, A = color.A / 255f };
             ((delegate* unmanaged[Stdcall]<nint, ColorF*, nint, nint*, int>)Slot(Target, 8))(Target, &paint, 0, &brush); // CreateSolidColorBrush
-            var origin = new Point2F();
-            var clipBox = new RectF(clip.Left - inner.Left, clip.Top - inner.Top, clip.Right - inner.Left, clip.Bottom - inner.Top);
-            ((delegate* unmanaged[Stdcall]<nint, RectF*, int, void>)Slot(Target, 45))(Target, &clipBox, 0); // PushAxisAlignedClip
-            ((delegate* unmanaged[Stdcall]<nint, Point2F, nint, nint, int, void>)Slot(Target, 28))(Target, origin, layout, brush, 0); // DrawTextLayout
-            ((delegate* unmanaged[Stdcall]<nint, void>)Slot(Target, 46))(Target); // PopAxisAlignedClip
+            ((delegate* unmanaged[Stdcall]<nint, Point2F, nint, nint, int, void>)Slot(Target, 28))(Target, new Point2F(), layout, brush, 0); // DrawTextLayout
             ulong tag1, tag2;
             int result = ((delegate* unmanaged[Stdcall]<nint, ulong*, ulong*, int>)Slot(Target, 49))(Target, &tag1, &tag2); // EndDraw
             Release(brush);
-            if (result < 0) TextRenderer.DrawText(dc, text, font, bounds, color, flags); // A lost target: drawn the old way once.
+            if (result < 0) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; } // Drawn the old way once.
+            // Laid over what is there, following the graphics' own clip and shift.
+            using var words = new Bitmap(inner.Width, inner.Height, _surfaceWidth * 4, System.Drawing.Imaging.PixelFormat.Format32bppPArgb, _bits);
+            System.Drawing.Drawing2D.CompositingMode mode = graphics.CompositingMode;
+            graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
+            graphics.DrawImageUnscaled(words, inner.Left, inner.Top);
+            graphics.CompositingMode = mode;
         }
-        finally
-        {
-            graphics.ReleaseHdc(hdc);
-            Release(layout);
-        }
+        finally { Release(layout); }
     }
 
     [StructLayout(LayoutKind.Sequential)]

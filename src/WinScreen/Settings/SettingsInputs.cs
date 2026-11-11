@@ -575,7 +575,7 @@ internal sealed class ThemedPicker : ComboBox
         bool caret = Native.User32.HideCaret(typing);
         try
         {
-            using var picture = new Bitmap(r.Right, r.Bottom, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+            using var picture = new Bitmap(r.Right, r.Bottom, System.Drawing.Imaging.PixelFormat.Format32bppPArgb); // Text blends over it as drawn.
             using (Graphics g = Graphics.FromImage(picture))
             {
                 g.Clear(BackColor);
