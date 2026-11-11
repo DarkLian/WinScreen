@@ -826,6 +826,138 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     }
 
     /// <summary>
+    /// Two pages, each used through its own view at the same time. The pointer goes straight from one view to the
+    /// other and back, and every click, key and wheel turn reaches the page under it and only that page. Both
+    /// originals are hidden on the same strip at the screen's edge, and a browser only takes a wheel turn when its
+    /// own window is at the point, so the one not in use must never take what was meant for the other.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BrowserCases))]
+    public void Two_pages_used_through_two_views_at_once_each_get_only_their_own_input(string path)
+    {
+        const string page = """
+            <!doctype html><title>NAME c=0 val= y=0</title>
+            <style>body{margin:0;font:20px sans-serif;height:6000px}#b{position:fixed;left:40px;top:40px;width:220px;height:70px}
+            #i{position:fixed;left:40px;top:160px;width:240px;font-size:24px}</style>
+            <button id=b>Press</button><input id=i>
+            <script>let c=0;const r=()=>document.title=`NAME c=${c} val=${i.value} y=${Math.round(scrollY)}`;
+            b.onclick=()=>{c++;r()};i.oninput=r;onscroll=r;setInterval(r,100);</script>
+            """;
+        var log = new StringBuilder();
+        var (browserA, windowA, rootA) = Open(page.Replace("NAME", "PageA"), "PageA", app: true, path);
+        Process? browserB = null;
+        string rootB = "";
+        nint handleA = 0, handleB = 0;
+        try
+        {
+            (browserB, nint windowB, rootB) = Open(page.Replace("NAME", "PageB"), "PageB", app: true, path);
+            // Where the page starts under each app window's title bar, measured while the windows are still shown.
+            int PageTop(nint window) => BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - Desktop.BoundsOf(window).Top;
+            int topA = PageTop(windowA), topB = PageTop(windowB);
+            // No lasting foreground rights for this process, as in use: that is when a view used to take the keys back.
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                var windows = new WindowController([]); // One controller for both, as in the app.
+                using var viewA = new PipWindow(windowA, windows) { AllowInteractive = true };
+                using var viewB = new PipWindow(windowB, windows) { AllowInteractive = true };
+                viewA.ShowOnTop();
+                viewA.Location = new Point(160, 220);
+                viewA.SetInteractive(true);
+                viewB.ShowOnTop();
+                viewB.Location = new Point(viewA.Right + 12, 220);
+                viewB.SetInteractive(true);
+                (handleA, handleB) = (viewA.Handle, viewB.Handle);
+                Assert.True(viewA.KeepsUpdating && viewB.KeepsUpdating, $"Not both hidden: {viewA.StateDescription}; {viewB.StateDescription}");
+                Point home = Desktop.CursorPosition();
+                log.AppendLine("start: front " + WindowInfo.ClassName(User32.GetForegroundWindow()) + (User32.GetForegroundWindow() == viewA.Handle ? " viewA" : User32.GetForegroundWindow() == viewB.Handle ? " viewB" : User32.GetForegroundWindow() == windowA ? " A" : User32.GetForegroundWindow() == windowB ? " B" : ""));
+                var driver = new Thread(() =>
+                {
+                    try
+                    {
+                        Use(viewA, windowA, topA, "ab", "A1");
+                        Use(viewB, windowB, topB, "cd", "B1");
+                        Use(viewA, windowA, topA, "e", "A2");
+                        log.AppendLine("parked A " + Desktop.BoundsOf(windowA) + " B " + Desktop.BoundsOf(windowB));
+                    }
+                    catch (Exception e) { log.AppendLine("EXC " + e); }
+                    finally { Desktop.MouseButton(false); Desktop.MoveMouse(home); }
+                });
+                driver.Start();
+                while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
+                viewA.Close();
+                viewB.Close();
+            });
+            log.AppendLine($"after closing: A hidden={WindowInfo.IsConcealed(windowA)} B hidden={WindowInfo.IsConcealed(windowB)}");
+
+            void Use(PipWindow view, nint window, int top, string keys, string step)
+            {
+                // Straight in from wherever the pointer is, the other view included.
+                Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
+                if (!Desktop.WaitFor(() => view.LiveInteraction is not null)) throw new InvalidOperationException("No visit started for " + step);
+                Point At(Point offset)
+                {
+                    var (area, shown) = view.LiveInteraction!.CurrentGeometry;
+                    return new Point(area.Left + (int)Math.Round((offset.X - shown.Left) * (double)area.Width / shown.Width),
+                        area.Top + (int)Math.Round((offset.Y - shown.Top) * (double)area.Height / shown.Height));
+                }
+                void ClickAt(Point offset)
+                {
+                    Desktop.SlideMouse(At(offset));
+                    Thread.Sleep(100);
+                    string Name(nint w) => w == windowA ? "A" : w == windowB ? "B" : w == handleA ? "viewA" : w == handleB ? "viewB" : w == 0 ? "none" : WindowInfo.ClassName(w);
+                    var seen = new List<string>();
+                    bool sampling = true;
+                    var sampler = new Thread(() => { while (Volatile.Read(ref sampling)) { string n = Name(User32.GetForegroundWindow()); if (seen.Count == 0 || seen[^1] != n) seen.Add(n); Thread.Sleep(2); } });
+                    sampler.Start();
+                    Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+                    Thread.Sleep(350);
+                    Volatile.Write(ref sampling, false);
+                    sampler.Join();
+                    log.AppendLine("    foreground: " + string.Join(">", seen));
+                    nint front = User32.GetForegroundWindow();
+                    log.AppendLine($"  {step} click {offset}: front={(front == windowA ? "A" : front == windowB ? "B" : front == handleA ? "viewA" : front == handleB ? "viewB" : WindowInfo.ClassName(front))} title '{WindowInfo.Title(window)}' visit={view.LiveInteraction is not null}");
+                }
+                ClickAt(new Point(150, top + 75)); // The button.
+                ClickAt(new Point(150, top + 175)); // The text box.
+                foreach (char key in keys) Desktop.Press((Keys)char.ToUpperInvariant(key));
+                Thread.Sleep(300);
+                Desktop.SlideMouse(At(new Point(500, top + 420)));
+                Thread.Sleep(150);
+                mouse_event(0x0800, 0, 0, unchecked((uint)-360), 0); // Three notches down.
+                Thread.Sleep(800);
+                log.AppendLine($"{step}: A '{WindowInfo.Title(windowA)}' B '{WindowInfo.Title(windowB)}' outcomes {string.Join(",", view.PressOutcomes)}");
+            }
+        }
+        finally
+        {
+            Close(browserA, rootA);
+            if (browserB is not null) Close(browserB, rootB);
+        }
+
+        string report = log.ToString();
+        output.WriteLine(report);
+        Assert.DoesNotContain("EXC ", report);
+        (int Clicks, string Text, int Y) Page(string step, char which)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(report,
+                $@"{step}: .*?{(which == 'A' ? "A 'PageA" : "B 'PageB")} c=(\d+) val=(\w*) y=(\d+)'");
+            Assert.True(match.Success, $"No {which} title at {step}: {report}");
+            return (int.Parse(match.Groups[1].Value), match.Groups[2].Value, int.Parse(match.Groups[3].Value));
+        }
+        // Each page changes only while its own view is in use.
+        var a1 = Page("A1", 'A'); var b1 = Page("A1", 'B');
+        Assert.True(a1.Clicks == 1 && a1.Text == "ab" && a1.Y > 0, report);
+        Assert.True(b1 == (0, "", 0), "Page B took input meant for A: " + report);
+        var a2 = Page("B1", 'A'); var b2 = Page("B1", 'B');
+        Assert.True(a2 == a1, "Page A took input meant for B: " + report);
+        Assert.True(b2.Clicks == 1 && b2.Text == "cd" && b2.Y > 0, report);
+        var a3 = Page("A2", 'A'); var b3 = Page("A2", 'B');
+        Assert.True(a3.Clicks == 2 && a3.Text == "abe" && a3.Y > a1.Y, report);
+        Assert.True(b3 == b2, "Page B took input meant for A on the way back: " + report);
+        Assert.Contains("after closing: A hidden=False B hidden=False", report);
+    }
+
+    /// <summary>
     /// Windows drops a low-level mouse hook that answers slowly, and every pointer move on the desktop waits for
     /// it. The hook must stay cheap while a busy page is used through a view: moves, presses and wheel turns.
     /// </summary>

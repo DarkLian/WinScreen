@@ -202,8 +202,16 @@ internal sealed class PipInteraction : IDisposable
         if (on)
         {
             if (!ShareInput || _stopping || _appBusy || _viewThread == 0 || _sourceThread == 0 || _viewThread == _sourceThread) return false;
-            if (Interlocked.CompareExchange(ref _sharing, 1, 0) == 0 && !AttachThreadInput(_viewThread, _sourceThread, true))
+            if (Interlocked.CompareExchange(ref _sharing, 1, 0) != 0) return false;
+            bool keysWithApp = User32.GetForegroundWindow() == _source;
+            if (!AttachThreadInput(_viewThread, _sourceThread, true))
+            {
                 Volatile.Write(ref _sharing, 0);
+                return false;
+            }
+            // Joined input state takes the view thread's own active window. Every view shares one thread, so that can
+            // be another view: with two views used directly, the keys went to a view instead of the app just clicked.
+            if (keysWithApp && User32.GetForegroundWindow() != _source) User32.SetForegroundWindow(_source);
             return false;
         }
         if (Interlocked.Exchange(ref _sharing, 0) != 1) return false;
