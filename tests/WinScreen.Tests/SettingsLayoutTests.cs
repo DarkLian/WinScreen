@@ -313,7 +313,7 @@ public sealed class SettingsLayoutTests
                         int inset = SettingsStyle.Unit(table, (column == 0 ? 18 : 12) + 4);
                         if (column == 0 && CommandCatalog.IsExperimental((AppCommand)row.Tag!))
                             inset += SettingsStyle.Unit(table, 8) + MenuParts.TagSize(value => SettingsStyle.Unit(table, value)).Width;
-                        int needs = TextRenderer.MeasureText(row.SubItems[column].Text, table.Font, Size.Empty, measure).Width + inset;
+                        int needs = Native.DirectText.MeasureText(row.SubItems[column].Text, table.Font, Size.Empty, measure).Width + inset; // As it is drawn.
                         Assert.True(needs <= table.Columns[column].Width,
                             $"{language}: \"{row.SubItems[column].Text}\" needs {needs}, has {table.Columns[column].Width}; columns " +
                             string.Join(", ", table.Columns.Cast<ColumnHeader>().Select(header => header.Width)) + $" in {table.ClientSize.Width}.");

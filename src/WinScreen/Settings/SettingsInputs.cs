@@ -296,7 +296,7 @@ internal sealed class HintTextBox : TextBox
         {
             using Graphics g = CreateGraphics();
             SettingsStyle.SoftText(g);
-            TextRenderer.DrawText(g, Hint, Font, Rectangle.FromLTRB(left, 0, ClientSize.Width, ClientSize.Height),
+            Native.DirectText.DrawText(g, Hint, Font, Rectangle.FromLTRB(left, 0, ClientSize.Width, ClientSize.Height),
                 Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, BackColor,
                 TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
                 TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
@@ -330,7 +330,7 @@ internal sealed class ThemedCombo : ComboBox
     /// <summary>Rows of the open list with room around the words; the box itself is as tall as every other box.</summary>
     private void FitHeight()
     {
-        ItemHeight = Math.Max(TextRenderer.MeasureText("Ag", Font).Height + Unit(12), Unit(26));
+        ItemHeight = Math.Max(Native.DirectText.MeasureText("Ag", Font).Height + Unit(12), Unit(26));
         BoxHeight.Fit(this);
     }
 
@@ -356,7 +356,7 @@ internal sealed class ThemedCombo : ComboBox
             g.DrawPath(pen, path);
         }
         string text = (SelectedIndex >= 0 ? GetItemText(SelectedItem) : Text) ?? "";
-        TextRenderer.DrawText(g, text, Font, new Rectangle(Unit(11), 0, Width - Unit(44), Height), Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
+        Native.DirectText.DrawText(g, text, Font, new Rectangle(Unit(11), 0, Width - Unit(44), Height), Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
         SettingsStyle.Chevron(g, new Point(Width - Unit(18), Height / 2), Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, this);
         if (SettingsStyle.ShowsFocus(this) && !DroppedDown) SettingsStyle.FocusRing(g, area, Unit(4), this);
@@ -380,7 +380,7 @@ internal sealed class ThemedCombo : ComboBox
         // While the list is open, Windows reports the row under the pointer as the chosen one; the bar stays on the
         // choice made before it opened, as in Windows 11, instead of being left on every row the pointer passed.
         if (e.Index == (DroppedDown ? _chosen : SelectedIndex)) SettingsStyle.SelectionBar(g, row, this);
-        TextRenderer.DrawText(g, GetItemText(Items[e.Index]), Font, new Rectangle(row.Left + Unit(10), row.Top, row.Width - Unit(12), row.Height),
+        Native.DirectText.DrawText(g, GetItemText(Items[e.Index]), Font, new Rectangle(row.Left + Unit(10), row.Top, row.Width - Unit(12), row.Height),
             SettingsStyle.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
     }
 
@@ -439,7 +439,7 @@ internal sealed class ThemedPicker : ComboBox
     /// <summary>Rows of the open list with room around the words; the box itself is as tall as every other box.</summary>
     private void FitHeight()
     {
-        ItemHeight = Math.Max(TextRenderer.MeasureText("Ag", Font).Height + Unit(12), Unit(26));
+        ItemHeight = Math.Max(Native.DirectText.MeasureText("Ag", Font).Height + Unit(12), Unit(26));
         BoxHeight.Fit(this);
     }
 
@@ -608,7 +608,7 @@ internal sealed class ThemedPicker : ComboBox
         }
         // Where typed words start, so they take the waiting words' place; gone while a character is being composed.
         if (typed || Placeholder.Length == 0 || _typing?.Composing == true) return;
-        TextRenderer.DrawText(g, Placeholder, Font, Rectangle.FromLTRB(IconRoom, area.Top, area.Right, area.Bottom), quiet, BackColor,
+        Native.DirectText.DrawText(g, Placeholder, Font, Rectangle.FromLTRB(IconRoom, area.Top, area.Right, area.Bottom), quiet, BackColor,
             TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
             TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
     }
@@ -630,7 +630,7 @@ internal sealed class ThemedPicker : ComboBox
         const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2;
         WindowPos position = Marshal.PtrToStructure<WindowPos>(place);
         if ((position.Flags & SWP_NOSIZE) != 0 || !Native.User32.GetClientRect(Handle, out Native.Rect box)) return;
-        int line = Math.Min(position.Height, TextRenderer.MeasureText("Ag", Font, Size.Empty, TextFormatFlags.NoPadding).Height);
+        int line = Math.Min(position.Height, Native.DirectText.MeasureText("Ag", Font, Size.Empty, TextFormatFlags.NoPadding).Height);
         if ((position.Flags & SWP_NOMOVE) != 0)
         {
             if (_typing is not { Handle: not 0 } typing || !Native.User32.GetWindowRect(typing.Handle, out Native.Rect now)) return;
@@ -650,12 +650,12 @@ internal sealed class ThemedPicker : ComboBox
     internal static int CapitalsMiddle(Font font)
     {
         if (Capitals.TryGetValue((font.Name, font.Size, font.Style), out int middle)) return middle;
-        Size cell = TextRenderer.MeasureText("H", font, Size.Empty, TextFormatFlags.NoPadding);
+        Size cell = Native.DirectText.MeasureText("H", font, Size.Empty, TextFormatFlags.NoPadding);
         using var picture = new Bitmap(Math.Max(1, cell.Width), Math.Max(1, cell.Height));
         using (Graphics g = Graphics.FromImage(picture))
         {
             g.Clear(Color.White);
-            TextRenderer.DrawText(g, "H", font, Point.Empty, Color.Black, Color.White, TextFormatFlags.NoPadding);
+            Native.DirectText.DrawText(g, "H", font, Point.Empty, Color.Black, Color.White, TextFormatFlags.NoPadding);
         }
         int top = -1, bottom = -1;
         for (int y = 0; y < picture.Height; y++)
@@ -780,7 +780,7 @@ internal sealed class ThemedPicker : ComboBox
             g.DrawImage(icon, new Rectangle(left, row.Top + (row.Height - size) / 2, size, size));
         }
         left += size + Unit(10);
-        TextRenderer.DrawText(g, name, Font, new Rectangle(left, row.Top, row.Right - left - Unit(4), row.Height), SettingsStyle.Text,
+        Native.DirectText.DrawText(g, name, Font, new Rectangle(left, row.Top, row.Right - left - Unit(4), row.Height), SettingsStyle.Text,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
             TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
     }
@@ -939,7 +939,7 @@ internal static class ListRows
 
     internal static bool ChangesItems(int message) => message is LB_ADDSTRING or LB_INSERTSTRING or LB_DELETESTRING or LB_RESETCONTENT;
 
-    internal static int RowHeight(Control list) => Math.Max(TextRenderer.MeasureText("Ag", list.Font).Height + SettingsStyle.Unit(list, 12), SettingsStyle.Unit(list, 30));
+    internal static int RowHeight(Control list) => Math.Max(Native.DirectText.MeasureText("Ag", list.Font).Height + SettingsStyle.Unit(list, 12), SettingsStyle.Unit(list, 30));
 
     /// <summary>The background of a row: a wash under the pointer, the accent wash and bar when chosen.</summary>
     internal static Rectangle Background(Graphics g, ListBox list, Rectangle bounds, bool selected, bool hot)
@@ -964,7 +964,7 @@ internal static class ListRows
         if (list.Items.Count > 0 || text.Length == 0 || !list.IsHandleCreated) return;
         using Graphics g = list.CreateGraphics();
         var area = Rectangle.Inflate(list.ClientRectangle, -SettingsStyle.Unit(list, 12), -SettingsStyle.Unit(list, 4));
-        TextRenderer.DrawText(g, text, list.Font, area, list.Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled,
+        Native.DirectText.DrawText(g, text, list.Font, area, list.Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
     }
 
@@ -1061,7 +1061,7 @@ internal class ThemedList : ListBox
                 }
                 left += size + SettingsStyle.Unit(this, 10); // The words line up whether or not a picture was found.
             }
-            TextRenderer.DrawText(g, GetItemText(Items[e.Index]), Font,
+            Native.DirectText.DrawText(g, GetItemText(Items[e.Index]), Font,
                 new Rectangle(left, row.Top, row.Right - left - SettingsStyle.Unit(this, 4), row.Height),
                 Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
@@ -1163,10 +1163,10 @@ internal sealed class ThemedCheckList : CheckedListBox
         string text = GetItemText(Items[e.Index]) ?? "";
         const TextFormatFlags format = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
             TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
-        TextRenderer.DrawText(g, text, Font, new Rectangle(textLeft, row.Top, row.Right - textLeft, row.Height),
+        Native.DirectText.DrawText(g, text, Font, new Rectangle(textLeft, row.Top, row.Right - textLeft, row.Height),
             Enabled ? SettingsStyle.Text : SettingsStyle.Disabled, format);
         if (Tagged?.Invoke(Items[e.Index]) == true)
-            MenuParts.DrawTag(g, textLeft + TextRenderer.MeasureText(g, text, Font, Size.Empty, format & ~TextFormatFlags.EndEllipsis).Width + SettingsStyle.Unit(this, 8),
+            MenuParts.DrawTag(g, textLeft + Native.DirectText.MeasureText(g, text, Font, Size.Empty, format & ~TextFormatFlags.EndEllipsis).Width + SettingsStyle.Unit(this, 8),
                 row.Top + row.Height / 2, value => SettingsStyle.Unit(this, value), Enabled);
         if ((e.State & DrawItemState.Focus) != 0 && SettingsStyle.ShowsFocus(this)) SettingsStyle.FocusRing(g, row, SettingsStyle.Unit(this, 4), this);
     }

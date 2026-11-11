@@ -165,9 +165,9 @@ internal static class SettingText
     /// <summary>How tall the name and the description are together, at this width.</summary>
     internal static int Height(Control row, string title, string description, int width)
     {
-        int height = TextRenderer.MeasureText(title, row.Font, new Size(width, 0), Words).Height;
+        int height = Native.DirectText.MeasureText(title, row.Font, new Size(width, 0), Words).Height;
         if (description.Length > 0)
-            height += SettingsStyle.Unit(row, 2) + TextRenderer.MeasureText(description, SettingsStyle.CaptionFont, new Size(width, 0), Words).Height;
+            height += SettingsStyle.Unit(row, 2) + Native.DirectText.MeasureText(description, SettingsStyle.CaptionFont, new Size(width, 0), Words).Height;
         return height;
     }
 
@@ -179,11 +179,11 @@ internal static class SettingText
         int top = (row.Height - height) / 2;
         if (glyph != '\0' && MenuParts.Icon(glyph, enabled ? SettingsStyle.Text : SettingsStyle.Disabled) is { } icon)
             g.DrawImage(icon, SettingsStyle.Unit(row, IconLeft) + (SettingsStyle.Unit(row, 20) - icon.Width) / 2, (row.Height - icon.Height) / 2);
-        int titleHeight = TextRenderer.MeasureText(title, row.Font, new Size(width, 0), Words).Height;
-        TextRenderer.DrawText(g, title, row.Font, new Rectangle(left, top, width, titleHeight), enabled ? SettingsStyle.Text : SettingsStyle.Disabled, Words);
+        int titleHeight = Native.DirectText.MeasureText(title, row.Font, new Size(width, 0), Words).Height;
+        Native.DirectText.DrawText(g, title, row.Font, new Rectangle(left, top, width, titleHeight), enabled ? SettingsStyle.Text : SettingsStyle.Disabled, Words);
         if (description.Length == 0) return;
         int below = top + titleHeight + SettingsStyle.Unit(row, 2);
-        TextRenderer.DrawText(g, description, SettingsStyle.CaptionFont, new Rectangle(left, below, width, row.Height - below),
+        Native.DirectText.DrawText(g, description, SettingsStyle.CaptionFont, new Rectangle(left, below, width, row.Height - below),
             enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, Words);
     }
 }
@@ -430,10 +430,39 @@ internal sealed class SettingsCard : Panel
 /// <summary>A label whose words are smoothed like the rest of Settings (<see cref="SettingsStyle.SoftText"/>).</summary>
 internal class SoftLabel : Label
 {
+    /// <summary>How the label's words are set, from its own settings, as Windows' label would set them.</summary>
+    private TextFormatFlags Flags
+    {
+        get
+        {
+            TextFormatFlags flags = TextFormatFlags.NoPadding | TextFormatFlags.WordBreak;
+            if (!UseMnemonic) flags |= TextFormatFlags.NoPrefix;
+            if (AutoEllipsis) flags |= TextFormatFlags.EndEllipsis;
+            int align = (int)TextAlign;
+            if ((align & 0x0F0) != 0) flags |= TextFormatFlags.VerticalCenter; // Middle.
+            else if ((align & 0xF00) != 0) flags |= TextFormatFlags.Bottom;
+            if ((align & 0x222) != 0) flags |= TextFormatFlags.HorizontalCenter;
+            else if ((align & 0x444) != 0) flags |= TextFormatFlags.Right;
+            return flags;
+        }
+    }
+
+    /// <summary>Its size measured the way its words are drawn, so they fit exactly.</summary>
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        if (!Native.DirectText.Available || !AutoSize) return base.GetPreferredSize(proposedSize);
+        int most = MaximumSize.Width > 0 ? MaximumSize.Width - Padding.Horizontal : 0;
+        Size text = Native.DirectText.MeasureText(Text, Font, new Size(Math.Max(0, most), 0), most > 0 ? Flags : Flags & ~TextFormatFlags.WordBreak);
+        var size = new Size(text.Width + Padding.Horizontal, text.Height + Padding.Vertical);
+        if (MaximumSize.Width > 0) size.Width = Math.Min(size.Width, MaximumSize.Width);
+        return new Size(Math.Max(size.Width, MinimumSize.Width), Math.Max(size.Height, MinimumSize.Height));
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
-        SettingsStyle.SoftText(e.Graphics);
-        base.OnPaint(e);
+        if (!Native.DirectText.Available) { SettingsStyle.SoftText(e.Graphics); base.OnPaint(e); return; }
+        var area = Rectangle.FromLTRB(Padding.Left, Padding.Top, Width - Padding.Right, Height - Padding.Bottom);
+        Native.DirectText.DrawText(e.Graphics, Text, Font, area, Enabled ? ForeColor : SettingsStyle.Disabled, Flags);
     }
 }
 
@@ -625,7 +654,7 @@ internal sealed class NavList : Control
         {
             if (entry.Page is null)
             {
-                TextRenderer.DrawText(g, entry.Text, SettingsStyle.CaptionFont, new Rectangle(bounds.Left + Unit(12), bounds.Top + Unit(10), bounds.Width, bounds.Height - Unit(10)),
+                Native.DirectText.DrawText(g, entry.Text, SettingsStyle.CaptionFont, new Rectangle(bounds.Left + Unit(12), bounds.Top + Unit(10), bounds.Width, bounds.Height - Unit(10)),
                     SettingsStyle.Tertiary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
             else
@@ -641,7 +670,7 @@ internal sealed class NavList : Control
                 if (selected) SettingsStyle.SelectionBar(g, row, this);
                 if (MenuParts.Icon(entry.Glyph) is { } icon)
                     g.DrawImage(icon, bounds.Left + Unit(14), bounds.Top + (bounds.Height - icon.Height) / 2);
-                TextRenderer.DrawText(g, entry.Text, SettingsStyle.BodyFont, new Rectangle(bounds.Left + Unit(42), bounds.Top, bounds.Width - Unit(44), bounds.Height),
+                Native.DirectText.DrawText(g, entry.Text, SettingsStyle.BodyFont, new Rectangle(bounds.Left + Unit(42), bounds.Top, bounds.Width - Unit(44), bounds.Height),
                     SettingsStyle.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
                 if (selected && SettingsStyle.ShowsFocus(this)) SettingsStyle.FocusRing(g, row, Unit(4), this);
             }
@@ -734,7 +763,7 @@ internal sealed class PlainButton : Button
     public override Size GetPreferredSize(Size proposedSize)
     {
         if (Glyph != '\0') return new Size(Unit(32), Unit(32));
-        Size text = TextRenderer.MeasureText(Text, Font, Size.Empty, TextFormatFlags.SingleLine);
+        Size text = Native.DirectText.MeasureText(Text, Font, Size.Empty, TextFormatFlags.SingleLine);
         return new Size(Math.Max(text.Width + Unit(22), Unit(72)), Math.Max(text.Height + Unit(12), Unit(32)));
     }
 
@@ -761,7 +790,7 @@ internal sealed class PlainButton : Button
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.DrawImage(icon, new Rectangle((Width - size) / 2, (Height - size) / 2, size, size));
         }
-        else TextRenderer.DrawText(g, Text, Font, area, text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+        else Native.DirectText.DrawText(g, Text, Font, area, text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
             (ShowKeyboardCues ? TextFormatFlags.Default : TextFormatFlags.HidePrefix));
         if (SettingsStyle.ShowsFocus(this)) SettingsStyle.FocusRing(g, area, Unit(4), this);
     }

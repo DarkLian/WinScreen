@@ -193,7 +193,7 @@ private readonly ErrorProvider _errors = new();
         MaximizeBox = true;
         MinimizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(970, 660); // Room for every entry in the table of actions at Windows 11's text size.
+        ClientSize = new Size(984, 660); // Room for every entry in the table of actions at Windows 11's text size.
         // No narrower than this, the narrowest its rows fit: they grow in a wider window but never shrink.
         MinimumSize = new Size(Width, 400);
         Font = SettingsStyle.BodyFont;
@@ -1485,7 +1485,7 @@ private readonly ErrorProvider _errors = new();
             Graphics g = e.Graphics;
             SettingsStyle.SoftText(g);
             using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, e.Bounds);
-            TextRenderer.DrawText(g, e.Header?.Text, SettingsStyle.CaptionFont,
+            Native.DirectText.DrawText(g, e.Header?.Text, SettingsStyle.CaptionFont,
                 new Rectangle(e.Bounds.Left + Unit(FeatureInset(e.ColumnIndex)), e.Bounds.Top, e.Bounds.Width - Unit(FeatureInset(e.ColumnIndex) + 4), e.Bounds.Height),
                 SettingsStyle.Secondary, FeatureText);
             using var line = new Pen(SettingsStyle.Divider);
@@ -1525,10 +1525,10 @@ private readonly ErrorProvider _errors = new();
                 const TextFormatFlags format = FeatureText;
                 string text = item.SubItems[index].Text;
                 var words = new Rectangle(cell.Left + inset, cell.Top, Math.Max(0, cell.Width - inset - Unit(4) - tag), cell.Height);
-                TextRenderer.DrawText(g, text, _features.Font, words, color, format);
+                Native.DirectText.DrawText(g, text, _features.Font, words, color, format);
                 if (tagged && words.Width > 0)
                 {
-                    int width = Math.Min(words.Width, TextRenderer.MeasureText(g, text, _features.Font, words.Size, format).Width);
+                    int width = Math.Min(words.Width, Native.DirectText.MeasureText(g, text, _features.Font, words.Size, format).Width);
                     MenuParts.DrawTag(g, words.Left + width + Unit(8), cell.Top + cell.Height / 2, Unit);
                 }
             }
@@ -1560,10 +1560,10 @@ private readonly ErrorProvider _errors = new();
         var need = new int[5];
         for (int column = 1; column < 5; column++)
         {
-            int widest = TextRenderer.MeasureText(_features.Columns[column].Text, SettingsStyle.CaptionFont, Size.Empty, FeatureMeasure).Width;
+            int widest = Native.DirectText.MeasureText(_features.Columns[column].Text, SettingsStyle.CaptionFont, Size.Empty, FeatureMeasure).Width;
             foreach (ListViewItem? item in _features.Items)
                 if (item is not null && column < item.SubItems.Count)
-                    widest = Math.Max(widest, TextRenderer.MeasureText(item.SubItems[column].Text, _features.Font, Size.Empty, FeatureMeasure).Width);
+                    widest = Math.Max(widest, Native.DirectText.MeasureText(item.SubItems[column].Text, _features.Font, Size.Empty, FeatureMeasure).Width);
             need[column] = widest + pad;
         }
         // A problem can be a whole sentence; the state column stays short, and it shows in full under the page.
@@ -1573,7 +1573,7 @@ private readonly ErrorProvider _errors = new();
         int tag = SettingsStyle.Unit(_features, FeatureInset(0) + 8 + 4) + MenuParts.TagSize(value => SettingsStyle.Unit(_features, value)).Width;
         foreach (ListViewItem? item in _features.Items)
             if (item?.Tag is AppCommand command && CommandCatalog.IsExperimental(command))
-                least = Math.Max(least, TextRenderer.MeasureText(item.Text, _features.Font, Size.Empty, FeatureMeasure).Width + tag);
+                least = Math.Max(least, Native.DirectText.MeasureText(item.Text, _features.Font, Size.Empty, FeatureMeasure).Width + tag);
         int rest = need.Skip(1).Sum();
         if (width - rest < least)
         {

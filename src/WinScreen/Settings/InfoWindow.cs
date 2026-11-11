@@ -45,7 +45,7 @@ internal sealed class InfoWindow : Form
         // A scroll bar only while the facts don't all fit; long lines wrap instead of scrolling sideways.
         box.Resize += (_, _) =>
         {
-            int needs = TextRenderer.MeasureText(box.Text, box.Font, new Size(box.ClientSize.Width, 0), TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height;
+            int needs = Native.DirectText.MeasureText(box.Text, box.Font, new Size(box.ClientSize.Width, 0), TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height;
             ScrollBars wanted = needs > box.ClientSize.Height ? ScrollBars.Vertical : ScrollBars.None;
             if (box.ScrollBars != wanted) box.ScrollBars = wanted;
         };

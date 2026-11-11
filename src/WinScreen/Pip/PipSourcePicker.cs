@@ -275,12 +275,12 @@ internal sealed class PipSourcePicker : Form
             }
             const TextFormatFlags line = TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
                 TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
-            int nameHeight = TextRenderer.MeasureText(g, "Ag", _list.Font, Size.Empty, line).Height;
-            int detailHeight = TextRenderer.MeasureText(g, "Ag", SettingsStyle.CaptionFont, Size.Empty, line).Height;
+            int nameHeight = Native.DirectText.MeasureText(g, "Ag", _list.Font, Size.Empty, line).Height;
+            int detailHeight = Native.DirectText.MeasureText(g, "Ag", SettingsStyle.CaptionFont, Size.Empty, line).Height;
             int top = row.Top + (row.Height - nameHeight - Unit(2) - detailHeight) / 2;
             int width = Math.Max(0, right - left);
-            TextRenderer.DrawText(g, item.Text, _list.Font, new Rectangle(left, top, width, nameHeight), SettingsStyle.Text, line);
-            TextRenderer.DrawText(g, Detail(item.Tag), SettingsStyle.CaptionFont, new Rectangle(left, top + nameHeight + Unit(2), width, detailHeight),
+            Native.DirectText.DrawText(g, item.Text, _list.Font, new Rectangle(left, top, width, nameHeight), SettingsStyle.Text, line);
+            Native.DirectText.DrawText(g, Detail(item.Tag), SettingsStyle.CaptionFont, new Rectangle(left, top + nameHeight + Unit(2), width, detailHeight),
                 SettingsStyle.Secondary, line);
         };
         _list.MouseMove += (_, e) => Hover(_list.GetItemAt(e.X, e.Y)?.Index ?? -1);
