@@ -249,6 +249,11 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool InvalidateRect(nint hWnd, nint rect, [MarshalAs(UnmanagedType.Bool)] bool erase);
 
+    /// <summary>Marks a window as painted, so Windows stops asking it to paint; with no rectangle, all of it.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool ValidateRect(nint hWnd, nint rect);
+
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool HideCaret(nint window);

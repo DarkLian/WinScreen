@@ -79,11 +79,12 @@ internal static class SettingsStyle
     private static string Face(string prefix, string fallback) =>
         FontFamily.Families.FirstOrDefault(family => family.Name.StartsWith(prefix, StringComparison.Ordinal))?.Name ?? fallback;
     /// <summary>
-    /// Smooths text in grey rather than in colour, as Windows 11's own Settings does. Windows' colour smoothing, the
-    /// default for text drawn here, makes small text look thin and sharp, with coloured edges on a dark background.
-    /// Text drawn on <paramref name="g"/> afterwards follows it.
+    /// Smooths text in grey on a dark background, where Windows' colour smoothing makes small light text look thin and
+    /// sharp, with coloured edges. Dark text on a light background keeps the colour smoothing: in grey it came out pale
+    /// and washed out next to Windows 11's own Settings. Text drawn on <paramref name="g"/> afterwards follows it.
     /// </summary>
-    internal static void SoftText(Graphics g) => g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+    internal static void SoftText(Graphics g) => g.TextRenderingHint = Dark
+        ? System.Drawing.Text.TextRenderingHint.AntiAliasGridFit : System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
     internal static readonly Font HeadingFont = new(Face("Segoe UI Variable Text Semib", "Segoe UI Semibold"), 9.75f);
     internal static readonly Font PageTitleFont = new(Face("Segoe UI Variable Display Semib", "Segoe UI Semibold"), 20f);

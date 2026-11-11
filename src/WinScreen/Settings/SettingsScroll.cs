@@ -221,6 +221,9 @@ internal sealed class ThemedTable : ListView
     private const int WM_PAINT = 0x000F, LVM_SCROLL = 0x1014;
     internal event Action? Moved;
 
+    // Windows redraws a row as the pointer passes over it; drawn straight onto the screen, its words blinked.
+    public ThemedTable() => DoubleBuffered = true;
+
     protected override void WndProc(ref Message m)
     {
         base.WndProc(ref m);

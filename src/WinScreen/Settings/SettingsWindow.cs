@@ -255,7 +255,10 @@ private readonly ErrorProvider _errors = new();
         _nav.BackColor = SettingsStyle.Side;
         side.Controls.Add(_nav);
         side.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 10, BackColor = SettingsStyle.Side });
-        side.Controls.Add(new InputFrame(_search) { Glyph = MenuParts.Search, Dock = DockStyle.Top, Height = 34 });
+        // Its edges line up with the highlighted page below, which sits a little in from the side's edges.
+        var searchRoom = new Panel { Dock = DockStyle.Top, Height = 34, Padding = new Padding(2, 0, 2, 0), BackColor = SettingsStyle.Side };
+        searchRoom.Controls.Add(new InputFrame(_search) { Glyph = MenuParts.Search, Dock = DockStyle.Fill });
+        side.Controls.Add(searchRoom);
         var page = new TableLayoutPanel { ColumnCount = 1, RowCount = 4, Dock = DockStyle.Fill, Padding = new Padding(20, 6, 12, 10) };
         page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -1055,8 +1058,10 @@ private readonly ErrorProvider _errors = new();
             if (_newApp.DroppedDown) _newApp.DroppedDown = false; // Enter on a suggestion takes it and adds it.
             AddApp();
         };
-        _newApp.Margin = new Padding(0, 2, 8, 0); // Level with the button beside it.
+        // Both centred on one line, as the program lists on other pages place them: anchored to neither top nor bottom.
+        _newApp.Margin = new Padding(0, 0, 8, 0);
         add.Margin = Padding.Empty;
+        _newApp.Anchor = add.Anchor = AnchorStyles.Left;
         var adding = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(4, 8, 3, 6), BackColor = SettingsStyle.Card };
         adding.Controls.Add(_newApp);
         adding.Controls.Add(add);

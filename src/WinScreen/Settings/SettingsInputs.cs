@@ -163,10 +163,15 @@ internal sealed class InputFrame : Panel
             _clip.SetBounds(StartRoom, (Height - height) / 2, width, height);
             _inner.SetBounds(0, 0, width + SystemInformation.VerticalScrollBarWidth + Unit(4), height);
         }
+        // A text box writes at its top and keeps room below for descenders; centring the box left its words low.
+        else if (_inner is TextBox) _inner.SetBounds(StartRoom, Math.Clamp(Height / 2 - ThemedPicker.CapitalsMiddle(_inner.Font), 0,
+            Math.Max(0, Height - height)), width, height);
         else _inner.SetBounds(StartRoom, (Height - height) / 2, width, height);
     }
 
     protected override void OnResize(EventArgs eventargs) { base.OnResize(eventargs); Place(); }
+    // Also after the window scales what's in it, which moves the control inside after the box placed it.
+    protected override void OnLayout(LayoutEventArgs levent) { base.OnLayout(levent); Place(); }
     protected override void OnDpiChangedAfterParent(EventArgs e) { base.OnDpiChangedAfterParent(e); Place(); }
     protected override void OnParentBackColorChanged(EventArgs e) { base.OnParentBackColorChanged(e); Restyle(); }
     protected override void OnParentChanged(EventArgs e) { base.OnParentChanged(e); Restyle(); }
@@ -448,15 +453,31 @@ internal sealed class ThemedPicker : ComboBox
 
     protected override void WndProc(ref Message m)
     {
+        // The box is painted here alone, in one go: Windows' own box, painted first and covered after, showed as a blink.
+        if (m.Msg == ListRows.WM_ERASEBKGND && IsHandleCreated) { m.Result = 1; return; }
+        if (m.Msg == ListRows.WM_PAINT && IsHandleCreated)
+        {
+            DrawBox();
+            Native.User32.ValidateRect(Handle, 0);
+            m.Result = 0;
+            return;
+        }
         base.WndProc(ref m);
-        if (m.Msg == ListRows.WM_PAINT && IsHandleCreated) DrawOver();
     }
 
-    private void DrawOver()
+    private void DrawBox()
     {
-        using Graphics g = CreateGraphics();
+        if (ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
+        using var picture = new Bitmap(ClientSize.Width, ClientSize.Height, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+        using (Graphics g = Graphics.FromImage(picture)) DrawBox(g);
+        using Graphics screen = CreateGraphics();
         if (_typing is { Handle: not 0 } typing && Native.User32.GetWindowRect(typing.Handle, out Native.Rect r))
-            g.ExcludeClip(RectangleToClient(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom)));
+            screen.ExcludeClip(RectangleToClient(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom)));
+        screen.DrawImageUnscaled(picture, 0, 0);
+    }
+
+    private void DrawBox(Graphics g)
+    {
         g.Clear(Surface);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         var area = new Rectangle(0, 0, Width - 1, Height - 1);
@@ -475,33 +496,58 @@ internal sealed class ThemedPicker : ComboBox
         SettingsStyle.Chevron(g, new Point(Width - Unit(14), Height / 2), Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, this);
     }
 
-    /// <summary>The search icon, and the waiting words while nothing is typed, drawn into the typing part after it paints.</summary>
-    private void DrawInTyping(nint typing)
+    /// <summary>
+    /// Paints the typing part off screen and puts it up whole: its words as Windows writes them, then the search icon
+    /// and, while nothing is typed, the waiting words. Painted in steps on the screen, the icon and words blinked.
+    /// </summary>
+    private void PaintTyping(nint typing)
     {
-        if (!Native.User32.GetClientRect(typing, out Native.Rect r)) return;
-        var area = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
+        const int WM_PRINTCLIENT = 0x0318, PRF_CLIENT = 0x4, WM_GETTEXTLENGTH = 0x000E;
+        if (!Native.User32.GetClientRect(typing, out Native.Rect r) || r.Right <= 0 || r.Bottom <= 0)
+        {
+            Native.User32.ValidateRect(typing, 0);
+            return;
+        }
         // The blinking caret is drawn by inverting what's under it, so it is taken away while anything is drawn there.
         bool caret = Native.User32.HideCaret(typing);
         try
         {
-            using Graphics g = Graphics.FromHwnd(typing);
-            Color quiet = Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled;
-            if (MenuParts.Icon(MenuParts.Search, quiet) is { } icon)
+            using var picture = new Bitmap(r.Right, r.Bottom, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+            using (Graphics g = Graphics.FromImage(picture))
             {
-                int size = Math.Min(icon.Height, area.Height);
-                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                g.DrawImage(icon, new Rectangle(Unit(6), area.Top + (area.Height - size) / 2, size, size));
+                g.Clear(BackColor);
+                nint dc = g.GetHdc();
+                try { Native.User32.SendMessage(typing, WM_PRINTCLIENT, dc, PRF_CLIENT); }
+                finally { g.ReleaseHdc(dc); }
+                // Read from the typing part itself: the box's own words can point at a row of a list just emptied.
+                bool typed = Native.User32.SendMessage(typing, WM_GETTEXTLENGTH, 0, 0) > 0;
+                DrawInTyping(g, Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom), typed);
             }
-            // Where typed words start, so they take the waiting words' place; gone while a character is being composed.
-            if (Text.Length > 0 || Placeholder.Length == 0 || _typing?.Composing == true) return;
-            TextRenderer.DrawText(g, Placeholder, Font, Rectangle.FromLTRB(IconRoom, area.Top, area.Right, area.Bottom), quiet, BackColor,
-                TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
-                TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+            using Graphics screen = Graphics.FromHwnd(typing);
+            screen.DrawImageUnscaled(picture, 0, 0);
         }
         finally
         {
+            Native.User32.ValidateRect(typing, 0);
             if (caret) Native.User32.ShowCaret(typing);
         }
+    }
+
+    /// <summary>The search icon, and the waiting words while nothing is typed.</summary>
+    private void DrawInTyping(Graphics g, Rectangle area, bool typed)
+    {
+        Color quiet = Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled;
+        if (MenuParts.Icon(MenuParts.Search, quiet) is { } icon)
+        {
+            int size = Math.Min(icon.Height, area.Height);
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(icon, new Rectangle(Unit(6), area.Top + (area.Height - size) / 2, size, size));
+        }
+        // Where typed words start, so they take the waiting words' place; gone while a character is being composed.
+        if (typed || Placeholder.Length == 0 || _typing?.Composing == true) return;
+        TextRenderer.DrawText(g, Placeholder, Font, Rectangle.FromLTRB(IconRoom, area.Top, area.Right, area.Bottom), quiet, BackColor,
+            TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+            TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -538,7 +584,7 @@ internal sealed class ThemedPicker : ComboBox
     private static readonly Dictionary<(string, float, FontStyle), int> Capitals = [];
 
     /// <summary>How far down a line of this font the middle of its capitals is, found by writing one and looking.</summary>
-    private static int CapitalsMiddle(Font font)
+    internal static int CapitalsMiddle(Font font)
     {
         if (Capitals.TryGetValue((font.Name, font.Size, font.Style), out int middle)) return middle;
         Size cell = TextRenderer.MeasureText("H", font, Size.Empty, TextFormatFlags.NoPadding);
@@ -581,8 +627,9 @@ internal sealed class ThemedPicker : ComboBox
                 Redraw();
             }
             else if (m.Msg == WM_WINDOWPOSCHANGING && m.LParam != 0) owner.CenterTyping(m.LParam);
+            else if (m.Msg == ListRows.WM_ERASEBKGND) { m.Result = 1; return; } // Painted whole below.
+            else if (m.Msg == ListRows.WM_PAINT) { owner.PaintTyping(Handle); m.Result = 0; return; }
             base.WndProc(ref m);
-            if (m.Msg == ListRows.WM_PAINT) owner.DrawInTyping(Handle);
         }
     }
 
@@ -623,6 +670,8 @@ internal sealed class ThemedPicker : ComboBox
                 Cursor.Current = Cursors.Default; // Opening the list hides the pointer otherwise.
             }
             else if (matches.Count == 0 && DroppedDown) DroppedDown = false;
+            // Closing a list just emptied can leave the box pointing at a row no longer there; reading its words then fails.
+            if (SelectedIndex >= Items.Count) SelectedIndex = -1;
             FitList();
             // Changing the list and opening it both take over the box's words; what was typed is put back.
             if (Text != typed) Text = typed;
@@ -677,15 +726,25 @@ internal sealed class ThemedPicker : ComboBox
     protected override void OnDpiChangedAfterParent(EventArgs e) { base.OnDpiChangedAfterParent(e); FitHeight(); SetMargin(); PlaceTyping(); }
     protected override void OnParentChanged(EventArgs e) { base.OnParentChanged(e); Restyle(); }
     protected override void OnParentBackColorChanged(EventArgs e) { base.OnParentBackColorChanged(e); Restyle(); } // Placed on a card.
-    protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Restyle(); }
+    // Moving between the box's edge and its typing part says the pointer came in again; it is redrawn only when that changes something.
+    protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); Hover(true); }
     protected override void OnMouseLeave(EventArgs e)
     {
         base.OnMouseLeave(e);
         if (ClientRectangle.Contains(PointToClient(Cursor.Position))) return; // Onto the typing part.
-        _hot = false;
+        Hover(false);
+    }
+
+    private void Hover(bool on)
+    {
+        if (_hot == on) return;
+        _hot = on;
         Restyle();
     }
     protected override void OnLeave(EventArgs e) { base.OnLeave(e); Restyle(); }
+    // Entering comes just before the keyboard arrives; the typing part's colour follows once it has.
+    protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Restyle(); }
+    protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Restyle(); }
     protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Restyle(); }
     protected override void OnDropDownClosed(EventArgs e) { base.OnDropDownClosed(e); Invalidate(); }
 }
@@ -763,6 +822,46 @@ internal static class ListRows
         int index = list.IndexFromPoint(point);
         return index >= 0 && list.GetItemRectangle(index).Contains(point) ? index : -1;
     }
+
+    internal const int WM_ERASEBKGND = 0x0014;
+
+    /// <summary>
+    /// Fills only the part no row covers: each row paints its own background, and Windows filling under all of them
+    /// first showed as a blink.
+    /// </summary>
+    internal static void EraseBelowRows(ListBox list, ref Message m)
+    {
+        int bottom = list.Items.Count == 0 ? 0 : Math.Max(0, list.GetItemRectangle(list.Items.Count - 1).Bottom);
+        var below = Rectangle.FromLTRB(0, bottom, list.ClientSize.Width, list.ClientSize.Height);
+        if (below.Width > 0 && below.Height > 0)
+        {
+            using Graphics g = Graphics.FromHdc(m.WParam);
+            using var back = new SolidBrush(list.BackColor);
+            g.FillRectangle(back, below);
+        }
+        m.Result = 1;
+    }
+
+    /// <summary>Moves the pointer's wash to another row, redrawing just the two rows.</summary>
+    internal static void MoveHot(ListBox list, ref int hot, int now)
+    {
+        if (now == hot) return;
+        foreach (int row in new[] { hot, now })
+            if (row >= 0 && row < list.Items.Count) list.Invalidate(list.GetItemRectangle(row));
+        hot = now;
+    }
+
+    /// <summary>
+    /// Draws a row off screen and puts it up whole: drawn straight onto the screen, the background showed for a moment
+    /// before the words.
+    /// </summary>
+    internal static void DrawBuffered(DrawItemEventArgs e, Action<Graphics> draw)
+    {
+        using BufferedGraphics buffer = BufferedGraphicsManager.Current.Allocate(e.Graphics, e.Bounds);
+        SettingsStyle.SoftText(buffer.Graphics);
+        draw(buffer.Graphics);
+        buffer.Render(e.Graphics);
+    }
 }
 
 /// <summary>A list of names with Windows 11's rows, and a line of its own to say so when it is empty.</summary>
@@ -790,17 +889,20 @@ internal class ThemedList : ListBox
 
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
-        SettingsStyle.SoftText(e.Graphics);
         if (e.Index < 0 || e.Index >= Items.Count) return;
-        Rectangle row = ListRows.Background(e.Graphics, this, e.Bounds, (e.State & DrawItemState.Selected) != 0, e.Index == _hot);
-        TextRenderer.DrawText(e.Graphics, GetItemText(Items[e.Index]), Font,
-            new Rectangle(row.Left + SettingsStyle.Unit(this, 12), row.Top, row.Width - SettingsStyle.Unit(this, 16), row.Height),
-            Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+        ListRows.DrawBuffered(e, g =>
+        {
+            Rectangle row = ListRows.Background(g, this, e.Bounds, (e.State & DrawItemState.Selected) != 0, e.Index == _hot);
+            TextRenderer.DrawText(g, GetItemText(Items[e.Index]), Font,
+                new Rectangle(row.Left + SettingsStyle.Unit(this, 12), row.Top, row.Width - SettingsStyle.Unit(this, 16), row.Height),
+                Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+        });
     }
 
     protected override void WndProc(ref Message m)
     {
+        if (m.Msg == ListRows.WM_ERASEBKGND && m.WParam != 0) { ListRows.EraseBelowRows(this, ref m); return; }
         base.WndProc(ref m);
         if (m.Msg == ListRows.WM_PAINT)
         {
@@ -819,11 +921,10 @@ internal class ThemedList : ListBox
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        int hot = ListRows.HotRow(this, e.Location);
-        if (hot != _hot) { _hot = hot; Invalidate(); }
+        ListRows.MoveHot(this, ref _hot, ListRows.HotRow(this, e.Location));
     }
 
-    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hot = -1; Invalidate(); }
+    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); ListRows.MoveHot(this, ref _hot, -1); }
 }
 
 /// <summary>A list of things to tick, with Windows 11's rows and check boxes.</summary>
@@ -856,9 +957,12 @@ internal sealed class ThemedCheckList : CheckedListBox
 
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
-        SettingsStyle.SoftText(e.Graphics);
         if (e.Index < 0 || e.Index >= Items.Count) return;
-        Graphics g = e.Graphics;
+        ListRows.DrawBuffered(e, g => DrawRow(g, e));
+    }
+
+    private void DrawRow(Graphics g, DrawItemEventArgs e)
+    {
         Rectangle row = ListRows.Background(g, this, e.Bounds, false, e.Index == _hot);
         bool on = GetItemChecked(e.Index);
         int size = SettingsStyle.Unit(this, 18);
@@ -910,11 +1014,16 @@ internal sealed class ThemedCheckList : CheckedListBox
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        int hot = ListRows.HotRow(this, e.Location);
-        if (hot != _hot) { _hot = hot; Invalidate(); }
+        ListRows.MoveHot(this, ref _hot, ListRows.HotRow(this, e.Location));
     }
 
-    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hot = -1; Invalidate(); }
+    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); ListRows.MoveHot(this, ref _hot, -1); }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == ListRows.WM_ERASEBKGND && m.WParam != 0) { ListRows.EraseBelowRows(this, ref m); return; }
+        base.WndProc(ref m);
+    }
 }
 
 /// <summary>
