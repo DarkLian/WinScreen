@@ -37,11 +37,18 @@ internal sealed class InfoWindow : Form
         var box = new TextBox
         {
             Text = text.Replace("\r\n", "\n").Replace("\n", Environment.NewLine), Multiline = true, ReadOnly = true,
-            BorderStyle = BorderStyle.None, ScrollBars = ScrollBars.Both, WordWrap = false, Dock = DockStyle.Fill,
+            BorderStyle = BorderStyle.None, ScrollBars = ScrollBars.None, WordWrap = true, Dock = DockStyle.Fill,
             BackColor = SettingsStyle.Card, ForeColor = SettingsStyle.Text, TabStop = true,
         };
         var card = new CardPanel { Dock = DockStyle.Fill, Padding = new Padding(14, 12, 6, 6) };
         card.Controls.Add(box);
+        // A scroll bar only while the facts don't all fit; long lines wrap instead of scrolling sideways.
+        box.Resize += (_, _) =>
+        {
+            int needs = TextRenderer.MeasureText(box.Text, box.Font, new Size(box.ClientSize.Width, 0), TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height;
+            ScrollBars wanted = needs > box.ClientSize.Height ? ScrollBars.Vertical : ScrollBars.None;
+            if (box.ScrollBars != wanted) box.ScrollBars = wanted;
+        };
 
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.RightToLeft,
             WrapContents = false, Padding = new Padding(0, 12, 0, 0), BackColor = SettingsStyle.Page };
