@@ -851,7 +851,7 @@ private readonly ErrorProvider _errors = new();
             var remove = new PlainButton { Glyph = MenuParts.Delete, Removes = true, AutoSize = false, Padding = Padding.Empty,
                 AccessibleName = removeText };
             remove.Size = remove.GetPreferredSize(Size.Empty);
-            _tips.SetToolTip(remove, removeText);
+            _tips.SetToolTip(remove, T("common.remove").Replace("&", "")); // The full sentence is for screen readers.
             remove.Click += (_, _) =>
             {
                 Unlist(_hoverPrograms, program);

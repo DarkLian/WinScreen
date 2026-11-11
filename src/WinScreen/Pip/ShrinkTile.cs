@@ -21,7 +21,6 @@ public sealed class ShrinkTile : Form
     private readonly WindowIdentity _identity;
     private readonly WindowController _windows;
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 100 };
-    private readonly ToolTip _tip = new() { ShowAlways = true };
     private readonly ContextMenuStrip _menu = new();
     private readonly int _width;
     private DwmThumbnail? _thumbnail;
@@ -43,7 +42,7 @@ public sealed class ShrinkTile : Form
         int dpi = Dpi.Of(source);
         _width = Dpi.Scale(TileWidth, dpi);
         Size = new Size(_width, Dpi.Scale(TileHeight, dpi));
-        _tip.SetToolTip(this, T("shrink.controls"));
+        AccessibleDescription = T("shrink.controls"); // Said by a screen reader; nothing pops up on hover.
         _menu.Items.Add(T("window.show"), null, (_, _) => Close());
         Tray.MenuRenderer.Apply(_menu);
         ContextMenuStrip = _menu;
@@ -174,7 +173,6 @@ public sealed class ShrinkTile : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
-        _tip.Dispose();
         _menu.Dispose();
         _watch.Dispose();
         _thumbnail?.Dispose();

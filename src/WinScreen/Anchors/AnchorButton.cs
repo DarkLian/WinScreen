@@ -21,7 +21,6 @@ internal sealed class AnchorButton : Form
     private readonly nint _target;
     private readonly WindowIdentity _identity;
     private readonly Icon? _icon;
-    private readonly ToolTip _tip = new() { ShowAlways = true };
     private Rectangle _iconBounds;
     private bool _marksView;
     private bool _excluded;
@@ -51,8 +50,7 @@ internal sealed class AnchorButton : Form
         AllowDrop = true;
         DoubleBuffered = true;
         Text = T("anchor.titlePrefix") + WindowInfo.Title(target);
-        _tip.SetToolTip(this, WindowInfo.Title(target) + Environment.NewLine +
-                              T("anchor.controls"));
+        AccessibleDescription = T("anchor.controls"); // Said by a screen reader; nothing pops up on hover.
         _menu.Items.Add(T("window.show"), null, (_, _) => BringForward());
         _menu.Items.Add(T("window.minimize"), null, (_, _) =>
         {
@@ -120,8 +118,7 @@ internal sealed class AnchorButton : Form
         if (_marksView != marksView)
         {
             _marksView = marksView;
-            _tip.SetToolTip(this, WindowInfo.Title(_target) + Environment.NewLine + T("anchor.controls") +
-                                  (marksView ? Environment.NewLine + T("anchors.controls.view") : ""));
+            AccessibleDescription = T("anchor.controls") + (marksView ? " " + T("anchors.controls.view") : "");
             Invalidate();
         }
 
@@ -301,7 +298,6 @@ internal sealed class AnchorButton : Form
             DropPreview();
             _previewTimer.Dispose();
             _icon?.Dispose();
-            _tip.Dispose();
             _menu.Dispose();
         }
 

@@ -19,7 +19,7 @@ internal sealed class PipSourcePicker : Form
     private readonly ThemedTable _list = new()
     {
         View = View.Details, FullRowSelect = true, MultiSelect = false, ShowGroups = false,
-        HeaderStyle = ColumnHeaderStyle.None, HideSelection = false, ShowItemToolTips = true,
+        HeaderStyle = ColumnHeaderStyle.None, HideSelection = false,
     };
     private int _hot = -1;
 
@@ -352,7 +352,7 @@ internal sealed class PipSourcePicker : Form
         if (_kind.SelectedIndex == 3)
             foreach (PipSourceBookmark bookmark in (Bookmarks?.Invoke() ?? []).Where(bookmark =>
                 bookmark.Name.Contains(_search.Text, StringComparison.CurrentCultureIgnoreCase)))
-                _list.Items.Add(new ListViewItem(bookmark.Name, _bookmarksGroup) { Tag = bookmark, ToolTipText = bookmark.Device });
+                _list.Items.Add(new ListViewItem(bookmark.Name, _bookmarksGroup) { Tag = bookmark });
         _list.EndUpdate();
         _open.Enabled = _exact.Enabled = false;
         int count = _list.Items.Count;
@@ -368,7 +368,7 @@ internal sealed class PipSourcePicker : Form
 
     private ListViewItem Row(PipChoice choice, ListViewGroup group) => new(choice.Title, group)
     {
-        Tag = choice, ToolTipText = choice.Title, ImageKey = IconFor(choice),
+        Tag = choice, ImageKey = IconFor(choice),
     };
 
     private string IconFor(PipChoice choice)
