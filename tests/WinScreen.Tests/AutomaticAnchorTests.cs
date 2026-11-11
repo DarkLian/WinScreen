@@ -198,8 +198,9 @@ public sealed class AutomaticAnchorTests
                 anchors.SyncAutomatic(targets.Select(target => target.Handle).ToList());
                 List<Form> shown = Buttons();
                 Assert.Equal(3, shown.Count);
-                Assert.Equal(64, shown[0].ClientSize.Width);
-                Assert.True(shown[2].ClientSize.Width < shown[1].ClientSize.Width && shown[1].ClientSize.Width < 64);
+                // Height, since these test windows share one icon and so each Anchor is widened for its title.
+                Assert.Equal(64, shown[0].ClientSize.Height);
+                Assert.True(shown[2].ClientSize.Height < shown[1].ClientSize.Height && shown[1].ClientSize.Height < 64);
                 Assert.True(shown[2].Opacity < shown[0].Opacity);
                 Assert.Equal(Color.FromArgb(240, 240, 240), shown[0].BackColor);
                 Assert.True(shown[0].Left < Screen.PrimaryScreen!.WorkingArea.Width / 2);

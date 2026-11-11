@@ -26,6 +26,11 @@ internal sealed class AnchorButton : Form
     private bool _marksView;
     private bool _excluded;
     private readonly ContextMenuStrip _menu = new();
+    private readonly System.Windows.Forms.Timer _previewTimer = new() { Interval = 100 };
+    private Pip.PipHoverPreview? _preview;
+    private long _hoverSince;
+    private int _size = ButtonSize;
+    private string? _title;
     private Point _pressedAt;
     private bool _pressed;
     private bool _dragged;
@@ -34,7 +39,7 @@ internal sealed class AnchorButton : Form
     {
         _target = target;
         _identity = WindowIdentity.Capture(target);
-        _icon = LoadIcon(target);
+        (_icon, Program) = LoadIcon(target);
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
@@ -59,7 +64,22 @@ internal sealed class AnchorButton : Form
         _menu.Items.Add(T("anchor.remove"), null, (_, _) => Close());
         Tray.MenuRenderer.Apply(_menu);
         ContextMenuStrip = _menu;
+        _menu.Opening += (_, _) => DropPreview();
+        _previewTimer.Tick += (_, _) => FollowPreview();
     }
+
+    /// <summary>The program the window belongs to, which decides its icon. Null when it couldn't be read.</summary>
+    public string? Program { get; }
+
+    /// <summary>How long the pointer rests before the window's live picture shows; 0 for never.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal int PreviewDelay { get; set; }
+
+    /// <summary>The short title shown beside the icon, for an Anchor whose icon others share. Null shows the icon alone.</summary>
+    internal string? Title => _title;
+
+    /// <summary>True while the window's live picture shows beside the Anchor.</summary>
+    internal bool Previewing => _preview is not null;
 
     public nint Target => _target;
 
@@ -71,13 +91,26 @@ internal sealed class AnchorButton : Form
     public bool Placed { get; private set; }
 
     /// <summary>Sets how it looks now. Skips anything unchanged, because this runs after every window change.</summary>
-    internal void Apply(int size, double opacity, bool light, bool marksView, bool excludeFromCapture)
+    internal void Apply(int size, double opacity, bool light, bool marksView, bool excludeFromCapture, string? title = null)
     {
-        if (ClientSize.Width != size)
+        int width = title is null ? size : size * 3;
+        if (ClientSize.Width != width || ClientSize.Height != size || _size != size)
         {
-            ClientSize = new Size(size, size);
+            // An Anchor that grows for its title keeps the edge nearest its side of the screen where it was.
+            Rectangle area = Screen.FromRectangle(Bounds).WorkingArea;
+            bool keepRight = Left + Width / 2 > area.Left + area.Width / 2;
+            int right = Right;
+            _size = size;
+            ClientSize = new Size(width, size);
+            if (keepRight) Left = right - Width;
             int inset = Math.Max(2, size / 6);
             _iconBounds = new Rectangle(inset, inset, size - 2 * inset, size - 2 * inset);
+            Invalidate();
+        }
+
+        if (_title != title)
+        {
+            _title = title;
             Invalidate();
         }
 
@@ -119,18 +152,86 @@ internal sealed class AnchorButton : Form
     {
         base.OnPaint(e);
         e.Graphics.DrawIcon(_icon ?? SystemIcons.Application, _iconBounds);
+        if (_title is not null)
+        {
+            int left = _size - _iconBounds.Left / 2;
+            var words = new Rectangle(left, 2, ClientSize.Width - left - _iconBounds.Left, ClientSize.Height - 4);
+            using var font = new Font(Tray.MenuStyle.Font.FontFamily, Math.Max(7f, _size / 4.4f), GraphicsUnit.Pixel);
+            TextRenderer.DrawText(e.Graphics, _title, font, words, BackColor.GetBrightness() > 0.5 ? Color.Black : Color.White,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+        }
         if (_marksView)
         {
             // A notch in the corner, so a window with a view reads differently without relying on colour.
-            int notch = Math.Max(6, ClientSize.Width / 4);
+            int notch = Math.Max(6, _size / 4);
             int right = ClientSize.Width, bottom = ClientSize.Height;
             using var brush = new SolidBrush(BackColor.GetBrightness() > 0.5 ? Color.Black : Color.White);
             e.Graphics.FillPolygon(brush, [new Point(right, bottom - notch), new Point(right, bottom), new Point(right - notch, bottom)]);
         }
     }
 
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        _hoverSince = Environment.TickCount64;
+        if (PreviewDelay > 0) _previewTimer.Start();
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        DropPreview();
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if (!Visible) DropPreview();
+    }
+
+    /// <summary>
+    /// Shows the window's live picture beside the Anchor once the pointer has rested on it. A minimized window has
+    /// no picture to show, so the title in its tooltip is all there is.
+    /// </summary>
+    private void FollowPreview()
+    {
+        bool resting = !IsDisposed && Visible && ClientRectangle.Contains(PointToClient(Cursor.Position)) && !_pressed &&
+                       !_menu.Visible && PreviewDelay > 0 && _identity.Matches() && !User32.IsIconic(_target) &&
+                       !WindowInfo.IsConcealed(_target);
+        if (!resting)
+        {
+            DropPreview();
+            return;
+        }
+        if (_preview is not null || Environment.TickCount64 - _hoverSince < PreviewDelay) return;
+        try
+        {
+            if (!User32.GetWindowRect(_target, out Rect r) || r.Right <= r.Left || r.Bottom <= r.Top) return;
+            var source = new Rectangle(0, 0, r.Right - r.Left, r.Bottom - r.Top);
+            Rectangle area = Screen.FromRectangle(Bounds).WorkingArea;
+            Size size = Pip.PipGeometry.FitLongSide(Dpi.Scale(360, DeviceDpi), source, area.Size);
+            _preview = new Pip.PipHoverPreview(this, _target);
+            if (_excluded) User32.SetWindowDisplayAffinity(_preview.Handle, User32.WDA_EXCLUDEFROMCAPTURE);
+            _preview.UpdatePreview(source, Pip.PipPreviewGeometry.Place(Bounds, size, area));
+            TopLayer.Raise(_preview.Handle);
+        }
+        catch (WindowOperationException)
+        {
+            DropPreview(); // A window that refuses a picture keeps its Anchor working as before.
+        }
+    }
+
+    private void DropPreview()
+    {
+        _previewTimer.Stop();
+        _preview?.Dispose();
+        _preview = null;
+    }
+
     protected override void OnMouseDown(MouseEventArgs e)
     {
+        DropPreview();
         base.OnMouseDown(e);
         _pressed = true;
         _dragged = false;
@@ -197,6 +298,8 @@ internal sealed class AnchorButton : Form
     {
         if (disposing)
         {
+            DropPreview();
+            _previewTimer.Dispose();
             _icon?.Dispose();
             _tip.Dispose();
             _menu.Dispose();
@@ -227,19 +330,19 @@ internal sealed class AnchorButton : Form
         User32.SetForegroundWindow(_target);
     }
 
-    private static Icon? LoadIcon(nint target)
+    private static (Icon? Icon, string? Program) LoadIcon(nint target)
     {
         User32.GetWindowThreadProcessId(target, out uint processId);
         try
         {
             using var process = System.Diagnostics.Process.GetProcessById((int)processId);
             string? path = process.MainModule?.FileName;
-            return path is null ? null : Icon.ExtractAssociatedIcon(path);
+            return (path is null ? null : Icon.ExtractAssociatedIcon(path), path);
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException
                                       or System.ComponentModel.Win32Exception)
         {
-            return null;
+            return (null, null);
         }
     }
 }

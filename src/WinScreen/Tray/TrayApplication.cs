@@ -110,6 +110,12 @@ public sealed class TrayApplication : ApplicationContext
         _automaticAnchors = new AutomaticAnchors(_anchors, CanHaveAutomaticAnchor, () => Paused || FullScreen.IsActive());
         _anchors.Created += _dark.Ignore;
         _anchors.HasView = _pips.ContainsKey;
+        _anchors.SetOffTaskbar = (window, off) =>
+        {
+            if (off) _windows.TakeOffTaskbar(window);
+            else _windows.PutBackOnTaskbar(window);
+        };
+        _anchors.IsOffTaskbar = _windows.IsOffTaskbar;
         _anchors.ShowRequested += window =>
         {
             if (_pips.TryGetValue(window, out var pip)) pip.GoToSource();

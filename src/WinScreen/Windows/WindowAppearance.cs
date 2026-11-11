@@ -261,6 +261,42 @@ public sealed partial class WindowController
         }
     }
 
+    /// <summary>
+    /// Takes a window's button off the taskbar while it stays as it is, for a window reached from its Anchor. It is
+    /// recorded first, so the button comes back after a crash too.
+    /// </summary>
+    public void TakeOffTaskbar(nint window)
+    {
+        lock (_gate)
+        {
+            ChangedWindow state = Track(window);
+            if (state.TaskbarButtonRemoved || state.SwitcherBits is not null) return;
+            if (TaskbarButtonOwnedByWindows(window))
+                throw new WindowOperationException(T("errors.switcher.windowsManaged"));
+            state.TaskbarButtonRemoved = true;
+            Prepare(window, state);
+            SaveJournal(); // Written before the button goes, so a crash right after still brings it back.
+            if (!TaskbarList.Remove(window))
+            {
+                state.TaskbarButtonRemoved = false;
+                SaveJournal();
+                throw Failure(T("actions.hideSwitcherEntry"), window);
+            }
+        }
+    }
+
+    /// <summary>Puts a window's taskbar button back, unless a view is keeping the window hidden: the view does it then.</summary>
+    public void PutBackOnTaskbar(nint window)
+    {
+        lock (_gate)
+        {
+            if (!_changed.TryGetValue(window, out ChangedWindow? state) || !state.TaskbarButtonRemoved || state.Hidden ||
+                !state.Identity.Matches()) return;
+            RestoreTaskbarButton(window, state);
+            SaveJournal();
+        }
+    }
+
     public bool IsOffTaskbar(nint window)
     {
         lock (_gate) return _changed.TryGetValue(window, out var state) && state.Identity.Matches() && state.TaskbarButtonRemoved;

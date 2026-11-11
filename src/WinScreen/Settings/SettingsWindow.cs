@@ -32,6 +32,8 @@ public sealed class SettingsWindow : Form
     private readonly NumericUpDown _anchorSize = new() { Minimum = 32, Maximum = 72, Increment = 4, Width = 70 };
     private readonly CheckBox _anchorRecency = new SwitchBox { Text = T("anchors.recency"), AutoSize = true };
     private readonly CheckBox _anchorAvoid = new SwitchBox { Text = T("anchors.avoid"), AutoSize = true };
+    private readonly CheckBox _anchorPreview = new SwitchBox { Text = T("anchors.preview"), AutoSize = true };
+    private readonly CheckBox _anchorOffTaskbar = new SwitchBox { Text = T("anchors.offTaskbar"), AutoSize = true };
     private readonly ThemedList _anchorOnly = new();
     private readonly ThemedList _anchorExcluded = new();
     private readonly ComboBox _newAnchorOnly = ProgramPicker();
@@ -590,6 +592,8 @@ private readonly ErrorProvider _errors = new();
             Size = Number(_anchorSize),
             RecencyEmphasis = _anchorRecency.Checked,
             AvoidContent = _anchorAvoid.Checked,
+            HoverPreview = _anchorPreview.Checked,
+            OffTaskbar = _anchorOffTaskbar.Checked,
         }.Validated();
         draft.ShowNotifications = _showNotifications.Checked;
         draft.AutomaticUpdates = _automaticUpdates.Checked;
@@ -895,6 +899,8 @@ private readonly ErrorProvider _errors = new();
         _anchorSize.Value = anchors.Size;
         _anchorRecency.Checked = anchors.RecencyEmphasis;
         _anchorAvoid.Checked = anchors.AvoidContent;
+        _anchorPreview.Checked = anchors.HoverPreview;
+        _anchorOffTaskbar.Checked = anchors.OffTaskbar;
         _anchorOnly.Items.Clear();
         _anchorOnly.Items.AddRange(anchors.OnlyPrograms.Cast<object>().ToArray());
         _anchorExcluded.Items.Clear();
@@ -1268,6 +1274,7 @@ private readonly ErrorProvider _errors = new();
             SettingRow(T("anchors.side.label"), _anchorSide), SettingRow(T("anchors.look.label"), _anchorLook),
             SettingRow(T("anchors.limit"), _anchorLimit), SettingRow(T("anchors.size"), _anchorSize),
             _anchorRecency, _anchorAvoid, Note(T("anchors.avoid.help"))));
+        page.Controls.Add(Section(T("anchors.every.title"), _anchorPreview, _anchorOffTaskbar, Note(T("anchors.offTaskbar.help"))));
         page.Controls.Add(Section(T("anchors.auto.only"), Programs(_anchorOnly, _newAnchorOnly, null, T("programs.empty.included"))));
         page.Controls.Add(Section(T("anchors.auto.excluded"), Programs(_anchorExcluded, _newAnchorExcluded, null, T("programs.empty.excluded"))));
         page.Controls.Add(Note(T("programs.alwaysLeftAlone")));

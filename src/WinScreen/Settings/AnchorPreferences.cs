@@ -16,6 +16,10 @@ public sealed record AnchorPreferences
     public AnchorLook Style { get; init; }
     public bool RecencyEmphasis { get; init; } = true;
     public bool AvoidContent { get; init; }
+    /// <summary>Resting the pointer on an Anchor shows its window's live picture beside it.</summary>
+    public bool HoverPreview { get; init; } = true;
+    /// <summary>A window with an Anchor the person added has no taskbar button while the Anchor is there.</summary>
+    public bool OffTaskbar { get; init; }
 
     internal AnchorPreferences Validated() => this with
     {

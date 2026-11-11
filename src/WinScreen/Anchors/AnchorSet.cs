@@ -13,9 +13,12 @@ public sealed class AnchorSet : IDisposable
     private const int Margin = 16;
     private const int FirstTop = 120;
     private const int Gap = 8;
+    private const int PreviewDelay = 600;
 
     private readonly Dictionary<nint, AnchorButton> _anchors = [];
     private readonly HashSet<nint> _dismissed = [];
+    private readonly HashSet<nint> _offTaskbar = [];
+    private readonly HashSet<nint> _keepsTaskbar = []; // Refused once, so not asked again every half second.
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 500 };
     private AnchorPreferences _preferences = new();
 
@@ -52,6 +55,42 @@ public sealed class AnchorSet : IDisposable
             _hidden = value;
             foreach (AnchorButton anchor in _anchors.Values.Where(anchor => !anchor.IsDisposed))
                 anchor.Visible = !value;
+            SyncTaskbar(); // A window with no taskbar button and no Anchor in sight would be hard to find.
+        }
+    }
+
+    /// <summary>Takes a window's taskbar button away (true) or puts it back (false); set by whoever owns the windows.</summary>
+    internal Action<nint, bool>? SetOffTaskbar { get; set; }
+
+    /// <summary>Whether a window's taskbar button is away now: something else, such as a view closing, may have put it back.</summary>
+    internal Func<nint, bool>? IsOffTaskbar { get; set; }
+
+    /// <summary>
+    /// Keeps taskbar buttons away for windows with an Anchor the person added, while that's chosen and the Anchors
+    /// show, and puts each back as soon as that stops being so.
+    /// </summary>
+    private void SyncTaskbar()
+    {
+        if (SetOffTaskbar is not { } set) return;
+        HashSet<nint> wanted = _preferences.OffTaskbar && !_hidden
+            ? [.. _anchors.Where(pair => !pair.Value.Automatic && !pair.Value.IsDisposed && pair.Value.TargetAlive).Select(pair => pair.Key)]
+            : [];
+        foreach (nint window in _offTaskbar.Except(wanted).ToArray())
+        {
+            _offTaskbar.Remove(window);
+            try { set(window, false); }
+            catch (Windows.WindowOperationException) { } // Closed meanwhile, or recovery puts it back.
+        }
+        if (IsOffTaskbar is { } isOff) _offTaskbar.RemoveWhere(window => wanted.Contains(window) && !isOff(window));
+        _keepsTaskbar.IntersectWith(wanted);
+        foreach (nint window in wanted.Except(_offTaskbar).Except(_keepsTaskbar).ToArray())
+        {
+            try
+            {
+                set(window, true);
+                _offTaskbar.Add(window);
+            }
+            catch (Windows.WindowOperationException) { _keepsTaskbar.Add(window); } // Some keep their button; the Anchor still works.
         }
     }
 
@@ -61,6 +100,7 @@ public sealed class AnchorSet : IDisposable
     {
         _preferences = preferences.Validated();
         Restyle();
+        SyncTaskbar();
     }
 
     /// <summary>Adds an anchor for a window, or removes the one it has. Returns the new state.</summary>
@@ -72,17 +112,21 @@ public sealed class AnchorSet : IDisposable
             {
                 existing.Automatic = false; // Asking for one keeps it, so uncovering won't remove it.
                 Restyle();
+                SyncTaskbar();
                 return true;
             }
 
             _anchors.Remove(window);
             existing.Dispose();
             _watch.Enabled = _anchors.Count > 0;
+            Restyle(); // One left alone shows its icon only again.
+            SyncTaskbar();
             return false;
         }
 
         Add(window, automatic: false);
         Restyle();
+        SyncTaskbar();
         return true;
     }
 
@@ -128,6 +172,7 @@ public sealed class AnchorSet : IDisposable
             Location = StartPosition(window, area, Dpi.Of(window)),
             ShowTarget = ShowRequested is null ? null : target => ShowRequested?.Invoke(target),
             Automatic = automatic,
+            PreviewDelay = _preferences.HoverPreview ? PreviewDelay : 0,
         };
         _anchors[window] = anchor;
         anchor.FormClosed += (_, _) =>
@@ -139,6 +184,8 @@ public sealed class AnchorSet : IDisposable
             }
 
             _watch.Enabled = _anchors.Count > 0;
+            if (!_disposing) Restyle();
+            SyncTaskbar();
         };
         Created?.Invoke(anchor.Handle);
         Style(anchor);
@@ -152,15 +199,41 @@ public sealed class AnchorSet : IDisposable
             Style(anchor);
     }
 
+    /// <summary>
+    /// The words an Anchor shows beside its icon: its window's title when another Anchor shows the same icon, since
+    /// two browser windows look alike otherwise. Null for an icon of its own.
+    /// </summary>
+    private string? TitleOf(AnchorButton anchor)
+    {
+        if (anchor.Program is not { } program || !_anchors.Values.Any(other => !ReferenceEquals(other, anchor) &&
+                !other.IsDisposed && string.Equals(other.Program, program, StringComparison.OrdinalIgnoreCase)))
+            return null;
+        string title = Windows.WindowInfo.Title(anchor.Target).Trim();
+        return title.Length == 0 ? null : AnchorTitles.Short(title, Path.GetFileNameWithoutExtension(program), Describe(program));
+    }
+
+    private readonly Dictionary<string, string> _descriptions = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The name a program gives itself, such as "Microsoft Edge" for msedge.exe.</summary>
+    private string Describe(string program)
+    {
+        if (_descriptions.TryGetValue(program, out string? known)) return known;
+        string name = "";
+        try { name = System.Diagnostics.FileVersionInfo.GetVersionInfo(program).FileDescription ?? ""; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        return _descriptions[program] = name;
+    }
+
     private void Style(AnchorButton anchor)
     {
+        anchor.PreviewDelay = _preferences.HoverPreview ? PreviewDelay : 0;
         int rank = anchor.Automatic ? _recency.IndexOf(anchor.Target) : -1;
         (double size, double opacity) = rank >= 0 && _preferences.RecencyEmphasis
             ? AnchorEmphasis.For(rank, _recency.Count)
             : (1.0, 1.0);
         int full = Dpi.Scale(_preferences.Size, Dpi.Of(anchor.Target));
         anchor.Apply((int)Math.Round(full * size), opacity, _preferences.Style == AnchorLook.Light,
-            HasView?.Invoke(anchor.Target) == true, _preferences.AvoidContent);
+            HasView?.Invoke(anchor.Target) == true, _preferences.AvoidContent, TitleOf(anchor));
     }
 
     /// <summary>
@@ -187,10 +260,14 @@ public sealed class AnchorSet : IDisposable
             anchor.Dispose();
         _anchors.Clear();
         _watch.Enabled = false;
+        SyncTaskbar();
     }
+
+    private bool _disposing;
 
     public void Dispose()
     {
+        _disposing = true;
         RemoveAll();
         _watch.Dispose();
     }
@@ -244,6 +321,34 @@ public sealed class AnchorSet : IDisposable
         }
 
         _watch.Enabled = _anchors.Count > 0;
+        _offTaskbar.RemoveWhere(window => !_anchors.ContainsKey(window) && !User32.IsWindow(window));
+        SyncTaskbar();
+    }
+}
+
+/// <summary>Shortens a window title for an Anchor, kept apart so it can be tested directly.</summary>
+internal static class AnchorTitles
+{
+    /// <summary>
+    /// Drops the program's own name from the end, where browsers and editors put it ("Inbox - Mail - Google Chrome"
+    /// becomes "Inbox - Mail"), since the icon already says which program it is.
+    /// </summary>
+    public static string Short(string title, params string[] program)
+    {
+        foreach (string separator in new[] { " - ", " \u2014 ", " \u2013 ", " | " })
+        {
+            int at = title.LastIndexOf(separator, StringComparison.Ordinal);
+            if (at > 0 && LooksLikeProgram(title[(at + separator.Length)..], program))
+                return title[..at].Trim();
+        }
+        return title;
+    }
+
+    private static bool LooksLikeProgram(string tail, string[] names)
+    {
+        static string Plain(string text) => new([.. text.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant)]);
+        string a = Plain(tail);
+        return a.Length > 0 && names.Select(Plain).Any(b => b.Length > 0 && (a.Contains(b) || b.Contains(a)));
     }
 }
 
