@@ -21,8 +21,10 @@
   <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
-WinScreen is a free helper for the windows on your screen. Keep a window on top, make it see-through, watch it in a small
-live view, or bring a buried window back with one click. No account, no trial, no activation key.
+WinScreen is a free helper for the windows on your screen. Keep a window on top or make it see-through. Watch it
+in a small live view, and even click, type and scroll in that view to use the app from a corner of the screen.
+Bring a buried window back with one click, place windows exactly where you want them, and put everything back
+with one shortcut. No account, no trial, no activation key.
 
 ## A look
 
