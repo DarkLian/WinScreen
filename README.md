@@ -21,10 +21,42 @@
   <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
-WinScreen is a free helper for the windows on your screen. Keep a window on top or make it see-through. Watch it
-in a small live view, and even click, type and scroll in that view to use the app from a corner of the screen.
-Bring a buried window back with one click, place windows exactly where you want them, and put everything back
-with one shortcut. No account, no trial, no activation key.
+## Q&A
+
+### AI Slop!?
+
+The project exists purely out of passion, and to actually solve problems: it offers free, specialized alternatives to
+closed source, paid apps, built with the help of AI agents. Compatibility and reliability might be questionable, but
+that is where community help is needed most. I can't discover every issue with just my own use and my agents, even
+though AI is powerful and fast at patching issues. Yet if you still think it is AI slop, then it is. I can't and won't
+bother changing what you think. Simply find another reliable alternative (if any exists).
+
+### Why not just use existing mature tools?
+
+[PowerToys](https://github.com/microsoft/powertoys) is actively maintained, yet it emphasizes the breadth of features
+and lacks targeted enhancements. WinScreen exists as a complement that specializes in certain Windows utilities. It is
+not here to replicate PowerToys, which would be pointless.
+
+[WindowTop](https://windowtop.info/) is what inspired this project. However, it is closed source and paid. WinScreen
+aims to offer a free, open source option for people (and myself) who want features that are locked behind paywalls.
+On top of that, without the constraints of a business, WinScreen gets to update rapidly and without burden, so you can
+expect quick bug fixes and fast feature additions on demand (with thorough tests, I hope).
+
+Many other projects I have found are either discontinued, paid, or real AI slop that doesn't get updated and leaves
+issues I found on Day 1 open, and their GitHub is a mess.
+**There simply doesn't exist an option that offers free, open source, targeted enhancements with continuous support at
+this time.**
+
+### Will the project be continuously maintained?
+
+I will try my best to. Yet as a passion-driven, non-profit project, community support is a huge boost for me. I can't
+guarantee it will be maintained constantly, but even then it is MIT licensed, so anyone can fork it and keep it alive.
+That's the spirit of open source!
+
+### Is it safe?
+
+The project is fully open source. Anyone can inspect the code (or tell AI to analyze it) and build it themselves. 2FA is
+enabled on my GitHub account. Turn automatic updates off and analyze the code with AI if you want extra security.
 
 ## A look
 
