@@ -33,8 +33,8 @@ Paths are relative to `src/WinScreen/` unless they start with `tests/`.
 | System | Status |
 |---|---|
 | Windows 10 (version 2004 or later) and Windows 11 on x64 | ✅ Supported. The only architecture that is tested, released and updated. Everything below describes it. |
-| Windows 11 on ARM64 | ❌ Not officially supported; experimental. No installer, portable package or update feed is published for it. |
-| The x64 build on an ARM64 PC (emulation) | ❔ Unverified. Enhanced hover is refused there. |
+| Windows 11 on ARM64 | ❌ Unsupported. No installer, portable package or update feed is published for it. |
+| The x64 build on an ARM64 PC (emulation) | ❌ Unsupported and not tested. Enhanced hover is refused there. |
 | 32-bit Windows (x86) | ❌ Unsupported. There is no 32-bit build. |
 
 **Why ARM64 is suspended.** There is no ARM64 device or signed-in ARM64 desktop to test on, and too little demand
@@ -66,15 +66,15 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 
 | Rule | What happens | Where |
 |---|---|---|
-| **Desktop, taskbar, Start and other parts of Windows** | Refused: "The desktop, taskbar and other parts of Windows can't be changed." | `WindowController.Refusal`, `Windows/WindowController.cs:450` |
+| **Desktop, taskbar, Start and other parts of Windows** | Refused: "The desktop, taskbar and other parts of Windows can't be changed." | `WindowController.Refusal`, `Windows/WindowController.cs` |
 | **WinScreen's own windows** (views, tiles, Settings) | Refused: "Use this on the original window…" | same |
 | **Programs on the leave-alone list** (Settings → Programs) | Refused with the program's name. The list wins over everything else. | same; `AppSettings.Allows` |
 | **Programs not on the work-on list**, when that list isn't empty | Refused with the program's name. | same |
-| **Administrator (elevated) apps**, when WinScreen isn't elevated | Windows' UIPI blocks WinScreen from tagging the window, so effects are refused with a message saying to start WinScreen as administrator. Mouse gestures check for elevation directly and leave it alone. Started as administrator, WinScreen works on them like any other app, gestures included (`ProcessInfo.SelfElevated`). | `WindowIdentity.Capture`, `Windows/WindowIdentity.cs:28`; `TrayApplication.CanGesture` |
+| **Administrator (elevated) apps**, when WinScreen isn't elevated | Windows' UIPI blocks WinScreen from tagging the window, so effects are refused with a message saying to start WinScreen as administrator. Mouse gestures, the title-bar toolbar and automatic Anchors check for elevation first and leave the app alone. Started as administrator, WinScreen works on them like any other app, gestures included (`ProcessInfo.SelfElevated`). | `WindowIdentity.Capture`, `Windows/WindowIdentity.cs`; `TrayApplication.CanReach` |
 | **App not responding** | Most changes wait half a second for an answer, then say "The window isn't responding right now." | `WindowController.EnsureResponsive` |
-| **Full-screen app or game running** (Settings → General → "Pause in full screen", on by default) | Hotkeys and toolbar commands are refused, except Put back / Put every window back. Views follow their own rules (see Picture-in-Picture). | `FullScreenPolicy.Decide`, `Windows/FullScreen.cs:49` |
+| **Full-screen app or game running** (Settings → General → "Pause in full screen", on by default) | Hotkeys and toolbar commands are refused, except the ones that only take something away: Put back, Put every window back, the commands for every window (below), and turning Borderless off. Views follow their own rules (see Picture-in-Picture). | `FullScreenPolicy.Decide`, `Windows/FullScreen.cs` |
 | **PC locked or the user is away** | The mouse hook is removed, so gestures and Ctrl+Alt+wheel stop. | `ModifierHookPolicy`, `FullScreen.IsAway` |
-| **Experimental features off** | Dark, Glass, Shrink, Crop and Roll up are refused with "Turn on experimental features in Settings". Turning experimental off while they're in use undoes them. | `CommandCatalog.IsExperimental`, `Settings/AppSettings.cs:133`; `TrayApplication.ApplyPreferences` |
+| **Experimental features off** | Dark, Glass, Shrink, Crop and Roll up are refused with "Turn on experimental features in Settings". Turning experimental off while they're in use undoes them. | `CommandCatalog.IsExperimental`, `Settings/AppSettings.cs`; `TrayApplication.ApplyPreferences` |
 
 ## Window states used in the tables
 
@@ -84,7 +84,7 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **Maximized** | `IsZoomed`. |
 | **Minimized** | `IsIconic`. |
 | **Borderless** | WinScreen's own Borderless or Fill display is on for it (`PlacementBeforeBorderless`). |
-| **Fills the screen** | Covers the whole monitor and has no standard title bar: a game or a full-screen app (`WindowInfo.FillsMonitor`, `Windows/WindowController.cs:1451`). A normal maximized window doesn't count because it has a title bar. |
+| **Fills the screen** | Covers the whole monitor and has no standard title bar: a game or a full-screen app (`WindowInfo.FillsMonitor`, `Windows/WindowController.cs`). A normal maximized window doesn't count because it has a title bar. |
 | **Pinned** | Kept on top by WinScreen (`TogglePin`). Windows that pin themselves are "topmost" but not pinned by WinScreen. |
 | **Hidden** | Hidden by WinScreen behind a view, a tile or Keep updating (`state.Hidden`). A view's menu shows Keep updating as **Keep hidden**, under **Original window**. |
 | **Click-through** | WinScreen's Click-through is on. |
@@ -110,7 +110,7 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **Put every window back** (Ctrl+Alt+R) | ✅ | ✅ | ✅ | ✅ | ✅ ¹² | ✅ | ✅ | ✅ |
 
 1. **Pause pin when maximized** (Settings → Appearance) takes the window off the top while it's maximized and puts it
-   back after (`WindowController.FollowMaximized`, `Windows/WindowController.cs:418`).
+   back after (`WindowController.FollowMaximized`, `Windows/WindowController.cs`).
 2. Allowed by the window checks, but with **Pause in full screen** on, the hotkey is refused while that app is the
    full-screen one (`FullScreenPolicy`). With the pause off, it runs.
 3. Changes the level that comes back when the window is shown again.
@@ -125,8 +125,8 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 7. A game in exclusive full screen: "Borderless mode isn't available while a game uses exclusive full screen."
 8. Needs a standard title bar, and refuses an app that keeps its own minimum height (`errors.rollUp.*`).
 9. "Turn off borderless mode first." Crop is also refused for **custom-shape** windows.
-10. The effect stops drawing while the window is minimized and comes back with it (`Glass/ContentOverlay.cs:132`).
-11. A minimized window is restored first, then shrunk (`Pip/ShrinkTile.cs:77`).
+10. The effect stops drawing while the window is minimized and comes back with it (`Glass/ContentOverlay.cs`).
+11. A minimized window is restored first, then shrunk (`Pip/ShrinkTile.cs`).
 12. Put back always runs, even during a full-screen app.
 13. The window stays minimized, and the change is there when it comes back.
 14. Borderless takes the title bar away, so there is none to darken.
@@ -139,7 +139,20 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
     a saved setup or recovery, say) is there when it comes back.
 
 **Own transparency** windows (the app made itself see-through): Opacity, Click-through, hiding and Glass are refused
-with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows/WindowController.cs:1301`).
+with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows/WindowController.cs`).
+
+**Window information** shows a window's program, file, process and size, with a button to open its folder. It
+follows the same rules as the other window changes.
+
+**Commands for every window** (tray menu, or a hotkey if one is set) don't depend on any one window. They only take
+something away, so they also work while a full-screen app runs (`CommandCatalog.Everywhere`):
+
+| Command | What it does |
+|---|---|
+| **Turn off click-through everywhere** | Clicks reach every window again. Shown only while a window is click-through. |
+| **Unpin everywhere** | Takes every WinScreen pin off. Shown only while a window is pinned. |
+| **Hide Anchors** | Hides every Anchor until chosen again. |
+| **Hide toolbar** | Hides the title-bar toolbar until chosen again. |
 
 ## Moving and placing
 
@@ -154,7 +167,7 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 | **Snap at screen edges** (during Alt+left drag) | ⚠️ ⁶ | ⚠️ ⁶ | — | ⚠️ ⁶ | ❌ ⁷ | — | — | — |
 
 1. A minimized window stays minimized; it's given a new place to come back to (`WindowPlacer.PlaceHidden`,
-   `Windows/WindowPlacer.cs:201`). A maximized window comes back to its usual size in the place chosen, except with
+   `Windows/WindowPlacer.cs`). A maximized window comes back to its usual size in the place chosen, except with
    Move to next display (or Move to display), which keeps it maximized on the new display. Between displays, tested in
    `tests/WinScreen.Tests/WindowPlacementTests.cs` with a virtual second display; not yet on real multi-monitor hardware.
 2. Same full-screen pause as above.
@@ -197,22 +210,23 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 | Minimized | ⚠️ | WinScreen asks first, then restores it, because Windows doesn't draw minimized windows (`TrayApplication.OpenViewOf`). |
 | Hidden by WinScreen (Keep updating) | ✅ | That's how Keep updating works: the original is invisible but still drawn. |
 | Shrunk, Dark or Glass | ⚠️ | Those are turned off first; if one can't be, "Show this window first". |
-| Elevated | ⚠️ | Opening the view tags the window, which UIPI blocks, so it's refused (`WindowIdentity.Capture`). |
+| Elevated | ❌ | Refused with a message saying to start WinScreen as administrator, unless it already runs that way (`WindowIdentity.Capture`). |
 | Game in exclusive full screen | ❌ | "Views can't appear over a game in exclusive full screen." |
-| Any app in full screen, with Pause in full screen on | ⚠️ | Allowed only with **Allow Picture-in-Picture in full screen** on, and only for borderless full screen (`FullScreenPolicy`, `Windows/FullScreen.cs:59`). Pressing the view hotkey in a game closes the newest view instead. |
-| A window Windows won't make a thumbnail of | ❌ | "This window can't be shown in Picture-in-Picture." (`Pip/DwmThumbnailBackend.cs:22`) |
-| The whole screen | ⚠️ | Needs a recent Windows 10 or 11 build ("This version of Windows can't show a view of the screen."). |
+| Any app in full screen, with Pause in full screen on | ⚠️ | Allowed only with **Allow Picture-in-Picture in full screen** on, and only for borderless full screen (`FullScreenPolicy`, `Windows/FullScreen.cs`). Pressing the view hotkey in a game closes the newest view instead. |
+| A window Windows won't make a thumbnail of | ❌ | "This window can't be shown in Picture-in-Picture." (`Pip/DwmThumbnailBackend.cs`) |
+| A whole display, or a region of one | ✅ | The view keeps itself out of screen capture so it never shows itself; that's also why screenshots and screen sharing leave it out. If Windows refuses that, the view isn't opened ("This version of Windows can't show a view of the screen."). |
 
 | View feature | Status | Notes |
 |---|---|---|
 | A click on a view | ✅ | Does nothing to the original; dragging moves the view. **Go to it** is under **Original window** in the view's menu. "Interactive PiP" is the one way to use the original through its view. |
-| WinScreen's tray menu, window menu and Settings | ✅ | Tips stay above WinScreen menus and Settings, followed by the taskbar and its overflow panel, then views and other pinned windows. Layering checks repair only a covered layer, avoiding repeated lifts while nothing changes. Both supported overflow-window classes are included. Views end direct-use visits and suspend their own lifts while a WinScreen menu or the tray overflow panel is open; they pass the pointer through only to the overflow panel. A click on a view while its own menu is open closes the menu. Popup raises are queued onto the view's UI thread and checked again before use. |
+| WinScreen's tray menu, window menu and Settings | ✅ | From the top down: WinScreen's tips, its menus and Settings, the taskbar and its hidden-icons panel, then views and other pinned windows. While a WinScreen menu or the hidden-icons panel is open, views stop taking input and stay below it. A click on a view while its own menu is open closes the menu. |
 | Move away from the pointer | 🧪 ⚠️ | Experimental **and** "Move out of the way" on. Needs a recent Windows (`errors.pip.autoMoveUnsupported`). |
 | Keep updating, taskbar and Alt+Tab | ✅ / ⚠️ | Keep updating takes the original off the shell's task list where supported and changes nothing else about the window, so the view keeps showing its own minimize, maximize and close buttons. Its taskbar button goes, and it also leaves Alt+Tab, on Windows 10 and 11. The entry comes back when the original is shown or the view closes, and after a forced exit. Store apps keep the taskbar button Windows owns; choosing it shows the original. On Windows 10 with smooth capture the button stays, to keep the view updating. The separate option that also takes a window out of Alt+Tab gives it a tool window's frame, which has a small close button only. |
 | Rendering | ⚠️ | Auto, Standard (compositor thumbnail) or Smooth (screen capture). Auto tries Smooth first. Smooth falls back to Standard when it isn't available. Frame rate and scaling only apply to Smooth. |
-| Yellow capture border (Smooth, and Glass) | ⚠️ | Windows can show a separate capture border. While a parked original is hidden, views use Standard capture whenever border suppression is unavailable or refused, restoring the selected backend when shown. This is necessary on Windows 10: fully off-screen parking froze the browser, and a two-pixel overlap exposed the WGC border. Visible originals and Glass retain their capture-border setting. |
-| Hidden original showing through (Keep hidden, Interactive PiP) | ✅ / ⚠️ | The default parks the original at an external monitor edge with only a two-pixel strip overlapping the screen, opacity 0 and click-through. While the pointer is over the view it is at opacity 1 and can be hit, because browsers only accept a wheel turn when their own window is at its point; it goes back to opacity 0 and click-through when the pointer leaves. Input is posted at mapped child-window coordinates while the original stays still. During a visit the view shares input state with the original's thread, except while a button is held, so the app's own pointer shapes show (text, link, resize). While used directly, a view's resize edges are 2 px wide and its corners 8 px, so controls near its edges, such as a browser's tabs, can be clicked. Without Enhanced hover, apps that track the pointer leaving (most browsers) are told it left after each move, so hover effects may not hold. A view's title bar moves the view; Alt+drag also moves it. This is the only direct-use mode: the former press-replay and hover-opacity modes are removed. Placement, switcher styles and a removed taskbar button are journaled before mutation. Closing restores the original while hidden, allows repaint, then fades it in. How input reaches each window, and what it supports, is in the table below (`Pip/PipInputRoute.cs`). Presses on an app Windows marks as not responding are not sent, so they can't act later. Store apps keep the taskbar button Windows owns while hidden; if anything brings a hidden original forward (its taskbar button, Alt+Tab, the app itself), it is shown. The pointer hook only decides what to let through and never waits on the app. VM tests (Windows 10) cover mapped buttons, double-clicks, wheels, drags, keys, placement and recovery; Chrome, File Explorer and Calculator were also tested on Windows 11. |
-| Controls inside the original's top bar | Conditional | Chrome toolbar/tab controls and File Explorer's modern controls were tested on Windows 11, including Explorer's Duplicate tab context-menu action. Edge toolbar cases were tested on Windows 10. Duplicate tab works, and its menu stays where it was put (see the popups row). Relocation preserves a fixed destination and the first restoration position. Other toolbar interactions remain unverified. |
+| Title bar, size and hover preview | ✅ | Every view has a title bar. A view resizes from its edges and corners and keeps the picture's shape; with **Keep aspect ratio** off for that view, the picture fits inside the shape chosen. The hover preview (Settings) shows either a larger picture of the whole view, only while the view is shown at under half its source's width (or its crop's), or a magnifier around the pointer. Checked in the Windows 10 VM. |
+| Yellow capture border (Smooth, and Glass) | ⚠️ | Smooth capture can make Windows draw a yellow border around the captured window. While the original is hidden, a view uses Standard capture wherever that border can't be turned off (Windows 10), so no border shows at the screen edge, and goes back to the chosen mode when the original is shown. Visible originals and Glass keep the border setting. |
+| Hidden original showing through (Keep hidden, Interactive PiP) | ✅ / ⚠️ | The hidden original is parked at an outer edge of the screen, with only a two-pixel strip on screen, fully see-through and letting clicks pass. While the pointer is over the view, that strip becomes just barely visible to the pointer, because browsers only take a wheel turn when their own window is under it; it goes back once the pointer leaves. Clicks, keys and wheel turns are sent to the matching point in the original, which never moves. The app's own pointer shapes show (text, link, resize). While a view is used directly its resize edges are thin, so controls near its edges, such as a browser's tabs, can be clicked; its title bar, or Alt+drag, moves the view. Without Enhanced hover, apps that watch for the pointer leaving (most browsers) are told it left after each move, so hover effects may not hold. Presses on an app that isn't responding are not sent, so they can't act later. If anything brings a hidden original forward (its taskbar button, Alt+Tab, the app itself), it is shown. Everything WinScreen changes is recorded first, so a crash puts the window back. How input reaches each kind of window is in the table below (`Pip/PipInputRoute.cs`). Tested in the Windows 10 VM (buttons, double-clicks, wheels, drags, keys, parking and recovery) and on Windows 11 with Chrome, File Explorer and Calculator. |
+| Controls inside the original's top bar | ⚠️ | Chrome's toolbar and tabs and File Explorer's newer controls were tested on Windows 11, including Explorer's Duplicate tab in a tab's menu, which stays where it was put (see the popups row). Edge's toolbar was tested on Windows 10. Other apps' toolbars are unverified. |
 | The original's popups | ✅ / ⚠️ | Display-only popups stay off screen. Interactive menus and lists are moved near the mapped pointer and clamped to its monitor, raised above the view, and take real input. A submenu opens beside its parent menu, as it would on the original, and stays above it: menus opened together are raised together, oldest first (tested with File Explorer's New submenu). On Windows 11, File Explorer's newer menus move themselves back toward the hidden original a few times while they open; WinScreen puts them back as Windows reports each move, about a millisecond later, and also moves a new one as soon as it appears (`Pip/PopupGuard.cs`). Measured over 10 openings: 2 screen refreshes showed a menu in the wrong place, against 38 before; any that remains is a flash at the edge of the screen as the menu opens. Dialogs end direct use and reveal the original. Apps with unusual ownership or custom popup behavior need manual checking. |
 | The original's caption buttons in a view used directly | ✅ | By hit-test (`PressRules.CaptionActionFor`): close asks the original to close (`SC_CLOSE`) and the view goes with it, or the original is shown after a second if it's still there; minimize minimizes the view, never the original (its picture would stop); maximize goes to the original; the icon or a right-click on the title bar opens the view's menu; borders do nothing; the title bar moves the view. An app that minimizes itself from its own content is restored, still hidden, and the view minimizes; one that maximizes itself goes to the original. |
 | The original after a visit | ✅ | The original never moves during a visit; it stays parked until it is shown or the view closes. |
@@ -230,14 +244,13 @@ One alternative was measured and set aside (Windows 11 x64, Chrome): keeping the
 **Several interactive views at once.** Each view takes input only while the pointer is on it, so going straight from one to another works. Verified with two views used one after the other and back, although both hidden originals are parked in the same place:
 - Two browser pages (Chrome on Windows 11 x64; Edge and Chrome on Windows 10): clicks, typing, wheel turns, drag selection, double-click selection and the page's right-click menu (opening beside the pointer) reach only the page under the pointer.
 - A browser page and Calculator (a Store app, which takes input another way): clicks and keys reach only the one under the pointer (Windows 11 x64 and Windows 10).
-- Enhanced hover on in two Chrome views (Windows 11 x64): the page under the pointer keeps its hover and the one just left clears it.
-
+- Enhanced hover on in two Chrome views (Windows 11 and Windows 10 x64): the page under the pointer keeps its hover and the one just left clears it.
 - Three views at once (test windows): clicks and keys reach only the window under the pointer, in any order.
 - Two windows of one program, sharing a process and a UI thread, each in its own view: clicks and keys reach only the window under the pointer.
 - File Explorer in two views: a double-click on a folder opens it only in the window under the pointer.
 - Middle-click scrolling in one view stops when the pointer goes on into another view, and the other window never scrolls.
 
-These four were checked on Windows 10 and Windows 11. In 0.9.1 and earlier, after a click the keys could go back to one of the views instead of the page, so typing was lost (`Two_pages_used_through_two_views_at_once_each_get_only_their_own_input`).
+The last four were checked on Windows 10 and Windows 11. In 0.9.1 and earlier, after a click the keys could go back to one of the views instead of the page, so typing was lost (`Two_pages_used_through_two_views_at_once_each_get_only_their_own_input`).
 
 **Enhanced hover (experimental)** keeps hover effects showing while an app is used through a view, using a small native helper inside the application. It applies only with Interactive PiP, which is itself experimental and off by default. **Settings → Picture-in-Picture → Using apps through a view** is one table of apps: each row says whether views of that app start with Enhanced hover on and, for a program you add, whether a click shows its original (a program has one or the other). **Choose for me** is on by default and picks the kinds it was verified with: Chrome-family browsers, Firefox and Electron apps. File Explorer is never picked automatically because of its tab menus (below). Clearing it lets you pick each kind yourself. Each view's menu can still turn it on or off for that view, and a view follows Settings until it is changed there. Leaving the view or turning the option off clears the hover. Native tooltips remain unavailable. It does not change popup placement or fix WinUI menu flicker.
 
@@ -249,14 +262,14 @@ The helper is only ever used with the kinds of app below and with programs added
 | Edge | same | ✅ Verified on Windows 10 x64 with the same test as Chrome |
 | Brave, Vivaldi | same | ✅ Verified on Windows 10 and Windows 11 x64 with the same test as Chrome |
 | VS Code (Electron) | VS Code, Discord and similar apps | ✅ Verified on Windows 11 x64: hover holds in a web view, shows in the view's picture, and clears on leave and turning off |
-| Discord and other Electron apps | same | ❔ Recognized by Electron's folder layout and window; not tested individually |
+| Discord and other Electron apps | same | ✅ Recognized by the files in their folder, not by name. Verified on Windows 10 and Windows 11 x64 with Electron's own download running a test page under a made-up name: the same hover test as Chrome passes. Each app's own pages are not tested individually |
 | File Explorer (file list) | File Explorer | ⚠️ Verified on Windows 11: a hovered row is highlighted in the view and stays so; without the option it never highlights. With the option on, the right-click menu of a tab did not take its click in testing (Duplicate tab failed three times of three), so leave it off if you use tab menus. The command bar, tabs and address bar are used through accessibility and don't get hover |
 | Firefox | Firefox | ✅ Verified on Windows 11 x64: hover holds, shows in the view's picture, follows the pointer to another element, and clears on leave and turning off |
-| Other programs added by name | Other programs | ❔ Depends on the app. Works only for windows that take posted mouse input; WinUI and Store content go through accessibility, and WPF apps can't be hidden at all. Don't add games that use anti-cheat |
+| Other programs added by name | Other programs | ⚠️ Depends on the app. Verified on Windows 10 and Windows 11 x64 with a test window that watches for the pointer leaving: added by name, its view starts with Enhanced hover on, and the window isn't told the pointer left while the pointer stays on the view (without it, it was told 16 times in the same moves). A 32-bit program added by name is left alone. Works only for windows that take posted mouse input; WinUI and Store content go through accessibility, and WPF apps can't be hidden at all. Don't add games that use anti-cheat |
 | Windows 10 | same settings | ✅ Verified on Windows 10 x64 (12 Nov 2026) with the same tests as Windows 11: Chrome hover and page previews (also with a window maximized in front, and in two views), Firefox, VS Code, Chrome's own middle-click scrolling, and File Explorer's row highlight |
 | ARM64 PCs (the ARM64 build, and the x64 build or x64 apps under emulation), 32-bit apps | — | ❌ Not available |
 
-On x64, a hidden browser or Electron app keeps its two-pixel strip at a side edge of the screen the whole time, raised without activation, instead of along the bottom, whether or not Enhanced hover is on. Under the taskbar a browser finds itself covered: it stops drawing and stops taking pointer moves, and does not check again until it is clicked, so hover never started when the option was turned on. File Explorer and programs added by name use the side edge only while the option is on for them. Other apps, and every app on Windows 10, park along the bottom as before. Caption styles, taskbar removal, popup placement and recorded restoration state are unchanged.
+On x64, a hidden browser or Electron app keeps its two-pixel strip at a side edge of the screen the whole time, raised without activation, instead of along the bottom, whether or not Enhanced hover is on. Under the taskbar a browser finds itself covered: it stops drawing and stops taking pointer moves, and does not check again until it is clicked, so hover never started when the option was turned on. This is the same on Windows 10 and Windows 11. File Explorer and programs added by name use the side edge only while the option is on for them. Other apps park along the bottom.
 
 The helper filters only queued mouse-leave messages for the currently hovered window on its own UI thread.
 
@@ -297,7 +310,7 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 | **Ctrl+Alt+wheel opacity** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Saved setups** | ✅ ⁵ | ✅ | — | ⚠️ ² | ❌ | ❌ |
 
-1. Clicking the Anchor brings a minimized window back (`Anchors/AnchorButton.cs:224`).
+1. Clicking the Anchor brings a minimized window back (`Anchors/AnchorButton.cs`).
 2. Paused with the rest of WinScreen while a full-screen app runs.
 3. Has its own **Only** and **Never** lists on the Anchors page, on top of the main lists.
 4. Has its own leave-alone list on the Mouse gestures page.
@@ -340,11 +353,10 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 - **Win 11 Snap Layouts panel** and Snap Assist aren't available to Alt-drag (no public API). Edge snapping is
   WinScreen's own.
 - **A lost mouse hook mid-drag** can leave a window following the pointer until the next click.
-- **Elevated windows** are refused by tagging, not by an up-front check. Running WinScreen as administrator lifts this,
-  and with **Run as administrator** on, starting with Windows keeps those rights.
+- **Elevated windows:** most changes find out they can't reach one when they try, and then say so; gestures, the
+  toolbar and automatic Anchors check first and stay away. Running WinScreen as administrator lifts this, and with
+  **Run as administrator** on, starting with Windows keeps those rights.
 - **Borderless windows from other apps** (not WinScreen's Borderless) are treated as normal unless they fill the
   screen.
 - **Multiple monitors with different scaling**: snapping does a second pass if the margins change on the way. Tested
   on a virtual second display at another scale; real mixed-scale monitors haven't been tested.
-
-Title bars are mandatory and have no whole-view tooltip. Whole-view hover previews appear only below half the shown source width, including a crop; the reading lens is unchanged. Title-bar checks passed in the Windows 10 VM. Views resize from a six-DIP edge/corner band without a native frame. Keep aspect ratio defaults on per view; turning it off fits the picture inside the chosen shape.
