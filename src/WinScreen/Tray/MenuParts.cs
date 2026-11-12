@@ -407,12 +407,12 @@ internal sealed class OpacityRow : ToolStripControlHost
         }
 
         /// <summary>
-        /// The wheel moves the slider a step at a time. Left to the menu, it went on to the window under it, which
-        /// took the focus and closed the menu.
+        /// The wheel doesn't move the slider: it is set by clicking or dragging, as everywhere in WinScreen, so a turn
+        /// of the wheel on the way past changes nothing. The wheel is still taken here: left to the menu, it went on
+        /// to the window under it, which took the focus and closed the menu.
         /// </summary>
         protected override void OnMouseWheel(MouseEventArgs e)
         {
-            Value += Math.Sign(e.Delta) * Step;
             if (e is HandledMouseEventArgs handled) handled.Handled = true;
         }
 
