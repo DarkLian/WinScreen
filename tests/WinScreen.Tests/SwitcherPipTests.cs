@@ -60,9 +60,10 @@ public sealed class SwitcherPipTests
                 pip.ShowOnTop();
                 pip.Location = new Point(800, 140);
                 Pump(800);
+                // Inside the view's own border, which Windows 11 colours differently while the view is the active window.
                 Rectangle Corner()
                 {
-                    Rectangle b = pip.Bounds;
+                    Rectangle b = Rectangle.Inflate(pip.Bounds, -2, -2);
                     return new Rectangle(b.Right - Math.Min(160, b.Width / 2), b.Top, Math.Min(160, b.Width / 2), Math.Min(48, b.Height / 4));
                 }
                 Rectangle corner = Corner();
@@ -79,8 +80,9 @@ public sealed class SwitcherPipTests
                 Pump(1200);
                 using Bitmap tool = Capture(corner);
                 double changed = Difference(shown, tool);
-                Assert.True(same < 6 && changed > 3 * same + 4,
-                    $"Title bar corner differs from the shown original by {same:F1} when hidden and {changed:F1} as a tool window.");
+                // Share of pixels that clearly changed: the caption buttons are thin lines, so an average hides them.
+                Assert.True(same < 0.5 && changed > 2 && changed > 5 * same,
+                    $"Title bar corner pixels changed from the shown original: {same:F2}% when hidden, {changed:F2}% as a tool window.");
                 pip.Close();
                 Assert.False(windows.IsHidden(source.Handle));
             }
@@ -96,17 +98,17 @@ public sealed class SwitcherPipTests
         return image;
     }
 
-    /// <summary>Mean difference per color channel, 0 to 255.</summary>
+    /// <summary>Percentage of pixels that differ clearly (by more than 60 over the three channels).</summary>
     private static double Difference(Bitmap a, Bitmap b)
     {
-        long total = 0;
+        int changed = 0;
         for (int y = 0; y < a.Height; y++)
             for (int x = 0; x < a.Width; x++)
             {
                 Color p = a.GetPixel(x, y), q = b.GetPixel(x, y);
-                total += Math.Abs(p.R - q.R) + Math.Abs(p.G - q.G) + Math.Abs(p.B - q.B);
+                if (Math.Abs(p.R - q.R) + Math.Abs(p.G - q.G) + Math.Abs(p.B - q.B) > 60) changed++;
             }
-        return total / (3.0 * a.Width * a.Height);
+        return 100.0 * changed / (a.Width * a.Height);
     }
 
     private static void Pump(int milliseconds)
@@ -137,12 +139,26 @@ public sealed class SwitcherPipTests
                 Assert.True(windows.IsHidden(source.Handle));
                 source.Animate(60);
                 var selector = (PipBackendSelector)typeof(PipWindow).GetField("_thumbnail", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(pip)!;
-                var advanced = (IPipCaptureBackend?)typeof(PipBackendSelector).GetField("_advanced", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(selector);
-                long Frames() => advanced is null ? 0 : Interlocked.Read(ref advanced.Diagnostics.Received);
+                // Hiding the original changes what the capture needs, so the view may replace its capture: always
+                // read the one in use, and count only while the same one keeps running.
+                FieldInfo field = typeof(PipBackendSelector).GetField("_advanced", BindingFlags.NonPublic | BindingFlags.Instance)!;
+                IPipCaptureBackend? Advanced() => (IPipCaptureBackend?)field.GetValue(selector);
+                long Count(int milliseconds)
+                {
+                    for (int attempt = 0; ; attempt++)
+                    {
+                        IPipCaptureBackend? before = Advanced();
+                        long first = before is null ? 0 : Interlocked.Read(ref before.Diagnostics.Received);
+                        Pump(milliseconds);
+                        IPipCaptureBackend? after = Advanced();
+                        if (ReferenceEquals(before, after) || attempt == 3)
+                            return after is null ? 0 : Interlocked.Read(ref after.Diagnostics.Received) - (ReferenceEquals(before, after) ? first : 0);
+                    }
+                }
+                IPipCaptureBackend? advanced = Advanced();
                 Pump(400);
-                long start = Frames();
-                Pump(2000);
-                long baseline = Frames() - start;
+                long baseline = Count(2000);
+                advanced = Advanced();
                 if (preference != PipBackendPreference.Dwm && Environment.OSVersion.Version.Build < 22000)
                 {
                     // Windows 10 can't capture a window out of the switcher, so this is refused, with a reason.
@@ -158,12 +174,10 @@ public sealed class SwitcherPipTests
                 Assert.False(windows.IsOutOfSwitcher(source.Handle));
                 Assert.Equal(before & WindowController.SwitcherMask, Desktop.ExStyle(source.Handle) & WindowController.SwitcherMask);
                 Pump(400);
-                start = Frames();
-                Pump(2000);
-                long hidden = Frames() - start;
+                long hidden = Count(2000);
                 if (advanced is not null)
                 {
-                    Assert.True(baseline >= 40, pip.DiagnosticSnapshot);
+                    Assert.True(baseline >= 40, $"Baseline {baseline}\n{pip.DiagnosticSnapshot}");
                     Assert.True(hidden >= baseline * .9, $"Baseline {baseline}; switcher hidden {hidden}\n{pip.DiagnosticSnapshot}");
                 }
                 else
