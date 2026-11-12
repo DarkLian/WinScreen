@@ -87,7 +87,6 @@ again when you switch away. [What works where](docs/FEATURE_COMPATIBILITY.md) li
 - Runs as administrator when you want it to, for apps such as Task Manager
 - Put everything back with Ctrl+Alt+R; windows come back even if WinScreen stops unexpectedly
 - Automatic updates, and settings you can move to another PC
-- About 20 MB of memory and almost no processor time while it waits in the tray
 - English, 简体中文 and 繁體中文
 
 ## Install
