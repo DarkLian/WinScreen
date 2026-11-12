@@ -58,7 +58,7 @@ That's the spirit of open source!
 The project is fully open source. Anyone can inspect the code (or tell AI to analyze it) and build it themselves. 2FA is
 enabled on my GitHub account. Turn automatic updates off and analyze the code with AI if you want extra security.
 
-## A look
+## Menus
 
 <p align="center">
   <img src="docs/assets/screenshots/settings-general.png" width="720" alt="WinScreen Settings, General page, in the dark look">

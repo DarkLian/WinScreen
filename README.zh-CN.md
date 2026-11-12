@@ -55,7 +55,7 @@ GitHub 页面也是一团糟。
 项目完全开源，任何人都可以检查代码（或者让 AI 帮忙分析），也可以自己构建。我的 GitHub 账号已启用两步验证。
 如果想要更高的安全性，可以关闭自动更新，并用 AI 分析代码。
 
-## 界面一览
+## 菜单
 
 <p align="center">
   <img src="docs/assets/screenshots/settings-general.png" width="720" alt="WinScreen 设置的“常规”页面（深色）">
