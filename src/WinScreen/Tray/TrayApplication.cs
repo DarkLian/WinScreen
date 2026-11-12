@@ -993,6 +993,9 @@ public sealed class TrayApplication : ApplicationContext
         }
         if (_windows.IsHidden(window) || _windows.IsPeeking(window))
             throw new WindowOperationException(T("errors.window.showFirst"));
+        // A part is chosen over the window as it is on screen, which a minimized window isn't, so it comes back first.
+        if (User32.IsIconic(window))
+            User32.ShowWindow(window, User32.SW_RESTORE);
 
         if (_cropping is { IsDisposed: false } || !User32.GetWindowRect(window, out Rect r))
             return;

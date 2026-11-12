@@ -98,6 +98,34 @@ public sealed class StateMatrixTests
         finally { windows.RestoreAll(); }
     }
 
+    /// <summary>
+    /// Crop on a minimized window (made through the window menu of its taskbar button, say) leaves it minimized, and
+    /// only the part kept shows once it comes back. The Crop command itself brings a minimized window back first, so
+    /// the part can be chosen over it.
+    /// </summary>
+    [Fact]
+    public void A_minimized_window_cropped_comes_back_with_only_that_part()
+    {
+        using var target = new TargetProcess(Spot);
+        // Not the form: a Windows Forms form with a frame puts its own shape back.
+        nint window = target.CreatePlainWindow(Spot, framed: true);
+        var windows = new WindowController([]);
+        Minimized(window);
+        var part = new Rectangle(30, 30, 200, 150);
+        try
+        {
+            windows.Crop(window, part);
+            Assert.True(User32.IsIconic(window), "It came out of minimized.");
+            // This plain window comes back maximized, as the first window of its process; either way is fine here.
+            User32.ShowWindow(window, User32.SW_RESTORE);
+            Assert.True(Desktop.WaitFor(() => !User32.IsIconic(window), 2000), "It didn't come back.");
+            Assert.Equal(part, WindowInfo.ShapeOf(window));
+            Assert.True(windows.IsCropped(window));
+        }
+        finally { windows.RestoreAll(); }
+        Assert.Null(WindowInfo.ShapeOf(window));
+    }
+
     // ---- WinScreen's Borderless ----
 
     /// <summary>
