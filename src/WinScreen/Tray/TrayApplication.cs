@@ -665,7 +665,7 @@ public sealed class TrayApplication : ApplicationContext
     /// <summary>Only windows a person would look for, that are really out of sight and allowed by Settings.</summary>
     private bool CanHaveAutomaticAnchor(nint window) =>
         WindowInfo.IsMainWindow(window) && _windows.CanControl(window) && !WindowInfo.IsConcealed(window) &&
-        !_windows.IsHidden(window) && _settings.Anchors.Allows(WindowInfo.ProgramOf(window));
+        !_windows.IsHidden(window) && _settings.Anchors.Allows(WindowInfo.ProgramOf(window)) && CanReach(window);
 
     private bool Paused => _settings.PauseInFullScreen && FullScreen.IsActive();
 
@@ -684,7 +684,8 @@ public sealed class TrayApplication : ApplicationContext
 
     private bool CanUseToolbar(nint window)
     {
-        return !Paused && _windows.CanControl(window);
+        // An administrator app's window would refuse every button, so the bar doesn't offer them.
+        return !Paused && _windows.CanControl(window) && CanReach(window);
     }
 
     private bool IsAvailable(AppCommand command) =>
@@ -828,9 +829,15 @@ public sealed class TrayApplication : ApplicationContext
     private bool CanGesture(nint window)
     {
         if (_windows.Refusal(window) is not null || _windows.GestureBlocked(window)) return false;
+        return CanReach(window);
+    }
+
+    /// <summary>Windows only lets an app reach an administrator app's windows when it runs as administrator too.</summary>
+    private static bool CanReach(nint window)
+    {
+        if (ProcessInfo.SelfElevated) return true;
         User32.GetWindowThreadProcessId(window, out uint process);
-        // Windows only lets an app reach an administrator app's windows when it runs as administrator too.
-        return ProcessInfo.SelfElevated || !ProcessInfo.IsElevated(process);
+        return !ProcessInfo.IsElevated(process);
     }
 
     private bool CanOpenWindowMenu(nint window) => CanGesture(window) && !User32.IsIconic(window) &&
