@@ -21,6 +21,8 @@ internal sealed class SourcePopups
     private const long WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x80;
     /// <summary>How near a new popup must be to an open one to belong to it, as a submenu does.</summary>
     private const int Adjacent = 8;
+    /// <summary>Windows 11's newer menus, which move themselves back a few times while they open.</summary>
+    internal const string WinUiPopup = "Microsoft.UI.Content.PopupWindowSiteBridge";
     private readonly nint _source;
     private readonly Dictionary<nint, Placement> _placed = [];
     private readonly Dictionary<nint, Point> _hidden = []; // Popup, and where it was.
@@ -84,13 +86,18 @@ internal sealed class SourcePopups
                         Point place = PlaceNew(native, at, sourcePoint);
                         _placed[popup] = new Placement(current, place, native.Size, ++_opened);
                         if (place != current) User32.SetWindowPos(popup, 0, place.X, place.Y, 0, 0, Move);
+                        if (Windows.WindowInfo.ClassName(popup) == WinUiPopup) PopupGuard.Hold(popup, place);
                         opened = true;
                     }
-                    else if (current != previous.Placed)
+                    else
                     {
-                        // Layout may put a popup back at its source coordinates. Its destination belongs to
-                        // this opening, not to the latest pointer or transient layout position.
-                        User32.SetWindowPos(popup, 0, previous.Placed.X, previous.Placed.Y, 0, 0, Move);
+                        if (current != previous.Placed)
+                        {
+                            // Layout may put a popup back at its source coordinates. Its destination belongs to
+                            // this opening, not to the latest pointer or transient layout position.
+                            User32.SetWindowPos(popup, 0, previous.Placed.X, previous.Placed.Y, 0, 0, Move);
+                        }
+                        if (Windows.WindowInfo.ClassName(popup) == WinUiPopup) PopupGuard.Hold(popup, previous.Placed);
                     }
                     continue;
                 }

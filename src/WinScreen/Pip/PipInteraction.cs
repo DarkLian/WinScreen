@@ -167,7 +167,7 @@ internal sealed class PipInteraction : IDisposable
     private enum EventKind { Move, Press, Release, Wheel, Record, CancelScroll }
 
     private readonly record struct InputEvent(EventKind Kind, Point At, MouseButtons Button = MouseButtons.None,
-        bool Alt = false, bool Horizontal = false, uint Data = 0, PressOutcome Outcome = default);
+        bool Alt = false, bool Horizontal = false, uint Data = 0, PressOutcome Outcome = default, bool EndsScroll = false);
 
     /// <summary>Whether visits share input state with the original, for tests.</summary>
     internal static bool ShareInput { get; set; } = true;
@@ -342,6 +342,7 @@ internal sealed class PipInteraction : IDisposable
         }
         _watcher = new Thread(FollowPopups) { IsBackground = true, Name = "WinScreen interaction popups" };
         _watcher.Start();
+        _menuOpened = PopupGuard.Watch(_sourceProcess, () => _moved.Set());
         Share(true);
         Interlocked.Increment(ref _active);
     }
@@ -494,7 +495,10 @@ internal sealed class PipInteraction : IDisposable
             User32.SetForegroundWindow(_source);
         }
         _swallowed |= button;
-        Enqueue(new(EventKind.Press, point, button, Alt: alt));
+        // Scrolling stops with the press itself, not when the worker reaches it: it may still be busy sending steps.
+        bool endsScroll = _scrolling;
+        if (endsScroll) _scrolling = false;
+        Enqueue(new(EventKind.Press, point, button, Alt: alt, EndsScroll: endsScroll));
         return true;
     }
 
@@ -565,7 +569,7 @@ internal sealed class PipInteraction : IDisposable
         {
             case EventKind.Record: Record(input.Outcome, input.At, 0); break;
             case EventKind.Move: MoveArrived(input.At); break;
-            case EventKind.Press: PressArrived(input.At, input.Button, input.Alt); break;
+            case EventKind.Press: PressArrived(input.At, input.Button, input.Alt, input.EndsScroll); break;
             case EventKind.Release: ReleaseArrived(input.At, input.Button); break;
             case EventKind.Wheel:
                 StopScroll();
@@ -611,9 +615,9 @@ internal sealed class PipInteraction : IDisposable
         }
     }
 
-    private void PressArrived(Point point, MouseButtons button, bool alt)
+    private void PressArrived(Point point, MouseButtons button, bool alt, bool endsScroll = false)
     {
-        if (_scrolling)
+        if (_scrolling || endsScroll)
         {
             _scrolling = false;
             if (!alt && button is MouseButtons.Left or MouseButtons.Middle)
@@ -790,11 +794,14 @@ internal sealed class PipInteraction : IDisposable
         return process;
     }
 
+    private IDisposable? _menuOpened;
+
     public void Dispose()
     {
         if (_stopping)
             return;
         _stopping = true;
+        _menuOpened?.Dispose();
         _messages.Hover.Deactivate();
         Share(false);
         _rechecked.Set();

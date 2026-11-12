@@ -12,7 +12,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
 {
     private bool _requireStationary;
 
-    [Fact(Skip = "PIP-501: Windows 11's WinUI menus put themselves back at their own position once or twice while opening; corrections and waiting first both still see it.")]
+    [Fact]
     public void Explorer_tab_menus_remain_stationary_during_sustained_navigation()
     {
         _requireStationary = true;

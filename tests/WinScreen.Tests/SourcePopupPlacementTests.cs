@@ -27,6 +27,35 @@ public sealed class SourcePopupPlacementTests
 
     private static Point Middle(Rectangle r) => new(r.Left + r.Width / 2, r.Top + r.Height / 2);
 
+    /// <summary>
+    /// PIP-501: a menu that its app moves back while it opens goes straight back where it was put, without waiting
+    /// for the next sweep; once it has been open a while, it is left alone.
+    /// </summary>
+    [Fact]
+    public void A_held_popup_moved_by_its_app_goes_straight_back_for_a_short_while()
+    {
+        static Point At(nint window) => User32.GetWindowRect(window, out Rect r) ? new Point(r.Left, r.Top) : default;
+        using var other = new TargetProcess(new Rectangle(300, 300, 200, 120));
+        var place = new Point(320, 330);
+        User32.SetWindowPos(other.Handle, 0, place.X, place.Y, 0, 0, User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+        PopupGuard.Hold(other.Handle, place);
+        Thread.Sleep(150); // The guard hooks the process.
+        var back = new List<double>();
+        for (int i = 0; i < 5; i++)
+        {
+            User32.SetWindowPos(other.Handle, 0, 16, 600, 0, 0, User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            Assert.True(Desktop.WaitFor(() => At(other.Handle) == place, 200), "Not put back.");
+            back.Add(watch.Elapsed.TotalMilliseconds);
+            Thread.Sleep(40);
+        }
+        Assert.True(back.Max() < 50, string.Join(", ", back));
+        Thread.Sleep(PopupGuard.HoldMilliseconds);
+        User32.SetWindowPos(other.Handle, 0, 16, 600, 0, 0, User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+        Thread.Sleep(150);
+        Assert.Equal(new Point(16, 600), At(other.Handle));
+    }
+
     [Fact]
     public void Relayout_keeps_a_popups_anchor_and_first_restoration_position()
     {
