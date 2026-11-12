@@ -299,6 +299,67 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(toolbar)), "The toolbar didn't hide.");
     }
 
+    /// <summary>
+    /// A real administrator app, with WinScreen running without administrator rights: no toolbar on its title bar, no
+    /// automatic Anchor when it's covered (while an ordinary window covered beside it gets one), and a manual Anchor or
+    /// any other change says to start WinScreen as administrator. Starting the window as administrator brings up
+    /// Windows' prompt, so this runs only with WINSCREEN_TEST_ELEVATED=1, from a shell without administrator rights.
+    /// </summary>
+    [Fact]
+    public void An_administrator_app_gets_no_toolbar_and_no_anchors_and_says_why()
+    {
+        if (Environment.GetEnvironmentVariable("WINSCREEN_TEST_ELEVATED") != "1") return; // Asks for administrator rights.
+        Assert.False(ProcessInfo.SelfElevated, "Run this from a shell without administrator rights.");
+        RestartWith(new AppSettings { WelcomeShown = true, Anchors = new AnchorPreferences { Automatic = true } });
+        // Windows drops simulated keys and clicks while an administrator window is in front, so the right to bring
+        // windows forward is earned first.
+        Desktop.GainForegroundRights();
+
+        string title = "Administrator target " + Guid.NewGuid().ToString("N")[..6];
+        var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, "WinScreen.TestTarget.exe"))
+        {
+            UseShellExecute = true,
+            Verb = "runas",
+            Arguments = $"--left 300 --top 220 --width 500 --height 360 --colors 1E64C8 --title \"{title}\" --alone-for 45000",
+        };
+        Process.Start(start)?.Dispose(); // Throws if the prompt is declined.
+        nint elevated = 0;
+        Assert.True(Desktop.WaitFor(() => (elevated = Desktop.FindWindow(null, title)) != 0, 60000),
+            "The administrator test window didn't open.");
+        User32.GetWindowThreadProcessId(elevated, out uint process);
+        Assert.True(ProcessInfo.IsElevated(process), "The test window isn't running as administrator.");
+
+        // Any change, a manual Anchor included, says why it can't be made.
+        var refused = Assert.Throws<WinScreen.Windows.WindowOperationException>(() => new WinScreen.Windows.WindowController([]).TogglePin(elevated));
+        Assert.Contains("administrator", refused.Message);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var anchors = new WinScreen.Anchors.AnchorSet();
+            var anchorRefused = Assert.Throws<WinScreen.Windows.WindowOperationException>(() => anchors.Toggle(elevated));
+            Assert.Contains("administrator", anchorRefused.Message);
+        });
+
+        // No toolbar on its title bar.
+        User32.SetForegroundWindow(elevated);
+        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == elevated, 3000), "The administrator window didn't come forward.");
+        Assert.True(WinScreen.Windows.WindowInfo.TryGetFrameBounds(elevated, out Rectangle frame, out _));
+        Desktop.MoveMouse(new Point(frame.Left + frame.Width / 2, frame.Top + 12));
+        Thread.Sleep(2500);
+        nint toolbar = Desktop.FindProcessWindow(_app.Id, text => text == "WinScreen toolbar");
+        Assert.True(toolbar == 0 || !Desktop.IsWindowVisible(toolbar), "The toolbar appeared on an administrator app.");
+        Desktop.MoveMouse(new Point(frame.Left + 40, frame.Bottom - 40));
+
+        // Covered, it gets no automatic Anchor; an ordinary window covered beside it does. The cover is put on top
+        // without taking the focus, which an administrator window in front would refuse.
+        using var ordinary = new TargetProcess(new Rectangle(900, 220, 400, 300), "1EC81E", title: "Ordinary covered target");
+        using var cover = new TargetProcess(new Rectangle(250, 160, 1150, 520), "808080", title: "Cover");
+        User32.SetWindowPos(cover.Handle, User32.HWND_TOPMOST, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        Assert.True(Desktop.WaitFor(() => Desktop.FindProcessWindow(_app.Id, text => text.EndsWith("Ordinary covered target", StringComparison.Ordinal)) != 0, 8000),
+            "No automatic Anchor for the ordinary covered window, so the check below would prove nothing.");
+        Thread.Sleep(1500);
+        Assert.Equal(0, Desktop.FindProcessWindow(_app.Id, text => text.EndsWith(title, StringComparison.Ordinal)));
+    }
+
     /// <summary>On a maximized window the toolbar shows on its title bar at the top of the screen, and its pin button works.</summary>
     [Fact]
     public void The_toolbar_appears_on_a_maximized_windows_title_bar_and_works()

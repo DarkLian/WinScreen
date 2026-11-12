@@ -215,8 +215,17 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         // CSS/DOM effects and cleanup for the native helper's validated rollout.
     }
 
-    /// <summary>Every Chrome-family browser installed: Chrome, and Edge where Windows still has it.</summary>
-    public static IEnumerable<object[]> HoverBrowsers() => BrowserCases();
+    /// <summary>
+    /// Every Chrome-family browser at hand: Chrome, Edge where Windows still has it, and the portable Brave and Vivaldi
+    /// in the test output's test-apps folder (official builds, signatures checked; not in Git), when downloaded.
+    /// </summary>
+    public static IEnumerable<object[]> HoverBrowsers()
+    {
+        foreach (object[] browser in BrowserCases()) yield return browser;
+        string apps = Path.Combine(AppContext.BaseDirectory, "test-apps");
+        foreach (string portable in new[] { Path.Combine(apps, "brave", "brave.exe"), Path.Combine(apps, "vivaldi", "Application", "vivaldi.exe") })
+            if (File.Exists(portable)) yield return [portable];
+    }
 
     [NativeHoverTheory]
     [MemberData(nameof(HoverBrowsers))]
@@ -1507,7 +1516,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     private static List<int> ProcessesUsing(string root)
     {
         var ids = new List<int>();
-        using var search = new System.Management.ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='chrome.exe' OR Name='msedge.exe'");
+        using var search = new System.Management.ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='chrome.exe' OR Name='msedge.exe' OR Name='brave.exe' OR Name='vivaldi.exe'");
         foreach (var item in search.Get())
             using (item)
                 if (item["CommandLine"] is string line && line.Contains(root, StringComparison.OrdinalIgnoreCase))

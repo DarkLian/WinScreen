@@ -41,6 +41,18 @@ internal static class Program
                 NativeShow.SetWindowLongPtr(window.Handle, -8, (nint)long.Parse(ownerText));
             };
         }
+        if (options.TryGetValue("--alone-for", out string? lifetime))
+        {
+            // Started without a test to talk to (as administrator, through Windows' prompt): a title bar from the
+            // start, no commands, and gone after this many milliseconds, since the test can't close it.
+            window.FormBorderStyle = FormBorderStyle.Sizable;
+            var end = new System.Windows.Forms.Timer { Interval = int.Parse(lifetime) };
+            end.Tick += (_, _) => window.Close();
+            window.Shown += (_, _) => end.Start();
+            Application.Run(window);
+            return;
+        }
+
         window.Shown += (_, _) =>
         {
             Console.Out.WriteLine(window.Handle.ToInt64());

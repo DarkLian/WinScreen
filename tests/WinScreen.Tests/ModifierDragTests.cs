@@ -433,6 +433,65 @@ public sealed class ModifierGestureTests
         }
     }
 
+    /// <summary>
+    /// A window in WinScreen's Borderless moves with Alt+drag and resizes with Alt+right drag. It has no resize frame
+    /// any more, so it doesn't snap at a screen edge: it stays where it was let go.
+    /// </summary>
+    [Fact]
+    public void A_borderless_window_moves_and_resizes_with_alt_drag_and_does_not_snap()
+    {
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(new(500, 200, 400, 300));
+        target.UseFrame();
+        var windows = new WindowController([]);
+        using var drag = Gestures(target);
+        Point original = Cursor.Position;
+        try
+        {
+            Assert.True(windows.ToggleBorderless(target.Handle));
+            Desktop.Activate(target.Handle);
+            Rectangle start = RectOf(target.Handle);
+            drag.SetActive(true);
+            Pump(150);
+            keybd_event(Alt, 0, 0, 0);
+            var grab = new Point(start.Left + 150, start.Top + 120);
+            Drag(grab, new Point(grab.X + 100, grab.Y + 60), LeftDown, LeftUp);
+            Assert.True(Desktop.WaitFor(() => Near(RectOf(target.Handle).Location, new Point(start.Left + 100, start.Top + 60)), 1000),
+                "Not moved: " + RectOf(target.Handle));
+            Rectangle moved = RectOf(target.Handle);
+            var corner = new Point(moved.Right - 30, moved.Bottom - 30);
+            Drag(corner, new Point(corner.X + 60, corner.Y + 40), RightDown, RightUp);
+            Assert.True(Desktop.WaitFor(() => Near(RectOf(target.Handle).Size, new Size(moved.Width + 60, moved.Height + 40)), 1000),
+                "Not resized: " + RectOf(target.Handle));
+
+            // To the left edge of the screen: no snap to half.
+            Screen screen = Screen.FromHandle(target.Handle);
+            Rectangle before = RectOf(target.Handle);
+            var from = new Point(before.Left + 150, before.Top + 120);
+            MoveTo(from);
+            Pump(60);
+            Press(LeftDown);
+            Glide(from, new Point(screen.Bounds.Left, from.Y), 15, 20);
+            Pump(150);
+            mouse_event(LeftUp, 0, 0, 0, 0);
+            keybd_event(Alt, 0, 2, 0);
+            Pump(400);
+            Rectangle half = PlacementGeometry.SnapFrame(SnapZone.Left, screen.WorkingArea);
+            Rectangle after = RectOf(target.Handle);
+            Assert.Equal(before.Size, after.Size);
+            Assert.False(Near(after.Size, half.Size), "It snapped: " + after);
+            Assert.True(windows.IsBorderless(target.Handle));
+            Assert.Null(target.NextReport(100));
+        }
+        finally
+        {
+            keybd_event(Alt, 0, 2, 0);
+            drag.SetActive(false);
+            Cursor.Position = original;
+            windows.RestoreAll();
+        }
+    }
+
     /// <summary>A real mouse event anywhere on the desktop, other displays included.</summary>
     private static void MoveToAnywhere(Point point)
     {

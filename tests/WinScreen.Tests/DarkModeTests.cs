@@ -301,4 +301,43 @@ public class DarkModeTests
             if (expected) Assert.True(Shows(target, Color.Black, pump));
         });
     }
+
+    /// <summary>
+    /// Dark mode's filter works on a window in WinScreen's Borderless, follows it when it's moved, and the window is
+    /// still borderless once Dark is off.
+    /// </summary>
+    [Fact]
+    public void Turns_a_borderless_window_dark_and_follows_it()
+    {
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        target.UseFrame();
+        OnUiThread(pump =>
+        {
+            Desktop.GainForegroundRights();
+            var windows = new WindowController([]);
+            try
+            {
+                Assert.True(windows.ToggleBorderless(target.Handle));
+                Desktop.Activate(target.Handle);
+                Rectangle Middle()
+                {
+                    Rectangle frame = Desktop.BoundsOf(target.Handle);
+                    return new Rectangle(frame.Left + frame.Width / 2 - 20, frame.Top + frame.Height / 2 - 20, 40, 40);
+                }
+                bool ShowsColor(Color color) => Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Middle()), color), 3000, () => pump(20));
+                Assert.True(ShowsColor(White), $"Borderless showed {Desktop.ColorOnScreen(Middle())}.");
+                using var dark = new DarkMode();
+                Assert.True(dark.Toggle(target.Handle));
+                Assert.True(ShowsColor(Color.Black), $"Dark on a borderless window showed {Desktop.ColorOnScreen(Middle())}.");
+                Rectangle frame = Desktop.BoundsOf(target.Handle);
+                Native.User32.SetWindowPos(target.Handle, 0, frame.Left + 120, frame.Top + 60, 0, 0,
+                    Native.User32.SWP_NOSIZE | Native.User32.SWP_NOZORDER | Native.User32.SWP_NOACTIVATE);
+                Assert.True(ShowsColor(Color.Black), $"Dark didn't follow the move: {Desktop.ColorOnScreen(Middle())}.");
+                Assert.False(dark.Toggle(target.Handle));
+                Assert.True(ShowsColor(White));
+                Assert.True(windows.IsBorderless(target.Handle));
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
 }

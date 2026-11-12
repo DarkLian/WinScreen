@@ -390,4 +390,74 @@ public sealed class SwitcherListTests
             return names;
         }
     }
+    /// <summary>
+    /// Windows 11's switcher can't be read through accessibility, so its text is read off the screen. Keep updating's own
+    /// steps are taken on a window with no title bar, with no view, so the window's title shows nowhere but in the switcher:
+    /// listed before, gone while hidden with its taskbar button taken away, and back once shown.
+    /// </summary>
+    [Fact]
+    public void On_windows_11_keep_updating_takes_the_original_out_of_alt_tab_read_from_the_screen()
+    {
+        if (Environment.OSVersion.Version.Build < 22000) return; // Windows 10's switcher is read by the test above.
+        const string word = "Lantern";
+        using var target = new TargetProcess(new Rectangle(240, 160, 480, 340), "E8E0C8", title: "Kettle " + word + " Meadow");
+        Desktop.GainForegroundRights();
+        Desktop.Activate(target.Handle);
+        var windows = new WindowController([]);
+        var owner = new object();
+        try
+        {
+            Assert.Contains(word, SwitcherText());
+            windows.HideOwned(target.Handle, owner);
+            windows.RemoveTaskbarButton(target.Handle);
+            windows.Park(target.Handle);
+            Thread.Sleep(500);
+            Assert.DoesNotContain(word, SwitcherText());
+            windows.ShowOwned(target.Handle, owner);
+            Thread.Sleep(500);
+            Assert.Contains(word, SwitcherText());
+        }
+        finally { windows.RestoreAll(); }
+
+        static string SwitcherText()
+        {
+            Desktop.Key(Keys.Menu, true);
+            try
+            {
+                Desktop.Press(Keys.Tab);
+                Thread.Sleep(1200);
+                return ReadScreen().GetAwaiter().GetResult();
+            }
+            finally
+            {
+                Desktop.Press(Keys.Escape);
+                Desktop.Key(Keys.Menu, false);
+                Thread.Sleep(400);
+            }
+        }
+    }
+
+    /// <summary>The text Windows' own recognizer reads off the primary screen.</summary>
+    private static async Task<string> ReadScreen()
+    {
+        Rectangle area = Screen.PrimaryScreen!.Bounds;
+        using var picture = new Bitmap(area.Width, area.Height);
+        using (var graphics = Graphics.FromImage(picture)) graphics.CopyFromScreen(area.Location, Point.Empty, area.Size);
+        using var png = new MemoryStream();
+        picture.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+        using var stream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream();
+        using (var writer = new global::Windows.Storage.Streams.DataWriter(stream))
+        {
+            writer.WriteBytes(png.ToArray());
+            await writer.StoreAsync();
+            writer.DetachStream();
+        }
+        stream.Seek(0);
+        var decoder = await global::Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
+        using var bitmap = await decoder.GetSoftwareBitmapAsync();
+        var engine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages()
+            ?? throw new InvalidOperationException("No text recognition language is installed.");
+        var result = await engine.RecognizeAsync(bitmap);
+        return result.Text;
+    }
 }
