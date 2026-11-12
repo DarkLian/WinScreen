@@ -1509,15 +1509,6 @@ internal sealed class NumberSlider : Control
         if (_held && !Capture) { _held = false; Become(); }
     }
 
-    /// <summary>A notch of the wheel moves it a step, and the page doesn't scroll as well.</summary>
-    protected override void OnMouseWheel(MouseEventArgs e)
-    {
-        base.OnMouseWheel(e);
-        if (!Usable) return;
-        Set(_number.Value + Math.Sign(e.Delta) * Math.Max(1, _number.Increment));
-        if (e is HandledMouseEventArgs handled) handled.Handled = true;
-    }
-
     protected override bool IsInputKey(Keys keyData) =>
         (keyData & Keys.KeyCode) is Keys.Left or Keys.Right or Keys.Up or Keys.Down or Keys.Home or Keys.End or Keys.PageUp or Keys.PageDown
         || base.IsInputKey(keyData);

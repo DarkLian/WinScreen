@@ -26,15 +26,15 @@ public sealed class WindowPlacer(WindowController windows)
         Remember(window);
         Screen screen = Screen.FromHandle(window);
         Rectangle frame = FrameOf(window, screen);
-        Place(window, new Rectangle(PlacementGeometry.Align(frame.Size, screen.WorkingArea, anchor), frame.Size), screen);
+        Place(window, new Rectangle(PlacementGeometry.Align(frame.Size, screen.WorkingArea, anchor), frame.Size), screen, unmaximize: true);
     }
 
-    /// <summary>Sets the visible frame exactly, in screen pixels.</summary>
+    /// <summary>Sets the visible frame exactly, in screen pixels. A maximized window comes back to its usual size for it.</summary>
     public void SetFrame(nint window, Rectangle frame)
     {
         Check(window);
         Remember(window);
-        Place(window, frame, Screen.FromRectangle(frame));
+        Place(window, frame, Screen.FromRectangle(frame), unmaximize: true);
     }
 
     /// <exception cref="WindowOperationException">There's only one display, or the window refused.</exception>
@@ -146,8 +146,18 @@ public sealed class WindowPlacer(WindowController windows)
             normal.Right + area.Left - all.Left, normal.Bottom + area.Top - all.Top);
     }
 
-    private void Place(nint window, Rectangle target, Screen screen)
+    /// <summary>
+    /// Puts the visible frame at <paramref name="target"/>. A minimized window stays minimized and comes back there.
+    /// A maximized one, which fills its display whatever its place, is made its usual size first with
+    /// <paramref name="unmaximize"/>, so the place chosen can be seen; otherwise it too comes back there.
+    /// </summary>
+    private void Place(nint window, Rectangle target, Screen screen, bool unmaximize = false)
     {
+        if (unmaximize && User32.IsZoomed(window) && !User32.IsIconic(window))
+        {
+            PlaceHidden(window, target, screen, User32.SW_SHOWNOACTIVATE);
+            Settle(window);
+        }
         if (!IsPlainlyOnScreen(window))
         {
             PlaceHidden(window, target, screen);
@@ -174,11 +184,12 @@ public sealed class WindowPlacer(WindowController windows)
     }
 
     /// <summary>A minimized or maximized window stays that way, and is given a new place to come back to.</summary>
-    private static void PlaceHidden(nint window, Rectangle target, Screen screen)
+    private static void PlaceHidden(nint window, Rectangle target, Screen screen, int? show = null)
     {
         var placement = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() };
         if (!User32.GetWindowPlacement(window, ref placement))
             throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
+        if (show is { } command) placement.ShowCommand = command;
         Rectangle area = screen.WorkingArea, all = screen.Bounds;
         int x = area.Left - all.Left, y = area.Top - all.Top;
         placement.NormalPosition = new Rect(target.Left - x, target.Top - y, target.Right - x, target.Bottom - y);

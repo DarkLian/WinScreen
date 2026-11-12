@@ -171,7 +171,7 @@ public sealed class LocalizationTests : IDisposable
         IReadOnlyDictionary<string, string> english = UiText.GetCatalog("en");
         var partial = new Dictionary<string, string> { ["settings.title"] = "Custom" };
         Assert.Equal("Custom", UiText.Translate("settings.title", partial, english));
-        Assert.Equal("&Save", UiText.Translate("settings.save", partial, english));
+        Assert.Equal("&Add", UiText.Translate("common.add", partial, english));
         Assert.Equal("Last result: ", UiText.Translate("tray.resultPrefix", partial, english));
         Assert.Equal("unknown.key", UiText.Translate("unknown.key", partial, english));
     }
@@ -207,9 +207,9 @@ public sealed class LocalizationTests : IDisposable
     [Theory]
     // Reviewed catalog values, sorted by stable key with NUL separators.
     // Update deliberately when adding labels; existing values retain their migration output.
-    [InlineData("en", "5970B6C61D9615D4E68687B7CDED642FCB21F5D876CAE757B48922364E21818C")]
-    [InlineData("zh-Hans", "A2D1F8D81A92196F2CC235614DD3182273A19FFB9D41C35742D126B28C6B2D75")]
-    [InlineData("zh-Hant", "CA8C1DD393A59590D121D1233938B89B9A3E3F4A881BC62B958A6E6981D8A748")]
+    [InlineData("en", "B7F558077B26B04C648EDB249608A01CC9E7258F79B128168064337106999ED1")]
+    [InlineData("zh-Hans", "767BDE562F4D5CF8261BAF385B2373DAAD2ED3DD13A36AB4575567780B34B5E0")]
+    [InlineData("zh-Hant", "4ED0EA2363F8410CF417CF2B0F7C72AA23F192318449EC1FEF1AE3DC438EC566")]
     public void Every_translation_matches_the_reviewed_catalog(string language, string expectedDigest)
     {
         UiText.Initialize(language);
@@ -239,7 +239,7 @@ public sealed class LocalizationSurfaceTests
                     new Tray.StartWithWindows(@"Software\WinScreenTests\Localization"), _ => []);
                 Assert.Equal(catalog["settings.window.title"], settings.Text);
                 var controls = Descendants(settings).ToArray();
-                Assert.Contains(controls, control => control.Text == catalog["settings.save"]);
+                Assert.Contains(controls, control => control.Text == catalog["settings.transfer.export"]);
                 foreach (string key in new[] { "settings.general", "features.title", "settings.programs", "gestures.title", "pip.rendering", "pip.frameRate" })
                     Assert.Contains(controls, control => control.Text == catalog[key]);
 

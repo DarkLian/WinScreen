@@ -5,7 +5,10 @@ using WinScreen.Updates;
 
 namespace WinScreen.Settings;
 
-/// <summary>The settings window. Apply puts the changes into effect and keeps it open; Save does that and closes it.</summary>
+/// <summary>
+/// The settings window. A change is put into effect and saved as soon as it is made, once it has settled: not while a
+/// slider is held or a list is open, and never half-typed.
+/// </summary>
 public sealed class SettingsWindow : Form
 {
     private const int ContentWidth = SwitchBox.RowWidth + 20;
@@ -47,7 +50,6 @@ public sealed class SettingsWindow : Form
     private readonly NavList _nav = new() { Dock = DockStyle.Fill };
     private readonly HintTextBox _search = new();
     private readonly Label _pageTitle = new SoftLabel() { AutoSize = true, Font = SettingsStyle.PageTitleFont, UseMnemonic = false, Margin = new Padding(0, 0, 0, 14) };
-    private readonly Panel _saveBar = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly HintTextBox _actionSearch = new() { Dock = DockStyle.Top };
     private readonly InputFrame _shortcutEditor = new(null) { Width = 240, ReserveEnd = 22, Anchor = AnchorStyles.Right };
     private readonly Label _shortcutLabel = new SoftLabel() { AutoSize = true, Anchor = AnchorStyles.Left, Font = SettingsStyle.HeadingFont, UseMnemonic = false, AutoEllipsis = true };
@@ -159,9 +161,18 @@ private readonly ErrorProvider _errors = new();
     private readonly ToolTip _tips = new();
 
     private readonly HashSet<ProgramSetup> _removedSetups = [];
-    private readonly Button _applyButton = new() { Text = T("settings.apply"), AutoSize = true, Enabled = false };
     private string _savedState = "";
     private bool _refreshQueued;
+
+    /// <summary>How long a change rests before it is put into effect, so one being made isn't applied many times over.</summary>
+    internal const int SettleMilliseconds = 300;
+    private readonly System.Windows.Forms.Timer _settle = new() { Interval = SettleMilliseconds };
+    /// <summary>What's on screen differs from what's in effect.</summary>
+    private bool _pending;
+    /// <summary>Changes are being put into effect now; anything changed meanwhile waits for the next turn.</summary>
+    private bool _applying;
+    /// <summary>The window is being filled with values, which are what's in effect already.</summary>
+    private bool _loading;
 
     private readonly Label _status = new SoftLabel()
         { AutoSize = true, ForeColor = SettingsStyle.Text, MaximumSize = new Size(500, 0), Margin = new Padding(0, 6, 0, 0) };
@@ -277,7 +288,6 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(_pageTitle, 0, 0);
         page.Controls.Add(tabs, 0, 1);
         page.Controls.Add(_status, 0, 2);
-        page.Controls.Add(BuildButtons(), 0, 3);
         Controls.Add(page);
         Controls.Add(side);
 
@@ -286,7 +296,14 @@ private readonly ErrorProvider _errors = new();
         _pipAutoMove.Enabled = _pipMiddleScroll.Enabled = _experimental.Checked;
         _hoverOptions?.Enabled = _experimental.Checked && Pip.PipEnhancedHover.Supported;
         WatchForChanges(this);
-        foreach (TextBox box in _hotkeys.Values) box.TextChanged += (_, _) => QueueApplyRefresh();
+        foreach ((AppCommand command, TextBox box) in _hotkeys)
+            box.TextChanged += (_, _) =>
+            {
+                // A problem with a shortcut is said until that shortcut is changed again.
+                if (!_loading && _shortcutProblems.Remove(command)) _errors.SetError(box, "");
+                QueueApplyRefresh();
+            };
+        _settle.Tick += (_, _) => ApplyWhenSettled();
         MarkSaved();
         ResumeLayout(true);
     }
@@ -298,7 +315,7 @@ private readonly ErrorProvider _errors = new();
         _ => null,
     } : null;
 
-    /// <summary>The title, and the bar for saving under the page, line up with the page's column wherever it is.</summary>
+    /// <summary>The title, and any message under the page, line up with the page's column wherever it is.</summary>
     private void FollowColumn()
     {
         // The pages sit a little in from the edges of the space they are shown in.
@@ -306,11 +323,10 @@ private readonly ErrorProvider _errors = new();
         int left = _tabs.Margin.Left + page.Left, gap = _tabs.Margin.Right + _tabs.Width - page.Right;
         int column = ColumnOf(_tabs.SelectedTab)?.Shift ?? 0;
         int shift = column + left;
-        var bar = new Padding(shift, _saveBar.Margin.Top, column + gap + SettingsStyle.Unit(this, PageColumn.RightGap), 0);
-        if (_pageTitle.Margin.Left == shift && _status.Margin.Left == shift && _saveBar.Margin == bar) return;
+        _ = gap;
+        if (_pageTitle.Margin.Left == shift && _status.Margin.Left == shift) return;
         _pageTitle.Margin = _pageTitle.Margin with { Left = shift };
         _status.Margin = _status.Margin with { Left = shift };
-        _saveBar.Margin = bar;
         // The page moves its column while the window is being laid out, which doesn't lay the title out again.
         if (IsHandleCreated) BeginInvoke(() => { if (!IsDisposed) _pageTitle.Parent?.PerformLayout(); });
     }
@@ -354,8 +370,8 @@ private readonly ErrorProvider _errors = new();
         set => _tabs.SelectedIndex = Math.Clamp(value, 0, _tabs.TabCount - 1);
     }
 
-    /// <summary>True when what's on screen differs from what's in effect, so Apply has something to do.</summary>
-    internal bool HasChanges => _applyButton.Enabled;
+    /// <summary>True when what's on screen differs from what's in effect: a change still settling, or one that couldn't be applied.</summary>
+    internal bool HasChanges => _pending;
 
     /// <summary>
     /// Shown without taking the keyboard, for when it is made again while something else is being used. It still stays
@@ -378,16 +394,20 @@ private readonly ErrorProvider _errors = new();
     }
 
     /// <summary>What was changed here but not saved, with what saving needs to know about it.</summary>
-    internal sealed record UnsavedEdits(AppSettings Values, bool Imported, ProgramSetup[] RemovedSetups, string[] AddedApps);
+    internal sealed record UnsavedEdits(AppSettings Values, bool Imported, ProgramSetup[] RemovedSetups, string[] AddedApps, string BorderColor);
 
-    /// <summary>The changes not saved yet, or null when there are none; read before the window closes.</summary>
+    /// <summary>
+    /// The changes not in effect yet, or null when there are none; read before the window closes. Whatever can be put
+    /// into effect is, first; what is left is what couldn't be, such as a colour still being typed.
+    /// </summary>
     internal UnsavedEdits? Unsaved()
     {
         RefreshApply();
+        if (HasChanges && InputsComplete() && !_applying) ApplyChanges();
         if (!HasChanges) return null;
-        AppSettings values = Draft((_pendingImport ?? _settings).Clone(), commitTyped: false);
+        AppSettings values = Draft((_pendingImport ?? _settings).Clone());
         values.SavedSetups = _setups.Items.Cast<ProgramSetup>().ToList();
-        return new UnsavedEdits(values, _pendingImport is not null, [.. _removedSetups], [.. _addedApps]);
+        return new UnsavedEdits(values, _pendingImport is not null, [.. _removedSetups], [.. _addedApps], _borderColor.Text);
     }
 
     /// <summary>
@@ -403,32 +423,90 @@ private readonly ErrorProvider _errors = new();
         _startWithWindows.Checked = edits.Values.StartWithWindows ?? _startup.IsOn;
         foreach (string app in edits.AddedApps)
             if (!_addedApps.Contains(app, StringComparer.OrdinalIgnoreCase)) _addedApps.Add(app);
+        _borderColor.Text = edits.BorderColor; // Perhaps still being typed: it can't be in Values until it is whole.
         RebuildApps();
         RefreshApply();
     }
 
-    /// <summary>Applies the changes and keeps the window open, the way the Apply button does.</summary>
+    /// <summary>Puts what's on screen into effect now, without waiting for it to settle. False if some of it couldn't be.</summary>
     internal bool ApplyChanges()
     {
-        if (!SaveChanges()) return false;
-        MarkSaved();
-        return true;
+        if (_applying) return false;
+        _settle.Stop();
+        _applying = true;
+        try
+        {
+            if (!SaveChanges()) return false;
+            MarkSaved();
+            return true;
+        }
+        finally { _applying = false; }
     }
 
     private void MarkSaved()
     {
         _savedState = CurrentState();
-        _applyButton.Enabled = false;
-        _saveBar.Visible = false;
+        _pending = false;
+        _settle.Stop();
     }
 
-    /// <summary>Rechecks whether there's anything to apply. Changing something and changing it back leaves nothing.</summary>
+    /// <summary>
+    /// Rechecks whether anything differs from what's in effect, and if so puts it into effect once it settles.
+    /// Changing something and changing it back leaves nothing to do.
+    /// </summary>
     internal void RefreshApply()
     {
         _refreshQueued = false;
         if (IsDisposed) return;
-        _applyButton.Enabled = _pendingImport is not null || CurrentState() != _savedState;
-        _saveBar.Visible = _applyButton.Enabled; // The bar is only there while something waits to be saved.
+        _pending = _pendingImport is not null || CurrentState() != _savedState;
+        if (!_pending || _loading) { if (!_pending) _settle.Stop(); return; }
+        _settle.Stop(); // Each change starts the wait again.
+        _settle.Start();
+    }
+
+    /// <summary>
+    /// Puts the changes into effect once nothing is being done that would change them again at once: a button held
+    /// (a slider being dragged), or a list open (its choice being looked through). Something half-typed, such as a
+    /// colour, waits until it is whole.
+    /// </summary>
+    private void ApplyWhenSettled()
+    {
+        _settle.Stop();
+        if (IsDisposed || !_pending || !InputsComplete()) return;
+        if (_applying || MouseButtons != MouseButtons.None || ListOpen(this))
+        {
+            _settle.Start();
+            return;
+        }
+        ApplyChanges();
+
+        static bool ListOpen(Control parent) => parent.Controls.Cast<Control>().Any(child =>
+            child is ComboBox { IsHandleCreated: true, DroppedDown: true } || ListOpen(child));
+    }
+
+    /// <summary>False while something typed isn't whole yet: a colour must be all six digits before it is used.</summary>
+    private bool InputsComplete() => HexColor(_borderColor.Text) is not null;
+
+    /// <summary>What's on screen goes into effect as the window closes, if it can.</summary>
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
+        if (e.Cancel) return;
+        RefreshApply();
+        if (_pending && InputsComplete() && !_applying) ApplyChanges();
+    }
+
+    /// <summary>
+    /// Shows the saved setups again after one was saved or forgotten from a window's menu while this is open. One
+    /// removed here and not yet in effect stays removed.
+    /// </summary>
+    internal void SetupsChanged()
+    {
+        bool wasPending = _pending;
+        _setups.Items.Clear();
+        _setups.Items.AddRange(_settings.SavedSetups.Where(setup => !_removedSetups.Contains(setup)).Cast<object>().ToArray());
+        if (!wasPending) MarkSaved();
+        else RefreshApply();
     }
 
     /// <summary>Esc closes the window, as the Cancel button it used to have did.</summary>
@@ -501,20 +579,27 @@ private readonly ErrorProvider _errors = new();
                     combo.SelectedIndexChanged += (_, _) => QueueApplyRefresh();
                     combo.TextChanged += (_, _) => QueueApplyRefresh();
                     break;
-                case TextBox text when text != _actionSearch: text.TextChanged += (_, _) => QueueApplyRefresh(); break;
-                case Button button when button != _applyButton: button.Click += (_, _) => QueueApplyRefresh(); break;
+                case TextBox text when text != _actionSearch && text != _search: text.TextChanged += (_, _) => QueueApplyRefresh(); break;
+                case Button button: button.Click += (_, _) => QueueApplyRefresh(); break;
             }
             WatchForChanges(control);
         }
     }
 
-    /// <summary>Everything the window would save, written out so two moments can be compared.</summary>
+    /// <summary>
+    /// Everything the window would save, written out so two moments can be compared, with what is typed in the colour
+    /// box as it is: a colour still being typed is a change not yet in effect.
+    /// </summary>
     private string CurrentState()
     {
-        AppSettings draft = Draft(new AppSettings(), commitTyped: false);
+        AppSettings draft = Draft(new AppSettings());
         draft.SavedSetups = _setups.Items.Cast<ProgramSetup>().ToList();
-        return System.Text.Json.JsonSerializer.Serialize(draft);
+        return System.Text.Json.JsonSerializer.Serialize(draft) + "\0" + _borderColor.Text.Trim();
     }
+
+    internal void SetBorderColor(string text) => _borderColor.Text = text;
+
+    internal string BorderColorText => _borderColor.Text;
 
     protected override void OnShown(EventArgs e)
     {
@@ -527,6 +612,7 @@ private readonly ErrorProvider _errors = new();
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
+        if (_wheel is null) Application.AddMessageFilter(_wheel = new WheelRouter(this));
         StayOnTopQuietly();
         static int ColorRef(Color color) => color.R | color.G << 8 | color.B << 16;
         int dark = MenuStyle.Dark ? 1 : 0, caption = ColorRef(SettingsStyle.Page), text = ColorRef(SettingsStyle.Text);
@@ -540,6 +626,57 @@ private readonly ErrorProvider _errors = new();
     {
         base.OnSizeChanged(e);
         FollowWindowState();
+    }
+
+    private WheelRouter? _wheel;
+
+    protected override void OnHandleDestroyed(EventArgs e)
+    {
+        if (_wheel is not null) Application.RemoveMessageFilter(_wheel);
+        _wheel = null;
+        base.OnHandleDestroyed(e);
+    }
+
+    private const int WM_MOUSEWHEEL = 0x020A, WM_MOUSEHWHEEL = 0x020E;
+
+    /// <summary>
+    /// The wheel only ever scrolls. Over a setting of any kind (a switch, a slider, a list to choose from, a box) it
+    /// scrolls the page instead of changing the setting, so reading down a page is never interrupted; settings change
+    /// by clicking or dragging. A list with more in it than it shows scrolls itself until it reaches its end, and an
+    /// open drop-down list keeps the wheel. Nothing scrolls sideways.
+    /// </summary>
+    private sealed class WheelRouter(SettingsWindow owner) : IMessageFilter
+    {
+        public bool PreFilterMessage(ref Message m) => m.Msg is WM_MOUSEWHEEL or WM_MOUSEHWHEEL && owner.RouteWheel(m);
+    }
+
+    /// <summary>True when the wheel was dealt with here; false leaves it to Windows as usual.</summary>
+    internal bool RouteWheel(Message m)
+    {
+        if (IsDisposed || !Visible) return false;
+        var at = new Native.NativePoint { X = (short)((long)m.LParam & 0xFFFF), Y = (short)(((long)m.LParam >> 16) & 0xFFFF) };
+        if (Control.FromChildHandle(Native.User32.WindowFromPoint(at)) is not { } under || under.FindForm() != this) return false;
+        if (Every(this).OfType<ComboBox>().Any(box => box.IsHandleCreated && box.DroppedDown)) return false;
+        ScrollPage? page = null;
+        for (Control? up = under; up is not null && page is null; up = up.Parent) page = up as ScrollPage;
+        if (page is null) return false; // The page list, and the table of actions, which is a page of its own.
+        if (m.Msg == WM_MOUSEHWHEEL) return true;
+        int delta = (short)(((long)m.WParam >> 16) & 0xFFFF);
+        for (Control? up = under; up is not null && up != page; up = up.Parent)
+            if (up is ListBox list && CanScroll(list, delta))
+            {
+                Native.User32.SendMessage(list.Handle, WM_MOUSEWHEEL, m.WParam, m.LParam);
+                return true;
+            }
+        Native.User32.SendMessage(page.Handle, WM_MOUSEWHEEL, m.WParam, m.LParam);
+        return true;
+
+        static bool CanScroll(ListBox list, int delta)
+        {
+            int shown = Math.Max(1, list.ClientSize.Height / Math.Max(1, list.ItemHeight));
+            return delta > 0 ? list.TopIndex > 0 : list.TopIndex + shown < list.Items.Count;
+        }
+        static IEnumerable<Control> Every(Control parent) => parent.Controls.Cast<Control>().SelectMany(child => new[] { child }.Concat(Every(child)));
     }
 
     private bool _belowOthers;
@@ -580,6 +717,7 @@ private readonly ErrorProvider _errors = new();
     {
         if (disposing)
         {
+            _settle.Dispose();
             _errors.Dispose();
             _tips.Dispose();
             foreach (TextBox box in _hotkeys.Values) box.Dispose();
@@ -608,32 +746,53 @@ private readonly ErrorProvider _errors = new();
         _status.Text = usable ? "" : T("hotkeys.modifierRequired");
     }
 
-    /// <summary>Applies and saves what is on screen. Returns false if a hotkey couldn't be claimed.</summary>
+    /// <summary>
+    /// Puts what is on screen into effect and saves it. A shortcut that can't be had goes back to the one in effect,
+    /// with the reason shown, and everything else still goes into effect. False when nothing could be saved, such as
+    /// when the settings file can't be written; what's on screen stays, to be tried again with the next change.
+    /// </summary>
     internal bool SaveChanges()
     {
-        AppSettings draft = Draft((_pendingImport ?? _settings).Clone(), commitTyped: true);
+        AppSettings draft = Draft((_pendingImport ?? _settings).Clone());
         draft.Imported = _pendingImport is not null;
+        // Setups are taken from what's in effect, so one saved from a window's menu meanwhile is kept.
+        draft.SavedSetups.RemoveAll(setup => _removedSetups.Any(removed =>
+            removed.Program == setup.Program && removed.ExecutablePath == setup.ExecutablePath));
         try
         {
             IReadOnlyList<HotkeyProblem> problems = _apply(draft);
-            _status.Text = string.Join(Environment.NewLine, problems.Select(problem => problem.Message));
-            foreach (HotkeyProblem problem in problems)
-                if (_hotkeys.TryGetValue(problem.Command, out TextBox? box))
-                    _errors.SetError(box, problem.Message);
             if (problems.Count > 0)
             {
-                foreach (HotkeyProblem problem in problems) _shortcutProblems[problem.Command] = problem.Message;
-                _actionSearch.Clear();
-                RefreshFeatures();
-                _tabs.SelectedIndex = 1;
-                ListViewItem? row = _features.Items.Cast<ListViewItem>().FirstOrDefault(item => Equals(item.Tag, problems[0].Command));
-                if (row is not null) { row.Selected = true; row.EnsureVisible(); }
-                ShowShortcutEditor();
-                _hotkeys[problems[0].Command].Focus();
-                return false;
+                // Every shortcut changed since the last time goes back to the one in effect: a problem can be reported
+                // against the shortcut that was there first, when the new one is what clashes with it.
+                foreach ((AppCommand command, TextBox box) in _hotkeys)
+                {
+                    string kept = _settings.Hotkeys.GetValueOrDefault(command, "");
+                    if (draft.Hotkeys.GetValueOrDefault(command, "") == kept) continue;
+                    draft.Hotkeys[command] = kept;
+                    _loading = true; // Putting it back is not a change of its own.
+                    try { box.Text = kept; }
+                    finally { _loading = false; }
+                }
+                foreach (HotkeyProblem problem in problems)
+                {
+                    if (_hotkeys.TryGetValue(problem.Command, out TextBox? box)) _errors.SetError(box, problem.Message);
+                    _shortcutProblems[problem.Command] = problem.Message;
+                }
+                IReadOnlyList<HotkeyProblem> still = _apply(draft);
+                _status.Text = string.Join(Environment.NewLine, problems.Concat(still).Select(problem => problem.Message).Distinct());
+                if (still.Count > 0)
+                {
+                    RefreshFeatures();
+                    return false;
+                }
+            }
+            else
+            {
+                _status.Text = "";
             }
             _pendingImport = null;
-            _shortcutProblems.Clear();
+            _removedSetups.Clear();
             RefreshFeatures();
             return true;
         }
@@ -646,36 +805,23 @@ private readonly ErrorProvider _errors = new();
     }
 
     /// <summary>
-    /// What's on screen, on top of <paramref name="draft"/>. With <paramref name="commitTyped"/>, program names typed
-    /// but not yet added go into their lists, the way saving treats them; otherwise they're only counted.
+    /// What's on screen, on top of <paramref name="draft"/>. A program name still in its box, not yet added, isn't
+    /// part of it: it is added with Add or Enter.
     /// </summary>
-    private AppSettings Draft(AppSettings draft, bool commitTyped)
+    private AppSettings Draft(AppSettings draft)
     {
-        List<string> Programs(ListBox list, ComboBox typed)
-        {
-            if (commitTyped) AddTyped(list, typed);
-            List<string> names = list.Items.Cast<string>().ToList();
-            string name = ProgramName(typed.Text);
-            if (name.Length > 0 && !names.Contains(name)) names.Add(name);
-            return names;
-        }
+        static List<string> Programs(ListBox list, ComboBox typed) => list.Items.Cast<string>().ToList();
         int Number(NumericUpDown box)
         {
             // Reading Value would tidy up a number that's still being typed, so the text is read instead.
-            if (commitTyped || !decimal.TryParse(box.Text, out decimal typed)) return (int)box.Value;
+            if (!decimal.TryParse(box.Text, out decimal typed)) return (int)box.Value;
             return (int)Math.Clamp(typed, box.Minimum, box.Maximum);
         }
         foreach ((AppCommand command, TextBox box) in _hotkeys)
-        {
             draft.Hotkeys[command] = box.Text;
-            if (commitTyped) _errors.SetError(box, "");
-        }
 
-        // A name typed but not yet added is still what the person meant.
         draft.ExcludedPrograms = Programs(_excluded, _newExcluded);
         draft.IncludedPrograms = Programs(_included, _newIncluded);
-        if (commitTyped) draft.SavedSetups.RemoveAll(setup => _removedSetups.Any(removed =>
-            removed.Program == setup.Program && removed.ExecutablePath == setup.ExecutablePath));
         draft.ShowToolbar = _showToolbar.Checked;
         draft.Toolbar = new ToolbarPreferences
         {
@@ -744,7 +890,8 @@ private readonly ErrorProvider _errors = new();
         }.Validated();
         draft.PinBorder = new PinBorderPreferences
         {
-            ColorHex = _borderColor.Text,
+            // A colour still being typed leaves the one in effect alone.
+            ColorHex = HexColor(_borderColor.Text) is null ? draft.PinBorder.ColorHex : _borderColor.Text.Trim(),
             OpacityPercent = Number(_borderOpacity),
             Thickness = Number(_borderThickness),
         }.Validated();
@@ -787,12 +934,6 @@ private readonly ErrorProvider _errors = new();
         return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
     }
 
-    private static void AddTyped(ListBox list, ComboBox newProgram)
-    {
-        AddProgram(list, newProgram.Text);
-        newProgram.Text = "";
-    }
-
     private PipHoverPreferences _hover = new();
     private bool _hoverShowsOwn = true, _loadingHover;
 
@@ -820,7 +961,37 @@ private readonly ErrorProvider _errors = new();
     /// Fills the table of apps: the four kinds WinScreen knows, then every program named for Enhanced hover or for
     /// showing its original. A program has one or the other, never both: with its original shown, nothing is sent to it.
     /// </summary>
-    private void RebuildApps()
+    private void RebuildApps(int focusRemoveAt = -1)
+    {
+        // The page is rebuilt unseen and left where it was scrolled to: taking away the button that had the keyboard
+        // would otherwise send the keyboard, and the page with it, back to the top.
+        ScrollPage? scroller = null;
+        for (Control? parent = _appRows.Parent; parent is not null && scroller is null; parent = parent.Parent) scroller = parent as ScrollPage;
+        int scrolled = scroller is null ? 0 : -scroller.AutoScrollPosition.Y;
+        bool hid = scroller is { IsHandleCreated: true, Visible: true };
+        if (hid) Native.User32.SendMessage(scroller!.Handle, WM_SETREDRAW, 0, 0);
+        bool hadKeyboard = _appRows.ContainsFocus;
+        try { BuildAppRows(); }
+        finally
+        {
+            if (scroller is not null) scroller.AutoScrollPosition = new Point(0, scrolled);
+            // Turning drawing off hides the page from Windows, so it is back on before anything in it takes the keyboard.
+            if (hid) Native.User32.SendMessage(scroller!.Handle, WM_SETREDRAW, 1, 0);
+            if (hadKeyboard)
+            {
+                // The keyboard goes to the remove button that now sits where the removed one was, or to the box.
+                Control[] removes = _appRows.Controls.Cast<Control>().SelectMany(row => row.Controls.OfType<PlainButton>()).ToArray();
+                if (focusRemoveAt >= 0 && removes.Length > 0) removes[Math.Min(focusRemoveAt, removes.Length - 1)].Focus();
+                else _newApp.Focus();
+                if (scroller is not null) scroller.AutoScrollPosition = new Point(0, scrolled);
+            }
+            if (hid) scroller!.Invalidate(true);
+        }
+    }
+
+    private const uint WM_SETREDRAW = 0x000B;
+
+    private void BuildAppRows()
     {
         // Sizes here are at 100% scaling; rows made after the window has scaled itself are scaled to match below.
         double scale = _appRows.DeviceDpi / 96.0;
@@ -916,12 +1087,13 @@ private readonly ErrorProvider _errors = new();
                 AccessibleName = removeText };
             remove.Size = remove.GetPreferredSize(Size.Empty);
             _tips.SetToolTip(remove, T("common.remove").Replace("&", "")); // The full sentence is for screen readers.
+            int place = Array.IndexOf(programs, program);
             remove.Click += (_, _) =>
             {
                 Unlist(_hoverPrograms, program);
                 Unlist(_originalPrograms, program);
                 _addedApps.RemoveAll(name => name.Equals(program, StringComparison.OrdinalIgnoreCase));
-                BeginInvoke(RebuildApps); // Not from inside the click of a button this removes.
+                BeginInvoke(() => RebuildApps(place)); // Not from inside the click of a button this removes.
                 QueueApplyRefresh();
             };
             if (scaled)
@@ -1003,9 +1175,22 @@ private readonly ErrorProvider _errors = new();
         box.Checked = on;
     }
 
+    /// <summary>
+    /// Fills the window with <paramref name="values"/>. Without any, it shows what's in effect (or a file being brought
+    /// in), and anything not yet in effect is dropped.
+    /// </summary>
     internal void LoadValues(AppSettings? values = null)
     {
-        values ??= _pendingImport ?? _settings;
+        bool inEffect = values is null && _pendingImport is null || ReferenceEquals(values, _settings);
+        _loading = true;
+        try { Fill(values ?? _pendingImport ?? _settings); }
+        finally { _loading = false; }
+        if (inEffect) MarkSaved();
+        else RefreshApply();
+    }
+
+    private void Fill(AppSettings values)
+    {
         _excluded.Items.Clear();
         _included.Items.Clear();
         _setups.Items.Clear();
@@ -1306,42 +1491,6 @@ private readonly ErrorProvider _errors = new();
         return page;
     }
 
-    private Control BuildButtons()
-    {
-        var save = new PlainButton { Text = T("settings.save"), Primary = true, Anchor = AnchorStyles.Right };
-        save.Click += (_, _) => ApplyChanges();
-        AcceptButton = null;
-        var discard = new PlainButton { Text = T("settings.discard"), Anchor = AnchorStyles.Right };
-        discard.Click += (_, _) =>
-        {
-            _pendingImport = null;
-            _removedSetups.Clear();
-            LoadValues();
-            _status.Text = "";
-            RefreshApply();
-        };
-        _applyButton.Click += (_, _) => ApplyChanges();
-
-        var text = new SoftLabel { Text = T("settings.unsaved"), AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = SettingsStyle.Accent,
-            BackColor = SettingsStyle.AccentBack, Margin = new Padding(12, 0, 0, 0) };
-        var row = new TableLayoutPanel { ColumnCount = 3, RowCount = 1, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            BackColor = SettingsStyle.AccentBack, Padding = new Padding(0, 6, 8, 6) };
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        row.Controls.Add(text, 0, 0);
-        row.Controls.Add(discard, 1, 0);
-        row.Controls.Add(save, 2, 0);
-        _saveBar.Controls.Add(row);
-        _saveBar.AutoSize = true; // As tall as its buttons, whatever the display scale.
-        _saveBar.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        _saveBar.BackColor = SettingsStyle.AccentBack;
-        _saveBar.Dock = DockStyle.None;
-        _saveBar.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-        _saveBar.Margin = new Padding(0, 8, 0, 0);
-        return _saveBar;
-    }
-
     private Control BuildTransfer()
     {
         var export = new PlainButton { Text = T("settings.transfer.export"), AutoSize = true };
@@ -1362,7 +1511,8 @@ private readonly ErrorProvider _errors = new();
                 _pendingImport = SettingsTransfer.Import(dialog.FileName, _settings);
                 _removedSetups.Clear();
                 LoadValues();
-                _status.Text = T("settings.transfer.review");
+                // Brought in whole, at once: what was in effect before is kept as a backup.
+                if (ApplyChanges()) _status.Text = T("settings.transfer.imported");
             }
             catch (Exception e) when (e is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
             { _status.Text = e.Message; }
@@ -1418,7 +1568,7 @@ private readonly ErrorProvider _errors = new();
     private Control BuildAnchors()
     {
         _anchorSide.Items.AddRange([T("anchors.side.right"), T("anchors.side.left"), T("anchors.side.near")]);
-        _anchorLook.Items.AddRange([T("anchors.look.dark"), T("anchors.look.light")]);
+        _anchorLook.Items.AddRange([T("anchors.look.dark"), T("anchors.look.light"), T("anchors.look.noBackground")]);
         FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("anchors.settings.title"), _autoAnchors, Note(T("anchors.auto.help")),
             SettingRow(T("anchors.side.label"), _anchorSide), SettingRow(T("anchors.look.label"), _anchorLook),

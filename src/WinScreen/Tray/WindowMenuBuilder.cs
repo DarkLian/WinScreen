@@ -23,6 +23,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     internal Action<nint, int>? SetOpacityPercent { get; init; }
 
     private sealed record Group;
+    private sealed record MoreGroup;
 
     public void Populate(ToolStripItemCollection items, bool tray)
     {
@@ -75,7 +76,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         items.Add(experimental);
 
         items.Add(new ToolStripSeparator());
-        var more = new ToolStripMenuItem(T("menu.more")).WithIcon(MenuParts.More);
+        var more = new ToolStripMenuItem(T("menu.more")) { Tag = new MoreGroup() }.WithIcon(MenuParts.More);
         if (OpacityPercent is null || SetOpacityPercent is null)
         {
             more.DropDownItems.Add(Command(AppCommand.OpacityDown));
@@ -122,6 +123,54 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
             }
             items.Insert(places ? 10 : 0, displays);
         }
+    }
+
+    /// <summary>
+    /// Takes out of a window menu what a toolbar already shows as buttons, for the toolbar's own Window menu: the
+    /// commands themselves, the opacity slider when both opacity buttons are there, and the place grid when Arrange
+    /// window is. What is left of More moves up into the menu, and headings and dividers with nothing left under them go.
+    /// </summary>
+    internal static void LeaveOut(ToolStripItemCollection items, IReadOnlySet<AppCommand> onBar)
+    {
+        bool Shown(ToolStripItem item) => item switch
+        {
+            OpacityRow => onBar.Contains(AppCommand.OpacityUp) && onBar.Contains(AppCommand.OpacityDown),
+            PlacementRow => onBar.Contains(AppCommand.Arrange),
+            { Tag: AppCommand command } => onBar.Contains(command),
+            _ => false,
+        };
+        foreach (ToolStripItem item in items.Cast<ToolStripItem>().ToArray())
+        {
+            if (Shown(item)) { items.Remove(item); item.Dispose(); continue; }
+            if (item is not ToolStripMenuItem { HasDropDownItems: true } parent || item.Tag is AppCommand) continue;
+            LeaveOut(parent.DropDownItems, onBar);
+            if (!parent.DropDownItems.OfType<ToolStripMenuItem>().Any()) { items.Remove(item); item.Dispose(); continue; }
+            if (item.Tag is not MoreGroup) continue;
+            int at = items.IndexOf(item);
+            items.Insert(at++, new ToolStripSeparator());
+            foreach (ToolStripItem child in parent.DropDownItems.Cast<ToolStripItem>().ToArray()) items.Insert(at++, child);
+            items.Remove(item);
+            item.Dispose();
+        }
+        Tidy(items);
+    }
+
+    /// <summary>Drops headings with nothing under them and dividers at either end or next to another.</summary>
+    private static void Tidy(ToolStripItemCollection items)
+    {
+        bool Ends(ToolStripItem? item) => item is null or ToolStripSeparator || Equals(item.Tag, MenuParts.HeaderTag);
+        for (int index = items.Count - 1; index >= 0; index--)
+        {
+            ToolStripItem item = items[index];
+            ToolStripItem? next = index + 1 < items.Count ? items[index + 1] : null;
+            bool heading = Equals(item.Tag, MenuParts.HeaderTag);
+            if (heading && Ends(next) || item is ToolStripSeparator && (index == 0 || next is null or ToolStripSeparator))
+            {
+                items.RemoveAt(index);
+                item.Dispose();
+            }
+        }
+        while (items.Count > 0 && items[0] is ToolStripSeparator first) { items.RemoveAt(0); first.Dispose(); }
     }
 
     private ToolStripMenuItem Command(AppCommand command) => new(CommandCatalog.Name(command),

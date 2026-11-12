@@ -109,8 +109,12 @@ public sealed partial class WindowController
                 state.PlacementBeforeRollUp is not null || User32.IsIconic(window) || (!fill && User32.IsZoomed(window)))
                 throw new WindowOperationException(T("errors.window.showNormally"));
             EnsureResponsive(window);
-            if (!HasNativeTitleBar(window))
-                throw new WindowOperationException(T("errors.window.nonstandardTitleBar"));
+            // A window that draws its own title bar, as browsers and editors do, still has Windows' frame bits; taking
+            // them away leaves its own drawing as it is. With neither there is nothing to take away, though it can
+            // still be made to fill a display.
+            bool nativeTitleBar = HasNativeTitleBar(window);
+            if (!fill && ((long)User32.GetWindowLongPtr(window, User32.GWL_STYLE) & BorderlessMask) == 0)
+                throw new WindowOperationException(T("errors.borderless.noFrame"));
 
             state.BorderlessBits = (long)User32.GetWindowLongPtr(window, User32.GWL_STYLE) & BorderlessMask;
             state.PlacementBeforeBorderless = ReadPlacement(window);
@@ -136,8 +140,11 @@ public sealed partial class WindowController
                 if (!fill && !User32.AdjustWindowRectExForDpi(ref adjusted, (uint)style, User32.GetMenu(window) != 0,
                         (uint)ReadExStyle(window), User32.GetDpiForWindow(window)))
                     throw Failure(T("actions.readPosition"), window);
-                Rectangle target = fill ? bounds : new Rectangle(origin.X + adjusted.Left, origin.Y + adjusted.Top,
-                    adjusted.Right - adjusted.Left, adjusted.Bottom - adjusted.Top);
+                // Windows' own title bar: the window keeps what is inside its frame where it is. A title bar it draws
+                // itself: the window keeps the size and place it shows now.
+                Rectangle target = fill ? bounds : nativeTitleBar ? new Rectangle(origin.X + adjusted.Left, origin.Y + adjusted.Top,
+                    adjusted.Right - adjusted.Left, adjusted.Bottom - adjusted.Top)
+                    : WindowInfo.TryGetFrameBounds(window, out Rectangle visible, out _) ? visible : throw Failure(T("actions.readPosition"), window);
                 state.BorderlessOrigin = target.Location;
                 SaveJournal(); // Includes the restoration origin before removing the frame.
                 WriteStyle(window, state, style);

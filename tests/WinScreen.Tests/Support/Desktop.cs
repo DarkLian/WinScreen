@@ -248,6 +248,17 @@ internal static partial class Desktop
         return count;
     }
 
+    /// <summary>Each visible top-level window of a process, front to back.</summary>
+    public static void EachProcessWindow(int processId, Action<nint> each)
+    {
+        EnumWindows((window, _) =>
+        {
+            User32.GetWindowThreadProcessId(window, out uint owner);
+            if (owner == processId && IsWindowVisible(window)) each(window);
+            return true;
+        }, 0);
+    }
+
     public static nint FindProcessWindow(int processId, Func<string, bool> titleMatches)
     {
         nint found = 0;

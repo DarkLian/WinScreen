@@ -23,6 +23,53 @@ public sealed class WindowMenuBuilderTests
     private static IEnumerable<ToolStripMenuItem> Commands(ToolStripItemCollection items) =>
         items.OfType<ToolStripMenuItem>().SelectMany(item => new[] { item }.Concat(Commands(item.DropDownItems)));
 
+    /// <summary>
+    /// The toolbar's Window menu offers what the window menu has that the bar doesn't: with every button on the bar,
+    /// the title bar and frame choices and the window's details. Anything shown as a button is left out, and so is the
+    /// slider or grid a button already covers; with fewer buttons, more stays.
+    /// </summary>
+    [Fact]
+    public void The_toolbar_window_menu_leaves_out_what_the_bar_shows()
+    {
+        OnUiThread(() =>
+        {
+            ToolStripItemCollection Built(IReadOnlySet<AppCommand> onBar)
+            {
+                var menu = new ContextMenuStrip();
+                var builder = new WindowMenuBuilder(() => null, (_, _) => { }, (_, _) => { }, _ => true, (_, _) => true, (_, _) => false, () => { })
+                    { OpacityPercent = _ => 100, SetOpacityPercent = (_, _) => { } };
+                builder.Populate(menu.Items, false);
+                WindowMenuBuilder.LeaveOut(menu.Items, onBar);
+                return menu.Items;
+            }
+            ToolStripItemCollection all = Built(CommandCatalog.ToolbarButtons.ToHashSet());
+            AppCommand[] left = Commands(all).Select(item => item.Tag).OfType<AppCommand>().ToArray();
+            Assert.Equal([AppCommand.ToggleDarkTitleBar, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill], left);
+            Assert.DoesNotContain(all.Cast<ToolStripItem>(), item => item is OpacityRow or PlacementRow);
+            Assert.Contains(all.Cast<ToolStripItem>(), item => item.Text == UiText.T("window.openLocation"));
+            Assert.Contains(all.Cast<ToolStripItem>(), item => item.Text == UiText.T("common.copy"));
+            Assert.DoesNotContain(all.Cast<ToolStripItem>(), item => item.Text == UiText.T("menu.more"));
+            // No heading without anything under it, and no divider at an end or beside another.
+            ToolStripItem[] rows = all.Cast<ToolStripItem>().ToArray();
+            Assert.IsNotType<ToolStripSeparator>(rows[0]);
+            Assert.IsNotType<ToolStripSeparator>(rows[^1]);
+            for (int index = 0; index < rows.Length; index++)
+            {
+                ToolStripItem? next = index + 1 < rows.Length ? rows[index + 1] : null;
+                if (rows[index] is ToolStripSeparator) Assert.IsNotType<ToolStripSeparator>(next);
+                if (Equals(rows[index].Tag, MenuParts.HeaderTag)) Assert.True(next is ToolStripMenuItem, rows[index].Text);
+            }
+
+            // A bar with only Pin keeps the slider, the grid, Arrange and the effects.
+            ToolStripItemCollection few = Built(new HashSet<AppCommand> { AppCommand.TogglePin });
+            Assert.Contains(few.Cast<ToolStripItem>(), item => item is OpacityRow);
+            Assert.Contains(few.Cast<ToolStripItem>(), item => item is PlacementRow);
+            Assert.DoesNotContain(Commands(few), item => Equals(item.Tag, AppCommand.TogglePin));
+            foreach (AppCommand command in new[] { AppCommand.Arrange, AppCommand.ToggleDark, AppCommand.RestoreWindow, AppCommand.SaveWindowSetup })
+                Assert.Contains(Commands(few), item => Equals(item.Tag, command));
+        });
+    }
+
     [Fact]
     public void Both_menus_share_commands_and_disable_missing_targets()
     {

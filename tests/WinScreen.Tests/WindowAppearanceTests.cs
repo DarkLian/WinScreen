@@ -118,15 +118,28 @@ public sealed class WindowAppearanceTests
         finally { windows.RestoreAll(); }
     }
 
+    /// <summary>
+    /// A window with no frame at all has nothing for Borderless to take away, and no title bar of Windows' to darken,
+    /// so both say so. It can still fill a display, and comes back exactly from it.
+    /// </summary>
     [Fact]
-    public void A_window_without_a_native_caption_refuses_borderless_and_dark_title_bar()
+    public void A_window_without_a_frame_refuses_borderless_and_dark_title_bar_but_can_fill_a_display()
     {
         using var target = new TargetProcess(Spot);
         var windows = new WindowController([]);
-        Assert.False(WindowController.HasNativeTitleBar(target.Handle));
-        Assert.Throws<WindowOperationException>(() => windows.ToggleBorderless(target.Handle));
-        Assert.Throws<WindowOperationException>(() => windows.ToggleDarkTitleBar(target.Handle));
-        windows.RestoreAll();
+        try
+        {
+            Assert.False(WindowController.HasNativeTitleBar(target.Handle));
+            Assert.Throws<WindowOperationException>(() => windows.ToggleBorderless(target.Handle));
+            Assert.Throws<WindowOperationException>(() => windows.ToggleDarkTitleBar(target.Handle));
+            Rectangle before = Desktop.BoundsOf(target.Handle);
+            Rectangle display = Screen.FromHandle(target.Handle).Bounds;
+            Assert.True(windows.ToggleBorderless(target.Handle, fill: true, display));
+            Assert.Equal(display, Desktop.BoundsOf(target.Handle));
+            Assert.False(windows.ToggleBorderless(target.Handle, fill: true, display));
+            Assert.Equal(before, Desktop.BoundsOf(target.Handle));
+        }
+        finally { windows.RestoreAll(); }
     }
 
     [Fact]

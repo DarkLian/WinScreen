@@ -68,7 +68,7 @@ public sealed class WindowToolbar : Form
         BackColor = Background;
         Text = T("toolbar.title");
 
-        foreach (AppCommand command in CommandCatalog.Ordered.Where(command => command != AppCommand.RestoreAll))
+        foreach (AppCommand command in CommandCatalog.ToolbarButtons)
         {
             string name = CommandCatalog.Name(command);
             var button = new Button
@@ -90,6 +90,13 @@ public sealed class WindowToolbar : Form
                     return;
                 }
 
+                // The two buttons that open a menu open it under themselves, not at the pointer.
+                if (command is AppCommand.Arrange or AppCommand.ShowWindowMenu && OpenMenu is { } open)
+                {
+                    Rectangle shown = button.RectangleToScreen(button.ClientRectangle);
+                    open(command, _window, new Point(shown.Left, shown.Bottom));
+                    return;
+                }
                 _run(command, _window);
                 ShowStates();
             };
@@ -101,6 +108,14 @@ public sealed class WindowToolbar : Form
         Arrange(Dpi.Default);
         _watch.Tick += (_, _) => Watch();
     }
+
+    /// <summary>Opens the menu of a button that has one, under the button, for the window the bar is showing for.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Action<AppCommand, nint, Point>? OpenMenu { get; init; }
+
+    /// <summary>The commands that have a button on the bar now, so a menu from it can leave them out.</summary>
+    internal IReadOnlySet<AppCommand> ShownButtons =>
+        _buttons.Keys.Where(command => _preferences.Buttons.Contains(command) && _isAvailable(command)).ToHashSet();
 
     /// <summary>The window the toolbar is showing for, or none.</summary>
     public nint Window => Visible ? _window : 0;

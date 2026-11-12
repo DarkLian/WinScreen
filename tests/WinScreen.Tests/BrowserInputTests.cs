@@ -1452,6 +1452,54 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         }
     }
 
+    /// <summary>
+    /// A browser draws its own title bar. Borderless takes Windows' frame away and keeps the window as big as it shows,
+    /// Fill display covers the whole display, and both go back exactly. Dark title bar says it can't change a title bar
+    /// the app draws itself.
+    /// </summary>
+    [Fact]
+    public void Borderless_and_fill_display_work_on_a_browser_that_draws_its_own_title_bar()
+    {
+        string? path = BrowserCases().Select(c => (string)c[0]).FirstOrDefault(p => Path.GetFileName(p) == "chrome.exe");
+        if (path is null || !File.Exists(path)) return;
+        var (browser, window, root) = Open("<!doctype html><title>FrameProbe</title>", "FrameProbe", app: false, path);
+        var windows = new WindowController([]);
+        try
+        {
+            User32.ShowWindow(window, 9); // SW_RESTORE
+            Thread.Sleep(600);
+            Assert.False(WindowController.HasNativeTitleBar(window));
+            Assert.Throws<WindowOperationException>(() => windows.ToggleDarkTitleBar(window));
+            long style = User32.GetWindowLongPtr(window, User32.GWL_STYLE);
+            Assert.True(WindowInfo.TryGetFrameBounds(window, out Rectangle before, out _));
+            void Near(Rectangle expected, string what)
+            {
+                Thread.Sleep(600);
+                Assert.True(WindowInfo.TryGetFrameBounds(window, out Rectangle now, out _));
+                Assert.True(Math.Abs(now.Left - expected.Left) <= 2 && Math.Abs(now.Top - expected.Top) <= 2 &&
+                    Math.Abs(now.Width - expected.Width) <= 2 && Math.Abs(now.Height - expected.Height) <= 2, $"{what}: {now}, not {expected}.");
+            }
+
+            Assert.True(windows.ToggleBorderless(window));
+            Assert.Equal(0, User32.GetWindowLongPtr(window, User32.GWL_STYLE) & WindowController.BorderlessMask);
+            Near(before, "Borderless");
+            Assert.False(windows.ToggleBorderless(window));
+            Assert.Equal(style & WindowController.BorderlessMask, User32.GetWindowLongPtr(window, User32.GWL_STYLE) & WindowController.BorderlessMask);
+            Near(before, "Borderless undone");
+
+            Rectangle display = Screen.FromHandle(window).Bounds;
+            Assert.True(windows.ToggleBorderless(window, fill: true, display));
+            Near(display, "Fill display");
+            Assert.False(windows.ToggleBorderless(window, fill: true, display));
+            Near(before, "Fill display undone");
+        }
+        finally
+        {
+            windows.RestoreAll();
+            Close(browser, root);
+        }
+    }
+
     /// <summary>Processes whose command line names this run's folder, which holds its browser profile.</summary>
     private static List<int> ProcessesUsing(string root)
     {

@@ -78,7 +78,7 @@ public sealed class TrayApplication : ApplicationContext
             if (_settings.ShowNotifications)
                 Balloon(T("updates.title"), message, ToolTipIcon.None);
         });
-        _toolbar = new WindowToolbar(CanUseToolbar, IsOn, IsAvailable, Run);
+        _toolbar = new WindowToolbar(CanUseToolbar, IsOn, IsAvailable, Run) { OpenMenu = ShowToolbarMenu };
         _ = _toolbar.Handle;
         _modifierDrag.MenuEligible = CanOpenWindowMenu;
         _modifierDrag.MenuRequested = (window, point) => _toolbar.BeginInvoke(() => ShowWindowMenu(window, point));
@@ -271,16 +271,28 @@ public sealed class TrayApplication : ApplicationContext
 
     private void ShowWindowMenu(nint window, Point point)
     {
-        if (_windowMenu is { IsDisposed: false } || !CanOpenWindowMenu(window) ||
-            FullScreenDecision(AppCommand.ShowWindowMenu, window) != FullScreenAction.Run) return;
+        if (!CanOpenWindowMenu(window)) return;
+        ShowHostedMenu(window, point, AppCommand.ShowWindowMenu, (menu, builder) =>
+        {
+            menu.Items.Add(new ToolStripMenuItem(MenuText(WindowInfo.Title(window))) { Enabled = false, Name = MenuRenderer.TitleName });
+            menu.Items.Add(new ToolStripSeparator());
+            builder.Populate(menu.Items, false);
+        });
+    }
+
+    /// <summary>
+    /// Opens a window's menu where it is asked for, from a gesture, a hotkey or a toolbar button. The menu is held by
+    /// a window of its own that takes the keyboard, so it stays open whatever happens to the toolbar meanwhile.
+    /// </summary>
+    private void ShowHostedMenu(nint window, Point point, AppCommand asked, Action<ContextMenuStrip, WindowMenuBuilder> fill)
+    {
+        if (_windowMenu is { IsDisposed: false } || FullScreenDecision(asked, window) != FullScreenAction.Run) return;
         Attempt(() =>
         {
             WindowIdentity identity = WindowIdentity.Capture(window);
             var menu = new ContextMenuStrip();
-            menu.Items.Add(new ToolStripMenuItem(MenuText(WindowInfo.Title(window))) { Enabled = false, Name = MenuRenderer.TitleName });
-            menu.Items.Add(new ToolStripSeparator());
             var builder = CreateWindowMenuBuilder(() => identity);
-            builder.Populate(menu.Items, false);
+            fill(menu, builder);
             builder.Refresh(menu.Items);
             MenuRenderer.Apply(menu);
             StayingOpen.Follow(menu, () => builder.Refresh(menu.Items));
@@ -292,6 +304,25 @@ public sealed class TrayApplication : ApplicationContext
             _modifierDrag.MenuVisible = true;
             host.FormClosed += (_, _) => { _windowMenu = null; _modifierDrag.MenuVisible = false; };
             host.Open();
+        });
+    }
+
+    /// <summary>
+    /// The toolbar's two menu buttons. Arrange window lists everything that moves the window; Window menu lists what
+    /// the window menu offers that isn't a button on this bar already, so nothing shows twice.
+    /// </summary>
+    private void ShowToolbarMenu(AppCommand command, nint window, Point point)
+    {
+        if (command == AppCommand.Arrange)
+        {
+            ShowHostedMenu(window, point, AppCommand.Arrange, (menu, builder) => builder.PopulateArrange(menu.Items));
+            return;
+        }
+        IReadOnlySet<AppCommand> onBar = _toolbar.ShownButtons;
+        ShowHostedMenu(window, point, AppCommand.ShowWindowMenu, (menu, builder) =>
+        {
+            builder.Populate(menu.Items, false);
+            WindowMenuBuilder.LeaveOut(menu.Items, onBar);
         });
     }
 
@@ -400,9 +431,10 @@ public sealed class TrayApplication : ApplicationContext
             }, out var conflicts))
             return conflicts.Cast<AppCommand>().Select(command => Taken(command, settings)).ToArray();
 
+        AppSettings before = _settings.Clone();
         _settings.CopyFrom(settings);
         _setupNone.Clear();
-        ApplyPreferences(experimentalBefore);
+        ApplyPreferences(experimentalBefore, before);
         Native.Translucency.Allowed = _settings.MenuTransparency;
         if (_settings.Theme != themeBefore) ChangeTheme();
         if (adminChanged && _settings.RunAsAdministrator && !ProcessInfo.SelfElevated)
@@ -507,37 +539,68 @@ public sealed class TrayApplication : ApplicationContext
 
     private bool _wasDark = MenuStyle.Dark;
 
-    private void ApplyPreferences(bool experimentalBefore)
+    /// <summary>
+    /// Puts the settings into effect in every part of WinScreen and on every open view. With the settings that were in
+    /// effect before, only the parts whose settings changed are touched: Settings applies each change as it is made, and
+    /// resetting the toolbar or every view for an unrelated switch would be felt. Each part is put into effect on its
+    /// own, so one that fails doesn't leave the others as they were.
+    /// </summary>
+    private void ApplyPreferences(bool experimentalBefore, AppSettings? before = null)
     {
+        bool Changed<T>(Func<AppSettings, T> part) => before is null ||
+            System.Text.Json.JsonSerializer.Serialize(part(before)) != System.Text.Json.JsonSerializer.Serialize(part(_settings));
+        void Part(Action apply)
+        {
+            try { apply(); }
+            catch (Exception failure) when (IsExpected(failure)) { Alert(T("errors.operation.title"), failure.Message); }
+        }
+        bool experimentalChanged = before is null || experimentalBefore != _settings.ExperimentalFeatures;
         _hookForeground = 0;
-        _windows.SetExcluded(_settings.ExcludedPrograms);
-        _windows.SetIncluded(_settings.IncludedPrograms);
-        _windows.DefaultOpacity = _settings.DefaultAlpha;
-        _borders.Configure(_settings.PinBorder);
-        _dark.DetectAlreadyDark = _settings.DetectAlreadyDark;
-        _toolbar.Enable(_settings.ShowToolbar && !_toolbarHidden);
-        _toolbar.Configure(_settings.Toolbar);
-        _anchors.Configure(_settings.Anchors);
-        _automaticAnchors.Configure(_settings.Anchors.Automatic, _settings.Anchors.AvoidContent);
-        _content.SetLevels(_settings.Effects.Levels);
-        if (_settings.HideCaptureBorder && !Pip.CaptureBorder.Wanted) Pip.CaptureBorder.Forget(); // Ask again: the Windows setting may have changed.
-        Pip.CaptureBorder.Wanted = _settings.HideCaptureBorder;
-        if (Pip.CaptureBorder.Wanted && Pip.CaptureBorder.Supported()) _ = Pip.CaptureBorder.Prepare();
-        if (_settings.AutomaticUpdates && !_updatesWereOn)
-            _updateTimer.Interval = 30_000; // Check soon after it's turned on, then every few hours.
-        _updatesWereOn = _settings.AutomaticUpdates;
-        _updates.SetEnabled(_settings.AutomaticUpdates);
+        Part(() =>
+        {
+            _windows.SetExcluded(_settings.ExcludedPrograms);
+            _windows.SetIncluded(_settings.IncludedPrograms);
+            _windows.DefaultOpacity = _settings.DefaultAlpha;
+            _dark.DetectAlreadyDark = _settings.DetectAlreadyDark;
+        });
+        if (Changed(settings => settings.PinBorder)) Part(() => _borders.Configure(_settings.PinBorder));
+        Part(() => _toolbar.Enable(_settings.ShowToolbar && !_toolbarHidden));
+        if (Changed(settings => settings.Toolbar) || experimentalChanged) Part(() => _toolbar.Configure(_settings.Toolbar));
+        if (Changed(settings => settings.Anchors)) Part(() =>
+        {
+            _anchors.Configure(_settings.Anchors);
+            _automaticAnchors.Configure(_settings.Anchors.Automatic, _settings.Anchors.AvoidContent);
+        });
+        if (Changed(settings => settings.Effects)) Part(() => _content.SetLevels(_settings.Effects.Levels));
+        if (Changed(settings => settings.HideCaptureBorder)) Part(() =>
+        {
+            if (_settings.HideCaptureBorder && !Pip.CaptureBorder.Wanted) Pip.CaptureBorder.Forget(); // Ask again: the Windows setting may have changed.
+            Pip.CaptureBorder.Wanted = _settings.HideCaptureBorder;
+            if (Pip.CaptureBorder.Wanted && Pip.CaptureBorder.Supported()) _ = Pip.CaptureBorder.Prepare();
+        });
+        Part(() =>
+        {
+            if (_settings.AutomaticUpdates && !_updatesWereOn)
+                _updateTimer.Interval = 30_000; // Check soon after it's turned on, then every few hours.
+            _updatesWereOn = _settings.AutomaticUpdates;
+            _updates.SetEnabled(_settings.AutomaticUpdates);
+        });
         Pip.PipHoverApps.Preferences = _settings.PipHover;
         Pip.PipOriginalApps.Programs = _settings.PipOriginalPrograms;
-        foreach (PipWindow pip in _viewsInOrder)
+        bool pipChanged = Changed(settings => settings.Pip), viewsChanged = Changed(settings => settings.PipViews);
+        foreach (PipWindow pip in _viewsInOrder.ToArray())
         {
-            pip.ApplyPipPreferences(_settings.Pip);
-            pip.ApplyViewPreferences(_settings.PipViews);
-            pip.AllowAutoMove = _settings.ExperimentalFeatures;
-            pip.AllowInteractive = _settings.ExperimentalFeatures;
-            if (!_settings.ExperimentalFeatures) pip.SetInteractive(false);
-            pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;
-            if (!_settings.ExperimentalFeatures) pip.SetAutoMove(false);
+            if (pipChanged) Part(() => pip.ApplyPipPreferences(_settings.Pip));
+            if (viewsChanged) Part(() => pip.ApplyViewPreferences(_settings.PipViews));
+            if (!experimentalChanged) continue;
+            Part(() =>
+            {
+                pip.AllowAutoMove = _settings.ExperimentalFeatures;
+                pip.AllowInteractive = _settings.ExperimentalFeatures;
+                if (!_settings.ExperimentalFeatures) pip.SetInteractive(false);
+                pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;
+                if (!_settings.ExperimentalFeatures) pip.SetAutoMove(false);
+            });
         }
 
         if (experimentalBefore && !_settings.ExperimentalFeatures)
@@ -812,7 +875,7 @@ public sealed class TrayApplication : ApplicationContext
             identity.Require();
             if (setup.Alpha < 255) _windows.SetOpacity(window, setup.Alpha);
             identity.Require();
-            if (_settings.ExperimentalFeatures && setup.Dark && !_dark.IsDark(window) && !_content.Has(window, Glass.ContentLook.Dark)) ToggleDark(window);
+            if (_settings.ExperimentalFeatures && setup.Dark && DarkLook(window) == Look.None) ToggleDark(window);
             identity.Require();
             RestoreSavedView(window, setup);
             _setupDone[window] = identity;
@@ -885,6 +948,7 @@ public sealed class TrayApplication : ApplicationContext
 
         _setupNone.Clear();
         _setupDone[window] = WindowIdentity.Capture(window);
+        if (_settingsWindow is { IsDisposed: false } open) open.SetupsChanged();
         Confirm(setup.ChangesAnything ? T("setups.saved") : T("setups.removed"),
             setup.ChangesAnything ? setup.ToString() : program);
     }
@@ -1034,6 +1098,8 @@ public sealed class TrayApplication : ApplicationContext
 
     protected override void ExitThreadCore()
     {
+        // Settings first, while everything it puts into effect is still there: closing it applies a change still settling.
+        if (_settingsWindow is { IsDisposed: false } settings) settings.Close();
         // Windows go back first: if that fails WinScreen stays running, with its views still in place.
         CancelCrop();
         if (_windows.RestoreAll() != 0)
@@ -1309,27 +1375,8 @@ public sealed class TrayApplication : ApplicationContext
     }
 
     /// <summary>Everything that moves a window, from one button, so the toolbar doesn't need a button for each.</summary>
-    private void ShowArrangeMenu(nint window)
-    {
-        var menu = new ContextMenuStrip();
-        WindowIdentity identity = WindowIdentity.Capture(window);
-        var builder = CreateWindowMenuBuilder(() => identity);
-        builder.PopulateArrange(menu.Items);
-        builder.Refresh(menu.Items);
-        MenuRenderer.Apply(menu);
-        StayingOpen.Follow(menu, () => builder.Refresh(menu.Items));
-
-        // A menu only closes on an outside click while its program has the focus.
-        menu.Closed += (_, _) =>
-        {
-            User32.SetForegroundWindow(window);
-            BeginInvokeDispose(menu);
-        };
-        User32.SetForegroundWindow(_toolbar.Handle);
-        menu.Show(Cursor.Position);
-    }
-
-    private void BeginInvokeDispose(IDisposable item) => _toolbar.BeginInvoke(item.Dispose);
+    private void ShowArrangeMenu(nint window) =>
+        ShowHostedMenu(window, Cursor.Position, AppCommand.Arrange, (menu, builder) => builder.PopulateArrange(menu.Items));
 
     private void PlaceExactly(nint window)
     {
@@ -1539,27 +1586,81 @@ public sealed class TrayApplication : ApplicationContext
         _dark.IsDark(window) || _content.Has(window) || _anchors.Has(window) || _croppingWindow == window;
 
     /// <summary>Picture-safe Dark when it's chosen in Settings, otherwise the simple filter. Only one at a time.</summary>
-    private void ToggleDark(nint window)
+    /// <summary>The ways a window's colours can be changed. A window has at most one of them at a time.</summary>
+    private enum Look { None, FilterDark, PictureDark, ColorGlass, LayeredGlass }
+
+    private Look DarkLook(nint window) =>
+        _dark.IsDark(window) ? Look.FilterDark : _content.Has(window, Glass.ContentLook.Dark) ? Look.PictureDark : Look.None;
+
+    private Look GlassLook(nint window) =>
+        _windows.IsGlass(window) ? Look.ColorGlass : _content.Has(window, Glass.ContentLook.Glass) ? Look.LayeredGlass : Look.None;
+
+    /// <summary>Dark mode, or picture-keeping Dark when it's chosen in Settings. Glass goes first: the two can't share a window.</summary>
+    private void ToggleDark(nint window) => SwitchLook(window, DarkLook(window), GlassLook(window),
+        _settings.Effects.PictureSafeDark ? Look.PictureDark : Look.FilterDark);
+
+    /// <summary>Layered Glass when it's chosen in Settings, otherwise the colour-key Glass. Dark goes first.</summary>
+    private void ToggleGlass(nint window) => SwitchLook(window, GlassLook(window), DarkLook(window),
+        _settings.Effects.LayeredGlass ? Look.LayeredGlass : Look.ColorGlass);
+
+    /// <summary>
+    /// Turns <paramref name="current"/> off when the window has it; otherwise turns <paramref name="other"/> off and
+    /// <paramref name="wanted"/> on. When the new look fails or is refused, the old one is put back, so a window never
+    /// ends up with both, and never loses one for nothing.
+    /// </summary>
+    private void SwitchLook(nint window, Look current, Look other, Look wanted)
     {
-        if (_content.Has(window, Glass.ContentLook.Dark) || (_settings.Effects.PictureSafeDark && !_dark.IsDark(window)))
+        if (current != Look.None)
         {
-            _content.Toggle(window, Glass.ContentLook.Dark);
+            SetLook(window, current, false);
             return;
         }
+        if (other != Look.None)
+        {
+            SetLook(window, other, false);
+            if (Has(other)) throw new WindowOperationException(T("errors.effects.otherStayed"));
+        }
+        try
+        {
+            SetLook(window, wanted, true);
+            if (Has(wanted)) return;
+        }
+        catch (Exception failure) when (IsExpected(failure) && other != Look.None)
+        {
+            PutBack(failure.Message);
+            throw;
+        }
+        if (other != Look.None) PutBack(null); // Refused without an error, as Dark is for a window that is dark already.
 
-        _dark.Toggle(window);
+        bool Has(Look look) => look is Look.FilterDark or Look.PictureDark ? DarkLook(window) == look : GlassLook(window) == look;
+
+        void PutBack(string? problem)
+        {
+            try { SetLook(window, other, true); }
+            catch (Exception failure) when (IsExpected(failure))
+            {
+                throw new WindowOperationException(problem is null ? failure.Message : problem + Environment.NewLine + failure.Message);
+            }
+        }
     }
 
-    /// <summary>Layered Glass when it's chosen in Settings, otherwise the colour-key Glass.</summary>
-    private void ToggleGlass(nint window)
+    private void SetLook(nint window, Look look, bool on)
     {
-        if (_content.Has(window, Glass.ContentLook.Glass) || (_settings.Effects.LayeredGlass && !_windows.IsGlass(window)))
+        switch (look)
         {
-            _content.Toggle(window, Glass.ContentLook.Glass);
-            return;
+            case Look.FilterDark:
+                if (_dark.IsDark(window) != on) _dark.Toggle(window);
+                break;
+            case Look.PictureDark:
+                if (on != _content.Has(window, Glass.ContentLook.Dark)) _content.Toggle(window, Glass.ContentLook.Dark);
+                break;
+            case Look.LayeredGlass:
+                if (on != _content.Has(window, Glass.ContentLook.Glass)) _content.Toggle(window, Glass.ContentLook.Glass);
+                break;
+            case Look.ColorGlass:
+                if (_windows.IsGlass(window) != on) _windows.ToggleGlass(window);
+                break;
         }
-
-        _windows.ToggleGlass(window);
     }
 
     private int OpacityDelta(int steps) => steps * (int)Math.Round(Math.Clamp(_settings.OpacityStepPercent, 1, 25) * 255 / 100.0);

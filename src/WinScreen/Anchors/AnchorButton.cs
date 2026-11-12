@@ -1,5 +1,6 @@
 using static WinScreen.Localization.UiText;
 using WinScreen.Native;
+using WinScreen.Settings;
 using WinScreen.Windows;
 
 namespace WinScreen.Anchors;
@@ -89,8 +90,10 @@ internal sealed class AnchorButton : Form
     public bool Placed { get; private set; }
 
     /// <summary>Sets how it looks now. Skips anything unchanged, because this runs after every window change.</summary>
-    internal void Apply(int size, double opacity, bool light, bool marksView, bool excludeFromCapture, string? title = null)
+    internal void Apply(int size, double opacity, AnchorLook look, bool marksView, bool excludeFromCapture, string? title = null)
     {
+        bool plain = look == AnchorLook.NoBackground, light = look == AnchorLook.Light;
+        if (plain != _plain) ChangeKind(plain);
         int width = title is null ? size : size * 3;
         if (ClientSize.Width != width || ClientSize.Height != size || _size != size)
         {
@@ -112,9 +115,16 @@ internal sealed class AnchorButton : Form
             Invalidate();
         }
 
-        if (Math.Abs(Opacity - opacity) > 0.001) Opacity = opacity;
-        Color back = light ? Color.FromArgb(240, 240, 240) : Color.FromArgb(32, 32, 32);
-        if (BackColor != back) BackColor = back;
+        if (plain)
+        {
+            _plainOpacity = opacity;
+        }
+        else
+        {
+            if (Math.Abs(Opacity - opacity) > 0.001) Opacity = opacity;
+            Color back = light ? Color.FromArgb(240, 240, 240) : Color.FromArgb(32, 32, 32);
+            if (BackColor != back) BackColor = back;
+        }
         if (_marksView != marksView)
         {
             _marksView = marksView;
@@ -127,6 +137,96 @@ internal sealed class AnchorButton : Form
             _excluded = excludeFromCapture;
             User32.SetWindowDisplayAffinity(Handle, excludeFromCapture ? User32.WDA_EXCLUDEFROMCAPTURE : User32.WDA_NONE);
         }
+        if (plain) DrawPlain();
+    }
+
+    private bool _plain;
+    private double _plainOpacity = 1;
+    private string _drawnPlain = "";
+
+    /// <summary>True while it shows its icon with nothing behind it.</summary>
+    internal bool Plain => _plain;
+
+    /// <summary>
+    /// Moves between a button with a background, which paints itself, and the icon alone, which is a picture with
+    /// see-through parts handed to Windows whole. A window can't be both, so its layered style is taken off and put back
+    /// fresh each time.
+    /// </summary>
+    private void ChangeKind(bool plain)
+    {
+        if (plain) Opacity = 1; // The picture carries the opacity instead.
+        _plain = plain;
+        _drawnPlain = "";
+        if (!IsHandleCreated) return;
+        long style = User32.GetWindowLongPtr(Handle, User32.GWL_EXSTYLE);
+        User32.SetWindowLongPtr(Handle, User32.GWL_EXSTYLE, (nint)(style & ~User32.WS_EX_LAYERED));
+        UpdateStyles(); // Puts the layered style back for the picture, or leaves it to Opacity for a button.
+        if (!plain) Invalidate();
+    }
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            CreateParams parameters = base.CreateParams;
+            parameters.ExStyle |= (int)(User32.WS_EX_TOPMOST | User32.WS_EX_TOOLWINDOW);
+            if (_plain) parameters.ExStyle |= (int)User32.WS_EX_LAYERED;
+            return parameters;
+        }
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        _drawnPlain = "";
+        if (_plain) DrawPlain();
+    }
+
+    /// <summary>
+    /// The icon alone, with the title and the view notch outlined so they read on any background. Everything else is
+    /// almost but not quite see-through, so the whole square still takes clicks, drags and dropped files.
+    /// </summary>
+    private void DrawPlain()
+    {
+        if (!_plain || !IsHandleCreated || IsDisposed) return;
+        Size size = ClientSize;
+        string drawn = $"{size}|{_iconBounds}|{_title}|{_marksView}|{_plainOpacity:F3}";
+        if (drawn == _drawnPlain || size.Width <= 0 || size.Height <= 0) return;
+        using var picture = new Bitmap(size.Width, size.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (Graphics g = Graphics.FromImage(picture))
+        {
+            g.Clear(Color.FromArgb(1, 0, 0, 0));
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (Bitmap icon = (_icon ?? SystemIcons.Application).ToBitmap()) g.DrawImage(icon, _iconBounds);
+            using var outline = new Pen(Color.FromArgb(200, 0, 0, 0), Math.Max(2f, _size / 16f)) { LineJoin = System.Drawing.Drawing2D.LineJoin.Round };
+            if (_title is not null)
+            {
+                int left = _size - _iconBounds.Left / 2;
+                var words = new RectangleF(left, 2, size.Width - left - _iconBounds.Left, size.Height - 4);
+                using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                using var format = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter };
+                path.AddString(_title, Tray.MenuStyle.Font.FontFamily, (int)FontStyle.Regular, Math.Max(7f, _size / 4.4f), words, format);
+                g.DrawPath(outline, path);
+                g.FillPath(Brushes.White, path);
+            }
+            if (_marksView)
+            {
+                int notch = Math.Max(6, _size / 4);
+                int right = size.Width - 1, bottom = size.Height - 1;
+                Point[] corner = [new(right, bottom - notch), new(right, bottom), new(right - notch, bottom)];
+                g.DrawPolygon(outline, corner);
+                g.FillPolygon(Brushes.White, corner);
+            }
+        }
+        if (LayeredPicture.Show(Handle, picture, (byte)Math.Round(Math.Clamp(_plainOpacity, 0, 1) * 255)))
+            _drawnPlain = drawn;
+    }
+
+    protected override void OnSizeChanged(EventArgs e)
+    {
+        base.OnSizeChanged(e);
+        DrawPlain();
     }
     public bool TargetAlive => _identity.Matches();
 
@@ -135,19 +235,10 @@ internal sealed class AnchorButton : Form
 
     protected override bool ShowWithoutActivation => true;
 
-    protected override CreateParams CreateParams
-    {
-        get
-        {
-            CreateParams parameters = base.CreateParams;
-            parameters.ExStyle |= (int)(User32.WS_EX_TOPMOST | User32.WS_EX_TOOLWINDOW);
-            return parameters;
-        }
-    }
-
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
+        if (_plain) return; // Drawn whole in DrawPlain.
         e.Graphics.DrawIcon(_icon ?? SystemIcons.Application, _iconBounds);
         if (_title is not null)
         {

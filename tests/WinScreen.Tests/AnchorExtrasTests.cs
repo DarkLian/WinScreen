@@ -87,6 +87,42 @@ public sealed class AnchorExtrasTests
         finally { File.Delete(path); }
     }
 
+    /// <summary>
+    /// With No background an Anchor shows its icon alone: what is behind shows round it, yet the whole square still
+    /// takes the pointer. It can change to a look with a background and back while it is on screen.
+    /// </summary>
+    [Fact]
+    public void An_Anchor_with_no_background_shows_what_is_behind_and_still_takes_the_pointer()
+    {
+        using var target = new TargetProcess(new Rectangle(240, 200, 420, 320), "C81E1E", "Anchor backdrop");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var anchors = new AnchorSet();
+            anchors.Configure(new AnchorPreferences { Style = AnchorLook.NoBackground, HoverPreview = false });
+            anchors.Toggle(target.Handle);
+            AnchorButton anchor = Assert.Single(Buttons(anchors));
+            anchor.Location = new Point(300, 260);
+            void Settle() { for (int i = 0; i < 10; i++) { Application.DoEvents(); Thread.Sleep(20); } }
+            Settle();
+            Rectangle corner = new(anchor.Left + 1, anchor.Top + 1, 2, 2);
+            Point inside = new(anchor.Left + 2, anchor.Top + 2);
+            Color red = Color.FromArgb(0xC8, 0x1E, 0x1E);
+            Assert.True(anchor.Plain);
+            Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(corner), red), $"Corner was {Desktop.ColorOnScreen(corner)}.");
+            Assert.Equal(anchor.Handle, Desktop.TopWindowAt(inside));
+
+            anchors.Configure(new AnchorPreferences { Style = AnchorLook.Dark, HoverPreview = false });
+            Settle();
+            Assert.False(anchor.Plain);
+            Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(corner), Color.FromArgb(32, 32, 32)), $"Corner was {Desktop.ColorOnScreen(corner)}.");
+
+            anchors.Configure(new AnchorPreferences { Style = AnchorLook.NoBackground, HoverPreview = false });
+            Settle();
+            Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(corner), red), $"Corner was {Desktop.ColorOnScreen(corner)} after changing back.");
+            Assert.Equal(anchor.Handle, Desktop.TopWindowAt(inside));
+        });
+    }
+
     /// <summary>Two Anchors with the same icon each show their window's title; an Anchor alone shows its icon only.</summary>
     [Fact]
     public void Lookalike_Anchors_show_their_titles()

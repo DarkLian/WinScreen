@@ -119,6 +119,13 @@ public static class CommandCatalog
         AppCommand.RestoreWindow, AppCommand.RestoreAll,
     ];
 
+    /// <summary>
+    /// The toolbar's buttons, in order: the commands above but Restore all windows, then the window menu, which lists
+    /// what the bar doesn't show itself.
+    /// </summary>
+    public static readonly AppCommand[] ToolbarButtons =
+        [.. Ordered.Where(command => command != AppCommand.RestoreAll), AppCommand.ShowWindowMenu];
+
     /// <summary>Commands with a place in the tray and Hotkeys but no toolbar button.</summary>
     public static readonly AppCommand[] Extra =
     [
@@ -159,7 +166,7 @@ public static class CommandCatalog
 
     /// <summary>The last command of each group, where a divider follows.</summary>
     public static bool EndsGroup(AppCommand command) =>
-        command is AppCommand.ToggleClickThrough or AppCommand.ToggleCrop or AppCommand.SaveWindowSetup;
+        command is AppCommand.ToggleClickThrough or AppCommand.ToggleCrop or AppCommand.SaveWindowSetup or AppCommand.RestoreWindow;
 
     public static bool IsExperimental(AppCommand command) =>
         command is AppCommand.ToggleDark or AppCommand.ToggleGlass or AppCommand.ToggleShrink or AppCommand.ToggleCrop
@@ -403,6 +410,10 @@ public sealed class AppSettings
         loaded.PipOriginalPrograms = (loaded.PipOriginalPrograms ?? []).Where(value => !string.IsNullOrWhiteSpace(value))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         loaded.Toolbar = (loaded.Toolbar ?? new()).Validated();
+        // Settings from before the Window menu button get it once; the marker is saved with them from then on.
+        if (document.RootElement.TryGetProperty(nameof(Toolbar), out JsonElement toolbar) && toolbar.ValueKind == JsonValueKind.Object &&
+            !toolbar.TryGetProperty(nameof(ToolbarPreferences.WindowMenuOffered), out _))
+            loaded.Toolbar = (loaded.Toolbar with { Buttons = [.. loaded.Toolbar.Buttons, AppCommand.ShowWindowMenu], WindowMenuOffered = true }).Validated();
         loaded.Anchors = (loaded.Anchors ?? new()).Validated();
         loaded.Effects = (loaded.Effects ?? new()).Validated();
         loaded.ModifierExclusions = (loaded.ModifierExclusions ?? defaults.ModifierExclusions)

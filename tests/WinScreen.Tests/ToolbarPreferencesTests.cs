@@ -15,7 +15,25 @@ public sealed class ToolbarPreferencesTests
         Assert.Equal(ToolbarPlacement.Centre, loaded.Toolbar.Placement);
         Assert.Equal(ToolbarTrigger.TitleBar, loaded.Toolbar.Trigger);
         Assert.Equal(500, loaded.Toolbar.HoverDelayMilliseconds);
-        Assert.Equal(CommandCatalog.Ordered.Where(command => command != AppCommand.RestoreAll), loaded.Toolbar.Buttons);
+        Assert.Equal([.. CommandCatalog.Ordered.Where(command => command != AppCommand.RestoreAll), AppCommand.ShowWindowMenu], loaded.Toolbar.Buttons);
+    }
+
+    /// <summary>
+    /// Settings saved before the Window menu button existed get it once, after their other buttons; once it has been
+    /// offered, taking it off stays off.
+    /// </summary>
+    [Fact]
+    public void Older_toolbar_choices_get_the_window_menu_button_once()
+    {
+        var older = AppSettings.Parse("""{"Toolbar":{"Buttons":["TogglePin","Arrange"]}}""");
+        Assert.Equal([AppCommand.TogglePin, AppCommand.Arrange, AppCommand.ShowWindowMenu], older.Toolbar.Buttons);
+        Assert.True(older.Toolbar.WindowMenuOffered);
+        string saved = System.Text.Json.JsonSerializer.Serialize(older);
+        var removed = AppSettings.Parse(System.Text.Json.JsonSerializer.Serialize(new AppSettings
+            { Toolbar = older.Toolbar with { Buttons = [AppCommand.TogglePin] } }));
+        Assert.Equal([AppCommand.TogglePin], removed.Toolbar.Buttons);
+        Assert.Contains(AppCommand.ShowWindowMenu, new AppSettings().Toolbar.Buttons);
+        Assert.Contains(nameof(ToolbarPreferences.WindowMenuOffered), saved);
     }
 
     [Fact]
@@ -35,7 +53,7 @@ public sealed class ToolbarPreferencesTests
             Assert.Equal(ToolbarTrigger.MinimizeButton, preferences.Trigger);
             Assert.Equal(700, preferences.HoverDelayMilliseconds);
             Assert.Equal([AppCommand.TogglePin, AppCommand.OpenPip], preferences.Buttons);
-            Assert.Empty(AppSettings.Parse("""{"Toolbar":{"Buttons":[]}}""").Toolbar.Buttons);
+            Assert.Empty(AppSettings.Parse("""{"Toolbar":{"Buttons":[],"WindowMenuOffered":true}}""").Toolbar.Buttons);
         }
         finally { Directory.Delete(folder, true); }
     }
@@ -128,7 +146,7 @@ public sealed class ToolbarPreferencesTests
         string saved = System.Text.Json.JsonSerializer.Serialize(new ToolbarPreferences { Buttons = [AppCommand.OpenPip] });
         Assert.Contains("\"Buttons\":[\"OpenPip\"]", saved);
         int pin = (int)AppCommand.TogglePin;
-        var loaded = AppSettings.Parse($$$"""{"Toolbar":{"Buttons":[{{{pin}}},"OpenPip","ACommandFromLater",{"odd":1}]}}""");
+        var loaded = AppSettings.Parse($$$"""{"Toolbar":{"WindowMenuOffered":true,"Buttons":[{{{pin}}},"OpenPip","ACommandFromLater",{"odd":1}]}}""");
         Assert.Equal([AppCommand.TogglePin, AppCommand.OpenPip], loaded.Toolbar.Buttons);
         Assert.Equal(ToolbarPreferences.DefaultButtons(), AppSettings.Parse("""{"Toolbar":{"Buttons":"none"}}""").Toolbar.Buttons);
         Assert.Equal(ToolbarPreferences.DefaultButtons(), AppSettings.Parse("""{"Toolbar":{"Buttons":null}}""").Toolbar.Buttons);

@@ -448,12 +448,13 @@ public sealed class SettingsWindowTests : IDisposable
 
             Descendants(window).OfType<ComboBox>().Skip(2).First().Text = "Typed.exe";
             window.RefreshApply();
-            Assert.True(window.HasChanges); // A name typed but not added counts, as it does for Save.
+            Assert.False(window.HasChanges); // A name still being typed is added with Add or Enter, not as it is typed.
         });
     }
 
+    /// <summary>A change that can't go into effect, such as a shortcut every key of which is taken, stays waiting.</summary>
     [Fact]
-    public void Apply_stays_available_when_a_hotkey_is_taken()
+    public void A_change_that_cant_go_into_effect_stays_waiting()
     {
         OnUiThread(() =>
         {
@@ -469,8 +470,9 @@ public sealed class SettingsWindowTests : IDisposable
         });
     }
 
+    /// <summary>A program name still in its box is left there, not saved half typed; Add puts it in the list.</summary>
     [Fact]
-    public void A_name_typed_but_not_added_is_still_saved()
+    public void A_name_typed_but_not_added_waits_for_Add()
     {
         OnUiThread(() =>
         {
@@ -481,9 +483,108 @@ public sealed class SettingsWindowTests : IDisposable
                 return [];
             });
             _ = window.Handle;
-            Descendants(window).OfType<ComboBox>().Skip(2).First().Text = "Typed.exe";
+            ComboBox box = Descendants(window).OfType<ComboBox>().Skip(2).First();
+            box.Text = "Typed.exe";
+            window.SetDefaultOpacity(60);
             Assert.True(window.SaveChanges());
-            Assert.Contains("Typed", applied!.ExcludedPrograms);
+            Assert.DoesNotContain("Typed", applied!.ExcludedPrograms);
+            Assert.Equal("Typed.exe", box.Text);
+        });
+    }
+
+    /// <summary>
+    /// A change goes into effect by itself once it settles, with nothing to press. A colour waits until it is whole,
+    /// and a change of the values in effect from elsewhere (as when running as administrator was declined) is shown
+    /// without being put into effect again.
+    /// </summary>
+    [Fact]
+    public void Changes_go_into_effect_by_themselves_once_they_settle()
+    {
+        OnUiThread(() =>
+        {
+            var settings = new AppSettings();
+            int applied = 0;
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), draft =>
+            {
+                applied++;
+                settings.CopyFrom(draft);
+                return [];
+            });
+            _ = window.Handle;
+            bool Within(int milliseconds, Func<bool> condition)
+            {
+                long end = Environment.TickCount64 + milliseconds;
+                while (Environment.TickCount64 < end) { Application.DoEvents(); if (condition()) return true; Thread.Sleep(10); }
+                return condition();
+            }
+
+            window.SetOption(nameof(AppSettings.ShowNotifications), false);
+            window.SetOption(nameof(AppSettings.OpaqueOnHover), true);
+            Assert.True(Within(SettingsWindow.SettleMilliseconds * 5, () => applied > 0), "The change wasn't put into effect.");
+            Assert.False(Within(SettingsWindow.SettleMilliseconds * 2, () => applied > 1)); // Both, together, once.
+            Assert.False(settings.ShowNotifications);
+            Assert.True(settings.OpaqueOnHover);
+            Assert.False(window.HasChanges);
+
+            window.SetBorderColor("#12");
+            Assert.False(Within(SettingsWindow.SettleMilliseconds * 3, () => applied > 1), "A half-typed colour went into effect.");
+            Assert.True(window.HasChanges);
+            window.SetBorderColor("#123456");
+            Assert.True(Within(SettingsWindow.SettleMilliseconds * 5, () => applied > 1));
+            Assert.Equal("#123456", settings.PinBorder.ColorHex);
+
+            settings.ShowNotifications = true; // As if changed from elsewhere.
+            window.LoadValues(settings);
+            Assert.False(window.HasChanges);
+            Assert.False(Within(SettingsWindow.SettleMilliseconds * 3, () => applied > 2), "Showing what's in effect put it into effect again.");
+        });
+    }
+
+    /// <summary>
+    /// A shortcut that can't be had goes back to the one in effect, with the reason shown, and every other change
+    /// still goes into effect.
+    /// </summary>
+    [Fact]
+    public void A_taken_shortcut_goes_back_and_everything_else_goes_into_effect()
+    {
+        OnUiThread(() =>
+        {
+            var settings = new AppSettings();
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), draft =>
+            {
+                if (draft.Hotkeys[AppCommand.TogglePin] == "Ctrl+Alt+F22") return [new HotkeyProblem(AppCommand.TogglePin, "Ctrl+Alt+F22 is taken.")];
+                settings.CopyFrom(draft);
+                return [];
+            });
+            _ = window.Handle;
+            window.CaptureHotkey(AppCommand.TogglePin, Keys.Control | Keys.Alt | Keys.F22);
+            window.SetOption(nameof(AppSettings.ShowNotifications), false);
+            Assert.True(window.ApplyChanges());
+            Assert.False(settings.ShowNotifications);
+            Assert.Equal("Ctrl+Alt+T", settings.Hotkeys[AppCommand.TogglePin]);
+            Assert.Contains(Descendants(window), control => control.Text == "Ctrl+Alt+F22 is taken.");
+            Assert.False(window.HasChanges); // What's on screen is what's in effect, so the box shows Ctrl+Alt+T again.
+            Assert.True(window.ApplyChanges());
+            Assert.Equal("Ctrl+Alt+T", settings.Hotkeys[AppCommand.TogglePin]);
+        });
+    }
+
+    /// <summary>A setup saved from a window's menu while Settings is open shows in its list, and isn't taken away again.</summary>
+    [Fact]
+    public void A_setup_saved_meanwhile_shows_in_Settings()
+    {
+        OnUiThread(() =>
+        {
+            var settings = new AppSettings();
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), draft => { settings.CopyFrom(draft); return []; });
+            _ = window.Handle;
+            settings.SavedSetups.Add(new ProgramSetup { Program = "notepad", Pinned = true });
+            window.SetupsChanged();
+            Assert.False(window.HasChanges);
+            Assert.Contains(Descendants(window).OfType<ListBox>(), list => list.Items.OfType<ProgramSetup>().Any(setup => setup.Program == "notepad"));
+            window.SetOption(nameof(AppSettings.ShowNotifications), false);
+            Assert.True(window.ApplyChanges());
+            Assert.Single(settings.SavedSetups);
         });
     }
 

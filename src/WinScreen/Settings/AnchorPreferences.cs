@@ -1,7 +1,8 @@
 namespace WinScreen.Settings;
 
 public enum AnchorSide { Right, Left, NearWindow }
-public enum AnchorLook { Dark, Light }
+/// <summary>How an Anchor looks. New looks go at the end, so saved choices keep their meaning.</summary>
+public enum AnchorLook { Dark, Light, NoBackground }
 
 public sealed record AnchorPreferences
 {

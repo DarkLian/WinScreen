@@ -100,7 +100,13 @@ public sealed class WindowPlacementTests
 
     [Theory]
     [InlineData(WindowAnchor.TopLeft)]
+    [InlineData(WindowAnchor.Top)]
+    [InlineData(WindowAnchor.TopRight)]
+    [InlineData(WindowAnchor.Left)]
     [InlineData(WindowAnchor.Center)]
+    [InlineData(WindowAnchor.Right)]
+    [InlineData(WindowAnchor.BottomLeft)]
+    [InlineData(WindowAnchor.Bottom)]
     [InlineData(WindowAnchor.BottomRight)]
     public void The_visible_frame_lands_on_the_anchor(WindowAnchor anchor)
     {
@@ -182,6 +188,84 @@ public sealed class WindowPlacementTests
         windows.TogglePin(target.Handle);
         Assert.Throws<WindowOperationException>(() => windows.SendToBottom(target.Handle));
         windows.RestoreAll();
+    }
+
+    /// <summary>
+    /// A maximized window fills its display wherever its place is, so a place chosen for it, or an exact position,
+    /// brings it back to its usual size there. Back to previous position maximizes it again.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_maximized_window_comes_back_to_its_size_in_the_place_chosen(bool exact)
+    {
+        using var target = new TargetProcess(Spot);
+        target.UseTitleBar();
+        var placer = new WindowPlacer(new WindowController([]));
+        Rectangle usual = FrameOf(target.Handle);
+        User32.ShowWindow(target.Handle, 3); // SW_MAXIMIZE
+        Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000));
+        Rectangle area = Screen.FromHandle(target.Handle).WorkingArea;
+        Rectangle wanted = exact ? new Rectangle(area.Left + 100, area.Top + 80, 500, 320) : new Rectangle(area.Location, usual.Size);
+        if (exact) placer.SetFrame(target.Handle, wanted);
+        else placer.Align(target.Handle, WindowAnchor.TopLeft);
+        Assert.False(User32.IsZoomed(target.Handle), "Still maximized.");
+        Rectangle after = FrameOf(target.Handle);
+        Assert.InRange(Math.Abs(after.X - wanted.X), 0, 1);
+        Assert.InRange(Math.Abs(after.Y - wanted.Y), 0, 1);
+        Assert.Equal(wanted.Size, after.Size);
+        Assert.True(placer.RestorePrior(target.Handle));
+        Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000), "Back to previous position didn't maximize it again.");
+    }
+
+    /// <summary>Exact position and size starts from where the window is, and what is typed in is where it goes.</summary>
+    [Fact]
+    public void Exact_position_and_size_starts_from_the_window_and_puts_it_where_typed()
+    {
+        using var target = new TargetProcess(Spot);
+        Rectangle frame = FrameOf(target.Handle);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var dialog = new PlacementDialog("Exact", frame);
+            Assert.Equal(frame, dialog.Frame);
+            var boxes = Descendants(dialog).OfType<NumericUpDown>().ToArray();
+            Assert.Equal(4, boxes.Length);
+            (boxes[0].Value, boxes[1].Value, boxes[2].Value, boxes[3].Value) = (300, 260, 480, 330);
+            Assert.Equal(new Rectangle(300, 260, 480, 330), dialog.Frame);
+            new WindowPlacer(new WindowController([])).SetFrame(target.Handle, dialog.Frame);
+        });
+        Assert.Equal(new Rectangle(300, 260, 480, 330), FrameOf(target.Handle));
+
+        static IEnumerable<Control> Descendants(Control parent) =>
+            parent.Controls.Cast<Control>().SelectMany(child => new[] { child }.Concat(Descendants(child)));
+    }
+
+    /// <summary>Send to bottom puts the window under the others, so one it covered is in front of it.</summary>
+    [Fact]
+    public void Send_to_bottom_puts_the_window_under_the_others()
+    {
+        using var under = new TargetProcess(new Rectangle(300, 260, 400, 300), "1E64C8", "Under");
+        using var front = new TargetProcess(Spot, "C81E1E", "Front");
+        Desktop.GainForegroundRights();
+        Desktop.Activate(front.Handle);
+        var overlap = new Point(350, 300);
+        Assert.True(Desktop.WaitFor(() => User32.GetAncestor(Desktop.TopWindowAt(overlap), User32.GA_ROOT) == front.Handle, 2000));
+        new WindowController([]).SendToBottom(front.Handle);
+        Assert.True(Desktop.WaitFor(() => User32.GetAncestor(Desktop.TopWindowAt(overlap), User32.GA_ROOT) == under.Handle, 2000),
+            "The window covered is still behind.");
+    }
+
+    /// <summary>Move to display, with the display the window is on, leaves it where it is.</summary>
+    [Fact]
+    public void Moving_to_its_own_display_leaves_the_window_where_it_is()
+    {
+        using var target = new TargetProcess(Spot);
+        Rectangle before = FrameOf(target.Handle);
+        new WindowPlacer(new WindowController([])).MoveToDisplay(target.Handle, Screen.FromHandle(target.Handle).DeviceName);
+        Rectangle after = FrameOf(target.Handle);
+        Assert.InRange(Math.Abs(after.X - before.X), 0, 1);
+        Assert.InRange(Math.Abs(after.Y - before.Y), 0, 1);
+        Assert.Equal(before.Size, after.Size);
     }
 
     [Fact]

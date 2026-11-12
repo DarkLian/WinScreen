@@ -232,7 +232,7 @@ public sealed class AnchorSet : IDisposable
             ? AnchorEmphasis.For(rank, _recency.Count)
             : (1.0, 1.0);
         int full = Dpi.Scale(_preferences.Size, Dpi.Of(anchor.Target));
-        anchor.Apply((int)Math.Round(full * size), opacity, _preferences.Style == AnchorLook.Light,
+        anchor.Apply((int)Math.Round(full * size), opacity, _preferences.Style,
             HasView?.Invoke(anchor.Target) == true, _preferences.AvoidContent, TitleOf(anchor));
     }
 

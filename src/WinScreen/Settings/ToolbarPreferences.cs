@@ -14,7 +14,13 @@ public sealed record ToolbarPreferences
     [JsonConverter(typeof(ToolbarButtonListConverter))]
     public List<AppCommand> Buttons { get; init; } = DefaultButtons();
 
-    internal static List<AppCommand> DefaultButtons() => [.. CommandCatalog.Ordered.Where(command => command != AppCommand.RestoreAll)];
+    /// <summary>
+    /// Marks settings made since the toolbar got its Window menu button. Older settings get the button once, as they
+    /// load (<see cref="AppSettings.Parse"/>); after that, taking it off stays off.
+    /// </summary>
+    public bool WindowMenuOffered { get; init; } = true;
+
+    internal static List<AppCommand> DefaultButtons() => [.. CommandCatalog.ToolbarButtons];
 
     internal ToolbarPreferences Validated() => this with
     {

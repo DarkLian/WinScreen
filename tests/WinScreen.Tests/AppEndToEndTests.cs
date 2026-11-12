@@ -299,6 +299,75 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(toolbar)), "The toolbar didn't hide.");
     }
 
+    /// <summary>
+    /// The toolbar's Arrange window and Window menu buttons open their menus under the button, and the menus stay open
+    /// until a choice is made, though the bar itself goes once the menu has the keyboard. A choice from Arrange works.
+    /// </summary>
+    [Fact]
+    public void The_toolbar_menus_stay_open_and_their_choices_work()
+    {
+        var settings = new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.Arrange, AppCommand.ShowWindowMenu] } };
+        RestartWith(settings);
+        using var target = new TargetProcess(Spot);
+        target.UseTitleBar();
+        foreach (int button in new[] { 0, 1 })
+        {
+            // The bar from the round before goes once the pointer leaves it.
+            Desktop.MoveMouse(new Point(Spot.Left + 40, Spot.Bottom - 40));
+            Assert.True(Desktop.WaitFor(() => Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar") == 0, 3000),
+                "The toolbar stayed after the pointer left.");
+            Focus(target);
+            var rest = new Point(target.Center.X, Spot.Top + 12);
+            Desktop.RequireWindowAt(rest, target.Handle);
+            Desktop.MoveMouse(new Point(rest.X + 30, rest.Y));
+            Desktop.MoveMouse(rest);
+            nint toolbar = 0;
+            Assert.True(Desktop.WaitFor(() =>
+            {
+                toolbar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar");
+                return toolbar != 0;
+            }, 4000), "The toolbar didn't appear.");
+            Rectangle bar = Desktop.BoundsOf(toolbar);
+            Point press = new(bar.Left + bar.Height / 2 + button * (bar.Height + bar.Height * 8 / 34), bar.Top + bar.Height / 2);
+            Desktop.ClickOn(press, toolbar);
+            nint menu = 0;
+            Assert.True(Desktop.WaitFor(() => (menu = OpenMenu()) != 0, 2000), $"Button {button} opened no menu.");
+            Thread.Sleep(900);
+            Assert.True(Desktop.IsWindowVisible(menu), $"The menu of button {button} closed by itself.");
+            Rectangle shown = Desktop.BoundsOf(menu);
+            Assert.InRange(shown.Top, bar.Bottom - 4, bar.Bottom + 40); // Under the bar, not wherever the pointer is.
+            if (button == 0)
+            {
+                // The first entry, Top left, moves the window to the top left of its display.
+                Desktop.Press(Keys.Down);
+                Desktop.Press(Keys.Enter);
+                Rectangle area = Screen.FromHandle(target.Handle).WorkingArea;
+                Assert.True(Desktop.WaitFor(() => Math.Abs(Desktop.BoundsOf(target.Handle).Left - area.Left) < 12 &&
+                    Math.Abs(Desktop.BoundsOf(target.Handle).Top - area.Top) < 12), "Top left didn't move the window.");
+                Desktop.Press(Keys.Escape);
+                Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(menu)));
+                User32.SetWindowPos(target.Handle, 0, Spot.Left, Spot.Top, Spot.Width, Spot.Height, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+            }
+            else
+            {
+                Desktop.Press(Keys.Escape);
+                Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(menu)));
+            }
+            Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle), "The window didn't get the keyboard back.");
+        }
+
+        nint OpenMenu()
+        {
+            nint found = 0;
+            Desktop.EachProcessWindow(_app.Id, window =>
+            {
+                Rectangle bounds = Desktop.BoundsOf(window);
+                if (found == 0 && bounds.Height > 120 && bounds.Width > 120) found = window;
+            });
+            return found;
+        }
+    }
+
     [Fact]
     public void An_anchor_brings_forward_minimizes_and_closes_its_window()
     {

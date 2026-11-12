@@ -39,7 +39,8 @@ public class DarkModeTests
         return work;
     }
 
-    private static void OnUiThread(Action<Action<int>> test)
+    /// <summary>Runs on the one thread that may use Dark mode in this process. Other tests that turn Dark mode on use it too.</summary>
+    internal static void OnUiThread(Action<Action<int>> test)
     {
         Exception? failure = null;
         using var finished = new ManualResetEventSlim();
