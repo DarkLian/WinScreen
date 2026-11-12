@@ -25,7 +25,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         cursor == LoadCursor(0, 32512) ? "arrow" : cursor == LoadCursor(0, 32513) ? "ibeam" :
         cursor == LoadCursor(0, 32649) ? "hand" : cursor == 0 ? "none" : $"0x{cursor:X}";
 
-    private static (Process Browser, nint Window, string Root) Open(string html, string title, bool app, string? path = null, double scale = 1)
+    internal static (Process Browser, nint Window, string Root) Open(string html, string title, bool app, string? path = null, double scale = 1)
     {
         string root = Directory.CreateTempSubdirectory("winscreen-browser").FullName;
         string page = Path.Combine(root, "page.html");
@@ -59,7 +59,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         return (browser, window, root);
     }
 
-    private static void Close(Process browser, string root)
+    internal static void Close(Process browser, string root)
     {
         try { if (!browser.HasExited) browser.Kill(true); } catch (InvalidOperationException) { }
         browser.WaitForExit(5000);

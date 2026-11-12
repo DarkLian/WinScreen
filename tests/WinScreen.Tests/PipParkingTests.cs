@@ -9,6 +9,22 @@ namespace WinScreen.Tests;
 public sealed class PipParkingGeometryTests
 {
     [Fact]
+    public void A_window_put_back_in_full_screen_is_known_by_covering_a_monitor_and_a_parked_one_as_out_of_reach()
+    {
+        Rectangle[] monitors = [new(0, 0, 1920, 1080), new(1920, 0, 2560, 1440)];
+        Assert.True(WindowController.FillsAMonitor(new Rectangle(0, 0, 1920, 1080), monitors));
+        Assert.True(WindowController.FillsAMonitor(new Rectangle(1920, 0, 2560, 1439), monitors));
+        Assert.False(WindowController.FillsAMonitor(new Rectangle(-8, -8, 1936, 1048), monitors)); // Maximized, under the taskbar.
+        Assert.False(WindowController.FillsAMonitor(new Rectangle(200, 100, 900, 700), monitors));
+
+        Rectangle parked = WindowController.HoverParkingPlace(new Size(1936, 1048), monitors, monitors[0]);
+        Assert.True(WindowController.OutOfReach(parked, monitors));
+        Assert.True(WindowController.OutOfReach(new Rectangle(1918 + 2560 + 1920, 0, 900, 700), monitors));
+        Assert.False(WindowController.OutOfReach(new Rectangle(1880, 0, 900, 700), monitors)); // Its edge can be taken hold of.
+        Assert.False(WindowController.OutOfReach(new Rectangle(-8, -8, 1936, 1048), monitors));
+    }
+
+    [Fact]
     public void Hover_parking_prefers_a_side_keeps_the_home_monitor_and_the_two_pixel_limit()
     {
         Rectangle home = new(-1920, 0, 1920, 1080);

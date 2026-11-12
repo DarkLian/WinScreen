@@ -16,6 +16,7 @@ public sealed partial class WindowController
         {
             ChangedWindow state = Track(window);
             if (state.Parked) return;
+            StopWatchingReturn(window); // A new view parks it again; this one's own close decides.
             if (!state.Hidden || state.PlacementBeforePeek is not null)
                 throw new WindowOperationException(T("errors.pip.previewNotReady"));
             if (!User32.GetWindowRect(window, out Rect bounds)) throw Failure(T("actions.readPosition"), window);

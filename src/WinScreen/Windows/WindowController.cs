@@ -1003,6 +1003,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 }
             }
         }
+        // Full screen now, it may have gone so while parked and will go back to the parked spot when it leaves.
+        bool fullScreen = state.Parked && User32.GetWindowRect(window, out Rect shown) && FillsAMonitor(
+            Rectangle.FromLTRB(shown.Left, shown.Top, shown.Right, shown.Bottom), Screen.AllScreens.Select(screen => screen.Bounds).ToArray());
         Attempt("peek-pin", () => SetTopmost(window, state.Pinned, state.Identity));
         Attempt("peek-placement", () => WritePlacement(window, placement));
         if (state.Hidden)
@@ -1013,6 +1016,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             });
         if (failures.Count > 0)
             throw new WindowOperationException(string.Join(Environment.NewLine, failures));
+        if (fullScreen) WatchForReturn(window, placement);
         state.PlacementBeforePeek = null;
         state.Parked = false;
         state.HoverParking = false;
