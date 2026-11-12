@@ -299,6 +299,36 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(toolbar)), "The toolbar didn't hide.");
     }
 
+    /// <summary>On a maximized window the toolbar shows on its title bar at the top of the screen, and its pin button works.</summary>
+    [Fact]
+    public void The_toolbar_appears_on_a_maximized_windows_title_bar_and_works()
+    {
+        using var target = new TargetProcess(Spot);
+        target.UseFrame();
+        User32.ShowWindow(target.Handle, User32.SW_MAXIMIZE);
+        Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000));
+        Focus(target);
+        Assert.True(WinScreen.Windows.WindowInfo.TryGetFrameBounds(target.Handle, out Rectangle frame, out _));
+        var rest = new Point(frame.Left + frame.Width / 2, frame.Top + 12);
+        Desktop.RequireWindowAt(rest, target.Handle);
+        Desktop.MoveMouse(rest);
+
+        nint toolbar = 0;
+        Assert.True(Desktop.WaitFor(() =>
+        {
+            toolbar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar");
+            return toolbar != 0 && Desktop.IsWindowVisible(toolbar);
+        }, 4000), "The toolbar didn't appear on the maximized window.");
+        Rectangle bar = Desktop.BoundsOf(toolbar);
+        Assert.True(Screen.FromHandle(target.Handle).Bounds.Contains(bar), $"The toolbar is off the screen: {bar}.");
+        Desktop.ClickOn(new Point(bar.Left + bar.Height / 2, bar.Top + bar.Height / 2), toolbar);
+        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST) != 0),
+            "The pin button didn't pin.");
+        Assert.True(User32.IsZoomed(target.Handle));
+        Desktop.MoveMouse(new Point(frame.Left + 40, frame.Bottom - 80));
+        Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(toolbar)), "The toolbar didn't hide.");
+    }
+
     /// <summary>
     /// The toolbar's Arrange window and Window menu buttons open their menus under the button, and the menus stay open
     /// until a choice is made, though the bar itself goes once the menu has the keyboard. A choice from Arrange works.

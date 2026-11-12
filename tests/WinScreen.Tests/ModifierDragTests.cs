@@ -350,6 +350,155 @@ public sealed class ModifierGestureTests
         }
     }
 
+    /// <summary>
+    /// Alt+right drag on a maximized window brings it out at the size it had on screen, then moves only the edges
+    /// nearest the press, so nothing jumps.
+    /// </summary>
+    [Fact]
+    public void Alt_right_drag_brings_a_maximized_window_out_at_its_size_and_resizes_from_the_nearest_corner()
+    {
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(new(300, 200, 400, 300));
+        target.UseFrame();
+        Desktop.Activate(target.Handle);
+        User32.ShowWindow(target.Handle, User32.SW_MAXIMIZE);
+        Assert.True(Desktop.WaitFor(() => IsZoomed(target.Handle), 2000));
+        Assert.True(WindowInfo.TryGetFrameBounds(target.Handle, out Rectangle maximized, out _));
+        using var drag = Gestures(target);
+        drag.SnapEnabled = false;
+        Point original = Cursor.Position;
+        drag.SetActive(true);
+        Pump(150);
+        try
+        {
+            var from = new Point(maximized.Right - 60, maximized.Bottom - 60);
+            keybd_event(Alt, 0, 0, 0);
+            Drag(from, new Point(from.X - 200, from.Y - 150), RightDown, RightUp);
+            keybd_event(Alt, 0, 2, 0);
+            Rectangle frame = Rectangle.Empty;
+            Assert.True(Desktop.WaitFor(() => !IsZoomed(target.Handle) &&
+                WindowInfo.TryGetFrameBounds(target.Handle, out frame, out _) &&
+                Near(frame.Location, maximized.Location) &&
+                Near(frame.Size, new Size(maximized.Width - 200, maximized.Height - 150)), 1500),
+                $"Maximized frame {maximized}, now {frame}, zoomed {IsZoomed(target.Handle)}.");
+            Assert.Null(target.NextReport(100));
+        }
+        finally
+        {
+            keybd_event(Alt, 0, 2, 0);
+            drag.SetActive(false);
+            Cursor.Position = original;
+        }
+    }
+
+    /// <summary>
+    /// A pinned window paused while maximized is back on top at the next check after Alt+drag brings it out,
+    /// while it's the window in use.
+    /// </summary>
+    [Fact]
+    public void A_pinned_window_alt_dragged_out_of_maximized_is_back_on_top_at_the_next_check()
+    {
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(new(300, 200, 400, 300));
+        target.UseFrame();
+        Desktop.Activate(target.Handle);
+        var windows = new WindowController([]);
+        bool Topmost() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST) != 0;
+        using var drag = Gestures(target);
+        drag.SnapEnabled = false;
+        Point original = Cursor.Position;
+        try
+        {
+            Assert.True(windows.TogglePin(target.Handle));
+            User32.ShowWindow(target.Handle, User32.SW_MAXIMIZE);
+            Assert.True(Desktop.WaitFor(() => IsZoomed(target.Handle), 2000));
+            windows.Refresh(new Point(-30000, -30000), false, pausePinWhenMaximized: true);
+            Assert.False(Topmost(), "Still on top while maximized.");
+            drag.SetActive(true);
+            Pump(150);
+            keybd_event(Alt, 0, 0, 0);
+            Drag(new Point(600, 400), new Point(700, 450), LeftDown, LeftUp);
+            keybd_event(Alt, 0, 2, 0);
+            Assert.True(Desktop.WaitFor(() => !IsZoomed(target.Handle), 1000), "It didn't come out of maximized.");
+            Assert.Equal(target.Handle, User32.GetForegroundWindow());
+            windows.Refresh(new Point(-30000, -30000), false, pausePinWhenMaximized: true);
+            Assert.True(Topmost(), "Not back on top.");
+        }
+        finally
+        {
+            keybd_event(Alt, 0, 2, 0);
+            drag.SetActive(false);
+            Cursor.Position = original;
+            windows.RestoreAll();
+        }
+    }
+
+    /// <summary>A real mouse event anywhere on the desktop, other displays included.</summary>
+    private static void MoveToAnywhere(Point point)
+    {
+        const uint move = 0x1, absolute = 0x8000, wholeDesktop = 0x4000;
+        Rectangle all = SystemInformation.VirtualScreen;
+        mouse_event(move | absolute | wholeDesktop, (int)Math.Round((point.X - all.Left) * 65535.0 / (all.Width - 1)),
+            (int)Math.Round((point.Y - all.Top) * 65535.0 / (all.Height - 1)), 0, 0);
+    }
+
+    /// <summary>
+    /// Alt+drag to the outer edge of a second display at another scale snaps the window to half of that display's work
+    /// area: the app takes the new scale on the way, and the second pass puts its frame where it belongs. Only in the
+    /// test VM's two-display setup, the only place a scale is ever changed.
+    /// </summary>
+    [MultiDisplayFact]
+    public void Alt_drag_to_the_edge_of_a_display_at_another_scale_snaps_to_half_of_it()
+    {
+        if (!DisplayScale.Allowed) return; // Never on someone's own screen.
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(new(300, 200, 400, 300));
+        target.UseFrame();
+        Desktop.Activate(target.Handle);
+        string home = Screen.FromHandle(target.Handle).DeviceName;
+        string otherName = Screen.AllScreens.First(screen => screen.DeviceName != home).DeviceName;
+        int scale = DisplayScale.CurrentOf(otherName);
+        using var drag = Gestures(target);
+        Point original = Cursor.Position;
+        try
+        {
+            DisplayScale.Set(scale == 150 ? 100 : 150, otherName);
+            Pump(1500);
+            Screen homeScreen = Screen.AllScreens.First(screen => screen.DeviceName == home);
+            Screen other = Screen.AllScreens.First(screen => screen.DeviceName == otherName);
+            bool leftOfHome = other.Bounds.Right <= homeScreen.Bounds.Left;
+            SnapZone zone = leftOfHome ? SnapZone.Left : SnapZone.Right;
+            var edge = new Point(leftOfHome ? other.Bounds.Left : other.Bounds.Right - 1, other.Bounds.Top + other.Bounds.Height / 2);
+            Rectangle expected = PlacementGeometry.SnapFrame(zone, other.WorkingArea);
+            drag.SetActive(true);
+            Pump(150);
+            keybd_event(Alt, 0, 0, 0);
+            var from = new Point(500, 350);
+            MoveToAnywhere(from);
+            Pump(60);
+            Press(LeftDown);
+            for (int i = 1; i <= 25; i++)
+            {
+                MoveToAnywhere(new Point(from.X + (edge.X - from.X) * i / 25, from.Y + (edge.Y - from.Y) * i / 25));
+                Pump(25);
+            }
+            Pump(150);
+            mouse_event(LeftUp, 0, 0, 0, 0);
+            keybd_event(Alt, 0, 2, 0);
+            Rectangle frame = Rectangle.Empty;
+            Assert.True(Desktop.WaitFor(() => WindowInfo.TryGetFrameBounds(target.Handle, out frame, out _) &&
+                Near(frame.Location, expected.Location) && Near(frame.Size, expected.Size), 2000),
+                $"Expected {expected} on {otherName} at {DisplayScale.CurrentOf(otherName)}%, got {frame}.");
+        }
+        finally
+        {
+            keybd_event(Alt, 0, 2, 0);
+            drag.SetActive(false);
+            Cursor.Position = original;
+            DisplayScale.Set(scale, otherName);
+        }
+    }
+
     [Fact]
     public void Alt_drag_to_the_left_edge_snaps_to_half_and_dragging_out_brings_back_the_size()
     {

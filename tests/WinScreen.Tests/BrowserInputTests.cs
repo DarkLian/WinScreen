@@ -215,10 +215,13 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         // CSS/DOM effects and cleanup for the native helper's validated rollout.
     }
 
-    [NativeHoverFact]
-    public void Enhanced_hover_keeps_css_previews_and_dom_state_and_clears_on_leave_and_disable()
+    /// <summary>Every Chrome-family browser installed: Chrome, and Edge where Windows still has it.</summary>
+    public static IEnumerable<object[]> HoverBrowsers() => BrowserCases();
+
+    [NativeHoverTheory]
+    [MemberData(nameof(HoverBrowsers))]
+    public void Enhanced_hover_keeps_css_previews_and_dom_state_and_clears_on_leave_and_disable(string path)
     {
-        string path = BrowserCases().Select(c => (string)c[0]).First(p => Path.GetFileName(p) == "chrome.exe");
         Assert.True(File.Exists(Path.Combine(AppContext.BaseDirectory, "WinScreen.Hover.dll")), "Build the native x64 helper before this runtime test.");
         const string page = """
             <!doctype html><title>EnhancedState</title><style>body{margin:0}section{position:absolute;top:0;width:40vw;height:70vh}
