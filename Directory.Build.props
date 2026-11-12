@@ -23,4 +23,11 @@
     <!-- Keep the commit out of the product version, so every signed file reports the same version. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
+  <!-- What the projects under src build goes to artifacts\bin\<project> and artifacts\obj\<project> at the root,
+       not beside their sources. The tests keep their own bin folders: the portable test apps live there. -->
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.StartsWith('$(MSBuildThisFileDirectory)src\', StringComparison.OrdinalIgnoreCase))">
+    <WinScreenArtifacts>$(MSBuildThisFileDirectory)artifacts\</WinScreenArtifacts>
+    <BaseOutputPath>$(WinScreenArtifacts)bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(WinScreenArtifacts)obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+  </PropertyGroup>
 </Project>
