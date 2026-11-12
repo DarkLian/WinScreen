@@ -361,7 +361,7 @@ public sealed class WindowPlacementTests
     /// A maximized window moved to another display is maximized there, and un-maximizing it puts it at the same place
     /// on that display. Its stored place is measured from the work area, which starts at a different offset on each.
     /// </summary>
-    [MultiDisplayTheory(Skip = "Known bug (12 Nov 2026): Move to display leaves a maximized window maximized on its own display.")]
+    [MultiDisplayTheory]
     [InlineData(false)]
     [InlineData(true)]
     public void A_maximized_window_moved_to_another_display_is_maximized_there_and_comes_back_there(bool startOnOther)
@@ -377,7 +377,9 @@ public sealed class WindowPlacementTests
         placer.MoveToDisplay(target.Handle, to.DeviceName);
         Assert.True(User32.IsZoomed(target.Handle), "No longer maximized.");
         Assert.Equal(to.DeviceName, DisplayOf(target.Handle));
-        Near(to.WorkingArea, FrameOf(target.Handle), 1, "Maximized: ");
+        // This target, maximized, covers its whole display, taskbar too, as it does without a move.
+        Rectangle maximized = FrameOf(target.Handle);
+        Assert.True(maximized.Contains(to.WorkingArea) && to.Bounds.Contains(maximized), $"Maximized: {maximized}, on {to.WorkingArea} of {to.Bounds}.");
         User32.ShowWindow(target.Handle, User32.SW_RESTORE);
         Assert.True(Desktop.WaitFor(() => !User32.IsZoomed(target.Handle), 2000));
         Near(PlacementGeometry.FrameOnDisplay(usual, from.WorkingArea, to.WorkingArea, usual.Size), FrameOf(target.Handle), 1, "Restored: ");

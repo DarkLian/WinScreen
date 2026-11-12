@@ -61,9 +61,23 @@ public sealed class WindowPlacer(WindowController windows)
         Rectangle target = PlacementGeometry.FrameOnDisplay(original, from.WorkingArea, to.WorkingArea, original.Size);
         Remember(window);
         identity.Require();
-        if (!IsPlainlyOnScreen(window))
+        if (User32.IsIconic(window))
         {
             PlaceHidden(window, target, to);
+            return;
+        }
+        if (User32.IsZoomed(window))
+        {
+            // A maximized window stays where it is when given a new place to come back to. It comes back to its usual
+            // size on the display chosen, then is maximized there again. The place is given again for that: some
+            // apps, Windows Forms ones among them, put a window they restore back where their own code last put it.
+            PlaceHidden(window, target, to, User32.SW_SHOWNOACTIVATE);
+            Settle(window);
+            identity.Require();
+            PlaceHidden(window, target, to, User32.SW_MAXIMIZE);
+            Settle(window);
+            if (!User32.IsZoomed(window) || Screen.FromHandle(window).DeviceName != device)
+                throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
             return;
         }
         Move(window, target, User32.SWP_NOSIZE);

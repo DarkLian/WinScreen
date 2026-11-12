@@ -135,16 +135,18 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 
 | Feature | Normal | Maximized | Minimized | Snapped by WinScreen | Borderless | Fills the screen | Hidden by WinScreen | Elevated |
 |---|---|---|---|---|---|---|---|---|
-| **Align** (corners, edges, center) | ✅ | ⚠️ ¹ | ⚠️ ¹ | ✅ | ❔ | ⚠️ ² | ❌ | ❌ |
-| **Move to next display** | ✅ | ⚠️ ¹ | ⚠️ ¹ | ✅ | ❔ | ⚠️ ² | ❌ | ❌ |
-| **Place exactly** | ✅ | ⚠️ ¹ | ⚠️ ¹ | ✅ | ❔ | ⚠️ ² | ❌ | ❌ |
+| **Align** (corners, edges, center) | ✅ | ✅ ¹ | ⚠️ ¹ | ✅ | ❔ | ⚠️ ² | ❌ | ❌ |
+| **Move to next display** | ✅ | ✅ ¹ | ⚠️ ¹ | ✅ | ❔ | ⚠️ ² | ❌ | ❌ |
+| **Place exactly** | ✅ | ✅ ¹ | ⚠️ ¹ | ✅ | ❔ | ⚠️ ² | ❌ | ❌ |
 | **Put back earlier position** | ✅ | ✅ | ✅ | ✅ | ❔ | ⚠️ ² | ❌ | ❌ |
 | **Alt+left drag (move)** | ✅ | ✅ ³ | ❌ | ✅ ⁴ | ❔ | ❌ | ❌ | ❌ |
 | **Alt+right drag (resize)** | ✅ | ✅ ⁵ | ❌ | ✅ | ❔ | ❌ | ❌ | ❌ |
 | **Snap at screen edges** (during Alt+left drag) | ⚠️ ⁶ | ⚠️ ⁶ | — | ⚠️ ⁶ | ❔ | — | — | — |
 
-1. A maximized or minimized window stays that way; it's given a new place to come back to (`WindowPlacer.PlaceHidden`,
-   `Windows/WindowPlacer.cs:166`).
+1. A minimized window stays minimized; it's given a new place to come back to (`WindowPlacer.PlaceHidden`,
+   `Windows/WindowPlacer.cs:201`). A maximized window comes back to its usual size in the place chosen, except with
+   Move to next display (or Move to display), which keeps it maximized on the new display. Between displays, tested in
+   `tests/WinScreen.Tests/WindowPlacementTests.cs` with a virtual second display; not yet on real multi-monitor hardware.
 2. Same full-screen pause as above.
 3. Comes out of maximized once the pointer moves a few pixels, at its normal size, with the grabbed point still under
    the pointer. An Alt+click alone leaves it maximized. **Esc** puts it back to maximized
