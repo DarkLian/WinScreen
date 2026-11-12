@@ -99,7 +99,7 @@ Windows 10 (version 2004 or later) and Windows 11, on 64-bit Intel or AMD PCs (x
 
 You don't need anything else installed, and it runs without administrator rights. WinScreen lives in the system tray.
 
-The installer isn't signed yet, so Windows may say it doesn't recognize it. Choose **More info**, then **Run anyway**.
+The installer isn't signed, so Windows may say it doesn't recognize it. Choose **More info**, then **Run anyway**.
 To remove it, go to **Settings → Apps → Installed apps** in Windows.
 
 ## Quick start
@@ -141,12 +141,11 @@ You need the .NET 10 SDK named in `global.json`. Run `.\build.ps1 -SkipInteracti
 
 ## Code signing policy
 
-**WinScreen isn't signed yet.** We've applied to [SignPath Foundation](https://signpath.org/) for free code signing
-and are waiting to hear back. Once they accept, releases will be signed, with free code signing provided by
-[SignPath.io](https://about.signpath.io/) and the certificate by SignPath Foundation.
+**WinScreen isn't signed.** Free code signing from [SignPath Foundation](https://signpath.org/) needs a project to be
+more widely used first, so we'll apply again later.
 
 - **Who's involved:** [DarkLian](https://github.com/DarkLian) writes and reviews WinScreen's code, with help from AI
-  agents, and approves every signed release. Nobody else can change the code or sign a release.
+  agents, and approves every release. Nobody else can change the code or publish a release.
 - **Privacy:** WinScreen doesn't send anything about you or your PC anywhere. It only goes online when you turn on
   automatic updates or choose **Check for updates**, and then it just asks GitHub for a newer version.
 

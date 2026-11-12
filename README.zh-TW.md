@@ -96,7 +96,7 @@ WinScreen 是一個免費的視窗小幫手。可以讓視窗保持置頂或變�
 
 不用另外安裝任何東西，也無須系統管理員權限即可執行。WinScreen 會顯示在系統匣中。
 
-安裝程式尚未簽署，Windows 可能提示無法辨識。請點選 **其他資訊**，然後點選 **仍要執行**。
+安裝程式未經簽署，Windows 可能提示無法辨識。請點選 **其他資訊**，然後點選 **仍要執行**。
 如需解除安裝，請開啟 Windows 的 **設定 → 應用程式 → 已安裝的應用程式**。
 
 ## 快速上手
@@ -138,11 +138,10 @@ WinScreen 由 DarkLian 在 AI 助手的協助下開發。最好的幫助就是�
 
 ## 程式碼簽署政策
 
-**WinScreen 尚未簽署。**我們已向 [SignPath Foundation](https://signpath.org/) 申請免費程式碼簽署，正在等待回覆。
-獲准後，發布版本將會簽署：免費程式碼簽署由 [SignPath.io](https://about.signpath.io/) 提供，憑證來自 SignPath Foundation。
+**WinScreen 未經簽署。**[SignPath Foundation](https://signpath.org/) 的免費程式碼簽署要求專案先有更多使用者，我們之後會再次申請。
 
-- **參與者：**[DarkLian](https://github.com/DarkLian) 在 AI 助手的協助下撰寫和審查 WinScreen 的程式碼，並核准每個簽署發布。
-  其他人無法修改程式碼或簽署發布。
+- **參與者：**[DarkLian](https://github.com/DarkLian) 在 AI 助手的協助下撰寫和審查 WinScreen 的程式碼，並核准每個發布。
+  其他人無法修改程式碼或發布新版本。
 - **隱私：**WinScreen 不會把你或你電腦的任何資訊傳送到任何地方。只有在你開啟自動更新或選擇 **檢查更新** 時才會連網，
   而且只是向 GitHub 查詢是否有新版本。
 
