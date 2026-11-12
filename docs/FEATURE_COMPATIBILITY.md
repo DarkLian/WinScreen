@@ -102,7 +102,7 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **Borderless / Fill display** | ✅ | ⚠️ ⁶ | ❌ | — | ❌ ⁷ | ✅ | ❌ | ✅ |
 | **Dark title bar** | ✅ | ✅ | ✅ ¹³ | ❌ ¹⁴ | ⚠️ ² | ✅ | ✅ | ✅ |
 | **Roll up** 🧪 | ✅ ⁸ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ |
-| **Crop** 🧪 | ✅ ¹⁵ | ✅ ¹⁵ | ❔ | ❌ ⁹ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
+| **Crop** 🧪 | ✅ ¹⁵ | ✅ ¹⁵ | ⚠️ ¹⁷ | ❌ ⁹ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
 | **Dark** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ⚠️ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
 | **Glass** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ⚠️ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
 | **Shrink to a tile** 🧪 | ✅ | ✅ | ⚠️ ¹¹ | ❌ ⁹ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
@@ -134,7 +134,9 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
     the app draws its own shape, rather than showing as on. Taking a crop off a maximized window leaves it
     maximized.
 16. Picture-keeping Dark and layered Glass hide the window under their picture, so they say "Turn off
-    borderless mode first." Colour Glass works. Dark mode's plain filter isn't tested on a borderless window.
+    borderless mode first." Colour Glass and Dark mode's plain filter work, and the filter follows the window.
+17. The window comes back first, so the part to keep can be chosen over it. A crop made while it's minimized (by
+    a saved setup or recovery, say) is there when it comes back.
 
 **Own transparency** windows (the app made itself see-through): Opacity, Click-through, hiding and Glass are refused
 with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows/WindowController.cs:1301`).
@@ -147,9 +149,9 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
 | **Move to next display** | ✅ | ✅ ¹ | ⚠️ ¹ | ✅ | ✅ | ⚠️ ² | ❌ | ❌ |
 | **Place exactly** | ✅ | ✅ ¹ | ⚠️ ¹ | ✅ | ✅ | ⚠️ ² | ❌ | ❌ |
 | **Put back earlier position** | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ ² | ❌ | ❌ |
-| **Alt+left drag (move)** | ✅ | ✅ ³ | ❌ | ✅ ⁴ | ❔ | ❌ | ❌ | ❌ |
-| **Alt+right drag (resize)** | ✅ | ✅ ⁵ | ❌ | ✅ | ❔ | ❌ | ❌ | ❌ |
-| **Snap at screen edges** (during Alt+left drag) | ⚠️ ⁶ | ⚠️ ⁶ | — | ⚠️ ⁶ | ❔ | — | — | — |
+| **Alt+left drag (move)** | ✅ | ✅ ³ | ❌ | ✅ ⁴ | ✅ | ❌ | ❌ | ❌ |
+| **Alt+right drag (resize)** | ✅ | ✅ ⁵ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Snap at screen edges** (during Alt+left drag) | ⚠️ ⁶ | ⚠️ ⁶ | — | ⚠️ ⁶ | ❌ ⁷ | — | — | — |
 
 1. A minimized window stays minimized; it's given a new place to come back to (`WindowPlacer.PlaceHidden`,
    `Windows/WindowPlacer.cs:201`). A maximized window comes back to its usual size in the place chosen, except with
@@ -171,6 +173,8 @@ with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows
    Windows' own snap groups, so Snap Assist doesn't offer to fill the other half. Snapping to the outer edge of a
    second display at another scale (150% beside 100%) lands on half of that display; tested with a virtual second
    display.
+7. Borderless takes the resize frame away, so the window doesn't snap; it stays where it's let go. Alt+drag still
+   moves it and Alt+right drag still resizes it.
 
 **Alt-drag in more detail**
 
@@ -243,7 +247,7 @@ The helper is only ever used with the kinds of app below and with programs added
 |---|---|---|
 | Chrome | Chrome, Edge, Brave and Vivaldi | ✅ Verified on Windows 11 x64: CSS hover and page previews hold while the pointer rests, follow it to another element, and clear on leave, turning off and suspending |
 | Edge | same | ✅ Verified on Windows 10 x64 with the same test as Chrome |
-| Brave, Vivaldi | same | ❔ Enabled because they share Chrome's engine; not tested (neither is installed on a test desktop) |
+| Brave, Vivaldi | same | ✅ Verified on Windows 10 and Windows 11 x64 with the same test as Chrome |
 | VS Code (Electron) | VS Code, Discord and similar apps | ✅ Verified on Windows 11 x64: hover holds in a web view, shows in the view's picture, and clears on leave and turning off |
 | Discord and other Electron apps | same | ❔ Recognized by Electron's folder layout and window; not tested individually |
 | File Explorer (file list) | File Explorer | ⚠️ Verified on Windows 11: a hovered row is highlighted in the view and stays so; without the option it never highlights. With the option on, the right-click menu of a tab did not take its click in testing (Duplicate tab failed three times of three), so leave it off if you use tab menus. The command bar, tabs and address bar are used through accessibility and don't get hover |
@@ -300,8 +304,8 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 5. Applied once, the first time a main window of that program comes forward; changes after that stay. Dark from a
    saved setup needs experimental on.
 6. Unless WinScreen runs as administrator too. Then the toolbar isn't shown on the app and no automatic Anchor is
-   made for it, as mouse gestures leave it alone; a manual Anchor says to start WinScreen as administrator. This
-   follows the same check as gestures and hasn't been tried with a real administrator app.
+   made for it, as mouse gestures leave it alone; a manual Anchor says to start WinScreen as administrator. Tested
+   with a real administrator app on Windows 11.
 
 ## Combinations
 
@@ -339,8 +343,7 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 - **Elevated windows** are refused by tagging, not by an up-front check. Running WinScreen as administrator lifts this,
   and with **Run as administrator** on, starting with Windows keeps those rights.
 - **Borderless windows from other apps** (not WinScreen's Borderless) are treated as normal unless they fill the
-  screen. The cells left ❔ under Borderless (Alt-drag and snapping) refer to WinScreen's own Borderless and haven't
-  been tested.
+  screen.
 - **Multiple monitors with different scaling**: snapping does a second pass if the margins change on the way. Tested
   on a virtual second display at another scale; real mixed-scale monitors haven't been tested.
 
