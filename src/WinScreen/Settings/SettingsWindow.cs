@@ -105,7 +105,7 @@ private readonly ErrorProvider _errors = new();
 
     private readonly CheckBox _startWithWindows = new SwitchBox { Text = T("settings.startWithWindows"), AutoSize = true };
     private readonly CheckBox _runAsAdministrator = new SwitchBox { Text = T("settings.admin"), AutoSize = true };
-    private readonly CheckBox _seeThroughMenus = new SwitchBox { Text = T("settings.menus.seeThrough"), AutoSize = true };
+    private readonly CheckBox _menuTransparency = new SwitchBox { Text = T("settings.menus.transparency"), AutoSize = true };
 
     private readonly CheckBox _showToolbar = new SwitchBox
         { Text = T("settings.toolbar.enable"), AutoSize = true };
@@ -320,7 +320,7 @@ private readonly ErrorProvider _errors = new();
     {
         var icons = new Dictionary<Control, char>
         {
-            [_language] = '\uE774', [_theme] = '\uE790', [_seeThroughMenus] = '\uE706', [_startWithWindows] = '\uE7E8', [_runAsAdministrator] = '\uE7EF',
+            [_language] = '\uE774', [_theme] = '\uE790', [_menuTransparency] = '\uE706', [_startWithWindows] = '\uE7E8', [_runAsAdministrator] = '\uE7EF',
             [_showNotifications] = '\uEA8F', [_automaticUpdates] = '\uE896', [_pauseInFullScreen] = '\uE7FC', [_allowPip] = '\uE8A7',
             [_experimental] = '\uE945',
             [_modifierDrag] = '\uE7C2', [_modifierKey] = '\uE765', [_snapWhileDragging] = '\uE90C', [_windowMenu] = '\uE712',
@@ -690,7 +690,7 @@ private readonly ErrorProvider _errors = new();
             OffTaskbar = _anchorOffTaskbar.Checked,
         }.Validated();
         draft.ShowNotifications = _showNotifications.Checked;
-        draft.SeeThroughMenus = _seeThroughMenus.Checked;
+        draft.MenuTransparency = _menuTransparency.Checked;
         draft.AutomaticUpdates = _automaticUpdates.Checked;
         draft.ExperimentalFeatures = _experimental.Checked;
         draft.StartWithWindows = _startWithWindows.Checked;
@@ -967,7 +967,7 @@ private readonly ErrorProvider _errors = new();
         {
             nameof(AppSettings.ShowToolbar) => _showToolbar,
             nameof(AppSettings.ShowNotifications) => _showNotifications,
-            nameof(AppSettings.SeeThroughMenus) => _seeThroughMenus,
+            nameof(AppSettings.MenuTransparency) => _menuTransparency,
             nameof(AppSettings.AutomaticUpdates) => _automaticUpdates,
             nameof(AppSettings.ExperimentalFeatures) => _experimental,
             nameof(AppSettings.PauseInFullScreen) => _pauseInFullScreen,
@@ -1031,7 +1031,7 @@ private readonly ErrorProvider _errors = new();
         _anchorExcluded.Items.Clear();
         _anchorExcluded.Items.AddRange(anchors.ExcludedPrograms.Cast<object>().ToArray());
         _showNotifications.Checked = values.ShowNotifications;
-        _seeThroughMenus.Checked = values.SeeThroughMenus;
+        _menuTransparency.Checked = values.MenuTransparency;
         _automaticUpdates.Checked = values.AutomaticUpdates;
         _experimental.Checked = values.ExperimentalFeatures;
         _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, values.Language));
@@ -1162,9 +1162,9 @@ private readonly ErrorProvider _errors = new();
         bool adminWorks = Native.ProcessInfo.CanElevate;
         // Windows 10 has no Transparency effects for menus to follow.
         bool blurWorks = Environment.OSVersion.Version.Build >= 22000;
-        _seeThroughMenus.Enabled = blurWorks;
-        var startup = new List<Control> { language, theme, _seeThroughMenus,
-            Note(blurWorks ? T("settings.menus.seeThrough.help") : T("settings.menus.seeThrough.windows11")), _startWithWindows, _runAsAdministrator,
+        _menuTransparency.Enabled = blurWorks;
+        var startup = new List<Control> { language, theme, _menuTransparency,
+            Note(blurWorks ? T("settings.menus.transparency.help") : T("settings.menus.transparency.windows11")), _startWithWindows, _runAsAdministrator,
             Note(adminWorks ? T("settings.admin.help") : T("settings.admin.unavailable")), _showNotifications, _automaticUpdates };
         bool updatesWork = VelopackUpdateSession.IsConfigured && VelopackUpdateSession.IsInstalled;
         _automaticUpdates.Enabled = updatesWork;

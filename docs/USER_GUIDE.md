@@ -190,8 +190,8 @@ the newer installer. Your settings stay as they are.
 - Commands pause while a game or full-screen app is in front. Views can't appear over games in exclusive full screen.
 - A minimized app stops drawing, so its view shows the last picture.
 - Protected video may show as black in a view.
-- When **Transparency effects** is on in Windows' own Settings, WinScreen's menus are see-through too. To keep them solid, turn off
-  **See-through menus** in **Settings → General**.
+- When **Transparency effects** is on in Windows' own Settings, WinScreen's menus get the same blurred background as Windows' own.
+  To keep them plain, turn off **Transparency effects in menus** in **Settings → General**.
 - In smooth mode Windows draws a yellow border around the window being shown. On Windows 11 WinScreen asks to leave it
   off; you can change that in **Settings → Picture-in-Picture**. Windows 10 always shows it, so choose standard mode there if
   it bothers you.

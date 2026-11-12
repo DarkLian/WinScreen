@@ -466,9 +466,9 @@ public sealed class SettingsLayoutTests
         });
     }
 
-    /// <summary>Menus can be kept solid even while Windows' Transparency effects is on, and the choice is saved.</summary>
+    /// <summary>Menus can be kept plain even while Windows' Transparency effects is on, and the choice is saved.</summary>
     [Fact]
-    public void See_through_menus_can_be_turned_off()
+    public void Transparency_effects_in_menus_can_be_turned_off()
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
@@ -477,12 +477,12 @@ public sealed class SettingsLayoutTests
             using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(tasks: NoTasks.Instance), draft => { saved = draft; return []; });
             window.Show();
             Application.DoEvents();
-            CheckBox box = Descendants(window).OfType<CheckBox>().Single(b => b.Text == UiText.T("settings.menus.seeThrough"));
+            CheckBox box = Descendants(window).OfType<CheckBox>().Single(b => b.Text == UiText.T("settings.menus.transparency"));
             Assert.True(box.Checked); // On by default: menus follow Windows.
             Assert.Equal(Environment.OSVersion.Version.Build >= 22000, box.Enabled);
-            window.SetOption(nameof(AppSettings.SeeThroughMenus), false);
+            window.SetOption(nameof(AppSettings.MenuTransparency), false);
             Assert.True(window.ApplyChanges());
-            Assert.False(saved!.SeeThroughMenus);
+            Assert.False(saved!.MenuTransparency);
             window.Close();
         });
         try

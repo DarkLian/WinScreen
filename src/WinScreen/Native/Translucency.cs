@@ -33,7 +33,7 @@ internal static class Translucency
     internal static bool Allowed { get; set; } = true;
 
     /// <summary>
-    /// Whether menus are see-through: allowed, and Transparency effects on in Windows 11, read again at most every
+    /// Whether menus get the blurred background: allowed, and Transparency effects on in Windows 11, read again at most every
     /// couple of seconds.
     /// </summary>
     internal static bool On => Allowed && WindowsOn;

@@ -45,7 +45,7 @@ internal static class Program
         Settings.ProgramIcons.File = Path.Combine(DataFolder, "program-paths.json");
         UiText.Initialize(settings.Language);
         MenuStyle.UseTheme(settings.Theme);
-        Native.Translucency.Allowed = settings.SeeThroughMenus;
+        Native.Translucency.Allowed = settings.MenuTransparency;
 
         if (Environment.OSVersion.Version.Build < MinimumBuild)
         {
