@@ -86,7 +86,7 @@ internal sealed class PipSourcePicker : Form
         // A saved source is forgotten from its own row: the button on it, or Delete.
         _list.MouseClick += (_, e) =>
         {
-            if (_list.GetItemAt(e.X, e.Y) is { Tag: PipSourceBookmark bookmark } row && RemoveSpot(row.Bounds).Contains(e.Location)) Forget(bookmark);
+            if (_list.GetItemAt(e.X, e.Y) is { Tag: PipSourceBookmark bookmark } row && RemoveSpot(Drawn(row)).Contains(e.Location)) Forget(bookmark);
         };
         _list.KeyDown += (_, e) =>
         {
@@ -191,12 +191,26 @@ internal sealed class PipSourcePicker : Form
         Native.Dwmapi.DwmSetWindowAttribute(Handle, Native.Dwmapi.DWMWA_TEXT_COLOR, in text, sizeof(int));
     }
 
-    /// <summary>The one column as wide as what shows: Windows' own scroll bar is hidden past the list's edge.</summary>
+    /// <summary>
+    /// Rows are drawn as wide as what shows, short of the thin scroll bar; Windows' own scroll bar is hidden past the
+    /// list's edge. The one column itself reaches the list's far edge: Windows draws a line at a column's end down the
+    /// empty space under the last row, which then lies out of sight.
+    /// </summary>
     private void FitColumn()
     {
         if (_list.Columns.Count == 0 || _list.Parent is not { } shown) return;
-        int width = Math.Max(Unit(100), Math.Min(_list.ClientSize.Width, shown.ClientSize.Width) - Unit(ThinScrollBar.BarWidth));
+        _rowWidth = Math.Max(Unit(100), Math.Min(_list.ClientSize.Width, shown.ClientSize.Width) - Unit(ThinScrollBar.BarWidth));
+        int width = Math.Max(_rowWidth, _list.ClientSize.Width);
         if (_list.Columns[0].Width != width) _list.Columns[0].Width = width;
+    }
+
+    private int _rowWidth = 420;
+
+    /// <summary>Where a row is drawn: its own bounds, as wide as what shows.</summary>
+    private Rectangle Drawn(ListViewItem item)
+    {
+        Rectangle row = item.Bounds;
+        return row with { Width = Math.Min(row.Width, _rowWidth) };
     }
 
     /// <summary>The button on a saved source's row that forgets it.</summary>
@@ -238,8 +252,8 @@ internal sealed class PipSourcePicker : Form
             if (e.Item is not { } item) return;
             Graphics g = e.Graphics;
             SettingsStyle.SoftText(g);
-            Rectangle row = item.Bounds;
-            using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, row);
+            using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, item.Bounds);
+            Rectangle row = Drawn(item);
             var wash = new Rectangle(row.Left + Unit(4), row.Top + Unit(2), row.Width - Unit(8), row.Height - Unit(4));
             bool hot = item.Index == _hot;
             if (item.Selected || hot)

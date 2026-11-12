@@ -40,6 +40,26 @@ public sealed class SourcePickerTests
         });
     }
 
+    /// <summary>
+    /// With few rows, Windows draws a line at the column's end down the empty space under them; the column reaches
+    /// the list's far edge so that line stays out of sight, past the visible part of the list.
+    /// </summary>
+    [Fact]
+    public void No_line_shows_under_the_rows_when_only_a_few_are_listed()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var few = new HashSet<nint>();
+            using var picker = new PipSourcePicker(window => few.Contains(window) || (few.Count < 2 && few.Add(window)));
+            picker.Show();
+            Pump();
+            ListView list = Descendants(picker).OfType<ListView>().Single();
+            Assert.True(list.Columns[0].Width >= list.ClientSize.Width,
+                $"column {list.Columns[0].Width}, list {list.ClientSize.Width}");
+            Assert.True(list.Columns[0].Width >= list.Parent!.ClientSize.Width, "the column's end shows inside the list");
+        });
+    }
+
     /// <summary>A saved source is forgotten from its own row: Delete on the chosen one.</summary>
     [Fact]
     public void Delete_forgets_the_chosen_saved_source()
