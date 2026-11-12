@@ -16,7 +16,7 @@ namespace WinScreen.Tests;
 /// process it starts is closed.
 /// </summary>
 [Trait("Category", "Interactive")]
-public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper output)
+public sealed partial class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private static string Apps => Path.Combine(AppContext.BaseDirectory, "test-apps");
 
@@ -55,7 +55,7 @@ public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper o
     /// Opens a view of the window, starts a visit, and runs the steps with a mapping from a point in the window
     /// (window-relative, physical) to the view.
     /// </summary>
-    private static void Visit(nint window, Action<PipWindow, Func<Point, Point>> steps, StringBuilder log)
+    private static void Visit(nint window, Action<PipWindow, Func<Point, Point>> steps, StringBuilder log, bool? enhancedHover = null)
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
@@ -67,7 +67,7 @@ public sealed class AppCompatibilityTests(Xunit.Abstractions.ITestOutputHelper o
             view.ShowOnTop();
             view.Location = new Point(900, 200);
             view.SetInteractive(true);
-            view.SetEnhancedHover(Environment.GetEnvironmentVariable("WINSCREEN_TEST_ENHANCED_HOVER") == "1");
+            view.SetEnhancedHover(enhancedHover ?? Environment.GetEnvironmentVariable("WINSCREEN_TEST_ENHANCED_HOVER") == "1");
             Exception? failure = null;
             PipInteraction.DiagnoseInput = true;
             var driver = new Thread(() =>
