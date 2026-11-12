@@ -131,9 +131,9 @@ public sealed class AppEndToEndTests : IDisposable
         Desktop.Press(Keys.Down);
         Desktop.Press(Keys.Down); // Region.
         Desktop.Press(Keys.Tab); // Search.
-        Desktop.Press(Keys.Tab); // Display list.
-        Desktop.Press(Keys.Home);
-        Desktop.Press(Keys.Enter);
+        Desktop.Press(Keys.Down); // The first display in the list.
+        Desktop.Press(Keys.Tab); // Exact area, the first of the buttons below (the main one drags a region out).
+        Desktop.Press(Keys.Space);
         nint bounds = 0;
         Assert.True(Desktop.WaitFor(() => (bounds = Desktop.FindProcessWindow(_app.Id,
             title => title == Localization.UiText.T("pip.sources.regionBounds"))) != 0));
@@ -177,9 +177,10 @@ public sealed class AppEndToEndTests : IDisposable
         Desktop.Activate(picker);
         Desktop.Press(Keys.Tab, Keys.ShiftKey);
         Desktop.Press(Keys.Home);
-        Desktop.Press(Keys.Down); Desktop.Press(Keys.Down); Desktop.Press(Keys.Down);
-        Desktop.Press(Keys.Tab); Desktop.Press(Keys.Tab);
-        Desktop.Press(Keys.Home); Desktop.Press(Keys.Enter);
+        Desktop.Press(Keys.Down); Desktop.Press(Keys.Down); Desktop.Press(Keys.Down); // Saved.
+        Desktop.Press(Keys.Tab); // Search.
+        Desktop.Press(Keys.Down); // The first saved source in the list.
+        Desktop.Press(Keys.Enter);
         nint view = WaitForPip();
         Assert.Equal(320, Desktop.BoundsOf(view).Width);
         Assert.Contains("region", WindowTitle(view), StringComparison.OrdinalIgnoreCase);
