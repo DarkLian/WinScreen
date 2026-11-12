@@ -49,6 +49,10 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     [DllImport("user32.dll")] private static extern bool ScreenToClient(nint window, ref NativePoint point);
     [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")] private static extern nint GetClassLongPtr(nint window, int index);
     [DllImport("user32.dll")] private static extern uint GetDoubleClickTime();
+    [DllImport("user32.dll")] private static extern nint GetWindowDpiAwarenessContext(nint window);
+    [DllImport("user32.dll")] private static extern nint SetThreadDpiAwarenessContext(nint context);
+    [DllImport("user32.dll")] private static extern int GetAwarenessFromDpiAwarenessContext(nint context);
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool AreDpiAwarenessContextsEqual(nint a, nint b);
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsHungAppWindow(nint window);
 
@@ -126,8 +130,37 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         if (process != identity.ProcessId) return false;
         if (!evenIfBusy && IsHungAppWindow(target)) return false;
         var point = new NativePoint { X = mapped.X, Y = mapped.Y };
-        if (!screenCoordinates && !ScreenToClient(target, ref point)) return false;
-        return User32.PostMessage(target, message, keys, Pack(new Point(point.X, point.Y)));
+        if (screenCoordinates) return User32.PostMessage(target, message, keys, Pack(mapped));
+        if (!ScreenToClient(target, ref point)) return false;
+        return PostClient(target, message, keys, new Point(point.X, point.Y));
+    }
+
+    /// <summary>
+    /// Posts a client point (in pixels) to the window in its own coordinates. For an app that isn't per-monitor aware,
+    /// Windows rescales a point posted from WinScreen's context on delivery, and gets it wrong for a window parked off
+    /// every display beside a display at another scale (about 250 points too high at 150%). Posted from a thread in
+    /// the app's own context, the point arrives as sent, so it is scaled here by the window's own two sizes.
+    /// </summary>
+    private static bool PostClient(nint target, int message, nint keys, Point client)
+    {
+        nint context = GetWindowDpiAwarenessContext(target);
+        if (context == 0 || GetAwarenessFromDpiAwarenessContext(context) is not (0 or 1)) // Unaware or system aware.
+            return User32.PostMessage(target, message, keys, Pack(client));
+        // The top-level window gives the most exact scale, when it shares the target's context.
+        nint root = User32.GetAncestor(target, 2 /* GA_ROOT */);
+        nint measured = root != 0 && AreDpiAwarenessContextsEqual(GetWindowDpiAwarenessContext(root), context) ? root : target;
+        if (!User32.GetWindowRect(measured, out Rect pixels)) return false;
+        nint previous = SetThreadDpiAwarenessContext(context);
+        if (previous == 0) return User32.PostMessage(target, message, keys, Pack(client));
+        try
+        {
+            if (!User32.GetWindowRect(measured, out Rect own)) return false;
+            static double Ratio(int ownSize, int pixelSize) => ownSize > 0 && pixelSize > 0 ? ownSize / (double)pixelSize : 1;
+            double x = Ratio(own.Right - own.Left, pixels.Right - pixels.Left), y = Ratio(own.Bottom - own.Top, pixels.Bottom - pixels.Top);
+            return User32.PostMessage(target, message, keys,
+                Pack(new Point((int)Math.Round(client.X * x), (int)Math.Round(client.Y * y))));
+        }
+        finally { SetThreadDpiAwarenessContext(previous); }
     }
 
     internal bool Move(Point pointer, Rectangle view, Rectangle shown)
