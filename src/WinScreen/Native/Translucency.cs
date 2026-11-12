@@ -29,8 +29,16 @@ internal static class Translucency
     [DllImport("dwmapi.dll")]
     private static extern int DwmExtendFrameIntoClientArea(nint window, in Margins margins);
 
-    /// <summary>Whether Transparency effects is on in Windows 11, read again at most every couple of seconds.</summary>
-    internal static bool On
+    /// <summary>Whether WinScreen's menus may be see-through at all: Settings can keep them solid.</summary>
+    internal static bool Allowed { get; set; } = true;
+
+    /// <summary>
+    /// Whether menus are see-through: allowed, and Transparency effects on in Windows 11, read again at most every
+    /// couple of seconds.
+    /// </summary>
+    internal static bool On => Allowed && WindowsOn;
+
+    private static bool WindowsOn
     {
         get
         {

@@ -247,6 +247,8 @@ public sealed class AppSettings
 
     public bool ShowToolbar { get; set; } = true;
     public bool ShowNotifications { get; set; } = true;
+    /// <summary>Menus are see-through while Windows' Transparency effects is on; off keeps them solid.</summary>
+    public bool SeeThroughMenus { get; set; } = true;
     public bool AutomaticUpdates { get; set; }
     public string Language { get; set; } = "system";
 

@@ -466,6 +466,34 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    /// <summary>Menus can be kept solid even while Windows' Transparency effects is on, and the choice is saved.</summary>
+    [Fact]
+    public void See_through_menus_can_be_turned_off()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            AppSettings? saved = null;
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(tasks: NoTasks.Instance), draft => { saved = draft; return []; });
+            window.Show();
+            Application.DoEvents();
+            CheckBox box = Descendants(window).OfType<CheckBox>().Single(b => b.Text == UiText.T("settings.menus.seeThrough"));
+            Assert.True(box.Checked); // On by default: menus follow Windows.
+            Assert.Equal(Environment.OSVersion.Version.Build >= 22000, box.Enabled);
+            window.SetOption(nameof(AppSettings.SeeThroughMenus), false);
+            Assert.True(window.ApplyChanges());
+            Assert.False(saved!.SeeThroughMenus);
+            window.Close();
+        });
+        try
+        {
+            Translucency.Allowed = false;
+            Assert.False(MenuStyle.Translucent);
+            Assert.Equal(MenuStyle.Back, MenuStyle.Ground);
+        }
+        finally { Translucency.Allowed = true; }
+    }
+
     /// <summary>A value chosen on a slider is what gets saved.</summary>
     [Fact]
     public void A_value_chosen_on_a_slider_is_saved()

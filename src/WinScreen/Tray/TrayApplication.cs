@@ -403,6 +403,7 @@ public sealed class TrayApplication : ApplicationContext
         _settings.CopyFrom(settings);
         _setupNone.Clear();
         ApplyPreferences(experimentalBefore);
+        Native.Translucency.Allowed = _settings.SeeThroughMenus;
         if (_settings.Theme != themeBefore) ChangeTheme();
         if (adminChanged && _settings.RunAsAdministrator && !ProcessInfo.SelfElevated)
             _toolbar.BeginInvoke(RestartAsAdministrator); // After Settings has finished saving.
