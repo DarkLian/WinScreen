@@ -192,10 +192,20 @@ internal sealed class TargetProcess : IDisposable
         return (nint)long.Parse(report.Split(' ')[1]);
     }
 
-    /// <summary>A plain native window in this process, which acts like an ordinary app window.</summary>
-    public nint CreatePlainWindow(Rectangle bounds)
+    /// <summary>A second main window of the same process, with a title bar; it reports "second-click x y" and "second-key k".</summary>
+    public nint CreateSecondWindow(Rectangle bounds)
     {
-        _process.StandardInput.WriteLine($"plain {bounds.X} {bounds.Y} {bounds.Width} {bounds.Height}");
+        _process.StandardInput.WriteLine($"second {bounds.X} {bounds.Y} {bounds.Width} {bounds.Height}");
+        _process.StandardInput.Flush();
+        string report = NextReport() ?? throw new InvalidOperationException("No second window was created.");
+        return (nint)long.Parse(report.Split(' ')[1]);
+    }
+
+    /// <summary>A plain native window in this process, which acts like an ordinary app window.</summary>
+    /// <param name="framed">With a title bar and borders Windows draws, which, unlike a Windows Forms form's, keep a crop.</param>
+    public nint CreatePlainWindow(Rectangle bounds, bool framed = false)
+    {
+        _process.StandardInput.WriteLine($"plain {bounds.X} {bounds.Y} {bounds.Width} {bounds.Height}" + (framed ? " framed" : ""));
         _process.StandardInput.Flush();
         string report = NextReport() ?? throw new InvalidOperationException("No plain window was created.");
         return (nint)long.Parse(report.Split(' ')[1]);

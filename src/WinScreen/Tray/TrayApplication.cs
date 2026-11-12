@@ -984,6 +984,8 @@ public sealed class TrayApplication : ApplicationContext
             _windows.RemoveCrop(window);
             return;
         }
+        if (_windows.IsHidden(window) || _windows.IsPeeking(window))
+            throw new WindowOperationException(T("errors.window.showFirst"));
 
         if (_cropping is { IsDisposed: false } || !User32.GetWindowRect(window, out Rect r))
             return;
@@ -1615,6 +1617,9 @@ public sealed class TrayApplication : ApplicationContext
             SetLook(window, current, false);
             return;
         }
+        // Hidden behind a view or tile: both looks work from what is on screen, where it isn't.
+        if (_windows.IsHidden(window) && !_content.Has(window))
+            throw new WindowOperationException(T("errors.window.showFirst"));
         if (other != Look.None)
         {
             SetLook(window, other, false);

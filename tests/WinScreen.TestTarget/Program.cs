@@ -112,6 +112,23 @@ internal static class Program
                             Console.WriteLine("popup " + popup.Handle.ToInt64());
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "second")
+                        window.BeginInvoke(() =>
+                        {
+                            // Another main window of the same program, with a title bar, telling its own clicks and keys apart.
+                            string[] at = parts[1].Split(' ');
+                            var second = new Form
+                            {
+                                Text = "WinScreen test target 2", StartPosition = FormStartPosition.Manual, BackColor = Color.SteelBlue,
+                                Bounds = new Rectangle(int.Parse(at[0]), int.Parse(at[1]), int.Parse(at[2]), int.Parse(at[3])),
+                                KeyPreview = true,
+                            };
+                            second.MouseDown += (_, e) => { Console.WriteLine($"second-click {e.X} {e.Y}"); Console.Out.Flush(); };
+                            second.KeyPress += (_, e) => { Console.WriteLine($"second-key {e.KeyChar}"); Console.Out.Flush(); };
+                            second.Show();
+                            Console.WriteLine("second " + second.Handle.ToInt64());
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "threadpopup")
                     {
                         // An owned popup made by another UI thread of the same program, as multi-threaded apps do.
@@ -325,9 +342,13 @@ internal sealed partial class TargetForm : Form
     /// </summary>
     public void CreatePlainWindow(string bounds)
     {
-        int[] b = [.. bounds.Split(' ').Select(int.Parse)];
-        const uint popup = 0x80000000, visible = 0x10000000;
-        nint plain = CreateWindowEx(0, "STATIC", "Plain test window", popup | visible, b[0], b[1], b[2], b[3], 0, 0, 0, 0);
+        string[] parts = bounds.Split(' ');
+        int[] b = [.. parts.Take(4).Select(int.Parse)];
+        const uint popup = 0x80000000, visible = 0x10000000, overlapped = 0x00CF0000; // WS_OVERLAPPEDWINDOW
+        // "framed": a standard title bar and borders that Windows draws, as most apps have; Windows Forms puts its own
+        // shape back on a form with a frame, which a few tests mustn't depend on.
+        uint style = parts.Length > 4 && parts[4] == "framed" ? overlapped | visible : popup | visible;
+        nint plain = CreateWindowEx(0, "STATIC", "Plain test window", style, b[0], b[1], b[2], b[3], 0, 0, 0, 0);
         Report("plain " + plain.ToInt64());
     }
 

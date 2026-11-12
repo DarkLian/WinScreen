@@ -101,19 +101,21 @@ public sealed class WindowAppearanceTests
     {
         using var target = new TargetProcess(Spot);
         target.UseFrame();
+        // A Windows Forms form with a frame puts its own shape back, so a crop is tried on a window that keeps it.
+        nint window = state == "crop" ? target.CreatePlainWindow(Spot, framed: true) : target.Handle;
         var windows = new WindowController([]);
         try
         {
             switch (state)
             {
-                case "hidden": windows.Hide(target.Handle); break;
-                case "crop": windows.Crop(target.Handle, new Rectangle(0, 0, 150, 100)); break;
-                case "rollup": windows.ToggleRollUp(target.Handle); break;
-                case "minimized": User32.ShowWindow(target.Handle, 6); break;
+                case "hidden": windows.Hide(window); break;
+                case "crop": windows.Crop(window, new Rectangle(0, 0, 150, 100)); break;
+                case "rollup": windows.ToggleRollUp(window); break;
+                case "minimized": User32.ShowWindow(window, 6); break;
             }
-            long style = Style(target.Handle);
-            Assert.Throws<WindowOperationException>(() => windows.ToggleBorderless(target.Handle));
-            Assert.Equal(style, Style(target.Handle));
+            long style = Style(window);
+            Assert.Throws<WindowOperationException>(() => windows.ToggleBorderless(window));
+            Assert.Equal(style, Style(window));
         }
         finally { windows.RestoreAll(); }
     }

@@ -85,6 +85,8 @@ public sealed partial class WindowController
     {
         if ((User32.GetWindowLongPtr(window, User32.GWL_STYLE) & User32.WS_CAPTION) != User32.WS_CAPTION ||
             !User32.GetWindowRect(window, out Rect rect)) return false;
+        // Minimized, a window has only a stub of a frame to measure, so its style is all there is to go by.
+        if (User32.IsIconic(window)) return true;
         var point = new NativePoint();
         return User32.ClientToScreen(window, ref point) && NativeCaptionGeometry(point.Y - rect.Top,
             User32.GetSystemMetricsForDpi(CaptionMetric, User32.GetDpiForWindow(window)));

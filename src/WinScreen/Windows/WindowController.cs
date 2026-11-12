@@ -187,6 +187,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             Color? after = null;
             if (before is null)
             {
+                // Its colour is read off the screen, where a hidden window isn't.
+                if (state.Hidden || state.PlacementBeforePeek is not null)
+                    throw new WindowOperationException(T("errors.window.showFirst"));
                 if (!User32.GetWindowRect(window, out Rect r))
                     throw Failure(T("actions.readPosition"), window);
                 after = ScreenColors.MostCommon(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom));
@@ -240,6 +243,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             ChangedWindow state = Track(window);
             if (state.PlacementBeforeBorderless is not null)
                 throw new WindowOperationException(T("errors.borderless.disableFirst"));
+            // A hidden window is parked out of sight, so a part chosen on screen would be a part of something else.
+            if (state.Hidden || state.PlacementBeforePeek is not null)
+                throw new WindowOperationException(T("errors.window.showFirst"));
             if (!state.Cropped && WindowInfo.ShapeOf(window) is not null)
                 throw new WindowOperationException(
                     string.Format(T("errors.crop.customShape"), WindowInfo.Title(window)));
@@ -258,6 +264,10 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                     User32.DeleteObject(region);
                     throw Failure(T("actions.crop"), window);
                 }
+                // Some apps put their own shape straight back (Windows Forms ones with a frame, for one), so a crop
+                // that didn't stay is said to have failed rather than shown as on.
+                if (WindowInfo.ShapeOf(window) is null)
+                    throw new WindowOperationException(string.Format(T("errors.crop.customShape"), WindowInfo.Title(window)));
             }
             catch (WindowOperationException)
             {
