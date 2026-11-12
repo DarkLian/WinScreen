@@ -30,6 +30,31 @@ public sealed class PipHoverAppsTests
     }
 
     [Fact]
+    public void An_electron_app_is_known_by_its_resources_beside_it_or_one_folder_down()
+    {
+        string root = Directory.CreateTempSubdirectory("winscreen-electron-layout").FullName;
+        try
+        {
+            string Folder(string name) => Directory.CreateDirectory(Path.Combine(root, name)).FullName;
+            string packed = Folder("packed"), unpacked = Folder("unpacked"), versioned = Folder("versioned"), plain = Folder("plain");
+            Directory.CreateDirectory(Path.Combine(packed, "resources"));
+            File.WriteAllText(Path.Combine(packed, "resources", "app.asar"), "");
+            Directory.CreateDirectory(Path.Combine(unpacked, "resources", "app"));
+            File.WriteAllText(Path.Combine(Directory.CreateDirectory(Path.Combine(versioned, "app-1.0.0", "resources")).FullName, "app.asar"), "");
+            // Electron's own download keeps only its default app there, which is not an app of its own.
+            File.WriteAllText(Path.Combine(Directory.CreateDirectory(Path.Combine(plain, "resources")).FullName, "default_app.asar"), "");
+
+            Assert.True(PipEnhancedHover.HasElectronLayout(packed));
+            Assert.True(PipEnhancedHover.HasElectronLayout(unpacked));
+            Assert.True(PipEnhancedHover.HasElectronLayout(versioned));
+            Assert.False(PipEnhancedHover.HasElectronLayout(plain));
+            Assert.False(PipEnhancedHover.HasElectronLayout(Path.Combine(root, "missing")));
+            Assert.False(PipEnhancedHover.HasElectronLayout(""));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public void A_view_starts_with_hover_on_only_for_the_kinds_chosen_in_settings()
     {
         var nothing = new PipHoverPreferences { ChooseForMe = false };

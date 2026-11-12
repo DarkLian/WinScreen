@@ -22,11 +22,41 @@ public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper out
     public void An_electron_app_keeps_css_hover_when_chosen_in_settings() =>
         Run(Path.Combine("vscode", "Code.exe"), new PipHoverPreferences { ChooseForMe = false, Electron = true }, PipHoverApp.Electron);
 
+    /// <summary>
+    /// Any Electron app, not just one WinScreen knows by name: Electron's own download, running a page of its own
+    /// under a name nothing in WinScreen mentions, is recognized by its folder alone.
+    /// </summary>
+    [NativeHoverFact]
+    public void An_electron_app_known_only_by_its_folder_keeps_css_hover() =>
+        Run(Path.Combine("electron", ElectronFixture), new PipHoverPreferences { ChooseForMe = false, Electron = true }, PipHoverApp.Electron);
+
+    private const string ElectronFixture = "HoverFixture.exe";
+
+    /// <summary>Puts a small app into Electron's "resources\app" folder and gives Electron another name.</summary>
+    private static bool PrepareElectronFixture(string exe)
+    {
+        string folder = Path.GetDirectoryName(exe)!, electron = Path.Combine(folder, "electron.exe");
+        if (!File.Exists(electron)) return false;
+        string app = Directory.CreateDirectory(Path.Combine(folder, "resources", "app")).FullName;
+        File.WriteAllText(Path.Combine(app, "package.json"), """{"name":"hover-fixture","version":"1.0.0","main":"main.js"}""");
+        File.WriteAllText(Path.Combine(app, "main.js"), """
+            const {app, BrowserWindow} = require('electron');
+            const page = process.argv.find(a => a.endsWith('.html'));
+            const data = process.argv.find(a => a.startsWith('--fixture-data='));
+            if (data) app.setPath('userData', data.slice('--fixture-data='.length));
+            app.whenReady().then(() => new BrowserWindow({width: 1000, height: 700}).loadFile(page));
+            app.on('window-all-closed', () => app.quit());
+            """);
+        if (!File.Exists(exe) || new FileInfo(exe).Length != new FileInfo(electron).Length) File.Copy(electron, exe, true);
+        return true;
+    }
+
     private void Run(string app, PipHoverPreferences preferences, PipHoverApp kind)
     {
         string exe = Path.Combine(AppContext.BaseDirectory, "test-apps", app);
-        if (!File.Exists(exe)) return; // Portable test apps are optional downloads.
-        bool electron = kind == PipHoverApp.Electron;
+        bool fixture = Path.GetFileName(exe) == ElectronFixture;
+        if (fixture ? !PrepareElectronFixture(exe) : !File.Exists(exe)) return; // Portable test apps are optional downloads.
+        bool electron = kind == PipHoverApp.Electron && !fixture;
         string root = Directory.CreateTempSubdirectory("winscreen-framework-hover").FullName;
         const string html = """
             <!doctype html><title>FrameworkHoverDocument</title><style>body{margin:0}section{position:absolute;top:0;width:40vw;height:80vh;background:red}#a{left:0}#b{left:50vw}section:hover{background:green}.preview{display:none}section:hover .preview{display:block}</style>
@@ -45,6 +75,13 @@ public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper out
             File.WriteAllText(Path.Combine(settings, "settings.json"), """{"workbench.startupEditor":"none","security.workspace.trust.enabled":false,"update.mode":"none","telemetry.telemetryLevel":"off","window.restoreWindows":"none"}""");
             foreach (string arg in new[] { "--user-data-dir=" + Path.Combine(root, "data"), "--extensions-dir=" + Path.Combine(root, "ext"), "--extensionDevelopmentPath=" + extension, "--disable-extensions", "--skip-welcome", "--skip-release-notes", "--disable-workspace-trust", "--force-renderer-accessibility", "--new-window" })
                 launch.ArgumentList.Add(arg);
+        }
+        else if (fixture)
+        {
+            string page = Path.Combine(root, "page.html");
+            File.WriteAllText(page, html);
+            launch.ArgumentList.Add("--fixture-data=" + Path.Combine(root, "data"));
+            launch.ArgumentList.Add(page);
         }
         else
         {
