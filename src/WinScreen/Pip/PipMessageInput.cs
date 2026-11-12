@@ -70,7 +70,10 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     internal nint Hit(Point pointer, Rectangle view, Rectangle shown)
     {
         Point mapped = MappedScreen(pointer, view, shown);
-        return User32.SendMessageTimeout(source, User32.WM_NCHITTEST, 0, Pack(mapped), 2, 30, out nint hit) != 0 ? hit : -2;
+        if (User32.SendMessageTimeout(source, User32.WM_NCHITTEST, 0, Pack(mapped), 2, 30, out nint hit) != 0) return hit;
+        // Busy for a moment, as Word is just after the first click of a double-click: ask once more and wait a little
+        // longer. An app that still doesn't answer isn't responding, and its press isn't sent (it could act later).
+        return User32.SendMessageTimeout(source, User32.WM_NCHITTEST, 0, Pack(mapped), 2, 250, out hit) != 0 ? hit : -2;
     }
 
     internal nint TargetAt(Point mapped)
