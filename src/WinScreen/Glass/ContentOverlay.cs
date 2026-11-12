@@ -37,6 +37,7 @@ internal sealed unsafe class ContentOverlay : Form
     private readonly ManualResetEvent _stop = new(false);
     private readonly User32.WinEventProc _eventProc;
     private readonly List<nint> _hooks = [];
+    private const uint NextBelow = 2; // GW_HWNDNEXT
     private volatile bool _stopping;
     private ContentLevels _levels;
     private Thread? _renderer;
@@ -140,10 +141,24 @@ internal sealed unsafe class ContentOverlay : Form
         if (!Visible)
             Show();
         bool topmost = (User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0;
+        bool raised = (User32.GetWindowLongPtr(Handle, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0;
+        // Already just above the window, in the same band: leave the order alone. Every change of order is reported
+        // to the whole desktop, this method's own included, so changing it anyway made it run again without end.
+        // Hidden windows in between don't count: Windows keeps an input method's window right under ours.
+        if (topmost == raised && NextShown(Handle) == _source)
+            return;
         if (topmost) WinScreen.Windows.TopLayer.Raise(Handle);
         else User32.SetWindowPos(Handle, User32.HWND_NOTOPMOST, 0, 0, 0, 0,
             User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
         User32.SetWindowPos(_source, Handle, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+    }
+
+    /// <summary>The first window under <paramref name="window"/> that is showing.</summary>
+    private static nint NextShown(nint window)
+    {
+        nint below = User32.GetWindow(window, NextBelow);
+        while (below != 0 && !User32.IsWindowVisible(below)) below = User32.GetWindow(below, NextBelow);
+        return below;
     }
 
     private void CreateDevice(Size size)
