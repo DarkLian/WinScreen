@@ -215,7 +215,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         // CSS/DOM effects and cleanup for the native helper's validated rollout.
     }
 
-    [NativeHoverFact(true)]
+    [NativeHoverFact]
     public void Enhanced_hover_keeps_css_previews_and_dom_state_and_clears_on_leave_and_disable()
     {
         string path = BrowserCases().Select(c => (string)c[0]).First(p => Path.GetFileName(p) == "chrome.exe");
@@ -294,7 +294,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     /// reaches past every edge of its screen, where a hidden original keeps its strip; the original stays above it,
     /// so the page goes on believing it can be seen. Checked with an ordinary window and with a second browser.
     /// </summary>
-    [NativeHoverTheory(true)]
+    [NativeHoverTheory]
     [InlineData(false)]
     [InlineData(true)]
     public void Enhanced_hover_holds_with_another_window_maximized_in_front(bool anotherBrowser)
@@ -388,7 +388,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     /// stopped taking pointer moves and hover never started. Checked from a fresh browser each time, with the option
     /// on in Settings before the view opens and turned on from the view's menu afterwards.
     /// </summary>
-    [NativeHoverTheory(true)]
+    [NativeHoverTheory]
     [InlineData(true)]
     [InlineData(false)]
     public void Enhanced_hover_starts_on_a_browser_hidden_a_moment_ago(bool fromSettings)
@@ -517,7 +517,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         }
     }
 
-    [NativeHoverTheory(true)]
+    [NativeHoverTheory]
     [InlineData(false)]
     [InlineData(true)]
     public void Missing_or_invalid_hover_helpers_keep_mapped_clicks_functional(bool invalid)
@@ -554,35 +554,6 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             if (File.Exists(dll)) File.Delete(dll);
             File.Move(backup, dll);
         }
-    }
-
-    [Windows10HoverFallbackFact]
-    public void Windows_10_keeps_ordinary_input_and_reports_hover_unavailable()
-    {
-        string path = BrowserCases().Select(c => (string)c[0]).First(p => Path.GetFileName(p) == "chrome.exe");
-        var (browser, window, root) = Open("""
-            <!doctype html><title>Win10Fallback count=0</title><style>button{position:absolute;left:100px;top:100px;width:300px;height:150px}</style>
-            <button onclick="document.title='Win10Fallback count=1'">Click</button>
-            """, "Win10Fallback", true, path);
-        var log = new StringBuilder();
-        try
-        {
-            Visit(window, (view, at, l) =>
-            {
-                Rectangle parked = Desktop.BoundsOf(window);
-                view.Invoke(() => view.SetEnhancedHover(true));
-                Assert.Equal(parked, Desktop.BoundsOf(window));
-                int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - parked.Top;
-                Desktop.SlideMouse(at(new Point(200, top + 160))); Thread.Sleep(150);
-                Assert.StartsWith("unavailable: requires Windows 11", view.LiveInteraction!.HoverStatus);
-                Assert.Equal(0, User32.GetProp(window, WindowController.EnhancedHoverOwnerProperty));
-                Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
-                Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith("Win10Fallback count=1")), WindowInfo.Title(window));
-                l.AppendLine(view.LiveInteraction.HoverStatus);
-            }, log);
-        }
-        finally { output.WriteLine(log.ToString()); Close(browser, root); }
-        Assert.DoesNotContain("EXC ", log.ToString());
     }
 
     [Theory]
@@ -623,7 +594,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     /// With Enhanced hover on, a browser's own middle-click scrolling works through a view: click, move away, click
     /// again to stop. The view's own scrolling stands aside for it even when its option is on.
     /// </summary>
-    [NativeHoverTheory(true)]
+    [NativeHoverTheory]
     [InlineData(false)]
     [InlineData(true)]
     public void A_browsers_own_middle_click_scrolling_works_with_enhanced_hover(bool viewOptionOn)
@@ -707,6 +678,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 Assert.False(view.LiveInteraction?.Scrolling ?? false);
                 foreach (bool middle in new[] { true, false })
                 {
+                    l.AppendLine(middle ? "stop with a middle click" : "stop with a left click");
                     Desktop.SlideMouse(anchor);
                     mouse_event(0x20, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(0x40, 0, 0, 0, 0);
                     Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Scrolling == true, 500));
@@ -720,6 +692,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 }
                 foreach (bool leave in new[] { false, true })
                 {
+                    l.AppendLine(leave ? "stop by leaving" : "stop by turning the option off");
                     Desktop.SlideMouse(anchor);
                     mouse_event(0x20, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(0x40, 0, 0, 0, 0);
                     Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Scrolling == true, 500));
@@ -1126,7 +1099,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     /// Enhanced hover in two browsers at once: the page under the pointer keeps its hover, the one just left loses it,
     /// there and back, although both hidden browsers park in the same place.
     /// </summary>
-    [NativeHoverFact(true)]
+    [NativeHoverFact]
     public void Enhanced_hover_follows_the_pointer_between_two_views()
     {
         string path = BrowserCases().Select(c => (string)c[0]).First(p => Path.GetFileName(p) == "chrome.exe");

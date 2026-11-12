@@ -34,9 +34,9 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
 
     private static string HelperPath => Path.Combine(AppContext.BaseDirectory, "WinScreen.Hover.dll");
 
-    /// <summary>True where the helper runs at all: Windows 11 on native x64, with the helper installed.</summary>
+    /// <summary>True where the helper runs at all: Windows 10 or 11 on native x64, with the helper installed.</summary>
     internal static bool Supported =>
-        OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) && RuntimeInformation.OSArchitecture == Architecture.X64 &&
+        RuntimeInformation.OSArchitecture == Architecture.X64 &&
         RuntimeInformation.ProcessArchitecture == Architecture.X64 && File.Exists(HelperPath);
 
     /// <summary>The kind of program a window belongs to, and whether that program is a native 64-bit one.</summary>
@@ -86,9 +86,6 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
         if (_hook != 0) return;
         _attempted = target;
         if (target == 0) return;
-        // Win10 cold-source renderer visibility was inconsistent despite successful filtering.
-        // Keep the experimental rollout at the runtime-validated Windows 11 environment.
-        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) { Status = "unavailable: requires Windows 11"; return; }
         if (RuntimeInformation.OSArchitecture != Architecture.X64 || RuntimeInformation.ProcessArchitecture != Architecture.X64) { Status = "unavailable: requires native x64 Windows"; return; }
         uint thread = User32.GetWindowThreadProcessId(target, out _);
         try

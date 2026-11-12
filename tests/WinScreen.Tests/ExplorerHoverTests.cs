@@ -12,7 +12,7 @@ namespace WinScreen.Tests;
 [Trait("Category", "Interactive")]
 public sealed class ExplorerHoverTests(Xunit.Abstractions.ITestOutputHelper output)
 {
-    [NativeHoverFact(true)]
+    [NativeHoverFact]
     public void A_hovered_row_stays_highlighted_in_the_view_only_with_enhanced_hover()
     {
         string root = Directory.CreateTempSubdirectory("WinScreenHoverExplorer-").FullName;
@@ -79,7 +79,8 @@ public sealed class ExplorerHoverTests(Xunit.Abstractions.ITestOutputHelper outp
                                     int change = Math.Abs(now.R - rest.R) + Math.Abs(now.G - rest.G) + Math.Abs(now.B - rest.B);
                                     string seen = $"enhanced={enhanced} {name} rest={rest.R},{rest.G},{rest.B} now={now.R},{now.G},{now.B} :: {view.LiveInteraction?.HoverStatus}";
                                     log.AppendLine(seen);
-                                    if (enhanced) Assert.True(change > 60, "The hovered row is not highlighted in the view. " + seen);
+                                    // Windows 11 highlights in grey (a change over 60); Windows 10 in pale blue, 229,243,255 (38).
+                                    if (enhanced) Assert.True(change > 30, "The hovered row is not highlighted in the view. " + seen);
                                     else Assert.True(change < 15, "Without the option the row was expected to stay as it was. " + seen);
                                 }
                                 if (enhanced) Assert.StartsWith("active", view.LiveInteraction!.HoverStatus);

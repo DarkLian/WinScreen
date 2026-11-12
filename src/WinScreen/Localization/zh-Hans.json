@@ -382,7 +382,7 @@
   "settings.pip.hover.explorer": "文件资源管理器",
   "settings.pip.hover.firefox": "Firefox",
   "settings.pip.hover.programsHelp": "添加程序即可在其中试用。请勿添加使用反作弊的游戏。",
-  "settings.pip.hover.unsupported": "增强悬停需要 64 位 Intel 或 AMD 电脑上的 Windows 11。",
+  "settings.pip.hover.unsupported": "增强悬停需要 64 位 Intel 或 AMD 电脑。",
   "settings.pip.middleScroll": "新的交互式画中画使用中键滚动",
   "settings.pip.middleScrollHelp": "会替代应用自己的中键动作。每个视图的菜单仍可单独开关。",
   "settings.pip.moving": "自动避让",

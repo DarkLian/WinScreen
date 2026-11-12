@@ -382,7 +382,7 @@
   "settings.pip.hover.explorer": "檔案總管",
   "settings.pip.hover.firefox": "Firefox",
   "settings.pip.hover.programsHelp": "新增程式即可在其中試用。請勿新增使用反作弊的遊戲。",
-  "settings.pip.hover.unsupported": "增強懸停需要 64 位元 Intel 或 AMD 電腦上的 Windows 11。",
+  "settings.pip.hover.unsupported": "增強懸停需要 64 位元 Intel 或 AMD 電腦。",
   "settings.pip.middleScroll": "新的互動式子母畫面使用中鍵捲動",
   "settings.pip.middleScrollHelp": "會取代應用程式自己的中鍵動作。每個檢視的選單仍可個別開關。",
   "settings.pip.moving": "自動避讓",

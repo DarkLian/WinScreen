@@ -83,10 +83,9 @@ turn on **Always show title bar** in **Size and options**, or for every new view
   On some newer controls, in Store apps and parts of File Explorer, you can click, right-click and scroll,
   but not hover, drag or select.
   By default, browser pointer shapes work, but hover effects and tooltips may not stay active.
-  **Enhanced hover (experimental)** keeps hover effects showing while you use an app through a view. WinScreen turns it on for the apps it works well with: Chrome, Edge, Brave and Vivaldi; Firefox; and apps like VS Code and Discord. In **Settings → Picture-in-Picture → Using apps through a view**, turn off **Choose for me** to pick the apps yourself, including File Explorer and any program you add, and each view's menu can change it for that view. It needs Windows 11 on a 64-bit Intel or AMD PC. See the [compatibility table](FEATURE_COMPATIBILITY.md) for what has been tested. Native tooltips may still be unavailable.
+  **Enhanced hover (experimental)** keeps hover effects showing while you use an app through a view. WinScreen turns it on for the apps it works well with: Chrome, Edge, Brave and Vivaldi; Firefox; and apps like VS Code and Discord. In **Settings → Picture-in-Picture → Using apps through a view**, turn off **Choose for me** to pick the apps yourself, including File Explorer and any program you add, and each view's menu can change it for that view. It needs a 64-bit Intel or AMD PC. See the [compatibility table](FEATURE_COMPATIBILITY.md) for what has been tested. Native tooltips may still be unavailable.
   With Enhanced hover on, a browser's own middle-click scrolling works in the view, and so does VS Code's or Discord's.
   Where it doesn't, enable **Middle-click scrolling** in this view (or for new views in **Settings → Picture-in-Picture**), middle-click, then move away from that point. Middle-click again, left-click or press Escape to stop. Leave it off to keep the app's normal middle-click actions.
-  Some modern menus can still flicker; show the original if a menu is difficult to use.
   A few apps can't be hidden, such as PowerShell ISE, and WinScreen tells you.
 - **Use it, then hide again** is for an app that doesn't work well through a view, such as a game.
   The original window comes back where it was, and hides again when you switch to another window.

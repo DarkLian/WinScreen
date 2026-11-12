@@ -14,11 +14,11 @@ namespace WinScreen.Tests;
 [Trait("Category", "Interactive")]
 public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper output)
 {
-    [NativeHoverFact(true)]
+    [NativeHoverFact]
     public void Firefox_keeps_css_hover_when_chosen_in_settings() =>
         Run(Path.Combine("firefox", "firefox.exe"), new PipHoverPreferences { ChooseForMe = false, Firefox = true }, PipHoverApp.Firefox);
 
-    [NativeHoverFact(true)]
+    [NativeHoverFact]
     public void An_electron_app_keeps_css_hover_when_chosen_in_settings() =>
         Run(Path.Combine("vscode", "Code.exe"), new PipHoverPreferences { ChooseForMe = false, Electron = true }, PipHoverApp.Electron);
 
