@@ -466,6 +466,30 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    /// <summary>A search that moves Settings to another page leaves the keyboard in the search box.</summary>
+    [Fact]
+    public void Searching_keeps_typing_in_the_search_box_when_the_page_changes()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+            window.Show();
+            window.PageIndex = 6;
+            for (int i = 0; i < 5; i++) Application.DoEvents();
+            TextBox search = Descendants(window).OfType<TextBox>().First(box => box.AccessibleName == UiText.T("settings.search"));
+            search.Focus();
+            Application.DoEvents();
+            Assert.True(search.Focused);
+            search.AppendText("transp"); // Only on General.
+            for (int i = 0; i < 5; i++) Application.DoEvents();
+            Assert.Equal(0, window.PageIndex);
+            Assert.True(search.Focused, "The keyboard left the search box when the page changed.");
+            Assert.Equal(search.TextLength, search.SelectionStart);
+            window.Close();
+        });
+    }
+
     /// <summary>Menus can be kept plain even while Windows' Transparency effects is on, and the choice is saved.</summary>
     [Fact]
     public void Transparency_effects_in_menus_can_be_turned_off()

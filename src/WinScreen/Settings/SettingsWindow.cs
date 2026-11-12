@@ -455,7 +455,18 @@ private readonly ErrorProvider _errors = new();
         TabPage[] found = _tabs.TabPages.Cast<TabPage>().Where(page => Matches(page) || WithText(page).Any(Matches)).ToArray();
         _nav.Filter(found);
         if (found.Length == 0) return;
-        if (!found.Contains(_tabs.SelectedTab)) _tabs.SelectedTab = found[0];
+        if (!found.Contains(_tabs.SelectedTab))
+        {
+            // Changing page takes the keyboard to the pages; it goes back to the search box, still being typed in.
+            bool typing = _search.Focused;
+            int caret = _search.SelectionStart, chosen = _search.SelectionLength;
+            _tabs.SelectedTab = found[0];
+            if (typing && !_search.Focused)
+            {
+                _search.Focus();
+                _search.Select(caret, chosen);
+            }
+        }
         ShowSearchMatch();
     }
 
