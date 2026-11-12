@@ -383,6 +383,55 @@ public sealed class WindowPlacementTests
         Near(PlacementGeometry.FrameOnDisplay(usual, from.WorkingArea, to.WorkingArea, usual.Size), FrameOf(target.Handle), 1, "Restored: ");
     }
 
+    /// <summary>
+    /// A minimized window moved to another display stays minimized and comes back on that display. Its stored place is
+    /// measured from the work area, which starts at a different offset on each display.
+    /// </summary>
+    [MultiDisplayTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_minimized_window_moved_to_another_display_comes_back_there(bool startOnOther)
+    {
+        using var target = new TargetProcess(new Rectangle(900, 600, 200, 150));
+        // Not the form itself: on Windows 10, WinForms puts a restored form back where its own code placed it.
+        nint window = target.CreatePlainWindow(Spot);
+        var placer = new WindowPlacer(new WindowController([]));
+        if (startOnOther) placer.MoveToDisplay(window, OtherDisplay(window).DeviceName);
+        Rectangle usual = FrameOf(window);
+        Screen from = Screen.FromHandle(window), to = OtherDisplay(window);
+        User32.ShowWindow(window, 6); // SW_MINIMIZE
+        Assert.True(Desktop.WaitFor(() => User32.IsIconic(window), 2000));
+        placer.MoveToDisplay(window, to.DeviceName);
+        Assert.True(User32.IsIconic(window), "No longer minimized.");
+        User32.ShowWindow(window, User32.SW_SHOWNOACTIVATE);
+        Assert.True(Desktop.WaitFor(() => !User32.IsIconic(window), 2000));
+        Assert.Equal(to.DeviceName, DisplayOf(window));
+        // As for one display, the place to come back to is the window's outer edge, a few pixels out from its frame.
+        Near(PlacementGeometry.FrameOnDisplay(usual, from.WorkingArea, to.WorkingArea, usual.Size), FrameOf(window), 12, "Restored: ");
+    }
+
+    /// <summary>An exact place on another display, for a maximized window, brings it back to its size there.</summary>
+    [MultiDisplayTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_maximized_window_given_a_place_on_another_display_goes_there(bool startOnOther)
+    {
+        using var target = new TargetProcess(Spot);
+        target.UseTitleBar();
+        var placer = new WindowPlacer(new WindowController([]));
+        if (startOnOther) placer.MoveToDisplay(target.Handle, OtherDisplay(target.Handle).DeviceName);
+        Screen to = OtherDisplay(target.Handle);
+        User32.ShowWindow(target.Handle, User32.SW_MAXIMIZE);
+        Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000));
+        var wanted = new Rectangle(to.WorkingArea.Left + 100, to.WorkingArea.Top + 80, 500, 320);
+        placer.SetFrame(target.Handle, wanted);
+        Assert.False(User32.IsZoomed(target.Handle), "Still maximized.");
+        Assert.Equal(to.DeviceName, DisplayOf(target.Handle));
+        Near(wanted, FrameOf(target.Handle));
+        Assert.True(placer.RestorePrior(target.Handle));
+        Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000), "Back to previous position didn't maximize it again.");
+    }
+
     /// <summary>Arrange on a window maximized on a display places it on that display, and Back maximizes it there again.</summary>
     [MultiDisplayTheory]
     [InlineData(false)]
