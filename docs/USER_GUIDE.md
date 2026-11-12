@@ -36,6 +36,8 @@ You can change or clear any of these in **Settings → Actions and shortcuts**. 
 
 Other commands, like moving a window to a corner, have no shortcut until you give them one.
 
+<p align="center"><img src="assets/screenshots/settings-actions.png" width="640" alt="Settings, Actions and shortcuts page"></p>
+
 ## Pin and see-through
 
 - **Ctrl+Alt+T** keeps a window above the others.
@@ -129,6 +131,8 @@ left or right edge of the screen to fill that half, to a corner for a quarter, o
 
 The tray and window menus also have an **Opacity** slider, a grid of nine places to put the window (so their **Arrange window** lists only the other commands), **Borderless**, **Fill display** and **Dark title bar**. **Copy** and **Open file location** are under **More**.
 
+<p align="center"><img src="assets/screenshots/window-menu.png" width="360" alt="A window's menu, with the Effects menu open"></p>
+
 ## Effects *(experimental)*
 
 - **Dark mode** swaps light and dark. Windows that are already dark are left alone.
@@ -150,15 +154,15 @@ Press it again on a plain window to forget the setup, or remove it in **Settings
 
 | Page | What you'll find |
 | --- | --- |
-| General | Language, notifications, starting with Windows, running as administrator, updates, experimental features, and moving your settings to another PC |
+| General | Language, light or dark look, notifications, starting with Windows, running as administrator, updates, experimental features, and moving your settings to another PC |
 | Actions and shortcuts | Everything WinScreen can do, with its shortcut. Select an action to change its shortcut |
-| Programs | Programs WinScreen should leave alone, or the only ones it should work on |
-| Saved setups | Program setups you've remembered |
-| Picture-in-Picture | How views look and behave |
 | Mouse gestures | Move and resize with a key, and the mouse menu |
-| Appearance | Opacity, pin border and effects |
 | Toolbar | Where the toolbar appears, how quickly, and which buttons it shows |
 | Anchors | Automatic Anchors and how Anchors look |
+| Appearance | Opacity, pin border and effects |
+| Picture-in-Picture | How views look and behave |
+| Programs | Programs WinScreen should leave alone, or the only ones it should work on |
+| Saved setups | Program setups you've remembered |
 
 ## Putting things back
 
@@ -192,3 +196,5 @@ the newer installer. Your settings stay as they are.
   it bothers you.
 - Views of a display or region, and Anchors that move off content, don't show up in your own screenshots or screen sharing.
 - Results of Dark, Glass and Crop depend on how each app draws itself.
+
+See [Limitations at a glance](FEATURE_COMPATIBILITY.md#limitations-at-a-glance) for the full list.

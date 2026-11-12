@@ -1,10 +1,32 @@
 # WinScreen feature compatibility
 
 What each WinScreen feature does with each kind of window, as the code behaves today (last checked
-2026-11-10). Where the code and its tests don't settle a case, it says
+2026-11-12). Where the code and its tests don't settle a case, it says
 **Unverified** rather than guessing.
 
 Paths are relative to `src/WinScreen/` unless they start with `tests/`.
+
+## Limitations at a glance
+
+- **Systems:** Windows 10 (version 2004 or later) and Windows 11 on x64 only. ARM PCs and 32-bit Windows aren't
+  supported (below).
+- **Apps running as administrator,** such as Task Manager, can only be changed when WinScreen runs as administrator
+  too: turn on **Settings → General → Run as administrator**.
+- **Games and full-screen apps:** commands pause while one is in front, and views can't appear over games in
+  exclusive full screen.
+- **Views** of a minimized app show its last picture, because the app stops drawing. Protected video may show as black.
+- **Smooth mode** shows Windows' yellow capture border on Windows 10; on Windows 11 WinScreen asks to leave it off.
+- **Screenshots and screen sharing** don't show views of a display or region, or Anchors that move off content.
+- **Dark, Glass and Crop** depend on how each app draws itself.
+- **Using apps through a view** *(experimental)*:
+  - Some newer controls, in Store apps and parts of File Explorer, take clicks, right-clicks and scrolling, but not
+    hover, dragging or selecting.
+  - Native tooltips may not show, and some modern menus can flicker.
+  - When the app asks you something, its window comes back so you can answer.
+  - A few apps can't be hidden, such as PowerShell ISE.
+  - Games, and apps with anti-cheat, should use **Show original** instead.
+- **Enhanced hover** needs Windows 11 on an x64 PC and a 64-bit app.
+- **Snap Layouts** from Windows 11 aren't offered while moving a window with Alt+drag; WinScreen snaps to edges itself.
 
 ## Supported systems
 
@@ -289,8 +311,8 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 - **Win 11 Snap Layouts panel** and Snap Assist aren't available to Alt-drag (no public API). Edge snapping is
   WinScreen's own.
 - **A lost mouse hook mid-drag** can leave a window following the pointer until the next click.
-- **Elevated windows** are refused by tagging, not by an up-front check. Running WinScreen as administrator lifts this;
-  start-at-sign-in doesn't, because it starts WinScreen without administrator rights.
+- **Elevated windows** are refused by tagging, not by an up-front check. Running WinScreen as administrator lifts this,
+  and with **Run as administrator** on, starting with Windows keeps those rights.
 - **Borderless windows from other apps** (not WinScreen's Borderless) are treated as normal unless they fill the
   screen. Most cells marked ❔ under Borderless refer to WinScreen's own Borderless and haven't been tested.
 - **Multiple monitors with different scaling**: snapping does a second pass if the margins change on the way, but

@@ -30,53 +30,73 @@ live view, or bring a buried window back with one click. No account, no trial, n
   <img src="docs/assets/screenshots/settings-general.png" width="720" alt="WinScreen Settings, General page, in the dark look">
 </p>
 <p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="330" alt="A window's menu, with the Effects menu open">
-  <img src="docs/assets/screenshots/settings-anchors.png" width="470" alt="Settings, Anchors page">
+  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="A window's menu, with the Effects menu open">
+  <img src="docs/assets/screenshots/settings-appearance.png" width="440" alt="Settings, Appearance page, with sliders for opacity">
 </p>
 
-## Highlights
+## Use apps through a small view
 
-**Keep windows where you need them**
-- Pin any window on top, and make it see-through or click-through.
-- Scroll with Ctrl+Alt to change a window's opacity right under the pointer.
-- Remember a program's setup, so its windows open pinned, see-through or dark every time.
+Press **Ctrl+Alt+P** on a window for a small live view of it that stays on top. Turn on **Interactive** in the view's
+menu *(experimental)* and you can use the app right inside the view: click, type, scroll, select text and open menus.
+The real window stays hidden out of the way, so a video, chat or document stays at hand in a corner while you work.
+
+**Enhanced hover** keeps hover effects working in browsers and apps like VS Code and Discord. For an app that doesn't
+work well through a view, such as a game, a click on its view can bring the real window back instead, and it hides
+again when you switch away. [What works where](docs/FEATURE_COMPATIBILITY.md) lists the details.
+
+## Features
+
+**Windows**
+- Pin on top, with an optional colored border
+- See-through, with a default level, Ctrl+Alt+wheel under the pointer, and solid again while the mouse is over it
+- Click-through
+- Borderless, fill the display, dark title bar
+- Remember a program's setup for its windows from then on
 
 **Picture-in-Picture**
-- Open a small live view of a window, a whole display, or part of the screen.
-- Crop it, zoom in, resize it, and save the layout as a preset.
-- Hide the original and keep the view updating, minimize views to the taskbar, and preview them on hover.
-- Use a view directly, clicking and scrolling inside it *(experimental)*.
+- Live views of a window, a whole display or part of the screen
+- Crop, zoom, resize, presets and saved sources
+- Keep the original hidden and the view updating
+- Use apps through a view, with Enhanced hover and middle-click scrolling *(experimental)*
+- Per-view frame limit, opacity, position lock and click-through
+- Minimize views to the taskbar, hover preview and reading lens
+- Views that move away from text and pictures *(experimental)*
 
 **Anchors**
-- Floating buttons that bring a window back instantly.
-- Added for you when a window gets buried under others, if you like.
+- Floating buttons that bring a window back with a click
+- Drop files on them, rest the pointer for a live preview
+- Added and removed for you as windows get covered
+- Take their windows off the taskbar, or hide them all for now
 
-**Arrange windows**
-- Snap a window to nine places, move it to the next display, or type an exact position and size.
-- Move and resize from anywhere by holding a key and dragging.
-- Borderless mode, fill the display, roll up to the title bar, send to the back.
+**Arrange**
+- Nine places on the screen, the next display, an exact position and size, the previous position
+- Move and resize by holding Alt or Win and dragging, with edge snapping
+- Roll up to the title bar *(experimental)*, send to the back
 
 **Effects** *(experimental)*
-- Dark mode, and a version that keeps pictures and video as they are.
-- Glass that fades the background but keeps text and pictures.
-- Crop a window to the part you need, or shrink it to a small live tile.
+- Dark mode, and one that keeps pictures and video as they are
+- Glass that fades only the background
+- Crop a window, or shrink it to a live tile
 
-**Easy to use and safe to try**
-- A toolbar on title bars, a mouse menu, and shortcuts you can change.
-- Undo everything with Ctrl+Alt+R. If WinScreen stops unexpectedly, your windows go back the next time it starts.
-- Lightweight: about 20 MB of memory and almost no processor time while it waits in the tray.
-- English, 简体中文 and 繁體中文.
+**Everyday use**
+- A toolbar on title bars, a window menu on Ctrl+right-click, and a full tray menu
+- Shortcuts you can change, and a searchable list of every action
+- Settings that look like Windows 11's, in light or dark
+- Programs to leave alone, or the only ones to work on
+- Pauses during games and full-screen apps
+- Runs as administrator when you want it to, for apps such as Task Manager
+- Put everything back with Ctrl+Alt+R; windows come back even if WinScreen stops unexpectedly
+- Automatic updates, and settings you can move to another PC
+- About 20 MB of memory and almost no processor time while it waits in the tray
+- English, 简体中文 and 繁體中文
 
 ## Install
 
 Download **WinScreen-…-x64-Setup.exe** from [Releases](https://github.com/DarkLian/WinScreen/releases) and run it. It works on
-Windows 10 (version 2004 or later) and Windows 11, on 64-bit Intel or AMD PCs (x64).
-
-ARM PCs aren't supported for now. We don't have one to test on, so new releases have no ARM version, and earlier ARM
-versions won't get updates.
+Windows 10 (version 2004 or later) and Windows 11, on 64-bit Intel or AMD PCs (x64). See
+[what works where](docs/FEATURE_COMPATIBILITY.md) for other systems and for what each feature can and can't do.
 
 You don't need anything else installed, and it runs without administrator rights. WinScreen lives in the system tray.
-To use it on apps that run as administrator, start WinScreen as administrator too.
 
 The installer isn't signed yet, so Windows may say it doesn't recognize it. Choose **More info**, then **Run anyway**.
 To remove it, go to **Settings → Apps → Installed apps** in Windows.
