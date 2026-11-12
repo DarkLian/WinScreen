@@ -277,4 +277,161 @@ public sealed class WindowPlacementTests
         Assert.Equal("WinScreen.TestTarget", facts["Program"]);
         Assert.Equal("No", facts["Runs as administrator"]);
     }
+
+    // Between displays. These run where there is more than one display: in the test VM, its "two-displays" checkpoint
+    // has a second, virtual display to the left of the first, smaller, with no taskbar, while the first has its
+    // taskbar at the top, so the two work areas start at different offsets from their displays.
+
+    private static Screen OtherDisplay(nint window)
+    {
+        string current = Screen.FromHandle(window).DeviceName;
+        return Screen.AllScreens.First(screen => screen.DeviceName != current);
+    }
+
+    private static string DisplayOf(nint window) => Screen.FromHandle(window).DeviceName;
+
+    private static Rectangle OuterOf(nint window)
+    {
+        Assert.True(User32.GetWindowRect(window, out Rect rect));
+        return Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom);
+    }
+
+    private static void Near(Rectangle expected, Rectangle actual, int tolerance = 1, string what = "") =>
+        Assert.True(Math.Abs(actual.Left - expected.Left) <= tolerance && Math.Abs(actual.Top - expected.Top) <= tolerance &&
+            Math.Abs(actual.Width - expected.Width) <= tolerance && Math.Abs(actual.Height - expected.Height) <= tolerance,
+            $"{what}{actual}, not {expected}.");
+
+    /// <summary>Move to next display keeps the window's size and its place relative to the work area.</summary>
+    [MultiDisplayFact]
+    public void Move_to_next_display_keeps_the_size_and_relative_place()
+    {
+        using var target = new TargetProcess(Spot);
+        var placer = new WindowPlacer(new WindowController([]));
+        Screen[] screens = Screen.AllScreens;
+        Screen from = Screen.FromHandle(target.Handle);
+        Screen to = screens[PlacementGeometry.NextDisplay(Array.FindIndex(screens, screen => screen.DeviceName == from.DeviceName), screens.Length)];
+        Rectangle before = FrameOf(target.Handle);
+        placer.MoveToNextDisplay(target.Handle);
+        Assert.Equal(to.DeviceName, DisplayOf(target.Handle));
+        Near(PlacementGeometry.FrameOnDisplay(before, from.WorkingArea, to.WorkingArea, before.Size), FrameOf(target.Handle));
+        Assert.True(placer.RestorePrior(target.Handle));
+        Near(before, FrameOf(target.Handle));
+    }
+
+    /// <summary>Move to display takes the window to the display chosen, and back again.</summary>
+    [MultiDisplayFact]
+    public void Move_to_display_takes_the_window_to_the_display_chosen_and_back()
+    {
+        using var target = new TargetProcess(Spot);
+        var placer = new WindowPlacer(new WindowController([]));
+        Screen home = Screen.FromHandle(target.Handle), other = OtherDisplay(target.Handle);
+        Rectangle before = FrameOf(target.Handle);
+        placer.MoveToDisplay(target.Handle, other.DeviceName);
+        Assert.Equal(other.DeviceName, DisplayOf(target.Handle));
+        Rectangle there = FrameOf(target.Handle);
+        Assert.Equal(before.Size, there.Size);
+        Assert.True(other.WorkingArea.Contains(there), $"{there} isn't inside {other.WorkingArea}.");
+        placer.MoveToDisplay(target.Handle, home.DeviceName);
+        Assert.Equal(home.DeviceName, DisplayOf(target.Handle));
+        Near(before, FrameOf(target.Handle), 2, "Back: "); // The relative place is rounded each way.
+    }
+
+    /// <summary>Fill display, on a display the window isn't on, covers that display and comes back from it.</summary>
+    [MultiDisplayFact]
+    public void Fill_display_covers_the_display_chosen_and_comes_back()
+    {
+        using var target = new TargetProcess(Spot);
+        target.UseFrame();
+        string journal = Path.Combine(Directory.CreateTempSubdirectory("winscreen-fill").FullName, "recovery.json");
+        var windows = new WindowController([], new ChangeJournal(journal));
+        Screen other = OtherDisplay(target.Handle);
+        Rectangle before = OuterOf(target.Handle);
+        try
+        {
+            Assert.True(windows.ToggleBorderless(target.Handle, fill: true, other.Bounds));
+            Assert.Equal(other.Bounds, OuterOf(target.Handle));
+            Assert.Equal(other.DeviceName, DisplayOf(target.Handle));
+            Assert.False(windows.ToggleBorderless(target.Handle, fill: true, other.Bounds));
+            Assert.Equal(before, OuterOf(target.Handle));
+        }
+        finally { windows.RestoreAll(); }
+    }
+
+    /// <summary>
+    /// A maximized window moved to another display is maximized there, and un-maximizing it puts it at the same place
+    /// on that display. Its stored place is measured from the work area, which starts at a different offset on each.
+    /// </summary>
+    [MultiDisplayTheory(Skip = "Known bug (12 Nov 2026): Move to display leaves a maximized window maximized on its own display.")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_maximized_window_moved_to_another_display_is_maximized_there_and_comes_back_there(bool startOnOther)
+    {
+        using var target = new TargetProcess(Spot);
+        target.UseTitleBar();
+        var placer = new WindowPlacer(new WindowController([]));
+        if (startOnOther) placer.MoveToDisplay(target.Handle, OtherDisplay(target.Handle).DeviceName);
+        Rectangle usual = FrameOf(target.Handle);
+        Screen from = Screen.FromHandle(target.Handle), to = OtherDisplay(target.Handle);
+        User32.ShowWindow(target.Handle, User32.SW_MAXIMIZE);
+        Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000));
+        placer.MoveToDisplay(target.Handle, to.DeviceName);
+        Assert.True(User32.IsZoomed(target.Handle), "No longer maximized.");
+        Assert.Equal(to.DeviceName, DisplayOf(target.Handle));
+        Near(to.WorkingArea, FrameOf(target.Handle), 1, "Maximized: ");
+        User32.ShowWindow(target.Handle, User32.SW_RESTORE);
+        Assert.True(Desktop.WaitFor(() => !User32.IsZoomed(target.Handle), 2000));
+        Near(PlacementGeometry.FrameOnDisplay(usual, from.WorkingArea, to.WorkingArea, usual.Size), FrameOf(target.Handle), 1, "Restored: ");
+    }
+
+    /// <summary>Arrange on a window maximized on a display places it on that display, and Back maximizes it there again.</summary>
+    [MultiDisplayTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Arranging_a_maximized_window_places_it_on_its_own_display(bool onOther)
+    {
+        using var target = new TargetProcess(Spot);
+        target.UseTitleBar();
+        var placer = new WindowPlacer(new WindowController([]));
+        if (onOther) placer.MoveToDisplay(target.Handle, OtherDisplay(target.Handle).DeviceName);
+        Screen display = Screen.FromHandle(target.Handle);
+        Rectangle usual = FrameOf(target.Handle);
+        User32.ShowWindow(target.Handle, User32.SW_MAXIMIZE);
+        Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000));
+        Assert.Equal(display.DeviceName, DisplayOf(target.Handle));
+        placer.Align(target.Handle, WindowAnchor.BottomRight);
+        Assert.False(User32.IsZoomed(target.Handle), "Still maximized.");
+        Assert.Equal(display.DeviceName, DisplayOf(target.Handle));
+        Near(new Rectangle(PlacementGeometry.Align(usual.Size, display.WorkingArea, WindowAnchor.BottomRight), usual.Size), FrameOf(target.Handle));
+        Assert.True(placer.RestorePrior(target.Handle));
+        Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000), "Back to previous position didn't maximize it again.");
+        Assert.Equal(display.DeviceName, DisplayOf(target.Handle));
+    }
+
+    /// <summary>
+    /// Between displays at different scales the app resizes itself on the way. The window still lands at the same
+    /// relative place, and comes back at its old size. Only in the test VM, the only place a scale is ever changed.
+    /// </summary>
+    [MultiDisplayFact]
+    public void Moving_between_displays_at_different_scales_lands_where_expected()
+    {
+        if (!DisplayScale.Allowed) return; // Never on someone's own screen.
+        using var target = new TargetProcess(Spot);
+        var placer = new WindowPlacer(new WindowController([]));
+        Screen home = Screen.FromHandle(target.Handle), other = OtherDisplay(target.Handle);
+        int homeScale = DisplayScale.CurrentOf(home.DeviceName), otherScale = DisplayScale.CurrentOf(other.DeviceName);
+        try
+        {
+            DisplayScale.Set(homeScale == 150 ? 100 : 150, other.DeviceName);
+            Rectangle start = FrameOf(target.Handle);
+            placer.MoveToDisplay(target.Handle, other.DeviceName);
+            Assert.Equal(other.DeviceName, DisplayOf(target.Handle));
+            Rectangle there = FrameOf(target.Handle);
+            Assert.NotEqual(start.Size, there.Size); // The app took the other display's scale.
+            Near(PlacementGeometry.FrameOnDisplay(start, home.WorkingArea, other.WorkingArea, there.Size), there);
+            placer.MoveToDisplay(target.Handle, home.DeviceName);
+            Assert.Equal(home.DeviceName, DisplayOf(target.Handle));
+            Near(start, FrameOf(target.Handle), 2, "Back: ");
+        }
+        finally { DisplayScale.Set(otherScale, other.DeviceName); }
+    }
 }
