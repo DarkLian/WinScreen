@@ -117,8 +117,10 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 4. "Unpin this window first, then send it to the bottom." (`WindowController.SendToBottom`)
 5. "Show this window first, then try again."
 6. **Borderless** needs a normal window ("Show this window normally first"). **Fill display** works from maximized.
-   Both need a standard title bar, and both are refused while any game uses exclusive full screen
-   (`WindowAppearance.cs:100`).
+   Both also work on apps that draw their own title bar, such as browsers: Borderless keeps the window as big as it
+   shows. Borderless is refused for a window with no frame at all ("This window has no frame to take away"); Fill
+   display still works there. Both are refused while any game uses exclusive full screen (`WindowAppearance.cs`).
+   **Dark title bar** only changes a title bar Windows draws ("This window draws its own title bar").
 7. A game in exclusive full screen: "Borderless mode isn't available while a game uses exclusive full screen."
 8. Needs a standard title bar, and refuses an app that keeps its own minimum height (`errors.rollUp.*`).
 9. "Turn off borderless mode first." Also refused for **custom-shape** windows.
@@ -291,9 +293,11 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 | Cropped / rolled up / hidden + Borderless | Refused: "Show this window normally first." |
 | Shrunk + a view of the same window | The tile is closed first, then the view opens. |
 | Dark or Glass + a view of the same window | The effect is turned off first. |
+| Dark mode + Glass | Never both: turning one on turns the other off first. If the new one fails or is refused (a window that is dark already), the old one is put back (`TrayApplication.SwitchLook`). |
+| Arrange (a place or exact position) + maximized | The window comes back to its usual size in the place chosen; Back to previous position maximizes it again. |
 | View open + its source pinned or see-through | Allowed; the view shows the window as it is. |
 | Experimental turned off with effects in use | Crops, tiles, Dark and Glass are undone; any that fail are listed in one notice. |
-| Settings import | Applies only when you choose Apply or Save; the old settings are kept as a backup (five kept). |
+| Settings import | Applies at once; the old settings are kept as a backup (five kept). Other changes in Settings apply as they are made, once they settle; a shortcut that is taken goes back to the one in use, and the rest still applies. |
 | WinScreen closes or crashes with changes in place | The change journal puts windows back on the next start. Hidden windows are watched and brought back if WinScreen stops (`RecoveryWatcher`). |
 
 ## Getting a window back

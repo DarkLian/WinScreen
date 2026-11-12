@@ -109,7 +109,7 @@ An Anchor is a small floating button for a window. Press **Ctrl+Alt+A** to add o
 - **Rest the pointer** on it to see the window. Anchors of the same program show their window titles.
 
 In **Settings → Anchors**, WinScreen can add Anchors by itself for windows that are completely covered, and take them away
-again when you can see the window. You can also choose where Anchors appear, how many, their size and style, and whether
+again when you can see the window. You can also choose where Anchors appear, how many, their size and style (dark, light, or just the icon), and whether
 they move off text and pictures, and take windows with an Anchor you added off the taskbar. A small notch on an Anchor
 means its window has a view. **Hide all Anchors** in the tray menu puts them away until you show them again.
 
@@ -124,11 +124,18 @@ The toolbar's **Arrange window** button has everything that moves a window:
 - Send to the back, behind every other window.
 - Roll up to the title bar *(experimental)*.
 
+On a maximized window, a place or an exact position brings it back to its usual size there.
+
+The toolbar's **Window menu** button has the rest of the window menu: whatever isn't already a button on your toolbar,
+such as **Borderless**, **Fill display**, **Dark title bar**, **Copy** and **Open file location**.
+
 Turn on **Settings → Mouse gestures → Move and resize** to hold Alt (or Win) and drag anywhere in a window: the left button
 moves it, the right button resizes it. It works on maximized windows too, and Esc puts the window back. Drag a window to the
 left or right edge of the screen to fill that half, to a corner for a quarter, or to the top to maximize it. Turn on **Window menu** there for a menu of commands on **Ctrl+right-click**.
 
 The tray and window menus also have an **Opacity** slider, a grid of nine places to put the window (so their **Arrange window** lists only the other commands), **Borderless**, **Fill display** and **Dark title bar**. **Copy** and **Open file location** are under **More**.
+Borderless and Fill display also work on apps that draw their own title bar, such as browsers. Dark title bar only
+changes a title bar that Windows draws.
 
 <p align="center"><img src="assets/screenshots/window-menu.png" width="360" alt="A window's menu, with the Effects menu open"></p>
 
@@ -136,6 +143,8 @@ The tray and window menus also have an **Opacity** slider, a grid of nine places
 
 - **Dark mode** swaps light and dark. Windows that are already dark are left alone.
 - **Glass** makes a window's background see-through.
+
+A window has Dark mode or Glass, not both: turning one on turns the other off.
 - **Crop** keeps just the part of a window you drag over. Clicks on the rest reach what's behind.
 - **Shrink** turns a window into a small live tile. Click the tile to bring the window back.
 
@@ -150,6 +159,8 @@ Set a window up the way you like it: pinned, see-through, dark, with a view open
 Press it again on a plain window to forget the setup, or remove it in **Settings → Saved setups**.
 
 ## Settings at a glance
+
+Changes take effect as soon as you make them. The mouse wheel only scrolls; click or drag to change a setting.
 
 | Page | What you'll find |
 | --- | --- |
