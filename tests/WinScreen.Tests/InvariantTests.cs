@@ -531,7 +531,7 @@ public class InvariantTests
             MethodBody(settings, "public static string Name(AppCommand command)"),
             [CatalogKeys("en"), CatalogKeys("zh-Hans"), CatalogKeys("zh-Hant")],
             CommandCatalog.All, CommandCatalog.Everywhere,
-            MethodBody(tray, "void RunOnDisplay("), MethodBody(tray, "void RunEverywhere("));
+            WithoutComments(Source("Tray/TrayApplication.Commands.cs")), MethodBody(tray, "void RunEverywhere("));
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
     }
 

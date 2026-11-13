@@ -12,7 +12,7 @@ using WinScreen.Updates;
 namespace WinScreen.Tray;
 
 /// <summary>The running app: a tray icon, the global hotkeys, the toolbar, and what each command does.</summary>
-public sealed class TrayApplication : ApplicationContext
+public sealed partial class TrayApplication : ApplicationContext
 {
     private const int MenuTextLimit = 60;
     private const int BalloonMilliseconds = 3000;
@@ -20,6 +20,7 @@ public sealed class TrayApplication : ApplicationContext
 
     private readonly WindowController _windows;
     private readonly WindowPlacer _placer;
+    private readonly CommandTable _commands;
     private readonly MouseGestures _modifierDrag;
     private nint _hookForeground;
     private bool _hookForegroundExcluded;
@@ -67,6 +68,7 @@ public sealed class TrayApplication : ApplicationContext
     {
         _windows = windows;
         _placer = new WindowPlacer(windows);
+        _commands = new CommandTable(CommandAreas());
         _modifierDrag = new MouseGestures(CanDrag, _placer.Remember);
         _settings = settings;
         Pip.PipHoverApps.Preferences = settings.PipHover;
@@ -693,27 +695,7 @@ public sealed class TrayApplication : ApplicationContext
     private bool IsAvailable(AppCommand command) =>
         _settings.ExperimentalFeatures || !CommandCatalog.IsExperimental(command);
 
-    private bool IsOn(AppCommand command, nint window)
-    {
-        return command switch
-        {
-            AppCommand.TogglePin => _windows.IsPinned(window),
-            AppCommand.ToggleClickThrough => _windows.IsClickThrough(window),
-            AppCommand.OpenPip => _pips.ContainsKey(window),
-            AppCommand.ToggleDark => _dark.IsDark(window) || _content.Has(window, Glass.ContentLook.Dark),
-            AppCommand.ToggleGlass => _windows.IsGlass(window) || _content.Has(window, Glass.ContentLook.Glass),
-            AppCommand.ToggleAnchor => _anchors.Has(window),
-            AppCommand.ToggleDefaultOpacity => _windows.OpacityOf(window) < 255,
-            AppCommand.SaveWindowSetup => _settings.SetupForWindow(window) is not null,
-            AppCommand.ToggleShrink => _shrunk.ContainsKey(window),
-            AppCommand.ToggleCrop => _windows.IsCropped(window),
-            AppCommand.ToggleRollUp => _windows.IsRolledUp(window),
-            AppCommand.ToggleBorderless => _windows.IsBorderless(window) && !_windows.IsBorderlessFilled(window),
-            AppCommand.ToggleBorderlessFill => _windows.IsBorderlessFilled(window),
-            AppCommand.ToggleDarkTitleBar => _windows.IsDarkTitleBar(window),
-            _ => false,
-        };
-    }
+    private bool IsOn(AppCommand command, nint window) => _commands.IsOn(command, window);
 
     /// <summary>A hotkey pressed on a PiP view or Shrink tile means the window that view stands for.</summary>
     private nint TargetOf(nint foreground)
@@ -1173,30 +1155,27 @@ public sealed class TrayApplication : ApplicationContext
     private void Run(AppCommand command, nint window)
         => RunOnDisplay(command, window, null);
 
-    /// <summary>
-    /// How a command went, for the log. Written before it runs: Started means it got past every check, and a
-    /// failure while running adds a second line, Failed.
-    /// </summary>
-    private enum CommandOutcome { Started, ClosedLatestView, ExclusiveFullScreen, PausedInFullScreen, Refused, NotTurnedOn, Failed }
-
     private static void LogCommand(AppCommand command, nint window, CommandOutcome outcome) =>
         Diagnostics.Log.Event("command", ("name", command), ("outcome", outcome),
             ("program", window == 0 ? Diagnostics.LogValue.Program("") : Diagnostics.LogValue.ProgramOf(window)));
 
-    private void RunOnDisplay(AppCommand command, nint window, Rectangle? display)
+    /// <summary>
+    /// The one way every command runs, from hotkeys, menus and the toolbar: the checks in a fixed order, then the
+    /// command's definition (<see cref="CommandTable"/>). Says how it went.
+    /// </summary>
+    private CommandOutcome RunOnDisplay(AppCommand command, nint window, Rectangle? display)
     {
-        if (CommandCatalog.Everywhere.Contains(command))
+        if (!_commands.TryGet(command, out CommandDefinition definition))
+            return CommandOutcome.Refused;
+        switch (definition.Target)
         {
-            LogCommand(command, 0, CommandOutcome.Started);
-            RunEverywhere(command);
-            return;
-        }
-        if (command == AppCommand.ShowWindowMenu)
-        {
-            Point point = Cursor.Position;
-            nint underPointer = User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y }), User32.GA_ROOT);
-            ShowWindowMenu(underPointer, point);
-            return;
+            case CommandTarget.EveryWindow:
+                LogCommand(command, 0, CommandOutcome.Started);
+                definition.Run(0, null);
+                return CommandOutcome.Started;
+            case CommandTarget.UnderPointer:
+                definition.Run(0, null);
+                return CommandOutcome.Started;
         }
         if (command == AppCommand.RestoreWindow &&
             (window == 0 || !_windows.CanControl(window)) && _lastIdentity?.IsSameWindow() == true)
@@ -1205,175 +1184,50 @@ public sealed class TrayApplication : ApplicationContext
             if (window == 0 || pid == Environment.ProcessId) window = _lastIdentity.Window;
         }
 
-        bool recovery = command is AppCommand.RestoreAll or AppCommand.RestoreWindow;
+        bool recovery = definition.Recovers;
         switch (recovery ? FullScreenAction.Run : FullScreenDecision(command, window))
         {
             case FullScreenAction.CloseLatestView:
                 LogCommand(command, window, CommandOutcome.ClosedLatestView);
                 _viewsInOrder[^1].Close();
-                return;
+                return CommandOutcome.ClosedLatestView;
             case FullScreenAction.ExplainExclusive:
                 LogCommand(command, window, CommandOutcome.ExclusiveFullScreen);
-                Alert(T("errors.operation.title"),
-                    T("errors.fullScreen.exclusiveView"));
-                return;
+                Alert(T("errors.operation.title"), T("errors.fullScreen.exclusiveView"));
+                return CommandOutcome.ExclusiveFullScreen;
             case FullScreenAction.Refuse:
                 LogCommand(command, window, CommandOutcome.PausedInFullScreen);
                 Alert(T("errors.operation.title"), T("errors.fullScreen.paused"));
-                return;
+                return CommandOutcome.PausedInFullScreen;
         }
 
-        if (command == AppCommand.PickPipSource)
-        {
-            LogCommand(command, 0, CommandOutcome.Started);
-            ShowPicker();
-            return;
-        }
-
-        if (!recovery && _windows.Refusal(window) is { } refusal)
+        if (definition.Target == CommandTarget.NoWindow) window = 0;
+        else if (!recovery && _windows.Refusal(window) is { } refusal)
         {
             LogCommand(command, window, CommandOutcome.Refused);
             Alert(T("errors.operation.title"), refusal);
-            return;
-        }
-
-        if (CommandCatalog.AnchorOf(command) is { } anchor)
-        {
-            LogCommand(command, window, CommandOutcome.Started);
-            Attempt(() => _placer.Align(window, anchor));
-            return;
+            return CommandOutcome.Refused;
         }
 
         if (!recovery && !IsAvailable(command))
         {
             LogCommand(command, window, CommandOutcome.NotTurnedOn);
             Alert(T("errors.operation.title"), T("errors.experimental.enableFirst"));
-            return;
+            return CommandOutcome.NotTurnedOn;
         }
 
         LogCommand(command, window, CommandOutcome.Started);
         try
         {
-            switch (command)
-            {
-                case AppCommand.TogglePin:
-                    Confirm(_windows.TogglePin(window) ? T("status.pinned") : T("status.unpinned"), WindowInfo.Title(window));
-                    break;
-                case AppCommand.OpacityUp:
-                    ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(1)));
-                    break;
-                case AppCommand.OpacityDown:
-                    ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(-1)));
-                    break;
-                case AppCommand.ToggleDefaultOpacity:
-                    ShowOpacity(window, _windows.ToggleDefaultOpacity(window));
-                    break;
-                case AppCommand.ToggleClickThrough:
-                    if (_windows.ToggleClickThrough(window))
-                        Alert(T("status.clickThroughOn"),
-                            T("window.clickThrough.recoveryHelp"),
-                            ToolTipIcon.Info);
-                    else
-                        Confirm(T("status.clickThroughOff"), WindowInfo.Title(window));
-                    break;
-                case AppCommand.OpenPip:
-                    if (_pips.TryGetValue(window, out var existing))
-                    {
-                        existing.Close();
-                        break;
-                    }
-
-                    OpenViewOf(window);
-                    break;
-                case AppCommand.Arrange:
-                    ShowArrangeMenu(window);
-                    break;
-                case AppCommand.MoveToNextDisplay:
-                    _placer.MoveToNextDisplay(window);
-                    break;
-                case AppCommand.PlaceExactly:
-                    PlaceExactly(window);
-                    break;
-                case AppCommand.RestorePlacement:
-                    if (!_placer.RestorePrior(window))
-                        Alert(CommandCatalog.Name(command), T("errors.placement.unchanged"), ToolTipIcon.Info);
-                    break;
-                case AppCommand.SendToBottom:
-                    _windows.SendToBottom(window);
-                    break;
-                case AppCommand.ShowWindowInfo:
-                    ShowWindowInfo(window);
-                    break;
-                case AppCommand.ToggleRollUp:
-                    _windows.ToggleRollUp(window);
-                    break;
-                case AppCommand.ToggleBorderless:
-                case AppCommand.ToggleBorderlessFill:
-                    _windows.ToggleBorderless(window, command == AppCommand.ToggleBorderlessFill, display);
-                    break;
-                case AppCommand.ToggleDarkTitleBar:
-                    _windows.ToggleDarkTitleBar(window);
-                    break;
-                case AppCommand.ToggleDark:
-                    ToggleDark(window);
-                    break;
-                case AppCommand.ToggleGlass:
-                    ToggleGlass(window);
-                    break;
-                case AppCommand.ToggleAnchor:
-                    _anchors.Toggle(window);
-                    break;
-                case AppCommand.SaveWindowSetup:
-                    SaveSetup(window);
-                    break;
-                case AppCommand.ToggleShrink:
-                    Shrink(window);
-                    break;
-                case AppCommand.ToggleCrop:
-                    ToggleCrop(window);
-                    break;
-                case AppCommand.RestoreAll:
-                    CancelCrop();
-                    foreach (PipWindow preview in _viewsInOrder.ToArray()) preview.Close();
-                    foreach (var shrunk in _shrunk.Values.ToArray()) shrunk.Close();
-                    _dark.TurnAllOff();
-                    _content.TurnAllOff();
-                    _anchors.RemoveAll();
-                    int failed = _windows.RestoreAll();
-                    if (failed > 0)
-                        Alert(T("errors.recovery.someFailed"),
-                            string.Format(T("errors.window.changeRefusedCount"), failed) + Environment.NewLine +
-                            string.Join(Environment.NewLine, _windows.RestoreFailures));
-                    else if (_windows.RecoveryBlocked)
-                        Alert(T("recovery.attention"), _windows.RecoveryWarning!);
-                    else
-                        Confirm(T("window.restoreAll"), T("recovery.restored"));
-                    break;
-                case AppCommand.RestoreWindow:
-                    if (!HasAnythingToRestore(window))
-                    {
-                        Alert(T("window.restore"), T("errors.window.unchanged"), ToolTipIcon.Info);
-                        break;
-                    }
-
-                    if (_croppingWindow == window) CancelCrop();
-                    if (_pips.TryGetValue(window, out var view)) view.Close();
-                    if (_shrunk.TryGetValue(window, out var shrunkTile)) shrunkTile.Close();
-                    if (_dark.IsDark(window)) _dark.Toggle(window);
-                    _content.TurnOff(window);
-                    if (_anchors.Has(window)) _anchors.Toggle(window);
-                    if (_windows.RestoreWindow(window))
-                        Confirm(T("window.restore"), T("recovery.restored"));
-                    else
-                        Alert(T("window.restore"), string.Join(Environment.NewLine, _windows.RestoreFailures));
-                    break;
-            }
+            definition.Run(window, display);
+            return CommandOutcome.Started;
         }
         catch (Exception failure) when (IsExpected(failure))
         {
             LogCommand(command, window, CommandOutcome.Failed);
             Diagnostics.Log.Error("command.failed", failure);
             Alert(T("errors.operation.title"), failure.Message);
+            return CommandOutcome.Failed;
         }
     }
 
