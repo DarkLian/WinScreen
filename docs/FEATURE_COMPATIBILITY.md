@@ -98,10 +98,10 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **Pin on top** (Ctrl+Alt+T) | ✅ | ⚠️ ¹ | ✅ ¹³ | ✅ | ⚠️ ² | — | ✅ | ✅ |
 | **Opacity** (Ctrl+Alt+Up/Down, O) | ✅ | ✅ | ✅ ¹³ | ✅ | ⚠️ ² | ✅ | ✅ ³ | ✅ |
 | **Click-through** (Ctrl+Alt+C) | ✅ | ✅ | ✅ ¹³ | ✅ | ⚠️ ² | ✅ | ✅ | — |
-| **Send to bottom** | ✅ | ✅ | ✅ ¹³ | ✅ | ⚠️ ² | ❌ ⁴ | ❌ ⁵ | ✅ |
-| **Borderless / Fill display** | ✅ | ⚠️ ⁶ | ❌ | — | ❌ ⁷ | ✅ | ❌ | ✅ |
+| **Send to bottom** | ✅ | ✅ | ✅ ¹³ | ✅ | ⚠️ ² | ✅ ⁴ | ❌ ⁵ | ✅ |
+| **Borderless / Fill display** | ✅ | ⚠️ ⁶ | ✅ ¹⁸ | — | ❌ ⁷ | ✅ | ❌ | ✅ |
 | **Dark title bar** | ✅ | ✅ | ✅ ¹³ | ❌ ¹⁴ | ⚠️ ² | ✅ | ✅ | ✅ |
-| **Roll up** 🧪 | ✅ ⁸ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ |
+| **Roll up** 🧪 | ✅ ⁸ | ✅ ¹⁹ | ✅ ¹⁹ | ❌ | ❌ | ✅ | ❌ | ✅ |
 | **Crop** 🧪 | ✅ ¹⁵ | ✅ ¹⁵ | ⚠️ ¹⁷ | ❌ ⁹ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
 | **Dark** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ⚠️ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
 | **Glass** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ⚠️ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
@@ -114,7 +114,8 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 2. Allowed by the window checks, but with **Pause in full screen** on, the hotkey is refused while that app is the
    full-screen one (`FullScreenPolicy`). With the pause off, it runs.
 3. Changes the level that comes back when the window is shown again.
-4. "Unpin this window first, then send it to the bottom." (`WindowController.SendToBottom`)
+4. The window stops being kept on top first: WinScreen's pin comes off, and a window that keeps itself on top
+   loses that until it's put back (`WindowController.SendToBottom`).
 5. "Show this window first, then try again." A hidden window is parked out of sight, so Crop, Dark and Glass,
    which work from what is on screen, wait for it to be shown.
 6. **Borderless** needs a normal window ("Show this window normally first"). **Fill display** works from maximized.
@@ -137,6 +138,10 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
     borderless mode first." Colour Glass and Dark mode's plain filter work, and the filter follows the window.
 17. The window comes back first, so the part to keep can be chosen over it. A crop made while it's minimized (by
     a saved setup or recovery, say) is there when it comes back.
+18. The window comes back first, as its own Restore would bring it back. One that comes back maximized then follows
+    note 6.
+19. The window comes back to its usual size first, then rolls up. One that was maximized is maximized again when
+    it's rolled down.
 
 **Own transparency** windows (the app made itself see-through): Opacity, Click-through, hiding and Glass are refused
 with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows/WindowController.cs`).
@@ -158,12 +163,12 @@ something away, so they also work while a full-screen app runs (`CommandCatalog.
 
 | Feature | Normal | Maximized | Minimized | Snapped by WinScreen | Borderless | Fills the screen | Hidden by WinScreen | Elevated |
 |---|---|---|---|---|---|---|---|---|
-| **Align** (corners, edges, center) | ✅ | ✅ ¹ | ⚠️ ¹ | ✅ | ✅ | ⚠️ ² | ❌ | ❌ |
-| **Move to next display** | ✅ | ✅ ¹ | ⚠️ ¹ | ✅ | ✅ | ⚠️ ² | ❌ | ❌ |
-| **Place exactly** | ✅ | ✅ ¹ | ⚠️ ¹ | ✅ | ✅ | ⚠️ ² | ❌ | ❌ |
-| **Put back earlier position** | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ ² | ❌ | ❌ |
-| **Alt+left drag (move)** | ✅ | ✅ ³ | ❌ | ✅ ⁴ | ✅ | ❌ | ❌ | ❌ |
-| **Alt+right drag (resize)** | ✅ | ✅ ⁵ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Align** (corners, edges, center) | ✅ | ✅ ¹ | ⚠️ ¹ | ✅ | ✅ | ⚠️ ² | ❌ | ⚠️ ⁸ |
+| **Move to next display** | ✅ | ✅ ¹ | ⚠️ ¹ | ✅ | ✅ | ⚠️ ² | ❌ | ⚠️ ⁸ |
+| **Place exactly** | ✅ | ✅ ¹ | ⚠️ ¹ | ✅ | ✅ | ⚠️ ² | ❌ | ⚠️ ⁸ |
+| **Put back earlier position** | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ ² | ❌ | ⚠️ ⁸ |
+| **Alt+left drag (move)** | ✅ | ✅ ³ | ❌ | ✅ ⁴ | ✅ | ❌ | ❌ | ⚠️ ⁸ |
+| **Alt+right drag (resize)** | ✅ | ✅ ⁵ | ❌ | ✅ | ✅ | ❌ | ❌ | ⚠️ ⁸ |
 | **Snap at screen edges** (during Alt+left drag) | ⚠️ ⁶ | ⚠️ ⁶ | — | ⚠️ ⁶ | ❌ ⁷ | — | — | — |
 
 1. A minimized window stays minimized; it's given a new place to come back to (`WindowPlacer.PlaceHidden`,
@@ -188,6 +193,7 @@ something away, so they also work while a full-screen app runs (`CommandCatalog.
    display.
 7. Borderless takes the resize frame away, so the window doesn't snap; it stays where it's let go. Alt+drag still
    moves it and Alt+right drag still resizes it.
+8. Only when WinScreen runs as administrator too (**Settings → General → Run as administrator**).
 
 **Alt-drag in more detail**
 
@@ -197,7 +203,7 @@ something away, so they also work while a full-screen app runs (`CommandCatalog.
 | App that's slow to redraw | Moves are sent one at a time; the next waits until the app has caught up (up to 50 ms), so the window can't keep moving after you let go. | `MouseGestures.Send`; tested by `A_fast_drag_of_a_slow_app_catches_up_as_soon_as_its_let_go_and_then_stays` |
 | App that's hung | Moves are still asked for but not waited on. Coming out of maximized and snapping are skipped. | `IsHungAppWindow` checks in `MouseGestures` |
 | **Esc**, with or without Alt or Win still held | Puts the window back where it started, maximized again if it was. | `EscapeModifiers` in `MouseGestures` |
-| Windows removes the mouse hook (it does this silently when a hook is slow) | WinScreen notices input without hook activity and puts the hook back within a few seconds. A drag in progress at that moment may keep following the pointer until the next click. **Known weakness.** | `TrayApplication.FollowModifierHook`, `HookSilenceSeconds` |
+| Windows removes the mouse hook (it does this silently when a hook is slow) | WinScreen notices input without hook activity and puts the hook back within a few seconds. A drag in progress at that moment ends where the window was last moved, as if let go there. | `TrayApplication.FollowModifierHook`, `MouseGestures.Reinstall`; tested by `A_hook_lost_in_the_middle_of_a_drag_is_put_back_and_the_next_drag_works` |
 | Foreground app fills the screen and isn't maximized (a game) | The hook isn't installed at all while it's in front. | `ModifierHookPolicy.ShouldRun` |
 | Maximized app with an auto-hidden taskbar | Counts as maximized, not as full screen, so gestures work. | `TrayApplication.FollowModifierHook` |
 
@@ -234,7 +240,7 @@ something away, so they also work while a full-screen app runs (`CommandCatalog.
 | Parking and display changes | ✅ / ❔ | A hidden original is parked on an outer edge of its own monitor when it has one, so it keeps its scale. When the displays change (a monitor added or removed, a resolution change), it is parked again past an outer edge of the new layout and the view is kept on a screen. Tested by reproducing the change's effect on one display; real mixed-scale monitors haven't been tested. |
 | Apps that refuse to be see-through | ⚠️ | Some apps (WPF ones, such as PowerShell ISE) drop the style that makes a window see-through, so they can't be hidden, kept updating or used directly. The view says so and leaves the app as it was; a view of it still works while it is on screen. Other ways to hide them were measured and don't work: off screen, behind the taskbar edge or with an empty window region, a WPF window stops drawing and its view freezes (both capture methods). Its mouse input also needs the real pointer over the spot, which posted messages can't give. |
 
-**Apps that don't work through a view.** No single way of sending input works with every app: Windows gives real mouse and keyboard input only to the window under the pointer, and each app reads input in its own way. So every app has an answer, and it is not always the view. **Use it, then hide again**, under **Original window** in the menu of any view whose original is hidden, shows the original where it was, to be used as it is, and hides it again once another window is in use (its own dialogs and menus count as still using it). Nothing is sent to the app. Programs given **Show original** under **Settings → Picture-in-Picture → Using apps through a view** do this on a click on their view, and Interactive PiP sends them nothing. Minimizing the view, or choosing anything else about the original, leaves it shown. Verified on Windows 11 x64 with a test window: shown at its place, kept while in use, hidden and parked again after another window is activated, Interactive PiP restored.
+**Apps that don't work through a view.** No single way of sending input works with every app: Windows gives real mouse and keyboard input only to the window under the pointer, and each app reads input in its own way. So every app has an answer, and it is not always the view. **Use it, then hide again**, under **Original window** in the menu of any view whose original is hidden, shows the original where it was, to be used as it is, and hides it again once another window is in use (its own dialogs and menus count as still using it). Nothing is sent to the app. Programs given **Show original** under **Settings → Picture-in-Picture → Using apps through a view** do this on a click on their view, and Interactive PiP sends them nothing. Java apps always do, listed or not. Minimizing the view, or choosing anything else about the original, leaves it shown. Verified on Windows 11 x64 with a test window: shown at its place, kept while in use, hidden and parked again after another window is activated, Interactive PiP restored.
 
 Games are not supported through a view and none has been tested; use the original for those.
 
@@ -293,7 +299,7 @@ Every press gets one outcome: delivered, reached a popup, moved the view, a capt
 | PowerShell ISE (WPF) | ❌ | Can't be hidden or used directly (see above); a view of it works while it is on screen |
 | Word (Microsoft 365) | ✅ | A click puts the caret there, typing, saving, its right-click menu. A double-click to select a word works most of the time: Word sometimes opens a small window of its own right after the first click, and the second click can land on it |
 | Excel (Microsoft 365) | ⚠️ | A click picks the cell, typing, saving, its right-click menu. A double-click to edit a cell doesn't work, because Excel won't start editing in a cell while its window is hidden past the edge of the screen. Dragging doesn't work either: Excel checks that the mouse button is really held down on its own window. For these, give Excel **Show original** (see "Apps that don't work through a view" above) |
-| IntelliJ IDEA (Java) | ❌ | Shown in the view, but clicks through it have no effect: Java apps ignore clicks while their window is hidden past the edge of the screen. Give it **Show original** (see "Apps that don't work through a view" above). Rider uses the same Java interface and is expected to behave the same; it wasn't tested on its own |
+| IntelliJ IDEA (Java) | ❌ | Can't be used through a view: Java apps ignore clicks while their window is hidden past the edge of the screen, so a view of any Java app (recognised by its window, `PipOriginalApps.IsJavaWindow`) sends it nothing: a click shows the original, as **Show original** does, without adding it in Settings. Tested by `IntelliJ_shows_its_original_on_a_click_on_its_view_and_works_there`, not yet run. Rider uses the same Java interface and is expected to behave the same; it wasn't tested on its own |
 | LTspice (Win32) | ✅ | Its menu bar: a click on a menu opens it beside the view (a standard menu bar's menus are opened as its access key would open them, since such a bar only follows a button that is really down over it). Its right-click menu |
 | Claude, ChatGPT (Electron) | ✅ | Recognised as Electron apps; pointer moves and the right-click menu through the view, and the window goes back where it was. ChatGPT was also checked with Enhanced hover on. Only an app already open was used: nothing was typed into it |
 
@@ -312,8 +318,8 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 | **Anchor** (manual) | ✅ | ✅ | ✅ ¹ | ⚠️ ² | ❌ | ❌ ⁶ |
 | **Automatic Anchors** | ✅ | ✅ | ✅ ¹ | ⚠️ ² | ⚠️ ³ | ❌ ⁶ |
 | **Title-bar toolbar** | ✅ | ✅ | — | ❌ | ❌ | ❌ ⁶ |
-| **Window menu gesture** (Ctrl+right click) | ✅ | ✅ | ❌ | ❌ | ⚠️ ⁴ | ❌ |
-| **Ctrl+Alt+wheel opacity** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Window menu gesture** (Ctrl+right click) | ✅ | ✅ | ❌ | ❌ | ⚠️ ⁴ | ⚠️ ⁷ |
+| **Ctrl+Alt+wheel opacity** | ✅ | ✅ | ❌ | ❌ | ❌ | ⚠️ ⁷ |
 | **Saved setups** | ✅ ⁵ | ✅ | — | ⚠️ ² | ❌ | ❌ |
 
 1. Clicking the Anchor brings a minimized window back (`Anchors/AnchorButton.cs`).
@@ -325,6 +331,7 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 6. Unless WinScreen runs as administrator too. Then the toolbar isn't shown on the app and no automatic Anchor is
    made for it, as mouse gestures leave it alone; a manual Anchor says to start WinScreen as administrator. Tested
    with a real administrator app on Windows 11.
+7. Only when WinScreen runs as administrator too.
 
 ## Combinations
 
@@ -358,7 +365,6 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 
 - **Win 11 Snap Layouts panel** and Snap Assist aren't available to Alt-drag (no public API). Edge snapping is
   WinScreen's own.
-- **A lost mouse hook mid-drag** can leave a window following the pointer until the next click.
 - **Elevated windows:** most changes find out they can't reach one when they try, and then say so; gestures, the
   toolbar and automatic Anchors check first and stay away. Running WinScreen as administrator lifts this, and with
   **Run as administrator** on, starting with Windows keeps those rights.
