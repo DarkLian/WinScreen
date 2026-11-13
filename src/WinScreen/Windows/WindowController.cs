@@ -330,14 +330,17 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 return false;
             }
 
-            if (state.Hidden || state.PlacementBeforePeek is not null || state.Cropped || state.PlacementBeforeBorderless is not null ||
-                User32.IsIconic(window) || User32.IsZoomed(window))
+            if (state.Hidden || state.PlacementBeforePeek is not null || state.Cropped || state.PlacementBeforeBorderless is not null)
                 throw new WindowOperationException(T("errors.window.showNormally"));
             if ((User32.GetWindowLongPtr(window, User32.GWL_STYLE) & User32.WS_CAPTION) != User32.WS_CAPTION)
                 throw new WindowOperationException(
                     string.Format(T("errors.rollUp.noCaption"), WindowInfo.Title(window)));
 
+            // Only a window at its usual size can be rolled up, so a minimized or maximized one comes back to that
+            // first; one that was maximized is maximized again when it's rolled down.
+            bool wasMaximized = BringBackToNormal(window);
             state.PlacementBeforeRollUp = ReadPlacement(window);
+            if (wasMaximized) state.PlacementBeforeRollUp = state.PlacementBeforeRollUp.Value with { ShowCommand = ShowMaximized };
             try
             {
                 Prepare(window, state); // Journals where it came from before anything changes.
@@ -380,8 +383,30 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         Rect normal = placement.NormalPosition;
         placement.NormalPosition = new Rect(normal.Left, normal.Top, normal.Right,
             normal.Top + before.NormalPosition.Bottom - before.NormalPosition.Top);
+        if (before.ShowCommand == ShowMaximized && placement.ShowCommand != ShowMinimized)
+            placement.ShowCommand = ShowMaximized;
         WritePlacement(window, placement);
         state.PlacementBeforeRollUp = null;
+    }
+
+    private const int ShowMinimized = 2, ShowMaximized = 3, RestoreToMaximized = 2;
+
+    /// <summary>
+    /// Brings a minimized or maximized window back to its usual size and place, as its own Restore would. Returns
+    /// whether it was maximized (or minimized from maximized), so a change can put that back later.
+    /// </summary>
+    private bool BringBackToNormal(nint window)
+    {
+        bool maximized = User32.IsZoomed(window) ||
+                         (User32.IsIconic(window) && (ReadPlacement(window).Flags & RestoreToMaximized) != 0);
+        if (!User32.IsIconic(window) && !User32.IsZoomed(window)) return false;
+        EnsureResponsive(window);
+        _changed[window].Identity.Require();
+        for (int i = 0; i < 2 && (User32.IsIconic(window) || User32.IsZoomed(window)); i++)
+            User32.ShowWindow(window, User32.SW_RESTORE); // Minimized from maximized takes two: back to maximized, then normal.
+        if (User32.IsIconic(window) || User32.IsZoomed(window))
+            throw new WindowOperationException(T("errors.window.showNormally"));
+        return maximized;
     }
 
     /// <summary>The windows that are pinned right now and can be seen, for the highlight.</summary>
@@ -557,19 +582,34 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 : (byte)255;
     }
 
-    /// <summary>Puts a window behind all others. A pinned window stays in front of them by definition, so it's refused.</summary>
+    /// <summary>
+    /// Puts a window behind all others. A window kept on top can't be at the bottom, so it stops being kept on top:
+    /// WinScreen's pin comes off, and a window that keeps itself on top loses that until it's put back.
+    /// </summary>
     public void SendToBottom(nint window)
     {
         if (Refusal(window) is { } refusal)
             throw new WindowOperationException(refusal);
         if (IsHidden(window) || IsPeeking(window))
             throw new WindowOperationException(T("errors.window.showFirst"));
-        if ((User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0)
-            throw new WindowOperationException(T("errors.window.unpinFirst"));
         EnsureResponsive(window);
-        const uint flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
-        if (!User32.SetWindowPos(window, User32.HWND_BOTTOM, 0, 0, 0, 0, flags))
-            throw Failure(T("actions.move"), window);
+        lock (_gate)
+        {
+            // A pin paused while maximized has no topmost bit right now, but would come back on top once restored.
+            bool pinned = _changed.TryGetValue(window, out ChangedWindow? known) && known.Identity.Matches() && known.Pinned;
+            if (pinned || (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0)
+            {
+                ChangedWindow state = Track(window);
+                Prepare(window, state, User32.WS_EX_TOPMOST); // Recorded, so Put back makes it topmost again.
+                SetTopmost(window, false, state.Identity);
+                state.Pinned = false;
+                state.PinPaused = false;
+                SaveJournal();
+            }
+            const uint flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
+            if (!User32.SetWindowPos(window, User32.HWND_BOTTOM, 0, 0, 0, 0, flags))
+                throw Failure(T("actions.move"), window);
+        }
     }
 
     /// <summary>Makes a solid window as see-through as the default level, or a see-through one solid.</summary>

@@ -147,7 +147,6 @@
   "errors.window.showNormally": "请先正常显示此窗口，然后重试。",
   "errors.window.targetUnavailable": "该窗口已不可用。请点击目标窗口后重试。",
   "errors.window.unchanged": "WinScreen 未更改此窗口。",
-  "errors.window.unpinFirst": "请先取消置顶此窗口，然后再置于底层。",
   "errors.window.unresponsive": "窗口暂时没有响应，请稍后重试。",
   "everywhere.anchors": "隐藏所有浮动锚点",
   "everywhere.anchors.hidden": "浮动锚点会保持隐藏，直到你再次显示它们或 WinScreen 重新启动。",

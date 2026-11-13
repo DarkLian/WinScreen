@@ -394,4 +394,118 @@ public sealed class StateMatrixTests
         }
         finally { windows.RestoreAll(); }
     }
+
+    // ---- Brought back first ----
+
+    /// <summary>
+    /// Roll up on a minimized or maximized window brings it back to its usual size first, then rolls it up. One that
+    /// was maximized is maximized again when it's rolled down.
+    /// </summary>
+    [Theory]
+    [InlineData("minimized")]
+    [InlineData("maximized")]
+    public void Roll_up_brings_a_minimized_or_maximized_window_back_first(string state)
+    {
+        using var target = new TargetProcess(Spot);
+        target.UseFrame();
+        nint window = target.Handle;
+        var windows = new WindowController([]);
+        int height = FrameOf(window).Height;
+        if (state == "minimized") Minimized(window);
+        else Maximized(window);
+        try
+        {
+            Assert.True(windows.ToggleRollUp(window));
+            Assert.False(User32.IsIconic(window));
+            Assert.False(User32.IsZoomed(window));
+            Assert.True(FrameOf(window).Height < height / 2, $"Not rolled up: {FrameOf(window)}");
+            Assert.False(windows.ToggleRollUp(window));
+            if (state == "maximized")
+                Assert.True(Desktop.WaitFor(() => User32.IsZoomed(window), 2000), "Rolled down, it wasn't maximized again.");
+            else
+                Assert.True(Desktop.WaitFor(() => Math.Abs(FrameOf(window).Height - height) <= 1, 2000), $"Rolled down to {FrameOf(window)}.");
+        }
+        finally { windows.RestoreAll(); }
+    }
+
+    /// <summary>Borderless on a minimized window brings it back first, then takes its frame away.</summary>
+    [Fact]
+    public void Borderless_brings_a_minimized_window_back_first()
+    {
+        using var target = new TargetProcess(Spot);
+        target.UseFrame();
+        nint window = target.Handle;
+        var windows = new WindowController([]);
+        Minimized(window);
+        try
+        {
+            Assert.True(windows.ToggleBorderless(window));
+            Assert.False(User32.IsIconic(window));
+            Assert.True(windows.IsBorderless(window));
+            Assert.False(windows.ToggleBorderless(window));
+        }
+        finally { windows.RestoreAll(); }
+    }
+
+    /// <summary>
+    /// Send to bottom takes WinScreen's pin off a pinned window, and takes "always on top" from a window that keeps
+    /// itself there. Put back gives the second its own "always on top" again; the first stays unpinned.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Send_to_bottom_takes_a_window_off_the_top_first(bool pinnedByWinScreen)
+    {
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(Spot);
+        target.UseFrame();
+        nint window = target.Handle;
+        Desktop.Activate(window);
+        var windows = new WindowController([]);
+        try
+        {
+            if (pinnedByWinScreen) Assert.True(windows.TogglePin(window));
+            else Assert.True(User32.SetWindowPos(window, User32.HWND_TOPMOST, 0, 0, 0, 0, 0x13)); // The app's own.
+            Assert.True(Topmost(window));
+            windows.SendToBottom(window);
+            Assert.False(Topmost(window), "Still on top.");
+            Assert.False(windows.IsPinned(window));
+            windows.RestoreAll();
+            Assert.Equal(!pinnedByWinScreen, Topmost(window));
+        }
+        finally
+        {
+            windows.RestoreAll();
+            User32.SetWindowPos(window, User32.HWND_NOTOPMOST, 0, 0, 0, 0, 0x13);
+        }
+    }
+
+    /// <summary>
+    /// A pin paused while the window is maximized leaves no "always on top" on it for the moment. Send to bottom still
+    /// takes the pin off, or the window would come back on top as soon as it's restored.
+    /// </summary>
+    [Fact]
+    public void Send_to_bottom_takes_off_a_pin_paused_while_maximized()
+    {
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(Spot);
+        target.UseFrame();
+        nint window = target.Handle;
+        Desktop.Activate(window);
+        var windows = new WindowController([]);
+        try
+        {
+            Assert.True(windows.TogglePin(window));
+            Maximized(window);
+            windows.Refresh(new Point(-30000, -30000), false, pausePinWhenMaximized: true);
+            Assert.False(Topmost(window), "The pin didn't pause.");
+            windows.SendToBottom(window);
+            Assert.False(windows.IsPinned(window));
+            Restored(window);
+            Desktop.Activate(window);
+            windows.Refresh(new Point(-30000, -30000), false, pausePinWhenMaximized: true);
+            Assert.False(Topmost(window), "Back on top after it was restored.");
+        }
+        finally { windows.RestoreAll(); }
+    }
 }

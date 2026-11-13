@@ -115,6 +115,34 @@ public sealed class RollUpTests
         Assert.False(windows.IsRolledUp(target.Handle));
     }
 
+    /// <summary>A window maximized before it was rolled up comes back maximized after a crash, and the journal holds.</summary>
+    [Fact]
+    public void A_killed_copy_puts_a_window_rolled_up_from_maximized_back_maximized()
+    {
+        using var target = new TargetProcess(Spot);
+        target.UseFrame();
+        string path = JournalPath();
+        int height = RectOf(target.Handle).Height;
+        User32.ShowWindow(target.Handle, User32.SW_MAXIMIZE);
+        Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000), "It didn't maximize.");
+        var killed = new WindowController([], new ChangeJournal(path));
+        Assert.True(killed.ToggleRollUp(target.Handle));
+        Assert.False(User32.IsZoomed(target.Handle));
+        Assert.True(RectOf(target.Handle).Height < height);
+
+        var journal = new ChangeJournal(path);
+        Assert.Single(journal.Load());
+        Assert.Null(journal.DamagedBackup);
+        var next = new WindowController([], new ChangeJournal(path));
+        next.RecoverFromJournal();
+
+        Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000), "It didn't come back maximized.");
+        Assert.False(next.IsRolledUp(target.Handle));
+        User32.ShowWindow(target.Handle, User32.SW_RESTORE);
+        Assert.True(Desktop.WaitFor(() => RectOf(target.Handle).Height == height, 2000), $"Restored to {RectOf(target.Handle)}.");
+        Assert.Empty(new ChangeJournal(path).Load());
+    }
+
     [Fact]
     public void A_journal_with_a_bad_roll_up_record_is_treated_as_damaged()
     {

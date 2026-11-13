@@ -147,7 +147,6 @@
   "errors.window.showNormally": "請先正常顯示此視窗，然後再試一次。",
   "errors.window.targetUnavailable": "該視窗已無法使用。請點選目標視窗後重試。",
   "errors.window.unchanged": "WinScreen 未變更此視窗。",
-  "errors.window.unpinFirst": "請先取消置頂此視窗，然後再移至最下層。",
   "errors.window.unresponsive": "視窗暫時沒有回應，請稍後重試。",
   "everywhere.anchors": "隱藏所有浮動錨點",
   "everywhere.anchors.hidden": "浮動錨點會保持隱藏，直到你再次顯示它們或 WinScreen 重新啟動。",

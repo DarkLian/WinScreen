@@ -108,9 +108,17 @@ public sealed partial class WindowController
             if (FullScreen.Current() == FullScreenState.Exclusive)
                 throw new WindowOperationException(T("errors.borderless.exclusive"));
             if (state.Hidden || state.PlacementBeforePeek is not null || state.Cropped ||
-                state.PlacementBeforeRollUp is not null || User32.IsIconic(window) || (!fill && User32.IsZoomed(window)))
+                state.PlacementBeforeRollUp is not null)
                 throw new WindowOperationException(T("errors.window.showNormally"));
             EnsureResponsive(window);
+            // A minimized window comes back first, as its own Restore would bring it back (maximized, if it was).
+            if (User32.IsIconic(window))
+            {
+                state.Identity.Require();
+                User32.ShowWindow(window, User32.SW_RESTORE);
+            }
+            if (User32.IsIconic(window) || (!fill && User32.IsZoomed(window)))
+                throw new WindowOperationException(T("errors.window.showNormally"));
             // A window that draws its own title bar, as browsers and editors do, still has Windows' frame bits; taking
             // them away leaves its own drawing as it is. With neither there is nothing to take away, though it can
             // still be made to fill a display.

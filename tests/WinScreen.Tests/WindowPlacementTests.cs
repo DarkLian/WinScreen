@@ -178,7 +178,7 @@ public sealed class WindowPlacementTests
     }
 
     [Fact]
-    public void A_pinned_window_refuses_to_go_to_the_bottom()
+    public void A_pinned_window_sent_to_the_bottom_is_unpinned_first()
     {
         using var target = new TargetProcess(Spot);
         Desktop.GainForegroundRights();
@@ -186,7 +186,8 @@ public sealed class WindowPlacementTests
         var windows = new WindowController([]);
         windows.SendToBottom(target.Handle);
         windows.TogglePin(target.Handle);
-        Assert.Throws<WindowOperationException>(() => windows.SendToBottom(target.Handle));
+        windows.SendToBottom(target.Handle);
+        Assert.False(windows.IsPinned(target.Handle));
         windows.RestoreAll();
     }
 

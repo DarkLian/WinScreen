@@ -147,7 +147,6 @@
   "errors.window.showNormally": "Show this window normally first, then try again.",
   "errors.window.targetUnavailable": "That window is no longer available. Click the window you want, then try again.",
   "errors.window.unchanged": "WinScreen hasn't changed this window.",
-  "errors.window.unpinFirst": "Unpin this window first, then send it to the bottom.",
   "errors.window.unresponsive": "The window isn't responding right now. Try again in a moment.",
   "everywhere.anchors": "Hide all Anchors",
   "everywhere.anchors.hidden": "Anchors stay hidden until you show them again or WinScreen restarts.",
