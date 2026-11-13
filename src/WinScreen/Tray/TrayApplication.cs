@@ -266,6 +266,7 @@ public sealed partial class TrayApplication : ApplicationContext
             T("errors.window.targetUnavailable")))
         {
             MoveToDisplay = (window, device) => Attempt(() => _placer.MoveToDisplay(window, device)),
+            ResizeTo = (window, size) => Attempt(() => ResizeWindow(window, size)),
             Hotkey = command => MenuHotkey(command) ?? "",
             OpacityPercent = window => (int)Math.Round(_windows.OpacityOf(window) * 100.0 / 255),
             SetOpacityPercent = (window, percent) => Attempt(() =>

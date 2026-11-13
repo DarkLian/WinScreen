@@ -14,6 +14,13 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     private sealed record Utility(bool NeedsPath);
     private sealed record DisplayMove(string Device);
     internal Action<nint, string>? MoveToDisplay { get; init; }
+    private sealed record Resize(Size Size);
+
+    /// <summary>Gives a window one of the preset sizes (roadmap P2-14); without it there is no Size menu.</summary>
+    internal Action<nint, Size>? ResizeTo { get; init; }
+
+    /// <summary>The sizes offered, as the visible frame: common screen and video sizes.</summary>
+    internal static readonly Size[] PresetSizes = [new(800, 600), new(1024, 768), new(1280, 720), new(1366, 768), new(1600, 900), new(1920, 1080)];
 
     /// <summary>The hotkey to show beside a command, or empty.</summary>
     internal Func<AppCommand, string>? Hotkey { get; init; }
@@ -35,6 +42,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         items.Add(MenuParts.Header(T("menu.group.elsewhere")));
         items.Add(Command(AppCommand.OpenPip));
         items.Add(Command(AppCommand.ToggleAnchor));
+        items.Add(Command(AppCommand.MinimizeToAnchor));
 
         items.Add(MenuParts.Header(T("menu.group.place")));
         items.Add(new PlacementRow(place => WithTarget(window => run(place, window)), command => Hotkey?.Invoke(command)) { Tag = AppCommand.AlignCenter });
@@ -123,6 +131,14 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
             }
             items.Insert(places ? 10 : 0, displays);
         }
+        if (ResizeTo is { } resize)
+        {
+            var sizes = new ToolStripMenuItem(T("placement.size"));
+            foreach (Size size in PresetSizes)
+                sizes.DropDownItems.Add($"{size.Width} × {size.Height}", null,
+                    (_, _) => WithTarget(window => resize(window, size))).Tag = new Resize(size);
+            items.Insert(Math.Min(items.Count, (places ? 10 : 0) + (MoveToDisplay is null ? 0 : 1)), sizes);
+        }
     }
 
     /// <summary>
@@ -208,6 +224,8 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
             }
             else if (item.Tag is Utility utility)
                 item.Enabled = window != 0 && (!utility.NeedsPath || WindowInfo.ExecutablePath(window).Length > 0);
+            else if (item.Tag is Resize)
+                item.Enabled = window != 0 && enabled(AppCommand.PlaceExactly, window);
             else if (item.Tag is DisplayMove display)
                 item.Enabled = window != 0 && enabled(AppCommand.MoveToNextDisplay, window) &&
                     Screen.AllScreens.Any(screen => screen.DeviceName == display.Device);

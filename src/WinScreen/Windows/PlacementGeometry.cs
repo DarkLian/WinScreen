@@ -19,6 +19,18 @@ public static class PlacementGeometry
             to.Top + (int)Math.Round(top * (to.Height - size.Height)), size.Width, size.Height);
     }
 
+    /// <summary>
+    /// A frame given a new size: its top-left corner stays, unless that would put part of it off the work area, in
+    /// which case it moves back in; a size bigger than the work area is cut to it.
+    /// </summary>
+    public static Rectangle Resized(Rectangle frame, Size size, Rectangle area)
+    {
+        var fitted = new Size(Math.Min(size.Width, area.Width), Math.Min(size.Height, area.Height));
+        int left = Math.Clamp(frame.Left, area.Left, area.Right - fitted.Width);
+        int top = Math.Clamp(frame.Top, area.Top, area.Bottom - fitted.Height);
+        return new Rectangle(left, top, fitted.Width, fitted.Height);
+    }
+
     /// <summary>Where a frame of this size sits at this anchor of the work area. A frame too big for it starts at the corner.</summary>
     public static Point Align(Size frame, Rectangle area, WindowAnchor anchor)
     {

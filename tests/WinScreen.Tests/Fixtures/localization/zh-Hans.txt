@@ -29,6 +29,7 @@ actions.uncrop 7C6E927940080563
 actions.unpin C92179B74AF61689
 anchor.closeWindow 0EB47C75AA015A32
 anchor.controls 0040A7F658FDC91C
+anchor.minimize 20DFD5C6807FF4E3
 anchor.remove FBC1AD62583A8147
 anchor.titlePrefix 17693A90E4A2BC30
 anchor.toggle ADCDED7DCC6722BC
@@ -334,6 +335,7 @@ placement.moveToDisplay F5601D3AB8E62EA8
 placement.nextDisplay A810E6834C22A8A5
 placement.restore 7314D0D14FE10C1E
 placement.right D38A21C70B20B288
+placement.size 50DB7447B966F5EF
 placement.top 79D2F2BDC63A4800
 placement.topLeft FEF304A69096B2C3
 placement.topRight DDF11974A72B465A

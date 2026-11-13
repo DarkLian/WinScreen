@@ -87,6 +87,7 @@ internal static partial class User32
 
     public const int SW_SHOWNOACTIVATE = 4;
     public const int SW_RESTORE = 9;
+    public const int SW_MINIMIZE = 6;
     public const int SW_MAXIMIZE = 3;
 
     public const uint GA_ROOT = 2;

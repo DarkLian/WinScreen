@@ -47,6 +47,8 @@ public enum AppCommand
     UnpinEverywhere,
     HideAnchors,
     HideToolbar,
+    /// <summary>Gives the window an Anchor and minimizes it, in one step (roadmap P2-14).</summary>
+    MinimizeToAnchor,
 }
 
 /// <summary>The key to hold for modifier move and resize.</summary>
@@ -207,6 +209,7 @@ public static class CommandCatalog
         AppCommand.AlignBottom, AppCommand.AlignBottomRight, AppCommand.MoveToNextDisplay, AppCommand.PlaceExactly,
         AppCommand.RestorePlacement, AppCommand.SendToBottom, AppCommand.ShowWindowInfo, AppCommand.ToggleRollUp,
         AppCommand.ShowWindowMenu, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.ToggleDarkTitleBar,
+        AppCommand.MinimizeToAnchor,
     ];
 
     /// <summary>Commands for every window at once, in the tray and Hotkeys only. None has a key until one is chosen.</summary>
@@ -286,6 +289,7 @@ public static class CommandCatalog
         AppCommand.UnpinEverywhere => T("everywhere.unpin"),
         AppCommand.HideAnchors => T("everywhere.anchors"),
         AppCommand.HideToolbar => T("everywhere.toolbar"),
+        AppCommand.MinimizeToAnchor => T("anchor.minimize"),
         _ => command.ToString(),
     };
 }

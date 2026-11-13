@@ -25,7 +25,7 @@ public sealed class WindowMenuBuilderTests
 
     /// <summary>
     /// The toolbar's Window menu offers what the window menu has that the bar doesn't: with every button on the bar,
-    /// the title bar and frame choices and the window's details. Anything shown as a button is left out, and so is the
+    /// Minimize to an Anchor, the title bar and frame choices and the window's details. Anything shown as a button is left out, and so is the
     /// slider or grid a button already covers; with fewer buttons, more stays.
     /// </summary>
     [Fact]
@@ -44,7 +44,7 @@ public sealed class WindowMenuBuilderTests
             }
             ToolStripItemCollection all = Built(CommandCatalog.ToolbarButtons.ToHashSet());
             AppCommand[] left = Commands(all).Select(item => item.Tag).OfType<AppCommand>().ToArray();
-            Assert.Equal([AppCommand.ToggleDarkTitleBar, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill], left);
+            Assert.Equal([AppCommand.MinimizeToAnchor, AppCommand.ToggleDarkTitleBar, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill], left);
             Assert.DoesNotContain(all.Cast<ToolStripItem>(), item => item is OpacityRow or PlacementRow);
             Assert.Contains(all.Cast<ToolStripItem>(), item => item.Text == UiText.T("window.openLocation"));
             Assert.Contains(all.Cast<ToolStripItem>(), item => item.Text == UiText.T("common.copy"));

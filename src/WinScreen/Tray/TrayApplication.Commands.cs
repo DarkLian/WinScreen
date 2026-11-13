@@ -96,6 +96,12 @@ public sealed partial class TrayApplication
     private IEnumerable<CommandDefinition> AnchorCommands() =>
     [
         Define(AppCommand.ToggleAnchor, window => _anchors.Toggle(window)) with { IsOn = window => _anchors.Has(window), Undoes = [WindowPart.Anchor] },
+        // The Anchor is the way back: clicking it shows the window again.
+        Define(AppCommand.MinimizeToAnchor, window =>
+        {
+            if (!_anchors.Has(window)) _anchors.Toggle(window);
+            if (_anchors.Has(window)) Native.User32.ShowWindow(window, Native.User32.SW_MINIMIZE);
+        }) with { Undoes = [WindowPart.Anchor] },
     ];
 
     private IEnumerable<CommandDefinition> EverywhereCommands() =>
@@ -133,6 +139,16 @@ public sealed partial class TrayApplication
         }
         Diagnostics.Log.Event("command.fromCommandLine", ("name", command));
         return CommandLine.ExitFor(RunOnDisplay(command, window, null));
+    }
+
+    /// <summary>
+    /// Gives a window one of the preset sizes (roadmap P2-14): its visible frame keeps its top-left corner, and the
+    /// whole of it stays on its display, smaller there if the display is smaller.
+    /// </summary>
+    private void ResizeWindow(nint window, Size size)
+    {
+        if (!WindowInfo.TryGetFrameBounds(window, out Rectangle frame, out _)) return;
+        _placer.SetFrame(window, Windows.PlacementGeometry.Resized(frame, size, Screen.FromHandle(window).WorkingArea));
     }
 
     /// <summary>The topmost visible main window whose title contains the text (any case, * for any run).</summary>
