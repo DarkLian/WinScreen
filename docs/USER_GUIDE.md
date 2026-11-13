@@ -90,7 +90,7 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 - **Use it, then hide again** is for an app that doesn't work well through a view, such as a game.
   The original window comes back where it was, and hides again when you switch to another window.
   To have a click on the view do this every time, add the program under
-  **Settings → Picture-in-Picture → Using apps through a view** and turn on **Show original** for it.
+  **Settings → Picture-in-Picture → Using apps through a view** and turn on **Show original** for it. Apps built with Java always work this way.
 
 Views pause direct use while a WinScreen menu or the tray overflow panel is open.
 

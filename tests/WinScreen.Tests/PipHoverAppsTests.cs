@@ -106,6 +106,17 @@ public sealed class PipHoverAppsTests
         Assert.Empty(AppSettings.Parse("""{"PipOriginalPrograms":null}""").PipOriginalPrograms);
     }
 
+    [Theory]
+    [InlineData("SunAwtFrame", true)]
+    [InlineData("SunAwtDialog", true)]
+    [InlineData("Chrome_WidgetWin_1", false)]
+    [InlineData("sunawtframe", false)]
+    [InlineData("", false)]
+    public void Java_windows_show_their_original_on_a_click_without_being_listed(string windowClass, bool java)
+    {
+        Assert.Equal(java, PipOriginalApps.IsJavaClass(windowClass));
+    }
+
     [Fact]
     public void Own_hover_choices_are_off_by_default_and_survive_saving()
     {

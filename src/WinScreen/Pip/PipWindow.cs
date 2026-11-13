@@ -44,6 +44,10 @@ public sealed class PipWindow : Form
     private readonly ToolStripItem _goToItem;
     private readonly ToolStripItem _useOriginalItem;
     private readonly string _program;
+    private readonly bool _javaSource;
+
+    /// <summary>Nothing is sent to the original: a click shows it instead (Settings, or a Java app).</summary>
+    private bool ShowsOriginalOnly => _javaSource || PipOriginalApps.Includes(_program);
     private bool _usingOriginal, _usingFromInteractive, _originalTookFocus;
     private long _originalLeftAt;
     private const long UseOriginalGrace = 400;
@@ -125,6 +129,7 @@ public sealed class PipWindow : Form
         _source = source.Window;
         _windows = windows;
         _program = source.IsWindow ? WindowInfo.ProgramOf(_source) : "";
+        _javaSource = source.IsWindow && PipOriginalApps.IsJavaWindow(_source);
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         BackColor = Color.Black; // Whatever briefly shows while resizing shouldn't flash.
@@ -1199,7 +1204,7 @@ public sealed class PipWindow : Form
     internal PipInteraction? LiveInteraction => _live;
 
     /// <summary>True for a hidden original whose program is listed in Settings as one to use directly.</summary>
-    internal bool OpensOriginalOnClick => _origin.IsWindow && _hideItem.Checked && PipOriginalApps.Includes(_program);
+    internal bool OpensOriginalOnClick => _origin.IsWindow && _hideItem.Checked && ShowsOriginalOnly;
 
     /// <summary>True while the original is on show to be used, and will be hidden again afterwards.</summary>
     internal bool UsingOriginal => _usingOriginal;
@@ -1305,7 +1310,7 @@ public sealed class PipWindow : Form
     private void BeginLive(Point pointer)
     {
         if (_live is not null || _thumbnail is null || _suspended || !_origin.IsAvailable || !_windows.IsHidden(_source) ||
-            _inputPaused || _menu.Visible || TopLayer.InputBlocked || PipOriginalApps.Includes(_program))
+            _inputPaused || _menu.Visible || TopLayer.InputBlocked || ShowsOriginalOnly)
             return;
         Rectangle area = PictureArea;
         if (!area.Contains(pointer))

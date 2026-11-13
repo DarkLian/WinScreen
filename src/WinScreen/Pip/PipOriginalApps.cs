@@ -17,4 +17,13 @@ internal static class PipOriginalApps
 
     internal static bool Includes(string program) =>
         program.Length > 0 && _programs.Contains(program, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A window of a Java desktop app (IntelliJ IDEA, Rider and the like). Java ignores clicks while its window is
+    /// hidden past the edge of the screen, so a view of one always shows its original on a click, listed or not.
+    /// </summary>
+    internal static bool IsJavaWindow(nint window) => IsJavaClass(Windows.WindowInfo.ClassName(window));
+
+    /// <summary>Java's own window classes: SunAwtFrame for a main window, SunAwtDialog and the rest.</summary>
+    internal static bool IsJavaClass(string windowClass) => windowClass.StartsWith("SunAwt", StringComparison.Ordinal);
 }

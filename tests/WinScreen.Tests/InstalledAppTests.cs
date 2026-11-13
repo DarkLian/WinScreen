@@ -219,37 +219,56 @@ public sealed partial class AppCompatibilityTests
     private static bool EditedLine(string file) => Saved(file).Split('\n').Any(line => line.Trim() is "z" or "Z");
 
     /// <summary>
-    /// The IDE's own editor (Java). It is shown in the view, but it doesn't take clicks from it: Java ignores input
-    /// while its window is mostly off every display, as a parked original is (probed 13 Nov 2026: the same posted
-    /// clicks work on screen, wherever the real pointer is). Java also ignores a posted character on its own, so the
-    /// key here is a real one. This records the behaviour, so a change in it shows up here.
+    /// The IDE's own editor (Java). Java ignores input while its window is mostly off every display, as a parked
+    /// original is (probed 13 Nov 2026: the same posted clicks work on screen, wherever the real pointer is). So a
+    /// view of a Java window sends it nothing: a click shows the original, which then takes real clicks and keys.
     /// </summary>
-    private void UseIdeEditor(int process, nint window, string file, StringBuilder log)
+    private void UseIdeEditor(nint window, string file, StringBuilder log)
     {
         User32.ShowWindow(window, 9);
         User32.SetWindowPos(window, 0, 120, 80, 1100, 800, 0x14);
         Settle(3000);
         EnglishKeys(window);
-        Visit(window, (view, at) =>
+        WindowMenuBuilderTests.OnUiThread(() =>
         {
-            Assert.True(view.KeepsUpdating, "The view doesn't keep showing the editor.");
-            Point middle = Middle(window);
-            Click(at(middle), times: 2);
-            var gui = new GuiThreadInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<GuiThreadInfo>() };
-            GetGUIThreadInfo(User32.GetWindowThreadProcessId(window, out _), ref gui);
-            log.AppendLine($"after the double-click: foreground is the app {User32.GetForegroundWindow() == window} ({WindowInfo.ClassName(User32.GetForegroundWindow())}), app active {gui.Active == window}, focus {gui.Focus:X}");
-            Desktop.Press(Keys.Z); // A real key: Java ignores a posted character on its own.
-            Thread.Sleep(300);
-            Desktop.Press(Keys.S, Keys.ControlKey);
-            bool edited = Desktop.WaitFor(() => EditedLine(file), 4000);
-            log.AppendLine("double-click and typing changed the file: " + edited);
-            ContextMenuByPointer(process, window, at(middle + new Size(0, 60)), log, required: false);
-            Assert.False(edited, "The editor now takes clicks through a view: update FEATURE_COMPATIBILITY.md and this test.");
-        }, log);
+            Point home = Desktop.CursorPosition();
+            try
+            {
+                Desktop.GainForegroundRights();
+                var windows = new WindowController([]);
+                using var view = new PipWindow(window, windows) { AllowInteractive = true };
+                view.ShowOnTop();
+                view.Location = new Point(900, 200);
+                view.SetInteractive(true);
+                Assert.True(view.KeepsUpdating, "The view doesn't keep showing the editor.");
+                Assert.True(view.OpensOriginalOnClick, "A Java window isn't given Show original.");
+                var inside = new Point(view.Left + view.Width / 2, view.Top + view.Height / 2);
+                Desktop.SlideMouse(inside);
+                Thread.Sleep(400);
+                Assert.Null(view.LiveInteraction); // Nothing is sent to it.
+                Desktop.ClickOn(inside, view.Handle);
+                Assert.True(Desktop.WaitFor(() => view.UsingOriginal, 3000, Application.DoEvents), "The click didn't show the editor.");
+                Assert.False(windows.IsHidden(window));
+                Thread.Sleep(800);
+
+                // Used as it is, on the screen: a real double-click and a real key.
+                Rectangle bounds = Desktop.BoundsOf(window);
+                Point middle = Middle(window);
+                Click(new Point(bounds.Left + middle.X, bounds.Top + middle.Y), times: 2);
+                Desktop.Press(Keys.Z);
+                Thread.Sleep(300);
+                Desktop.Press(Keys.S, Keys.ControlKey);
+                bool edited = Desktop.WaitFor(() => EditedLine(file), 4000, Application.DoEvents);
+                log.AppendLine("the shown editor took a double-click and typing: " + edited);
+                Assert.True(edited, "The editor shown by a click on its view didn't take a double-click and a key.");
+                view.Close();
+            }
+            finally { Desktop.MoveMouse(home); }
+        });
     }
 
     [Fact]
-    public void IntelliJ_is_shown_in_a_view_but_doesnt_take_clicks_from_it()
+    public void IntelliJ_shows_its_original_on_a_click_on_its_view_and_works_there()
     {
         string idea = Directory.Exists(@"C:\Program Files\JetBrains")
             ? Directory.GetFiles(@"C:\Program Files\JetBrains", "idea64.exe", SearchOption.AllDirectories).FirstOrDefault() ?? "" : "";
@@ -277,7 +296,7 @@ public sealed partial class AppCompatibilityTests
             nint window = 0;
             Desktop.WaitFor(() => (window = Desktop.FindProcessWindow(process.Id, t => t.Contains("probe.txt"))) != 0, 90000);
             Assert.True(window != 0, "IntelliJ didn't open the file.");
-            UseIdeEditor(process.Id, window, file, log);
+            UseIdeEditor(window, file, log);
         }
         finally
         {
