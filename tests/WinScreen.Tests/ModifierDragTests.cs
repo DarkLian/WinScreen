@@ -647,8 +647,14 @@ public sealed class ModifierGestureTests
             Glide(new Point(450, 300), new Point(500, 330), 5, 30);
             Assert.True(Desktop.WaitFor(() => Near(RectOf(target.Handle).Location, new Point(350, 230)), 1000), RectOf(target.Handle).ToString());
 
+            bool told = false;
+            drag.HookSilent = () => told = true;
             drag.LoseHookForTest();
             Pump(150);
+            MoveTo(new Point(520, 340)); // The pointer moves; the hook hears nothing.
+            var noticed = System.Diagnostics.Stopwatch.StartNew();
+            Assert.True(Desktop.WaitFor(() => told, 1000), "The lost hook wasn't noticed during the drag.");
+            Assert.True(noticed.ElapsedMilliseconds < 1000, $"Noticed after {noticed.ElapsedMilliseconds} ms.");
             Press(LeftUp); // Never seen.
             keybd_event(Alt, 0, 2, 0);
             Pump(150);

@@ -83,6 +83,8 @@ public sealed partial class TrayApplication : ApplicationContext
         _toolbar = new WindowToolbar(CanUseToolbar, IsOn, IsAvailable, Run) { OpenMenu = ShowToolbarMenu };
         _ = _toolbar.Handle;
         _modifierDrag.MenuEligible = CanOpenWindowMenu;
+        // A hook lost in the middle of a drag is put back at once, not at the watch's next look two seconds later.
+        _modifierDrag.HookSilent = () => _toolbar.BeginInvoke(() => { if (_modifierDrag.Active) _modifierDrag.Reinstall(); });
         _modifierDrag.MenuRequested = (window, point) => _toolbar.BeginInvoke(() => ShowWindowMenu(window, point));
         _modifierDrag.OutsidePressed = point => _toolbar.BeginInvoke(() => _windowMenu?.OutsidePress(point));
         _dark.Ignore(_toolbar.Handle);

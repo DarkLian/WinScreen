@@ -120,6 +120,14 @@ internal sealed class MouseGestures : IDisposable
 
     public bool Active { get; private set; }
 
+    private const int SilenceCheckMilliseconds = 150;
+
+    /// <summary>
+    /// Told, from the mover's thread, when the hook has gone silent in the middle of a drag although the pointer
+    /// moved: Windows has removed it. Whoever owns this puts it back with <see cref="Reinstall"/> on its own thread.
+    /// </summary>
+    public Action? HookSilent { get; set; }
+
     /// <summary>When the hook last saw any mouse input, for noticing that Windows has quietly removed it.</summary>
     public long LastCallback => Interlocked.Read(ref _lastCallback);
 
@@ -429,10 +437,21 @@ internal sealed class MouseGestures : IDisposable
     private void MoveWindows()
     {
         Drag? drag = null;
+        bool silenceReported = false;
         while (!_stopping && !_moveStopping)
         {
-            _moved.WaitOne();
+            // While a drag is in hand, wake now and then to notice a hook Windows has removed (roadmap P2-10): the
+            // real pointer has moved, but the hook has heard nothing. Told at once, the app puts the hook back,
+            // which ends the drag where the window was last moved.
+            bool woken = _moved.WaitOne(_gesture is null ? Timeout.Infinite : SilenceCheckMilliseconds);
             if (_moveStopping) break;
+            if (!woken && _gesture is not null && !silenceReported && Cursor.Position != Pointer() &&
+                Stopwatch.GetElapsedTime(LastCallback).TotalMilliseconds > SilenceCheckMilliseconds * 2)
+            {
+                silenceReported = true;
+                HookSilent?.Invoke();
+            }
+            if (_gesture is null) silenceReported = false;
             while (_endings.TryDequeue(out var ending))
             {
                 if (drag is null || !ReferenceEquals(drag.Gesture, ending.Gesture))
