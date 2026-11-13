@@ -1,5 +1,6 @@
 using static WinScreen.Localization.UiText;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using WinScreen.Native;
 
@@ -225,6 +226,64 @@ public sealed class AppSettings
 
     private static readonly JsonSerializerOptions Format = new() { WriteIndented = true };
 
+    /// <summary>The format this version writes. Raise it only together with a new step in <see cref="Migrations"/>.</summary>
+    public const int CurrentSchemaVersion = 1;
+
+    /// <summary>
+    /// Steps that bring a saved file up to date before it is read, in order: step <c>n</c> turns format <c>n</c>
+    /// into <c>n + 1</c>. Each works on the file's JSON alone. Files from before the format was numbered are 0.
+    /// </summary>
+    internal static readonly Action<JsonObject>[] Migrations =
+    [
+        OfferWindowMenuButton, // 0 → 1
+    ];
+
+    /// <summary>Settings from before the toolbar's Window menu button get it once; after that, taking it off stays off.</summary>
+    private static void OfferWindowMenuButton(JsonObject root)
+    {
+        if (root[nameof(Toolbar)] is not JsonObject toolbar || toolbar.ContainsKey(nameof(ToolbarPreferences.WindowMenuOffered)))
+            return;
+        if (toolbar[nameof(ToolbarPreferences.Buttons)] is JsonArray buttons)
+            buttons.Add(nameof(AppCommand.ShowWindowMenu));
+        toolbar[nameof(ToolbarPreferences.WindowMenuOffered)] = true;
+    }
+
+    /// <summary>The format a file says it is in; 0 when it doesn't say, as before formats were numbered.</summary>
+    private static int SchemaVersionOf(JsonObject root) =>
+        root[nameof(SchemaVersion)] is JsonValue value && value.TryGetValue(out JsonElement element) &&
+        element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out int version) && version > 0 ? version : 0;
+
+    /// <summary>
+    /// The file as a JSON object to change. Built from a <see cref="JsonDocument"/> so a name given twice keeps the
+    /// last value, as reading straight into the settings always did; a parsed <see cref="JsonObject"/> throws instead.
+    /// </summary>
+    private static JsonObject ReadObject(string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+        return document.RootElement.ValueKind == JsonValueKind.Object
+            ? (JsonObject)ToNode(document.RootElement)!
+            : throw new JsonException("Settings must be an object.");
+
+        static JsonNode? ToNode(JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    var node = new JsonObject();
+                    foreach (JsonProperty property in element.EnumerateObject()) node[property.Name] = ToNode(property.Value);
+                    return node;
+                case JsonValueKind.Array:
+                    var array = new JsonArray();
+                    foreach (JsonElement item in element.EnumerateArray()) array.Add(ToNode(item));
+                    return array;
+                case JsonValueKind.Null:
+                    return null;
+                default:
+                    return JsonValue.Create(element.Clone());
+            }
+        }
+    }
+
     public Dictionary<AppCommand, string> Hotkeys { get; set; } = new()
     {
         [AppCommand.TogglePin] = "Ctrl+Alt+T",
@@ -320,6 +379,10 @@ public sealed class AppSettings
     public ToolbarPreferences Toolbar { get; set; } = new();
     public AnchorPreferences Anchors { get; set; } = new();
     public EffectPreferences Effects { get; set; } = new();
+
+    /// <summary>The format the file is written in (<see cref="CurrentSchemaVersion"/>); older files are brought up to date as they load.</summary>
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+
     [JsonIgnore]
     internal bool Imported { get; set; }
 
@@ -385,13 +448,15 @@ public sealed class AppSettings
     internal static AppSettings Parse(string json, Action? invalid = null)
     {
         var defaults = new AppSettings();
-        using var document = JsonDocument.Parse(json);
-        if (document.RootElement.ValueKind != JsonValueKind.Object)
-            throw new JsonException("Settings must be an object.");
-        AppSettings loaded = JsonSerializer.Deserialize<AppSettings>(json) ?? throw new JsonException("Missing settings.");
+        JsonObject root = ReadObject(json);
+        for (int step = SchemaVersionOf(root); step < Migrations.Length; step++)
+            Migrations[step](root);
+        root.Remove(nameof(SchemaVersion)); // An unreadable number mustn't cost the rest of the file.
+        AppSettings loaded = root.Deserialize<AppSettings>() ?? throw new JsonException("Missing settings.");
+        // Written back in this version's format; a newer file is kept aside first (Save).
+        loaded.SchemaVersion = CurrentSchemaVersion;
         // Existing installations keep compositor-managed PiP until the person selects capture.
-        loaded.Pip = document.RootElement.ValueKind == JsonValueKind.Object &&
-                     document.RootElement.TryGetProperty(nameof(Pip), out var pip) && pip.ValueKind == JsonValueKind.Object
+        loaded.Pip = root[nameof(Pip)] is JsonObject
             ? (loaded.Pip ?? new PipPreferences()).Validated()
             : new PipPreferences { Backend = PipBackendPreference.Dwm };
         if (loaded.Hotkeys is null || loaded.ExcludedPrograms is null || loaded.IncludedPrograms is null ||
@@ -410,10 +475,6 @@ public sealed class AppSettings
         loaded.PipOriginalPrograms = (loaded.PipOriginalPrograms ?? []).Where(value => !string.IsNullOrWhiteSpace(value))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         loaded.Toolbar = (loaded.Toolbar ?? new()).Validated();
-        // Settings from before the Window menu button get it once; the marker is saved with them from then on.
-        if (document.RootElement.TryGetProperty(nameof(Toolbar), out JsonElement toolbar) && toolbar.ValueKind == JsonValueKind.Object &&
-            !toolbar.TryGetProperty(nameof(ToolbarPreferences.WindowMenuOffered), out _))
-            loaded.Toolbar = (loaded.Toolbar with { Buttons = [.. loaded.Toolbar.Buttons, AppCommand.ShowWindowMenu], WindowMenuOffered = true }).Validated();
         loaded.Anchors = (loaded.Anchors ?? new()).Validated();
         loaded.Effects = (loaded.Effects ?? new()).Validated();
         loaded.ModifierExclusions = (loaded.ModifierExclusions ?? defaults.ModifierExclusions)
@@ -457,9 +518,38 @@ public sealed class AppSettings
     public void Save(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        KeepNewerFile(path);
         string temporary = path + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(this, Format));
+        // Straight to disk, as the change journal is: a power cut mustn't leave an empty settings file.
+        using (var file = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 4096,
+                   FileOptions.WriteThrough))
+        {
+            JsonSerializer.Serialize(file, this, Format);
+            file.Flush(flushToDisk: true);
+        }
         File.Move(temporary, path, overwrite: true);
+    }
+
+    /// <summary>
+    /// A file a newer WinScreen wrote is copied aside, once, before this version writes over it in its own format,
+    /// so going back to the newer version loses nothing. Loading alone never changes it.
+    /// </summary>
+    private static void KeepNewerFile(string path)
+    {
+        if (!File.Exists(path)) return;
+        int version;
+        try
+        {
+            if (new FileInfo(path).Length > 1024 * 1024) return;
+            version = SchemaVersionOf(ReadObject(File.ReadAllText(path)));
+        }
+        catch (JsonException)
+        {
+            return; // Unreadable: Load already kept a copy aside as damaged.
+        }
+        string kept = $"{path}.from-schema-{version}";
+        if (version > CurrentSchemaVersion && !File.Exists(kept))
+            File.Copy(path, kept);
     }
 }
 
