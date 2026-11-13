@@ -623,4 +623,55 @@ public sealed class ModifierGestureTests
             Cursor.Position = original;
         }
     }
+
+    /// <summary>
+    /// Windows removes a hook it finds slow without a word. Lost in the middle of a drag, the release was never seen,
+    /// and the claimed press used to keep the dead hook in place for good: no gesture worked again until a restart.
+    /// </summary>
+    [Fact]
+    public void A_hook_lost_in_the_middle_of_a_drag_is_put_back_and_the_next_drag_works()
+    {
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(new(300, 200, 400, 300));
+        Desktop.Activate(target.Handle);
+        using var drag = Gestures(target);
+        Point original = Cursor.Position;
+        drag.SetActive(true);
+        Pump(150);
+        try
+        {
+            keybd_event(Alt, 0, 0, 0);
+            MoveTo(new Point(450, 300));
+            Pump(60);
+            Press(LeftDown);
+            Glide(new Point(450, 300), new Point(500, 330), 5, 30);
+            Assert.True(Desktop.WaitFor(() => Near(RectOf(target.Handle).Location, new Point(350, 230)), 1000), RectOf(target.Handle).ToString());
+
+            drag.LoseHookForTest();
+            Pump(150);
+            Press(LeftUp); // Never seen.
+            keybd_event(Alt, 0, 2, 0);
+            Pump(150);
+            Rectangle dropped = RectOf(target.Handle);
+
+            // What the tray app does once input arrives with no callback. Turning it off works again too.
+            drag.Reinstall();
+            Assert.True(drag.Active);
+            Assert.Equal(dropped, RectOf(target.Handle));
+
+            keybd_event(Alt, 0, 0, 0);
+            Drag(new Point(450, 300), new Point(530, 350), LeftDown, LeftUp);
+            keybd_event(Alt, 0, 2, 0);
+            Assert.True(Desktop.WaitFor(() => Near(RectOf(target.Handle).Location, new Point(dropped.X + 80, dropped.Y + 50)), 1000),
+                $"{RectOf(target.Handle)} after a drop at {dropped}");
+            drag.SetActive(false);
+            Assert.False(drag.Active);
+        }
+        finally
+        {
+            keybd_event(Alt, 0, 2, 0);
+            drag.SetActive(false);
+            Cursor.Position = original;
+        }
+    }
 }

@@ -39,7 +39,7 @@ internal sealed class MouseGestures : IDisposable
     private const int WM_MOUSEWHEEL = 0x020A;
     private const int VK_MENU = 0x12, VK_LWIN = 0x5B, VK_RWIN = 0x5C, VK_ESCAPE = 0x1B;
     private const int MaskKey = 0xE8; // Unassigned: tapping it stops a held Alt or Win opening a menu or Start.
-    private const int ClaimEscape = WM_APP + 1, ReleaseEscape = WM_APP + 2;
+    private const int ClaimEscape = WM_APP + 1, ReleaseEscape = WM_APP + 2, DropHook = WM_APP + 3;
     private const int EscapeHotkey = 0x5751;
     private static readonly uint[] EscapeModifiers = [0, 1, 8]; // None, Alt, Win.
     private const uint KeyUp = 2;
@@ -140,6 +140,32 @@ internal sealed class MouseGestures : IDisposable
         else Stop();
     }
 
+    /// <summary>
+    /// Puts the hook back after Windows has removed it without saying so (it does that to a hook it finds slow).
+    /// A drag or menu press in hand will never see its release, so it ends here: a dragged window stays where it
+    /// was last moved, as if let go there. Without this, the claimed press would keep the dead hook in place for good.
+    /// </summary>
+    public void Reinstall()
+    {
+        if (!Active) return;
+        if (_gesture is { } gesture)
+        {
+            _gesture = null;
+            _endings.Enqueue((gesture, false));
+            _moved.Set();
+        }
+        _swallowRelease = false;
+        _dragClaimed = false;
+        Stop();
+        if (_accepting) Start();
+    }
+
+    /// <summary>For tests: removes the hook the way Windows does, leaving everything else as it was.</summary>
+    internal void LoseHookForTest()
+    {
+        if (Active) PostThreadMessage(_hookThreadId, DropHook, 0, 0);
+    }
+
     public void Dispose()
     {
         Stop();
@@ -171,6 +197,8 @@ internal sealed class MouseGestures : IDisposable
                             RegisterHotKey(0, EscapeHotkey + i, User32.MOD_NOREPEAT | EscapeModifiers[i], VK_ESCAPE);
                     else if (message.Message == ReleaseEscape)
                         ReleaseEscapeKeys();
+                    else if (message.Message == DropHook && UnhookWindowsHookEx(hook))
+                        hook = 0; // For tests: what Windows does to a hook it finds too slow, without a word.
                     else if (message.Message == WM_HOTKEY && message.WParam - EscapeHotkey is >= 0 and < 3)
                         Cancel();
                 }
@@ -178,7 +206,7 @@ internal sealed class MouseGestures : IDisposable
             finally
             {
                 ReleaseEscapeKeys();
-                UnhookWindowsHookEx(hook);
+                if (hook != 0) UnhookWindowsHookEx(hook);
             }
         }) { IsBackground = true, Name = "WinScreen modifier hook", Priority = ThreadPriority.AboveNormal };
         _hookThread.Start();

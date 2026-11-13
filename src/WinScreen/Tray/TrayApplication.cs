@@ -790,13 +790,14 @@ public sealed class TrayApplication : ApplicationContext
             FullScreen.Current(), !User32.IsZoomed(foreground) && WindowInfo.FillsMonitor(foreground), false, FullScreen.IsAway());
         if (!run && _windowMenu is { IsDisposed: false }) _windowMenu.Close();
         Point cursor = Cursor.Position;
-        // Windows drops a slow hook without saying so. Input with no callback means it has, so put it back.
-        if (run && _modifierDrag.Active && cursor != _hookCursor &&
-            System.Diagnostics.Stopwatch.GetElapsedTime(_modifierDrag.LastCallback).TotalSeconds > HookSilenceSeconds)
-            _modifierDrag.SetActive(false);
+        // Windows drops a slow hook without saying so. Input with no callback means it has, so put it back, ending
+        // any drag it was in the middle of (its release will never be seen).
+        bool silent = _modifierDrag.Active && cursor != _hookCursor &&
+            System.Diagnostics.Stopwatch.GetElapsedTime(_modifierDrag.LastCallback).TotalSeconds > HookSilenceSeconds;
         _hookCursor = cursor;
         try
         {
+            if (silent) _modifierDrag.Reinstall();
             _modifierDrag.SetActive(run);
             _hookReported = false;
         }
