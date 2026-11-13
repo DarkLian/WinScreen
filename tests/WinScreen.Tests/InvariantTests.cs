@@ -229,10 +229,16 @@ public class InvariantTests
 
     // ── 5. Network boundary ────────────────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Network types by name, not only by namespace: System.Net.Http is an implicit global using in the product, so
+    /// a bare HttpRequestMessage needs no using line. Windows' own networking (Windows.Networking, Windows.Web) is
+    /// reachable through the Windows target too. Case matters, so text such as "https://" doesn't count.
+    /// </summary>
     private static readonly Regex NetworkCode = new(
-        @"\bSystem\.Net\b|\bHttpClient\b|\bHttpMessageHandler\b|\bWebRequest\b|\bWebClient\b|\bTcpClient\b|\bUdpClient\b|" +
-        @"\bSocket\b|\bDns\.|\bUpdateManager\b|\bGithubSource\b|\bSimpleWebSource\b|""(?:wininet|winhttp|ws2_32|urlmon|websocket)(?:\.dll)?""",
-        RegexOptions.IgnoreCase);
+        @"\bSystem\.Net\b|\bWindows\.(?:Networking|Web)\b|\b(?:Http(?:Client|Content|Method|Headers)\w*|" +
+        @"Http(?:Message|Request|Response)\w*|\w*HttpHandler|(?:String|ByteArray|Stream|Json|FormUrlEncoded|Multipart\w*)Content|" +
+        @"WebRequest|WebClient|TcpClient|TcpListener|UdpClient|NetworkStream|\w*Socket\w*|Dns|HttpBaseProtocolFilter|" +
+        @"UpdateManager|GithubSource|SimpleWebSource)\b|""(?i:wininet|winhttp|ws2_32|urlmon|websocket)(?i:\.dll)?""");
 
     /// <summary>
     /// Velopack's start-up hook runs install and uninstall steps and never connects; it has to be the first thing
@@ -275,6 +281,15 @@ public class InvariantTests
         Assert.NotEmpty(NetworkProblems([Entry("Native/Net.cs", "[LibraryImport(\"winhttp.dll\")] static partial nint Open();")]));
         Assert.NotEmpty(NetworkProblems([Entry("Tray/Check.cs", "using Velopack;\nnew UpdateManager(source);")]));
         Assert.NotEmpty(NetworkProblems([Entry("Tray/Check.cs", "VelopackApp.Build().Run();")]));
+        // Found by the implicit using alone, with no namespace in the file.
+        Assert.NotEmpty(NetworkProblems([Entry("Pip/View.cs", "using var send = new HttpMessageInvoker(new SocketsHttpHandler());")]));
+        Assert.NotEmpty(NetworkProblems([Entry("Pip/View.cs", "var request = new HttpRequestMessage(HttpMethod.Get, uri);")]));
+        Assert.NotEmpty(NetworkProblems([Entry("Pip/View.cs", "var body = new StringContent(text);")]));
+        Assert.NotEmpty(NetworkProblems([Entry("Pip/View.cs", "var s = new Windows.Networking.Sockets.StreamSocket();")]));
+        Assert.NotEmpty(NetworkProblems([Entry("Pip/View.cs", "var s = new StreamSocket();")]));
+        Assert.NotEmpty(NetworkProblems([Entry("Native/Net.cs", "[DllImport(\"WS2_32.DLL\")] static extern int send();")]));
+        // Text that only looks like it.
+        Assert.Empty(NetworkProblems([Entry("Tray/About.cs", "string site = \"https://example.org\"; var socketless = 1; var content = Contents();")]));
     }
 
     // ── 6. Ratchets: global state and scattered P/Invoke may shrink, never grow ───────────────────────────────────

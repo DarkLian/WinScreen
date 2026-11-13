@@ -71,7 +71,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public object? ConcealmentOwner { get; set; }
         [NotJournalled("Lasts only while the pointer is over the window; recovery puts back OriginalAlpha.")]
         public bool SolidWhileHovered { get; set; }
-        [NotJournalled("Glass is drawn by WinScreen's own window, which ends with it; the styles it set are in OwnedStyles.")]
+        [NotJournalled("The colour key now set: recovery puts back OriginalColorKey and OriginalLayeredFlags, and OwnedStyles.")]
         public Color? GlassColor { get; set; }
         [NotJournalled(CurrentState)] public bool PinPaused { get; set; }
         public bool Cropped { get; set; }
