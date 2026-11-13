@@ -13,14 +13,14 @@ public class SettingsFixtureTests
 {
     private const string Prefix = "SettingsFixture.";
 
-    private static string[] VersionNames() =>
+    internal static string[] VersionNames() =>
         typeof(SettingsFixtureTests).Assembly.GetManifestResourceNames()
             .Where(name => name.StartsWith(Prefix, StringComparison.Ordinal)).Order(StringComparer.Ordinal)
             .Select(name => name[Prefix.Length..^".json".Length]).ToArray();
 
     public static TheoryData<string> Versions() => new(VersionNames());
 
-    private static string Fixture(string version)
+    internal static string Fixture(string version)
     {
         using var reader = new StreamReader(typeof(SettingsFixtureTests).Assembly.GetManifestResourceStream($"{Prefix}{version}.json")!);
         return reader.ReadToEnd();

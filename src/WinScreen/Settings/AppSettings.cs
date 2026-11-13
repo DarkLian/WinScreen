@@ -254,6 +254,20 @@ public sealed class AppSettings
         element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out int version) && version > 0 ? version : 0;
 
     /// <summary>
+    /// Takes out hotkeys for commands this version doesn't know, such as one a newer version added, and says how
+    /// many. Read as they are, one such name would make the whole file unreadable and every setting go back to its
+    /// default. Hotkeys are the only place a saved choice is a key; unknown values elsewhere are already tolerated.
+    /// </summary>
+    private static int DropUnknownKeys(JsonObject root)
+    {
+        if (root[nameof(Hotkeys)] is not JsonObject hotkeys) return 0;
+        string[] unknown = hotkeys.Select(pair => pair.Key)
+            .Where(name => !Enum.TryParse(name, ignoreCase: true, out AppCommand command) || !Enum.IsDefined(command)).ToArray();
+        foreach (string name in unknown) hotkeys.Remove(name);
+        return unknown.Length;
+    }
+
+    /// <summary>
     /// The file as a JSON object to change. Built from a <see cref="JsonDocument"/> so a name given twice keeps the
     /// last value, as reading straight into the settings always did; a parsed <see cref="JsonObject"/> throws instead.
     /// </summary>
@@ -452,6 +466,8 @@ public sealed class AppSettings
         for (int step = SchemaVersionOf(root); step < Migrations.Length; step++)
             Migrations[step](root);
         root.Remove(nameof(SchemaVersion)); // An unreadable number mustn't cost the rest of the file.
+        if (DropUnknownKeys(root) is var dropped and > 0)
+            Diagnostics.Log.Event("settings.unknownDropped", ("count", dropped));
         AppSettings loaded = root.Deserialize<AppSettings>() ?? throw new JsonException("Missing settings.");
         // Written back in this version's format; a newer file is kept aside first (Save).
         loaded.SchemaVersion = CurrentSchemaVersion;
@@ -532,23 +548,29 @@ public sealed class AppSettings
 
     /// <summary>
     /// A file a newer WinScreen wrote is copied aside, once, before this version writes over it in its own format,
-    /// so it can be put back by hand after going back to the newer version. Loading alone never changes it.
+    /// so it can be put back by hand after going back to the newer version. Loading alone never changes it. Newer
+    /// means a higher format, or the same format with hotkeys for commands this version doesn't know, which it
+    /// would leave out when saving.
     /// </summary>
     private static void KeepNewerFile(string path)
     {
         if (!File.Exists(path)) return;
-        int version;
+        int version, unknown;
         try
         {
             if (new FileInfo(path).Length > 1024 * 1024) return;
-            version = SchemaVersionOf(ReadObject(File.ReadAllText(path)));
+            JsonObject root = ReadObject(File.ReadAllText(path));
+            version = SchemaVersionOf(root);
+            unknown = DropUnknownKeys(root);
         }
         catch (JsonException)
         {
             return; // Unreadable: Load already kept a copy aside as damaged.
         }
-        string kept = $"{path}.from-schema-{version}";
-        if (version > CurrentSchemaVersion && !File.Exists(kept))
+        string kept = version > CurrentSchemaVersion ? $"{path}.from-schema-{version}"
+            : unknown > 0 ? $"{path}.from-newer"
+            : "";
+        if (kept.Length > 0 && !File.Exists(kept))
             File.Copy(path, kept);
     }
 }
