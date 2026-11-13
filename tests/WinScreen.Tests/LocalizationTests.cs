@@ -204,18 +204,84 @@ public sealed class LocalizationTests : IDisposable
         Assert.Empty(trailing);
     }
 
-    [Theory]
-    // Reviewed catalog values, sorted by stable key with NUL separators.
-    // Update deliberately when adding labels; existing values retain their migration output.
-    [InlineData("en", "2A185681BF5504599A4E0F9F0EEA973379B18585495024AC3E5505635CD0AEEC")]
-    [InlineData("zh-Hans", "25EF6BDCDF555848A11742BF5BC90DEEC16C4F1F0CA4969C15C6D183646CA1C7")]
-    [InlineData("zh-Hant", "61B9858E685154922E580427CE713E7C2AB539ABE54AB3D5E630845A0E39A3E5")]
-    public void Every_translation_matches_the_reviewed_catalog(string language, string expectedDigest)
+    /// <summary>
+    /// Text as shown, one line per key: the key and the start of the SHA-256 of what it says in this language
+    /// (English where a translation is missing). One line per key, so two changes to different text never touch
+    /// the same line (roadmap P2-6).
+    /// </summary>
+    internal static SortedDictionary<string, string> ShownText(string language)
     {
         UiText.Initialize(language);
-        string values = string.Concat(UiText.GetCatalog("en").Keys.Order(StringComparer.Ordinal)
-            .Select(key => key + '\0' + UiText.T(key) + '\0'));
-        Assert.Equal(expectedDigest, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(values))));
+        var shown = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (string key in UiText.GetCatalog("en").Keys)
+            shown[key] = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(UiText.T(key))))[..16];
+        return shown;
+    }
+
+    private const string ReviewedHeader =
+        "# Every key's text in this language as reviewed: the key, then the start of the SHA-256 of its text.\n" +
+        "# A change of wording changes its line here, in the same commit (LocalizationTests). Run the tests with\n" +
+        "# WINSCREEN_UPDATE_REVIEWED=1 to rewrite this file once the new text has been read.\n";
+
+    internal static string ReviewedFile(IReadOnlyDictionary<string, string> shown) =>
+        ReviewedHeader + string.Concat(shown.Select(pair => $"{pair.Key} {pair.Value}\n"));
+
+    internal static Dictionary<string, string> ReadReviewed(string text) =>
+        text.Split('\n').Select(line => line.TrimEnd('\r')).Where(line => line.Length > 0 && !line.StartsWith('#'))
+            .Select(line => line.Split(' ', 2)).ToDictionary(parts => parts[0], parts => parts.Length > 1 ? parts[1] : "", StringComparer.Ordinal);
+
+    /// <summary>Each key whose text isn't as reviewed, with the line the reviewed file needs, or that it no longer needs.</summary>
+    internal static List<string> Unreviewed(IReadOnlyDictionary<string, string> shown, IReadOnlyDictionary<string, string> reviewed)
+    {
+        var problems = new List<string>();
+        foreach ((string key, string digest) in shown)
+            if (!reviewed.TryGetValue(key, out string? was)) problems.Add($"new:     {key} {digest}");
+            else if (was != digest) problems.Add($"changed: {key} {digest} (was {was})");
+        foreach (string key in reviewed.Keys.Where(key => !shown.ContainsKey(key)).Order(StringComparer.Ordinal))
+            problems.Add($"gone:    {key}");
+        return problems;
+    }
+
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-Hans")]
+    [InlineData("zh-Hant")]
+    public void Every_translation_matches_the_reviewed_catalog(string language)
+    {
+        SortedDictionary<string, string> shown = ShownText(language);
+        if (Environment.GetEnvironmentVariable("WINSCREEN_UPDATE_REVIEWED") == "1" && WriteReviewed(language, ReviewedFile(shown)))
+            return;
+
+        using var reader = new StreamReader(typeof(LocalizationTests).Assembly.GetManifestResourceStream($"ReviewedText.{language}.txt")
+                                            ?? throw new InvalidOperationException($"No reviewed text for {language}."));
+        List<string> problems = Unreviewed(shown, ReadReviewed(reader.ReadToEnd()));
+        Assert.True(problems.Count == 0,
+            $"Text not as reviewed in Fixtures\\localization\\{language}.txt. Read the new text, then change these lines" +
+            " (or run the tests with WINSCREEN_UPDATE_REVIEWED=1):" + Environment.NewLine + string.Join(Environment.NewLine, problems));
+    }
+
+    [Fact]
+    public void The_reviewed_text_check_names_each_changed_new_and_gone_key()
+    {
+        var reviewed = new Dictionary<string, string> { ["a"] = "1", ["b"] = "2", ["c"] = "3" };
+        var shown = new Dictionary<string, string> { ["a"] = "1", ["b"] = "9", ["d"] = "4" };
+
+        Assert.Equal(["changed: b 9 (was 2)", "new:     d 4", "gone:    c"], Unreviewed(shown, reviewed));
+        Assert.Empty(Unreviewed(reviewed, ReadReviewed(ReviewedFile(reviewed).Replace("\n", "\r\n"))));
+    }
+
+    /// <summary>Rewrites a reviewed file in the checkout these tests were built from.</summary>
+    private static bool WriteReviewed(string language, string text)
+    {
+        for (DirectoryInfo? folder = new(AppContext.BaseDirectory); folder is not null; folder = folder.Parent)
+        {
+            if (!File.Exists(Path.Combine(folder.FullName, "WinScreen.slnx"))) continue;
+            string path = Path.Combine(folder.FullName, "tests", "WinScreen.Tests", "Fixtures", "localization", language + ".txt");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, text, new UTF8Encoding(false));
+            return true;
+        }
+        return false;
     }
 }
 

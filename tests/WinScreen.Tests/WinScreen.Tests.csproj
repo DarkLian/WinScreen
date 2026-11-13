@@ -26,6 +26,8 @@
     <None Include="..\..\tools\Confirm-Release.ps1;..\..\tools\TestRuns.ps1" Link="tools\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- settings.json as each published version saved it (tools\settings-fixtures). -->
     <EmbeddedResource Include="Fixtures\settings\*.json" WithCulture="false" LogicalName="SettingsFixture.%(Filename)%(Extension)" />
+    <!-- Every key's text as reviewed, one line per key and language (LocalizationTests). -->
+    <EmbeddedResource Include="Fixtures\localization\*.txt" WithCulture="false" LogicalName="ReviewedText.%(Filename)%(Extension)" />
     <!-- The compatibility page, whose app table must match the app profiles (AppProfileTests). -->
     <EmbeddedResource Include="..\..\docs\FEATURE_COMPATIBILITY.md" WithCulture="false" LogicalName="Doc.FEATURE_COMPATIBILITY.md" />
   </ItemGroup>
