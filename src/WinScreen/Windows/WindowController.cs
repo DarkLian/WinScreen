@@ -80,6 +80,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public bool BorderlessFilled { get; set; }
         public bool Parked { get; set; }
         public bool HoverParking { get; set; } // Transient; the existing journal already records the original placement.
+        public bool ReachableWanted { get; set; } // Transient: a visit asked for it; given only while it is off screen.
+        public long LooseSince { get; set; } // Transient: when a parked window was first seen on screen, not covering a monitor; 0 if not.
+        public bool CoveredAMonitor { get; set; } // Transient: covered a monitor (full screen) since it was parked.
         public long? SwitcherBits { get; set; }
         public bool TaskbarButtonRemoved { get; set; }
         public int? OriginalDarkTitleBar { get; set; }
@@ -1020,6 +1023,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         state.PlacementBeforePeek = null;
         state.Parked = false;
         state.HoverParking = false;
+        state.ReachableWanted = false;
+        state.CoveredAMonitor = false;
+        state.LooseSince = 0;
 
         void Attempt(string step, Action action)
         {

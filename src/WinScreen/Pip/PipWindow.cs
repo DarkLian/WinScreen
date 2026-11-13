@@ -1323,7 +1323,7 @@ public sealed class PipWindow : Form
         live.ViewDragged += moved => BeginInvokeIfAlive(() => DragLiveView(moved));
         live.CaptionPressed += action => BeginInvokeIfAlive(() => OnCaption(action));
         live.QuestionShown += () => BeginInvokeIfAlive(OnQuestion);
-        _liveStartedZoomed = User32.IsZoomed(_source);
+        _liveStartedZoomed = User32.IsZoomed(_source) || CoversAMonitor(_source);
         try
         {
             _windows.Park(_source);
@@ -1539,12 +1539,21 @@ public sealed class PipWindow : Form
             User32.ShowWindow(_source, User32.SW_SHOWNOACTIVATE);
             SuspendView();
         }
+        else if (_live is not null && !_liveStartedZoomed && CoversAMonitor(_source))
+        {
+            // A page went full screen: leaving it can put the window back maximized, which is no request to see it.
+            _liveStartedZoomed = true;
+        }
         else if (_live is not null && !_liveStartedZoomed && User32.IsZoomed(_source))
         {
             EndLive();
             GoToSource();
         }
     }
+
+    private static bool CoversAMonitor(nint window) =>
+        User32.GetWindowRect(window, out Rect r) &&
+        WindowController.FillsAMonitor(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom), [.. Screen.AllScreens.Select(s => s.Bounds)]);
 
     /// <summary>A view that couldn't update says so and stays open; the next change can put it right.</summary>
     private void Attempt(Action action)
@@ -1674,6 +1683,7 @@ public sealed class PipWindow : Form
             else SuspendView();
             return;
         }
+        try { _windows.FollowParkedPlace(_source); } catch (WindowOperationException) { }
         PauseInput(_menu.Visible || TopLayer.InputBlocked);
         // The taskbar's overflow panel can open over a view; the pointer goes through to it. WinScreen's own menus
         // need no such thing: a click on the view while its menu is open just closes the menu.

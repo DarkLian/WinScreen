@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using WinScreen.Native;
 using WinScreen.Pip;
 using WinScreen.Tests.Support;
 using WinScreen.Windows;
@@ -41,6 +42,7 @@ public sealed class FullScreenPageTests(Xunit.Abstractions.ITestOutputHelper out
     public void A_page_that_goes_full_screen_around_a_view_ends_up_where_the_window_was(When enter, When leave)
     {
         if (Browser is not { } path) return;
+        if (enter == When.BeforeTheView) Desktop.GainForegroundRights(); // The page is put in full screen from here first.
         var (browser, window, root) = BrowserInputTests.Open(Page, "Movie", app: true, path);
         output.WriteLine(path);
         var log = new StringBuilder();
@@ -66,6 +68,8 @@ public sealed class FullScreenPageTests(Xunit.Abstractions.ITestOutputHelper out
                 Point pointer = Desktop.CursorPosition();
                 Desktop.MoveMouse(new Point(screen.Left + 40, screen.Bottom - 120));
                 using var view = new PipWindow(window, windows) { AllowInteractive = true };
+                view.Problem += problem => log.AppendLine("problem: " + problem);
+                view.Notice += notice => log.AppendLine("notice: " + notice);
                 view.ShowOnTop();
                 view.Location = new Point(screen.Right - 560, screen.Top + 200);
                 view.SetInteractive(true);
@@ -78,7 +82,22 @@ public sealed class FullScreenPageTests(Xunit.Abstractions.ITestOutputHelper out
                         Desktop.SlideMouse(middle);
                         Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No direct-input visit started.");
                         Assert.True(windows.IsParked(window), "The original wasn't parked.");
+                        Rectangle[] monitors = [.. Screen.AllScreens.Select(s => s.Bounds)];
+                        // While the pointer is over the view the parked original is at opacity 1. A page in full screen
+                        // makes the browser cover its monitor again (and move straight back if moved), so there it
+                        // must be wholly see-through and let clicks pass, or it shows as a faint layer over the screen.
+                        bool Unseen() => WindowController.OutOfReach(Desktop.BoundsOf(window), monitors) ||
+                            (Desktop.Alpha(window) == 0 && (Desktop.ExStyle(window) & User32.WS_EX_TRANSPARENT) != 0);
+                        void StaysOff(string when)
+                        {
+                            Thread.Sleep(600);
+                            Assert.True(Desktop.WaitFor(Unseen, 2000),
+                                $"{when}: the original shows at {Desktop.BoundsOf(window)}, opacity {Desktop.Alpha(window)}, ex style 0x{Desktop.ExStyle(window):X}; " +
+                                $"parked {windows.IsParked(window)}, visit {view.LiveInteraction is not null}, last visit end '{view.LastVisitEnd}', revealed at {view.LastReveal}, now {Environment.TickCount64}, state {view.StateDescription}.\n{log}");
+                            Assert.NotNull(view.LiveInteraction); // Still in use, so this was checked during a visit.
+                        }
                         log.AppendLine($"parked at {Desktop.BoundsOf(window)}");
+                        StaysOff("Once parked");
                         Thread.Sleep(300);
                         if (enter == When.InTheView)
                         {
@@ -86,6 +105,7 @@ public sealed class FullScreenPageTests(Xunit.Abstractions.ITestOutputHelper out
                             Assert.True(Desktop.WaitFor(() => Title().Contains("fs=1"), 4000), "The page didn't go full screen through the view: " + Title());
                             Thread.Sleep(1000);
                             log.AppendLine($"full screen while parked at {Desktop.BoundsOf(window)}");
+                            StaysOff("After going full screen in the view");
                         }
                         if (leave == When.InTheView)
                         {
@@ -96,6 +116,7 @@ public sealed class FullScreenPageTests(Xunit.Abstractions.ITestOutputHelper out
                             Assert.True(Desktop.WaitFor(() => Title().Contains("fs=0"), 4000), "The page didn't leave full screen through the view: " + Title());
                             Thread.Sleep(1000);
                             log.AppendLine($"left full screen while parked at {Desktop.BoundsOf(window)}");
+                            StaysOff("After leaving full screen in the view");
                         }
                     }
                     catch (Exception e) { failure = e; }
@@ -104,8 +125,9 @@ public sealed class FullScreenPageTests(Xunit.Abstractions.ITestOutputHelper out
                 driver.Start();
                 while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
                 view.Close();
+                foreach (string step in windows.ParkedPlaceSteps) log.AppendLine("step: " + step);
                 if (failure is not null) throw new Xunit.Sdk.XunitException(failure + Environment.NewLine + log);
-                Thread.Sleep(800);
+                for (int i = 0; i < 4; i++) { Thread.Sleep(200); Application.DoEvents(); log.AppendLine($"closed +{(i + 1) * 200} ms: {Desktop.BoundsOf(window)} ex 0x{Desktop.ExStyle(window):X} opacity {Desktop.Alpha(window)}"); }
                 log.AppendLine($"after the view at {Desktop.BoundsOf(window)} ({Title()})");
                 Assert.Equal(leave == When.AfterTheView, windows.IsWatchingReturn(window));
                 if (leave != When.AfterTheView) return;
