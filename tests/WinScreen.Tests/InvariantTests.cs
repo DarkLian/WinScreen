@@ -151,6 +151,7 @@ public class InvariantTests
         ["WinScreen.Settings.ToolbarPlacement"] = "Left=0 Centre=1 Right=2",
         ["WinScreen.Settings.ToolbarTrigger"] = "TitleBar=0 MinimizeButton=1",
         ["WinScreen.Settings.WindowMenuGesture"] = "CtrlRightClick=0 CtrlShiftRightClick=1 CtrlMiddleClick=2",
+        ["WinScreen.Windows.WindowAnchor"] = "TopLeft=0 Top=1 TopRight=2 Left=3 Center=4 Right=5 BottomLeft=6 Bottom=7 BottomRight=8",
     };
 
     internal static string Describe(Type enumType) => string.Join(' ',

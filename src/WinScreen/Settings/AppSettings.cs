@@ -66,8 +66,66 @@ public sealed class ProgramSetup
     public PipPreset? View { get; set; }
     public bool ViewKeepsUpdating { get; set; }
 
+    // Rules (roadmap P1-5, 14 Nov 2026). All optional: a setup saved before has none of them and works as it did.
+    // Older versions ignore these fields when they read the file.
+
+    /// <summary>Only windows whose title contains this text (any case; * stands for any run of characters).</summary>
+    public string? TitleContains { get; set; }
+    /// <summary>Only windows of exactly this window class.</summary>
+    public string? WindowClass { get; set; }
+    /// <summary>One of the nine places on the window's display, or the display below.</summary>
+    public Windows.WindowAnchor? Place { get; set; }
+    /// <summary>The display to put the window on, by its device name. A display that isn't there is skipped.</summary>
+    public string? Display { get; set; }
+    public bool Borderless { get; set; }
+    public bool Anchor { get; set; }
+    /// <summary>The toolbar never offers itself on these windows.</summary>
+    public bool NoToolbar { get; set; }
+    /// <summary>Applied each time the window comes forward again, not only the first time.</summary>
+    public bool EveryTime { get; set; }
+    /// <summary>Kept, but not applied.</summary>
+    public bool Off { get; set; }
+
     /// <summary>False when the setup leaves a window exactly as it opens, so it isn't worth keeping.</summary>
-    public bool ChangesAnything => Pinned || Alpha < 255 || Dark || View is not null;
+    public bool ChangesAnything => Pinned || Alpha < 255 || Dark || View is not null || Place is not null ||
+                                   !string.IsNullOrEmpty(Display) || Borderless || Anchor || NoToolbar;
+
+    /// <summary>True when the rule looks at more than the program: some of its windows only.</summary>
+    internal bool Narrowed => !string.IsNullOrEmpty(TitleContains) || !string.IsNullOrEmpty(WindowClass);
+
+    /// <summary>True when a window with this title and class is one this rule is for (the program is matched apart).</summary>
+    internal bool MatchesWindow(string title, string windowClass) =>
+        (string.IsNullOrEmpty(WindowClass) || windowClass == WindowClass) &&
+        (string.IsNullOrEmpty(TitleContains) || TitleMatches(title, TitleContains));
+
+    /// <summary>"Contains", ignoring case, where * in the pattern stands for any run of characters.</summary>
+    internal static bool TitleMatches(string title, string pattern)
+    {
+        string[] parts = pattern.Split('*', StringSplitOptions.RemoveEmptyEntries);
+        int at = 0;
+        foreach (string part in parts)
+        {
+            int found = title.IndexOf(part, at, StringComparison.CurrentCultureIgnoreCase);
+            if (found < 0) return false;
+            at = found + part.Length;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// The rule for a window: rules for its file path before rules for its program name, and among those, the ones
+    /// that look at the title or class before the ones that don't. Rules that are off never count.
+    /// </summary>
+    internal static ProgramSetup? Choose(IEnumerable<ProgramSetup> rules, string program, string path, string title, string windowClass)
+    {
+        ProgramSetup[] on = rules.Where(rule => !rule.Off && rule.MatchesWindow(title, windowClass)).ToArray();
+        IEnumerable<ProgramSetup> byPath = on.Where(rule => !string.IsNullOrEmpty(rule.ExecutablePath) &&
+            string.Equals(rule.ExecutablePath, path, StringComparison.OrdinalIgnoreCase));
+        IEnumerable<ProgramSetup> byName = on.Where(rule => string.IsNullOrEmpty(rule.ExecutablePath) &&
+            string.Equals(rule.Program, program, StringComparison.OrdinalIgnoreCase));
+        return byPath.OrderByDescending(rule => rule.Narrowed).FirstOrDefault()
+               ?? byName.OrderByDescending(rule => rule.Narrowed).FirstOrDefault();
+    }
 
     /// <summary>What tells one program's setup from another's.</summary>
     internal string Key => string.IsNullOrEmpty(ExecutablePath) ? Program : ExecutablePath;
@@ -83,6 +141,20 @@ public sealed class ProgramSetup
             parts.Add(T("setups.dark"));
         if (View is not null)
             parts.Add(T("setups.view"));
+        if (Place is not null || !string.IsNullOrEmpty(Display))
+            parts.Add(T("setups.placed"));
+        if (Borderless)
+            parts.Add(T("setups.borderless"));
+        if (Anchor)
+            parts.Add(T("setups.anchor"));
+        if (NoToolbar)
+            parts.Add(T("setups.noToolbar"));
+        if (EveryTime)
+            parts.Add(T("setups.everyTime"));
+        if (Off)
+            parts.Add(T("setups.off"));
+        if (!string.IsNullOrEmpty(TitleContains))
+            parts.Insert(0, string.Format(T("setups.forTitle"), TitleContains));
         string location = string.IsNullOrWhiteSpace(ExecutablePath) ? "" : $" ({ExecutablePath})";
         return $"{Program}: {string.Join(", ", parts)}{location}";
     }
@@ -419,15 +491,9 @@ public sealed class AppSettings
         return SavedSetups.Find(setup => string.Equals(setup.Program, program, StringComparison.OrdinalIgnoreCase));
     }
 
-    public ProgramSetup? SetupForWindow(nint window)
-    {
-        string path = Windows.WindowInfo.ExecutablePath(window);
-        return SavedSetups.Find(setup => !string.IsNullOrEmpty(setup.ExecutablePath) &&
-                                         string.Equals(setup.ExecutablePath, path, StringComparison.OrdinalIgnoreCase))
-               ?? SavedSetups.Find(setup => string.IsNullOrEmpty(setup.ExecutablePath) &&
-                                            string.Equals(setup.Program, Windows.WindowInfo.ProgramOf(window),
-                                                StringComparison.OrdinalIgnoreCase));
-    }
+    public ProgramSetup? SetupForWindow(nint window) =>
+        SavedSetups.Count == 0 ? null : ProgramSetup.Choose(SavedSetups, Windows.WindowInfo.ProgramOf(window),
+            Windows.WindowInfo.ExecutablePath(window), Windows.WindowInfo.Title(window), Windows.WindowInfo.ClassName(window));
 
     public AppSettings Clone() => JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(this))!;
 
@@ -506,6 +572,9 @@ public sealed class AppSettings
             .ToList();
         loaded.SavedSetups = (loaded.SavedSetups ?? [])
             .Where(value => value is not null && !string.IsNullOrWhiteSpace(value.Program)).ToList();
+        // A place a newer version added is no place here: the rest of the rule still applies.
+        foreach (ProgramSetup setup in loaded.SavedSetups)
+            if (setup.Place is { } place && !Enum.IsDefined(place)) setup.Place = null;
         loaded.Language = loaded.Language is "en" or "zh-Hans" or "zh-Hant" ? loaded.Language : "system";
         loaded.Theme = loaded.Theme is "light" or "dark" ? loaded.Theme : "system";
         loaded.DefaultOpacityPercent =

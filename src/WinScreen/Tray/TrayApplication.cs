@@ -689,7 +689,8 @@ public sealed partial class TrayApplication : ApplicationContext
     private bool CanUseToolbar(nint window)
     {
         // An administrator app's window would refuse every button, so the bar doesn't offer them.
-        return !Paused && _windows.CanControl(window) && CanReach(window);
+        return !Paused && _windows.CanControl(window) && CanReach(window) &&
+               !(_ruleOf.TryGetValue(window, out var rule) && rule.NoToolbar && _setupDone.GetValueOrDefault(window)?.Matches() == true);
     }
 
     private bool IsAvailable(AppCommand command) =>
@@ -833,30 +834,45 @@ public sealed partial class TrayApplication : ApplicationContext
         !FullScreen.IsAway() && !User32.IsIconic(window) && !WindowInfo.FillsMonitor(window) && CanGesture(window);
 
     /// <summary>
-    /// Gives a window its program's saved setup the first time it comes forward, and never again: pinning
-    /// needs a window that is forward, and whatever the person changes after that must stay changed.
+    /// Gives a window its rule (a saved setup, roadmap P1-5) the first time it comes forward, and never again unless
+    /// the rule says every time: pinning needs a window that is forward, and whatever the person changes after that
+    /// must stay changed. A window no rule is for is looked at again when its title changes, since rules can look at
+    /// the title.
     /// </summary>
     private void ApplySavedSetup(nint window)
     {
         // Runs four times a second, so a window already looked at, or no saved setups at all, costs nothing.
+        bool cameForward = window != _setupForeground;
+        _setupForeground = window;
         if (_settings.SavedSetups.Count == 0 || Paused || !WindowInfo.IsMainWindow(window) ||
             _setupRetryAt.GetValueOrDefault(window) > Environment.TickCount64)
             return;
-        if ((_setupDone.TryGetValue(window, out var prior) || _setupNone.TryGetValue(window, out prior)) &&
-            prior.Matches())
+        if (_setupDone.TryGetValue(window, out var done) && done.Matches() &&
+            !(cameForward && _ruleOf.TryGetValue(window, out var applied) && applied.EveryTime))
+            return;
+        if (_setupNone.TryGetValue(window, out var none) && none.Matches() &&
+            _setupNoneTitle.GetValueOrDefault(window) == WindowInfo.Title(window))
             return;
         foreach (var stale in _setupDone.Where(pair => !pair.Value.Matches()).Select(pair => pair.Key).ToArray())
         {
             _setupDone.Remove(stale);
             _setupRetryAt.Remove(stale);
+            _ruleOf.Remove(stale);
         }
         foreach (var stale in _setupNone.Where(pair => !pair.Value.Matches()).Select(pair => pair.Key).ToArray())
+        {
             _setupNone.Remove(stale);
+            _setupNoneTitle.Remove(stale);
+        }
 
         if (_settings.SetupForWindow(window) is not { } setup)
         {
-            // Nothing saved for this program. Looked at again only when the saved setups change.
-            try { _setupNone[window] = WindowIdentity.Observe(window); }
+            // No rule for this window. Looked at again when its title or the saved setups change.
+            try
+            {
+                _setupNone[window] = WindowIdentity.Observe(window);
+                _setupNoneTitle[window] = WindowInfo.Title(window);
+            }
             catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
             return;
         }
@@ -869,9 +885,23 @@ public sealed partial class TrayApplication : ApplicationContext
             identity.Require();
             if (_settings.ExperimentalFeatures && setup.Dark && DarkLook(window) == Look.None) ToggleDark(window);
             identity.Require();
+            // Borderless first: it keeps the inside of the window where it is, so the frame moves when it goes.
+            if (setup.Borderless && !_windows.IsBorderless(window)) _windows.ToggleBorderless(window, false, null);
+            identity.Require();
+            if (!string.IsNullOrEmpty(setup.Display) &&
+                Screen.AllScreens.Any(screen => string.Equals(screen.DeviceName, setup.Display, StringComparison.OrdinalIgnoreCase)))
+                _placer.MoveToDisplay(window, setup.Display);
+            identity.Require();
+            if (setup.Place is { } place) _placer.Align(window, place);
+            identity.Require();
+            if (setup.Anchor && !_anchors.Has(window)) _anchors.Toggle(window);
+            identity.Require();
             RestoreSavedView(window, setup);
             _setupDone[window] = identity;
+            _ruleOf[window] = setup;
             _setupRetryAt.Remove(window);
+            Diagnostics.Log.Event("rule.applied", ("program", Diagnostics.LogValue.ProgramOf(window)), ("narrowed", setup.Narrowed),
+                ("everyTime", setup.EveryTime));
         }
         catch (Exception failure) when (IsExpected(failure))
         {
@@ -879,6 +909,11 @@ public sealed partial class TrayApplication : ApplicationContext
             Alert(T("errors.operation.title"), failure.Message);
         }
     }
+
+    /// <summary>The rule last applied to each window, for what it asks of the toolbar.</summary>
+    private readonly Dictionary<nint, ProgramSetup> _ruleOf = [];
+    private readonly Dictionary<nint, string> _setupNoneTitle = [];
+    private nint _setupForeground;
 
     /// <summary>
     /// Brings back a saved view, for the first window of its program in this session. A view that keeps
@@ -915,11 +950,18 @@ public sealed partial class TrayApplication : ApplicationContext
         }
 
         List<ProgramSetup> before = _settings.SavedSetups.ToList();
-        bool hadSetup = _settings.SavedSetups.RemoveAll(saved =>
-            (!string.IsNullOrEmpty(setup.ExecutablePath) && string.Equals(saved.ExecutablePath, setup.ExecutablePath,
-                StringComparison.OrdinalIgnoreCase)) || (string.IsNullOrEmpty(saved.ExecutablePath) &&
-                                                         string.Equals(saved.Program, program,
-                                                             StringComparison.OrdinalIgnoreCase))) > 0;
+        // The program-wide rule is replaced; rules for some of its windows (by title or class) are left alone, and
+        // what only a rule can say (place, display, Borderless, Anchor, toolbar, every time) carries over.
+        bool Replaced(ProgramSetup saved) => !saved.Narrowed &&
+            ((!string.IsNullOrEmpty(setup.ExecutablePath) && string.Equals(saved.ExecutablePath, setup.ExecutablePath,
+                 StringComparison.OrdinalIgnoreCase)) ||
+             (string.IsNullOrEmpty(saved.ExecutablePath) && string.Equals(saved.Program, program, StringComparison.OrdinalIgnoreCase)));
+        if (_settings.SavedSetups.FirstOrDefault(Replaced) is { } old)
+        {
+            (setup.Place, setup.Display, setup.Borderless, setup.Anchor, setup.NoToolbar, setup.EveryTime, setup.Off) =
+                (old.Place, old.Display, old.Borderless, old.Anchor, old.NoToolbar, old.EveryTime, old.Off);
+        }
+        bool hadSetup = _settings.SavedSetups.RemoveAll(Replaced) > 0;
         if (!setup.ChangesAnything && !hadSetup)
         {
             Alert(T("setups.nothingToRemember"), T("setups.changeWindowFirst"), ToolTipIcon.Info);

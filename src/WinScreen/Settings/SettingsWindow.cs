@@ -913,6 +913,22 @@ private readonly ErrorProvider _errors = new();
 
     internal void SetDefaultOpacity(int percent) => _defaultOpacity.Value = percent;
 
+    /// <summary>
+    /// Changes a saved setup's rule (roadmap P1-5): which windows it is for and what they get. A copy is changed, so
+    /// Cancel leaves everything as it was; Apply puts the copy in the list's place and saves like any other change.
+    /// </summary>
+    internal void ChangeSetup(ProgramSetup setup)
+    {
+        int index = _setups.Items.IndexOf(setup);
+        if (index < 0) return;
+        var copy = System.Text.Json.JsonSerializer.Deserialize<ProgramSetup>(System.Text.Json.JsonSerializer.Serialize(setup))!;
+        using var dialog = new RuleDialog(copy);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        _setups.Items[index] = dialog.Result();
+        _setups.SelectedIndex = index;
+        QueueApplyRefresh();
+    }
+
     /// <summary>Forgets a program's saved setup, the way the Remove button does.</summary>
     internal void RemoveSetup(ProgramSetup setup)
     {
@@ -1501,7 +1517,7 @@ private readonly ErrorProvider _errors = new();
         FlowLayoutPanel page = ScrollingPage();
         _setups.IconOf = (item, size) => item is ProgramSetup setup ? ProgramIcons.Of(setup.Program, size) : null;
         var setups = new ProgramList(_setups, null, null, T("settings.setups.empty"), T("common.add"), T("common.remove"),
-            item => RemoveSetup((ProgramSetup)item));
+            item => RemoveSetup((ProgramSetup)item), item => ChangeSetup((ProgramSetup)item), T("common.change"));
         page.Controls.Add(Section(T("settings.savedSetups"), Note(T("settings.setups.help")), setups));
         return page;
     }

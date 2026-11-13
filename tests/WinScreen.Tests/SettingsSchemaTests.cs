@@ -269,6 +269,8 @@ public sealed class SettingsSchemaTests : IDisposable
         // So the newer-value check above meets every saved choice, including any added since the last release.
         var found = new HashSet<Type>();
         Visit(new AppSettings(), found, new HashSet<object>(ReferenceEqualityComparer.Instance));
+        // A rule's place is empty by default; its newer-value case is its own test below.
+        found.Add(typeof(WinScreen.Windows.WindowAnchor));
         Type[] missing = InvariantTests.PersistedEnums(typeof(AppSettings)).Where(type => !found.Contains(type)).ToArray();
         Assert.True(missing.Length == 0,
             "Give these a value in the defaults, or a case of their own in SettingsSchemaTests: " + string.Join(", ", missing.Select(type => type.Name)));
@@ -297,6 +299,16 @@ public sealed class SettingsSchemaTests : IDisposable
                 Visit(property.GetValue(value), found, seen);
             }
         }
+    }
+
+    [Fact]
+    public void A_place_from_a_newer_version_costs_only_the_place()
+    {
+        AppSettings loaded = AppSettings.Parse("""{ "SavedSetups": [ { "Program": "a", "Pinned": true, "Place": 99, "Borderless": true } ] }""",
+            () => Assert.Fail("Read as damaged."));
+        ProgramSetup rule = Assert.Single(loaded.SavedSetups);
+        Assert.Null(rule.Place);
+        Assert.True(rule.Pinned && rule.Borderless);
     }
 
     [Fact]

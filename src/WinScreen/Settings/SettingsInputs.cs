@@ -1241,12 +1241,14 @@ internal sealed class ProgramList : Panel
     private readonly ComboBox? _picker;
     private readonly PlainButton? _add;
     private readonly PlainButton _remove;
+    private readonly PlainButton? _change;
 
     /// <param name="list">The list the page reads and fills.</param>
     /// <param name="picker">Where a name is typed or chosen, or null for a list nothing is added to by hand.</param>
     /// <param name="remove">What removing the chosen entry does; by default it leaves the list.</param>
+    /// <param name="change">What changing the chosen entry does (a Change button, and a double-click); none by default.</param>
     internal ProgramList(ThemedList list, ComboBox? picker, string? title, string empty, string addText, string removeText,
-        Action<object>? remove = null)
+        Action<object>? remove = null, Action<object>? change = null, string? changeText = null)
     {
         _list = list;
         _list.EmptyText = empty;
@@ -1280,8 +1282,15 @@ internal sealed class ProgramList : Panel
             Controls.Add(_add);
         }
         Controls.Add(_remove);
-        _list.SelectedIndexChanged += (_, _) => _remove.Enabled = _list.SelectedIndex >= 0;
-        _list.ItemsChanged += (_, _) => { _remove.Enabled = _list.SelectedIndex >= 0; PerformLayout(); };
+        if (change is not null)
+        {
+            _change = new PlainButton { Text = changeText ?? "", Enabled = false };
+            _change.Click += (_, _) => { if (_list.SelectedItem is { } item) change(item); };
+            _list.DoubleClick += (_, _) => { if (_list.SelectedItem is { } item) change(item); };
+            Controls.Add(_change);
+        }
+        _list.SelectedIndexChanged += (_, _) => Chosen();
+        _list.ItemsChanged += (_, _) => { Chosen(); PerformLayout(); };
         _list.KeyDown += (_, e) =>
         {
             if (e.KeyCode != Keys.Delete || !_remove.Enabled) return;
@@ -1293,6 +1302,12 @@ internal sealed class ProgramList : Panel
     }
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
+
+    private void Chosen()
+    {
+        _remove.Enabled = _list.SelectedIndex >= 0;
+        if (_change is not null) _change.Enabled = _list.SelectedIndex >= 0;
+    }
 
     /// <summary>The most rows it shows before it scrolls: more in a taller Settings window.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -1336,6 +1351,12 @@ internal sealed class ProgramList : Panel
         int right = Width;
         _remove.SetBounds(right - removeSize.Width, y, removeSize.Width, removeSize.Height);
         right = _remove.Left - Unit(6);
+        if (_change is not null)
+        {
+            Size changeSize = _change.GetPreferredSize(Size.Empty);
+            _change.SetBounds(right - changeSize.Width, y, changeSize.Width, changeSize.Height);
+            right = _change.Left - Unit(6);
+        }
         if (_add is not null && _picker is not null)
         {
             Size addSize = _add.GetPreferredSize(Size.Empty);
