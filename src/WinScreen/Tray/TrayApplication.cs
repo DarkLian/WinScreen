@@ -130,6 +130,9 @@ public sealed partial class TrayApplication : ApplicationContext
 
         _hotkeys.Pressed += id => Run((AppCommand)id, TargetOf(User32.GetForegroundWindow()));
         _hotkeys.CloseRequested += ExitThread;
+        _hotkeys.CopyDataReceived = data => CommandLine.Received(data) is { } request
+            ? (int)RunFromCommandLine(request.Command, request.Target)
+            : null;
 
         _tray.Icon = LoadIcon();
         _tray.Text = "WinScreen";

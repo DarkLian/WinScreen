@@ -34,9 +34,20 @@ internal struct WindowPlacement
     public Rect NormalPosition;
 }
 
+/// <summary>What WM_COPYDATA carries: a number saying what the data is, and the data.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CopyData
+{
+    public nint Kind;
+    public int Size;
+    public nint Data;
+}
+
 /// <summary>The user32.dll calls WinScreen needs. Window handles are plain <see cref="nint"/>.</summary>
 internal static partial class User32
 {
+    public const int WM_COPYDATA = 0x004A;
+
     public const int GWL_EXSTYLE = -20;
     public const int GWL_STYLE = -16;
     public const long WS_CAPTION = 0xC00000;

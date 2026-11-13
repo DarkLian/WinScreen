@@ -48,6 +48,14 @@ internal static class Program
         MenuStyle.UseTheme(settings.Theme);
         Native.Translucency.Allowed = settings.MenuTransparency;
 
+        // A command for the running copy (or the list of commands): answered here, and nothing else starts.
+        CommandLineRequest request = CommandLine.Parse(arguments);
+        if (request is not CommandLineRequest.None)
+        {
+            Environment.ExitCode = (int)CommandLine.Handle(request);
+            return;
+        }
+
         if (Environment.OSVersion.Version.Build < MinimumBuild)
         {
             MessageBox.Show(T("errors.app.windowsTooOld"), "WinScreen");

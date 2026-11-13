@@ -1164,6 +1164,44 @@ public sealed class AppEndToEndTests : IDisposable
         }
     }
 
+    /// <summary>Runs WinScreen.exe with arguments, as a script would, and returns its exit code and what it wrote.</summary>
+    private (int Exit, string Output) Script(params string[] arguments)
+    {
+        var start = new ProcessStartInfo(Program) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (string argument in arguments) start.ArgumentList.Add(argument);
+        start.Environment["WINSCREEN_DATA"] = _data;
+        using Process process = Process.Start(start)!;
+        string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        Assert.True(process.WaitForExit(20000), "The command line didn't finish.");
+        return (process.ExitCode, output);
+    }
+
+    /// <summary>
+    /// Roadmap P2-2: a script names a command and a window, the running WinScreen does it as a hotkey would, and the
+    /// exit code says how it went. No keys are pressed and no window has to be in front.
+    /// </summary>
+    [Fact]
+    public void A_script_pins_a_window_by_its_title_and_the_exit_code_says_how_it_went()
+    {
+        using var target = new TargetProcess(Spot, title: "WinScreen test target - scripted");
+        Assert.True((Desktop.ExStyle(target.Handle) & 0x8) == 0);
+
+        Assert.Equal(0, Script("--run", "TogglePin", "--window", "title:SCRIPTED").Exit);
+        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & 0x8) != 0), "The window wasn't pinned.");
+        Assert.Equal(0, Script("--run", "RestoreWindow", "--window", "title:scripted").Exit);
+        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & 0x8) == 0), "Put back didn't unpin it.");
+
+        Assert.Equal(6, Script("--run", "TogglePin", "--window", "title:no window is called this").Exit);
+        (int exit, string output) = Script("--run", "Nope");
+        Assert.Equal(2, exit);
+        Assert.Contains("Nope", output);
+        (exit, output) = Script("--list-commands");
+        Assert.Equal(0, exit);
+        Assert.Contains("TogglePin\t", output);
+        Assert.Contains("RestoreAll\t", output);
+        Assert.False(_app.HasExited, "The running copy stopped.");
+    }
+
     /// <summary>
     /// The watcher can find WinScreen and then fail to open it because it died in between, right after starting the
     /// watcher. Before the fix that crashed the watcher and left the window hidden (3 in 24 such kills in the VM).

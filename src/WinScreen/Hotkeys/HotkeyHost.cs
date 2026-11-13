@@ -25,6 +25,9 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
     public event Action<int>? Pressed;
     public event Action? CloseRequested;
 
+    /// <summary>Answers a WM_COPYDATA (its lParam), such as a command from the command line; null leaves it unanswered.</summary>
+    internal Func<nint, nint?>? CopyDataReceived { get; set; }
+
     internal bool IsRegistered(int command) => _dispatch.ContainsValue(command);
 
     /// <summary>Claims a global hotkey. Returns false with a reason when another program holds it.</summary>
@@ -156,6 +159,9 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
                 break;
             case User32.WM_CLOSE:
                 CloseRequested?.Invoke();
+                return;
+            case User32.WM_COPYDATA when CopyDataReceived?.Invoke(m.LParam) is { } answer:
+                m.Result = answer;
                 return;
         }
 

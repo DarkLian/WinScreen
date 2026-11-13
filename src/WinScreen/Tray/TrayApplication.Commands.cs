@@ -109,6 +109,42 @@ public sealed partial class TrayApplication
         Define(AppCommand.RestoreAll, _ => PutEveryWindowBack()) with { Target = CommandTarget.NoWindow, Recovers = true },
     ];
 
+    /// <summary>
+    /// A command from the command line (roadmap P2-2), run as a hotkey would run it, on the window the script named:
+    /// the active one, the one under the pointer, or the topmost open window whose title contains some text.
+    /// </summary>
+    private CommandLineExit RunFromCommandLine(AppCommand command, string target)
+    {
+        if (!_commands.TryGet(command, out CommandDefinition definition)) return CommandLineExit.Usage;
+        nint window = 0;
+        if (definition.Target == CommandTarget.Window)
+        {
+            if (target.StartsWith("title:", StringComparison.OrdinalIgnoreCase))
+                window = WindowTitled(target["title:".Length..]);
+            else if (string.Equals(target, "pointer", StringComparison.OrdinalIgnoreCase))
+            {
+                Point point = Cursor.Position;
+                window = Native.User32.GetAncestor(Native.User32.WindowFromPoint(new Native.NativePoint { X = point.X, Y = point.Y }),
+                    Native.User32.GA_ROOT);
+            }
+            else
+                window = TargetOf(Native.User32.GetForegroundWindow());
+            if (window == 0 && command != AppCommand.RestoreWindow) return CommandLineExit.NoWindow;
+        }
+        Diagnostics.Log.Event("command.fromCommandLine", ("name", command));
+        return CommandLine.ExitFor(RunOnDisplay(command, window, null));
+    }
+
+    /// <summary>The topmost visible main window whose title contains the text (any case, * for any run).</summary>
+    private static nint WindowTitled(string text)
+    {
+        for (nint window = Native.User32.GetWindow(Native.User32.GetDesktopWindow(), 5); window != 0; window = Native.User32.GetWindow(window, 2))
+            if (Native.User32.IsWindowVisible(window) && WindowInfo.IsMainWindow(window) &&
+                ProgramSetup.TitleMatches(WindowInfo.Title(window), text))
+                return window;
+        return 0;
+    }
+
     /// <summary>True while a window has this part from WinScreen.</summary>
     private bool Has(WindowPart part, nint window) => part switch
     {
