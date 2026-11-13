@@ -35,6 +35,10 @@ param(
     [ValidateSet('All', 'Desktop', 'Packaged')][string]$Suite = 'All',
     # Runs only matching tests, for example "FullyQualifiedName~Anchor". Narrows the Packaged suite too.
     [string]$Filter,
+    # Narrows only the Packaged suite (after Filter), so a run can take part of it: see Invoke-TestVmPair.ps1.
+    [string]$PackagedFilter,
+    # A program already published for the Packaged suite, used instead of publishing it again.
+    [string]$Published,
     [switch]$SkipBuild,
     [string]$ResultsDirectory,
     [int]$TimeoutMinutes = 60,
@@ -85,7 +89,8 @@ try {
     $dotnet = Join-Path (Find-HostDotnet) 'dotnet.exe'
     $env:DOTNET_NOLOGO = '1'
     $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
-    $staging = Join-Path $repo 'TestResults\vm\_bundle'
+    # Each VM stages its own files, so two VMs can run at once.
+    $staging = Join-Path $repo "TestResults\vm\_bundle-$Name"
     if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
     New-Item -ItemType Directory -Path $staging | Out-Null
     $common = @('-c', 'Release', '-p:WinScreenArchitecture=x64', '-p:UpdateRepository=DarkLian/WinScreen')
@@ -116,16 +121,23 @@ try {
         $steps += [ordered]@{ name = 'desktop'; filter = $(if ($Filter) { $Filter } else { 'Category!=Interactive' }) }
     }
     if ($Suite -in 'All', 'Packaged') {
-        Step 'Publishing the packaged program'
-        Dotnet (@('publish', (Join-Path $repo 'src\WinScreen\WinScreen.csproj'), '-o', (Join-Path $staging 'program'),
-            '--self-contained', 'true', '-p:DebugType=embedded') + $common)
+        if ($Published) {
+            Copy-Item $Published (Join-Path $staging 'program') -Recurse
+        }
+        else {
+            Step 'Publishing the packaged program'
+            Dotnet (@('publish', (Join-Path $repo 'src\WinScreen\WinScreen.csproj'), '-o', (Join-Path $staging 'program'),
+                '--self-contained', 'true', '-p:DebugType=embedded') + $common)
+        }
         Assert-HoverHelper (Join-Path $staging 'program') 'The packaged program'
-        $packagedFilter = if ($Filter) { "Category=Interactive&($Filter)" } else { 'Category=Interactive' }
-        $steps += [ordered]@{ name = 'packaged'; filter = $packagedFilter; env = @{ WINSCREEN_EXE = '{root}\program\WinScreen.exe' } }
+        # Not $packagedFilter: PowerShell names ignore case, and that is the -PackagedFilter parameter.
+        $interactive = if ($Filter) { "Category=Interactive&($Filter)" } else { 'Category=Interactive' }
+        if ($PackagedFilter) { $interactive = "$interactive&($PackagedFilter)" }
+        $steps += [ordered]@{ name = 'packaged'; filter = $interactive; env = @{ WINSCREEN_EXE = '{root}\program\WinScreen.exe' } }
     }
     [ordered]@{ steps = $steps } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $staging 'run.json') -Encoding UTF8
     Copy-Item (Join-Path $PSScriptRoot 'guest') (Join-Path $staging 'guest') -Recurse
-    $bundle = Join-Path $repo 'TestResults\vm\bundle.zip'
+    $bundle = Join-Path $repo "TestResults\vm\bundle-$Name.zip"
     Remove-Item $bundle -ErrorAction SilentlyContinue
     & tar.exe -a -c -f $bundle -C $staging .
     if ($LASTEXITCODE -ne 0) { throw 'Packing the bundle failed.' }
