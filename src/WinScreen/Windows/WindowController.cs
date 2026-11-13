@@ -843,6 +843,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 {
                     failed++;
                     problems.Add(WindowInfo.Title(window) + ": " + failure.Message);
+                    Diagnostics.Log.Event("restore.failed", ("program", Diagnostics.LogValue.ProgramOf(window)),
+                        ("class", Diagnostics.LogValue.ClassOf(window)), ("hidden", state.Hidden), ("parked", state.Parked));
                 }
             }
 
@@ -857,6 +859,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 catch (WindowOperationException failure)
                 {
                     problems.Add(failure.Message);
+                    Diagnostics.Log.Error("journal.saveFailed", failure);
                 }
             }
 
@@ -887,6 +890,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         {
             var records = journal!.Load();
             _recoveryBlocked = journal.ReadFailed;
+            if (records.Length > 0 || journal.ReadFailed || journal.DamagedBackup is not null)
+                Diagnostics.Log.Event("journal.read", ("records", records.Length), ("readFailed", journal.ReadFailed),
+                    ("damagedKept", journal.DamagedBackup is not null));
             if (_recoveryBlocked)
             {
                 RecoveryWarning = string.Format(
@@ -910,7 +916,10 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 var identity = new WindowIdentity((nint)record.Window, record.ProcessId, record.ThreadId,
                     record.ProcessStartTicks, record.IdentityToken);
                 if (!identity.Matches())
+                {
+                    Diagnostics.Log.Event("journal.windowGone");
                     continue;
+                }
 
                 var state = new ChangedWindow
                 {
@@ -939,7 +948,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 _changed[(nint)record.Window] = state;
             }
 
+            int recovered = _changed.Count;
             int failed = RestoreAll();
+            if (recovered > 0) Diagnostics.Log.Event("journal.recovered", ("windows", recovered), ("failed", failed));
             if (failed > 0)
                 RecoveryWarning =
                     string.Format(

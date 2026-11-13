@@ -313,10 +313,12 @@ internal sealed class PipInteraction : IDisposable
         _worker.Start();
         using var ready = new ManualResetEventSlim();
         nint hook = 0;
+        int hookError = 0;
         _hookThread = new Thread(() =>
         {
             _hookThreadId = GetCurrentThreadId();
             hook = SetWindowsHookEx(WH_MOUSE_LL, _hook, GetModuleHandle(0), 0);
+            if (hook == 0) hookError = Marshal.GetLastWin32Error();
             PeekMessage(out _, 0, 0, 0, 0); // Make the thread-message queue before publishing readiness.
             ready.Set();
             if (hook == 0) return;
@@ -327,6 +329,7 @@ internal sealed class PipInteraction : IDisposable
         ready.Wait();
         if (hook == 0)
         {
+            Diagnostics.Log.Event("hook.visit.failed", ("code", Diagnostics.LogValue.Code(hookError)));
             _stopping = true;
             _work.Set();
             _worker.Join(2000);
@@ -737,6 +740,14 @@ internal sealed class PipInteraction : IDisposable
             _log.Enqueue((outcome, at, hit));
             if (_log.Count > Keep)
                 _log.Dequeue();
+        }
+
+        // Presses that didn't arrive, so a report shows which apps and controls refuse them. Never moves or positions.
+        if (outcome is PressOutcome.Unsupported or PressOutcome.Unconfirmed)
+        {
+            nint target = queuedTarget != 0 ? queuedTarget : _messages.PressTarget != 0 ? _messages.PressTarget : _source;
+            Diagnostics.Log.Event("press", ("outcome", outcome), ("route", _messages.PressRoute), ("menuBar", _messages.PressRoute is null),
+                ("program", Diagnostics.LogValue.ProgramOf(_source)), ("class", Diagnostics.LogValue.ClassOf(target)));
         }
 
         if (DiagnoseInput)

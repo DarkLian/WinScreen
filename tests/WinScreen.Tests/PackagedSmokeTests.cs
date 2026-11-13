@@ -58,6 +58,17 @@ public sealed class PackagedSmokeTests(ITestOutputHelper output)
             Desktop.PostMessage(host, User32.WM_CLOSE, 0, 0);
             Assert.True(process.WaitForExit(8000));
             Assert.Equal(0, process.ExitCode);
+
+            // Its own short log: what a report needs about this PC, and how it ended. Nothing about the person.
+            string log = File.ReadAllText(Path.Combine(data, "winscreen.log"));
+            output.WriteLine(log);
+            Assert.Contains("log.started role=app", log);
+            Assert.Matches(@"system windows=1[01] build=\d+", log);
+            Assert.Matches(@"display number=1 width=\d+ height=\d+ x=-?\d+ y=-?\d+ scale=\d+ main=yes", log);
+            Assert.Contains("graphics name=", log);
+            Assert.Contains("app.exited", log);
+            Assert.DoesNotContain(Environment.UserName, log, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(@":\", log);
         }
         finally
         {

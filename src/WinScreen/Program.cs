@@ -1,5 +1,6 @@
 ﻿using static WinScreen.Localization.UiText;
 using Velopack;
+using WinScreen.Diagnostics;
 using WinScreen.Hotkeys;
 using WinScreen.Localization;
 using WinScreen.Settings;
@@ -66,16 +67,32 @@ internal static class Program
             !arguments.Contains(Elevation.ElevatedArgument) && Elevation.StartElevatedCopy())
             return;
 
+        // Only the copy that carries on writes the log: not a second copy, nor one handing over to an elevated one.
+        Log.Start(DataFolder, "app");
+        StartupFacts.LogInBackground();
+
         var windows = new WindowController(settings.ExcludedPrograms,
             new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")));
         windows.RecoverFromJournal();
 
         // A crash must not leave someone's window see-through and impossible to click.
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => windows.RestoreAll();
-        AppDomain.CurrentDomain.UnhandledException += (_, _) => windows.RestoreAll();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            windows.RestoreAll();
+            Log.Event("app.exited");
+            Log.Flush(TimeSpan.FromMilliseconds(500));
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            windows.RestoreAll();
+            if (e.ExceptionObject is Exception crash) Log.Error("app.crashed", crash);
+            Log.Flush(TimeSpan.FromSeconds(1));
+        };
         Application.ThreadException += (_, e) =>
         {
             windows.RestoreAll();
+            Log.Error("app.stopped", e.Exception);
+            Log.Flush(TimeSpan.FromSeconds(1));
             MessageBox.Show(e.Exception.Message, T("errors.app.unexpectedStop"), MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             Application.Exit();
@@ -89,8 +106,13 @@ internal static class Program
     {
         AppSettings settings = AppSettings.Load(Path.Combine(DataFolder, "settings.json"));
         UiText.Initialize(settings.Language);
+        // Called only once WinScreen itself is gone, so the log has a single writer.
+        Log.Start(DataFolder, "watcher");
         var windows = new WindowController(settings.ExcludedPrograms, new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")));
         windows.RecoverFromJournal();
-        return !windows.RecoveryBlocked && windows.PendingRestores == 0;
+        bool done = !windows.RecoveryBlocked && windows.PendingRestores == 0;
+        Log.Event("watcher.recovered", ("done", done), ("left", windows.PendingRestores));
+        Log.Flush(TimeSpan.FromSeconds(1));
+        return done;
     }
 }

@@ -30,6 +30,8 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     internal InputRoute MoveRoute { get; private set; }
     internal nint PressTarget { get; private set; }
     internal string PressTransport { get; private set; } = "messages";
+    /// <summary>How the last press went, for the log; null when it opened a standard menu bar.</summary>
+    internal InputRoute? PressRoute { get; private set; } = InputRoute.Messages;
     /// <summary>The window the last move went to, which is also where the pointer's shape comes from.</summary>
     internal nint MoveTarget { get; private set; }
     private nint _dragTarget;
@@ -236,6 +238,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         {
             PressTarget = source;
             PressTransport = "menu bar";
+            PressRoute = null;
             Why = "";
             if (!identity.StillThere() || IsHungAppWindow(source) ||
                 !User32.PostMessage(source, 0x112 /* WM_SYSCOMMAND */, 0xF100 /* SC_KEYMENU */, key)) return Delivery.Failed;
@@ -251,6 +254,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         Why = "";
         InputRoute route = RouteOf(target);
         PressTransport = route.ToString().ToLowerInvariant();
+        PressRoute = route;
         long now = Environment.TickCount64;
         bool secondClick = _clicks.TryGetValue(button, out var previous) && previous.Target == target &&
             now - previous.Time <= GetDoubleClickTime() && WithinDoubleClick(pointer, previous.At);

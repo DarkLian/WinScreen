@@ -71,7 +71,12 @@ internal sealed class PipBackendSelector : IPipRenderBackend
             _dwm = new DwmThumbnailBackend(destination, source.Window);
             _dwm.SetOpacity(_opacity);
         }
+        Diagnostics.Log.Event("capture.view", ("preference", _preferences.Backend), ("window", source.IsWindow),
+            ("program", source.IsWindow ? Diagnostics.LogValue.ProgramOf(source.Window) : Diagnostics.LogValue.Program("")));
     }
+
+    /// <summary>What a failed capture leads to, for the log.</summary>
+    private enum AfterFailure { Recreate, Software, Compositor, Nothing }
 
     /// <summary>A part of the screen has no compositor view, so the only way to show it is capture.</summary>
     private PipPreferences Effective(PipPreferences preferences)
@@ -162,6 +167,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
             UseDwm(); advanced.Dispose(); _retiring = true; _restart = true;
             _lastDiagnostics = advanced.Diagnostics;
             _lastDiagnostics.Failure = "Capture/render worker exceeded its progress deadline.";
+            Diagnostics.Log.Event("capture.hung", ("software", _software));
             // A hung driver cannot be forcibly disposed. Keep one retiring worker and never allocate another beside it.
             _policy.Pin(Stopwatch.GetTimestamp());
             if (!_warned && _dwm is not null) { _warned = true; Problem?.Invoke(T("errors.pip.advancedUnavailable")); }
@@ -175,6 +181,12 @@ internal sealed class PipBackendSelector : IPipRenderBackend
             _failures.Enqueue($"{_lastDiagnostics.Failure}\n{_lastDiagnostics.Exception?.StackTrace}");
             bool recreate = _policy.Fail(Stopwatch.GetTimestamp());
             _advanced = null;
+            AfterFailure next = recreate ? AfterFailure.Recreate
+                : !_software && _preferences.Backend == PipBackendPreference.Wgc ? AfterFailure.Software
+                : _dwm is not null ? AfterFailure.Compositor : AfterFailure.Nothing;
+            Diagnostics.Log.Event("capture.failed", ("software", _software), ("next", next),
+                ("code", Diagnostics.LogValue.Code(_lastDiagnostics.Exception?.HResult ?? 0)));
+            if (_lastDiagnostics.Exception is { } cause) Diagnostics.Log.Error("capture.failedBy", cause);
             if (recreate) { _trySourceAdapter = true; _restart = true; }
             else if (!_software && _preferences.Backend == PipBackendPreference.Wgc)
             {
@@ -218,9 +230,12 @@ internal sealed class PipBackendSelector : IPipRenderBackend
             _advanced = _createCapture(new(_source, _hwnd, _client,
                 _trySourceAdapter ? _source.Monitor : _monitor,
                 _preferences, _sourceHz, _targetHz, _software));
+            Diagnostics.Log.Event("capture.started", ("software", _software), ("sourceAdapter", _trySourceAdapter),
+                ("sourceHz", _sourceHz), ("targetHz", _targetHz));
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or ExternalException or NotSupportedException or InvalidOperationException)
         {
+            Diagnostics.Log.Error("capture.startFailed", e);
             _policy.Pin(Stopwatch.GetTimestamp());
             _lastDiagnostics.Failure = $"{e.GetType().Name} 0x{e.HResult:X8}";
             if (!_warned && _dwm is not null) { _warned = true; Problem?.Invoke(T("errors.pip.advancedUnavailable")); }

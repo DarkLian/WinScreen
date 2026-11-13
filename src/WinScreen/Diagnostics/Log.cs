@@ -26,7 +26,7 @@ public readonly struct LogValue
     public static implicit operator LogValue(uint value) => new(value);
     public static implicit operator LogValue(double value) => new(Math.Round(value, 3));
     public static implicit operator LogValue(bool value) => new(value);
-    public static implicit operator LogValue(Enum value) => new(value);
+    public static implicit operator LogValue(Enum? value) => new(value);
 
     /// <summary>A program, by its file name only: a full path names the person's folders.</summary>
     public static LogValue Program(string? pathOrName) => new(string.IsNullOrEmpty(pathOrName) ? "" : Path.GetFileName(pathOrName));
@@ -39,6 +39,12 @@ public readonly struct LogValue
         if (separator >= 0) value = value[(separator + 1)..];
         return new(value.Length > 80 ? value[..80] : value);
     }
+
+    /// <summary>The program a window belongs to, by file name.</summary>
+    public static LogValue ProgramOf(nint window) => Program(Windows.WindowInfo.ProgramOf(window));
+
+    /// <summary>A window's class.</summary>
+    public static LogValue ClassOf(nint window) => WindowClass(Windows.WindowInfo.ClassName(window));
 
     /// <summary>An error code, written as hex.</summary>
     public static LogValue Code(int code) => new(code, hex: true);

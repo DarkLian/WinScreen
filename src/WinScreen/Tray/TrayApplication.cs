@@ -1156,10 +1156,18 @@ public sealed class TrayApplication : ApplicationContext
     private void Run(AppCommand command, nint window)
         => RunOnDisplay(command, window, null);
 
+    /// <summary>How a command ended, for the log.</summary>
+    private enum CommandOutcome { Done, ClosedLatestView, ExclusiveFullScreen, PausedInFullScreen, Refused, NotTurnedOn, Failed }
+
+    private static void LogCommand(AppCommand command, nint window, CommandOutcome outcome) =>
+        Diagnostics.Log.Event("command", ("name", command), ("outcome", outcome),
+            ("program", window == 0 ? Diagnostics.LogValue.Program("") : Diagnostics.LogValue.ProgramOf(window)));
+
     private void RunOnDisplay(AppCommand command, nint window, Rectangle? display)
     {
         if (CommandCatalog.Everywhere.Contains(command))
         {
+            LogCommand(command, 0, CommandOutcome.Done);
             RunEverywhere(command);
             return;
         }
@@ -1181,41 +1189,49 @@ public sealed class TrayApplication : ApplicationContext
         switch (recovery ? FullScreenAction.Run : FullScreenDecision(command, window))
         {
             case FullScreenAction.CloseLatestView:
+                LogCommand(command, window, CommandOutcome.ClosedLatestView);
                 _viewsInOrder[^1].Close();
                 return;
             case FullScreenAction.ExplainExclusive:
+                LogCommand(command, window, CommandOutcome.ExclusiveFullScreen);
                 Alert(T("errors.operation.title"),
                     T("errors.fullScreen.exclusiveView"));
                 return;
             case FullScreenAction.Refuse:
+                LogCommand(command, window, CommandOutcome.PausedInFullScreen);
                 Alert(T("errors.operation.title"), T("errors.fullScreen.paused"));
                 return;
         }
 
         if (command == AppCommand.PickPipSource)
         {
+            LogCommand(command, 0, CommandOutcome.Done);
             ShowPicker();
             return;
         }
 
         if (!recovery && _windows.Refusal(window) is { } refusal)
         {
+            LogCommand(command, window, CommandOutcome.Refused);
             Alert(T("errors.operation.title"), refusal);
             return;
         }
 
         if (CommandCatalog.AnchorOf(command) is { } anchor)
         {
+            LogCommand(command, window, CommandOutcome.Done);
             Attempt(() => _placer.Align(window, anchor));
             return;
         }
 
         if (!recovery && !IsAvailable(command))
         {
+            LogCommand(command, window, CommandOutcome.NotTurnedOn);
             Alert(T("errors.operation.title"), T("errors.experimental.enableFirst"));
             return;
         }
 
+        LogCommand(command, window, CommandOutcome.Done);
         try
         {
             switch (command)
@@ -1335,6 +1351,8 @@ public sealed class TrayApplication : ApplicationContext
         }
         catch (Exception failure) when (IsExpected(failure))
         {
+            LogCommand(command, window, CommandOutcome.Failed);
+            Diagnostics.Log.Error("command.failed", failure);
             Alert(T("errors.operation.title"), failure.Message);
         }
     }
@@ -1383,6 +1401,7 @@ public sealed class TrayApplication : ApplicationContext
         }
         catch (Exception failure) when (IsExpected(failure))
         {
+            Diagnostics.Log.Error("action.failed", failure);
             Alert(T("errors.operation.title"), failure.Message);
         }
     }

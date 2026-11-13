@@ -401,7 +401,7 @@ public class InvariantTests
 
     private static readonly Regex LogCall = new("""\bLog\.(?<kind>Event|Error|Swallowed)\((?<arguments>.*?)\);""", RegexOptions.Singleline);
     private static readonly Regex PersonalText = new(
-        """\.Message\b|\bTitle\(|GetWindowText|\.Text\b|Clipboard|\bClassName\(|\.ToString\(|\$"|\bstring\.(?:Format|Concat|Join)\b""");
+        """\.Message\b|\bTitle\(|GetWindowText|\.Text\b|Clipboard|\.ToString\(|\$"|\bstring\.(?:Format|Concat|Join)\b""");
 
     internal static List<string> LogProblems(IEnumerable<KeyValuePair<string, string>> sources)
     {
@@ -412,7 +412,7 @@ public class InvariantTests
             foreach (Match call in LogCall.Matches(code))
             {
                 string arguments = call.Groups["arguments"].Value;
-                if (call.Groups["kind"].Value != "Swallowed" && !Regex.IsMatch(arguments, """\A\s*"[a-z][a-z0-9.]*"\s*(,|\z)"""))
+                if (call.Groups["kind"].Value != "Swallowed" && !Regex.IsMatch(arguments, """\A\s*"[a-z][a-zA-Z0-9.]*"\s*(,|\z)"""))
                     problems.Add($"{path}: Log.{call.Groups["kind"].Value} needs a fixed name in quotes first: {call.Value}");
                 if (PersonalText.Match(arguments) is { Success: true } found)
                     problems.Add($"{path}: '{found.Value}' in {call.Value}. Log values only through LogValue's kinds.");

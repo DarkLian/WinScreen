@@ -148,6 +148,7 @@ internal sealed class MouseGestures : IDisposable
     public void Reinstall()
     {
         if (!Active) return;
+        Diagnostics.Log.Event("hook.gestures.lost", ("dragEnded", _gesture is not null));
         if (_gesture is { } gesture)
         {
             _gesture = null;
@@ -215,9 +216,11 @@ internal sealed class MouseGestures : IDisposable
         {
             _hookThread.Join(ThreadExit);
             _hookThread = null;
+            Diagnostics.Log.Event("hook.gestures.failed", ("code", Diagnostics.LogValue.Code(((Win32Exception)failure).NativeErrorCode)));
             throw failure;
         }
 
+        Diagnostics.Log.Event("hook.gestures.installed");
         FollowMover();
         Interlocked.Exchange(ref _lastCallback, Stopwatch.GetTimestamp());
         Active = true;
@@ -236,6 +239,7 @@ internal sealed class MouseGestures : IDisposable
         _hookThread?.Join(ThreadExit);
         _mover?.Join(ThreadExit);
         _hookThread = _mover = null;
+        Diagnostics.Log.Event("hook.gestures.removed");
     }
 
     private static void ReleaseEscapeKeys()
