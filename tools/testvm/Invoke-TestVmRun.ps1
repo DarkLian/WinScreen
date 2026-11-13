@@ -202,8 +202,12 @@ finally {
 }
 
 foreach ($trx in Get-ChildItem $ResultsDirectory -Filter *.trx -ErrorAction SilentlyContinue) {
-    $counters = ([xml](Get-Content $trx.FullName -Raw)).TestRun.ResultSummary.Counters
-    Write-Output ("{0}: {1} passed, {2} failed, {3} not run" -f $trx.BaseName, $counters.passed, $counters.failed, $counters.notExecuted)
+    # Counted from each result: the summary counters leave skipped tests out of "not executed".
+    $all = @(([xml](Get-Content $trx.FullName -Raw)).TestRun.Results.UnitTestResult)
+    $skipped = @($all | Where-Object outcome -eq 'NotExecuted')
+    Write-Output ("{0}: {1} passed, {2} failed, {3} not run" -f $trx.BaseName, @($all | Where-Object outcome -eq 'Passed').Count,
+        @($all | Where-Object outcome -eq 'Failed').Count, $skipped.Count)
+    $skipped | ForEach-Object { Write-Output "  not run: $($_.testName)" }
 }
 Write-Output "Results: $ResultsDirectory (exit code $exitCode)"
 exit $exitCode
