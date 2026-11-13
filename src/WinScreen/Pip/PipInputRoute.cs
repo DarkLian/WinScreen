@@ -25,19 +25,14 @@ public enum InputOperation { Move, Click, DoubleClick, ContextClick, OtherButton
 /// </summary>
 internal static class PipInputRoutes
 {
-    private static readonly HashSet<string> AutomationSurfaces = new(StringComparer.Ordinal)
-    {
-        "Microsoft.UI.Content.DesktopChildSiteBridge", // WinUI 3 content in a desktop window
-        "Windows.UI.Core.CoreWindow",                  // Store app content, in the app's own process
-        "ApplicationFrameInputSinkWindow",             // The frame's input window over Store app content
-    };
-
     /// <param name="className">The target window's class.</param>
     /// <param name="sameProcess">The target belongs to the original's process.</param>
     /// <param name="insideOriginal">The target is the original or one of its child windows.</param>
+    /// <remarks>The surfaces with a route of their own are in <see cref="Compatibility.AppProfiles.Surfaces"/>.</remarks>
     internal static InputRoute RouteFor(string className, bool sameProcess, bool insideOriginal) =>
-        insideOriginal && AutomationSurfaces.Contains(className) ? InputRoute.Automation
-        : sameProcess && insideOriginal ? InputRoute.Messages
+        !insideOriginal ? InputRoute.Refused
+        : Compatibility.AppProfiles.SurfaceRoute(className) is { } route ? route
+        : sameProcess ? InputRoute.Messages
         : InputRoute.Refused;
 
     internal static InputRoute RouteFor(nint target, nint original, uint originalProcess)

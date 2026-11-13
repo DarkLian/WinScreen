@@ -22,5 +22,7 @@
                       WithCulture="false" LogicalName="LocalizationSource.%(RecursiveDir)%(Filename)%(Extension)" />
     <!-- settings.json as each published version saved it (tools\settings-fixtures). -->
     <EmbeddedResource Include="Fixtures\settings\*.json" WithCulture="false" LogicalName="SettingsFixture.%(Filename)%(Extension)" />
+    <!-- The compatibility page, whose app table must match the app profiles (AppProfileTests). -->
+    <EmbeddedResource Include="..\..\docs\FEATURE_COMPATIBILITY.md" WithCulture="false" LogicalName="Doc.FEATURE_COMPATIBILITY.md" />
   </ItemGroup>
 </Project>

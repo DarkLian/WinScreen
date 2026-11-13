@@ -288,6 +288,26 @@ Every press gets one outcome: delivered, reached a popup, moved the view, a capt
 | Newer UI frameworks: WinUI 3 islands (Explorer's command bar, tabs and address bar on Windows 11) and Store app content (Calculator, Settings) | Accessibility (UI Automation) | Click (invoke, select, toggle, expand, focus a text box); right-click opens the control's own menu, next to the pointer; double-click only where it means two clicks (buttons, check boxes, links, menu items); wheel scrolls what scrolls; keys after a click | Hover, drag and text selection, middle and side buttons, a double-click that opens an item or selects a word |
 | Any other program's window inside the original | — | — | Everything |
 
+**How WinScreen recognises each kind of app.** These two tables come from the list WinScreen itself uses, and a test fails if they ever disagree with it. "Tested on" counts only the tests named beside it.
+
+<!-- app-profiles: made from src/WinScreen/Compatibility/AppProfile.cs by AppProfileTests; don't edit -->
+| Kind of app | Recognised by | Enhanced hover | A click shows the original | Tested on | Tests |
+|---|---|---|---|---|---|
+| Chrome, Edge, Brave and Vivaldi | Program `chrome`, `msedge`, `brave` or `vivaldi` | On with Choose for me | — | Windows 10 and 11 | `Enhanced_hover_keeps_css_previews_and_dom_state_and_clears_on_leave_and_disable`, `A_browser_used_through_a_view_shows_its_own_pointer_and_takes_clicks_selection_and_keys`, `A_browsers_own_middle_click_scrolling_works_with_enhanced_hover` |
+| Firefox | Program `firefox` | On with Choose for me | — | Windows 10 and 11 | `Firefox_keeps_css_hover_when_chosen_in_settings`, `Firefox_takes_clicks_double_clicks_selection_typing_wheel_and_its_menu_through_a_view` |
+| File Explorer | Program `explorer` and window class `CabinetWClass` | Off unless chosen | — | Windows 10 and 11 | `A_hovered_row_stays_highlighted_in_the_view_only_with_enhanced_hover`, `Double_clicking_a_folder_in_a_view_navigates_explorer`, `Explorer_tab_menus_remain_stationary_during_sustained_navigation` |
+| The Windows shell: desktop and taskbar | Program `explorer` | Never | — | A rule, checked without a window | `A_program_is_one_of_the_known_kinds_or_listed_or_left_alone` |
+| Electron apps, such as VS Code and Discord | Window class `Chrome_WidgetWin_1` and Electron's files beside the program | On with Choose for me | — | Windows 10 and 11 | `An_electron_app_keeps_css_hover_when_chosen_in_settings`, `An_electron_app_known_only_by_its_folder_keeps_css_hover`, `An_electron_editor_takes_a_double_click_typing_and_its_context_menu_through_a_view` |
+| Java apps, such as IntelliJ IDEA | A window class starting `SunAwt` | Not used: nothing is sent to it | Always | Windows 11 | `IntelliJ_shows_its_original_on_a_click_on_its_view_and_works_there` |
+| Store apps, such as Calculator and Settings | Program `ApplicationFrameHost` and window class `ApplicationFrameWindow` | Only if added by name | — | Windows 10 and 11 | `Calculator_adds_through_a_view_takes_keys_and_says_what_it_cannot_do`, `A_hidden_store_app_brought_forward_from_elsewhere_is_shown_and_its_taskbar_button_stays` |
+
+| Window inside an app | Window class | Used through | Tested on | Tests |
+|---|---|---|---|---|
+| WinUI 3 content in a desktop window, such as File Explorer's command bar | `Microsoft.UI.Content.DesktopChildSiteBridge` | Accessibility | Windows 11 | `Explorer_tab_menus_remain_stationary_during_sustained_navigation` |
+| Store app content | `Windows.UI.Core.CoreWindow` | Accessibility | Windows 10 and 11 | `Calculator_adds_through_a_view_takes_keys_and_says_what_it_cannot_do` |
+| The Store app frame's input window | `ApplicationFrameInputSinkWindow` | Accessibility | Windows 10 and 11 | `The_wheel_scrolls_a_store_app_through_a_view` |
+<!-- app-profiles end -->
+
 | App (framework) | Direct use | Verified |
 |---|---|---|
 | Chrome, Edge (Chromium) | ✅ | Pointer shapes, clicks, double-click to select a word (also with a pixel of jitter and in a view a quarter of the page's size), drag selection, typing, toolbar, tabs, context menus, wheel |

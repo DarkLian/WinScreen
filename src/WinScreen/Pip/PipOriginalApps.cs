@@ -24,6 +24,6 @@ internal static class PipOriginalApps
     /// </summary>
     internal static bool IsJavaWindow(nint window) => IsJavaClass(Windows.WindowInfo.ClassName(window));
 
-    /// <summary>Java's own window classes: SunAwtFrame for a main window, SunAwtDialog and the rest.</summary>
-    internal static bool IsJavaClass(string windowClass) => windowClass.StartsWith("SunAwt", StringComparison.Ordinal);
+    /// <summary>Java's own window classes: SunAwtFrame for a main window, SunAwtDialog and the rest (see the app profiles).</summary>
+    internal static bool IsJavaClass(string windowClass) => Compatibility.AppProfiles.ShowsOriginalOnClick(windowClass);
 }

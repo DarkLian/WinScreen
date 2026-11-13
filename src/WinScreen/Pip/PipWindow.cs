@@ -1329,10 +1329,10 @@ public sealed class PipWindow : Form
     /// Other programs the helper can be used with go there only while the option is on.
     /// </summary>
     private bool HoverPlacementWanted => PipEnhancedHover.Supported && PipEnhancedHover.Describe(_source) is var (app, native) && native &&
-        (app is PipHoverApp.Browser or PipHoverApp.Firefox or PipHoverApp.Electron || (app != PipHoverApp.None && _enhancedHoverItem.Checked));
+        (PipHoverApps.SideEdgeAlways(app) || (app != PipHoverApp.None && _enhancedHoverItem.Checked));
 
     private bool AppScrollsWithHover => PipEnhancedHover.Supported && PipEnhancedHover.Describe(_source) is var (app, native) && native &&
-        PipHoverApps.Recommended(app);
+        PipHoverApps.ScrollsWithHover(app);
 
     private void PlaceForHover()
     {
@@ -1928,7 +1928,7 @@ public sealed class PipWindow : Form
     /// <summary>Says when the picture may be out of date, without claiming more than WinScreen can tell.</summary>
     private void ShowState()
     {
-        if (_offer != PressOffer.None && Environment.TickCount64 >= _offerUntil) _offer = PressOffer.None;
+        if (_offer != PressOffer.None && (Environment.TickCount64 >= _offerUntil || !CanOffer)) _offer = PressOffer.None;
         PipChipState state = PipStateChip.Decide(_origin.IsMinimized, BackendState,
             Bounds.Contains(Cursor.Position), _selecting || _pressed, _offer);
         if (state == PipChipState.None)
@@ -1960,13 +1960,17 @@ public sealed class PipWindow : Form
     private void OnAnswered(PressOutcome outcome)
     {
         if (_cleaned) return;
-        Offer(_pressFeedback.Note(outcome));
+        if (outcome is PressOutcome.Delivered or PressOutcome.Popup) _offer = PressOffer.None; // The app answers again.
+        Offer(_pressFeedback.Note(outcome, Environment.TickCount64, CanOffer));
     }
+
+    /// <summary>An offer can be shown: the original is hidden and the program is one that is sent input.</summary>
+    private bool CanOffer => _hideItem.Checked && !_usingOriginal && !ShowsOriginalOnly;
 
     /// <summary>Says on the chip, for a few seconds, that the original can be used instead.</summary>
     internal void Offer(PressOffer offer)
     {
-        if (offer == PressOffer.None || !_hideItem.Checked || ShowsOriginalOnly) return;
+        if (offer == PressOffer.None || !CanOffer) return;
         _offer = offer;
         _offerUntil = Environment.TickCount64 + OfferShownFor;
         Diagnostics.Log.Event("press.offered", ("always", offer == PressOffer.AlwaysShowOriginal),

@@ -5,9 +5,9 @@ namespace WinScreen.Pip;
 /// <summary>The kinds of program Enhanced hover knows. Anything else gets the helper only when it is listed by name.</summary>
 internal enum PipHoverApp { None, Browser, Firefox, Electron, FileExplorer, Listed }
 
+/// <summary>Enhanced hover's view of the app profiles (<see cref="Compatibility.AppProfiles"/>), with Settings' own list.</summary>
 internal static class PipHoverApps
 {
-    private static readonly string[] Browsers = ["chrome", "msedge", "brave", "vivaldi"];
     // Nothing is on until Settings has been read.
     private static volatile PipHoverPreferences _preferences = new() { ChooseForMe = false };
 
@@ -23,12 +23,11 @@ internal static class PipHoverApps
     /// <param name="electronLayout">The program's folder has Electron's "resources\app" beside it.</param>
     internal static PipHoverApp Classify(string program, string rootClass, bool electronLayout, IEnumerable<string> listed)
     {
-        if (Browsers.Contains(program, StringComparer.OrdinalIgnoreCase)) return PipHoverApp.Browser;
-        if (program.Equals("firefox", StringComparison.OrdinalIgnoreCase)) return PipHoverApp.Firefox;
-        // The shell process also owns the desktop and the taskbar; only its folder windows count.
-        if (program.Equals("explorer", StringComparison.OrdinalIgnoreCase))
-            return rootClass == "CabinetWClass" ? PipHoverApp.FileExplorer : PipHoverApp.None;
-        if (electronLayout && rootClass == "Chrome_WidgetWin_1") return PipHoverApp.Electron;
+        // A known kind wins over its name in the list. The shell process also owns the desktop and the taskbar, and
+        // only its folder windows count: its other windows are never given the helper, listed or not.
+        if (Compatibility.AppProfiles.Find(program, rootClass, electronLayout) is { } profile &&
+            (profile.Hover != PipHoverApp.None || profile.NeverByName))
+            return profile.Hover;
         return listed.Contains(program, StringComparer.OrdinalIgnoreCase) ? PipHoverApp.Listed : PipHoverApp.None;
     }
 
@@ -48,5 +47,15 @@ internal static class PipHoverApps
     /// What "choose for me" turns on: the kinds where hover was seen to hold and draw. File Explorer is left to the
     /// person, because its tab menus stop responding with the helper on.
     /// </summary>
-    internal static bool Recommended(PipHoverApp app) => app is PipHoverApp.Browser or PipHoverApp.Firefox or PipHoverApp.Electron;
+    internal static bool Recommended(PipHoverApp app) => Compatibility.AppProfiles.OfKind(app)?.ChosenForMe == true;
+
+    /// <summary>
+    /// True when a hidden original of this kind keeps its strip at a side edge whatever Enhanced hover is set to,
+    /// because under the taskbar it would stop drawing and taking pointer moves. Other kinds go there only while
+    /// Enhanced hover is on for them.
+    /// </summary>
+    internal static bool SideEdgeAlways(PipHoverApp app) => Compatibility.AppProfiles.OfKind(app)?.SideEdgeAlways == true;
+
+    /// <summary>True when, with Enhanced hover, the app's own middle-click scrolling works through a view.</summary>
+    internal static bool ScrollsWithHover(PipHoverApp app) => Compatibility.AppProfiles.OfKind(app)?.ScrollsWithHover == true;
 }

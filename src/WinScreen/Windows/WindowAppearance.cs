@@ -223,7 +223,8 @@ public sealed partial class WindowController
     /// Store apps' frames: Windows keeps their taskbar button and Alt+Tab entry itself, so they can't leave the
     /// switcher, but they can still be hidden.
     /// </summary>
-    internal static bool TaskbarButtonOwnedByWindows(nint window) => WindowInfo.ClassName(window) == "ApplicationFrameWindow";
+    internal static bool TaskbarButtonOwnedByWindows(nint window) =>
+        Compatibility.AppProfiles.WindowsOwnsTaskbarButton(WindowInfo.ClassName(window));
 
     public void SetOutOfSwitcher(nint window, bool on)
     {
