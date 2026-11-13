@@ -268,7 +268,8 @@ $os = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
     architecture = $env:PROCESSOR_ARCHITECTURE
     displays = @([HostRunDesktop]::Displays())
     gpus = @(Get-CimInstance Win32_VideoController | ForEach-Object { "$($_.Name) (driver $($_.DriverVersion))" })
-    inputLanguages = @(Get-WinUserLanguageList | ForEach-Object { "$($_.LanguageTag): $($_.InputMethodTips -join ', ')" })
+    # foreach, not the pipeline: the list comes through a pipeline as one object.
+    inputLanguages = @(foreach ($language in (Get-WinUserLanguageList)) { "$($language.LanguageTag): $($language.InputMethodTips -join ', ')" })
     administrator = $false
     commit = $commit
     steps = $steps
@@ -312,16 +313,19 @@ $notRun = @()
 foreach ($trx in Get-ChildItem $ResultsDirectory -Filter *.trx -ErrorAction SilentlyContinue) {
     [xml]$results = Get-Content $trx.FullName -Raw
     # Counted from each result: the summary counters leave skipped tests out of "not executed".
-    $all = @($results.TestRun.Results.UnitTestResult)
-    Write-Output ("{0}: {1} passed, {2} failed, {3} not run" -f $trx.BaseName, @($all | Where-Object outcome -eq 'Passed').Count,
-        @($all | Where-Object outcome -eq 'Failed').Count, @($all | Where-Object outcome -eq 'NotExecuted').Count)
-    foreach ($result in @($all | Where-Object { $_.outcome -eq 'NotExecuted' })) {
+    # Not $all: PowerShell names ignore case, and that is the -All parameter.
+    $outcomes = @($results.TestRun.Results.UnitTestResult)
+    Write-Output ("{0}: {1} passed, {2} failed, {3} not run" -f $trx.BaseName, @($outcomes | Where-Object outcome -eq 'Passed').Count,
+        @($outcomes | Where-Object outcome -eq 'Failed').Count, @($outcomes | Where-Object outcome -eq 'NotExecuted').Count)
+    foreach ($result in @($outcomes | Where-Object { $_.outcome -eq 'NotExecuted' })) {
         $reason = $result.Output.ErrorInfo.Message
         if (-not $reason) { $reason = $result.Output.StdOut }
         $notRun += "$($trx.BaseName): $($result.testName)$(if ($reason) { " - $($reason.Trim())" })"
     }
 }
-$notRun | Set-Content -LiteralPath (Join-Path $ResultsDirectory 'not-run.txt') -Encoding UTF8
+# Always written, so a missing file means the run didn't get this far.
+$listed = if ($notRun.Count -gt 0) { $notRun } else { @('Every selected test ran.') }
+Set-Content -LiteralPath (Join-Path $ResultsDirectory 'not-run.txt') -Value $listed -Encoding UTF8
 if ($notRun.Count -gt 0) { Say 'Did not run'; $notRun | ForEach-Object { Write-Output "- $_" } }
 Write-Output 'Tests that return early when an app is missing are counted as passed; check the console log for them.'
 Write-Output "Results: $ResultsDirectory (exit code $code)"
