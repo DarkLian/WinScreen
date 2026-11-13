@@ -774,7 +774,7 @@ internal sealed class PipInteraction : IDisposable
                     if (_diagnostics.Count > Keep) _diagnostics.Dequeue();
                 }
             }
-            catch (Windows.WindowOperationException) { }
+            catch (Windows.WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
         }
         Pressed?.Invoke(outcome);
     }
@@ -831,7 +831,7 @@ internal sealed class PipInteraction : IDisposable
             var (view, shown) = Geometry();
             // A press whose release never came must not leave the button held down in the app.
             MouseButtons cancelled = MouseButtons.None;
-            try { cancelled = _messages.ReleaseAll(view, shown); } catch (Windows.WindowOperationException) { }
+            try { cancelled = _messages.ReleaseAll(view, shown); } catch (Windows.WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
             if ((cancelled | _pendingClick) != MouseButtons.None)
             {
                 long packed = Interlocked.Read(ref _pointer);
@@ -849,8 +849,8 @@ internal sealed class PipInteraction : IDisposable
                 Directory.CreateDirectory(directory);
                 File.WriteAllLines(Path.Combine(directory, "pip-input-last.log"), InputDiagnostics);
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+            catch (IOException caught) { Diagnostics.Log.Swallowed(caught); }
+            catch (UnauthorizedAccessException caught) { Diagnostics.Log.Swallowed(caught); }
         }
     }
 

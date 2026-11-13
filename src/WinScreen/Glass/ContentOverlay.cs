@@ -380,8 +380,8 @@ internal sealed unsafe class ContentOverlay : Form
 
     private void Release()
     {
-        try { _session?.Dispose(); } catch (COMException) { }
-        try { _pool?.Dispose(); } catch (COMException) { }
+        try { _session?.Dispose(); } catch (COMException caught) { Diagnostics.Log.Swallowed(caught); }
+        try { _pool?.Dispose(); } catch (COMException caught) { Diagnostics.Log.Swallowed(caught); }
         _session = null;
         _pool = null;
         if (_visual != 0) Marshal.Release(_visual);

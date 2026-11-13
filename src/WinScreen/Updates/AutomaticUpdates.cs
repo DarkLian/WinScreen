@@ -85,8 +85,9 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
                 if (!quiet) status(UiText.T("updates.ready"));
             }
         }
-        catch (OperationCanceledException) when (generation.IsCancellationRequested)
+        catch (OperationCanceledException caught) when (generation.IsCancellationRequested)
         {
+            Diagnostics.Log.Swallowed(caught);
         }
         catch (Exception)
         {
@@ -122,9 +123,10 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
             {
                 await _pending.ApplyOnExit(_generation.Token);
             }
-            catch (Exception)
+            catch (Exception caught)
             {
                 /* Never prevent window restoration or shutdown if an update fails. */
+                Diagnostics.Log.Swallowed(caught);
             }
         }
     }

@@ -399,6 +399,7 @@ public sealed class PipWindow : Form
         catch (Exception failure) when (failure is System.ComponentModel.Win32Exception or ExternalException or ArgumentException)
         {
             // The taskbar can use the source icon while the desktop is locked.
+            Diagnostics.Log.Swallowed(failure);
         }
     }
 
@@ -447,7 +448,7 @@ public sealed class PipWindow : Form
             string path = _origin.IsWindow ? WindowInfo.ExecutablePath(_source) : "";
             if (!string.IsNullOrEmpty(path) && Icon.ExtractAssociatedIcon(path) is { } icon) return icon;
         }
-        catch (Exception failure) when (failure is ArgumentException or IOException or ExternalException or System.ComponentModel.Win32Exception) { }
+        catch (Exception failure) when (failure is ArgumentException or IOException or ExternalException or System.ComponentModel.Win32Exception) { Diagnostics.Log.Swallowed(failure); }
         return (Icon)SystemIcons.Application.Clone();
     }
 
@@ -865,8 +866,9 @@ public sealed class PipWindow : Form
                 {
                     _windows.ShowOwned(_source, this);
                 }
-                catch (WindowOperationException)
+                catch (WindowOperationException caught)
                 {
+                    Diagnostics.Log.Swallowed(caught);
                 }
             }
 
@@ -1342,7 +1344,7 @@ public sealed class PipWindow : Form
         {
             _live = null;
             live.Dispose();
-            try { _windows.SetParkedReachable(_source, false); _windows.SetParkedHoverSurface(_source, false); } catch (WindowOperationException) { }
+            try { _windows.SetParkedReachable(_source, false); _windows.SetParkedHoverSurface(_source, false); } catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
             SetInputPassesThrough(false);
             _interactiveItem.Checked = false;
             Problem?.Invoke(failure.Message);
@@ -1353,7 +1355,7 @@ public sealed class PipWindow : Form
     {
         if (!IsHandleCreated || IsDisposed) return;
         try { BeginInvoke(action); }
-        catch (InvalidOperationException) when (IsDisposed || !IsHandleCreated) { }
+        catch (InvalidOperationException caught) when (IsDisposed || !IsHandleCreated) { Diagnostics.Log.Swallowed(caught); }
     }
 
     private void DragLiveView(Size moved)
@@ -1688,7 +1690,7 @@ public sealed class PipWindow : Form
             else SuspendView();
             return;
         }
-        try { _windows.FollowParkedPlace(_source); } catch (WindowOperationException) { }
+        try { _windows.FollowParkedPlace(_source); } catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
         PauseInput(_menu.Visible || TopLayer.InputBlocked);
         // The taskbar's overflow panel can open over a view; the pointer goes through to it. WinScreen's own menus
         // need no such thing: a click on the view while its menu is open just closes the menu.
@@ -1739,9 +1741,10 @@ public sealed class PipWindow : Form
             if (ShownPart(_thumbnail.SourceSize) != _lastShown)
                 FitToSource();
         }
-        catch (WindowOperationException)
+        catch (WindowOperationException caught)
         {
             // Apps can be briefly unmeasurable while they redraw; the next tick tries again.
+            Diagnostics.Log.Swallowed(caught);
         }
     }
 

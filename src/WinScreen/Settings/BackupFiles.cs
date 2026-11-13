@@ -23,6 +23,7 @@ internal static class BackupFiles
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
         {
             // Tidying up is never worth a failure.
+            Diagnostics.Log.Swallowed(failure);
         }
     }
 }

@@ -456,7 +456,7 @@ public sealed class TrayApplication : ApplicationContext
         _settings.RunAsAdministrator = false;
         _startup.AsAdministrator = false;
         try { _settings.Save(_settingsPath); }
-        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(failure); }
         if (_settingsWindow is { IsDisposed: false } open) open.LoadValues(_settings);
         Alert(T("settings.admin"), T("settings.admin.declined"), ToolTipIcon.Info);
     }
@@ -525,7 +525,7 @@ public sealed class TrayApplication : ApplicationContext
         if (placement == _settings.SettingsWindowPlacement) return;
         _settings.SettingsWindowPlacement = placement;
         try { _settings.Save(_settingsPath); }
-        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { } // Opens centred next time instead.
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(failure); } // Opens centred next time instead.
     }
 
     /// <summary>With the look set to follow Windows, Settings is made again when Windows changes between light and dark.</summary>
@@ -873,7 +873,7 @@ public sealed class TrayApplication : ApplicationContext
         {
             // Nothing saved for this program. Looked at again only when the saved setups change.
             try { _setupNone[window] = WindowIdentity.Observe(window); }
-            catch (WindowOperationException) { }
+            catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
             return;
         }
         try

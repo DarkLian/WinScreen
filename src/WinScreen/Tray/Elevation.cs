@@ -95,7 +95,7 @@ internal static class Elevation
             using Process process = Process.GetProcessById(processId);
             process.WaitForExit(15000);
         }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception) { } // Gone already.
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception) { Diagnostics.Log.Swallowed(e); } // Gone already.
     }
 
     /// <summary>

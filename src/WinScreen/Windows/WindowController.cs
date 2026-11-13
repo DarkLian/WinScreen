@@ -453,9 +453,10 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                     FollowHover(window, state, cursor, opaqueOnHover);
                     FollowMaximized(window, state, pausePinWhenMaximized);
                 }
-                catch (WindowOperationException)
+                catch (WindowOperationException caught)
                 {
                     // Tried again on the next pass; nothing here is worth interrupting anyone for.
+                    Diagnostics.Log.Swallowed(caught);
                 }
             }
         }
@@ -755,7 +756,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                     RestoreBorder(window, state);
                     if (!state.ClickThrough) WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
                 }
-                catch (WindowOperationException) { }
+                catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
                 SaveJournal();
                 throw;
             }
@@ -997,9 +998,10 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         {
             SaveJournal();
         }
-        catch (WindowOperationException)
+        catch (WindowOperationException caught)
         {
             // The failure on its way to the person matters more than this one.
+            Diagnostics.Log.Swallowed(caught);
         }
     }
 
@@ -1164,9 +1166,10 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             SetTopmost(window, topmost, identity);
             return;
         }
-        catch (WindowOperationException)
+        catch (WindowOperationException caught)
         {
             // Fall through to bringing it forward.
+            Diagnostics.Log.Swallowed(caught);
         }
 
         nint previous = User32.GetForegroundWindow();
@@ -1181,9 +1184,10 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
 
             SetTopmost(window, topmost, identity);
         }
-        catch (WindowOperationException)
+        catch (WindowOperationException caught)
         {
             // Owned in the journal, so Restore all windows and crash recovery still put it right.
+            Diagnostics.Log.Swallowed(caught);
         }
         finally
         {

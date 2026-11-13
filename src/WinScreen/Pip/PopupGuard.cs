@@ -145,7 +145,7 @@ internal static class PopupGuard
             lock (_held) opened = _watchers.Where(watcher => watcher.Process == process).Select(watcher => watcher.Opened).ToArray();
             // Never let an exception out of a callback Windows makes into native code.
             foreach (Action action in opened)
-                try { action(); } catch (ObjectDisposedException) { }
+                try { action(); } catch (ObjectDisposedException caught) { Diagnostics.Log.Swallowed(caught); }
             return;
         }
         Held? held;

@@ -151,8 +151,9 @@ internal sealed class PipPresetListConverter : JsonConverter<List<PipPreset>>
                 if (element.Deserialize<PipPreset>()?.Validated() is { } preset)
                     presets.Add(preset);
             }
-            catch (JsonException)
+            catch (JsonException caught)
             {
+                Diagnostics.Log.Swallowed(caught);
             }
         }
 

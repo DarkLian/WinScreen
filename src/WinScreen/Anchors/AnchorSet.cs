@@ -79,7 +79,7 @@ public sealed class AnchorSet : IDisposable
         {
             _offTaskbar.Remove(window);
             try { set(window, false); }
-            catch (Windows.WindowOperationException) { } // Closed meanwhile, or recovery puts it back.
+            catch (Windows.WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); } // Closed meanwhile, or recovery puts it back.
         }
         if (IsOffTaskbar is { } isOff) _offTaskbar.RemoveWhere(window => wanted.Contains(window) && !isOff(window));
         _keepsTaskbar.IntersectWith(wanted);
@@ -151,7 +151,7 @@ public sealed class AnchorSet : IDisposable
         foreach (nint window in wanted.Where(window => !_anchors.ContainsKey(window)))
         {
             try { Add(window, automatic: true); }
-            catch (Windows.WindowOperationException) { } // It closed during the pass.
+            catch (Windows.WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); } // It closed during the pass.
         }
 
         _recency = wanted;
@@ -220,7 +220,7 @@ public sealed class AnchorSet : IDisposable
         if (_descriptions.TryGetValue(program, out string? known)) return known;
         string name = "";
         try { name = System.Diagnostics.FileVersionInfo.GetVersionInfo(program).FileDescription ?? ""; }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(e); }
         return _descriptions[program] = name;
     }
 

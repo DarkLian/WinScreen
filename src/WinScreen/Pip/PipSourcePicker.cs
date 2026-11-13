@@ -402,6 +402,7 @@ internal sealed class PipSourcePicker : Form
                                       System.Runtime.InteropServices.ExternalException)
         {
             // A row without an icon is still a row.
+            Diagnostics.Log.Swallowed(e);
         }
 
         return choice.Program;

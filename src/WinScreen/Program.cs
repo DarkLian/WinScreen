@@ -35,7 +35,7 @@ internal static class Program
             {
                 // First, so WinScreen stops starting at sign-in even if the running copy won't close.
                 try { new StartWithWindows().IsOn = false; }
-                catch (IOException) { } // A task only an administrator can remove; it fails harmlessly once the app is gone.
+                catch (IOException caught) { Diagnostics.Log.Swallowed(caught); } // A task only an administrator can remove; it fails harmlessly once the app is gone.
                 RunningInstance.Close();
             })
             .Run();

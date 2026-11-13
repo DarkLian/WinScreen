@@ -44,7 +44,7 @@ public sealed partial class WindowController
             }
             catch
             {
-                try { Unpark(window); } catch (WindowOperationException) { }
+                try { Unpark(window); } catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
                 throw;
             }
         }

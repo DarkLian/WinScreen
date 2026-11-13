@@ -445,6 +445,44 @@ public class InvariantTests
         Assert.NotEmpty(LogProblems([Entry("Tray/A.cs", "LogValue.Known(title)")]));
     }
 
+    // ── No exception disappears without a trace (P0-4) ─────────────────────────────────────────────────────────────
+
+    private static readonly Regex CatchBlock = new("""\bcatch\b(?<clause>[^{;]*)\{(?<body>[^{}]*)\}""");
+
+    /// <summary>Catches whose body is empty once comments are gone: each should at least say Log.Swallowed(e).</summary>
+    internal static List<string> EmptyCatchProblems(IEnumerable<KeyValuePair<string, string>> sources)
+    {
+        var problems = new List<string>();
+        foreach ((string path, string raw) in sources)
+        {
+            // Strings blanked first, so a brace or "catch" in text isn't read as code.
+            string code = Comments.Replace(Strings.Replace(raw, m => new string(' ', m.Length)), m => new string(' ', m.Length));
+            foreach (Match block in CatchBlock.Matches(code))
+                if (string.IsNullOrWhiteSpace(block.Groups["body"].Value))
+                    problems.Add($"{path}:{code[..block.Index].Count(c => c == '\n') + 1}: catch{block.Groups["clause"].Value.TrimEnd()} is empty.");
+        }
+        return problems;
+    }
+
+    [Fact]
+    public void No_exception_is_caught_and_dropped_without_a_trace()
+    {
+        List<string> problems = EmptyCatchProblems(Sources.Value);
+        Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
+    }
+
+    [Fact]
+    public void The_catch_check_fails_for_an_empty_or_comment_only_catch()
+    {
+        KeyValuePair<string, string> Entry(string code) => new("Pip/A.cs", code);
+        Assert.Empty(EmptyCatchProblems([Entry("try { X(); } catch (IOException e) { Log.Swallowed(e); }"),
+            Entry("try { X(); } catch (IOException) { return; }"), Entry("""string s = "catch {}";""")]));
+
+        Assert.NotEmpty(EmptyCatchProblems([Entry("try { X(); } catch (IOException) { }")]));
+        Assert.NotEmpty(EmptyCatchProblems([Entry("try { X(); }\ncatch (Exception e) when (e is IOException)\n{\n    // Gone already.\n}")]));
+        Assert.NotEmpty(EmptyCatchProblems([Entry("try { X(); } catch { /* fine */ }")]));
+    }
+
     // ── 7. Every command has a name in every language and something that runs it ─────────────────────────────────
 
     private static readonly Regex NameArm = new("""AppCommand\.(?<command>\w+)\s*=>\s*T\(\s*"(?<key>[^"]+)"\s*\)""");

@@ -1137,6 +1137,7 @@ private readonly ErrorProvider _errors = new();
                 catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
                 {
                     // Ended while being listed, or not readable from here.
+                    Diagnostics.Log.Swallowed(e);
                 }
             }
         }

@@ -891,7 +891,7 @@ internal static class ProgramIcons
                 var known = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(System.IO.File.ReadAllText(value));
                 foreach ((string name, string path) in known ?? []) Paths.TryAdd(name, path);
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { Diagnostics.Log.Swallowed(e); }
         }
     }
 
@@ -904,7 +904,7 @@ internal static class ProgramIcons
         Missed.Remove(name);
         if (_file is null) return;
         try { System.IO.File.WriteAllText(_file, System.Text.Json.JsonSerializer.Serialize(Paths)); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { } // Found again next time it runs.
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(e); } // Found again next time it runs.
     }
 
     private static Dictionary<string, nint> _running = new(StringComparer.OrdinalIgnoreCase);
@@ -920,7 +920,7 @@ internal static class ProgramIcons
             using (process)
             {
                 try { if (process.MainWindowHandle != 0) found.TryAdd(process.ProcessName, process.MainWindowHandle); }
-                catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+                catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { Diagnostics.Log.Swallowed(e); }
             }
         return _running = found;
     }
@@ -959,6 +959,7 @@ internal static class ProgramIcons
         catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
             // No picture then; the name is still there.
+            Diagnostics.Log.Swallowed(e);
         }
         return Made[(name, size)] = picture;
     }

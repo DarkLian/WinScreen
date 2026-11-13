@@ -275,7 +275,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
             Failure = e;
             Diagnostics.Exception = e;
             int reason = 0;
-            try { if (renderer is not null) reason = renderer.RemovedReason; } catch (Exception) { }
+            try { if (renderer is not null) reason = renderer.RemovedReason; } catch (Exception caught) { WinScreen.Diagnostics.Log.Swallowed(caught); }
             Diagnostics.Failure = $"{e.GetType().Name} 0x{e.HResult:X8}; device 0x{reason:X8}";
             _state = PipSessionState.Failed;
         }

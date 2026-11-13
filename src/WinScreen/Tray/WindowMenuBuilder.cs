@@ -227,7 +227,7 @@ internal static class WindowUtilities
     {
         if (text.Length == 0) return;
         try { Clipboard.SetText(text); }
-        catch (ExternalException) { /* The person can retry when the clipboard is free. */ }
+        catch (ExternalException caught) { Diagnostics.Log.Swallowed(caught); }
     }
 
     public static void OpenLocation(nint window)
@@ -239,6 +239,6 @@ internal static class WindowUtilities
             var start = new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = false };
             Process.Start(start)?.Dispose();
         }
-        catch (Exception failure) when (failure is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+        catch (Exception failure) when (failure is System.ComponentModel.Win32Exception or InvalidOperationException) { Diagnostics.Log.Swallowed(failure); }
     }
 }

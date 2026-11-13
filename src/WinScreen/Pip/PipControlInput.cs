@@ -86,7 +86,7 @@ internal sealed class PipControlInput
                 result = new(false, e.GetType().Name);
                 Drop();
             }
-            try { request.Done(result); } catch (Exception) { /* A finished view's callback must not stop the thread. */ }
+            try { request.Done(result); } catch (Exception caught) { Diagnostics.Log.Swallowed(caught); }
         }
     }
 

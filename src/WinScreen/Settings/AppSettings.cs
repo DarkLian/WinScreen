@@ -512,7 +512,7 @@ public sealed class AppSettings
             File.Copy(path, path + ".invalid-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"));
             BackupFiles.Prune(path, ".invalid-");
         }
-        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(failure); }
     }
 
     public void Save(string path)

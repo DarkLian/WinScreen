@@ -56,7 +56,7 @@ internal sealed class PipBookmarkListConverter : JsonConverter<List<PipSourceBoo
             {
                 if (element.Deserialize<PipSourceBookmark>()?.Validated() is { } bookmark) bookmarks.Add(bookmark);
             }
-            catch (JsonException) { }
+            catch (JsonException caught) { Diagnostics.Log.Swallowed(caught); }
         }
         return bookmarks;
     }

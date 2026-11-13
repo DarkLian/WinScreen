@@ -171,7 +171,7 @@ public sealed partial class WindowController
                 if (prepared)
                 {
                     try { RemoveBorderless(window, state); }
-                    catch (WindowOperationException) { /* Keep the durable record for retry. */ }
+                    catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
                 }
                 else
                 {

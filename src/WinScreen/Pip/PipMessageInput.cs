@@ -373,7 +373,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         if (_controlPress is not null) { _controlPress = null; cancelled = _held; _held = MouseButtons.None; }
         foreach (MouseButtons button in new[] { MouseButtons.Left, MouseButtons.Right, MouseButtons.Middle, MouseButtons.XButton1, MouseButtons.XButton2 })
             if ((_held & button) != 0 && identity.StillThere())
-                try { Release(_lastPointer, button, view, shown, null, out _); } catch (WindowOperationException) { }
+                try { Release(_lastPointer, button, view, shown, null, out _); } catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
         _held = MouseButtons.None;
         return cancelled;
     }

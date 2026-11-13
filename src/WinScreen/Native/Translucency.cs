@@ -65,7 +65,7 @@ internal static class Translucency
         // The see-through parts only let the blur through where the frame reaches; all of the window, while blurred.
         int all = tint is null ? 0 : -1;
         try { DwmExtendFrameIntoClientArea(window, new Margins { Left = all, Right = all, Top = all, Bottom = all }); }
-        catch (DllNotFoundException) { }
+        catch (DllNotFoundException caught) { Diagnostics.Log.Swallowed(caught); }
         int size = Marshal.SizeOf<AccentPolicy>();
         nint data = Marshal.AllocHGlobal(size);
         try
@@ -74,7 +74,7 @@ internal static class Translucency
             var attribute = new CompositionData { Attribute = WCA_ACCENT_POLICY, Data = data, Size = size };
             SetWindowCompositionAttribute(window, ref attribute);
         }
-        catch (EntryPointNotFoundException) { } // Not in this Windows: the menu stays solid.
+        catch (EntryPointNotFoundException caught) { Diagnostics.Log.Swallowed(caught); } // Not in this Windows: the menu stays solid.
         finally { Marshal.FreeHGlobal(data); }
     }
 }

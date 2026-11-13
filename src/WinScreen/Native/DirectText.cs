@@ -100,7 +100,7 @@ internal static unsafe class DirectText
             ((delegate* unmanaged[Stdcall]<nint, int, void>)Slot(Target, 34))(Target, 2); // Grey smoothing, as Windows 11 has.
             Available = true;
         }
-        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { Diagnostics.Log.Swallowed(e); }
     }
 
     private static nint Slot(nint com, int index) => (*(nint**)com)[index];
