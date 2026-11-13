@@ -92,13 +92,22 @@ function Get-RunOutcomes([string]$Folder) {
                 if (-not $reason) { $reason = $result.Output.StdOut }
                 "$($result.testName)$(if ($reason) { " - $("$reason".Trim())" })"
             })
+        $early = Join-Path $Folder "$($trx.BaseName).returned-early.txt"
+        # Anything else that ran counts as failed: Failed, Timeout, Aborted, Error.
+        $failed = @($outcomes | Where-Object { $_.outcome -ne 'Passed' -and $_.outcome -ne 'NotExecuted' })
         [pscustomobject]@{
             Suite = $trx.BaseName
             Passed = @($outcomes | Where-Object { $_.outcome -eq 'Passed' }).Count
-            # Anything else that ran counts as failed: Failed, Timeout, Aborted, Error.
-            Failed = @($outcomes | Where-Object { $_.outcome -ne 'Passed' -and $_.outcome -ne 'NotExecuted' }).Count
+            Failed = $failed.Count
             Skipped = $skipped
-            ReturnedEarly = @(Get-ReturnedEarly (Join-Path $Folder "$($trx.BaseName).returned-early.txt"))
+            ReturnedEarly = @(Get-ReturnedEarly $early)
+            # By full name, theory rows with their arguments, for matching a rerun to a run.
+            PassedTests = @($outcomes | Where-Object { $_.outcome -eq 'Passed' } | ForEach-Object { [string]$_.testName })
+            FailedTests = @($failed | ForEach-Object { [string]$_.testName })
+            # Class.Method of each test that returned early: its "pass" proves nothing.
+            EarlyTests = @(if (Test-Path -LiteralPath $early) {
+                    Get-Content -LiteralPath $early -Encoding UTF8 | Where-Object { $_ } | ForEach-Object { ($_ -split "`t", 2)[0] }
+                })
         }
     }
 }

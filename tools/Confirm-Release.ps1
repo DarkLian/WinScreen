@@ -6,9 +6,10 @@
   Refuses (exit code 1, with every reason) unless TestResults holds, for the commit, built from it with nothing
   uncommitted:
   - a full pair run in the Windows 10 VMs (tools\testvm\Invoke-TestVmPair.ps1) with no failures;
-  - a Windows 11 run of every desktop test on this PC (tools\Invoke-HostRun.ps1 -All) with no failures;
+  - a Windows 11 run of every desktop test on this PC (tools\Invoke-HostRun.ps1 -All) with no failures, or whose
+    every failure passed again in a later run on this PC for the same commit (a targeted rerun of just those);
   - a logic run (tools\Invoke-LogicRun.ps1) with no failures.
-  The newest run of each kind for the commit is the one that counts. It also checks the version in
+  The newest run of each kind for the commit is the one that counts (for Windows 11, the newest full one). It also checks the version in
   Directory.Build.props and, unless -Commit is given, that nothing is uncommitted now and the tag is new.
 
   When everything is there it prints lines to end the tag message with (the release workflow checks the first one
@@ -73,32 +74,68 @@ function Read-Record([string]$Folder) {
     try { return Get-Content -Raw -LiteralPath $file | ConvertFrom-Json } catch { return $null }
 }
 
-# The newest results folder recorded for the commit (folders are named by the time they started).
-function Find-Run([string]$Folder, [string]$Pattern) {
+# The newest results folder recorded for the commit (folders are named by the time they started), of those $Wanted
+# accepts when it is given.
+function Find-Run([string]$Folder, [string]$Pattern, [scriptblock]$Wanted) {
     foreach ($candidate in @(Get-ChildItem -LiteralPath $Folder -Directory -Filter $Pattern -ErrorAction SilentlyContinue | Sort-Object Name -Descending)) {
         $record = Read-Record $candidate.FullName
-        if ($record -and $record.commit -eq $Commit) { return $candidate }
+        if ($record -and $record.commit -eq $Commit -and (-not $Wanted -or (& $Wanted $record))) { return $candidate }
     }
     return $null
 }
 
-# Checks one run's folder; returns its outcomes. $Suites are the .trx files it must have.
-function Test-Run([string]$Label, [string]$Folder, [string[]]$Suites) {
+function Get-ExitCode([string]$Folder) {
+    $exit = Join-Path $Folder 'exitcode.txt'
+    if (-not (Test-Path -LiteralPath $exit)) { return $null }
+    return "$(Get-Content -Raw -LiteralPath $exit)".Trim()
+}
+
+# Checks one run's folder; returns its outcomes. $Suites are the .trx files it must have. $Forgiven are failures
+# ("suite|test") that passed again in a later run (see the Windows 11 part).
+function Test-Run([string]$Label, [string]$Folder, [string[]]$Suites, [string[]]$Forgiven = @()) {
     $record = Read-Record $Folder
     if (-not $record -or $record.commit -ne $Commit) { $problems.Add("${Label}: no source.json for $short in $Folder."); return @() }
     if (-not $record.clean) { $problems.Add("${Label}: built or run with uncommitted changes ($Folder).") }
-    $exit = Join-Path $Folder 'exitcode.txt'
-    if (-not (Test-Path -LiteralPath $exit)) { $problems.Add("${Label}: the run didn't finish (no exitcode.txt in $Folder).") }
-    elseif ("$(Get-Content -Raw -LiteralPath $exit)".Trim() -ne '0') { $problems.Add("${Label}: exit code $("$(Get-Content -Raw -LiteralPath $exit)".Trim()) ($Folder).") }
     $outcomes = @(Get-RunOutcomes $Folder)
     foreach ($suite in $Suites) {
         if (-not ($outcomes | Where-Object Suite -eq $suite)) { $problems.Add("${Label}: no $suite.trx in $Folder.") }
     }
+    $left = 0
     foreach ($outcome in $outcomes) {
-        if ($outcome.Failed -gt 0) { $problems.Add("${Label}: $($outcome.Failed) $($outcome.Suite) tests failed ($Folder).") }
+        $failed = @($outcome.FailedTests | Where-Object { $Forgiven -notcontains "$($outcome.Suite)|$_" })
+        $left += $failed.Count
+        if ($failed.Count -gt 0) { $problems.Add("${Label}: $($failed.Count) $($outcome.Suite) tests failed ($Folder).") }
         if ($outcome.Passed -eq 0) { $problems.Add("${Label}: no $($outcome.Suite) test passed ($Folder).") }
     }
+    $exit = Get-ExitCode $Folder
+    # A run whose every failure passed again ended with the failures' exit code, and that is all it says.
+    if ($null -eq $exit) { $problems.Add("${Label}: the run didn't finish (no exitcode.txt in $Folder).") }
+    elseif ($exit -ne '0' -and -not ($left -eq 0 -and $Forgiven.Count -gt 0)) { $problems.Add("${Label}: exit code $exit ($Folder).") }
     return $outcomes
+}
+
+# Failures of a full Windows 11 run that passed again later on this desktop, as the owner asked (13 Nov 2026): in a
+# later run for the same commit, built clean, on Windows 11, not as administrator, that finished with no failures
+# of its own; the same test (theory rows by their arguments) in the same suite, really run (not returned early).
+function Get-PassedAgain([string]$HostFolder, $Full) {
+    $failed = @(Get-RunOutcomes $Full.FullName | ForEach-Object { $suite = $_.Suite; $_.FailedTests | ForEach-Object { "$suite|$_" } })
+    $passed = @{}
+    if ($failed.Count -eq 0) { return $passed }
+    foreach ($later in @(Get-ChildItem -LiteralPath $HostFolder -Directory | Where-Object { $_.Name -gt $Full.Name } | Sort-Object Name)) {
+        $record = Read-Record $later.FullName
+        if (-not $record -or $record.commit -ne $Commit -or -not $record.clean -or $record.windows -ne '11' -or $record.administrator) { continue }
+        if ((Get-ExitCode $later.FullName) -ne '0') { continue }
+        $outcomes = @(Get-RunOutcomes $later.FullName)
+        if (@($outcomes | Where-Object { $_.Failed -gt 0 }).Count -gt 0) { continue }
+        foreach ($outcome in $outcomes) {
+            foreach ($test in $outcome.PassedTests) {
+                if ($outcome.EarlyTests -contains ($test -split '\(', 2)[0]) { continue }
+                $key = "$($outcome.Suite)|$test"
+                if ($failed -contains $key -and -not $passed.ContainsKey($key)) { $passed[$key] = $later.Name }
+            }
+        }
+    }
+    return $passed
 }
 
 function Sum($Outcomes) {
@@ -134,17 +171,20 @@ else {
     $gate.Add("Release-Gate-Windows-10: $($pair.Name) ($(Sum $all))")
 }
 
-# Windows 11: every desktop test on this PC.
-$hostRun = Find-Run (Join-Path $ResultsRoot 'host') '*'
-if (-not $hostRun) { $problems.Add("No Windows 11 run for $short. Run tools\Invoke-HostRun.ps1 -All -Suite Both, once the PC is free.") }
+# Windows 11: every desktop test on this PC. The newest full run counts; a later targeted run can only pass again
+# what it failed.
+$hostFolder = Join-Path $ResultsRoot 'host'
+$hostRun = Find-Run $hostFolder '*' { param($record) $record.all }
+if (-not $hostRun) { $problems.Add("No full Windows 11 run for $short. Run tools\Invoke-HostRun.ps1 -All -Suite Both, once the PC is free.") }
 else {
     $record = Read-Record $hostRun.FullName
     if ($record.windows -ne '11') { $problems.Add("Windows 11: $($hostRun.Name) ran on Windows $($record.windows).") }
-    if (-not $record.all) { $problems.Add("Windows 11: $($hostRun.Name) ran only $($record.filter); a release needs -All.") }
     if ($record.administrator) { $problems.Add("Windows 11: $($hostRun.Name) ran as administrator.") }
-    $outcomes = @(Test-Run 'Windows 11' $hostRun.FullName @('desktop'))
+    $again = Get-PassedAgain $hostFolder $hostRun
+    $outcomes = @(Test-Run 'Windows 11' $hostRun.FullName @('desktop') @($again.Keys))
     Add-NotRun 'Windows 11' $outcomes
-    $gate.Add("Release-Gate-Windows-11: $($hostRun.Name) ($(Sum $outcomes))")
+    $passedAgain = if ($again.Count -gt 0) { "; $($again.Count) failed, passed again in $(@($again.Values | Sort-Object -Unique) -join ', ')" } else { '' }
+    $gate.Add("Release-Gate-Windows-11: $($hostRun.Name) ($(Sum $outcomes)$passedAgain)")
 }
 
 # Logic.

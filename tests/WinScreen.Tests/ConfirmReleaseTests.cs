@@ -120,8 +120,8 @@ public sealed class ConfirmReleaseTests : IDisposable
     {
         { "a failed test", "1 desktop tests failed" },
         { "uncommitted changes", "uncommitted changes" },
-        { "another commit", "No Windows 11 run for 0123456" },
-        { "a filtered host run", "a release needs -All" },
+        { "another commit", "No full Windows 11 run for 0123456" },
+        { "a filtered host run", "No full Windows 11 run for 0123456" },
         { "a host run on Windows 10", "ran on Windows 10" },
         { "a host run as administrator", "ran as administrator" },
         { "a missing trx", "no logic.trx" },
@@ -168,6 +168,54 @@ public sealed class ConfirmReleaseTests : IDisposable
         Assert.Contains("Not ready to tag v1.0.0", output);
         Assert.Contains(said, output);
         Assert.DoesNotContain("Release-Gate:", output);
+    }
+
+    /// <summary>A later Windows 11 run for the commit: its tests passed (or failed), maybe some returned early.</summary>
+    private void Rerun(string name, string commit, (string Test, string Outcome)[] results, string? early = null)
+    {
+        string folder = Directory.CreateDirectory(Path.Combine(Results, "host", name)).FullName;
+        Json(folder, new { commit, clean = true, tool = "host", windows = "11", all = false, administrator = false, filter = "FullyQualifiedName~A" });
+        Trx(folder, "desktop", results);
+        if (early is not null) File.WriteAllText(Path.Combine(folder, "desktop.returned-early.txt"), early + "\tNo app here.\n");
+        Finished(folder, results.Any(r => r.Outcome == "Failed") ? 1 : 0);
+    }
+
+    /// <summary>
+    /// The owner's rule (13 Nov 2026): a full Windows 11 run's failures count only when every one passed again in a
+    /// later run on this PC for the same commit, really run, in a run with no failures of its own. The gate says so.
+    /// </summary>
+    [Theory]
+    [InlineData("passed again later", true, "(desktop 2 passed; 2 failed, passed again in 20261114-120000)")]
+    [InlineData("a newer targeted run with nothing failed", true, "Release-Gate-Windows-11: 20261114-110000 (desktop 2 passed)")]
+    [InlineData("one failure not run again", false, "1 desktop tests failed")]
+    [InlineData("a rerun with a failure of its own", false, "2 desktop tests failed")]
+    [InlineData("a rerun for another commit", false, "2 desktop tests failed")]
+    [InlineData("a rerun before the full run", false, "2 desktop tests failed")]
+    [InlineData("a rerun that returned early", false, "1 desktop tests failed")]
+    public void A_full_runs_failures_count_only_when_they_passed_again_later(string change, bool passes, string said)
+    {
+        Ready();
+        if (change != "a newer targeted run with nothing failed")
+        {
+            Trx(Host, "desktop", ("A.One", "Passed"), ("A.Two(x: 1)", "Failed"), ("A.Three", "Failed"), ("A.Calculator", "Passed"));
+            Finished(Host, 1);
+        }
+        const string other = "fedcba9876543210fedcba9876543210fedcba98";
+        switch (change)
+        {
+            case "passed again later": Rerun("20261114-120000", Commit, [("A.Two(x: 1)", "Passed"), ("A.Three", "Passed")]); break;
+            case "a newer targeted run with nothing failed": Rerun("20261114-120000", Commit, [("A.One", "Passed")]); break;
+            case "one failure not run again": Rerun("20261114-120000", Commit, [("A.Two(x: 1)", "Passed")]); break;
+            case "a rerun with a failure of its own": Rerun("20261114-120000", Commit, [("A.Two(x: 1)", "Passed"), ("A.Three", "Passed"), ("A.Four", "Failed")]); break;
+            case "a rerun for another commit": Rerun("20261114-120000", other, [("A.Two(x: 1)", "Passed"), ("A.Three", "Passed")]); break;
+            case "a rerun before the full run": Rerun("20261114-100500", Commit, [("A.Two(x: 1)", "Passed"), ("A.Three", "Passed")]); break;
+            case "a rerun that returned early": Rerun("20261114-120000", Commit, [("A.Two(x: 1)", "Passed"), ("A.Three", "Passed")], early: "A.Three"); break;
+            default: throw new ArgumentOutOfRangeException(nameof(change));
+        }
+        (int code, string output) = Confirm();
+        Assert.True(code == (passes ? 0 : 1), output);
+        Assert.Contains(said, output);
+        if (!passes) Assert.DoesNotContain("Release-Gate:", output);
     }
 
     [Fact]
