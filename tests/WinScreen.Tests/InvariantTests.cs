@@ -397,6 +397,54 @@ public class InvariantTests
         Assert.Equal(2, PInvoke.Matches(WithoutComments("[DllImport(\"user32.dll\")] x; [LibraryImport( \"a\")] y; // [DllImport(")).Count);
     }
 
+    // ── The log holds no person's text (P0-4) ──────────────────────────────────────────────────────────────────────
+
+    private static readonly Regex LogCall = new("""\bLog\.(?<kind>Event|Error|Swallowed)\((?<arguments>.*?)\);""", RegexOptions.Singleline);
+    private static readonly Regex PersonalText = new(
+        """\.Message\b|\bTitle\(|GetWindowText|\.Text\b|Clipboard|\bClassName\(|\.ToString\(|\$"|\bstring\.(?:Format|Concat|Join)\b""");
+
+    internal static List<string> LogProblems(IEnumerable<KeyValuePair<string, string>> sources)
+    {
+        var problems = new List<string>();
+        foreach ((string path, string raw) in sources)
+        {
+            string code = WithoutComments(raw);
+            foreach (Match call in LogCall.Matches(code))
+            {
+                string arguments = call.Groups["arguments"].Value;
+                if (call.Groups["kind"].Value != "Swallowed" && !Regex.IsMatch(arguments, """\A\s*"[a-z][a-z0-9.]*"\s*(,|\z)"""))
+                    problems.Add($"{path}: Log.{call.Groups["kind"].Value} needs a fixed name in quotes first: {call.Value}");
+                if (PersonalText.Match(arguments) is { Success: true } found)
+                    problems.Add($"{path}: '{found.Value}' in {call.Value}. Log values only through LogValue's kinds.");
+            }
+            if (!path.StartsWith("Diagnostics/", StringComparison.Ordinal) && code.Contains("LogValue.Known(", StringComparison.Ordinal))
+                problems.Add($"{path}: LogValue.Known is for Diagnostics/ only.");
+        }
+        return problems;
+    }
+
+    [Fact]
+    public void Log_calls_carry_fixed_names_and_no_titles_messages_or_text()
+    {
+        List<string> problems = LogProblems(Sources.Value);
+        Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
+    }
+
+    [Fact]
+    public void The_log_check_fails_for_a_title_a_message_or_a_name_made_up_at_run_time()
+    {
+        KeyValuePair<string, string> Entry(string path, string code) => new(path, code);
+        Assert.Empty(LogProblems([Entry("Pip/A.cs", """Log.Event("press", ("outcome", outcome), ("class", LogValue.WindowClass(name)));"""),
+            Entry("Pip/B.cs", "catch (IOException e) { Log.Swallowed(e); }"), Entry("Diagnostics/Log.cs", "LogValue.Known(version)")]));
+
+        Assert.NotEmpty(LogProblems([Entry("Pip/A.cs", """Log.Event("press", ("title", LogValue.WindowClass(WindowInfo.Title(w))));""")]));
+        Assert.NotEmpty(LogProblems([Entry("Pip/A.cs", """Log.Event("failed", ("why", LogValue.Program(e.Message)));""")]));
+        Assert.NotEmpty(LogProblems([Entry("Pip/A.cs", """Log.Event(name, ("n", 1));""")]));
+        Assert.NotEmpty(LogProblems([Entry("Pip/A.cs", """Log.Event($"press {title}");""")]));
+        Assert.NotEmpty(LogProblems([Entry("Pip/A.cs", """Log.Event("box", ("text", LogValue.WindowClass(box.Text)));""")]));
+        Assert.NotEmpty(LogProblems([Entry("Tray/A.cs", "LogValue.Known(title)")]));
+    }
+
     // ── 7. Every command has a name in every language and something that runs it ─────────────────────────────────
 
     private static readonly Regex NameArm = new("""AppCommand\.(?<command>\w+)\s*=>\s*T\(\s*"(?<key>[^"]+)"\s*\)""");
