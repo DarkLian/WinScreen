@@ -532,7 +532,7 @@ public sealed class AppSettings
 
     /// <summary>
     /// A file a newer WinScreen wrote is copied aside, once, before this version writes over it in its own format,
-    /// so going back to the newer version loses nothing. Loading alone never changes it.
+    /// so it can be put back by hand after going back to the newer version. Loading alone never changes it.
     /// </summary>
     private static void KeepNewerFile(string path)
     {
