@@ -16,6 +16,11 @@ indent_size = 2
 [*.md]
 indent_size = 2
 
+# Written by tools, never by hand: the settings each release saved (never edited) and the .NET tool list.
+[{tests/WinScreen.Tests/Fixtures/settings/*.json,dotnet-tools.json}]
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
 [*.cs]
 # Allman braces, file-scoped namespaces, usings outside the namespace.
 csharp_new_line_before_open_brace = all
