@@ -56,6 +56,7 @@
   "app.about": "關於 WinScreen",
   "app.exit": "結束",
   "app.running": "WinScreen 正在執行",
+  "app.saveDiagnostics": "儲存診斷資訊",
   "app.version": "WinScreen 版本 {0}",
   "common.add": "新增(&A)",
   "common.apply": "套用",

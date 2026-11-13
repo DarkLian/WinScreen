@@ -199,6 +199,7 @@ public sealed class TrayApplication : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem(T("settings.title"), MenuParts.Icon(MenuParts.Settings), (_, _) => OpenSettings()));
         menu.Items.Add(new ToolStripMenuItem(T("updates.check"), MenuParts.Icon(MenuParts.Sync), async (_, _) => await CheckForUpdates()));
+        menu.Items.Add(new ToolStripMenuItem(T("app.saveDiagnostics"), MenuParts.Icon(MenuParts.Save), (_, _) => SaveDiagnostics()));
         menu.Items.Add(new ToolStripMenuItem(T("app.about"), MenuParts.Icon(MenuParts.Info), (_, _) => MessageBox.Show(
             string.Format(T("app.version"), AppInfo.Version), "WinScreen", MessageBoxButtons.OK,
             MessageBoxIcon.Information)));
@@ -1099,6 +1100,21 @@ public sealed class TrayApplication : ApplicationContext
         // Only once shown: a state set before is lost as Settings is shown. Never reached quietly (see ReopenSettings).
         if (state == FormWindowState.Maximized) _settingsWindow.WindowState = FormWindowState.Maximized;
         if (!quietly) _settingsWindow.Activate();
+    }
+
+    /// <summary>Writes the diagnostics file and shows it in File Explorer, for the person to attach to a report.</summary>
+    private void SaveDiagnostics()
+    {
+        try
+        {
+            string path = Diagnostics.DiagnosticsFile.Save(Path.GetDirectoryName(_settingsPath)!, _settings);
+            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"")?.Dispose();
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            Diagnostics.Log.Error("diagnostics.saveFailed", failure);
+            Alert(T("errors.operation.title"), failure.Message);
+        }
     }
 
     private async Task CheckForUpdates()
