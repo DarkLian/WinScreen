@@ -19,45 +19,47 @@ internal static class SettingsStyle
         (int)Math.Round(under.B + (top.B - under.B) * amount));
 
     // Surfaces.
-    internal static Color Page => Dark ? Rgb(0x202020) : Rgb(0xF3F3F3);
+    // In a high-contrast theme every surface, text and mark takes Windows' own colours for it (roadmap P2-4).
+    private static bool Contrast => Tray.MenuStyle.HighContrast;
+    internal static Color Page => Contrast ? SystemColors.Window : Dark ? Rgb(0x202020) : Rgb(0xF3F3F3);
     internal static Color Side => Page;
-    internal static Color Card => Dark ? Rgb(0x2B2B2B) : Rgb(0xFBFBFB);
-    internal static Color CardStroke => Dark ? Rgb(0x1D1D1D) : Rgb(0xE5E5E5);
+    internal static Color Card => Contrast ? SystemColors.Window : Dark ? Rgb(0x2B2B2B) : Rgb(0xFBFBFB);
+    internal static Color CardStroke => Contrast ? SystemColors.WindowText : Dark ? Rgb(0x1D1D1D) : Rgb(0xE5E5E5);
     /// <summary>The line between options on a card: a shade lighter than the card, so options read as one group.</summary>
-    internal static Color Divider => Dark ? Blend(Color.White, Card, 0.055) : Rgb(0xEBEBEB);
+    internal static Color Divider => Contrast ? SystemColors.GrayText : Dark ? Blend(Color.White, Card, 0.055) : Rgb(0xEBEBEB);
     /// <summary>The background of a list that drops down, the same as the menus'.</summary>
     internal static Color Flyout => MenuStyle.Back;
 
     // Text.
     // In the dark theme, a little short of pure white: full white on a dark grey glares at reading size.
-    internal static Color Text => Dark ? Rgb(0xEDEDED) : Rgb(0x1B1B1B);
-    internal static Color Secondary => Dark ? Rgb(0xC5C5C5) : Rgb(0x5F5F5F);
-    internal static Color Tertiary => Dark ? Rgb(0x9E9E9E) : Rgb(0x6E6E6E);
-    internal static Color Disabled => Dark ? Rgb(0x8A8A8A) : Rgb(0x9A9A9A);
+    internal static Color Text => Contrast ? SystemColors.WindowText : Dark ? Rgb(0xEDEDED) : Rgb(0x1B1B1B);
+    internal static Color Secondary => Contrast ? SystemColors.WindowText : Dark ? Rgb(0xC5C5C5) : Rgb(0x5F5F5F);
+    internal static Color Tertiary => Contrast ? SystemColors.WindowText : Dark ? Rgb(0x9E9E9E) : Rgb(0x6E6E6E);
+    internal static Color Disabled => Contrast ? SystemColors.GrayText : Dark ? Rgb(0x8A8A8A) : Rgb(0x9A9A9A);
     internal static Color Error => Dark ? Rgb(0xFF99A4) : Rgb(0xC42B1C);
 
     // Controls: each sits on a surface and is drawn a little lighter (or, in the light theme, whiter) than it.
-    internal static Color FillOn(Color surface) => Dark ? Blend(Color.White, surface, 0.0605) : Blend(Color.White, surface, 0.7);
-    internal static Color HoverOn(Color surface) => Dark ? Blend(Color.White, surface, 0.0837) : Blend(Rgb(0xF9F9F9), surface, 0.5);
-    internal static Color PressedOn(Color surface) => Dark ? Blend(Color.White, surface, 0.0326) : Blend(Rgb(0xF9F9F9), surface, 0.3);
-    internal static Color DisabledOn(Color surface) => Dark ? Blend(Color.White, surface, 0.042) : Blend(Rgb(0xF9F9F9), surface, 0.3);
+    internal static Color FillOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.0605) : Blend(Color.White, surface, 0.7);
+    internal static Color HoverOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.0837) : Blend(Rgb(0xF9F9F9), surface, 0.5);
+    internal static Color PressedOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.0326) : Blend(Rgb(0xF9F9F9), surface, 0.3);
+    internal static Color DisabledOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.042) : Blend(Rgb(0xF9F9F9), surface, 0.3);
     /// <summary>A text box while it is being typed in.</summary>
-    internal static Color ActiveOn(Color surface) => Dark ? Blend(Rgb(0x1E1E1E), surface, 0.7) : Color.White;
-    internal static Color StrokeOn(Color fill) => Dark ? Blend(Color.White, fill, 0.07) : Blend(Color.Black, fill, 0.1);
+    internal static Color ActiveOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Rgb(0x1E1E1E), surface, 0.7) : Color.White;
+    internal static Color StrokeOn(Color fill) => Contrast ? SystemColors.WindowText : Dark ? Blend(Color.White, fill, 0.07) : Blend(Color.Black, fill, 0.1);
     /// <summary>The line under a text box that isn't being typed in.</summary>
-    internal static Color Underline => Dark ? Rgb(0x9A9A9A) : Rgb(0x868686);
+    internal static Color Underline => Contrast ? SystemColors.WindowText : Dark ? Rgb(0x9A9A9A) : Rgb(0x868686);
     /// <summary>A row under the pointer, in a list or in the list of pages.</summary>
-    internal static Color RowHoverOn(Color surface) => Dark ? Blend(Color.White, surface, 0.0419) : Blend(Color.Black, surface, 0.0373);
+    internal static Color RowHoverOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.0419) : Blend(Color.Black, surface, 0.0373);
     /// <summary>The chosen row of a list: a soft grey wash, as Windows 11 has, with a bar of the accent colour at the start.</summary>
-    internal static Color RowSelectedOn(Color surface) => Dark ? Blend(Color.White, surface, 0.0605) : Blend(Color.Black, surface, 0.0373);
-    internal static Color NavSelected => Dark ? Blend(Color.White, Page, 0.0605) : Blend(Color.Black, Page, 0.0373);
+    internal static Color RowSelectedOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.0605) : Blend(Color.Black, surface, 0.0373);
+    internal static Color NavSelected => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, Page, 0.0605) : Blend(Color.Black, Page, 0.0373);
 
     // Accent: the one chosen in Windows, as Windows' own Settings shows it.
     private static readonly Lazy<(Color Dark, Color Light)?> SystemAccent = new(ReadAccent);
-    internal static Color Accent => Dark ? SystemAccent.Value?.Dark ?? Rgb(0x60CDFF) : SystemAccent.Value?.Light ?? Rgb(0x005FB8);
-    internal static Color AccentHover => Blend(Accent, Page, 0.9);
-    internal static Color OnAccent => Dark ? Color.Black : Color.White;
-    internal static Color AccentBack => Blend(Accent, Page, Dark ? 0.18 : 0.14);
+    internal static Color Accent => Contrast ? SystemColors.Highlight : Dark ? SystemAccent.Value?.Dark ?? Rgb(0x60CDFF) : SystemAccent.Value?.Light ?? Rgb(0x005FB8);
+    internal static Color AccentHover => Contrast ? SystemColors.Highlight : Blend(Accent, Page, 0.9);
+    internal static Color OnAccent => Contrast ? SystemColors.HighlightText : Dark ? Color.Black : Color.White;
+    internal static Color AccentBack => Contrast ? SystemColors.Window : Blend(Accent, Page, Dark ? 0.18 : 0.14);
 
     private static (Color Dark, Color Light)? ReadAccent()
     {
@@ -538,6 +540,15 @@ internal sealed class SettingRowPanel : Panel, IDescribed
     {
         _control = control;
         Text = text;
+        // A screen reader reads the row's name for the box, list or slider that sets it (roadmap P2-4).
+        // A framed box is inside its frame, so whatever in the row takes the keyboard gets the name.
+        string name = text.TrimEnd(':', '：', ' ');
+        void Name(Control part)
+        {
+            if (string.IsNullOrEmpty(part.AccessibleName)) part.AccessibleName = name;
+            foreach (Control inner in part.Controls) Name(inner);
+        }
+        Name(control);
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         Size = new Size(SwitchBox.RowWidth, Math.Max(42, control.Height + 10));
         Margin = new Padding(3, 0, 3, 0);
@@ -620,6 +631,16 @@ internal sealed class NavList : Control
         AccessibleRole = AccessibleRole.List;
     }
 
+    /// <summary>A screen reader hears the list's name and the page that is open, and hears it change.</summary>
+    protected override AccessibleObject CreateAccessibilityInstance() => new Spoken(this);
+
+    private sealed class Spoken(NavList owner) : ControlAccessibleObject(owner)
+    {
+        public override AccessibleRole Role => AccessibleRole.List;
+        public override string? Value =>
+            owner._entries.FirstOrDefault(entry => entry.Page is not null && ReferenceEquals(entry.Page, owner._selected))?.Text;
+    }
+
     private int Unit(int value) => SettingsStyle.Unit(this, value);
 
     /// <summary>Adds a group heading.</summary>
@@ -630,7 +651,7 @@ internal sealed class NavList : Control
     internal object? Selected
     {
         get => _selected;
-        set { _selected = value; Invalidate(); }
+        set { _selected = value; Invalidate(); AccessibilityNotifyClients(AccessibleEvents.ValueChange, -1); }
     }
 
     /// <summary>Shows only these pages, or all of them again with null. A heading with none of its pages left goes too.</summary>
@@ -726,6 +747,7 @@ internal sealed class NavList : Control
     {
         _selected = page;
         Invalidate();
+        AccessibilityNotifyClients(AccessibleEvents.ValueChange, -1);
         Chosen?.Invoke(page);
     }
 

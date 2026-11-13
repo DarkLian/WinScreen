@@ -47,7 +47,7 @@ public sealed class SettingsWindow : Form
     private readonly ThemedCheckList _toolbarButtons = new() { CheckOnClick = true, Width = SwitchBox.RowWidth - 8 };
     // The pages. Its own row of tabs is hidden: the list on the left chooses the page.
     private readonly TabControl _tabs = new PagesControl { Size = new Size(540, 520), TabStop = false, Multiline = true };
-    private readonly NavList _nav = new() { Dock = DockStyle.Fill };
+    private readonly NavList _nav = new() { Dock = DockStyle.Fill, AccessibleName = T("settings.pages") };
     private readonly HintTextBox _search = new();
     private readonly Label _pageTitle = new SoftLabel() { AutoSize = true, Font = SettingsStyle.PageTitleFont, UseMnemonic = false, Margin = new Padding(0, 0, 0, 14) };
     private readonly HintTextBox _actionSearch = new() { Dock = DockStyle.Top };

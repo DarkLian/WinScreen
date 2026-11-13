@@ -77,6 +77,7 @@ common.close 7D9EB7ACB13E2462
 common.copy E21F935F11D7E966
 common.experimental 3DC9F569422DCFDA
 common.no 1EA442A134B2A184
+common.ok 565339BC4D33D728
 common.open ED077F3D8125D60D
 common.remove 19E32958B5BB2252
 common.save 1509F561F2416598
@@ -390,6 +391,7 @@ settings.opacity.solidOnHover C9A6DC9D54CE2FDE
 settings.opacity.step B75D0984DB2C85E6
 settings.opacity.title 6062652E10DD84C6
 settings.opacity.wheel DF970B2D6F312E4D
+settings.pages 9046DA16AEA909BA
 settings.pin.border E3F4045B34092EA9
 settings.pin.color 10DCDCA583010E81
 settings.pin.highlight A88E7D7089ED9F44

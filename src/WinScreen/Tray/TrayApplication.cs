@@ -202,14 +202,13 @@ public sealed partial class TrayApplication : ApplicationContext
         _statusItem.Image = MenuParts.Icon(MenuParts.Warning);
         menu.Items.Add(_statusItem);
         _statusItem.Click += (_, _) =>
-            MessageBox.Show(_lastStatus, "WinScreen", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            ThemedMessage.Show(null, _lastStatus, "WinScreen");
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem(T("settings.title"), MenuParts.Icon(MenuParts.Settings), (_, _) => OpenSettings()));
         menu.Items.Add(new ToolStripMenuItem(T("updates.check"), MenuParts.Icon(MenuParts.Sync), async (_, _) => await CheckForUpdates()));
         menu.Items.Add(new ToolStripMenuItem(T("app.saveDiagnostics"), MenuParts.Icon(MenuParts.Save), (_, _) => SaveDiagnostics()));
-        menu.Items.Add(new ToolStripMenuItem(T("app.about"), MenuParts.Icon(MenuParts.Info), (_, _) => MessageBox.Show(
-            string.Format(T("app.version"), AppInfo.Version), "WinScreen", MessageBoxButtons.OK,
-            MessageBoxIcon.Information)));
+        menu.Items.Add(new ToolStripMenuItem(T("app.about"), MenuParts.Icon(MenuParts.Info), (_, _) => ThemedMessage.Show(null,
+            string.Format(T("app.version"), AppInfo.Version), "WinScreen")));
         menu.Items.Add(new ToolStripMenuItem(T("app.exit"), MenuParts.Icon(MenuParts.Power), (_, _) => ExitThread()));
 
         void Ticks()
@@ -1359,8 +1358,8 @@ public sealed partial class TrayApplication : ApplicationContext
         _content.TurnOff(window);
         if (_content.Has(window)) throw new WindowOperationException(T("errors.window.showFirst"));
         WindowIdentity identity = WindowIdentity.Capture(window);
-        if (User32.IsIconic(window) && MessageBox.Show(string.Format(T("pip.sources.restoreWarning"), WindowInfo.Title(window)),
-            T("pip.open"), MessageBoxButtons.OKCancel, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) != DialogResult.OK)
+        if (User32.IsIconic(window) && ThemedMessage.Show(null, string.Format(T("pip.sources.restoreWarning"), WindowInfo.Title(window)),
+            T("pip.open"), okCancel: true) != DialogResult.OK)
             return null;
         identity.Require();
         var pip = new PipWindow(window, _windows);

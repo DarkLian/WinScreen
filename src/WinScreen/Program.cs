@@ -58,14 +58,14 @@ internal static class Program
 
         if (Environment.OSVersion.Version.Build < MinimumBuild)
         {
-            MessageBox.Show(T("errors.app.windowsTooOld"), "WinScreen");
+            Settings.ThemedMessage.Show(null, T("errors.app.windowsTooOld"), "WinScreen");
             return;
         }
 
         using var singleInstance = new Mutex(true, RunningInstance.MutexName, out bool isFirstCopy);
         if (!isFirstCopy)
         {
-            MessageBox.Show(T("errors.app.alreadyRunning"), "WinScreen");
+            Settings.ThemedMessage.Show(null, T("errors.app.alreadyRunning"), "WinScreen");
             return;
         }
 

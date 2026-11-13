@@ -425,7 +425,7 @@ internal sealed class PipSourcePicker : Form
             ? new ScreenPipSource(device, null).IsAvailable
             : choice.Identity?.Matches() == true && _allowed(choice.Window);
         if (valid) return true;
-        MessageBox.Show(this, T("errors.window.targetUnavailable"), Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        Settings.ThemedMessage.Show(this, T("errors.window.targetUnavailable"), Text);
         RefreshSources();
         return false;
     }
@@ -453,7 +453,7 @@ internal sealed class PipSourcePicker : Form
             {
                 if (Native.User32.IsIconic(choice.Window))
                 {
-                    MessageBox.Show(this, T("pip.sources.previewMinimized"), Text);
+                    Settings.ThemedMessage.Show(this, T("pip.sources.previewMinimized"), Text);
                     return;
                 }
                 WindowIdentity.Capture(choice.Window).Require();
@@ -468,7 +468,7 @@ internal sealed class PipSourcePicker : Form
         catch (Exception failure) when (failure is WindowOperationException or System.ComponentModel.Win32Exception or
             System.Runtime.InteropServices.ExternalException)
         {
-            MessageBox.Show(this, failure.Message, Text);
+            Settings.ThemedMessage.Show(this, failure.Message, Text);
         }
     }
 

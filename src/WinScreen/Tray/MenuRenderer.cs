@@ -9,6 +9,23 @@ internal static class MenuStyle
 {
     internal static bool Dark => Application.IsDarkModeEnabled;
 
+    /// <summary>Windows' high-contrast theme is on: WinScreen draws with its colours, not its own (roadmap P2-4).</summary>
+    internal static bool HighContrast => _contrastHere || SystemInformation.HighContrast;
+
+    [ThreadStatic] private static bool _contrastHere;
+
+    /// <summary>For tests: draws as in a high-contrast theme on this thread until disposed, and nowhere else.</summary>
+    internal static IDisposable AsIfHighContrast()
+    {
+        _contrastHere = true;
+        return new Restore();
+    }
+
+    private sealed class Restore : IDisposable
+    {
+        public void Dispose() => _contrastHere = false;
+    }
+
     /// <summary>
     /// Light, dark or as Windows is ("system"). It can change while WinScreen runs: windows made afterwards and
     /// everything WinScreen draws itself follow at once.
@@ -36,26 +53,26 @@ internal static class MenuStyle
     internal static readonly Font MenuHeaderFont = new(Face, 9f);
     internal static readonly Font MenuTitleFont = new(
         FontFamily.Families.FirstOrDefault(family => family.Name.StartsWith("Segoe UI Variable Text Semib", StringComparison.Ordinal))?.Name ?? "Segoe UI Semibold", 10.5f);
-    internal static Color Back => Dark ? Color.FromArgb(44, 44, 44) : Color.FromArgb(249, 249, 249);
-    internal static Color Text => Dark ? Color.FromArgb(255, 255, 255) : Color.FromArgb(27, 27, 27);
-    internal static Color Muted => Dark ? Color.FromArgb(160, 160, 160) : Color.FromArgb(110, 110, 110);
-    internal static Color Disabled => Dark ? Color.FromArgb(120, 120, 120) : Color.FromArgb(160, 160, 160);
-    internal static Color Hover => Dark ? Color.FromArgb(61, 61, 61) : Color.FromArgb(234, 234, 234);
+    internal static Color Back => HighContrast ? SystemColors.Menu : Dark ? Color.FromArgb(44, 44, 44) : Color.FromArgb(249, 249, 249);
+    internal static Color Text => HighContrast ? SystemColors.MenuText : Dark ? Color.FromArgb(255, 255, 255) : Color.FromArgb(27, 27, 27);
+    internal static Color Muted => HighContrast ? SystemColors.MenuText : Dark ? Color.FromArgb(160, 160, 160) : Color.FromArgb(110, 110, 110);
+    internal static Color Disabled => HighContrast ? SystemColors.GrayText : Dark ? Color.FromArgb(120, 120, 120) : Color.FromArgb(160, 160, 160);
+    internal static Color Hover => HighContrast ? SystemColors.Menu : Dark ? Color.FromArgb(61, 61, 61) : Color.FromArgb(234, 234, 234);
 
     /// <summary>Whether menus show a blurred glimpse of what is behind them, as Windows' Transparency effects asks.</summary>
-    internal static bool Translucent => Native.Translucency.On;
+    internal static bool Translucent => !HighContrast && Native.Translucency.On;
     /// <summary>What a menu's background is painted: see-through over the blur when translucent, its colour otherwise.</summary>
     internal static Color Ground => Translucent ? Color.Transparent : Back;
     /// <summary>The highlight under the pointer: a soft wash over the blur, as Windows 11's menus have.</summary>
     internal static Color HoverWash => !Translucent ? Hover : Dark ? Color.FromArgb(26, 255, 255, 255) : Color.FromArgb(20, 0, 0, 0);
     /// <summary>The tint over the blur, lighter than a solid menu so what is behind shows through a little.</summary>
     internal static Color Tint => Dark ? Color.FromArgb(0xD8, 40, 40, 40) : Color.FromArgb(0xE0, 245, 245, 245);
-    internal static Color Line => Dark ? Color.FromArgb(70, 70, 70) : Color.FromArgb(222, 222, 222);
-    internal static Color Accent => Dark ? Color.FromArgb(96, 205, 255) : Color.FromArgb(0, 95, 184);
-    internal static Color AccentBack => Dark ? Color.FromArgb(40, 62, 76) : Color.FromArgb(221, 235, 247);
+    internal static Color Line => HighContrast ? SystemColors.MenuText : Dark ? Color.FromArgb(70, 70, 70) : Color.FromArgb(222, 222, 222);
+    internal static Color Accent => HighContrast ? SystemColors.Highlight : Dark ? Color.FromArgb(96, 205, 255) : Color.FromArgb(0, 95, 184);
+    internal static Color AccentBack => HighContrast ? SystemColors.Menu : Dark ? Color.FromArgb(40, 62, 76) : Color.FromArgb(221, 235, 247);
     /// <summary>The tag on what is experimental, in menus and in Settings: Windows 11's caution colours.</summary>
-    internal static Color TagBack => Dark ? Color.FromArgb(67, 53, 25) : Color.FromArgb(255, 244, 206);
-    internal static Color TagText => Dark ? Color.FromArgb(252, 225, 0) : Color.FromArgb(121, 82, 0);
+    internal static Color TagBack => HighContrast ? SystemColors.Menu : Dark ? Color.FromArgb(67, 53, 25) : Color.FromArgb(255, 244, 206);
+    internal static Color TagText => HighContrast ? SystemColors.MenuText : Dark ? Color.FromArgb(252, 225, 0) : Color.FromArgb(121, 82, 0);
 }
 
 /// <summary>

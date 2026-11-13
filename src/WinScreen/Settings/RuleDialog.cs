@@ -8,7 +8,7 @@ namespace WinScreen.Settings;
 /// Changes one saved setup ("rule", roadmap P1-5): which of its program's windows it is for, and what they get. Says
 /// how many open windows it is for as the fields change.
 /// </summary>
-internal sealed class RuleDialog : Form
+internal sealed class RuleDialog : ThemedDialog
 {
     private readonly ProgramSetup _rule;
     private readonly TextBox _title = new() { Width = 260 }, _class = new() { Width = 260 };
@@ -17,22 +17,13 @@ internal sealed class RuleDialog : Form
         _noToolbar = Check(T("rule.noToolbar")), _everyTime = Check(T("rule.everyTime")), _off = Check(T("rule.off"));
     private readonly NumericUpDown _opacity = new() { Minimum = AppSettings.LowestOpacityPercent, Maximum = 100, Width = 90 };
     private readonly ComboBox _place = Choice(), _display = Choice();
-    private readonly Label _matches = new() { AutoSize = true, UseMnemonic = false };
+    private readonly Label _matches = new SoftLabel { AutoSize = true, UseMnemonic = false };
     private readonly string[] _displays;
 
-    public RuleDialog(ProgramSetup rule)
+    public RuleDialog(ProgramSetup rule) : base(string.Format(T("rule.title"), rule.Program))
     {
         _rule = rule;
-        AutoScaleDimensions = new SizeF(96F, 96F);
-        AutoScaleMode = AutoScaleMode.Dpi;
-        Text = string.Format(T("rule.title"), rule.Program);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = MinimizeBox = false;
-        ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
-        AutoSize = true;
-        AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        Padding = new Padding(10);
 
         _title.Text = rule.TitleContains ?? "";
         _class.Text = rule.WindowClass ?? "";
@@ -62,20 +53,8 @@ internal sealed class RuleDialog : Form
         _everyTime.Checked = rule.EveryTime;
         _off.Checked = rule.Off;
 
-        var table = new TableLayoutPanel { ColumnCount = 2, AutoSize = true };
-        void Row(string label, Control control)
-        {
-            table.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = false });
-            table.Controls.Add(control);
-        }
-        void Whole(Control control)
-        {
-            table.Controls.Add(control);
-            table.SetColumnSpan(control, 2);
-        }
-
         Row(T("rule.titleContains"), _title);
-        Whole(new Label { Text = T("rule.titleHint"), AutoSize = true, UseMnemonic = false, ForeColor = SystemColors.GrayText });
+        Note(T("rule.titleHint"));
         Row(T("rule.windowClass"), _class);
         Whole(_matches);
         Whole(_pinned);
@@ -88,13 +67,7 @@ internal sealed class RuleDialog : Form
         Whole(_noToolbar);
         Whole(_everyTime);
         Whole(_off);
-        var apply = new Button { Text = T("common.apply"), DialogResult = DialogResult.OK, AutoSize = true };
-        var cancel = new Button { Text = T("common.cancel"), DialogResult = DialogResult.Cancel, AutoSize = true };
-        table.Controls.Add(apply);
-        table.Controls.Add(cancel);
-        AcceptButton = apply;
-        CancelButton = cancel;
-        Controls.Add(table);
+        Buttons(T("common.apply"), T("common.cancel"));
 
         _title.TextChanged += (_, _) => CountMatches();
         _class.TextChanged += (_, _) => CountMatches();
@@ -103,7 +76,7 @@ internal sealed class RuleDialog : Form
 
     private static CheckBox Check(string text) => new() { Text = text, AutoSize = true, UseMnemonic = false };
 
-    private static ComboBox Choice() => new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
+    private static ComboBox Choice() => new ThemedCombo { Width = 260 };
 
     /// <summary>The rule as the fields say, kept as the same saved setup so the Settings list doesn't lose its place.</summary>
     public ProgramSetup Result()
