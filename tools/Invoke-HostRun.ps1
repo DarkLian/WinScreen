@@ -284,7 +284,9 @@ Start-Transcript -Path (Join-Path $ResultsDirectory 'runner.log') -Force | Out-N
 try {
     if ($InstalledApps) { $env:WINSCREEN_TEST_INSTALLED_APPS = '1' }
     foreach ($step in $steps) {
-        $env:WINSCREEN_EXE = if ($step.name -eq 'packaged') { Join-Path $program 'WinScreen.exe' } else { $savedExe }
+        # The desktop step's packaged smoke test skips itself without the program; give it the one published, if any.
+        $env:WINSCREEN_EXE = if ($step.name -eq 'packaged' -or ($packaged -and (Test-Path (Join-Path $program 'WinScreen.exe')))) {
+            Join-Path $program 'WinScreen.exe' } else { $savedExe }
         Say "$($step.name): $($step.filter)"
         # Windows PowerShell turns a native program's error output into errors, so don't stop on them here.
         $ErrorActionPreference = 'Continue'

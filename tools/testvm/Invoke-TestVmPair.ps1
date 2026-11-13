@@ -90,7 +90,7 @@ $exitCode = 0
 foreach ($i in 0..1) {
     $log = Join-Path $root "$($plans[$i].Name).log"
     Write-Output "== $($plans[$i].Name)"
-    Get-Content $log | Where-Object { $_ -match ' passed, |^Results:|^Run failed' } | ForEach-Object { "   $_" }
+    Get-Content $log | Where-Object { $_ -match ' passed, |^  not run: |^Results:|^Run failed' } | ForEach-Object { "   $_" }
     $code = $processes[$i].ExitCode
     if ($code -ne 0) { $exitCode = if ($code) { $code } else { 1 } }
 }

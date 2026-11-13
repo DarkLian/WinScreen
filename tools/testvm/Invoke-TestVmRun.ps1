@@ -118,7 +118,7 @@ try {
 
     $steps = @()
     if ($Suite -in 'All', 'Desktop') {
-        $steps += [ordered]@{ name = 'desktop'; filter = $(if ($Filter) { $Filter } else { 'Category!=Interactive' }) }
+        $steps += [ordered]@{ name = 'desktop'; filter = $(if ($Filter) { "Category!=Interactive&($Filter)" } else { 'Category!=Interactive' }) }
     }
     if ($Suite -in 'All', 'Packaged') {
         if ($Published) {
@@ -134,6 +134,8 @@ try {
         $interactive = if ($Filter) { "Category=Interactive&($Filter)" } else { 'Category=Interactive' }
         if ($PackagedFilter) { $interactive = "$interactive&($PackagedFilter)" }
         $steps += [ordered]@{ name = 'packaged'; filter = $interactive; env = @{ WINSCREEN_EXE = '{root}\program\WinScreen.exe' } }
+        # The desktop step's packaged smoke test skips itself without the program; give it the one just published.
+        foreach ($step in $steps | Where-Object { $_.name -eq 'desktop' }) { $step.env = @{ WINSCREEN_EXE = '{root}\program\WinScreen.exe' } }
     }
     [ordered]@{ steps = $steps } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $staging 'run.json') -Encoding UTF8
     Copy-Item (Join-Path $PSScriptRoot 'guest') (Join-Path $staging 'guest') -Recurse
