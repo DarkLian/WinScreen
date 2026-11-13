@@ -108,22 +108,25 @@ public sealed partial class WindowController
     }
 
     /// <summary>
+    /// For tests: given a queue, <see cref="FollowParkedPlace"/> records each step it takes there, with the bounds and
+    /// extended style at the time. Left empty, nothing is recorded.
+    /// </summary>
+    internal System.Collections.Concurrent.ConcurrentQueue<string>? ParkedPlaceSteps { get; set; }
+
+    private void Step(nint window, string what)
+    {
+        if (ParkedPlaceSteps is not { Count: <= 200 }) return;
+        User32.GetWindowRect(window, out Rect b);
+        ParkedPlaceSteps.Enqueue($"{Environment.TickCount64 % 100000} {what} at {b.Left},{b.Top},{b.Right - b.Left}x{b.Bottom - b.Top} ex 0x{ReadExStyle(window):X}");
+    }
+
+    /// <summary>
     /// Checked often while a view shows a parked original. A browser leaving full screen goes back to where it was
     /// before and puts back the styles it had then, which can leave it on the screen and fully visible behind the view.
     /// So: a dropped see-through style is put back, a window back on the screen without covering a monitor is parked
     /// again (one in full screen would only move straight back), and it is reachable only while off the screen.
     /// Nothing is written unless something changed.
     /// </summary>
-    /// <summary>What <see cref="FollowParkedPlace"/> did, for tests: the step, bounds and extended style at the time.</summary>
-    internal System.Collections.Concurrent.ConcurrentQueue<string> ParkedPlaceSteps { get; } = new();
-
-    private void Step(nint window, string what)
-    {
-        if (ParkedPlaceSteps.Count > 200) return;
-        User32.GetWindowRect(window, out Rect b);
-        ParkedPlaceSteps.Enqueue($"{Environment.TickCount64 % 100000} {what} at {b.Left},{b.Top},{b.Right - b.Left}x{b.Bottom - b.Top} ex 0x{ReadExStyle(window):X}");
-    }
-
     internal void FollowParkedPlace(nint window)
     {
         lock (_gate)

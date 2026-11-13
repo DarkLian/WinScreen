@@ -64,7 +64,7 @@ public sealed class FullScreenPageTests(Xunit.Abstractions.ITestOutputHelper out
 
             WindowMenuBuilderTests.OnUiThread(() =>
             {
-                var windows = new WindowController([]);
+                var windows = new WindowController([]) { ParkedPlaceSteps = new() };
                 Point pointer = Desktop.CursorPosition();
                 Desktop.MoveMouse(new Point(screen.Left + 40, screen.Bottom - 120));
                 using var view = new PipWindow(window, windows) { AllowInteractive = true };
@@ -125,7 +125,7 @@ public sealed class FullScreenPageTests(Xunit.Abstractions.ITestOutputHelper out
                 driver.Start();
                 while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
                 view.Close();
-                foreach (string step in windows.ParkedPlaceSteps) log.AppendLine("step: " + step);
+                foreach (string step in windows.ParkedPlaceSteps!) log.AppendLine("step: " + step);
                 if (failure is not null) throw new Xunit.Sdk.XunitException(failure + Environment.NewLine + log);
                 for (int i = 0; i < 4; i++) { Thread.Sleep(200); Application.DoEvents(); log.AppendLine($"closed +{(i + 1) * 200} ms: {Desktop.BoundsOf(window)} ex 0x{Desktop.ExStyle(window):X} opacity {Desktop.Alpha(window)}"); }
                 log.AppendLine($"after the view at {Desktop.BoundsOf(window)} ({Title()})");
