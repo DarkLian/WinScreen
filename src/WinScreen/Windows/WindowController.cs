@@ -60,18 +60,23 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public uint OriginalColorKey { get; init; }
         public byte OriginalAlpha { get; init; }
         public uint OriginalLayeredFlags { get; init; }
-        public bool Pinned { get; set; }
-        public bool Layered { get; set; }
-        public bool ClickThrough { get; set; }
-        public byte Alpha { get; set; } = 255;
+        private const string CurrentState = "Current state: recovery puts back the original from OriginalExStyle and OwnedStyles.";
+
+        [NotJournalled(CurrentState)] public bool Pinned { get; set; }
+        [NotJournalled(CurrentState)] public bool Layered { get; set; }
+        [NotJournalled(CurrentState)] public bool ClickThrough { get; set; }
+        [NotJournalled("Current level: recovery puts back OriginalAlpha.")] public byte Alpha { get; set; } = 255;
         public bool Hidden { get; set; }
+        [NotJournalled("An object in this process, gone after a crash; Hidden is journalled as Concealed.")]
         public object? ConcealmentOwner { get; set; }
+        [NotJournalled("Lasts only while the pointer is over the window; recovery puts back OriginalAlpha.")]
         public bool SolidWhileHovered { get; set; }
+        [NotJournalled("Glass is drawn by WinScreen's own window, which ends with it; the styles it set are in OwnedStyles.")]
         public Color? GlassColor { get; set; }
-        public bool PinPaused { get; set; }
+        [NotJournalled(CurrentState)] public bool PinPaused { get; set; }
         public bool Cropped { get; set; }
-        public byte AlphaBeforeHiding { get; set; } = 255;
-        public byte? AlphaFromClickThrough { get; set; }
+        [NotJournalled("A level in between: recovery puts back OriginalAlpha.")] public byte AlphaBeforeHiding { get; set; } = 255;
+        [NotJournalled("A level in between: recovery puts back OriginalAlpha.")] public byte? AlphaFromClickThrough { get; set; }
         public WindowPlacement? PlacementBeforePeek { get; set; }
         public WindowPlacement? PlacementBeforeRollUp { get; set; }
         public long BorderlessBits { get; set; }
@@ -79,10 +84,14 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public Point? BorderlessOrigin { get; set; }
         public bool BorderlessFilled { get; set; }
         public bool Parked { get; set; }
-        public bool HoverParking { get; set; } // Transient; the existing journal already records the original placement.
-        public bool ReachableWanted { get; set; } // Transient: a visit asked for it; given only while it is off screen.
-        public long LooseSince { get; set; } // Transient: when a parked window was first seen on screen, not covering a monitor; 0 if not.
-        public bool CoveredAMonitor { get; set; } // Transient: covered a monitor (full screen) since it was parked.
+        [NotJournalled("Transient; the journal already records the original placement.")]
+        public bool HoverParking { get; set; }
+        [NotJournalled("Transient: a visit asked for it; given only while it is off screen.")]
+        public bool ReachableWanted { get; set; }
+        [NotJournalled("Transient: when a parked window was first seen on screen, not covering a monitor; 0 if not.")]
+        public long LooseSince { get; set; }
+        [NotJournalled("Transient: covered a monitor (full screen) since it was parked.")]
+        public bool CoveredAMonitor { get; set; }
         public long? SwitcherBits { get; set; }
         public bool TaskbarButtonRemoved { get; set; }
         public int? OriginalDarkTitleBar { get; set; }
