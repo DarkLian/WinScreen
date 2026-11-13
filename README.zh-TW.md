@@ -5,13 +5,13 @@
 <h1 align="center">WinScreen</h1>
 
 <p align="center">
-  <strong>🧪 Beta 測試中。</strong>功能仍可能變化，部分功能仍處於實驗階段。現在最需要你的回饋。
+  <strong>正式版。</strong>標為<em>實驗性</em>的功能仍可能變化。現在最需要你的回饋。
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-beta%20testing-yellow" alt="狀態：Beta 測試中">
+  <img src="https://img.shields.io/badge/status-stable-brightgreen" alt="狀態：正式版">
   <a href="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml"><img src="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml/badge.svg" alt="建置"></a>
-  <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?include_prereleases&label=release" alt="最新版本"></a>
+  <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?label=release" alt="最新版本"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 與 11">
   <img src="https://img.shields.io/badge/arch-x64-4c8bf5" alt="x64">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/DarkLian/WinScreen" alt="MIT 授權"></a>
@@ -40,8 +40,8 @@
 
 ## 透過小檢視使用應用程式
 
-在視窗上按 **Ctrl+Alt+P**，即可開啟一個置頂的小即時檢視。在檢視選單中開啟**互動** *（實驗性）*，就能直接在檢視裡使用應用程式：
-點選、輸入、捲動、選取文字和開啟選單。真正的視窗會隱藏起來，讓影片、聊天或文件一直待在角落，方便你邊看邊做別的事。
+在視窗上按 **Ctrl+Alt+P**，即可開啟一個置頂的小即時檢視。在檢視選單中開啟**互動**，就能直接在檢視裡使用應用程式：
+點選、輸入、捲動、選取文字和開啟選單。Chrome 和 Edge 可直接使用，其他應用程式為*（實驗性）*。真正的視窗會隱藏起來，讓影片、聊天或文件一直待在角落，方便你邊看邊做別的事。
 
 **增強懸停**讓瀏覽器以及 VS Code、Discord 等應用程式的懸停效果正常顯示。對於不適合透過檢視使用的應用程式（例如遊戲），
 點選檢視可改為顯示原視窗，切換到別的視窗後它會再次隱藏。詳情請見[功能相容性](docs/FEATURE_COMPATIBILITY.md)。
@@ -59,7 +59,7 @@
 - 為視窗、整個顯示器或螢幕的一部分開啟即時檢視
 - 裁切、縮放、調整大小、預設和已儲存的來源
 - 隱藏原視窗並保持檢視更新
-- 透過檢視使用應用程式，支援增強懸停與中鍵捲動 *（實驗性）*
+- 透過檢視使用應用程式：Chrome 和 Edge；其他應用程式、增強懸停與中鍵捲動 *（實驗性）*
 - 每個檢視單獨設定畫面更新上限、不透明度、鎖定位置與滑鼠穿透
 - 把檢視最小化到工作列、停留預覽與閱讀放大鏡
 - 自動避開文字與圖片的檢視 *（實驗性）*

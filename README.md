@@ -5,13 +5,13 @@
 <h1 align="center">WinScreen</h1>
 
 <p align="center">
-  <strong>🧪 Beta testing.</strong> Things may still change and some features are still experimental. Your feedback helps most right now.
+  <strong>Stable.</strong> Features marked <em>experimental</em> may still change. Your feedback helps most right now.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-beta%20testing-yellow" alt="Status: beta testing">
+  <img src="https://img.shields.io/badge/status-stable-brightgreen" alt="Status: stable">
   <a href="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml"><img src="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml/badge.svg" alt="Build"></a>
-  <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?include_prereleases&label=release" alt="Latest release"></a>
+  <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?label=release" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 and 11">
   <img src="https://img.shields.io/badge/arch-x64-4c8bf5" alt="x64">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/DarkLian/WinScreen" alt="MIT license"></a>
@@ -41,7 +41,8 @@
 ## Use apps through a small view
 
 Press **Ctrl+Alt+P** on a window for a small live view of it that stays on top. Turn on **Interactive** in the view's
-menu *(experimental)* and you can use the app right inside the view: click, type, scroll, select text and open menus.
+menu and you can use the app right inside the view: click, type, scroll, select text and open menus. It's ready for
+Chrome and Edge; for other apps it's *(experimental)*.
 The real window stays hidden out of the way, so a video, chat or document stays at hand in a corner while you work.
 
 **Enhanced hover** keeps hover effects working in browsers and apps like VS Code and Discord. For an app that doesn't
@@ -61,7 +62,7 @@ again when you switch away. [What works where](docs/FEATURE_COMPATIBILITY.md) li
 - Live views of a window, a whole display or part of the screen
 - Crop, zoom, resize, presets and saved sources
 - Keep the original hidden and the view updating
-- Use apps through a view, with Enhanced hover and middle-click scrolling *(experimental)*
+- Use apps through a view: Chrome and Edge, and other apps, Enhanced hover and middle-click scrolling *(experimental)*
 - Per-view frame limit, opacity, position lock and click-through
 - Minimize views to the taskbar, hover preview and reading lens
 - Views that move away from text and pictures *(experimental)*

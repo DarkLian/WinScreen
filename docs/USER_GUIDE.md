@@ -74,7 +74,8 @@ turn on **Always show title bar** in **Size and options**, or for every new view
   so the view stays live. It also removes the original from the taskbar and Alt+Tab where supported. Showing the original or closing the view restores its entry.
 - **Size and options:** frame limit, opacity, size, position lock and click-through, just for this view.
 - **Presets:** save the crop, size and place under a name and use it again later.
-- **Interactive (experimental)** lets you point, click, select text, drag and scroll in the picture.
+- **Interactive** lets you point, click, select text, drag and scroll in the picture. Ready for Chrome and Edge;
+  *experimental* for other apps.
   **Keep hidden** stays checked and locked while this is on. Turning it off restores your previous hiding choice.
   Drag the view's title bar to move it, or hold Alt and drag the picture.
   Menus open near the pointer. If the app asks you something, the original comes back so you can answer.
