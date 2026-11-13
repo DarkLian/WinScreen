@@ -36,8 +36,17 @@ internal sealed record AppProfile(string Name)
     public bool SharedHost { get; init; }
     /// <summary>Windows owns its taskbar button, so hiding it leaves the button.</summary>
     public bool WindowsOwnsTaskbarButton { get; init; }
+    /// <summary>
+    /// Its views can be used directly with experimental features off (roadmap P1-3): clicks, double-clicks, drag
+    /// selection, typing, the wheel and the context menu were seen working on Windows 10 and 11, and the original
+    /// came back when WinScreen was killed during a visit (<see cref="RecoveredBy"/>). Enhanced hover and middle-click
+    /// scrolling stay experimental for it.
+    /// </summary>
+    public bool InteractiveWithoutSwitch { get; init; }
 
     public Verification[] VerifiedBy { get; init; } = [];
+    /// <summary>Tests that end WinScreen during a visit to this kind of app and see the original come back.</summary>
+    public Verification[] RecoveredBy { get; init; } = [];
 
     internal bool MatchesProgram(string program)
     {
@@ -69,16 +78,36 @@ internal static class AppProfiles
     /// <summary>In order: the first row that matches is the one that counts.</summary>
     internal static readonly AppProfile[] All =
     [
-        new("Chrome, Edge, Brave and Vivaldi")
+        new("Chrome and Edge")
         {
-            Programs = ["chrome", "msedge", "brave", "vivaldi"],
+            // Both browsers run every test below in the Windows 10 VM. The Windows 11 PC has no Edge, so there these tests
+            // ran with Chrome only; the two share their engine and window classes.
+            Programs = ["chrome", "msedge"],
             Hover = PipHoverApp.Browser, ChosenForMe = true, SideEdgeAlways = true, ScrollsWithHover = true,
+            InteractiveWithoutSwitch = true,
             VerifiedBy =
             [
-                new("BrowserInputTests.Enhanced_hover_keeps_css_previews_and_dom_state_and_clears_on_leave_and_disable", Both),
                 new("BrowserInputTests.A_browser_used_through_a_view_shows_its_own_pointer_and_takes_clicks_selection_and_keys", Both),
+                new("BrowserInputTests.A_double_click_selects_a_word_in_a_page_used_through_a_view", Both),
+                new("BrowserInputTests.Two_pages_in_two_views_take_drags_double_clicks_and_menus_each_on_its_own", Both),
+                new("PipMessageInputTests.A_browser_scrolls_under_the_wheel_in_a_view_used_directly", Both),
+                new("BrowserInputTests.A_browser_view_is_used_directly_without_experimental_features_and_never_gets_the_helper", Both),
+                new("BrowserInputTests.Enhanced_hover_keeps_css_previews_and_dom_state_and_clears_on_leave_and_disable", Both),
                 new("BrowserInputTests.A_browsers_own_middle_click_scrolling_works_with_enhanced_hover", Both),
             ],
+            RecoveredBy =
+            [
+                new("AppEndToEndTests.A_browser_used_without_experimental_features_comes_back_when_WinScreen_is_ended_during_a_visit", Both),
+                new("BrowserInputTests.A_hook_owner_crash_restores_a_parked_browser_and_clears_hover", Both),
+            ],
+        },
+        new("Brave and Vivaldi")
+        {
+            // The same engine as Chrome and Edge, and treated the same, but no test has run either: Interactive stays
+            // experimental for them until one does.
+            Programs = ["brave", "vivaldi"],
+            Hover = PipHoverApp.Browser, ChosenForMe = true, SideEdgeAlways = true, ScrollsWithHover = true,
+            VerifiedBy = [new("AppProfileTests.Every_row_is_reached_by_its_own_example", Logic)],
         },
         new("Firefox")
         {
@@ -174,6 +203,10 @@ internal static class AppProfiles
             if (profile.ShowsOriginalOnClick && profile.MatchesClass(windowClass)) return true;
         return false;
     }
+
+    /// <summary>True when views of this app can be used directly without the experimental switch.</summary>
+    internal static bool InteractiveWithoutSwitch(string program, string windowClass, bool electronFiles) =>
+        Find(program, windowClass, electronFiles)?.InteractiveWithoutSwitch == true;
 
     internal static bool IsSharedHost(string program)
     {

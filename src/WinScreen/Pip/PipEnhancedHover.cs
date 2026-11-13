@@ -56,6 +56,26 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
         }
     }
 
+    /// <summary>
+    /// True when a view of this window can be used directly with experimental features off: its kind of app was
+    /// verified for it (<see cref="Compatibility.AppProfile.InteractiveWithoutSwitch"/>).
+    /// </summary>
+    internal static bool InteractiveWithoutSwitch(nint window)
+    {
+        User32.GetWindowThreadProcessId(window, out uint pid);
+        try
+        {
+            using var process = Process.GetProcessById((int)pid);
+            return Compatibility.AppProfiles.InteractiveWithoutSwitch(process.ProcessName,
+                WindowInfo.ClassName(User32.GetAncestor(window, User32.GA_ROOT)),
+                HasElectronLayout(Path.GetDirectoryName(process.MainModule!.FileName) ?? ""));
+        }
+        catch (Exception e) when (e is Win32Exception or ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            return false; // A program that can't be looked at (an administrator one, one that has ended) isn't known.
+        }
+    }
+
     /// <summary>Electron keeps an app's own files in a "resources" folder, as "app" or "app.asar": beside the
     /// program, or one folder down when the program keeps each version in a folder of its own.</summary>
     internal static bool HasElectronLayout(string folder)

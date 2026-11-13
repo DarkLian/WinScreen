@@ -597,8 +597,9 @@ public sealed class TrayApplication : ApplicationContext
             Part(() =>
             {
                 pip.AllowAutoMove = _settings.ExperimentalFeatures;
+                // Ends direct use, unless this kind of app may be used without the switch; then it only loses
+                // Enhanced hover and middle-click scrolling.
                 pip.AllowInteractive = _settings.ExperimentalFeatures;
-                if (!_settings.ExperimentalFeatures) pip.SetInteractive(false);
                 pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;
                 if (!_settings.ExperimentalFeatures) pip.SetAutoMove(false);
             });

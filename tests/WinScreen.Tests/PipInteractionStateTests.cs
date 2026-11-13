@@ -49,6 +49,40 @@ public sealed class PipInteractionStateTests
         });
     }
 
+    /// <summary>
+    /// An app not verified for it (roadmap P1-3) is used through a view only with experimental features on, and
+    /// turning them off puts the original back as it was before.
+    /// </summary>
+    [Fact]
+    public void Without_experimental_features_an_ordinary_app_is_only_watched_and_turning_them_off_ends_direct_use()
+    {
+        using var source = new TargetProcess(new Rectangle(160, 120, 600, 400));
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var view = new PipWindow(source.Handle, windows) { AllowInteractive = false };
+            view.ShowOnTop();
+            Assert.False(view.CanInteract);
+            view.SetInteractive(true);
+            Assert.False(Item(view, "menu.view.interactive").Checked);
+            Assert.False(windows.IsHidden(source.Handle));
+            view.ContextMenuStrip!.Show(view, new Point(20, 20));
+            view.ContextMenuStrip.Close();
+            Assert.False(Item(view, "menu.view.interactive").Available);
+
+            view.AllowInteractive = true;
+            Assert.True(Tray.MenuParts.IsExperimental(Item(view, "menu.view.interactive")));
+            view.SetInteractive(true);
+            Assert.True(Item(view, "menu.view.interactive").Checked);
+            Assert.True(windows.IsHidden(source.Handle));
+            view.AllowInteractive = false;
+            Assert.False(Item(view, "menu.view.interactive").Checked);
+            Assert.False(windows.IsHidden(source.Handle));
+            Assert.Equal(PipStateProblem.None, view.FirstStateProblem);
+            view.Close();
+        });
+    }
+
     [Fact]
     public void Recovery_updates_mode_state_while_a_view_is_suspended()
     {

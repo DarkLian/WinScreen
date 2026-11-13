@@ -53,13 +53,14 @@ public sealed class AppEndToEndTests : IDisposable
         Thread.Sleep(2000); // Input-idle can occur while the notification-area startup still pumps messages.
     }
 
-    private void RestartWith(AppSettings settings)
+    /// <param name="experimental">Experimental features on, as for most tests here; off for what people get by default.</param>
+    private void RestartWith(AppSettings settings, bool experimental = true)
     {
         Desktop.PostMessage(_appWindow, User32.WM_CLOSE, 0, 0);
         Assert.True(_app.WaitForExit(4000));
         _app.Dispose();
 
-        settings.ExperimentalFeatures = true;
+        settings.ExperimentalFeatures = experimental;
         settings.Save(Path.Combine(_data, "settings.json"));
         _app = Start();
         _appWindow = WaitForAppWindow();
@@ -944,6 +945,19 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0), "The original wasn't hidden.");
     }
 
+    /// <summary>The end of WinScreen's own log, for a failure message.</summary>
+    private string LogTail(int lines = 40)
+    {
+        string file = Path.Combine(_data, Diagnostics.DiagnosticLog.FileName);
+        try
+        {
+            using var reader = new StreamReader(new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+            string[] all = reader.ReadToEnd().Split('\n');
+            return "log:\n" + string.Join("\n", all.Skip(Math.Max(0, all.Length - lines)));
+        }
+        catch (IOException e) { return "no log: " + e.Message; }
+    }
+
     private bool ForegroundIsApp()
     {
         User32.GetWindowThreadProcessId(User32.GetForegroundWindow(), out uint owner);
@@ -1007,6 +1021,78 @@ public sealed class AppEndToEndTests : IDisposable
         _app.Dispose();
         _app = Start();
         _appWindow = WaitForAppWindow();
+    }
+
+    /// <summary>
+    /// Roadmap P1-3's recovery check, the way most people will meet it: experimental features off, a view of Chrome or
+    /// Edge used directly from its own menu, a real click and typing that land in the page, then WinScreen ends without
+    /// warning during the visit. The browser comes back where it was and as it was, and the helper was never in it,
+    /// although Choose for me is on.
+    /// </summary>
+    [Fact]
+    public void A_browser_used_without_experimental_features_comes_back_when_WinScreen_is_ended_during_a_visit()
+    {
+        string? path = BrowserInputTests.BrowserCases().Select(c => (string)c[0]).FirstOrDefault(File.Exists);
+        if (path is null) { Skipped.Because("No Chrome or Edge found."); return; }
+        // Without the helper beside the program, "it was never in the browser" would say nothing.
+        Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(Program))!, "WinScreen.Hover.dll")),
+            "The program under test has no WinScreen.Hover.dll.");
+        RestartWith(new AppSettings { WelcomeShown = true, ShowToolbar = false }, experimental: false);
+        const string page = """
+            <!doctype html><title>Kept c=0 val=</title>
+            <style>body{margin:0;font:22px sans-serif}#b{position:fixed;left:0;top:0;width:100vw;height:50vh}
+            #i{position:fixed;left:20px;top:62vh;width:80vw;height:20vh;font-size:40px}</style><button id=b>Press</button><input id=i>
+            <script>let c=0;const r=()=>document.title=`Kept c=${c} val=${i.value}`;b.onclick=()=>{c++;r()};i.oninput=r;</script>
+            """;
+        var (browser, window, root) = BrowserInputTests.Open(page, "Kept", app: true, path);
+        Point home = Desktop.CursorPosition();
+        try
+        {
+            Assert.NotEqual(0, window);
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == window), "The browser didn't come to the front.");
+            Rectangle originalBounds = Desktop.BoundsOf(window);
+            long style = Desktop.ExStyle(window);
+            Desktop.Press(Keys.P, Keys.ControlKey, Keys.Menu);
+            nint pip = WaitForPip();
+            Rectangle view = Desktop.BoundsOf(pip);
+            Desktop.RightClickOn(new Point(view.Left + 60, view.Top + 60), pip);
+            Assert.True(Desktop.WaitFor(ForegroundIsApp), "The view's menu didn't open.");
+            Desktop.Press(Keys.I); // Interactive, offered for Chrome and Edge with experimental features off.
+            Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.IsConcealed(window)), "Interactive wasn't offered, or didn't hide the browser.");
+            Assert.True(Desktop.WaitFor(() => Copies() == 2), "The watcher didn't start.");
+            // The menu stays open after a choice, for the next one. Closed, it may leave the focus with WinScreen.
+            Desktop.Press(Keys.Escape);
+            Thread.Sleep(500);
+
+            view = Desktop.BoundsOf(pip);
+            Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height * 3 / 10));
+            Thread.Sleep(600);
+            Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+            Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.Title(window).StartsWith("Kept c=1", StringComparison.Ordinal), 3000),
+                "The click didn't land: " + Windows.WindowInfo.Title(window) + $"\nview {view}, pointer {Desktop.CursorPosition()}\n" + LogTail());
+            Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height * 3 / 4));
+            Thread.Sleep(300);
+            Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+            Thread.Sleep(400);
+            Desktop.Press(Keys.A); Desktop.Press(Keys.B); Desktop.Press(Keys.C);
+            Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.Title(window) == "Kept c=1 val=abc", 3000),
+                "The typing didn't land: " + Windows.WindowInfo.Title(window) + "\n" + LogTail());
+            Assert.Equal(0, User32.GetProp(window, Windows.WindowController.EnhancedHoverOwnerProperty));
+
+            _app.Kill(); // During the visit: the pointer is still on the view.
+            Assert.True(Desktop.WaitFor(() => !Windows.WindowInfo.IsConcealed(window) && Desktop.BoundsOf(window) == originalBounds &&
+                Desktop.ExStyle(window) == style && Desktop.Alpha(window) is null or 255, 5000),
+                $"The browser didn't come back: concealed={Windows.WindowInfo.IsConcealed(window)} bounds={Desktop.BoundsOf(window)} " +
+                $"(was {originalBounds}) style=0x{Desktop.ExStyle(window):X} (was 0x{style:X}) alpha={Desktop.Alpha(window)}");
+            Assert.True(Desktop.WaitFor(() => Copies() == 0, 3000), "The watcher stayed.");
+        }
+        finally
+        {
+            Desktop.MoveMouse(home);
+            BrowserInputTests.Close(browser, root);
+        }
     }
 
     /// <summary>

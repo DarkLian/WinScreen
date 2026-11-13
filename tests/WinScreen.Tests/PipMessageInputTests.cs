@@ -442,12 +442,12 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
             Desktop.Alpha(source.Handle) == (expected ? 1 : 0));
     }
 
-    private const string EdgePath = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
-
-    [Fact]
-    public void A_browser_scrolls_under_the_wheel_in_a_view_used_directly()
+    /// <summary>Chrome and Edge, with experimental features off: the wheel is one of the inputs they graduated with (P1-3).</summary>
+    [Theory]
+    [MemberData(nameof(BrowserInputTests.BrowserCases), MemberType = typeof(BrowserInputTests))]
+    public void A_browser_scrolls_under_the_wheel_in_a_view_used_directly(string path)
     {
-        if (!File.Exists(EdgePath)) { Skipped.Because("Edge isn't installed."); return; }
+        if (!File.Exists(path)) { Skipped.Because($"{path} isn't there."); return; }
         string root = Directory.CreateTempSubdirectory("winscreen-wheel").FullName;
         using var browser = new System.Diagnostics.Process();
         try
@@ -458,7 +458,7 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
                 <style>body{margin:0}div{height:6000px;background:linear-gradient(#fff,#08f)}</style><div></div>
                 <script>let w=0;function r(){document.title=`WheelPage w=${w} y=${Math.round(scrollY)}`};addEventListener('wheel',()=>{w++;r()},{passive:true});addEventListener('scroll',r);</script>
                 """);
-            browser.StartInfo = new System.Diagnostics.ProcessStartInfo(EdgePath) { UseShellExecute = false };
+            browser.StartInfo = new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = false };
             foreach (string arg in new[] { "--user-data-dir=" + Path.Combine(root, "profile"), "--no-first-run", "--no-default-browser-check",
                 "--disable-sync", "--window-size=900,700", "--window-position=160,100", "--app=" + new Uri(page).AbsoluteUri })
                 browser.StartInfo.ArgumentList.Add(arg);
@@ -468,7 +468,7 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
             Thread.Sleep(1000);
             WindowMenuBuilderTests.OnUiThread(() =>
             {
-                using var view = new PipWindow(edge, new WindowController([])) { AllowInteractive = true };
+                using var view = new PipWindow(edge, new WindowController([])) { AllowInteractive = false };
                 view.ShowOnTop();
                 view.Location = new Point(1000, 250);
                 view.SetInteractive(true);

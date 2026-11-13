@@ -22,12 +22,16 @@ internal enum PipStateProblem
     UsingHiddenOriginal,
     /// <summary>"Use it, then hide again" while the view is minimized.</summary>
     UsingOriginalWhileMinimized,
+    /// <summary>Used directly although neither the experimental switch nor its kind of app allows it.</summary>
+    InteractiveNotAllowed,
+    /// <summary>A visit with Enhanced hover or middle-click scrolling while experimental features are off.</summary>
+    ExperimentalVisitWithoutSwitch,
 }
 
 /// <summary>
 /// A borderless, always-on-top live view of another window. Drag to move, mouse wheel to resize,
 /// Ctrl+drag to crop, Ctrl+double-click to remove the crop. Clicking activates the original by
-/// default; verified input forwarding requires an explicit experimental opt-in. Using the view never
+/// default; using the view directly needs experimental features, except for the kinds of app verified for it. Using the view never
 /// takes the focus from the app in use.
 /// </summary>
 public sealed class PipWindow : Form
@@ -132,8 +136,36 @@ public sealed class PipWindow : Form
     [System.ComponentModel.DefaultValue(false)]
     public bool AllowAutoMove { get; set; }
 
+    /// <summary>
+    /// The experimental switch: any kind of app can be used through the view, with Enhanced hover and middle-click
+    /// scrolling. Without it only the kinds verified for it can (<see cref="CanInteract"/>), and with neither of those.
+    /// </summary>
     [System.ComponentModel.DefaultValue(false)]
-    public bool AllowInteractive { get; set; }
+    public bool AllowInteractive
+    {
+        get => _allowInteractive;
+        set
+        {
+            if (_allowInteractive == value) return;
+            _allowInteractive = value;
+            if (!CanInteract) { SetInteractive(false); return; }
+            // Enhanced hover and middle-click scrolling come and go with the switch: a visit going on starts again.
+            if (_live is not null) { EndLive(); BeginLive(PointToClient(Cursor.Position)); }
+            PlaceForHover();
+        }
+    }
+    private bool _allowInteractive;
+
+    /// <summary>Its kind of app may be used through a view with experimental features off (roadmap P1-3).</summary>
+    private readonly bool _interactiveWithoutSwitch;
+
+    /// <summary>True when the view may be used directly now.</summary>
+    internal bool CanInteract => (_allowInteractive || _interactiveWithoutSwitch) && _origin.IsWindow;
+
+    /// <summary>Whether a visit uses the helper in the app: chosen, and experimental features on.</summary>
+    private bool HoverOn => _enhancedHoverItem.Checked && _allowInteractive;
+
+    private bool MiddleScrollOn => _middleScrollItem.Checked && _allowInteractive;
 
     [System.ComponentModel.DefaultValue(false)]
     public bool AllowSwitcherHiding { get; set; }
@@ -151,6 +183,7 @@ public sealed class PipWindow : Form
         _program = source.IsWindow ? WindowInfo.ProgramOf(_source) : "";
         _javaSource = source.IsWindow && PipOriginalApps.IsJavaWindow(_source);
         _pressFeedback = new PipPressFeedback(_program);
+        _interactiveWithoutSwitch = source.IsWindow && PipEnhancedHover.InteractiveWithoutSwitch(_source);
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         BackColor = Color.Black; // Whatever briefly shows while resizing shouldn't flash.
@@ -164,12 +197,17 @@ public sealed class PipWindow : Form
         _autoMoveItem = new ToolStripMenuItem(T("pip.autoMove"), null,
             (_, _) => SetAutoMove(!_autoMoveItem!.Checked)).Experimental();
         _interactiveItem = new ToolStripMenuItem(T("menu.view.interactive"), null,
-            (_, _) => SetInteractive(!_interactiveItem!.Checked)).Experimental().OneOf();
+            (_, _) => SetInteractive(!_interactiveItem!.Checked));
+        // Tagged Experimental unless this kind of app was verified for it. Its two options are experimental for every
+        // app; under an untagged Interactive they carry the tag themselves.
+        if (!_interactiveWithoutSwitch) _interactiveItem.Experimental();
+        _interactiveItem.OneOf();
         _middleScrollItem = new ToolStripMenuItem(T("menu.view.middleScroll"), null,
             (_, _) => SetMiddleClickScroll(!_middleScrollItem!.Checked)) { ToolTipText = T("menu.view.middleScroll.tip") };
         _enhancedHoverItem = new ToolStripMenuItem(T("menu.view.hover"), null,
             (_, _) => { _hoverChosen = true; SetEnhancedHover(!_enhancedHoverItem!.Checked); })
             { ToolTipText = T("pip.enhancedHover.description"), Checked = PipEnhancedHover.StartsOn(_source) };
+        if (_interactiveWithoutSwitch) { _middleScrollItem.Experimental(); _enhancedHoverItem.Experimental(); }
         _viewOnlyItem = new ToolStripMenuItem(T("menu.view.watch"), null, (_, _) => SetInteractive(false)) { Name = "viewOnly" }.OneOf();
         // The two options that only mean something while the picture is being used sit under Interactive PiP, set in.
         _middleScrollItem.Margin = _enhancedHoverItem.Margin = new Padding(MenuParts.Scale(16), 0, 0, 0);
@@ -239,11 +277,12 @@ public sealed class PipWindow : Form
         FillHelp();
         _retryItem.Available = CanRetryCapture;
         _autoMoveItem.Available = AllowAutoMove;
-        bool canInteract = AllowInteractive && _origin.IsWindow;
+        bool canInteract = CanInteract;
         _viewOnlyItem.Available = _interactiveItem.Available = canInteract;
         _viewOnlyItem.Checked = !_interactiveItem.Checked;
-        // Available is what is asked for; Visible would also say whether the menu is open, and it isn't yet.
-        bool showInteractionOptions = canInteract && _interactiveItem.Checked;
+        // Available is what is asked for; Visible would also say whether the menu is open, and it isn't yet. The two
+        // options are experimental, also for a kind of app that can be used directly without the switch.
+        bool showInteractionOptions = canInteract && _interactiveItem.Checked && _allowInteractive;
         _middleScrollItem.Available = showInteractionOptions;
         _enhancedHoverItem.Available = showInteractionOptions;
         _useHeader.Available = canInteract || AllowAutoMove;
@@ -762,7 +801,7 @@ public sealed class PipWindow : Form
 
     internal PipBackendKind BackendKind => _thumbnail?.Kind ?? PipBackendKind.DwmThumbnail;
     internal PipSessionState BackendState => _thumbnail?.State ?? PipSessionState.Stopped;
-    internal string DiagnosticSnapshot => (_thumbnail?.Snapshot() ?? "Stopped") + $"\nEnhanced hover: {_live?.HoverStatus ?? (_enhancedHoverItem.Checked ? "inactive" : "off")}";
+    internal string DiagnosticSnapshot => (_thumbnail?.Snapshot() ?? "Stopped") + $"\nEnhanced hover: {_live?.HoverStatus ?? (HoverOn ? "inactive" : "off")}";
 
     /// <summary>Opens the view's diagnostics in front, leaving the view usable while they are open.</summary>
     private void ShowDiagnostics()
@@ -1216,7 +1255,7 @@ public sealed class PipWindow : Form
     internal void SetInteractive(bool on)
     {
         if (on == _interactiveItem.Checked) return;
-        if (on && (!AllowInteractive || !_origin.IsWindow)) return;
+        if (on && !CanInteract) return;
         if (on)
         {
             _hiddenBeforeInteractive = _hideItem.Checked;
@@ -1254,6 +1293,9 @@ public sealed class PipWindow : Form
         if (live && (_suspended || _inputPaused)) return PipStateProblem.VisitWhilePaused;
         if (_usingOriginal && (hidden || live)) return PipStateProblem.UsingHiddenOriginal;
         if (_usingOriginal && _suspended) return PipStateProblem.UsingOriginalWhileMinimized;
+        if (interactive && !CanInteract) return PipStateProblem.InteractiveNotAllowed;
+        if (_live is { } visit && !_allowInteractive && (visit.EnhancedHover || visit.MiddleClickScroll))
+            return PipStateProblem.ExperimentalVisitWithoutSwitch;
         return PipStateProblem.None;
     }
 
@@ -1306,7 +1348,7 @@ public sealed class PipWindow : Form
         long now = Environment.TickCount64;
         if (_originalLeftAt == 0) _originalLeftAt = now;
         if (now - _originalLeftAt < UseOriginalGrace) return;
-        bool interactive = _usingFromInteractive && AllowInteractive;
+        bool interactive = _usingFromInteractive && CanInteract;
         ChangeInteractionMode(interactive, true);
         if (_hideItem.Checked && User32.IsIconic(_source))
             User32.ShowWindow(_source, User32.SW_SHOWNOACTIVATE); // Minimized while in use: it has no picture until restored.
@@ -1329,7 +1371,7 @@ public sealed class PipWindow : Form
     /// Other programs the helper can be used with go there only while the option is on.
     /// </summary>
     private bool HoverPlacementWanted => PipEnhancedHover.Supported && PipEnhancedHover.Describe(_source) is var (app, native) && native &&
-        (PipHoverApps.SideEdgeAlways(app) || (app != PipHoverApp.None && _enhancedHoverItem.Checked));
+        (PipHoverApps.SideEdgeAlways(app) || (app != PipHoverApp.None && HoverOn));
 
     private bool AppScrollsWithHover => PipEnhancedHover.Supported && PipEnhancedHover.Describe(_source) is var (app, native) && native &&
         PipHoverApps.ScrollsWithHover(app);
@@ -1344,7 +1386,7 @@ public sealed class PipWindow : Form
     internal void SetMiddleClickScroll(bool enabled)
     {
         _middleScrollItem.Checked = enabled;
-        if (_live is { } live) { live.MiddleClickScroll = enabled; if (!enabled) live.CancelScroll(); }
+        if (_live is { } live) { live.MiddleClickScroll = MiddleScrollOn; if (!MiddleScrollOn) live.CancelScroll(); }
     }
 
     /// <summary>Why the last visit ended, for tests and diagnostics.</summary>
@@ -1381,9 +1423,10 @@ public sealed class PipWindow : Form
         _unobservedSince = 0;
         _popups ??= CreateSourcePopups();
         var live = new PipInteraction(_source, RectangleToScreen(area), ShownPart(_thumbnail.SourceSize), Handle, _popups);
-        live.MiddleClickScroll = _middleScrollItem.Checked;
+        // Both stay experimental, also where the view itself may be used without the switch.
+        live.MiddleClickScroll = MiddleScrollOn;
         live.AppScrollsWithHover = AppScrollsWithHover;
-        live.EnhancedHover = _enhancedHoverItem.Checked;
+        live.EnhancedHover = HoverOn;
         live.Left += () => BeginInvokeIfAlive(() => { LastVisitEnd = "the pointer left"; EndLive(); });
         live.Pressed += _pressOutcomes.Enqueue;
         live.Answered += outcome => BeginInvokeIfAlive(() => OnAnswered(outcome));

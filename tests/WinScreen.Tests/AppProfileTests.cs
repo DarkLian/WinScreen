@@ -100,7 +100,8 @@ public sealed class AppProfileTests
     /// <summary>One app of each row, as Windows reports it. Each must land on its own row, not an earlier one.</summary>
     public static TheoryData<string, string, string, bool> Examples => new()
     {
-        { "Chrome, Edge, Brave and Vivaldi", "chrome", "Chrome_WidgetWin_1", false },
+        { "Chrome and Edge", "chrome", "Chrome_WidgetWin_1", false },
+        { "Brave and Vivaldi", "brave", "Chrome_WidgetWin_1", false },
         { "Firefox", "firefox", "MozillaWindowClass", false },
         { "File Explorer", "explorer", "CabinetWClass", false },
         { "The Windows shell: desktop and taskbar", "explorer", "Shell_TrayWnd", false },
@@ -131,6 +132,7 @@ public sealed class AppProfileTests
     {
         var problems = new List<string>();
         IEnumerable<(string Row, Verification[] By)> rows = AppProfiles.All.Select(profile => (profile.Name, profile.VerifiedBy))
+            .Concat(AppProfiles.All.Where(profile => profile.RecoveredBy.Length > 0).Select(profile => (profile.Name, profile.RecoveredBy)))
             .Concat(AppProfiles.Surfaces.Select(surface => (surface.Name, surface.VerifiedBy)));
         foreach ((string row, Verification[] by) in rows)
         {
@@ -148,6 +150,41 @@ public sealed class AppProfileTests
                     problems.Add($"{row}: {verification.Test} says {verification.On}");
             }
         }
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    [Theory]
+    [InlineData("chrome", "Chrome_WidgetWin_1", false, true)]
+    [InlineData("msedge", "Chrome_WidgetWin_1", false, true)]
+    [InlineData("brave", "Chrome_WidgetWin_1", false, false)]
+    [InlineData("vivaldi", "Chrome_WidgetWin_1", false, false)]
+    [InlineData("firefox", "MozillaWindowClass", false, false)]
+    [InlineData("Code", "Chrome_WidgetWin_1", true, false)]
+    [InlineData("explorer", "CabinetWClass", false, false)]
+    [InlineData("ApplicationFrameHost", "ApplicationFrameWindow", false, false)]
+    [InlineData("WinScreen.TestTarget", "WindowsForms10.Window.8.app.0.1", false, false)]
+    public void Only_chrome_and_edge_are_used_through_a_view_without_experimental_features(string program, string windowClass,
+        bool electron, bool without) =>
+        Assert.Equal(without, AppProfiles.InteractiveWithoutSwitch(program, windowClass, electron));
+
+    /// <summary>
+    /// A kind of app leaves the experimental switch only with its evidence (roadmap P1-3): input seen working on
+    /// Windows 10 and 11, and the original seen coming back after WinScreen ended during a visit, on both.
+    /// </summary>
+    [Fact]
+    public void A_kind_used_without_the_switch_was_seen_working_and_coming_back_on_both_versions()
+    {
+        var problems = new List<string>();
+        foreach (AppProfile profile in AppProfiles.All.Where(profile => profile.InteractiveWithoutSwitch))
+        {
+            if (profile.ShowsOriginalOnClick) problems.Add($"{profile.Name}: a click shows its original, so nothing is sent to it.");
+            if (profile.VerifiedBy.Count(verification => verification.On == WindowsVersions.Both) < 4)
+                problems.Add($"{profile.Name}: fewer than four input tests seen on both Windows versions.");
+            if (!profile.RecoveredBy.Any(verification => verification.On == WindowsVersions.Both))
+                problems.Add($"{profile.Name}: no recovery test seen on both Windows versions.");
+        }
+        foreach (AppProfile profile in AppProfiles.All.Where(profile => !profile.InteractiveWithoutSwitch && profile.RecoveredBy.Length > 0))
+            problems.Add($"{profile.Name}: recovery tests listed, but not used without the switch.");
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
@@ -190,15 +227,17 @@ internal static class AppProfileDocument
     internal static string Table()
     {
         var text = new System.Text.StringBuilder();
-        text.Append("| Kind of app | Recognised by | Enhanced hover | A click shows the original | Tested on | Tests |\n");
-        text.Append("|---|---|---|---|---|---|\n");
+        text.Append("| Kind of app | Recognised by | Used through a view | Enhanced hover | A click shows the original | Tested on | Tests |\n");
+        text.Append("|---|---|---|---|---|---|---|\n");
         foreach (AppProfile profile in AppProfiles.All)
         {
+            string used = profile.ShowsOriginalOnClick ? "—" : profile.InteractiveWithoutSwitch ? "Yes" : "With experimental features on";
             string hover = profile.ShowsOriginalOnClick ? "Not used: nothing is sent to it"
                 : profile.Hover == PipHoverApp.None ? (profile.NeverByName ? "Never" : "Only if added by name")
                 : profile.ChosenForMe ? "On with Choose for me" : "Off unless chosen";
-            text.Append($"| {profile.Name} | {RecognisedBy(profile)} | {hover} | {(profile.ShowsOriginalOnClick ? "Always" : "—")} | " +
-                $"{Versions(profile.VerifiedBy)} | {Tests(profile.VerifiedBy)} |\n");
+            Verification[] all = [.. profile.VerifiedBy, .. profile.RecoveredBy];
+            text.Append($"| {profile.Name} | {RecognisedBy(profile)} | {used} | {hover} | {(profile.ShowsOriginalOnClick ? "Always" : "—")} | " +
+                $"{Versions(all)} | {Tests(all)} |\n");
         }
         text.Append('\n');
         text.Append("| Window inside an app | Window class | Used through | Tested on | Tests |\n");

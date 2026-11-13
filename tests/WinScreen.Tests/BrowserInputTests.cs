@@ -72,15 +72,19 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         try { Directory.Delete(root, true); } catch (IOException) { }
     }
 
-    private static void Visit(nint source, Action<PipWindow, Func<Point, Point>, StringBuilder> steps, StringBuilder log)
+    /// <param name="experimental">Experimental features on. Off, only kinds of app verified for direct use (Chrome and
+    /// Edge) can be used through the view, without Enhanced hover and middle-click scrolling: as most people will.</param>
+    private static void Visit(nint source, Action<PipWindow, Func<Point, Point>, StringBuilder> steps, StringBuilder log, bool experimental = true)
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
-            using var view = new PipWindow(source, new WindowController([])) { AllowInteractive = true };
+            using var view = new PipWindow(source, new WindowController([])) { AllowInteractive = experimental };
             view.ShowOnTop();
             view.Location = new Point(1000, 220);
             view.SetInteractive(true);
-            if (Environment.GetEnvironmentVariable("WINSCREEN_TEST_ENHANCED_HOVER") == "1") view.SetEnhancedHover(true);
+            // Asked for across a run, Enhanced hover joins only the visits with experimental features on.
+            if (experimental && Environment.GetEnvironmentVariable("WINSCREEN_TEST_ENHANCED_HOVER") == "1") view.SetEnhancedHover(true);
+            Assert.True(view.KeepsUpdating, "Not used directly: " + view.StateDescription);
             Point home = Desktop.CursorPosition();
             var driver = new Thread(() =>
             {
@@ -107,6 +111,14 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             view.Close();
         });
     }
+
+    /// <summary>A visit with experimental features off, as for most people (Chrome and Edge, roadmap P1-3).</summary>
+    private static void VisitWithoutSwitch(nint source, Action<PipWindow, Func<Point, Point>, StringBuilder> steps, StringBuilder log) =>
+        Visit(source, steps, log, experimental: false);
+
+    private static void TwoViewsWithoutSwitch(nint windowA, nint windowB,
+        Action<PipWindow, PipWindow, Action<PipWindow>, Func<PipWindow, Point, Point>> steps, StringBuilder log) =>
+        TwoViews(windowA, windowB, (_, _) => { }, steps, log, experimental: false);
 
     private static string Sample(int ms)
     {
@@ -759,7 +771,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             {
                 PipInteraction.ShareInput = share;
                 log.AppendLine($"--- share={share}");
-                Visit(window, (view, at, l) =>
+                VisitWithoutSwitch(window, (view, at, l) =>
                 {
                     Rectangle client = Desktop.BoundsOf(window);
                     // Offsets are window-relative; the page starts under the app window's title bar.
@@ -811,6 +823,107 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     }
 
     /// <summary>
+    /// With experimental features off (roadmap P1-3), a view of Chrome or Edge offers Interactive without the
+    /// Experimental tag and without its two experimental options, takes a real click, and never puts the helper in the
+    /// browser, even with Choose for me on. The switch turned on brings the helper into the visit; turned off again,
+    /// the view stays in use and the helper goes.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BrowserCases))]
+    public void A_browser_view_is_used_directly_without_experimental_features_and_never_gets_the_helper(string path)
+    {
+        const string page = """
+            <!doctype html><title>Plain c=0</title><style>body{margin:0}#b{width:96vw;height:90vh}</style><button id=b>Press</button>
+            <script>let c=0;b.onclick=()=>{c++;document.title=`Plain c=${c}`}</script>
+            """;
+        // Without the helper, "it never got in" would prove nothing.
+        Assert.True(PipEnhancedHover.Supported, "Build the native x64 helper before this test.");
+        WinScreen.Settings.PipHoverPreferences before = PipHoverApps.Preferences;
+        var (browser, window, root) = Open(page, "Plain", app: true, path);
+        var log = new StringBuilder();
+        try
+        {
+            PipHoverApps.Preferences = new WinScreen.Settings.PipHoverPreferences { ChooseForMe = true };
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = false };
+                view.ShowOnTop();
+                view.Location = new Point(1000, 220);
+                ToolStripMenuItem Item(string key) =>
+                    view.ContextMenuStrip!.Items.OfType<ToolStripMenuItem>().Single(i => i.Text == Localization.UiText.T(key));
+                void Refresh() { view.ContextMenuStrip!.Show(view, new Point(20, 20)); view.ContextMenuStrip.Close(); }
+                Refresh();
+                Assert.True(Item("menu.view.interactive").Available, "Interactive isn't offered.");
+                Assert.False(Tray.MenuParts.IsExperimental(Item("menu.view.interactive")), "Interactive is still tagged Experimental.");
+                view.SetInteractive(true);
+                Assert.True(view.KeepsUpdating, "Not used directly: " + view.StateDescription);
+                Refresh();
+                Assert.False(Item("menu.view.hover").Available, "Enhanced hover is offered without the switch.");
+                Assert.False(Item("menu.view.middleScroll").Available, "Middle-click scrolling is offered without the switch.");
+                bool HelperIn() => User32.GetProp(window, WindowController.EnhancedHoverOwnerProperty) != 0;
+                Point home = Desktop.CursorPosition();
+                var driver = new Thread(() =>
+                {
+                    try
+                    {
+                        Point middle = new(view.Left + view.Width / 2, view.Top + view.Height / 2);
+                        Desktop.SlideMouse(middle);
+                        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No visit started.");
+                        for (int i = 0; i < 6; i++) { Desktop.SlideMouse(middle + new Size(i * 4, i * 2)); Thread.Sleep(80); }
+                        Assert.False(view.LiveInteraction!.EnhancedHover, "The visit asked for the helper.");
+                        Assert.False(HelperIn(), "The helper is in the browser without the switch.");
+                        Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+                        Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window) == "Plain c=1", 3000), WindowInfo.Title(window));
+                        Assert.False(HelperIn(), "The helper came with the click.");
+
+                        view.Invoke(() => view.AllowInteractive = true);
+                        Desktop.SlideMouse(middle + new Size(10, 10));
+                        Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.EnhancedHover == true, 3000), "The switch didn't bring Enhanced hover.");
+                        // Under an untagged Interactive, the two options still say they are experimental.
+                        view.Invoke(() => Assert.True(Tray.MenuParts.IsExperimental(Item("menu.view.hover")) &&
+                            Tray.MenuParts.IsExperimental(Item("menu.view.middleScroll")), "The options lost their Experimental tag."));
+                        for (int i = 0; i < 6; i++) { Desktop.SlideMouse(middle + new Size(i * 5, i * 3)); Thread.Sleep(80); }
+                        Assert.True(Desktop.WaitFor(HelperIn, 3000), "With the switch on the helper never got in: " + view.LiveInteraction?.HoverStatus);
+                        log.AppendLine("switch on: " + view.LiveInteraction?.HoverStatus);
+
+                        view.Invoke(() => view.AllowInteractive = false);
+                        Desktop.SlideMouse(middle);
+                        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is { EnhancedHover: false }, 3000), "Enhanced hover stayed on.");
+                        Assert.True(view.KeepsUpdating, "The view stopped being used directly: " + view.StateDescription);
+                        Assert.True(Desktop.WaitFor(() => !HelperIn(), 3000), "The helper stayed in the browser.");
+                        Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+                        Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window) == "Plain c=2", 3000), WindowInfo.Title(window));
+                    }
+                    catch (Exception e) { log.AppendLine("EXC " + e); }
+                    finally { Desktop.MouseButton(false); Desktop.MoveMouse(home); }
+                });
+                driver.Start();
+                while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
+                // The switch going on and off while the view is minimized, and while the original is in use.
+                view.SuspendView();
+                view.AllowInteractive = true;
+                view.AllowInteractive = false;
+                Assert.Equal(PipStateProblem.None, view.StateProblem());
+                view.ResumeView();
+                Assert.True(view.KeepsUpdating, "Not used directly after minimizing: " + view.StateDescription);
+                view.UseOriginal();
+                view.AllowInteractive = true;
+                view.AllowInteractive = false;
+                Assert.Equal(PipStateProblem.None, view.StateProblem());
+                Assert.Equal(PipStateProblem.None, view.FirstStateProblem);
+                view.Close();
+            });
+        }
+        finally
+        {
+            PipHoverApps.Preferences = before;
+            Close(browser, root);
+        }
+        output.WriteLine(log.ToString());
+        Assert.DoesNotContain("EXC ", log.ToString());
+    }
+
+    /// <summary>
     /// Two pages, each used through its own view at the same time. The pointer goes straight from one view to the
     /// other and back, and every click, key and wheel turn reaches the page under it and only that page. Both
     /// originals are hidden on the same strip at the screen's edge, and a browser only takes a wheel turn when its
@@ -843,8 +956,9 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             WindowMenuBuilderTests.OnUiThread(() =>
             {
                 var windows = new WindowController([]); // One controller for both, as in the app.
-                using var viewA = new PipWindow(windowA, windows) { AllowInteractive = true };
-                using var viewB = new PipWindow(windowB, windows) { AllowInteractive = true };
+                // Experimental features off: the pages are Chrome or Edge, used directly without them.
+                using var viewA = new PipWindow(windowA, windows) { AllowInteractive = false };
+                using var viewB = new PipWindow(windowB, windows) { AllowInteractive = false };
                 viewA.ShowOnTop();
                 viewA.Location = new Point(160, 220);
                 viewA.SetInteractive(true);
@@ -948,13 +1062,13 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     /// visit, and <c>at</c> maps a point of a window to the screen through its view.
     /// </summary>
     private static void TwoViews(nint windowA, nint windowB, Action<PipWindow, PipWindow> setUp,
-        Action<PipWindow, PipWindow, Action<PipWindow>, Func<PipWindow, Point, Point>> steps, StringBuilder log)
+        Action<PipWindow, PipWindow, Action<PipWindow>, Func<PipWindow, Point, Point>> steps, StringBuilder log, bool experimental = true)
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             var windows = new WindowController([]);
-            using var viewA = new PipWindow(windowA, windows) { AllowInteractive = true };
-            using var viewB = new PipWindow(windowB, windows) { AllowInteractive = true };
+            using var viewA = new PipWindow(windowA, windows) { AllowInteractive = experimental };
+            using var viewB = new PipWindow(windowB, windows) { AllowInteractive = experimental };
             viewA.ShowOnTop();
             viewA.Location = new Point(160, 220);
             viewA.SetInteractive(true);
@@ -1042,7 +1156,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             int PageTop(nint window) => BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - Desktop.BoundsOf(window).Top;
             int topA = PageTop(windowA), topB = PageTop(windowB);
             string Titles() => $"A '{WindowInfo.Title(windowA)}' B '{WindowInfo.Title(windowB)}'";
-            TwoViews(windowA, windowB, (_, _) => { }, (viewA, viewB, enter, at) =>
+            TwoViewsWithoutSwitch(windowA, windowB, (viewA, viewB, enter, at) =>
             {
                 void Use(PipWindow view, nint window, int top, string step)
                 {
@@ -1300,7 +1414,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             User32.ShowWindow(window, 9);
             User32.SetWindowPos(window, 0, 0, 100, width, 700, 0x14);
             Thread.Sleep(800);
-            Visit(window, (view, at, l) =>
+            VisitWithoutSwitch(window, (view, at, l) =>
             {
                 Rectangle client = Desktop.BoundsOf(window);
                 int top = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds.Top - client.Top;
