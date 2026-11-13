@@ -183,8 +183,8 @@ Windows 無法隱藏擷取邊框時，隱藏的原視窗會改用標準模式。
 ## 回報問題
 
 在系統匣選單中選擇 **儲存診斷資訊**。WinScreen 會儲存一個小檔案並在檔案總管中顯示它，把它附加到
-[新的 Issue](https://github.com/DarkLian/WinScreen/issues) 中即可。檔案裡有 WinScreen 自己的簡短記錄與你的設定，
-但不含程式名稱、檔案路徑或視窗標題。除非你自己傳送，否則什麼都不會離開你的電腦。
+[新的 Issue](https://github.com/DarkLian/WinScreen/issues) 中即可。檔案裡有 WinScreen 自己的簡短記錄與你的設定。
+程式只以檔名出現（例如 chrome.exe），視窗標題、檔案路徑和你輸入的內容都不會在裡面。除非你自己傳送，否則什麼都不會離開你的電腦。
 
 ## 小提示
 

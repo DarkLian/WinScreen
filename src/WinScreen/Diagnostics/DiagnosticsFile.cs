@@ -6,8 +6,9 @@ using WinScreen.Settings;
 namespace WinScreen.Diagnostics;
 
 /// <summary>
-/// Save diagnostics: one zip a person can look inside and attach to a report themselves. It holds the log and the
-/// settings with every list cut to a count, so no program name, path, title or other text of theirs is in it.
+/// Save diagnostics: one zip a person can look inside and attach to a report themselves. It holds the log, which names
+/// programs only by file name and never holds titles, paths or anything typed, and the settings with every list cut
+/// to a count.
 /// </summary>
 internal static class DiagnosticsFile
 {
@@ -21,11 +22,12 @@ internal static class DiagnosticsFile
     /// Writes the zip in a folder of its own inside the data folder, so nothing else is beside it to attach by
     /// mistake, and returns its path. Replaces the one saved before.
     /// </summary>
-    public static string Save(string dataFolder, AppSettings settings)
+    public static string Save(string dataFolder, AppSettings settings, IReadOnlyList<string>? logFiles = null)
     {
         Log.Event("diagnostics.saved");
         StartupFacts.LogNow(); // The facts again, in case the start of this session has rolled out of the log.
         Log.Flush(TimeSpan.FromSeconds(2));
+        logFiles ??= Log.Files;
 
         string folder = Path.Combine(dataFolder, FolderName);
         Directory.CreateDirectory(folder);
@@ -33,7 +35,7 @@ internal static class DiagnosticsFile
         File.Delete(temporary);
         using (ZipArchive zip = ZipFile.Open(temporary, ZipArchiveMode.Create))
         {
-            foreach (string file in Log.Files)
+            foreach (string file in logFiles)
             {
                 using var source = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 using Stream entry = zip.CreateEntry(Path.GetFileName(file)).Open();

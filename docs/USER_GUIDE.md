@@ -193,8 +193,9 @@ the newer installer. Your settings stay as they are.
 ## Reporting a problem
 
 Choose **Save diagnostics** from the tray menu. WinScreen saves a small file and shows it in File Explorer; attach it to
-a [new issue](https://github.com/DarkLian/WinScreen/issues). It holds WinScreen's own short log and your settings,
-without program names, file paths or window titles. Nothing leaves your PC unless you send it yourself.
+a [new issue](https://github.com/DarkLian/WinScreen/issues). It holds WinScreen's own short log and your settings.
+Programs appear only by file name, such as chrome.exe; window titles, file paths and anything you type are never in it.
+Nothing leaves your PC unless you send it yourself.
 
 ## Good to know
 

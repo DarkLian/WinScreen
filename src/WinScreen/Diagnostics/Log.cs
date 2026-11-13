@@ -201,7 +201,7 @@ internal sealed class DiagnosticLog : IDisposable
                 BeforeWrite?.Invoke();
                 Drain();
             }
-            catch (Exception) when (!_stopping)
+            catch (Exception)
             {
                 // Anything at all: an exception here would end the whole app. Give up quietly if it keeps happening.
                 if (++_failures >= GiveUpAfterFailures) _off = true;

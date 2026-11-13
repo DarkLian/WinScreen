@@ -183,8 +183,8 @@ Windows 无法隐藏捕获边框时，隐藏的原窗口会改用标准模式。
 ## 报告问题
 
 在托盘菜单中选择 **保存诊断信息**。WinScreen 会保存一个小文件并在文件资源管理器中显示它，把它附加到
-[新的 Issue](https://github.com/DarkLian/WinScreen/issues) 中即可。文件里有 WinScreen 自己的简短日志和你的设置，
-但不含程序名称、文件路径或窗口标题。除非你自己发送，否则什么都不会离开你的电脑。
+[新的 Issue](https://github.com/DarkLian/WinScreen/issues) 中即可。文件里有 WinScreen 自己的简短日志和你的设置。
+程序只以文件名出现（例如 chrome.exe），窗口标题、文件路径和你输入的内容都不会在里面。除非你自己发送，否则什么都不会离开你的电脑。
 
 ## 小提示
 

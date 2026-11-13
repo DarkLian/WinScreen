@@ -32,5 +32,6 @@ body:
     attributes:
       label: Diagnostics file
       description: >-
-        Choose Save diagnostics from WinScreen's tray menu, then drag the file it shows into this box. It has no program
-        names, file paths or window titles; you can open it to look first. A screenshot helps too, if it shows nothing private.
+        Choose Save diagnostics from WinScreen's tray menu, then drag the file it shows into this box. It names programs
+        only by file name, such as chrome.exe, never window titles, file paths or anything you typed; you can open it to
+        look first. A screenshot helps too, if it shows nothing private.
