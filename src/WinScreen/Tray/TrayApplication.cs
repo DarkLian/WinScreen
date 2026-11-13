@@ -1173,8 +1173,11 @@ public sealed class TrayApplication : ApplicationContext
     private void Run(AppCommand command, nint window)
         => RunOnDisplay(command, window, null);
 
-    /// <summary>How a command ended, for the log.</summary>
-    private enum CommandOutcome { Done, ClosedLatestView, ExclusiveFullScreen, PausedInFullScreen, Refused, NotTurnedOn, Failed }
+    /// <summary>
+    /// How a command went, for the log. Written before it runs: Started means it got past every check, and a
+    /// failure while running adds a second line, Failed.
+    /// </summary>
+    private enum CommandOutcome { Started, ClosedLatestView, ExclusiveFullScreen, PausedInFullScreen, Refused, NotTurnedOn, Failed }
 
     private static void LogCommand(AppCommand command, nint window, CommandOutcome outcome) =>
         Diagnostics.Log.Event("command", ("name", command), ("outcome", outcome),
@@ -1184,7 +1187,7 @@ public sealed class TrayApplication : ApplicationContext
     {
         if (CommandCatalog.Everywhere.Contains(command))
         {
-            LogCommand(command, 0, CommandOutcome.Done);
+            LogCommand(command, 0, CommandOutcome.Started);
             RunEverywhere(command);
             return;
         }
@@ -1222,7 +1225,7 @@ public sealed class TrayApplication : ApplicationContext
 
         if (command == AppCommand.PickPipSource)
         {
-            LogCommand(command, 0, CommandOutcome.Done);
+            LogCommand(command, 0, CommandOutcome.Started);
             ShowPicker();
             return;
         }
@@ -1236,7 +1239,7 @@ public sealed class TrayApplication : ApplicationContext
 
         if (CommandCatalog.AnchorOf(command) is { } anchor)
         {
-            LogCommand(command, window, CommandOutcome.Done);
+            LogCommand(command, window, CommandOutcome.Started);
             Attempt(() => _placer.Align(window, anchor));
             return;
         }
@@ -1248,7 +1251,7 @@ public sealed class TrayApplication : ApplicationContext
             return;
         }
 
-        LogCommand(command, window, CommandOutcome.Done);
+        LogCommand(command, window, CommandOutcome.Started);
         try
         {
             switch (command)
