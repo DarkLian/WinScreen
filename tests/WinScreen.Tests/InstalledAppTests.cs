@@ -137,14 +137,21 @@ public sealed partial class AppCompatibilityTests
                 Assert.True(Desktop.WaitFor(() => RtfText(file).Contains("qqq"), 6000), "After a click, qqq and Ctrl+S the file doesn't have them.");
                 ContextMenuByPointer(process.Id, window, at(middle + new Size(0, 60)), log);
 
-                // A double-click to select a word, only noted: Word sometimes opens a small window of its own under
-                // the pointer after the first click, and the second lands there.
+                // A double-click to select a word, recorded as a limit. Both presses reach the document, but Word ignores
+                // a double-click sent as messages even on screen (probed 13 Nov 2026, no view: a real double-click
+                // selects the word, a posted one or two posted presses only place the caret).
+                // Typing over a selected word replaces all four "probeword"s in it; typing at a caret breaks one at most.
+                static int Words(string text) => System.Text.RegularExpressions.Regex.Matches(text, "probeword").Count;
+                int before = Words(RtfText(file));
                 Click(at(middle + new Size(0, -60)), times: 2);
                 log.AppendLine("after the double-click: " + Others());
                 Type(window, "yyy");
                 Thread.Sleep(300);
                 Desktop.Press(Keys.S, Keys.ControlKey);
-                log.AppendLine("double-click selected a word: " + Desktop.WaitFor(() => RtfText(file).Contains("yyy"), 4000));
+                bool selected = Desktop.WaitFor(() => RtfText(file) is var text && text.Contains("yyy") && Words(text) == before - 4, 4000);
+                log.AppendLine($"words before {before}, after {Words(RtfText(file))}");
+                log.AppendLine("double-click selected a word: " + selected);
+                Assert.False(selected, "Word now selects a word on a double-click through a view: update FEATURE_COMPATIBILITY.md and this test.");
                 Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
             }, log);
         }
@@ -250,16 +257,30 @@ public sealed partial class AppCompatibilityTests
                 Assert.True(Desktop.WaitFor(() => view.UsingOriginal, 3000, Application.DoEvents), "The click didn't show the editor.");
                 Assert.False(windows.IsHidden(window));
                 Thread.Sleep(800);
+                log.AppendLine($"shown at {Desktop.BoundsOf(window)}, foreground is it {User32.GetForegroundWindow() == window}");
 
-                // Used as it is, on the screen: a real double-click and a real key.
+                // Used as it is, on the screen: a real double-click and a real key. Driven from another thread, so this
+                // one keeps handling the view's messages meanwhile, as the app's own thread would.
                 Rectangle bounds = Desktop.BoundsOf(window);
                 Point middle = Middle(window);
-                Click(new Point(bounds.Left + middle.X, bounds.Top + middle.Y), times: 2);
-                Desktop.Press(Keys.Z);
-                Thread.Sleep(300);
-                Desktop.Press(Keys.S, Keys.ControlKey);
+                Exception? failure = null;
+                var driver = new Thread(() =>
+                {
+                    try
+                    {
+                        Click(new Point(bounds.Left + middle.X, bounds.Top + middle.Y), times: 2);
+                        Desktop.Press(Keys.Z);
+                        Thread.Sleep(300);
+                        Desktop.Press(Keys.S, Keys.ControlKey);
+                    }
+                    catch (Exception e) { failure = e; }
+                });
+                driver.Start();
+                while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
+                if (failure is not null) throw new Xunit.Sdk.XunitException(failure.ToString());
                 bool edited = Desktop.WaitFor(() => EditedLine(file), 4000, Application.DoEvents);
                 log.AppendLine("the shown editor took a double-click and typing: " + edited);
+                log.AppendLine($"after: original hidden again {windows.IsHidden(window)}, foreground is it {User32.GetForegroundWindow() == window}");
                 Assert.True(edited, "The editor shown by a click on its view didn't take a double-click and a key.");
                 view.Close();
             }
