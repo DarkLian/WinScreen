@@ -662,7 +662,7 @@ internal sealed class PipInteraction : IDisposable
             Record(PressOutcome.ScrollMode, point, hit);
             return;
         }
-        Delivery delivery = _messages.Press(point, button, view, shown);
+        Delivery delivery = _messages.Press(point, button, view, shown, menuBar: hit == 5);
         if (delivery == Delivery.Posted) _heldDelivered |= button;
         if (delivery == Delivery.Deferred) { _pendingClick |= button; return; } // Its outcome comes with the release.
         Record(Outcome(delivery), point, hit, _messages.PressTarget, delivery == Delivery.Posted, _messages.Why);

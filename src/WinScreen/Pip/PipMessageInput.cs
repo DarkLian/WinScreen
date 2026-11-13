@@ -35,6 +35,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     private nint _dragTarget;
     private Point _lastPointer;
     private Point? _controlPress;
+    private bool _menuPress;
     private PipControlInput.Request _controlRequest;
     private int _wheelRemainder;
     /// <summary>Why the last press or release couldn't be delivered, for the press log.</summary>
@@ -54,6 +55,9 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     [DllImport("user32.dll")] private static extern int GetAwarenessFromDpiAwarenessContext(nint context);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool AreDpiAwarenessContextsEqual(nint a, nint b);
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+    [DllImport("user32.dll")] private static extern nint GetMenu(nint window);
+    [DllImport("user32.dll")] private static extern int MenuItemFromPoint(nint window, nint menu, NativePoint point);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetMenuString(nint menu, uint item, System.Text.StringBuilder text, int length, uint flags);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsHungAppWindow(nint window);
 
     private InputRoute RouteOf(nint target) => PipInputRoutes.RouteFor(target, source, identity.ProcessId);
@@ -166,6 +170,22 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         finally { SetThreadDpiAwarenessContext(previous); }
     }
 
+    /// <summary>The access key of the menu bar item at a point: its marked letter, or else its first, as Windows matches.</summary>
+    private nint? MenuKeyAt(Point mapped)
+    {
+        nint bar = GetMenu(source);
+        if (bar == 0) return null;
+        int item = MenuItemFromPoint(source, bar, new NativePoint { X = mapped.X, Y = mapped.Y });
+        if (item < 0) return null;
+        var text = new System.Text.StringBuilder(256);
+        if (GetMenuString(bar, (uint)item, text, text.Capacity, 0x400 /* MF_BYPOSITION */) <= 0) return null;
+        string name = text.ToString();
+        int marked = name.IndexOf('&');
+        while (marked >= 0 && marked + 1 < name.Length && name[marked + 1] == '&') marked = name.IndexOf('&', marked + 2);
+        char key = marked >= 0 && marked + 1 < name.Length ? name[marked + 1] : name.TrimStart().FirstOrDefault();
+        return key == '\0' ? null : char.ToLowerInvariant(key);
+    }
+
     internal bool Move(Point pointer, Rectangle view, Rectangle shown)
     {
         _lastPointer = pointer;
@@ -205,10 +225,27 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         return User32.SendMessageTimeout(target, 0x0020 /* WM_SETCURSOR */, target, (nint)(1 | (0x0200 << 16)), 0x2, 20, out _) != 0;
     }
 
-    internal Delivery Press(Point pointer, MouseButtons button, Rectangle view, Rectangle shown)
+    internal Delivery Press(Point pointer, MouseButtons button, Rectangle view, Rectangle shown, bool menuBar = false)
     {
         _lastPointer = pointer;
         Point mapped = MappedScreen(pointer, view, shown);
+        // A standard menu bar only follows a press while the button is really down over it, which it isn't. Its menus
+        // also open from the keyboard, so the menu under the pointer is opened by its access key instead. A bar the
+        // app draws itself takes the press as any other.
+        if (menuBar && button == MouseButtons.Left && _held == MouseButtons.None && MenuKeyAt(mapped) is { } key)
+        {
+            PressTarget = source;
+            PressTransport = "menu bar";
+            Why = "";
+            if (!identity.StillThere() || IsHungAppWindow(source) ||
+                !User32.PostMessage(source, 0x112 /* WM_SYSCOMMAND */, 0xF100 /* SC_KEYMENU */, key)) return Delivery.Failed;
+            _clicks.Remove(button);
+            _spot.Remove(button);
+            _menuPress = true;
+            _held = button;
+            _dragTarget = source;
+            return Delivery.Posted;
+        }
         nint target = _held != MouseButtons.None ? _dragTarget : TargetAt(mapped);
         PressTarget = target;
         Why = "";
@@ -273,6 +310,12 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         why = "";
         if ((_held & button) == 0) return Delivery.Failed;
         _held &= ~button;
+        if (_menuPress)
+        {
+            // The menu that opened tracks the pointer by itself from here; a release would close it again.
+            _menuPress = false;
+            return Delivery.Posted;
+        }
         if (_controlPress is { } press)
         {
             _controlPress = null;

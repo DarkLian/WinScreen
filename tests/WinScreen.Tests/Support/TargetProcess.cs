@@ -203,9 +203,10 @@ internal sealed class TargetProcess : IDisposable
 
     /// <summary>A plain native window in this process, which acts like an ordinary app window.</summary>
     /// <param name="framed">With a title bar and borders Windows draws, which, unlike a Windows Forms form's, keep a crop.</param>
-    public nint CreatePlainWindow(Rectangle bounds, bool framed = false)
+    /// <param name="menu">With a standard menu bar (implies framed): "File" and "Edit".</param>
+    public nint CreatePlainWindow(Rectangle bounds, bool framed = false, bool menu = false)
     {
-        _process.StandardInput.WriteLine($"plain {bounds.X} {bounds.Y} {bounds.Width} {bounds.Height}" + (framed ? " framed" : ""));
+        _process.StandardInput.WriteLine($"plain {bounds.X} {bounds.Y} {bounds.Width} {bounds.Height}" + (framed || menu ? " framed" : "") + (menu ? " menu" : ""));
         _process.StandardInput.Flush();
         string report = NextReport() ?? throw new InvalidOperationException("No plain window was created.");
         return (nint)long.Parse(report.Split(' ')[1]);

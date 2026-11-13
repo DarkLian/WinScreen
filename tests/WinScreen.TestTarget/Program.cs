@@ -285,6 +285,14 @@ internal sealed partial class TargetForm : Form
         }) { IsBackground = true, Name = "Pattern fixture" };
         worker.Start();
     }
+    [LibraryImport("user32.dll")] private static partial nint CreateMenu();
+    [LibraryImport("user32.dll")] private static partial nint CreatePopupMenu();
+    [LibraryImport("user32.dll", EntryPoint = "AppendMenuW", StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool AppendMenu(nint menu, uint flags, nint item, string text);
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetMenu(nint window, nint menu);
     [LibraryImport("user32.dll", EntryPoint = "CreateWindowExW", StringMarshalling = StringMarshalling.Utf16)]
     private static partial nint CreateWindowEx(uint exStyle, string className, string title, uint style,
         int x, int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
@@ -360,7 +368,22 @@ internal sealed partial class TargetForm : Form
         // "framed": a standard title bar and borders that Windows draws, as most apps have; Windows Forms puts its own
         // shape back on a form with a frame, which a few tests mustn't depend on.
         uint style = parts.Length > 4 && parts[4] == "framed" ? overlapped | visible : popup | visible;
-        nint plain = CreateWindowEx(0, "STATIC", "Plain test window", style, b[0], b[1], b[2], b[3], 0, 0, 0, 0);
+        bool menu = parts.Contains("menu");
+        // A static control is transparent to the pointer, menu bar and all; the dialog class leaves hit tests to
+        // Windows, as an ordinary app window does.
+        nint plain = CreateWindowEx(0, menu ? "#32770" : "STATIC", "Plain test window", style, b[0], b[1], b[2], b[3], 0, 0, 0, 0);
+        if (menu)
+        {
+            // A standard menu bar, as older desktop apps have: "File" and "Edit", each with one item.
+            nint bar = CreateMenu();
+            foreach (var (name, item) in new[] { ("&File", "&New"), ("&Edit", "&Copy") })
+            {
+                nint list = CreatePopupMenu();
+                AppendMenu(list, 0, 100, item);
+                AppendMenu(bar, 0x10 /* MF_POPUP */, list, name);
+            }
+            SetMenu(plain, bar);
+        }
         Report("plain " + plain.ToInt64());
     }
 
