@@ -90,6 +90,15 @@ try {
     New-Item -ItemType Directory -Path $staging | Out-Null
     $common = @('-c', 'Release', '-p:WinScreenArchitecture=x64', '-p:UpdateRepository=DarkLian/WinScreen')
 
+    # The hover helper needs a C compiler. Without one the build only warns, and every hover test fails in the VM.
+    $zig = Join-Path $repo '.local\hover-tools\zig-windows-x86_64-0.13.0\zig.exe'
+    if (-not $env:WINSCREEN_ZIG -and (Test-Path $zig)) { $env:WINSCREEN_ZIG = $zig }
+    function Assert-HoverHelper([string]$folder, [string]$what) {
+        if (-not (Test-Path (Join-Path $folder 'WinScreen.Hover.dll'))) {
+            throw "$what has no WinScreen.Hover.dll. Build with WINSCREEN_ZIG set (or MSVC installed), without -SkipBuild."
+        }
+    }
+
     if (-not $SkipBuild) {
         Step 'Building'
         Dotnet (@('build', (Join-Path $repo 'WinScreen.slnx')) + $common)
@@ -99,6 +108,7 @@ try {
         ForEach-Object { Join-Path $_.FullName 'win-x64' } | Where-Object { Test-Path (Join-Path $_ 'WinScreen.Tests.dll') } |
         Select-Object -First 1
     if (-not $testOutput) { throw 'No built tests found. Run without -SkipBuild.' }
+    Assert-HoverHelper $testOutput 'The test build'
     Copy-Item $testOutput (Join-Path $staging 'tests') -Recurse
 
     $steps = @()
@@ -109,6 +119,7 @@ try {
         Step 'Publishing the packaged program'
         Dotnet (@('publish', (Join-Path $repo 'src\WinScreen\WinScreen.csproj'), '-o', (Join-Path $staging 'program'),
             '--self-contained', 'true', '-p:DebugType=embedded') + $common)
+        Assert-HoverHelper (Join-Path $staging 'program') 'The packaged program'
         $packagedFilter = if ($Filter) { "Category=Interactive&($Filter)" } else { 'Category=Interactive' }
         $steps += [ordered]@{ name = 'packaged'; filter = $packagedFilter; env = @{ WINSCREEN_EXE = '{root}\program\WinScreen.exe' } }
     }
