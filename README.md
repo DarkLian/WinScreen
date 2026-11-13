@@ -189,7 +189,8 @@ more widely used first, so we'll apply again later.
 - **Who's involved:** [DarkLian](https://github.com/DarkLian) writes and reviews WinScreen's code, with help from AI
   agents, and approves every release. Nobody else can change the code or publish a release.
 - **Privacy:** WinScreen doesn't send anything about you or your PC anywhere. It only goes online when you turn on
-  automatic updates or choose **Check for updates**, and then it just asks GitHub for a newer version.
+  automatic updates or choose **Check for updates**, and then it just asks GitHub for a newer version. It keeps a short
+  log on your PC to help fix problems, which never leaves your PC unless you send it yourself.
 
 ## License
 

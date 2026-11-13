@@ -190,6 +190,12 @@ Turn on automatic updates in **Settings → General**. WinScreen downloads new v
 when you close it. You can also choose **Check for updates** from the tray menu at any time. To update by hand, close WinScreen and run
 the newer installer. Your settings stay as they are.
 
+## Reporting a problem
+
+Choose **Save diagnostics** from the tray menu. WinScreen saves a small file and shows it in File Explorer; attach it to
+a [new issue](https://github.com/DarkLian/WinScreen/issues). It holds WinScreen's own short log and your settings,
+without program names, file paths or window titles. Nothing leaves your PC unless you send it yourself.
+
 ## Good to know
 
 - WinScreen runs on Windows 10 (version 2004 or later) and Windows 11, on 64-bit Intel or AMD PCs (x64). ARM PCs and

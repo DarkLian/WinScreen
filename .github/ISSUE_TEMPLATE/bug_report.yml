@@ -1,0 +1,36 @@
+name: Something isn't working
+description: Tell us what went wrong. A short report is still better than none.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: You can write in English or Chinese. Fill in whatever you can; nothing here is required except what happened.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, step by step, and what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Windows and WinScreen versions
+      placeholder: Windows 11 24H2, WinScreen 0.10.3-beta
+  - type: input
+    id: displays
+    attributes:
+      label: Displays
+      description: How many, and each one's scaling.
+      placeholder: Two monitors, 100% and 150%
+  - type: input
+    id: app
+    attributes:
+      label: The app whose window was involved
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics file
+      description: >-
+        Choose Save diagnostics from WinScreen's tray menu, then drag the file it shows into this box. It has no program
+        names, file paths or window titles; you can open it to look first. A screenshot helps too, if it shows nothing private.

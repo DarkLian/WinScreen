@@ -28,6 +28,8 @@ Include whatever you can. A short report is still better than none.
 3. Your Windows version, and the WinScreen version if you know it.
 4. Your display setup: how many monitors, and each one's scaling, such as 100% or 150%.
 5. The app whose window was involved, and a screenshot or short recording if one would help.
+6. The file from **Save diagnostics** in the tray menu. It has no program names, file paths or window titles, and you
+   can open it to look before you attach it.
 
 Check that a screenshot doesn't show anything private before you post it.
 
