@@ -31,6 +31,13 @@
   <img src="docs/assets/screenshots/settings-appearance.png" width="440" alt="Settings, Appearance page, with sliders for opacity">
 </p>
 
+## Toolbar and Anchors
+
+<p align="center">
+  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="The toolbar on a window's title bar">
+  <img src="docs/assets/screenshots/anchors.png" width="364" alt="Three Anchors at the edge of the screen, with no background">
+</p>
+
 ## Use apps through a small view
 
 Press **Ctrl+Alt+P** on a window for a small live view of it that stays on top. Turn on **Interactive** in the view's

@@ -31,6 +31,13 @@
   <img src="docs/assets/screenshots/settings-appearance.png" width="440" alt="设置的“外观”页面，用滑块调整不透明度">
 </p>
 
+## 工具栏和锚点
+
+<p align="center">
+  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="窗口标题栏上的工具栏">
+  <img src="docs/assets/screenshots/anchors.png" width="364" alt="屏幕边缘的三个锚点，无背景">
+</p>
+
 ## 通过小视图使用应用
 
 在窗口上按 **Ctrl+Alt+P**，即可打开一个置顶的小实时视图。在视图菜单中开启**交互** *（实验性）*，就能直接在视图里使用应用：

@@ -31,6 +31,13 @@
   <img src="docs/assets/screenshots/settings-appearance.png" width="440" alt="設定的「外觀」頁面，用滑桿調整不透明度">
 </p>
 
+## 工具列和錨點
+
+<p align="center">
+  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="視窗標題列上的工具列">
+  <img src="docs/assets/screenshots/anchors.png" width="364" alt="螢幕邊緣的三個錨點，無背景">
+</p>
+
 ## 透過小檢視使用應用程式
 
 在視窗上按 **Ctrl+Alt+P**，即可開啟一個置頂的小即時檢視。在檢視選單中開啟**互動** *（實驗性）*，就能直接在檢視裡使用應用程式：
