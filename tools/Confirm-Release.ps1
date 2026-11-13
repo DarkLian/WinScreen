@@ -219,7 +219,7 @@ if ($stable) {
     Write-Output 'A stable release also needs, from the owner:'
     Write-Output '- no open bug that leaves a window hidden, unclickable or off screen;'
     Write-Output '- an update from the previous stable release checked in a VM (none before the first);'
-    Write-Output '- Interactive PiP graduated for Chromium browsers at least, or clearly labelled;'
+    Write-Output '- Interactive PiP graduated for Chromium browsers at least;'
     Write-Output "- the README's status line changed."
 }
 exit 0

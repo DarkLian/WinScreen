@@ -40,7 +40,7 @@ public class SettingsFixtureTests
     {
         string[] versions = VersionNames();
         foreach (string expected in new[] { "0.7.1-beta", "0.8.0-beta", "0.8.1-beta", "0.8.2-beta", "0.9.0-beta", "0.9.1-beta",
-                     "0.10.1-beta", "0.10.2-beta", "0.10.3-beta" })
+                     "0.10.1-beta", "0.10.2-beta", "0.10.3-beta", "1.0.0" })
             Assert.Contains(expected, versions);
     }
 
