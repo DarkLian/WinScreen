@@ -113,10 +113,18 @@ internal static class AppProfiles
         {
             Programs = ["firefox"],
             Hover = PipHoverApp.Firefox, ChosenForMe = true, SideEdgeAlways = true, ScrollsWithHover = true,
+            InteractiveWithoutSwitch = true, // Since 14 Nov 2026; every input test below runs with the switch off.
             VerifiedBy =
             [
+                new("AppCompatibilityTests.Firefox_takes_clicks_and_a_double_click_through_a_view", Both),
+                new("AppCompatibilityTests.Firefox_takes_a_drag_selection_through_a_view", Both),
+                new("AppCompatibilityTests.Firefox_takes_typing_through_a_view", Both),
+                new("AppCompatibilityTests.Firefox_scrolls_under_the_wheel_and_opens_its_menu_by_the_pointer_through_a_view", Both),
                 new("FrameworkHoverTests.Firefox_keeps_css_hover_when_chosen_in_settings", Both),
-                new("AppCompatibilityTests.Firefox_takes_clicks_double_clicks_selection_typing_wheel_and_its_menu_through_a_view", Windows11),
+            ],
+            RecoveredBy =
+            [
+                new("AppEndToEndTests.Firefox_used_without_experimental_features_comes_back_when_WinScreen_is_ended_during_a_visit", Both),
             ],
         },
         new("File Explorer")

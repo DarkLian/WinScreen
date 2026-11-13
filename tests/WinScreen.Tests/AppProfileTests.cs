@@ -158,12 +158,12 @@ public sealed class AppProfileTests
     [InlineData("msedge", "Chrome_WidgetWin_1", false, true)]
     [InlineData("brave", "Chrome_WidgetWin_1", false, false)]
     [InlineData("vivaldi", "Chrome_WidgetWin_1", false, false)]
-    [InlineData("firefox", "MozillaWindowClass", false, false)]
+    [InlineData("firefox", "MozillaWindowClass", false, true)]
     [InlineData("Code", "Chrome_WidgetWin_1", true, false)]
     [InlineData("explorer", "CabinetWClass", false, false)]
     [InlineData("ApplicationFrameHost", "ApplicationFrameWindow", false, false)]
     [InlineData("WinScreen.TestTarget", "WindowsForms10.Window.8.app.0.1", false, false)]
-    public void Only_chrome_and_edge_are_used_through_a_view_without_experimental_features(string program, string windowClass,
+    public void Only_kinds_with_their_evidence_are_used_through_a_view_without_experimental_features(string program, string windowClass,
         bool electron, bool without) =>
         Assert.Equal(without, AppProfiles.InteractiveWithoutSwitch(program, windowClass, electron));
 

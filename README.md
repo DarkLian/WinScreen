@@ -42,7 +42,7 @@
 
 Press **Ctrl+Alt+P** on a window for a small live view of it that stays on top. Turn on **Interactive** in the view's
 menu and you can use the app right inside the view: click, type, scroll, select text and open menus. It's ready for
-Chrome and Edge; for other apps it's *(experimental)*.
+Chrome, Edge and Firefox; for other apps it's *(experimental)*.
 The real window stays hidden out of the way, so a video, chat or document stays at hand in a corner while you work.
 
 **Enhanced hover** keeps hover effects working in browsers and apps like VS Code and Discord. For an app that doesn't
@@ -62,7 +62,7 @@ again when you switch away. [What works where](docs/FEATURE_COMPATIBILITY.md) li
 - Live views of a window, a whole display or part of the screen
 - Crop, zoom, resize, presets and saved sources
 - Keep the original hidden and the view updating
-- Use apps through a view: Chrome and Edge, and other apps, Enhanced hover and middle-click scrolling *(experimental)*
+- Use apps through a view: Chrome, Edge and Firefox, and other apps, Enhanced hover and middle-click scrolling *(experimental)*
 - Per-view frame limit, opacity, position lock and click-through
 - Minimize views to the taskbar, hover preview and reading lens
 - Views that move away from text and pictures *(experimental)*

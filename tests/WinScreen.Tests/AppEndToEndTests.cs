@@ -1096,6 +1096,75 @@ public sealed class AppEndToEndTests : IDisposable
     }
 
     /// <summary>
+    /// The same recovery check for Firefox (roadmap P1-3, 14 Nov 2026): experimental features off, a view used directly
+    /// from its own menu, a click and typing that land in the page, then WinScreen ends without warning during the
+    /// visit. Firefox comes back where it was and as it was, and the helper was never in it.
+    /// </summary>
+    [Fact]
+    public void Firefox_used_without_experimental_features_comes_back_when_WinScreen_is_ended_during_a_visit()
+    {
+        string firefox = Path.Combine(AppContext.BaseDirectory, "test-apps", "firefox", "firefox.exe");
+        if (!File.Exists(firefox)) { Skipped.Because("Firefox isn't in test-apps."); return; }
+        RestartWith(new AppSettings { WelcomeShown = true, ShowToolbar = false }, experimental: false);
+        const string page = """
+            <!doctype html><title>Kept c=0 val=</title>
+            <style>body{margin:0;font:22px sans-serif}#b{position:fixed;left:0;top:0;width:100vw;height:50vh}
+            #i{position:fixed;left:20px;top:62vh;width:80vw;height:20vh;font-size:40px}</style><button id=b>Press</button><input id=i>
+            <script>let c=0;const r=()=>document.title=`Kept c=${c} val=${i.value}`;b.onclick=()=>{c++;r()};i.oninput=r;</script>
+            """;
+        var (process, window, root) = AppCompatibilityTests.OpenFirefox(firefox, page, "Kept");
+        Point home = Desktop.CursorPosition();
+        try
+        {
+            Assert.NotEqual(0, window);
+            User32.SetWindowPos(window, 0, 120, 80, 900, 700, 0x14);
+            Thread.Sleep(1500);
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == window), "Firefox didn't come to the front.");
+            Rectangle originalBounds = Desktop.BoundsOf(window);
+            long style = Desktop.ExStyle(window);
+            Desktop.Press(Keys.P, Keys.ControlKey, Keys.Menu);
+            nint pip = WaitForPip();
+            Rectangle view = Desktop.BoundsOf(pip);
+            Desktop.RightClickOn(new Point(view.Left + 60, view.Top + 60), pip);
+            Assert.True(Desktop.WaitFor(ForegroundIsApp), "The view's menu didn't open.");
+            Desktop.Press(Keys.I); // Interactive, offered for Firefox with experimental features off.
+            Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.IsConcealed(window)), "Interactive wasn't offered, or didn't hide Firefox.");
+            Assert.True(Desktop.WaitFor(() => Copies() == 2), "The watcher didn't start.");
+            Desktop.Press(Keys.Escape);
+            Thread.Sleep(500);
+
+            view = Desktop.BoundsOf(pip);
+            Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height * 3 / 10));
+            Thread.Sleep(600);
+            Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+            Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.Title(window).StartsWith("Kept c=1", StringComparison.Ordinal), 3000),
+                "The click didn't land: " + Windows.WindowInfo.Title(window) + $"\nview {view}, pointer {Desktop.CursorPosition()}\n" + LogTail());
+            Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height * 3 / 4));
+            Thread.Sleep(300);
+            Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+            Thread.Sleep(400);
+            Desktop.Press(Keys.A); Desktop.Press(Keys.B); Desktop.Press(Keys.C);
+            Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.Title(window).StartsWith("Kept c=1 val=abc", StringComparison.Ordinal), 3000),
+                "The typing didn't land: " + Windows.WindowInfo.Title(window) + "\n" + LogTail());
+            Assert.Equal(0, User32.GetProp(window, Windows.WindowController.EnhancedHoverOwnerProperty));
+
+            _app.Kill(); // During the visit: the pointer is still on the view.
+            Assert.True(Desktop.WaitFor(() => !Windows.WindowInfo.IsConcealed(window) && Desktop.BoundsOf(window) == originalBounds &&
+                Desktop.ExStyle(window) == style && Desktop.Alpha(window) is null or 255, 5000),
+                $"Firefox didn't come back: concealed={Windows.WindowInfo.IsConcealed(window)} bounds={Desktop.BoundsOf(window)} " +
+                $"(was {originalBounds}) style=0x{Desktop.ExStyle(window):X} (was 0x{style:X}) alpha={Desktop.Alpha(window)}");
+            Assert.True(Desktop.WaitFor(() => Copies() == 0, 3000), "The watcher stayed.");
+        }
+        finally
+        {
+            Desktop.MoveMouse(home);
+            AppCompatibilityTests.CloseFirefox(process, firefox, root);
+        }
+    }
+
+    /// <summary>
     /// The watcher can find WinScreen and then fail to open it because it died in between, right after starting the
     /// watcher. Before the fix that crashed the watcher and left the window hidden (3 in 24 such kills in the VM).
     /// </summary>

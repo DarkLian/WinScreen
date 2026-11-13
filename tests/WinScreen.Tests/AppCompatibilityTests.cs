@@ -55,19 +55,21 @@ public sealed partial class AppCompatibilityTests(Xunit.Abstractions.ITestOutput
     /// Opens a view of the window, starts a visit, and runs the steps with a mapping from a point in the window
     /// (window-relative, physical) to the view.
     /// </summary>
-    private static void Visit(nint window, Action<PipWindow, Func<Point, Point>> steps, StringBuilder log, bool? enhancedHover = null)
+    private static void Visit(nint window, Action<PipWindow, Func<Point, Point>> steps, StringBuilder log, bool? enhancedHover = null,
+        bool experimental = true)
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             Point home = Desktop.CursorPosition();
             Desktop.MoveMouse(new Point(860, 180));
-            using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = true };
+            using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = experimental };
             var problems = new List<string>();
             view.Problem += problems.Add;
             view.ShowOnTop();
             view.Location = new Point(900, 200);
             view.SetInteractive(true);
-            view.SetEnhancedHover(enhancedHover ?? Environment.GetEnvironmentVariable("WINSCREEN_TEST_ENHANCED_HOVER") == "1");
+            // Off, only kinds of app verified for direct use can be visited, and Enhanced hover stays out.
+            view.SetEnhancedHover(experimental && (enhancedHover ?? Environment.GetEnvironmentVariable("WINSCREEN_TEST_ENHANCED_HOVER") == "1"));
             Exception? failure = null;
             PipInteraction.DiagnoseInput = true;
             var driver = new Thread(() =>
@@ -201,15 +203,44 @@ public sealed partial class AppCompatibilityTests(Xunit.Abstractions.ITestOutput
         b.onclick=()=>{c++;r()};document.addEventListener('selectionchange',r);i.oninput=r;addEventListener('scroll',r);setInterval(r,100);</script>
         """;
 
+    /// <summary>
+    /// Firefox opens the page in a throwaway profile and the body runs with the window, the page's top-left inside it,
+    /// and the process that owns its menus; Firefox and the profile go afterwards.
+    /// </summary>
     /// <remarks>
     /// A new profile opens with a first-run dialog that covers the page and takes every click, real ones included; the
     /// throwaway profile turns it off with Firefox's own preference. (Phase 3 measured with that dialog open.)
     /// </remarks>
-    [Fact]
-    public void Firefox_takes_clicks_double_clicks_selection_typing_wheel_and_its_menu_through_a_view()
+    private void WithFirefox(Action<nint, Point, int, StringBuilder> body)
     {
         string firefox = Path.Combine(Apps, "firefox", "firefox.exe");
         if (!File.Exists(firefox)) { Skipped.Because("Firefox isn't in test-apps."); return; }
+        var log = new StringBuilder();
+        (Process process, nint window, string root) = OpenFirefox(firefox, Page, "Probe");
+        try
+        {
+            Assert.True(window != 0, "Firefox didn't open the page.");
+            User32.SetWindowPos(window, 0, 120, 80, 900, 700, 0x14);
+            Settle(1500);
+            // The page's top-left inside the window, as the page itself reports it (its title ends "at=x,y").
+            Rectangle home = Desktop.BoundsOf(window);
+            string[] at0 = WindowInfo.Title(window).Split("at=")[1].Split(' ')[0].Split(',');
+            Point page = new((int)double.Parse(at0[0], System.Globalization.CultureInfo.InvariantCulture) - home.Left,
+                (int)double.Parse(at0[1], System.Globalization.CultureInfo.InvariantCulture) - home.Top);
+            log.AppendLine($"page offset {page}");
+            User32.GetWindowThreadProcessId(window, out uint browserProcess);
+            body(window, page, (int)browserProcess, log); // Its menus belong to the process that has the window.
+        }
+        finally
+        {
+            output.WriteLine(log.ToString());
+            CloseFirefox(process, firefox, root);
+        }
+    }
+
+    /// <summary>Starts the tests' portable Firefox on a page in a new throwaway profile and finds its window (0 if none).</summary>
+    internal static (Process Process, nint Window, string Root) OpenFirefox(string firefox, string html, string title)
+    {
         string root = Directory.CreateTempSubdirectory("winscreen-firefox").FullName;
         string profile = Directory.CreateDirectory(Path.Combine(root, "profile")).FullName;
         File.WriteAllText(Path.Combine(profile, "user.js"), """
@@ -235,65 +266,85 @@ public sealed partial class AppCompatibilityTests(Xunit.Abstractions.ITestOutput
             user_pref("app.normandy.enabled", false);
             user_pref("browser.tabs.firefox-view", false);
             """);
-        File.WriteAllText(Path.Combine(root, "page.html"), Page);
+        File.WriteAllText(Path.Combine(root, "page.html"), html);
         var start = new ProcessStartInfo(firefox) { UseShellExecute = false };
         foreach (string arg in new[] { "-profile", profile, "-no-remote", "-new-instance", "-width", "900", "-height", "700", new Uri(Path.Combine(root, "page.html")).AbsoluteUri })
             start.ArgumentList.Add(arg);
-        using var process = Process.Start(start)!;
-        var log = new StringBuilder();
-        try
+        Process process = Process.Start(start)!;
+        // The process started here hands over to another and leaves, so its tree doesn't lead to the window: look
+        // for a Firefox window of this test's own copy.
+        nint window = 0;
+        Desktop.WaitFor(() => (window = FirefoxWindow(firefox, title)) != 0, 40000);
+        // A new profile opens maximized; moved like that it would still be maximized to Windows, and anything that puts
+        // it back (Put back, recovery) rightly makes it fill the screen again. Tests want an ordinary window.
+        if (window != 0 && User32.IsZoomed(window))
         {
-            // The process started here hands over to another and leaves, so its tree doesn't lead to the window: look
-            // for a Firefox window of this test's own copy.
-            nint window = 0;
-            Desktop.WaitFor(() => (window = FirefoxWindow(firefox, "Probe")) != 0, 40000);
-            Assert.True(window != 0, "Firefox didn't open the page.");
-            User32.SetWindowPos(window, 0, 120, 80, 900, 700, 0x14);
-            Settle(1500);
-            string Title() => WindowInfo.Title(window);
-            // The page's top-left inside the window, as the page itself reports it (its title ends "at=x,y").
-            Rectangle home = Desktop.BoundsOf(window);
-            string[] at0 = Title().Split("at=")[1].Split(' ')[0].Split(',');
-            Point page = new((int)double.Parse(at0[0], System.Globalization.CultureInfo.InvariantCulture) - home.Left,
-                (int)double.Parse(at0[1], System.Globalization.CultureInfo.InvariantCulture) - home.Top);
-            log.AppendLine($"page offset {page}");
-            User32.GetWindowThreadProcessId(window, out uint browserProcess);
-            int owner = (int)browserProcess; // Its menus belong to the process that has the window.
-            Visit(window, (view, at) =>
-            {
-                Point P(int x, int y) => at(new Point(page.X + x, page.Y + y));
-                Click(P(600, 230), times: 1); Click(P(600, 230)); Click(P(600, 230));
-                Assert.True(Desktop.WaitFor(() => Title().Contains("c=3 "), 2000), "Clicks: " + Title());
-                Click(P(45, 32), times: 2); // A double-click selects a word.
-                Assert.True(Desktop.WaitFor(() => Title().Contains("sel=8 ") || Title().Contains("sel=9 "), 2000), "Double-click: " + Title());
-                Drag(P(150, 52), P(380, 97)); // From the first line, past the word just selected, to the third.
-                Assert.True(Desktop.WaitFor(() => int.Parse(Title().Split("sel=")[1].Split(' ')[0]) > 25, 2000), "Drag selection: " + Title());
-                Click(P(600, 365));
-                Desktop.Press(Keys.A); Desktop.Press(Keys.B); Desktop.Press(Keys.C);
-                Assert.True(Desktop.WaitFor(() => Title().Contains("val=abc"), 2000), "Typing: " + Title());
-                Desktop.SlideMouse(P(300, 300)); Thread.Sleep(150);
-                for (int i = 0; i < 3; i++) { mouse_event(0x800, 0, 0, unchecked((uint)-120), 0); Thread.Sleep(100); }
-                Assert.True(Desktop.WaitFor(() => !Title().Contains(" s=0"), 2000), "Wheel: " + Title());
-                int before = Popups(owner, window).Count;
-                Point menuAt = P(300, 250);
-                Click(menuAt, right: true);
-                List<nint> menus = [];
-                Assert.True(Desktop.WaitFor(() => (menus = Popups(owner, window)).Count > before, 2000), "No context menu.");
-                Rectangle menu = Desktop.BoundsOf(menus[^1]);
-                log.AppendLine($"menu {menu} pointer {Desktop.CursorPosition()}");
-                Assert.True(Rectangle.Inflate(menu, 60, 60).Contains(Desktop.CursorPosition()), $"The menu isn't by the pointer: {menu}.");
-                Desktop.Press(Keys.Escape);
-                Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
-            }, log);
+            User32.ShowWindow(window, User32.SW_RESTORE);
+            Desktop.WaitFor(() => !User32.IsZoomed(window), 3000);
         }
-        finally
-        {
-            output.WriteLine(log.ToString());
-            CloseTree(process);
-            CloseCopy(firefox);
-            try { Directory.Delete(root, true); } catch (IOException) { }
-        }
+        return (process, window, root);
     }
+
+    internal static void CloseFirefox(Process process, string firefox, string root)
+    {
+        using (process) CloseTree(process);
+        CloseCopy(firefox);
+        try { Directory.Delete(root, true); } catch (IOException) { }
+    }
+
+    /// <summary>Firefox's views are used directly without experimental features since 14 Nov 2026 (roadmap P1-3).</summary>
+    [Fact]
+    public void Firefox_takes_clicks_and_a_double_click_through_a_view() => WithFirefox((window, page, _, log) =>
+        Visit(window, (view, at) =>
+        {
+            Point P(int x, int y) => at(new Point(page.X + x, page.Y + y));
+            Click(P(600, 230), times: 1); Click(P(600, 230)); Click(P(600, 230));
+            Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains("c=3 "), 2000), "Clicks: " + WindowInfo.Title(window));
+            Click(P(45, 32), times: 2); // A double-click selects a word.
+            Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains("sel=8 ") || WindowInfo.Title(window).Contains("sel=9 "), 2000),
+                "Double-click: " + WindowInfo.Title(window));
+            Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
+        }, log, experimental: false));
+
+    [Fact]
+    public void Firefox_takes_a_drag_selection_through_a_view() => WithFirefox((window, page, _, log) =>
+        Visit(window, (view, at) =>
+        {
+            Point P(int x, int y) => at(new Point(page.X + x, page.Y + y));
+            Drag(P(150, 52), P(380, 97)); // From the first line to the third.
+            Assert.True(Desktop.WaitFor(() => int.Parse(WindowInfo.Title(window).Split("sel=")[1].Split(' ')[0]) > 25, 2000),
+                "Drag selection: " + WindowInfo.Title(window));
+            Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
+        }, log, experimental: false));
+
+    [Fact]
+    public void Firefox_takes_typing_through_a_view() => WithFirefox((window, page, _, log) =>
+        Visit(window, (view, at) =>
+        {
+            Point P(int x, int y) => at(new Point(page.X + x, page.Y + y));
+            Click(P(600, 365));
+            Desktop.Press(Keys.A); Desktop.Press(Keys.B); Desktop.Press(Keys.C);
+            Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains("val=abc"), 2000), "Typing: " + WindowInfo.Title(window));
+        }, log, experimental: false));
+
+    [Fact]
+    public void Firefox_scrolls_under_the_wheel_and_opens_its_menu_by_the_pointer_through_a_view() => WithFirefox((window, page, owner, log) =>
+        Visit(window, (view, at) =>
+        {
+            Point P(int x, int y) => at(new Point(page.X + x, page.Y + y));
+            Desktop.SlideMouse(P(300, 300)); Thread.Sleep(150);
+            for (int i = 0; i < 3; i++) { mouse_event(0x800, 0, 0, unchecked((uint)-120), 0); Thread.Sleep(100); }
+            Assert.True(Desktop.WaitFor(() => !WindowInfo.Title(window).Contains(" s=0"), 2000), "Wheel: " + WindowInfo.Title(window));
+            int before = Popups(owner, window).Count;
+            Click(P(300, 250), right: true);
+            List<nint> menus = [];
+            Assert.True(Desktop.WaitFor(() => (menus = Popups(owner, window)).Count > before, 2000), "No context menu.");
+            Rectangle menu = Desktop.BoundsOf(menus[^1]);
+            log.AppendLine($"menu {menu} pointer {Desktop.CursorPosition()}");
+            Assert.True(Rectangle.Inflate(menu, 60, 60).Contains(Desktop.CursorPosition()), $"The menu isn't by the pointer: {menu}.");
+            Desktop.Press(Keys.Escape);
+            Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
+        }, log, experimental: false));
 
     /// <summary>A visible Firefox window of the given copy whose title starts so.</summary>
     private static nint FirefoxWindow(string executable, string title)
