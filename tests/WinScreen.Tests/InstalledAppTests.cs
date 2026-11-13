@@ -186,8 +186,8 @@ public sealed partial class AppCompatibilityTests
                 Thread.Sleep(300);
                 Desktop.Press(Keys.S, Keys.ControlKey);
                 Assert.True(Desktop.WaitFor(() => SavedShared(file).Contains("qqq"), 6000), "After a click, qqq, Enter and Ctrl+S the file doesn't have them.");
-                // Only noted: a double-click to edit a cell. Excel follows the real pointer while the button is down,
-                // and that is on the view, not over the hidden window.
+                // Only noted: a double-click to edit a cell. Excel won't start editing in a cell while its window is
+                // past the edge of the screen (the same posted double-click works on screen).
                 Click(at(middle + new Size(0, 60)), times: 2);
                 Thread.Sleep(300);
                 Desktop.Press(Keys.End);
@@ -219,22 +219,26 @@ public sealed partial class AppCompatibilityTests
     private static bool EditedLine(string file) => Saved(file).Split('\n').Any(line => line.Trim() is "z" or "Z");
 
     /// <summary>
-    /// The IDE's own editor (Java). It is shown in the view, but it doesn't take clicks from it, most likely because
-    /// Java checks which window is under the pointer position Windows keeps with each message: for a posted message
-    /// that is the real pointer, on the view, while the original is parked past the edge of the screen. This records
-    /// the behaviour, so a change in it shows up here.
+    /// The IDE's own editor (Java). It is shown in the view, but it doesn't take clicks from it: Java ignores input
+    /// while its window is mostly off every display, as a parked original is (probed 13 Nov 2026: the same posted
+    /// clicks work on screen, wherever the real pointer is). Java also ignores a posted character on its own, so the
+    /// key here is a real one. This records the behaviour, so a change in it shows up here.
     /// </summary>
     private void UseIdeEditor(int process, nint window, string file, StringBuilder log)
     {
         User32.ShowWindow(window, 9);
         User32.SetWindowPos(window, 0, 120, 80, 1100, 800, 0x14);
         Settle(3000);
+        EnglishKeys(window);
         Visit(window, (view, at) =>
         {
             Assert.True(view.KeepsUpdating, "The view doesn't keep showing the editor.");
             Point middle = Middle(window);
             Click(at(middle), times: 2);
-            Type(window, "z");
+            var gui = new GuiThreadInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<GuiThreadInfo>() };
+            GetGUIThreadInfo(User32.GetWindowThreadProcessId(window, out _), ref gui);
+            log.AppendLine($"after the double-click: foreground is the app {User32.GetForegroundWindow() == window} ({WindowInfo.ClassName(User32.GetForegroundWindow())}), app active {gui.Active == window}, focus {gui.Focus:X}");
+            Desktop.Press(Keys.Z); // A real key: Java ignores a posted character on its own.
             Thread.Sleep(300);
             Desktop.Press(Keys.S, Keys.ControlKey);
             bool edited = Desktop.WaitFor(() => EditedLine(file), 4000);
@@ -356,9 +360,11 @@ public sealed partial class AppCompatibilityTests
                 Visit(window, (view, at) =>
                 {
                     Assert.Equal(enhancedHover, view.LiveInteraction!.EnhancedHover);
-                    if (enhancedHover) Assert.StartsWith("active", view.LiveInteraction.HoverStatus);
                     Point middle = Middle(window);
                     for (int step = 0; step < 6; step++) { Desktop.SlideMouse(at(middle + new Size(step * 20, step * 10))); Thread.Sleep(150); }
+                    // It starts once the pointer has been over the app's content.
+                    if (enhancedHover) Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.HoverStatus.StartsWith("active") == true, 3000),
+                        view.LiveInteraction?.HoverStatus);
                     ContextMenuByPointer(app.Id, window, at(middle), log, required: false);
                 }, log, enhancedHover);
             }
