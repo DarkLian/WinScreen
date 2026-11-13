@@ -104,7 +104,8 @@ public sealed class SettingsSchemaTests : IDisposable
 
     [Theory]
     [InlineData("99")]
-    [InlineData("togglepin, opacityup")]
+    [InlineData("3")] // a number, even one of a known command, isn't how hotkeys are saved
+    [InlineData("togglepin, opacityup")] // parses as OpacityDown
     [InlineData("")]
     public void A_hotkey_name_this_version_cannot_place_is_dropped(string name)
     {
@@ -113,7 +114,15 @@ public sealed class SettingsSchemaTests : IDisposable
 
         Assert.False(loaded.ShowToolbar);
         Assert.Equal("Ctrl+Shift+F9", loaded.Hotkeys[AppCommand.TogglePin]);
+        Assert.DoesNotContain("Ctrl+Alt+N", loaded.Hotkeys.Values); // not moved to some other command
         Assert.All(loaded.Hotkeys.Keys, command => Assert.True(Enum.IsDefined(command)));
+    }
+
+    [Fact]
+    public void A_hotkey_name_in_other_letter_case_is_kept()
+    {
+        AppSettings loaded = AppSettings.Parse("""{ "Hotkeys": { "opacityup": "Ctrl+Alt+N" } }""", () => Assert.Fail("Read as damaged."));
+        Assert.Equal("Ctrl+Alt+N", loaded.Hotkeys[AppCommand.OpacityUp]);
     }
 
     [Fact]

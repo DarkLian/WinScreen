@@ -261,8 +261,9 @@ public sealed class AppSettings
     private static int DropUnknownKeys(JsonObject root)
     {
         if (root[nameof(Hotkeys)] is not JsonObject hotkeys) return 0;
+        // Names only: a number or a list of names ("A, B") would parse, as some other command.
         string[] unknown = hotkeys.Select(pair => pair.Key)
-            .Where(name => !Enum.TryParse(name, ignoreCase: true, out AppCommand command) || !Enum.IsDefined(command)).ToArray();
+            .Where(name => !Enum.GetNames<AppCommand>().Contains(name, StringComparer.OrdinalIgnoreCase)).ToArray();
         foreach (string name in unknown) hotkeys.Remove(name);
         return unknown.Length;
     }
