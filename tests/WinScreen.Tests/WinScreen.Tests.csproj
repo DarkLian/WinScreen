@@ -20,6 +20,10 @@
     <!-- Validate the exact sources built with this test assembly, including on packaged test runs. -->
     <EmbeddedResource Include="..\..\src\WinScreen\**\*.cs"
                       WithCulture="false" LogicalName="LocalizationSource.%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- The tests' own sources, so SkippedTests can find a test that returns early without saying so. -->
+    <EmbeddedResource Include="**\*.cs" Exclude="bin\**;obj\**" WithCulture="false" LogicalName="TestSource.%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- The release gate and what it reads, checked by ConfirmReleaseTests against sample result folders. -->
+    <None Include="..\..\tools\Confirm-Release.ps1;..\..\tools\TestRuns.ps1" Link="tools\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- settings.json as each published version saved it (tools\settings-fixtures). -->
     <EmbeddedResource Include="Fixtures\settings\*.json" WithCulture="false" LogicalName="SettingsFixture.%(Filename)%(Extension)" />
     <!-- The compatibility page, whose app table must match the app profiles (AppProfileTests). -->

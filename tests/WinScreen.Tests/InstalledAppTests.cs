@@ -18,6 +18,19 @@ namespace WinScreen.Tests;
 public sealed partial class AppCompatibilityTests
 {
     private static bool InstalledAppsWanted => Environment.GetEnvironmentVariable("WINSCREEN_TEST_INSTALLED_APPS") == "1";
+    private const string NotWanted = "Installed apps take part only with WINSCREEN_TEST_INSTALLED_APPS=1.";
+
+    /// <summary>True, after saying why, when an installed app's test can't run here.</summary>
+    private static bool Unavailable(string app, string exe, string process)
+    {
+        string? reason = !InstalledAppsWanted ? NotWanted
+            : !File.Exists(exe) ? $"{app} isn't installed."
+            : Process.GetProcessesByName(process).Length > 0 ? $"{app} is already open, and someone's own copy is left alone."
+            : null;
+        if (reason is not null) Skipped.Because(reason);
+        return reason is not null;
+    }
+
     private static string Office(string exe) => Path.Combine(@"C:\Program Files\Microsoft Office\root\Office16", exe);
 
     /// <summary>A right-click opens the app's own menu by the pointer, and Escape closes it.</summary>
@@ -103,7 +116,7 @@ public sealed partial class AppCompatibilityTests
     public void Word_takes_a_click_typing_saving_and_its_context_menu_through_a_view()
     {
         string word = Office("WINWORD.EXE");
-        if (!InstalledAppsWanted || !File.Exists(word) || Process.GetProcessesByName("WINWORD").Length > 0) return;
+        if (Unavailable("Word", word, "WINWORD")) return;
         string root = Directory.CreateTempSubdirectory("winscreen-word").FullName;
         string file = Path.Combine(root, "probe.rtf");
         // One long word per paragraph in large type, so a double-click anywhere on the page lands on a word.
@@ -167,7 +180,7 @@ public sealed partial class AppCompatibilityTests
     public void Excel_takes_a_click_on_a_cell_typing_saving_and_its_context_menu_through_a_view()
     {
         string excel = Office("EXCEL.EXE");
-        if (!InstalledAppsWanted || !File.Exists(excel) || Process.GetProcessesByName("EXCEL").Length > 0) return;
+        if (Unavailable("Excel", excel, "EXCEL")) return;
         string root = Directory.CreateTempSubdirectory("winscreen-excel").FullName;
         string file = Path.Combine(root, "probe.csv");
         File.WriteAllText(file, string.Concat(Enumerable.Repeat(string.Join(",", Enumerable.Repeat("abc", 26)) + "\r\n", 60)));
@@ -293,7 +306,7 @@ public sealed partial class AppCompatibilityTests
     {
         string idea = Directory.Exists(@"C:\Program Files\JetBrains")
             ? Directory.GetFiles(@"C:\Program Files\JetBrains", "idea64.exe", SearchOption.AllDirectories).FirstOrDefault() ?? "" : "";
-        if (!InstalledAppsWanted || !File.Exists(idea) || Process.GetProcessesByName("idea64").Length > 0) return;
+        if (Unavailable("IntelliJ IDEA", idea, "idea64")) return;
         string root = Directory.CreateTempSubdirectory("winscreen-idea").FullName;
         string file = IdeFile(root);
         // Its own settings and data folders, so the person's own are never touched. A new settings folder makes it ask
@@ -332,7 +345,7 @@ public sealed partial class AppCompatibilityTests
     public void LTspice_opens_its_menus_by_the_pointer_through_a_view()
     {
         string ltspice = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\ADI\LTspice\LTspice.exe");
-        if (!InstalledAppsWanted || !File.Exists(ltspice) || Process.GetProcessesByName("LTspice").Length > 0) return;
+        if (Unavailable("LTspice", ltspice, "LTspice")) return;
         using var process = Process.Start(new ProcessStartInfo(ltspice) { UseShellExecute = false })!;
         var log = new StringBuilder();
         try
@@ -381,9 +394,9 @@ public sealed partial class AppCompatibilityTests
     [InlineData("ChatGPT", true)]
     public void A_chat_app_that_is_open_is_recognised_and_can_be_used_through_a_view(string program, bool enhancedHover)
     {
-        if (!InstalledAppsWanted) return;
+        if (!InstalledAppsWanted) { Skipped.Because(NotWanted); return; }
         Process? app = Process.GetProcessesByName(program).FirstOrDefault(p => p.MainWindowHandle != 0 && User32.IsWindowVisible(p.MainWindowHandle));
-        if (app is null) return;
+        if (app is null) { Skipped.Because($"{program} isn't open."); return; }
         using (app)
         {
             nint window = app.MainWindowHandle;

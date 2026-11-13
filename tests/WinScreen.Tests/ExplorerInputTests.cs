@@ -218,7 +218,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                         Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith(folder, StringComparison.Ordinal), 4000),
                             "Explorer did not navigate. " + string.Join("\n", view.LiveInteraction?.InputDiagnostics ?? []));
                         // The rest is Windows 11's Explorer: its command bar, tabs and address bar.
-                        if (Environment.OSVersion.Version.Build < 22000) return;
+                        if (Environment.OSVersion.Version.Build < 22000) { Skipped.Because("The rest needs Windows 11's command bar, tabs and address bar."); return; }
                         void ClickControl(Func<BrowserAccessibility.Control, bool> match, double across = .5, bool right = false, bool last = false, bool first = false)
                         {
                             var control = last ? BrowserAccessibility.Read(window).Last(c => match(c)) : first ? BrowserAccessibility.Read(window).First(c => match(c)) : Assert.Single(BrowserAccessibility.Read(window), c => match(c));

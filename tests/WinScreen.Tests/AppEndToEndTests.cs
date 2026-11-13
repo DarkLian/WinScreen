@@ -308,7 +308,7 @@ public sealed class AppEndToEndTests : IDisposable
     [Fact]
     public void An_administrator_app_gets_no_toolbar_and_no_anchors_and_says_why()
     {
-        if (Environment.GetEnvironmentVariable("WINSCREEN_TEST_ELEVATED") != "1") return; // Asks for administrator rights.
+        if (Environment.GetEnvironmentVariable("WINSCREEN_TEST_ELEVATED") != "1") { Skipped.Because("Asks for administrator rights, so it runs only with WINSCREEN_TEST_ELEVATED=1."); return; }
         Assert.False(ProcessInfo.SelfElevated, "Run this from a shell without administrator rights.");
         RestartWith(new AppSettings { WelcomeShown = true, Anchors = new AnchorPreferences { Automatic = true } });
         // Windows drops simulated keys and clicks while an administrator window is in front, so the right to bring

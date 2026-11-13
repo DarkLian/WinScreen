@@ -15,8 +15,9 @@
   3. With -GoAhead: checks again, records the conditions in environment.json (Windows build, displays and
      scale, graphics, input languages, administrator or not, commit), runs, and lists what did not run.
 
-  Results go to TestResults\host\<time>: a .trx per suite, runner.log, environment.json, not-run.txt.
-  Exit code 0 when every test passed.
+  Results go to TestResults\host\<time>: a .trx per suite, runner.log, environment.json, source.json (the commit
+  the build came from, for Confirm-Release.ps1), not-run.txt (skipped tests and tests that returned early, see
+  TestRuns.ps1) and exitcode.txt. Exit code 0 when every test passed.
 
 .EXAMPLE
   .\tools\Invoke-HostRun.ps1 -Filter "FullyQualifiedName~DarkModeTests"
@@ -46,6 +47,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'TestRuns.ps1')
 
 if (-not $Filter -and -not $All) { throw 'Name the tests with -Filter (targeted runs by default), or pass -All.' }
 if ($Filter -and $All) { throw 'Pass -Filter or -All, not both.' }
@@ -200,8 +202,10 @@ if (-not (Test-Path $env:WINSCREEN_ZIG)) { Say 'Not starting'; Write-Output "- W
 $common = @('-c', 'Release', '-p:WinScreenArchitecture=x64', '-p:UpdateRepository=DarkLian/WinScreen')
 $program = Join-Path $repo 'TestResults\host\_program'
 $packaged = $Suite -in 'Packaged', 'Both'
+$tests = Join-Path $repo 'tests\WinScreen.Tests\bin\Release\net10.0-windows10.0.26100.0\win-x64'
 
 if (-not $SkipBuild) {
+    $before = Get-SourceState $repo
     Say 'Building'
     & $dotnet build (Join-Path $repo 'WinScreen.slnx') @common -v q -nologo
     if ($LASTEXITCODE -ne 0) { throw 'The build failed.' }
@@ -212,9 +216,10 @@ if (-not $SkipBuild) {
             -p:DebugType=embedded @common -v q -nologo
         if ($LASTEXITCODE -ne 0) { throw 'Publishing failed.' }
     }
+    Save-BuildStamp $tests $before
+    if ($packaged) { Save-BuildStamp $program $before }
 }
 
-$tests = Join-Path $repo 'tests\WinScreen.Tests\bin\Release\net10.0-windows10.0.26100.0\win-x64'
 $missing = @()
 if (-not (Test-Path (Join-Path $tests 'WinScreen.Tests.dll'))) { $missing += 'No built tests. Run without -SkipBuild.' }
 elseif (-not (Test-Path (Join-Path $tests 'WinScreen.Hover.dll'))) { $missing += 'The test build has no WinScreen.Hover.dll. Build with WINSCREEN_ZIG set, without -SkipBuild.' }
@@ -231,8 +236,16 @@ if ($packaged) {
     $steps += @{ name = 'packaged'; filter = (@('Category=Interactive', $selected) | Where-Object { $_ }) -join '&' }
 }
 
-$commit = (git -C $repo rev-parse --short HEAD).Trim()
-if (git -C $repo status --porcelain --untracked-files=no) { $commit += ' with uncommitted changes' }
+# The built files this run uses.
+$outputs = @(Join-Path $tests 'WinScreen.Tests.dll')
+if ($packaged) { $outputs += Join-Path $program 'WinScreen.exe' }
+function Get-Commit {
+    $source = Get-RunSource $repo $outputs
+    $said = if ($source.commit) { $source.commit.Substring(0, 7) } else { 'unknown' }
+    if ($source.note) { $said += " ($($source.note))" }
+    return $source, $said
+}
+$source, $commit = Get-Commit
 
 Say 'About to run on this desktop'
 foreach ($step in $steps) { Write-Output "- $($step.name): $($step.filter)" }
@@ -259,10 +272,15 @@ New-Item -ItemType Directory -Path $ResultsDirectory -Force | Out-Null
 $ResultsDirectory = (Resolve-Path $ResultsDirectory).Path
 
 $os = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+$windows = if ([int]$os.CurrentBuildNumber -ge 22000) { '11' } else { '10' }
+$source, $commit = Get-Commit
+# What Confirm-Release.ps1 reads: the commit, and that it was every test.
+Save-RunRecord $ResultsDirectory $source @{ tool = 'host'; windows = $windows; all = [bool]$All; suite = $Suite; filter = $Filter
+    installedApps = [bool]$InstalledApps; administrator = $false }
 [ordered]@{
     machine = 'host'
     # ProductName says "Windows 10" on Windows 11 too; the build number tells them apart.
-    windows = $(if ([int]$os.CurrentBuildNumber -ge 22000) { '11' } else { '10' })
+    windows = $windows
     displayVersion = $os.DisplayVersion
     build = "$($os.CurrentBuildNumber).$($os.UBR)"
     architecture = $env:PROCESSOR_ARCHITECTURE
@@ -280,13 +298,17 @@ $os = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
 $code = 0
 $savedExe = $env:WINSCREEN_EXE
 $savedApps = $env:WINSCREEN_TEST_INSTALLED_APPS
+$savedSkipped = $env:WINSCREEN_SKIPPED_FILE
 Start-Transcript -Path (Join-Path $ResultsDirectory 'runner.log') -Force | Out-Null
 try {
     if ($InstalledApps) { $env:WINSCREEN_TEST_INSTALLED_APPS = '1' }
     foreach ($step in $steps) {
-        # The desktop step's packaged smoke test skips itself without the program; give it the one published, if any.
-        $env:WINSCREEN_EXE = if ($step.name -eq 'packaged' -or ($packaged -and (Test-Path (Join-Path $program 'WinScreen.exe')))) {
-            Join-Path $program 'WinScreen.exe' } else { $savedExe }
+        # The desktop step's packaged smoke test skips itself without the program: it gets the one published for
+        # this run, never one left from an earlier build.
+        $env:WINSCREEN_EXE = if ($packaged) { Join-Path $program 'WinScreen.exe' } else { $savedExe }
+        # Tests that return early say so here (Skipped.Because); the .trx counts them as passed.
+        $env:WINSCREEN_SKIPPED_FILE = Join-Path $ResultsDirectory "$($step.name).returned-early.txt"
+        Remove-Item -LiteralPath $env:WINSCREEN_SKIPPED_FILE -ErrorAction SilentlyContinue
         Say "$($step.name): $($step.filter)"
         # Windows PowerShell turns a native program's error output into errors, so don't stop on them here.
         $ErrorActionPreference = 'Continue'
@@ -305,30 +327,18 @@ catch {
 finally {
     $env:WINSCREEN_EXE = $savedExe
     $env:WINSCREEN_TEST_INSTALLED_APPS = $savedApps
+    $env:WINSCREEN_SKIPPED_FILE = $savedSkipped
     Stop-Transcript | Out-Null
     $lock.ReleaseMutex()
     $lock.Dispose()
 }
 
-# What did not run: skipped tests, with their reasons. A pass of a test that didn't run is not a pass.
-$notRun = @()
-foreach ($trx in Get-ChildItem $ResultsDirectory -Filter *.trx -ErrorAction SilentlyContinue) {
-    [xml]$results = Get-Content $trx.FullName -Raw
-    # Counted from each result: the summary counters leave skipped tests out of "not executed".
-    # Not $all: PowerShell names ignore case, and that is the -All parameter.
-    $outcomes = @($results.TestRun.Results.UnitTestResult)
-    Write-Output ("{0}: {1} passed, {2} failed, {3} not run" -f $trx.BaseName, @($outcomes | Where-Object outcome -eq 'Passed').Count,
-        @($outcomes | Where-Object outcome -eq 'Failed').Count, @($outcomes | Where-Object outcome -eq 'NotExecuted').Count)
-    foreach ($result in @($outcomes | Where-Object { $_.outcome -eq 'NotExecuted' })) {
-        $reason = $result.Output.ErrorInfo.Message
-        if (-not $reason) { $reason = $result.Output.StdOut }
-        $notRun += "$($trx.BaseName): $($result.testName)$(if ($reason) { " - $($reason.Trim())" })"
-    }
-}
-# Always written, so a missing file means the run didn't get this far.
-$listed = if ($notRun.Count -gt 0) { $notRun } else { @('Every selected test ran.') }
-Set-Content -LiteralPath (Join-Path $ResultsDirectory 'not-run.txt') -Value $listed -Encoding UTF8
+# What did not run: skipped tests and tests that returned early, with their reasons. A pass of a test that didn't
+# run is not a pass.
+$outcomes = @(Get-RunOutcomes $ResultsDirectory)
+$outcomes | ForEach-Object { Write-Output (Format-Outcome $_) }
+$notRun = @(Save-NotRun $ResultsDirectory $outcomes)
 if ($notRun.Count -gt 0) { Say 'Did not run'; $notRun | ForEach-Object { Write-Output "- $_" } }
-Write-Output 'Tests that return early when an app is missing are counted as passed; check the console log for them.'
+Set-Content -LiteralPath (Join-Path $ResultsDirectory 'exitcode.txt') -Value $code -Encoding ASCII
 Write-Output "Results: $ResultsDirectory (exit code $code)"
 exit $code

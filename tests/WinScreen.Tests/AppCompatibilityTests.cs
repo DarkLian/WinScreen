@@ -209,7 +209,7 @@ public sealed partial class AppCompatibilityTests(Xunit.Abstractions.ITestOutput
     public void Firefox_takes_clicks_double_clicks_selection_typing_wheel_and_its_menu_through_a_view()
     {
         string firefox = Path.Combine(Apps, "firefox", "firefox.exe");
-        if (!File.Exists(firefox)) return;
+        if (!File.Exists(firefox)) { Skipped.Because("Firefox isn't in test-apps."); return; }
         string root = Directory.CreateTempSubdirectory("winscreen-firefox").FullName;
         string profile = Directory.CreateDirectory(Path.Combine(root, "profile")).FullName;
         File.WriteAllText(Path.Combine(profile, "user.js"), """
@@ -336,7 +336,7 @@ public sealed partial class AppCompatibilityTests(Xunit.Abstractions.ITestOutput
     public void An_electron_editor_takes_a_double_click_typing_and_its_context_menu_through_a_view()
     {
         string code = Path.Combine(Apps, "vscode", "Code.exe");
-        if (!File.Exists(code)) return;
+        if (!File.Exists(code)) { Skipped.Because("VS Code isn't in test-apps."); return; }
         string root = Directory.CreateTempSubdirectory("winscreen-electron").FullName;
         string file = Path.Combine(root, "probe.txt");
         File.WriteAllText(file, "alpha beta gamma\n");
@@ -410,7 +410,7 @@ public sealed partial class AppCompatibilityTests(Xunit.Abstractions.ITestOutput
     public void A_qt_app_opens_its_menus_by_the_pointer_and_a_dialog_shows_the_original()
     {
         string vlc = Path.Combine(Apps, "vlc", "vlc.exe");
-        if (!File.Exists(vlc)) return;
+        if (!File.Exists(vlc)) { Skipped.Because("VLC isn't in test-apps."); return; }
         var start = new ProcessStartInfo(vlc) { UseShellExecute = false };
         foreach (string arg in new[] { "--ignore-config", "--no-qt-privacy-ask", "--no-qt-updates-notif", "--no-qt-recentplay", "--qt-continue=0" })
             start.ArgumentList.Add(arg);
@@ -466,7 +466,7 @@ public sealed partial class AppCompatibilityTests(Xunit.Abstractions.ITestOutput
     public void A_wpf_app_that_refuses_to_be_hidden_is_told_plainly_and_left_alone()
     {
         string ise = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), @"WindowsPowerShell\v1.0\powershell_ise.exe");
-        if (!File.Exists(ise)) return;
+        if (!File.Exists(ise)) { Skipped.Because("PowerShell ISE isn't installed."); return; }
         var start = new ProcessStartInfo(ise) { UseShellExecute = false };
         start.ArgumentList.Add("-NoProfile");
         using var process = Process.Start(start)!;

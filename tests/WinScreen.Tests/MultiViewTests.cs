@@ -345,7 +345,7 @@ public sealed class SwitcherListTests
                 List<string> shown = Names();
                 // Windows 11's switcher shows its list only to the eye: through accessibility it has a title and nothing
                 // else, so there is nothing to compare there.
-                if (shown.Count == 0 && Environment.OSVersion.Version.Build >= 22000) return;
+                if (shown.Count == 0 && Environment.OSVersion.Version.Build >= 22000) { Skipped.Because("Windows 11's switcher list can't be read through accessibility."); return; }
                 Assert.Contains(shown, name => name.Contains(title, StringComparison.Ordinal));
                 view.SetOriginalHidden(true);
                 Assert.True(windows.IsHidden(target.Handle));
@@ -398,7 +398,7 @@ public sealed class SwitcherListTests
     [Fact]
     public void On_windows_11_keep_updating_takes_the_original_out_of_alt_tab_read_from_the_screen()
     {
-        if (Environment.OSVersion.Version.Build < 22000) return; // Windows 10's switcher is read by the test above.
+        if (Environment.OSVersion.Version.Build < 22000) { Skipped.Because("Needs Windows 11; Windows 10's switcher is read by the test above."); return; }
         const string word = "Lantern";
         using var target = new TargetProcess(new Rectangle(240, 160, 480, 340), "E8E0C8", title: "Kettle " + word + " Meadow");
         Desktop.GainForegroundRights();

@@ -102,7 +102,7 @@ public sealed class NamedProgramArchitectureTests
     public void A_32_bit_program_added_by_name_never_gets_enhanced_hover()
     {
         string exe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.SystemX86), "charmap.exe");
-        if (!Environment.Is64BitOperatingSystem || !File.Exists(exe)) return;
+        if (!Environment.Is64BitOperatingSystem || !File.Exists(exe)) { Skipped.Because("No 32-bit Character Map here."); return; }
         PipHoverPreferences before = PipHoverApps.Preferences;
         using var process = Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false })!;
         try

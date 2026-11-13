@@ -7,7 +7,8 @@
 
   The bundle folder holds run.json, tests\ (the built test output) and, for the packaged suite,
   program\ (the published WinScreen). Results go to <Root>\out: one .trx per step, runner.log,
-  environment.json, and exitcode.txt, which is written last.
+  environment.json, <step>.returned-early.txt for tests that returned early (Skipped.Because), and exitcode.txt,
+  which is written last.
 #>
 param(
     [string]$Root = 'C:\WinScreenTest\run',
@@ -59,6 +60,10 @@ try {
                 [Environment]::SetEnvironmentVariable($pair.Name, $value)
             }
         }
+        # Tests that return early say so here (Skipped.Because); the .trx counts them as passed.
+        $saved['WINSCREEN_SKIPPED_FILE'] = $env:WINSCREEN_SKIPPED_FILE
+        $env:WINSCREEN_SKIPPED_FILE = Join-Path $out "$($step.name).returned-early.txt"
+        Remove-Item -LiteralPath $env:WINSCREEN_SKIPPED_FILE -ErrorAction SilentlyContinue
         try {
             Write-Output "== $($step.name): $($step.filter)"
             # A hung test is stopped and named in the results instead of blocking the run.

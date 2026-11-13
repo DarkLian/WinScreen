@@ -12,7 +12,8 @@
   Each VM keeps the memory its checkpoint was taken with (a checkpoint of a running VM can't be given other
   memory), so both together need that much free on this PC, plus some for the PC itself.
 
-  Results go to TestResults\vm\pair-<time>\<VM name>. The exit code is 0 only when both runs passed.
+  Results go to TestResults\vm\pair-<time>\<VM name>, with source.json (the commit the build came from)
+  beside them. The exit code is 0 only when both runs passed.
 
 .EXAMPLE
   .\Invoke-TestVmPair.ps1
@@ -28,6 +29,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'TestVm.Common.ps1')
+. (Join-Path $PSScriptRoot '..\TestRuns.ps1')
 Assert-HyperVAccess
 if ($Names.Count -ne 2) { throw 'Give exactly two VM names.' }
 
@@ -56,6 +58,8 @@ $common = @('-c', 'Release', '-p:WinScreenArchitecture=x64', '-p:UpdateRepositor
 
 # Built and published once: two publishes of one project at the same time would share its intermediate files.
 $program = Join-Path $repo 'TestResults\vm\_program'
+$tests = Join-Path $repo 'tests\WinScreen.Tests\bin\Release\net10.0-windows10.0.26100.0\win-x64'
+$before = Get-SourceState $repo
 if (-not $SkipBuild) {
     Write-Output '== Building'
     & $dotnet build (Join-Path $repo 'WinScreen.slnx') @common
@@ -65,9 +69,15 @@ Write-Output '== Publishing the packaged program'
 if (Test-Path $program) { Remove-Item $program -Recurse -Force }
 & $dotnet publish (Join-Path $repo 'src\WinScreen\WinScreen.csproj') -o $program --self-contained true '-p:DebugType=embedded' @common
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
+if (-not $SkipBuild) { Save-BuildStamp $tests $before }
+Save-BuildStamp $program $before
 
 $root = Join-Path $repo ('TestResults\vm\pair-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Path $root -Force | Out-Null
+# What Confirm-Release.ps1 reads first; each VM's own folder has its source.json and results.
+$source = Get-RunSource $repo @((Join-Path $tests 'WinScreen.Tests.dll'), (Join-Path $program 'WinScreen.exe'))
+Save-RunRecord $root $source @{ tool = 'pair'; vms = $Names }
+if (-not $source.commit -or -not $source.clean) { Write-Output "Not a release run: $($source.note)" }
 $runner = Join-Path $PSScriptRoot 'Invoke-TestVmRun.ps1'
 $plans = @(
     @{ Name = $Names[0]; Arguments = @('-Suite', 'Packaged', '-PackagedFilter', $takeHeavy) },

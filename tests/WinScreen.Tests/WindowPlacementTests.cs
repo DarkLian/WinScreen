@@ -160,7 +160,7 @@ public sealed class WindowPlacementTests
     [Fact]
     public void One_display_says_so_rather_than_doing_nothing()
     {
-        if (Screen.AllScreens.Length > 1) return;
+        if (Screen.AllScreens.Length > 1) { Skipped.Because("Needs exactly one display."); return; }
         using var target = new TargetProcess(Spot);
         var placer = new WindowPlacer(new WindowController([]));
         Assert.Throws<WindowOperationException>(() => placer.MoveToNextDisplay(target.Handle));
@@ -466,7 +466,7 @@ public sealed class WindowPlacementTests
     [MultiDisplayFact]
     public void Moving_between_displays_at_different_scales_lands_where_expected()
     {
-        if (!DisplayScale.Allowed) return; // Never on someone's own screen.
+        if (!DisplayScale.Allowed) { Skipped.Because("Changes the display scale, which only the test VM allows."); return; } // Never on someone's own screen.
         using var target = new TargetProcess(Spot);
         var placer = new WindowPlacer(new WindowController([]));
         Screen home = Screen.FromHandle(target.Handle), other = OtherDisplay(target.Handle);

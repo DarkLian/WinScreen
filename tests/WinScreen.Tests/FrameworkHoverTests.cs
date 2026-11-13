@@ -55,7 +55,7 @@ public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper out
     {
         string exe = Path.Combine(AppContext.BaseDirectory, "test-apps", app);
         bool fixture = Path.GetFileName(exe) == ElectronFixture;
-        if (fixture ? !PrepareElectronFixture(exe) : !File.Exists(exe)) return; // Portable test apps are optional downloads.
+        if (fixture ? !PrepareElectronFixture(exe) : !File.Exists(exe)) { Skipped.Because($"{app} isn't in test-apps."); return; } // Optional downloads.
         bool electron = kind == PipHoverApp.Electron && !fixture;
         string root = Directory.CreateTempSubdirectory("winscreen-framework-hover").FullName;
         const string html = """

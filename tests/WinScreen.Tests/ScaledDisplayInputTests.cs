@@ -24,7 +24,7 @@ public sealed class ScaledDisplayInputTests(Xunit.Abstractions.ITestOutputHelper
     [Fact]
     public void Every_kind_of_input_lands_on_the_shown_point_in_scaled_and_unscaled_apps_at_150_percent()
     {
-        if (!DisplayScale.Allowed) return; // Never on someone's own screen.
+        if (!DisplayScale.Allowed) { Skipped.Because("Changes the display scale, which only the test VM allows."); return; } // Never on someone's own screen.
         int before = DisplayScale.Current;
         var log = new StringBuilder();
         var failures = new List<string>();

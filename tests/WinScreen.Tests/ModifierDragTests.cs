@@ -509,7 +509,7 @@ public sealed class ModifierGestureTests
     [MultiDisplayFact]
     public void Alt_drag_to_the_edge_of_a_display_at_another_scale_snaps_to_half_of_it()
     {
-        if (!DisplayScale.Allowed) return; // Never on someone's own screen.
+        if (!DisplayScale.Allowed) { Skipped.Because("Changes the display scale, which only the test VM allows."); return; } // Never on someone's own screen.
         Desktop.GainForegroundRights();
         using var target = new TargetProcess(new(300, 200, 400, 300));
         target.UseFrame();

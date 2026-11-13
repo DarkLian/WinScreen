@@ -447,7 +447,7 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
     [Fact]
     public void A_browser_scrolls_under_the_wheel_in_a_view_used_directly()
     {
-        if (!File.Exists(EdgePath)) return;
+        if (!File.Exists(EdgePath)) { Skipped.Because("Edge isn't installed."); return; }
         string root = Directory.CreateTempSubdirectory("winscreen-wheel").FullName;
         using var browser = new System.Diagnostics.Process();
         try

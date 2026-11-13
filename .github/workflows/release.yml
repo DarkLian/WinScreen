@@ -3,7 +3,8 @@ name: Release
 # Push a version tag to build the installer and publish it as a GitHub Release.
 # Releases are x64 only. ARM64 is not officially supported and gets no installer, portable zip or update feed; the
 # Build workflow still compiles it as a best-effort check, and this workflow doesn't depend on that job.
-#   v1.2.3        a stable release. Needs desktop validation for the commit and the update signing key.
+#   v1.2.3        a stable release. Needs the release gate's lines in the tag message (tools/Confirm-Release.ps1)
+#                 and the update signing key.
 #   v1.2.3-beta   a prerelease (also -alpha, -rc, with an optional .N). Installed copies never update to it.
 # Code signing goes through SignPath when the SIGNPATH_API_TOKEN secret and the SIGNPATH_ORGANIZATION_ID variable are
 # set (the artifact configurations are in .signpath). Each signed release waits for two approvals in SignPath: the
@@ -42,14 +43,21 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           "prerelease=$($prerelease.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           "title=WinScreen $($version.Replace('-', ' '))" >> $env:GITHUB_OUTPUT
-      - name: Check desktop validation (stable releases)
+      - name: Check the release gate (stable releases)
         if: steps.tag.outputs.prerelease == 'false'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/desktop.yml/runs?head_sha=$env:GITHUB_SHA&status=success" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0 -or -not ($runs.workflow_runs | Where-Object { $_.head_sha -eq $env:GITHUB_SHA -and $_.conclusion -eq 'success' -and $_.event -eq 'workflow_dispatch' })) { throw 'Run the desktop validation workflow successfully for this exact commit before a stable release.' }
+          # Desktop tests need a real desktop, so they run on the maintainer's PC and test VMs, not here.
+          # tools/Confirm-Release.ps1 checks those runs for the commit and prints lines that end the tag message.
+          $ref = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$env:GITHUB_REF_NAME" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $ref.object.type -ne 'tag') { throw 'A stable release needs an annotated tag.' }
+          $annotation = gh api "repos/$env:GITHUB_REPOSITORY/git/tags/$($ref.object.sha)" | ConvertFrom-Json
+          $lines = @($annotation.message -split "`n" | ForEach-Object { $_.Trim() })
+          if ($LASTEXITCODE -ne 0 -or $lines -notcontains "Release-Gate: $env:GITHUB_SHA") {
+            throw 'Run tools/Confirm-Release.ps1 for this exact commit and end the tag message with the lines it prints.'
+          }
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
@@ -181,7 +189,8 @@ jobs:
           $ref = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/$env:GITHUB_REF_NAME" | ConvertFrom-Json
           if ($LASTEXITCODE -eq 0 -and $ref.object.type -eq 'tag') {
             $annotation = gh api "repos/$env:GITHUB_REPOSITORY/git/tags/$($ref.object.sha)" | ConvertFrom-Json
-            $highlights = (($annotation.message -split "`n") | Select-Object -Skip 1) -join "`n"
+            # The release gate's lines (Release-Gate...) are for the workflow, not for readers.
+            $highlights = (($annotation.message -split "`n") | Select-Object -Skip 1 | Where-Object { $_ -notmatch '^\s*Release-Gate' }) -join "`n"
             if ($LASTEXITCODE -eq 0 -and $highlights.Trim()) { $notes = @($highlights.Trim()) + $notes }
           }
           $arguments = @($env:GITHUB_REF_NAME) + (Get-ChildItem dist/release -File).FullName +

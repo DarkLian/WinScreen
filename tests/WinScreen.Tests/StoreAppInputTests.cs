@@ -108,7 +108,7 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
     public void Calculator_adds_through_a_view_takes_keys_and_says_what_it_cannot_do()
     {
         nint window = OpenCalculator();
-        if (window == 0) return; // No calculator, or one that's someone else's.
+        if (window == 0) { Skipped.Because("No Calculator of its own: none installed, or one already open."); return; }
         var log = new StringBuilder();
         Rectangle before = Desktop.BoundsOf(window);
         try
@@ -158,7 +158,7 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
     public void Calculator_title_bar_buttons_in_the_picture_act_on_the_view()
     {
         nint window = OpenCalculator();
-        if (window == 0) return;
+        if (window == 0) { Skipped.Because("No Calculator of its own: none installed, or one already open."); return; }
         var log = new StringBuilder();
         try
         {
@@ -189,7 +189,7 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
     public void A_hidden_store_app_brought_forward_from_elsewhere_is_shown_and_its_taskbar_button_stays()
     {
         nint window = OpenCalculator();
-        if (window == 0) return;
+        if (window == 0) { Skipped.Because("No Calculator of its own: none installed, or one already open."); return; }
         Rectangle before = Desktop.BoundsOf(window);
         try
         {
@@ -218,7 +218,7 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
     public void A_hidden_store_app_comes_back_after_a_forced_stop()
     {
         nint window = OpenCalculator();
-        if (window == 0) return;
+        if (window == 0) { Skipped.Because("No Calculator of its own: none installed, or one already open."); return; }
         Rectangle before = Desktop.BoundsOf(window);
         string folder = Directory.CreateTempSubdirectory("winscreen-store-recovery").FullName;
         var journal = new ChangeJournal(Path.Combine(folder, "journal.json"));
@@ -247,11 +247,11 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
     public void The_wheel_scrolls_a_store_app_through_a_view()
     {
         // Settings is a Store app whose pages scroll. One someone already has open is left alone.
-        if (!Desktop.WaitFor(() => Desktop.FindWindow("ApplicationFrameWindow", "Settings") == 0, 3000)) return;
+        if (!Desktop.WaitFor(() => Desktop.FindWindow("ApplicationFrameWindow", "Settings") == 0, 3000)) { Skipped.Because("Settings is already open, and someone's own window is left alone."); return; }
         try { Process.Start(new ProcessStartInfo("ms-settings:about") { UseShellExecute = true }); }
-        catch (System.ComponentModel.Win32Exception) { return; }
+        catch (System.ComponentModel.Win32Exception) { Skipped.Because("Settings couldn't be started."); return; }
         nint window = 0;
-        if (!Desktop.WaitFor(() => (window = Desktop.FindWindow("ApplicationFrameWindow", "Settings")) != 0, 20000)) return;
+        if (!Desktop.WaitFor(() => (window = Desktop.FindWindow("ApplicationFrameWindow", "Settings")) != 0, 20000)) { Skipped.Because("Settings didn't open."); return; }
         var log = new StringBuilder();
         try
         {

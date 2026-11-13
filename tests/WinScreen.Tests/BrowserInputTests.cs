@@ -612,7 +612,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     public void A_browsers_own_middle_click_scrolling_works_with_enhanced_hover(bool viewOptionOn)
     {
         string path = BrowserCases().Select(c => (string)c[0]).FirstOrDefault(p => Path.GetFileName(p) == "chrome.exe") ?? "";
-        if (!File.Exists(path)) return;
+        if (!File.Exists(path)) { Skipped.Because("No Chrome found."); return; }
         const string page = """
             <!doctype html><title>AutoScroll y=0</title><style>body{margin:0;height:60000px;background:repeating-linear-gradient(white 0px,white 90px,gray 100px)}</style>
             <script>const report=()=>document.title=`AutoScroll y=${Math.round(scrollY)}`;onscroll=report;setInterval(report,20)</script>
@@ -1169,7 +1169,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     public void A_page_and_a_store_app_in_two_views_each_get_only_their_own_input(string path)
     {
         nint calculator = StoreAppInputTests.OpenCalculator();
-        if (calculator == 0) return; // No calculator, or one that's someone else's.
+        if (calculator == 0) { Skipped.Because("No Calculator of its own: none installed, or one already open."); return; }
         const string page = """
             <!doctype html><title>PageA c=0 val=</title>
             <style>body{margin:0;font:20px sans-serif}#b{position:fixed;left:40px;top:40px;width:220px;height:70px}
@@ -1473,7 +1473,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     public void Borderless_and_fill_display_work_on_a_browser_that_draws_its_own_title_bar()
     {
         string? path = BrowserCases().Select(c => (string)c[0]).FirstOrDefault(p => Path.GetFileName(p) == "chrome.exe");
-        if (path is null || !File.Exists(path)) return;
+        if (path is null || !File.Exists(path)) { Skipped.Because("No Chrome found."); return; }
         var (browser, window, root) = Open("<!doctype html><title>FrameProbe</title>", "FrameProbe", app: false, path);
         var windows = new WindowController([]);
         try

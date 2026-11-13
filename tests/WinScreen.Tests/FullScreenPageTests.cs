@@ -41,7 +41,7 @@ public sealed class FullScreenPageTests(Xunit.Abstractions.ITestOutputHelper out
     [InlineData(When.BeforeTheView, When.InTheView)]
     public void A_page_that_goes_full_screen_around_a_view_ends_up_where_the_window_was(When enter, When leave)
     {
-        if (Browser is not { } path) return;
+        if (Browser is not { } path) { Skipped.Because("No browser found."); return; }
         if (enter == When.BeforeTheView) Desktop.GainForegroundRights(); // The page is put in full screen from here first.
         var (browser, window, root) = BrowserInputTests.Open(Page, "Movie", app: true, path);
         output.WriteLine(path);

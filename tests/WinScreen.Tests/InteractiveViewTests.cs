@@ -463,8 +463,7 @@ public sealed class InteractiveViewTests
     [Fact]
     public void Fast_accelerated_pointer_in_a_browser_misdelivers_nothing()
     {
-        if (!File.Exists(ChromePath))
-            return;
+        if (!File.Exists(ChromePath)) { Skipped.Because("Chrome isn't installed."); return; }
         string folder = Directory.CreateTempSubdirectory("winscreen-chrome-").FullName;
         System.Diagnostics.Process? browser = null;
         try

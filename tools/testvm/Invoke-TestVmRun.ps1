@@ -9,9 +9,10 @@
      VM's own desktop. Mouse and keyboard input stay inside the VM.
   4. Copies the results back, then turns the VM off and restores the checkpoint again.
 
-  Results go to TestResults\vm\<Name>-<time> by default: a .trx per suite, runner.log and
-  environment.json (Windows build, screen size, graphics). The exit code is 0 when every suite
-  passed, so the script can run as-is from a CI job on this PC.
+  Results go to TestResults\vm\<Name>-<time> by default: a .trx per suite, runner.log,
+  environment.json (Windows build, screen size, graphics), source.json (the commit the build came
+  from, for Confirm-Release.ps1), not-run.txt (skipped tests and tests that returned early, see
+  ..\TestRuns.ps1) and exitcode.txt. The exit code is 0 when every suite passed.
 
   The suites follow build.ps1: "Desktop" is everything except Category=Interactive, and "Packaged"
   is Category=Interactive against the published program.
@@ -48,6 +49,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'TestVm.Common.ps1')
+. (Join-Path $PSScriptRoot '..\TestRuns.ps1')
 Assert-HyperVAccess
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
@@ -104,6 +106,8 @@ try {
         }
     }
 
+    # What the build and the publish below are made from.
+    $before = Get-SourceState $repo
     if (-not $SkipBuild) {
         Step 'Building'
         Dotnet (@('build', (Join-Path $repo 'WinScreen.slnx')) + $common)
@@ -143,6 +147,22 @@ try {
     Remove-Item $bundle -ErrorAction SilentlyContinue
     & tar.exe -a -c -f $bundle -C $staging .
     if ($LASTEXITCODE -ne 0) { throw 'Packing the bundle failed.' }
+
+    # What Confirm-Release.ps1 reads: the commit the build came from, and what this run takes.
+    $outputs = @(Join-Path $testOutput 'WinScreen.Tests.dll')
+    if (-not $SkipBuild) { Save-BuildStamp $testOutput $before }
+    if ($Suite -in 'All', 'Packaged') {
+        # Published here just now, or by the caller (Invoke-TestVmPair.ps1), which stamps it.
+        if ($Published) { $outputs += Join-Path $Published 'WinScreen.exe' }
+        else {
+            Save-BuildStamp (Join-Path $staging 'program') $before
+            $outputs += Join-Path $staging 'program\WinScreen.exe'
+        }
+    }
+    $source = Get-RunSource $repo $outputs
+    Save-RunRecord $ResultsDirectory $source @{ tool = 'vm'; vm = $Name; checkpoint = $CheckpointName; suite = $Suite
+        filter = $Filter; packagedFilter = $PackagedFilter }
+    if (-not $source.commit -or -not $source.clean) { Write-Output "Not a release run: $($source.note)" }
 
     Step "Restoring '$Name' to '$CheckpointName'"
     Stop-VM -Name $Name -TurnOff -Force -ErrorAction SilentlyContinue
@@ -203,13 +223,10 @@ finally {
     $lock.Dispose()
 }
 
-foreach ($trx in Get-ChildItem $ResultsDirectory -Filter *.trx -ErrorAction SilentlyContinue) {
-    # Counted from each result: the summary counters leave skipped tests out of "not executed".
-    $all = @(([xml](Get-Content $trx.FullName -Raw)).TestRun.Results.UnitTestResult)
-    $skipped = @($all | Where-Object outcome -eq 'NotExecuted')
-    Write-Output ("{0}: {1} passed, {2} failed, {3} not run" -f $trx.BaseName, @($all | Where-Object outcome -eq 'Passed').Count,
-        @($all | Where-Object outcome -eq 'Failed').Count, $skipped.Count)
-    $skipped | ForEach-Object { Write-Output "  not run: $($_.testName)" }
+foreach ($outcome in @(Get-RunOutcomes $ResultsDirectory)) {
+    Write-Output (Format-Outcome $outcome)
+    @($outcome.Skipped) + @($outcome.ReturnedEarly) | ForEach-Object { Write-Output "  not run: $_" }
 }
+$null = Save-NotRun $ResultsDirectory @(Get-RunOutcomes $ResultsDirectory)
 Write-Output "Results: $ResultsDirectory (exit code $exitCode)"
 exit $exitCode

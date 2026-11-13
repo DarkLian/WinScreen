@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using Microsoft.Win32;
 using WinScreen.Settings;
+using WinScreen.Tests.Support;
 using WinScreen.Tray;
 using Xunit;
 
@@ -90,7 +91,7 @@ public sealed class AdministratorStartTests : IDisposable
     [Fact]
     public void The_real_Task_Scheduler_accepts_the_task()
     {
-        if (!Native.ProcessInfo.SelfElevated) return;
+        if (!Native.ProcessInfo.SelfElevated) { Skipped.Because("Needs a shell running as administrator."); return; }
         const string name = "WinScreen test task";
         var tasks = new SchtasksScheduler();
         try
