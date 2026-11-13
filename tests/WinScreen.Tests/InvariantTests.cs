@@ -30,13 +30,13 @@ public class InvariantTests
         return sources;
     });
 
-    private static string Source(string path) =>
+    internal static string Source(string path) =>
         Sources.Value.TryGetValue(path, out string? code) ? code : throw new InvalidOperationException($"No source {path}.");
 
     private static readonly Regex Comments = new("""//[^\n]*|/\*.*?\*/""", RegexOptions.Singleline);
     private static readonly Regex Strings = new("""@"(?:[^"]|"")*"|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)'""");
 
-    private static string WithoutComments(string code) => Comments.Replace(code, "");
+    internal static string WithoutComments(string code) => Comments.Replace(code, "");
 
     /// <summary>The body of the first method whose declaration contains <paramref name="signature"/>, braces included.</summary>
     internal static string MethodBody(string code, string signature)

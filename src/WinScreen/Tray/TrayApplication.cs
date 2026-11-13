@@ -1113,8 +1113,7 @@ public sealed partial class TrayApplication : ApplicationContext
         // Settings first, while everything it puts into effect is still there: closing it applies a change still settling.
         if (_settingsWindow is { IsDisposed: false } settings) settings.Close();
         // Windows go back first: if that fails WinScreen stays running, with its views still in place.
-        CancelCrop();
-        if (_windows.RestoreAll() != 0)
+        if (!TakeEverythingAwayForExit())
         {
             Alert(T("recovery.attention"),
                 T(
@@ -1123,11 +1122,6 @@ public sealed partial class TrayApplication : ApplicationContext
             return;
         }
 
-        foreach (PipWindow preview in _viewsInOrder.ToArray()) preview.Close();
-        foreach (var tile in _shrunk.Values.ToArray()) tile.Close();
-        _dark.TurnAllOff();
-        _content.TurnAllOff();
-        _anchors.RemoveAll();
         _updateTimer.Dispose();
         _menuGuard.Dispose();
         Microsoft.Win32.SystemEvents.UserPreferenceChanged -= FollowWindowsTheme;
@@ -1503,10 +1497,6 @@ public sealed partial class TrayApplication : ApplicationContext
     /// <summary>Failures a command can meet in normal use, such as a locked settings file or a refused screen capture.</summary>
     private static bool IsExpected(Exception failure) => failure is WindowOperationException or IOException
         or UnauthorizedAccessException or System.Security.SecurityException or ExternalException;
-
-    private bool HasAnythingToRestore(nint window) =>
-        _windows.HasChanges(window) || _pips.ContainsKey(window) || _shrunk.ContainsKey(window) ||
-        _dark.IsDark(window) || _content.Has(window) || _anchors.Has(window) || _croppingWindow == window;
 
     /// <summary>Picture-safe Dark when it's chosen in Settings, otherwise the simple filter. Only one at a time.</summary>
     /// <summary>The ways a window's colours can be changed. A window has at most one of them at a time.</summary>

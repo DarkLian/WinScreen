@@ -23,26 +23,26 @@ public sealed partial class TrayApplication
     [
         Define(AppCommand.TogglePin, window =>
             Confirm(_windows.TogglePin(window) ? T("status.pinned") : T("status.unpinned"), WindowInfo.Title(window)))
-            with { IsOn = window => _windows.IsPinned(window) },
-        Define(AppCommand.OpacityUp, window => ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(1)))),
-        Define(AppCommand.OpacityDown, window => ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(-1)))),
+            with { IsOn = window => _windows.IsPinned(window), Undoes = [WindowPart.WindowChanges] },
+        Define(AppCommand.OpacityUp, window => ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(1)))) with { Undoes = [WindowPart.WindowChanges] },
+        Define(AppCommand.OpacityDown, window => ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(-1)))) with { Undoes = [WindowPart.WindowChanges] },
         Define(AppCommand.ToggleDefaultOpacity, window => ShowOpacity(window, _windows.ToggleDefaultOpacity(window)))
-            with { IsOn = window => _windows.OpacityOf(window) < 255 },
+            with { IsOn = window => _windows.OpacityOf(window) < 255, Undoes = [WindowPart.WindowChanges] },
         Define(AppCommand.ToggleClickThrough, window =>
         {
             if (_windows.ToggleClickThrough(window))
                 Alert(T("status.clickThroughOn"), T("window.clickThrough.recoveryHelp"), ToolTipIcon.Info);
             else
                 Confirm(T("status.clickThroughOff"), WindowInfo.Title(window));
-        }) with { IsOn = window => _windows.IsClickThrough(window) },
+        }) with { IsOn = window => _windows.IsClickThrough(window), Undoes = [WindowPart.WindowChanges] },
         new CommandDefinition(AppCommand.ToggleBorderless, (window, display) => _windows.ToggleBorderless(window, false, display))
-            { IsOn = window => _windows.IsBorderless(window) && !_windows.IsBorderlessFilled(window) },
+            { IsOn = window => _windows.IsBorderless(window) && !_windows.IsBorderlessFilled(window), Undoes = [WindowPart.WindowChanges] },
         new CommandDefinition(AppCommand.ToggleBorderlessFill, (window, display) => _windows.ToggleBorderless(window, true, display))
-            { IsOn = window => _windows.IsBorderlessFilled(window) },
+            { IsOn = window => _windows.IsBorderlessFilled(window), Undoes = [WindowPart.WindowChanges] },
         Define(AppCommand.ToggleDarkTitleBar, window => _windows.ToggleDarkTitleBar(window))
-            with { IsOn = window => _windows.IsDarkTitleBar(window) },
+            with { IsOn = window => _windows.IsDarkTitleBar(window), Undoes = [WindowPart.WindowChanges] },
         Define(AppCommand.ToggleRollUp, window => _windows.ToggleRollUp(window))
-            with { IsOn = window => _windows.IsRolledUp(window) },
+            with { IsOn = window => _windows.IsRolledUp(window), Undoes = [WindowPart.WindowChanges] },
         Define(AppCommand.SendToBottom, window => _windows.SendToBottom(window)),
         Define(AppCommand.ShowWindowInfo, ShowWindowInfo),
         Define(AppCommand.SaveWindowSetup, window => SaveSetup(window))
@@ -78,24 +78,24 @@ public sealed partial class TrayApplication
         {
             if (_pips.TryGetValue(window, out var existing)) existing.Close();
             else OpenViewOf(window);
-        }) with { IsOn = window => _pips.ContainsKey(window) },
+        }) with { IsOn = window => _pips.ContainsKey(window), Undoes = [WindowPart.View] },
         Define(AppCommand.PickPipSource, _ => ShowPicker()) with { Target = CommandTarget.NoWindow },
-        Define(AppCommand.ToggleShrink, window => Shrink(window)) with { IsOn = window => _shrunk.ContainsKey(window) },
-        Define(AppCommand.ToggleCrop, window => ToggleCrop(window)) with { IsOn = window => _windows.IsCropped(window) },
+        Define(AppCommand.ToggleShrink, window => Shrink(window)) with { IsOn = window => _shrunk.ContainsKey(window), Undoes = [WindowPart.Tile] },
+        Define(AppCommand.ToggleCrop, window => ToggleCrop(window)) with { IsOn = window => _windows.IsCropped(window), Undoes = [WindowPart.CropChoice, WindowPart.WindowChanges] },
     ];
 
     /// <summary>Dark and Glass, whichever kind of each Settings chooses. A window has at most one of them.</summary>
     private IEnumerable<CommandDefinition> EffectCommands() =>
     [
         Define(AppCommand.ToggleDark, window => ToggleDark(window))
-            with { IsOn = window => _dark.IsDark(window) || _content.Has(window, Glass.ContentLook.Dark) },
+            with { IsOn = window => _dark.IsDark(window) || _content.Has(window, Glass.ContentLook.Dark), Undoes = [WindowPart.FilterDark, WindowPart.ContentEffect] },
         Define(AppCommand.ToggleGlass, window => ToggleGlass(window))
-            with { IsOn = window => _windows.IsGlass(window) || _content.Has(window, Glass.ContentLook.Glass) },
+            with { IsOn = window => _windows.IsGlass(window) || _content.Has(window, Glass.ContentLook.Glass), Undoes = [WindowPart.WindowChanges, WindowPart.ContentEffect] },
     ];
 
     private IEnumerable<CommandDefinition> AnchorCommands() =>
     [
-        Define(AppCommand.ToggleAnchor, window => _anchors.Toggle(window)) with { IsOn = window => _anchors.Has(window) },
+        Define(AppCommand.ToggleAnchor, window => _anchors.Toggle(window)) with { IsOn = window => _anchors.Has(window), Undoes = [WindowPart.Anchor] },
     ];
 
     private IEnumerable<CommandDefinition> EverywhereCommands() =>
@@ -109,6 +109,53 @@ public sealed partial class TrayApplication
         Define(AppCommand.RestoreAll, _ => PutEveryWindowBack()) with { Target = CommandTarget.NoWindow, Recovers = true },
     ];
 
+    /// <summary>True while a window has this part from WinScreen.</summary>
+    private bool Has(WindowPart part, nint window) => part switch
+    {
+        WindowPart.CropChoice => _croppingWindow == window,
+        WindowPart.View => _pips.ContainsKey(window),
+        WindowPart.Tile => _shrunk.ContainsKey(window),
+        WindowPart.FilterDark => _dark.IsDark(window),
+        WindowPart.ContentEffect => _content.Has(window),
+        WindowPart.Anchor => _anchors.Has(window),
+        WindowPart.WindowChanges => _windows.HasChanges(window),
+        _ => false,
+    };
+
+    /// <summary>Takes one part away from one window. False only when the window's own changes couldn't all be undone.</summary>
+    private bool TakeAway(WindowPart part, nint window)
+    {
+        switch (part)
+        {
+            case WindowPart.CropChoice: if (_croppingWindow == window) CancelCrop(); break;
+            case WindowPart.View: if (_pips.TryGetValue(window, out var view)) view.Close(); break;
+            case WindowPart.Tile: if (_shrunk.TryGetValue(window, out var tile)) tile.Close(); break;
+            case WindowPart.FilterDark: if (_dark.IsDark(window)) _dark.Toggle(window); break;
+            case WindowPart.ContentEffect: _content.TurnOff(window); break;
+            case WindowPart.Anchor: if (_anchors.Has(window)) _anchors.Toggle(window); break;
+            case WindowPart.WindowChanges: return _windows.RestoreWindow(window);
+        }
+        return true;
+    }
+
+    /// <summary>Takes one part away from every window. Returns how many windows' own changes couldn't be undone.</summary>
+    private int TakeAwayEverywhere(WindowPart part)
+    {
+        switch (part)
+        {
+            case WindowPart.CropChoice: CancelCrop(); break;
+            case WindowPart.View: foreach (PipWindow view in _viewsInOrder.ToArray()) view.Close(); break;
+            case WindowPart.Tile: foreach (var tile in _shrunk.Values.ToArray()) tile.Close(); break;
+            case WindowPart.FilterDark: _dark.TurnAllOff(); break;
+            case WindowPart.ContentEffect: _content.TurnAllOff(); break;
+            case WindowPart.Anchor: _anchors.RemoveAll(); break;
+            case WindowPart.WindowChanges: return _windows.RestoreAll();
+        }
+        return 0;
+    }
+
+    private bool HasAnythingToRestore(nint window) => Enum.GetValues<WindowPart>().Any(part => Has(part, window));
+
     private void PutBack(nint window)
     {
         if (!HasAnythingToRestore(window))
@@ -117,13 +164,10 @@ public sealed partial class TrayApplication
             return;
         }
 
-        if (_croppingWindow == window) CancelCrop();
-        if (_pips.TryGetValue(window, out var view)) view.Close();
-        if (_shrunk.TryGetValue(window, out var shrunkTile)) shrunkTile.Close();
-        if (_dark.IsDark(window)) _dark.Toggle(window);
-        _content.TurnOff(window);
-        if (_anchors.Has(window)) _anchors.Toggle(window);
-        if (_windows.RestoreWindow(window))
+        bool restored = true;
+        foreach (WindowPart part in PutBackOrder.PutBack)
+            restored &= TakeAway(part, window);
+        if (restored)
             Confirm(T("window.restore"), T("recovery.restored"));
         else
             Alert(T("window.restore"), string.Join(Environment.NewLine, _windows.RestoreFailures));
@@ -131,13 +175,9 @@ public sealed partial class TrayApplication
 
     private void PutEveryWindowBack()
     {
-        CancelCrop();
-        foreach (PipWindow preview in _viewsInOrder.ToArray()) preview.Close();
-        foreach (var shrunk in _shrunk.Values.ToArray()) shrunk.Close();
-        _dark.TurnAllOff();
-        _content.TurnAllOff();
-        _anchors.RemoveAll();
-        int failed = _windows.RestoreAll();
+        int failed = 0;
+        foreach (WindowPart part in PutBackOrder.PutBack)
+            failed += TakeAwayEverywhere(part);
         if (failed > 0)
             Alert(T("errors.recovery.someFailed"),
                 string.Format(T("errors.window.changeRefusedCount"), failed) + Environment.NewLine +
@@ -146,5 +186,17 @@ public sealed partial class TrayApplication
             Alert(T("recovery.attention"), _windows.RecoveryWarning!);
         else
             Confirm(T("window.restoreAll"), T("recovery.restored"));
+    }
+
+    /// <summary>
+    /// What exit takes away, in <see cref="PutBackOrder.Exit"/>'s order. False, with nothing after the windows taken
+    /// away, when the windows' own changes couldn't all be undone: WinScreen then stays running.
+    /// </summary>
+    private bool TakeEverythingAwayForExit()
+    {
+        foreach (WindowPart part in PutBackOrder.Exit)
+            if (TakeAwayEverywhere(part) != 0)
+                return false;
+        return true;
     }
 }
