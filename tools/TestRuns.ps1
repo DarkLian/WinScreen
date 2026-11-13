@@ -86,7 +86,8 @@ function Get-RunOutcomes([string]$Folder) {
     foreach ($trx in Get-ChildItem -LiteralPath $Folder -Filter *.trx -File -ErrorAction SilentlyContinue | Sort-Object Name) {
         [xml]$results = Get-Content -Raw -LiteralPath $trx.FullName
         # Counted from each result: the summary counters leave skipped tests out of "not executed".
-        $outcomes = @($results.TestRun.Results.UnitTestResult)
+        # A run whose filter matched nothing has no Results element at all, which strict mode won't read.
+        $outcomes = @(Select-Xml -Xml $results -XPath "//*[local-name()='UnitTestResult']" | ForEach-Object Node)
         $skipped = @(foreach ($result in @($outcomes | Where-Object { $_.outcome -eq 'NotExecuted' })) {
                 $reason = $result.Output.ErrorInfo.Message
                 if (-not $reason) { $reason = $result.Output.StdOut }
