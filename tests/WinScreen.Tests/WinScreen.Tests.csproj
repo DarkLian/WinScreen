@@ -20,5 +20,7 @@
     <!-- Validate the exact sources built with this test assembly, including on packaged test runs. -->
     <EmbeddedResource Include="..\..\src\WinScreen\**\*.cs"
                       WithCulture="false" LogicalName="LocalizationSource.%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- settings.json as each published version saved it (tools\settings-fixtures). -->
+    <EmbeddedResource Include="Fixtures\settings\*.json" WithCulture="false" LogicalName="SettingsFixture.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

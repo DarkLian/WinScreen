@@ -1,0 +1,134 @@
+{
+  "Hotkeys": {
+    "TogglePin": "Ctrl\u002BShift\u002BF9",
+    "OpacityUp": "",
+    "OpacityDown": "Ctrl\u002BAlt\u002BDown",
+    "ToggleClickThrough": "Ctrl\u002BAlt\u002BC",
+    "OpenPip": "Ctrl\u002BAlt\u002BP",
+    "RestoreAll": "Ctrl\u002BAlt\u002BR",
+    "ToggleDark": "Ctrl\u002BAlt\u002BD",
+    "ToggleGlass": "Ctrl\u002BAlt\u002BG",
+    "ToggleAnchor": "Ctrl\u002BAlt\u002BA",
+    "ToggleDefaultOpacity": "Ctrl\u002BAlt\u002BO",
+    "SaveWindowSetup": "Ctrl\u002BAlt\u002BShift\u002BS",
+    "ToggleShrink": "Ctrl\u002BAlt\u002BW",
+    "ToggleCrop": "Ctrl\u002BAlt\u002BX",
+    "RestoreWindow": "Ctrl\u002BAlt\u002BU",
+    "ToggleRollUp": "Ctrl\u002BAlt\u002BShift\u002BR"
+  },
+  "ExcludedPrograms": [
+    "csgo",
+    "cs2",
+    "valorant",
+    "eldenring",
+    "fixture-game"
+  ],
+  "IncludedPrograms": [
+    "fixture-included"
+  ],
+  "SavedSetups": [
+    {
+      "Program": "fixture-editor",
+      "ExecutablePath": "C:\\Fixture\\editor.exe",
+      "Pinned": true,
+      "Alpha": 200,
+      "Dark": true,
+      "View": null,
+      "ViewKeepsUpdating": false,
+      "ChangesAnything": true
+    },
+    {
+      "Program": "fixture-chat",
+      "ExecutablePath": null,
+      "Pinned": true,
+      "Alpha": 255,
+      "Dark": false,
+      "View": null,
+      "ViewKeepsUpdating": false,
+      "ChangesAnything": true
+    }
+  ],
+  "ShowToolbar": false,
+  "ShowNotifications": true,
+  "AutomaticUpdates": false,
+  "Language": "zh-Hans",
+  "PauseInFullScreen": true,
+  "AllowPipInFullScreen": false,
+  "PausePinWhenMaximized": false,
+  "OpaqueOnHover": false,
+  "HighlightPinned": false,
+  "PipAutoMove": false,
+  "ExperimentalFeatures": true,
+  "ModifierDrag": true,
+  "ModifierKey": 1,
+  "WindowMenu": true,
+  "WindowMenuGesture": 2,
+  "WindowMenuExclusions": [
+    "fixture-menu"
+  ],
+  "ModifierExclusions": [
+    "blender",
+    "maya",
+    "3dsmax",
+    "Photoshop",
+    "krita",
+    "gimp",
+    "fixture-paint"
+  ],
+  "PipClickForwarding": false,
+  "Pip": {
+    "Backend": "Auto",
+    "FrameRate": 60,
+    "OpacityPercent": 100,
+    "Scaling": "Auto",
+    "ShowDiagnostics": false,
+    "PixelBudget": 8294400
+  },
+  "PipPresets": [],
+  "PipBookmarks": [],
+  "StartWithWindows": null,
+  "WelcomeShown": false,
+  "DefaultOpacityPercent": 60,
+  "OpacityStepPercent": 10,
+  "OpacityWheel": false,
+  "DetectAlreadyDark": true,
+  "PinBorder": {
+    "ColorHex": "#E82020",
+    "OpacityPercent": 100,
+    "Thickness": 3
+  },
+  "PipViews": {
+    "CompactTitleBar": true,
+    "HoverPreview": 0,
+    "HoverDelayMilliseconds": 600,
+    "MinimizeToTaskbar": false
+  },
+  "Toolbar": {
+    "Placement": 2,
+    "Trigger": 1,
+    "HoverDelayMilliseconds": 500,
+    "Buttons": [
+      "TogglePin",
+      "OpenPip",
+      "RestoreWindow"
+    ]
+  },
+  "Anchors": {
+    "Automatic": true,
+    "OnlyPrograms": [],
+    "ExcludedPrograms": [],
+    "Side": 1,
+    "MaxAutomatic": 8,
+    "Size": 48,
+    "Style": 0,
+    "RecencyEmphasis": true,
+    "AvoidContent": false
+  },
+  "Effects": {
+    "LayeredGlass": false,
+    "PictureSafeDark": false,
+    "BackgroundPercent": 15,
+    "TextPercent": 100,
+    "PicturePercent": 90
+  }
+}
