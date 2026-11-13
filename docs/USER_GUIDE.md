@@ -111,6 +111,8 @@ An Anchor is a small floating button for a window. Press **Ctrl+Alt+A** to add o
 - **Drag a file over it** to bring the window forward and drop the file there.
 - **Rest the pointer** on it to see the window. Anchors of the same program show their window titles.
 
+**Minimize to an Anchor** in the window menu gives a window an Anchor and minimizes it in one step.
+
 In **Settings → Anchors**, WinScreen can add Anchors by itself for windows that are completely covered, and take them away
 again when you can see the window. You can also choose where Anchors appear, how many, their size and style (dark, light, or just the icon), and whether
 they move off text and pictures, and take windows with an Anchor you added off the taskbar. A small notch on an Anchor
@@ -122,6 +124,7 @@ The toolbar's **Arrange window** button has everything that moves a window:
 
 - Nine places on the screen: corners, edges and center.
 - Move to the next display.
+- A common size, such as 1280 × 720.
 - Type an exact position and size.
 - Go back to the previous position.
 - Send to the back, behind every other window.
@@ -160,6 +163,16 @@ Windows shows a colored border around a window while these two options are worki
 Set a window up the way you like it: pinned, see-through, dark, with a view open if you want one. Then press
 **Ctrl+Alt+Shift+S**. From then on, that program's windows start the same way, even after a restart.
 Press it again on a plain window to forget the setup, or remove it in **Settings → Saved setups**.
+
+Choose **Change** there to keep a setup to windows whose title contains some text, to put the window in a place or on
+a display, to make it borderless, give it an Anchor or keep the toolbar off it. A setup can also apply every time the
+window comes forward, or be turned off for now.
+
+## Commands from scripts
+
+`WinScreen.exe --run TogglePin --window title:Chat` asks WinScreen to do a command, as its hotkey would, on the window
+you name: `active` (the default), `pointer`, or the first window whose title contains some text. WinScreen must be
+running. `WinScreen.exe --list-commands` lists the commands. The exit code is 0 when it worked.
 
 ## Settings at a glance
 
