@@ -19,6 +19,35 @@ public sealed class PipStateChipTests
     [InlineData(false, (int)PipSessionState.Compositor, true, false, (int)PipChipState.None)]
     public void The_chip_only_says_what_is_known(bool minimized, int state, bool pointer, bool busy,
         int expected) => Assert.Equal((PipChipState)expected, PipStateChip.Decide(minimized, (PipSessionState)state, pointer, busy));
+
+    [Theory]
+    [InlineData(false, (int)PipSessionState.Live, false, (int)PressOffer.UseOriginal, (int)PipChipState.OriginalOffered)]
+    [InlineData(false, (int)PipSessionState.Live, false, (int)PressOffer.AlwaysShowOriginal, (int)PipChipState.AlwaysOriginalOffered)]
+    [InlineData(false, (int)PipSessionState.SourcePaused, true, (int)PressOffer.UseOriginal, (int)PipChipState.OriginalOffered)]
+    [InlineData(false, (int)PipSessionState.Fallback, false, (int)PressOffer.UseOriginal, (int)PipChipState.OriginalOffered)]
+    [InlineData(false, (int)PipSessionState.Starting, false, (int)PressOffer.UseOriginal, (int)PipChipState.OriginalOffered)]
+    [InlineData(false, (int)PipSessionState.Failed, false, (int)PressOffer.UseOriginal, (int)PipChipState.Unavailable)]
+    [InlineData(true, (int)PipSessionState.Live, false, (int)PressOffer.UseOriginal, (int)PipChipState.SourceMinimized)]
+    public void A_press_that_did_not_get_through_is_said_over_a_picture_state_but_not_over_a_fact(bool minimized, int state,
+        bool pointer, int offer, int expected) =>
+        Assert.Equal((PipChipState)expected, PipStateChip.Decide(minimized, (PipSessionState)state, pointer, false, (PressOffer)offer));
+
+    [Fact]
+    public void Nothing_is_offered_while_the_view_is_being_pressed() =>
+        Assert.Equal(PipChipState.None, PipStateChip.Decide(false, PipSessionState.Live, true, true, PressOffer.UseOriginal));
+
+    [Theory]
+    [InlineData((int)PipChipState.SourceMinimized, true)]
+    [InlineData((int)PipChipState.OriginalOffered, true)]
+    [InlineData((int)PipChipState.AlwaysOriginalOffered, true)]
+    [InlineData((int)PipChipState.NoNewPicture, false)]
+    [InlineData((int)PipChipState.Fallback, false)]
+    [InlineData((int)PipChipState.Unavailable, false)]
+    public void Only_a_chip_that_offers_something_can_be_clicked(int state, bool clickable)
+    {
+        Assert.Equal(clickable, PipStateChip.OffersAction((PipChipState)state));
+        Assert.NotEqual("", PipStateChip.Words((PipChipState)state));
+    }
 }
 
 [Trait("Category", "RealWindows")]

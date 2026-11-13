@@ -298,6 +298,8 @@
   "pip.state.live": "即時",
   "pip.state.noNewPicture": "沒有新畫面",
   "pip.state.originalHidden": "原視窗已隱藏",
+  "pip.state.pressNotDelivered": "這次點選沒有傳到應用程式。點選以使用原視窗。",
+  "pip.state.pressNotDeliveredAgain": "這個應用程式常常收不到點選。點選以一律顯示它的原視窗。",
   "pip.state.sourceMinimized": "原視窗已最小化。點選以保持更新。",
   "pip.state.starting": "正在啟動",
   "pip.state.suspended": "已暫停",

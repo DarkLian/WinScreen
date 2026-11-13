@@ -142,6 +142,9 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 Assert.Equal(PressOutcome.Unsupported, view.PressOutcomes.Last());
                 Assert.Equal("Display is 77", Display(window));
                 Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
+                // The view says so, and offers the original instead.
+                Assert.True(Desktop.WaitFor(() => view.ChipShown is PipChipState.OriginalOffered or PipChipState.AlwaysOriginalOffered, 2000),
+                    "The view didn't say the middle click didn't get through.");
             }, log);
             // Closing the view puts it back where it was, visible.
             Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(window) == before && !WindowInfo.IsConcealed(window), 3000),

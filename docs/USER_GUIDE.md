@@ -91,6 +91,8 @@ turn on **Always show title bar** in **Size and options**, or for every new view
   The original window comes back where it was, and hides again when you switch to another window.
   To have a click on the view do this every time, add the program under
   **Settings → Picture-in-Picture → Using apps through a view** and turn on **Show original** for it. Apps built with Java always work this way.
+  If a click on a view doesn't get through, the view says so. Click that note to use the original instead.
+  If it keeps happening with an app, the note offers to turn on **Show original** for it.
 
 Views pause direct use while a WinScreen menu or the tray overflow panel is open.
 

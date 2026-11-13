@@ -102,9 +102,11 @@ public sealed class InteractiveViewTests
                 Thread.Sleep(2);
             }
 
+            PipStateProblem stateProblem = view.FirstStateProblem; // Every change of mode on the way was checked.
             if (!view.IsDisposed) view.Close();
             if (failure is not null)
                 throw new Xunit.Sdk.XunitException(failure.ToString());
+            Assert.Equal(PipStateProblem.None, stateProblem);
         });
     }
 
@@ -247,6 +249,12 @@ public sealed class InteractiveViewTests
                 {
                     Assert.True(Desktop.WaitFor(() => during.Log.Count > 0, 2000), "The press got no outcome.");
                     Assert.Equal(PressOutcome.Unconfirmed, during.Log.Single().Outcome);
+                    // A second one in a row: the view says the clicks aren't getting through, and offers the original.
+                    Desktop.MouseButton(true);
+                    Desktop.MouseButton(false);
+                    if (Desktop.WaitFor(() => during.Log.Count > 1, 2000) && during.Log[1].Outcome == PressOutcome.Unconfirmed)
+                        Assert.True(Desktop.WaitFor(() => view.ChipShown is PipChipState.OriginalOffered or PipChipState.AlwaysOriginalOffered, 2000),
+                            "Two presses in a row didn't get through, and the view didn't say so.");
                 }
                 else
                 {

@@ -921,6 +921,20 @@ private readonly ErrorProvider _errors = new();
         QueueApplyRefresh();
     }
 
+    /// <summary>
+    /// A program put on the Show original list from a view, while this window is open. It's already saved; this
+    /// window shows it too, so its next change doesn't save the list without it.
+    /// </summary>
+    internal void AddOriginalProgram(string program)
+    {
+        string name = ProgramName(program);
+        string[] hovered = _hoverPrograms.Items.Cast<string>().Where(item => item.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray();
+        foreach (string item in hovered) _hoverPrograms.Items.Remove(item);
+        bool listed = _originalPrograms.Items.Cast<string>().Contains(name, StringComparer.OrdinalIgnoreCase);
+        if (!listed) AddProgram(_originalPrograms, name);
+        if (hovered.Length > 0 || !listed) RebuildApps();
+    }
+
     private static void AddProgram(ListBox list, string program)
     {
         string name = ProgramName(program);

@@ -298,6 +298,8 @@
   "pip.state.live": "实时",
   "pip.state.noNewPicture": "没有新画面",
   "pip.state.originalHidden": "原窗口已隐藏",
+  "pip.state.pressNotDelivered": "这次点击没有传到应用。点击以使用原窗口。",
+  "pip.state.pressNotDeliveredAgain": "这个应用常常收不到点击。点击以总是显示它的原窗口。",
   "pip.state.sourceMinimized": "原窗口已最小化。点击以保持更新。",
   "pip.state.starting": "正在启动",
   "pip.state.suspended": "已暂停",

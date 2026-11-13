@@ -298,6 +298,8 @@
   "pip.state.live": "Live",
   "pip.state.noNewPicture": "No new picture",
   "pip.state.originalHidden": "Original hidden",
+  "pip.state.pressNotDelivered": "That click didn't get through. Click to use the original.",
+  "pip.state.pressNotDeliveredAgain": "This app often misses clicks. Click to always show its original.",
   "pip.state.sourceMinimized": "The original is minimized. Click to keep it updating.",
   "pip.state.starting": "Starting",
   "pip.state.suspended": "Suspended",

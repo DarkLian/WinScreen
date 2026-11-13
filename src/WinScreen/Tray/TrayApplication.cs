@@ -1479,6 +1479,7 @@ public sealed class TrayApplication : ApplicationContext
         pip.FormClosed += (_, _) => _viewsInOrder.Remove(pip);
         pip.Problem += text => Alert(T("errors.operation.title"), text);
         pip.Notice += text => Alert(T("pip.open"), text, ToolTipIcon.Info);
+        pip.AlwaysShowOriginal += ShowOriginalFor;
         pip.Presets = () => _settings.PipPresets;
         pip.PresetSaved += preset => ChangePresets(presets =>
         {
@@ -1528,6 +1529,22 @@ public sealed class TrayApplication : ApplicationContext
         {
             Alert(T("errors.operation.title"), failure.Message);
         }
+    }
+
+    /// <summary>Adds a program to Settings' Show original list, chosen from a view's chip.</summary>
+    private void ShowOriginalFor(string program)
+    {
+        if (_settings.PipOriginalPrograms.Contains(program, StringComparer.OrdinalIgnoreCase)) return;
+        var draft = _settings.Clone();
+        draft.PipOriginalPrograms.Add(program);
+        // One or the other, as in Settings: nothing is sent to a program whose original is shown.
+        draft.PipHover.Programs.RemoveAll(name => name.Equals(program, StringComparison.OrdinalIgnoreCase));
+        try { draft.Save(_settingsPath); _settings.CopyFrom(draft); }
+        catch (Exception failure) when (IsExpected(failure)) { Alert(T("errors.settings.saveFailed"), failure.Message); return; }
+        Pip.PipOriginalApps.Programs = _settings.PipOriginalPrograms;
+        Pip.PipHoverApps.Preferences = _settings.PipHover;
+        // An open Settings window saves its own list with its next change, so it must show this one too.
+        if (_settingsWindow is { IsDisposed: false } open) open.AddOriginalProgram(program);
     }
 
     private void ChangeBookmarks(Action<List<PipSourceBookmark>> change)

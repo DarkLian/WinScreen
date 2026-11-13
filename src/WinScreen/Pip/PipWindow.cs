@@ -8,6 +8,22 @@ using WinScreen.Windows;
 
 namespace WinScreen.Pip;
 
+/// <summary>A combination of a view's modes that must never happen (see <see cref="PipWindow.StateProblem"/>).</summary>
+internal enum PipStateProblem
+{
+    None,
+    /// <summary>Used directly while the original is on show.</summary>
+    InteractiveWithOriginalShown,
+    /// <summary>A visit going on while the view isn't used directly.</summary>
+    VisitWithoutInteractive,
+    /// <summary>A visit going on while the view is minimized or its input paused.</summary>
+    VisitWhilePaused,
+    /// <summary>"Use it, then hide again" while the original is hidden or visited.</summary>
+    UsingHiddenOriginal,
+    /// <summary>"Use it, then hide again" while the view is minimized.</summary>
+    UsingOriginalWhileMinimized,
+}
+
 /// <summary>
 /// A borderless, always-on-top live view of another window. Drag to move, mouse wheel to resize,
 /// Ctrl+drag to crop, Ctrl+double-click to remove the crop. Clicking activates the original by
@@ -94,6 +110,10 @@ public sealed class PipWindow : Form
     private bool _cleaned;
     private PipInteraction? _live;
     private readonly System.Collections.Concurrent.ConcurrentQueue<PressOutcome> _pressOutcomes = new();
+    private readonly PipPressFeedback _pressFeedback;
+    private PressOffer _offer;
+    private long _offerUntil;
+    private const long OfferShownFor = 6000;
     private nint _foregroundBeforeLive;
     private bool _liveSawSourceFocus;
     private long _unobservedSince;
@@ -130,6 +150,7 @@ public sealed class PipWindow : Form
         _windows = windows;
         _program = source.IsWindow ? WindowInfo.ProgramOf(_source) : "";
         _javaSource = source.IsWindow && PipOriginalApps.IsJavaWindow(_source);
+        _pressFeedback = new PipPressFeedback(_program);
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         BackColor = Color.Black; // Whatever briefly shows while resizing shouldn't flash.
@@ -243,6 +264,9 @@ public sealed class PipWindow : Form
 
     /// <summary>Raised for something the person should know that isn't a failure.</summary>
     public event Action<string>? Notice;
+
+    /// <summary>Raised with a program the person chose to always use through its original, from the view's chip.</summary>
+    public event Action<string>? AlwaysShowOriginal;
 
     /// <summary>The part of the source window being shown; empty means all of it.</summary>
     public Rectangle Crop => _crop;
@@ -366,6 +390,7 @@ public sealed class PipWindow : Form
         Hide();
         if (_viewPreferences.MinimizeToTaskbar && _sourceIcon is not null)
             TaskbarProxy = new PipTaskbarProxy(_origin.Title, _sourceIcon, Bounds, TaskbarPreview, ResumeView, Close);
+        CheckState();
     }
 
     /// <summary>The taskbar button standing in for this view while it's minimized there.</summary>
@@ -439,6 +464,7 @@ public sealed class PipWindow : Form
             _suspended = true;
             Problem?.Invoke(failure.Message);
         }
+        CheckState();
     }
 
     private Icon LoadSourceIcon()
@@ -812,6 +838,7 @@ public sealed class PipWindow : Form
         if (!interactive || !hidden) EndLive();
         bool changed = SetConcealment(hidden);
         PublishInteractionMode(interactive && changed);
+        CheckState();
     }
 
     private void PublishInteractionMode(bool interactive)
@@ -1212,6 +1239,37 @@ public sealed class PipWindow : Form
     internal bool UsingOriginal => _usingOriginal;
 
     /// <summary>
+    /// The first combination of the view's modes that must never happen, if one ever did. Each change of mode is
+    /// checked, in every build, so tests can see it; a debug build stops at it.
+    /// </summary>
+    internal PipStateProblem FirstStateProblem { get; private set; }
+
+    /// <summary>Which combination of interactive, hidden, suspended, paused and using the original is wrong now.</summary>
+    internal PipStateProblem StateProblem()
+    {
+        if (_cleaned) return PipStateProblem.None;
+        bool live = _live is not null, hidden = _hideItem.Checked, interactive = _interactiveItem.Checked;
+        if (interactive && !hidden) return PipStateProblem.InteractiveWithOriginalShown;
+        if (live && !interactive) return PipStateProblem.VisitWithoutInteractive;
+        if (live && (_suspended || _inputPaused)) return PipStateProblem.VisitWhilePaused;
+        if (_usingOriginal && (hidden || live)) return PipStateProblem.UsingHiddenOriginal;
+        if (_usingOriginal && _suspended) return PipStateProblem.UsingOriginalWhileMinimized;
+        return PipStateProblem.None;
+    }
+
+    private void CheckState()
+    {
+        PipStateProblem problem = StateProblem();
+        if (problem == PipStateProblem.None) return;
+        if (FirstStateProblem == PipStateProblem.None)
+        {
+            FirstStateProblem = problem;
+            Diagnostics.Log.Event("view.stateProblem", ("problem", problem));
+        }
+        System.Diagnostics.Debug.Fail("The view's modes don't fit together: " + problem);
+    }
+
+    /// <summary>
     /// The answer for an app that doesn't work through a view: its hidden original comes back where it was, to be
     /// used as it is, and goes away again once another window is in use. Nothing is sent to the app.
     /// </summary>
@@ -1225,6 +1283,7 @@ public sealed class PipWindow : Form
         _usingFromInteractive = interactive;
         _originalTookFocus = User32.GetForegroundWindow() == _source;
         _originalLeftAt = 0;
+        CheckState();
     }
 
     /// <summary>
@@ -1327,6 +1386,7 @@ public sealed class PipWindow : Form
         live.EnhancedHover = _enhancedHoverItem.Checked;
         live.Left += () => BeginInvokeIfAlive(() => { LastVisitEnd = "the pointer left"; EndLive(); });
         live.Pressed += _pressOutcomes.Enqueue;
+        live.Answered += outcome => BeginInvokeIfAlive(() => OnAnswered(outcome));
         live.ViewDragged += moved => BeginInvokeIfAlive(() => DragLiveView(moved));
         live.CaptionPressed += action => BeginInvokeIfAlive(() => OnCaption(action));
         live.QuestionShown += () => BeginInvokeIfAlive(OnQuestion);
@@ -1339,6 +1399,7 @@ public sealed class PipWindow : Form
             _live = live;
             _windows.SetParkedReachable(_source, true);
             _cursorFromFrame = true; // Whatever shape the pointer arrived with goes back to the arrow once.
+            CheckState();
         }
         catch (WindowOperationException failure)
         {
@@ -1480,6 +1541,7 @@ public sealed class PipWindow : Form
             if (!keepTitleBar && !_menu.Visible) _titleBar?.Dismiss();
         }
         ApplyClickThrough();
+        CheckState();
     }
 
     /// <summary>Windows lifts an activated always-on-top window over the taskbar; this puts it back under.</summary>
@@ -1866,8 +1928,9 @@ public sealed class PipWindow : Form
     /// <summary>Says when the picture may be out of date, without claiming more than WinScreen can tell.</summary>
     private void ShowState()
     {
+        if (_offer != PressOffer.None && Environment.TickCount64 >= _offerUntil) _offer = PressOffer.None;
         PipChipState state = PipStateChip.Decide(_origin.IsMinimized, BackendState,
-            Bounds.Contains(Cursor.Position), _selecting || _pressed);
+            Bounds.Contains(Cursor.Position), _selecting || _pressed, _offer);
         if (state == PipChipState.None)
         {
             _chip?.Hide();
@@ -1877,11 +1940,55 @@ public sealed class PipWindow : Form
         if (_chip is null)
         {
             _chip = new PipStateChip(this);
-            _chip.Chosen += KeepUpdating;
+            _chip.Chosen += OnChipChosen;
             KeepPartOutOfScreenCapture(_chip);
         }
 
         _chip.Show(state, new Point(Left + PipGeometry.Border, Bottom - PipGeometry.Border));
+    }
+
+    /// <summary>What the view's chip says now, for tests.</summary>
+    internal PipChipState ChipShown => _chip?.Saying ?? PipChipState.None;
+
+    /// <summary>Where the chip is while it shows, for tests.</summary>
+    internal Rectangle? ChipBounds => _chip is { Visible: true } chip ? chip.Bounds : null;
+
+    /// <summary>
+    /// A press through the view that didn't get through, said on the chip for a few seconds, with the original
+    /// offered instead. A program that keeps refusing presses is offered a place in Settings' Show original list.
+    /// </summary>
+    private void OnAnswered(PressOutcome outcome)
+    {
+        if (_cleaned) return;
+        Offer(_pressFeedback.Note(outcome));
+    }
+
+    /// <summary>Says on the chip, for a few seconds, that the original can be used instead.</summary>
+    internal void Offer(PressOffer offer)
+    {
+        if (offer == PressOffer.None || !_hideItem.Checked || ShowsOriginalOnly) return;
+        _offer = offer;
+        _offerUntil = Environment.TickCount64 + OfferShownFor;
+        Diagnostics.Log.Event("press.offered", ("always", offer == PressOffer.AlwaysShowOriginal),
+            ("program", Diagnostics.LogValue.ProgramOf(_source)));
+        if (!_suspended && Visible) ShowState();
+    }
+
+    /// <summary>A click on the chip: the one way to act on what it says.</summary>
+    internal void OnChipChosen(PipChipState state)
+    {
+        if (state == PipChipState.SourceMinimized)
+        {
+            KeepUpdating();
+            return;
+        }
+        if (state is not (PipChipState.OriginalOffered or PipChipState.AlwaysOriginalOffered)) return;
+        bool always = state == PipChipState.AlwaysOriginalOffered && _program.Length > 0;
+        Diagnostics.Log.Event("press.originalChosen", ("always", always), ("program", Diagnostics.LogValue.ProgramOf(_source)));
+        _offer = PressOffer.None;
+        _chip?.Hide();
+        if (always) AlwaysShowOriginal?.Invoke(_program);
+        UseOriginal();
     }
 
     /// <summary>

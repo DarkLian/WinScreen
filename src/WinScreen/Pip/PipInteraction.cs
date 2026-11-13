@@ -268,6 +268,12 @@ internal sealed class PipInteraction : IDisposable
     /// </summary>
     public event Action<PressOutcome>? Pressed;
 
+    /// <summary>
+    /// Like <see cref="Pressed"/>, but only for presses that tell the person something about the app: not one that
+    /// never went to it, such as on the hidden window's frame, nor one cut short because the visit ended.
+    /// </summary>
+    public event Action<PressOutcome>? Answered;
+
     internal IReadOnlyList<(PressOutcome Outcome, Point At, nint Hit)> Log
     {
         get { lock (_log) return _log.ToArray(); }
@@ -652,7 +658,7 @@ internal sealed class PipInteraction : IDisposable
         }
         if (!PressRules.ReachesContent(hit))
         {
-            Record(PressOutcome.Unconfirmed, point, hit);
+            Record(PressOutcome.Unconfirmed, point, hit, answers: false);
             return;
         }
         if (!alt && button == MouseButtons.Middle && MiddleClickScroll && !(AppScrollsWithHover && _messages.Hover.Installed) &&
@@ -733,7 +739,8 @@ internal sealed class PipInteraction : IDisposable
         _ => PressOutcome.Unconfirmed,
     };
 
-    private void Record(PressOutcome outcome, Point at, nint hit, nint queuedTarget = 0, bool? queued = null, string effect = "unobserved")
+    private void Record(PressOutcome outcome, Point at, nint hit, nint queuedTarget = 0, bool? queued = null, string effect = "unobserved",
+        bool answers = true)
     {
         lock (_log)
         {
@@ -777,6 +784,7 @@ internal sealed class PipInteraction : IDisposable
             catch (Windows.WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
         }
         Pressed?.Invoke(outcome);
+        if (answers) Answered?.Invoke(outcome);
     }
 
     internal static string HitName(nint hit) => (int)hit switch
@@ -835,7 +843,7 @@ internal sealed class PipInteraction : IDisposable
             if ((cancelled | _pendingClick) != MouseButtons.None)
             {
                 long packed = Interlocked.Read(ref _pointer);
-                Record(PressOutcome.Unconfirmed, new Point((int)(packed >> 32), (int)packed), 1, 0, false, "the visit ended during the press");
+                Record(PressOutcome.Unconfirmed, new Point((int)(packed >> 32), (int)packed), 1, 0, false, "the visit ended during the press", answers: false);
             }
         }
         if (_watcher is not null)
