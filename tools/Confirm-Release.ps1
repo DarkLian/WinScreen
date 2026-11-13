@@ -52,10 +52,18 @@ if ($props -match '<Version>([^<]+)</Version>') {
 else { $problems.Add("No <Version> in $PropsFile.") }
 
 if (-not $Commit) {
-    $Commit = "$(& git -C $repo rev-parse HEAD)".Trim()
-    if (@(& git -C $repo status --porcelain).Count -gt 0) { $problems.Add('There are uncommitted changes. Commit them; the runs must test what is tagged.') }
-    & git -C $repo rev-parse -q --verify "refs/tags/v$version" *> $null
-    if ($LASTEXITCODE -eq 0) { $problems.Add("The tag v$version exists already.") }
+    $state = Get-SourceState $repo
+    if (-not $state.commit) {
+        Write-Output "Not ready to tag v${version}: $($state.note)"
+        exit 1
+    }
+    $Commit = $state.commit
+    if (-not $state.clean) {
+        $problems.Add("There are uncommitted changes. Commit them; the runs must test what is tagged. $($state.note)".Trim())
+    }
+    $tags = @(& git -C $repo tag --list "v$version")
+    if ($LASTEXITCODE -ne 0) { $problems.Add('Git could not list the tags.') }
+    elseif ($tags.Count -gt 0) { $problems.Add("The tag v$version exists already.") }
 }
 $short = if ($Commit.Length -ge 7) { $Commit.Substring(0, 7) } else { $Commit }
 

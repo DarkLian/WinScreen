@@ -7,14 +7,26 @@
 
 function Get-SourceState([string]$Repo) {
     $commit = "$(& git -C $Repo rev-parse HEAD)".Trim()
-    # Untracked files count: a new .cs file is built in. Local files are kept out by .git\info\exclude.
+    $ok = $LASTEXITCODE -eq 0
+    # Untracked files count: a new .cs file is built in.
     $changes = @(& git -C $Repo status --porcelain)
-    [ordered]@{ commit = $commit; clean = ($changes.Count -eq 0); changedFiles = $changes.Count }
+    $ok = $ok -and $LASTEXITCODE -eq 0
+    # So do source files Git ignores, such as local probe tests kept out by .git\info\exclude: they are built in too.
+    $ignored = @(& git -C $Repo ls-files --others --ignored --exclude-standard -- src tests |
+        Where-Object { $_ -match '\.(cs|csproj|props|targets|json|resx)$' -and $_ -notmatch '(^|/)(bin|obj)/' })
+    $ok = $ok -and $LASTEXITCODE -eq 0
+    if (-not $ok -or $commit -notmatch '\A[0-9a-f]{40}\z') {
+        # Never "clean" because git said nothing.
+        return [ordered]@{ commit = $null; clean = $false; changedFiles = 0; ignoredSources = @(); note = 'Git could not say which commit this is.' }
+    }
+    [ordered]@{ commit = $commit; clean = ($changes.Count + $ignored.Count -eq 0); changedFiles = $changes.Count
+        ignoredSources = $ignored; note = $(if ($ignored.Count -gt 0) { "Built in, but ignored by Git: $($ignored -join ', ')." } else { '' }) }
 }
 
 # After a build: what it was made from, taken before it started.
 function Save-BuildStamp([string]$Folder, $State) {
-    $stamp = [ordered]@{ commit = $State.commit; clean = $State.clean; changedFiles = $State.changedFiles; stamped = (Get-Date).ToString('o') }
+    $stamp = [ordered]@{ commit = $State.commit; clean = $State.clean; changedFiles = $State.changedFiles
+        ignoredSources = $State.ignoredSources; stamped = (Get-Date).ToString('o') }
     $stamp | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Folder 'built-from.json') -Encoding UTF8
 }
 
@@ -23,6 +35,7 @@ function Save-BuildStamp([string]$Folder, $State) {
 function Get-RunSource([string]$Repo, [string[]]$Outputs) {
     $record = [ordered]@{ commit = $null; clean = $false; note = '' }
     $now = Get-SourceState $Repo
+    if (-not $now.commit) { $record.note = $now.note; return $record }
     $clean = [bool]$now.clean
     foreach ($output in $Outputs) {
         $name = Split-Path $output -Leaf
@@ -37,7 +50,7 @@ function Get-RunSource([string]$Repo, [string[]]$Outputs) {
             return $record
         }
         $built = Get-Content -Raw -LiteralPath $stamp | ConvertFrom-Json
-        if ($built.commit -ne $now.commit) {
+        if (-not $built.commit -or $built.commit -ne $now.commit) {
             $record.note = "$name was built from $($built.commit), but HEAD is $($now.commit) now."
             return $record
         }
@@ -45,7 +58,7 @@ function Get-RunSource([string]$Repo, [string[]]$Outputs) {
     }
     $record.commit = $now.commit
     $record.clean = $clean
-    if (-not $clean) { $record.note = 'There were uncommitted changes when it was built or run.' }
+    if (-not $clean) { $record.note = "There were uncommitted changes when it was built or run. $($now.note)".Trim() }
     return $record
 }
 
