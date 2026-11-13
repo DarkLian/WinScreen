@@ -45,6 +45,17 @@ public sealed class SkippedTests : IDisposable
         Assert.Equal([$"{name}\tafter an await", $"{name}\ton another thread", $"{name}\tin a local function"], Lines());
     }
 
+    /// <summary>
+    /// A test that ends with the call can lose its own frame to a tail call (ScaledDisplayInputTests on Windows 11 was
+    /// written down as "an unknown test"). The caller's name still finds it.
+    /// </summary>
+    [Fact]
+    public void A_test_whose_last_call_it_is_is_still_named()
+    {
+        new TailCallSample().Ends_with_the_call(_file);
+        Assert.Equal([$"{typeof(TailCallSample).FullName}.{nameof(TailCallSample.Ends_with_the_call)}\tlast"], Lines());
+    }
+
     [Fact]
     public void Nothing_is_written_when_no_runner_asked_for_the_list()
     {
@@ -124,3 +135,12 @@ public sealed class SkippedTests : IDisposable
         Assert.Empty(QuietReturns([Entry("if (!File.Exists(x)) return false;")]));
     }
 }
+
+#pragma warning disable xUnit1000, xUnit1001 // Not a test class of its own: SkippedTests calls it, xunit never does.
+/// <summary>A "test" whose last statement is the call, called by <see cref="SkippedTests"/>.</summary>
+internal sealed class TailCallSample
+{
+    [Fact]
+    public void Ends_with_the_call(string file) => Skipped.Record("last", file);
+}
+#pragma warning restore xUnit1000, xUnit1001

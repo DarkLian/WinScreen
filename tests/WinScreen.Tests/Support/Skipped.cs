@@ -18,17 +18,43 @@ internal static class Skipped
 
     /// <summary>Says the calling test returns here without doing (the rest of) its work, and why.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static void Because(string reason) => Record(reason, Environment.GetEnvironmentVariable(FileVariable));
+    internal static void Because(string reason, [CallerMemberName] string member = "", [CallerFilePath] string source = "") =>
+        Record(reason, Environment.GetEnvironmentVariable(FileVariable), member, source);
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static void Record(string reason, string? file)
+    internal static void Record(string reason, string? file, [CallerMemberName] string member = "", [CallerFilePath] string source = "")
     {
-        string test = CurrentTest(new StackTrace()) ?? "an unknown test";
+        // The caller's name first: a call just before "return" can be made a tail call, and then the test's own frame
+        // is gone from the stack (seen with ScaledDisplayInputTests on Windows 11).
+        string test = Named(member, source) ?? CurrentTest(new StackTrace()) ?? "an unknown test";
         Console.WriteLine($"Did not run: {test} - {reason}");
         if (string.IsNullOrEmpty(file)) return;
         // One line per call: the test, a tab, the reason. Tabs and line breaks in a reason would break the line.
         string line = test + "\t" + reason.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ') + Environment.NewLine;
         lock (Gate) File.AppendAllText(file, line);
+    }
+
+    /// <summary>Every [Fact] and [Theory] in this assembly by method name, public classes or not.</summary>
+    private static readonly Lazy<ILookup<string, MethodInfo>> Tests = new(() => typeof(Skipped).Assembly.GetTypes()
+        .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+            BindingFlags.Static | BindingFlags.DeclaredOnly))
+        .Where(method => method.IsDefined(typeof(FactAttribute), inherit: true))
+        .ToLookup(method => method.Name, StringComparer.Ordinal));
+
+    /// <summary>
+    /// The test a caller's member name (a lambda's is its method's) stands for: the one test of that name, or the one in
+    /// the class named like its source file. Null for a helper that isn't a test, such as a check several tests share.
+    /// </summary>
+    internal static string? Named(string member, string source)
+    {
+        if (member.Length == 0) return null;
+        MethodInfo[] found = Tests.Value[member].ToArray();
+        if (found.Length > 1)
+        {
+            string file = Path.GetFileNameWithoutExtension(source.Replace('\\', '/').Split('/')[^1]);
+            found = found.Where(method => method.DeclaringType!.Name == file).ToArray();
+        }
+        return found.Length == 1 ? found[0].DeclaringType!.FullName + "." + found[0].Name : null;
     }
 
     /// <summary>
