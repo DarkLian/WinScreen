@@ -364,6 +364,48 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.Equal(0, Desktop.FindProcessWindow(_app.Id, text => text.EndsWith(title, StringComparison.Ordinal)));
     }
 
+    /// <summary>
+    /// WinScreen running as administrator reaches administrator apps: the toolbar shows on one's title bar and its pin
+    /// works, and an Anchor can be made (the owner's report on 1.1.0-beta, F4). Run from a shell that is itself
+    /// elevated, so WinScreen and the test window both start as administrator without a prompt, and with
+    /// WINSCREEN_TEST_ELEVATED=1.
+    /// </summary>
+    [Fact]
+    public void As_administrator_WinScreen_reaches_administrator_apps()
+    {
+        if (Environment.GetEnvironmentVariable("WINSCREEN_TEST_ELEVATED") != "1") { Skipped.Because("Needs an elevated shell, so it runs only with WINSCREEN_TEST_ELEVATED=1."); return; }
+        if (!ProcessInfo.SelfElevated) { Skipped.Because("Run this from a shell with administrator rights."); return; }
+        var settings = new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.TogglePin], Placement = ToolbarPlacement.Left } };
+        RestartWith(settings);
+        Assert.True(ProcessInfo.IsElevated((uint)_app.Id), "WinScreen didn't start as administrator.");
+
+        using var target = new TargetProcess(Spot, "1E64C8", "Elevated target");
+        target.UseTitleBar();
+        User32.GetWindowThreadProcessId(target.Handle, out uint process);
+        Assert.True(ProcessInfo.IsElevated(process), "The test window isn't running as administrator.");
+        Focus(target);
+
+        var rest = new Point(Spot.Left + Dpi.Scale(34, Dpi.Of(target.Handle)) + 12, Spot.Top + 12);
+        Desktop.RequireWindowAt(rest, target.Handle);
+        Desktop.MoveMouse(new Point(rest.X + 30, rest.Y));
+        Desktop.MoveMouse(rest);
+        nint toolbar = 0;
+        Assert.True(Desktop.WaitFor(() =>
+        {
+            toolbar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar");
+            return toolbar != 0 && Desktop.IsWindowVisible(toolbar);
+        }, 4000), "The toolbar didn't appear on an administrator app.");
+        Rectangle bar = Desktop.BoundsOf(toolbar);
+        Desktop.ClickOn(new Point(bar.Left + bar.Height / 2, bar.Top + bar.Height / 2), toolbar);
+        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST) != 0), "The pin button didn't pin.");
+
+        Desktop.MoveMouse(new Point(Spot.Left + 40, Spot.Bottom - 40));
+        Focus(target);
+        Hotkey(Keys.A, target);
+        Assert.True(Desktop.WaitFor(() => Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen anchor - Elevated target") != 0, 4000),
+            "Ctrl+Alt+A didn't add an Anchor to an administrator app.");
+    }
+
     /// <summary>On a maximized window the toolbar shows on its title bar at the top of the screen, and its pin button works.</summary>
     [Fact]
     public void The_toolbar_appears_on_a_maximized_windows_title_bar_and_works()
