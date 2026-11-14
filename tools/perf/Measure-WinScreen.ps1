@@ -16,13 +16,14 @@
     Metrics come from WMI performance classes, whose names are the same in every Windows language.
 
 .PARAMETER Scenario
-    Which scenarios to run; all by default. tray, toolbar, pinned, view, smooth30, smooth60, smooth3, dark, visit.
+    Which scenarios to run; all by default. tray, toolbar, pinned, view, smooth30, smooth60, smooth3, dark (the filter kind),
+    darkpicture (picture-keeping Dark), visit.
 
 .PARAMETER MovePointer
     Lets the 'visit' scenario sweep the real pointer over a view used directly. Without it that scenario is skipped.
 #>
 param(
-    [string[]]$Scenario = @('tray', 'toolbar', 'pinned', 'view', 'smooth30', 'smooth60', 'smooth3', 'dark', 'visit'),
+    [string[]]$Scenario = @('tray', 'toolbar', 'pinned', 'view', 'smooth30', 'smooth60', 'smooth3', 'dark', 'darkpicture', 'visit'),
     [int]$Seconds = 60,
     [int]$Settle = 8,
     [switch]$MovePointer,
@@ -193,6 +194,8 @@ $scenarios = [ordered]@{
     smooth3  = @{ Text = 'Three Smooth views of videos, 60 frames'; Settings = @{ Pip = @{ Backend = 'Wgc'; FrameRate = 60 } }
                   Setup = { foreach ($i in 1..3) { Start-Video "WinScreen perf video $i" (60 * $i) (60 * $i); Send-WinScreen 'OpenPip' "title:WinScreen perf video $i" } } }
     dark     = @{ Text = 'Dark on a scrolling page'; Settings = @{ ExperimentalFeatures = $true }
+                  Setup = { Start-Video 'WinScreen perf page' -Scrolling; Send-WinScreen 'ToggleDark' 'title:WinScreen perf page' } }
+    darkpicture = @{ Text = 'Picture-keeping Dark on a scrolling page'; Settings = @{ ExperimentalFeatures = $true; Effects = @{ PictureSafeDark = $true } }
                   Setup = { Start-Video 'WinScreen perf page' -Scrolling; Send-WinScreen 'ToggleDark' 'title:WinScreen perf page' } }
     visit    = @{ Text = 'One view with the pointer moving over it'; Settings = @{ Pip = @{ Backend = 'Dwm' } }
                   Setup = { Start-Video 'WinScreen perf page' -Scrolling; Send-WinScreen 'OpenPip' 'title:WinScreen perf page' } }
