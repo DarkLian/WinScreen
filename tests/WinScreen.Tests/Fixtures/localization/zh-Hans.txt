@@ -374,11 +374,11 @@ settings.customization 86A63F23A076B11E
 settings.dark.detect 213E74467CBD6C29
 settings.effects.background 9D911AA2E0E4110B
 settings.effects.help 12174B1290023078
-settings.effects.layeredGlass FB6E2ED4D583DAEE
-settings.effects.pictureSafeDark 5BA6412A278C66C3
+settings.effects.layeredGlass A074A99BBB0F0A36
+settings.effects.pictureSafeDark 5E3C56A77D5F7DE9
 settings.effects.pictures C1C1A47DA31D0D8F
 settings.effects.text 2317E7A1901A6CD7
-settings.effects.title 5176F92CB3BCF673
+settings.effects.title 77C196E7393C7D2A
 settings.experimental 4C322F4B7D921C0F
 settings.experimental.enable C7A0FB5122BB2E73
 settings.fullScreen.allowPip 7A203992E47724AA
