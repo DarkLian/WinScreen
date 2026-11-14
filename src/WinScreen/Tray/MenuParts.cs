@@ -365,8 +365,8 @@ internal sealed class OpacityRow : ToolStripControlHost
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             Color text = Enabled ? MenuStyle.Text : MenuStyle.Disabled, accent = Enabled ? MenuStyle.Accent : MenuStyle.Disabled;
             var top = new Rectangle(Left0 - MenuParts.Scale(4), 0, Right0 - Left0 + MenuParts.Scale(8), MenuParts.Scale(22));
-            Native.DirectText.DrawText(g, _title, MenuStyle.MenuFont, top, text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-            Native.DirectText.DrawText(g, _value + "%", MenuStyle.MenuFont, top, Enabled ? MenuStyle.Muted : MenuStyle.Disabled,
+            Native.DirectText.DrawText(g, _title, MenuStyle.ForDpi(MenuStyle.MenuFont, DeviceDpi), top, text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            Native.DirectText.DrawText(g, _value + "%", MenuStyle.ForDpi(MenuStyle.MenuFont, DeviceDpi), top, Enabled ? MenuStyle.Muted : MenuStyle.Disabled,
                 TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             int thick = MenuParts.Scale(4), radius = MenuParts.Scale(Focused ? 8 : 7);
             using (var rest = new Pen(MenuStyle.Line, thick) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round })

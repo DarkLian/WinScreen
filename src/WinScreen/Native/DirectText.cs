@@ -127,7 +127,7 @@ internal static unsafe class DirectText
     /// Pixels per inch for type, as Windows' own text drawing uses it: the screen's, so a font is just as big drawn
     /// either way, at any display scaling.
     /// </summary>
-    private static readonly float TypeDpi = ReadTypeDpi();
+    internal static readonly float TypeDpi = ReadTypeDpi();
 
     private static float ReadTypeDpi()
     {

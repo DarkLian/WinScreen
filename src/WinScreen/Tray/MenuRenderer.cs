@@ -51,6 +51,19 @@ internal static class MenuStyle
     // Menus use Windows 11's own menu sizes: words at 14 px (10.5 pt at 100%), group headings at 12 px, the title in semibold.
     internal static readonly Font MenuFont = new(Face, 10.5f);
     internal static readonly Font MenuHeaderFont = new(Face, 9f);
+    private static readonly Dictionary<(Font, int), Font> Fitted = [];
+
+    /// <summary>
+    /// A menu font for a display at <paramref name="dpi"/> (roadmap P2-3). WinScreen's text is drawn at the system's
+    /// DPI, so on a display at another scale the font is made that much larger or smaller, to come out at its size there.
+    /// </summary>
+    internal static Font ForDpi(Font font, int dpi)
+    {
+        if (dpi <= 0 || Math.Abs(dpi - Native.DirectText.TypeDpi) < 0.5f) return font;
+        if (!Fitted.TryGetValue((font, dpi), out Font? fitted))
+            Fitted[(font, dpi)] = fitted = new Font(font.FontFamily, font.SizeInPoints * dpi / Native.DirectText.TypeDpi, font.Style);
+        return fitted;
+    }
     internal static readonly Font MenuTitleFont = new(
         FontFamily.Families.FirstOrDefault(family => family.Name.StartsWith("Segoe UI Variable Text Semib", StringComparison.Ordinal))?.Name ?? "Segoe UI Semibold", 10.5f);
     internal static Color Back => HighContrast ? SystemColors.Menu : Dark ? Color.FromArgb(44, 44, 44) : Color.FromArgb(249, 249, 249);
@@ -113,7 +126,7 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
     /// </summary>
     private sealed class SubmenuEdge : NativeWindow
     {
-        private const int WM_WINDOWPOSCHANGING = 0x0046;
+        private const int WM_WINDOWPOSCHANGING = 0x0046, WM_DPICHANGED = 0x02E0;
         private const uint SWP_NOMOVE = 0x2;
         private readonly ToolStripDropDown _menu;
 
@@ -140,6 +153,8 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         {
             if (m.Msg == WM_WINDOWPOSCHANGING && m.LParam != 0) Meet(m.LParam);
             base.WndProc(ref m);
+            // On a display at another scale Windows Forms has just rescaled the fonts: set them for this display again.
+            if (m.Msg == WM_DPICHANGED) Prepare(_menu);
         }
 
         private void Meet(nint place)
@@ -167,18 +182,23 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         // The light or dark look may have changed since the menu was made.
         if (menu.BackColor != MenuStyle.Back) menu.BackColor = MenuStyle.Back;
         if (menu.ForeColor != MenuStyle.Text) menu.ForeColor = MenuStyle.Text;
-        int gap = MenuParts.Scale(5);
+        int gap = MenuParts.Scale(5), dpi = menu.DeviceDpi;
         bool icons = menu.Items.Cast<ToolStripItem>().Any(item => item.Image is not null ||
             item is ToolStripMenuItem { Checked: true } or ToolStripMenuItem { CheckOnClick: true });
         if (menu is ToolStripDropDownMenu withMargin && withMargin.ShowImageMargin != icons) withMargin.ShowImageMargin = icons;
         int inset = MenuParts.Scale(icons ? 8 : 13);
         // Beside icons the words are a size up, as in File Explorer's menu; a list of words alone is set a little smaller.
-        Font font = icons ? MenuStyle.MenuFont : MenuStyle.Font;
+        // At the size of the display the menu is on: Windows Forms rescales a menu's font when it moves to a display
+        // at another scale, which a font in points doesn't need (it came out at 7 pt at 100% beside a 150% display).
+        Font font = MenuStyle.ForDpi(icons ? MenuStyle.MenuFont : MenuStyle.Font, dpi);
         if (menu.Font != font) menu.Font = font;
         foreach (ToolStripItem item in menu.Items)
         {
             // A title is measured in the font it is drawn in, or a long one runs off the menu's edge.
-            if (item.Name == TitleName && item.Font != MenuStyle.MenuTitleFont) item.Font = MenuStyle.MenuTitleFont;
+            Font title = MenuStyle.ForDpi(MenuStyle.MenuTitleFont, dpi), header = MenuStyle.ForDpi(MenuStyle.MenuHeaderFont, dpi);
+            if (item.Name == TitleName && item.Font != title) item.Font = title;
+            else if (Equals(item.Tag, MenuParts.HeaderTag) && item.Font != header) item.Font = header;
+            else if (item.Name != TitleName && !Equals(item.Tag, MenuParts.HeaderTag) && item.Font != font) item.Font = font;
             if (item is ToolStripMenuItem entry)
             {
                 // As much room on the right as the words move right, so a long one is never cut off.
@@ -296,7 +316,7 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         else if (e.Item.Name == TitleName)
         {
             // Drawn here: a line that can't be chosen would otherwise be greyed like an unavailable command.
-            Native.DirectText.DrawText(e.Graphics, e.Text, MenuStyle.MenuTitleFont, e.TextRectangle, MenuStyle.Text, e.TextFormat);
+            Native.DirectText.DrawText(e.Graphics, e.Text, MenuStyle.ForDpi(MenuStyle.MenuTitleFont, e.ToolStrip?.DeviceDpi ?? 0), e.TextRectangle, MenuStyle.Text, e.TextFormat);
             return;
         }
         else if (!e.Item.Enabled) e.TextColor = MenuStyle.Disabled;
