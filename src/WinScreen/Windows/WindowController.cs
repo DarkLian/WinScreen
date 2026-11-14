@@ -26,6 +26,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     // Fully transparent. On some Windows 11 PCs even 1 of 255 showed as a faint ghost of the whole window (seen
     // without HDR; the cause isn't known). Views and captures still get the whole picture.
     private const byte HiddenOpacity = 0;
+    private const byte UsableHiddenOpacity = 1;
 
     // A window with no opacity at all gets no clicks, so while it's being used through its view it's at the
     // least opacity that does. That's only while the pointer is on the view.
@@ -71,6 +72,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public object? ConcealmentOwner { get; set; }
         [NotJournalled("Lasts only while the pointer is over the window; recovery puts back OriginalAlpha.")]
         public bool SolidWhileHovered { get; set; }
+        [NotJournalled("How a hidden window is hidden, gone with it: recovery puts back OriginalAlpha.")]
+        public bool HiddenButUsable { get; set; }
         [NotJournalled("The colour key now set: recovery puts back OriginalColorKey and OriginalLayeredFlags, and OwnedStyles.")]
         public Color? GlassColor { get; set; }
         [NotJournalled(CurrentState)] public bool PinPaused { get; set; }
@@ -780,10 +783,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             EnsureLayeringSafe(state);
             state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
             state.Hidden = true;
+            state.HiddenButUsable = true;
             Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT);
             Conceal(window, state);
-            if (!state.ClickThrough)
-                WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
         }
     }
 
@@ -812,6 +814,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             }
             Reveal(window, state);
             state.Hidden = false;
+            state.HiddenButUsable = false;
             SaveJournal();
         }
     }
@@ -1104,10 +1107,17 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
+    /// <summary>
+    /// Fully see-through, or, for a window an effect draws again and that must still take every press, the faintest
+    /// level above it: Windows passes presses through a window at level 0, page, title bar and buttons alike.
+    /// </summary>
     private void Conceal(nint window, ChangedWindow state)
     {
-        ApplyAlpha(window, state, HiddenOpacity);
-        WriteExStyle(window, ReadExStyle(window) | User32.WS_EX_TRANSPARENT);
+        ApplyAlpha(window, state, state.HiddenButUsable ? UsableHiddenOpacity : HiddenOpacity);
+        if (state.HiddenButUsable && !state.ClickThrough)
+            WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
+        else
+            WriteExStyle(window, ReadExStyle(window) | User32.WS_EX_TRANSPARENT);
         HideBorder(window, state);
     }
 
@@ -1277,6 +1287,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         if (failures.Count > 0)
             throw new WindowOperationException(string.Join(Environment.NewLine, failures));
         state.Hidden = false;
+        state.HiddenButUsable = false;
         state.ConcealmentOwner = null;
 
         void Attempt(string step, Action action)

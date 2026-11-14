@@ -20,3 +20,9 @@ public sealed class GraphicsCardFactAttribute : FactAttribute
         catch (Exception e) { Skip = $"Couldn't check for a graphics card: {e.GetType().Name} 0x{e.HResult:X8}"; }
     }
 }
+
+/// <summary>A theory for effects that need a graphics card, skipped as <see cref="GraphicsCardFactAttribute"/> is.</summary>
+public sealed class GraphicsCardTheoryAttribute : TheoryAttribute
+{
+    public GraphicsCardTheoryAttribute() => Skip = new GraphicsCardFactAttribute().Skip;
+}
