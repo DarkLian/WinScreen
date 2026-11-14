@@ -56,12 +56,14 @@ again when you switch away. [What works where](docs/FEATURE_COMPATIBILITY.md) li
 - See-through, with a default level, Ctrl+Alt+wheel under the pointer, and solid again while the mouse is over it
 - Click-through
 - Borderless, fill the display, dark title bar
-- Remember a program's setup for its windows from then on
+- Remember a program's setup for its windows, matched by title or class, once or every time
 
 **Picture-in-Picture**
 - Live views of a window, a whole display or part of the screen
-- Crop, zoom, resize, presets and saved sources
+- Crop, zoom, resize, preset sizes, presets and saved sources
+- Crop to a part of a window you click, and keep it when the window is resized
 - Keep the original hidden and the view updating
+- Mute the original's sound from the view
 - Use apps through a view: Chrome, Edge, Brave, Vivaldi, Firefox, Electron apps and File Explorer, and other apps, Enhanced hover and middle-click scrolling *(experimental)*
 - Per-view frame limit, opacity, position lock and click-through
 - Minimize views to the taskbar, hover preview and reading lens
@@ -71,7 +73,9 @@ again when you switch away. [What works where](docs/FEATURE_COMPATIBILITY.md) li
 - Floating buttons that bring a window back with a click
 - Drop files on them, rest the pointer for a live preview
 - Added and removed for you as windows get covered
+- Minimize a window to its Anchor
 - Take their windows off the taskbar, or hide them all for now
+- Show on every virtual desktop, or only on their window's
 
 **Arrange**
 - Nine places on the screen, the next display, an exact position and size, the previous position
@@ -79,13 +83,15 @@ again when you switch away. [What works where](docs/FEATURE_COMPATIBILITY.md) li
 - Roll up to the title bar *(experimental)*, send to the back
 
 **Effects** *(experimental)*
-- Dark mode, and one that keeps pictures and video as they are
+- Dark mode that keeps pictures and video as they are, or a simple filter
 - Glass that fades only the background
 - Crop a window, or shrink it to a live tile
 
 **Everyday use**
 - A toolbar on title bars, a window menu on Ctrl+right-click, and a full tray menu
 - Shortcuts you can change, and a searchable list of every action
+- A command line for scripts
+- Settings and menus that work with the keyboard alone
 - Settings that look like Windows 11's, in light or dark
 - Programs to leave alone, or the only ones to work on
 - Pauses during games and full-screen apps
