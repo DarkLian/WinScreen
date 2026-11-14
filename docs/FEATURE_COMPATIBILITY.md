@@ -28,6 +28,8 @@ Paths are relative to `src/WinScreen/` unless they start with `tests/`.
   - Games, and apps with anti-cheat, should use **Show original** instead.
 - **Enhanced hover** needs an x64 PC and a 64-bit app.
 - **Snap Layouts** from Windows 11 aren't offered while moving a window with Alt+drag; WinScreen snaps to edges itself.
+- **Virtual desktops:** views and Anchors show on every desktop (Anchors can be kept to their window's). A window kept
+  hidden by a view comes back on the desktop you're on, not the one it came from.
 
 ## Supported systems
 

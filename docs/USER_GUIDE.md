@@ -121,6 +121,9 @@ again when you can see the window. You can also choose where Anchors appear, how
 they move off text and pictures, and take windows with an Anchor you added off the taskbar. A small notch on an Anchor
 means its window has a view. **Hide all Anchors** in the tray menu puts them away until you show them again.
 
+Anchors show on every virtual desktop, and clicking one takes you to its window's desktop. To show each Anchor only on
+its window's desktop, turn off **Show Anchors on every desktop** in **Settings → Anchors**.
+
 ## Arrange windows
 
 The toolbar's **Arrange window** button has everything that moves a window:
@@ -228,6 +231,8 @@ Nothing leaves your PC unless you send it yourself.
 - Commands pause while a game or full-screen app is in front. Views can't appear over games in exclusive full screen.
 - A minimized app stops drawing, so its view shows the last picture.
 - Protected video may show as black in a view.
+- Views show on every virtual desktop. A window kept hidden by a view comes back on the desktop you're on when you show
+  it again, not the one it came from. To move it back, open Task View (**Win+Tab**), right-click it and choose **Move to**.
 - When **Transparency effects** is on in Windows' own Settings, WinScreen's menus get the same blurred background as Windows' own.
   To keep them plain, turn off **Transparency effects in menus** in **Settings → General**.
 - In smooth mode Windows draws a yellow border around the window being shown. On Windows 11 WinScreen asks to leave it
