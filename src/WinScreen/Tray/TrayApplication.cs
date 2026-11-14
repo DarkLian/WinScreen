@@ -1674,6 +1674,7 @@ public sealed partial class TrayApplication : ApplicationContext
                 if (_dark.IsDark(window) != on) _dark.Toggle(window);
                 break;
             case Look.PictureDark:
+                if (on && !_content.Has(window, Glass.ContentLook.Dark) && _dark.RefusesAsAlreadyDark(window)) break;
                 if (on != _content.Has(window, Glass.ContentLook.Dark)) _content.Toggle(window, Glass.ContentLook.Dark);
                 break;
             case Look.LayeredGlass:

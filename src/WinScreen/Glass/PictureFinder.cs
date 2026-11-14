@@ -13,6 +13,8 @@ internal sealed class PictureFinder(Func<long>? clock = null)
     public const int Tile = 16;
     /// <summary>The mask's values: picture, decide each pixel, a plain panel, or nothing.</summary>
     public const float Picture = 1, PerPixel = 0.5f, Panel = 0.2f, None = 0;
+    /// <summary>For Dark: a part that is dark already, such as a dark title bar or panel, which stays as it is.</summary>
+    public const float AlreadyDark = 0.05f;
     private const int HoldMilliseconds = 5000;
 
     private readonly Func<long> _clock = clock ?? (() => Environment.TickCount64);
@@ -131,12 +133,12 @@ internal sealed class PictureFinder(Func<long>? clock = null)
                 {
                     int k = y * columns + x;
                     TileStats t = tiles[k];
-                    // Mostly page colour, such as a gap between pictures: each pixel decides.
-                    mask[k] = Distance(t.R - pr, t.G - pg, t.B - pb) < 0.0004f && t.Exact > 0.5f ? PerPixel : Picture;
+                    // Partly page colour, such as a gap between pictures: each pixel decides.
+                    mask[k] = Distance(t.R - pr, t.G - pg, t.B - pb) < 0.0004f && t.Exact > 0.3f ? PerPixel : Picture;
                 }
         }
 
-        Hold(mask, current, columns, rows);
+        Hold(mask, current, columns, rows, k => IsPage(k));
         for (int k = 0; k < mask.Length; k++)
             if (mask[k] == None && tiles[k].Exact > 0.9f)
                 mask[k] = Panel;
@@ -147,7 +149,7 @@ internal sealed class PictureFinder(Func<long>? clock = null)
     /// Video fades to black and shows title cards. A picture seen recently stays a picture for a few
     /// seconds, so effects don't flicker. Video black often matches a dark page, so only time ends a hold.
     /// </summary>
-    private void Hold(float[] mask, List<Rectangle> current, int columns, int rows)
+    private void Hold(float[] mask, List<Rectangle> current, int columns, int rows, Func<int, bool> isPage)
     {
         long now = _clock();
         _held.RemoveAll(held => now > held.Until);
@@ -158,13 +160,28 @@ internal sealed class PictureFinder(Func<long>? clock = null)
             for (int y = area.Top; y < area.Bottom; y++)
                 for (int x = area.Left; x < area.Right; x++)
                     if (mask[y * columns + x] == None)
-                        mask[y * columns + x] = Picture;
+                        // Plain page in a remembered picture's place decides by pixel, or it would stay a white block.
+                        mask[y * columns + x] = isPage(y * columns + x) ? PerPixel : Picture;
         }
 
         foreach (Rectangle block in current)
         {
             _held.RemoveAll(held => held.Tiles.IntersectsWith(block));
             _held.Add((block, now + HoldMilliseconds));
+        }
+    }
+
+    /// <summary>
+    /// For Dark: marks the parts that are dark already, a tile whose own colour is dark and that isn't a picture, so a
+    /// dark title bar, toolbar or panel stays dark instead of turning light.
+    /// </summary>
+    public static void MarkAlreadyDark(float[] mask, TileStats[] tiles)
+    {
+        for (int k = 0; k < mask.Length && k < tiles.Length; k++)
+        {
+            TileStats t = tiles[k];
+            if (mask[k] is None or Panel && 0.3f * t.R + 0.59f * t.G + 0.11f * t.B < 0.25f)
+                mask[k] = AlreadyDark;
         }
     }
 

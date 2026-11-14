@@ -29,14 +29,23 @@ public sealed class DarkMode : IDisposable
             return false;
         }
 
-        if (DetectAlreadyDark && Windows.WindowInfo.TryGetVisibleBounds(window, out Rectangle bounds) &&
-            Windows.ScreenColors.Brightness(Windows.ScreenColors.MostCommon(bounds)) < .35)
-        {
-            Notice?.Invoke(Localization.UiText.T("dark.alreadyDark"));
+        if (RefusesAsAlreadyDark(window))
             return false;
-        }
         Add(window).Follow();
         _timer.Enabled = true;
+        return true;
+    }
+
+    /// <summary>
+    /// True, and says so, when Settings leaves already-dark windows unchanged and this one is dark already. Both kinds
+    /// of Dark ask it.
+    /// </summary>
+    public bool RefusesAsAlreadyDark(nint window)
+    {
+        if (!DetectAlreadyDark || !Windows.WindowInfo.TryGetVisibleBounds(window, out Rectangle bounds) ||
+            Windows.ScreenColors.Brightness(Windows.ScreenColors.MostCommon(bounds)) >= .35)
+            return false;
+        Notice?.Invoke(Localization.UiText.T("dark.alreadyDark"));
         return true;
     }
 

@@ -59,10 +59,14 @@ internal static class ContentShaders
             float m = mask.Load(int3(min(tile, int2(tw,th) - 1),0));
             bool inside = m > 0.75;
             bool panel = m > 0.1 && m < 0.3;
-            bool near = m > 0.3, edge = false;
+            bool dark = m > 0.03 && m < 0.08;
+            bool near = m > 0.3, edge = false, nextToLight = false;
             for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-                bool on = mask.Load(int3(clamp(tile + int2(x,y), 0, int2(tw,th) - 1),0)) > 0.3;
-                if (on) near = true; else edge = true;
+                float n = mask.Load(int3(clamp(tile + int2(x,y), 0, int2(tw,th) - 1),0));
+                // Near any picture; but inside one only among its own tiles, not among tiles that decide by pixel.
+                if (n > 0.3) near = true;
+                if (!(n > 0.75)) edge = true;
+                if (!(n > 0.03 && n < 0.08)) nextToLight = true;
             }
             float3 d3 = abs(c - page.rgb);
             bool differs = max(d3.r, max(d3.g, d3.b)) > 2.5 / 255;
@@ -70,8 +74,20 @@ internal static class ContentShaders
             float away = length(c - page.rgb);
             float4 result;
             if (mode.x == 2) {
+                // Each channel flips, which turns ClearType's coloured fringes into the right ones for light text on
+                // dark. Then the colour of the few pixels across is put back: grey text's fringes cancel there, so it
+                // stays crisp; red text is red there, so it stays red.
+                float3 across = 0;
+                for (int k = -2; k <= 2; k++) across += source.Load(int3(clamp(int2(id.x + k, id.y), int2(0,0), int2(ow - 1, oh - 1)), 0)).rgb;
+                across /= 5;
+                float3 hue = across - dot(across, float3(0.3,0.59,0.11));
                 float light = dot(c, float3(0.3,0.59,0.11));
-                result = float4(picture ? c : saturate(c + (1 - 2 * light)), 1);
+                // Coloured text flips its brightness and keeps its colour, as before; grey text flips by channel.
+                float coloured = smoothstep(0.04, 0.12, length(hue));
+                float3 flipped = saturate(lerp(1 - c + 2 * hue, c + (1 - 2 * light), coloured));
+                // A part that is dark already keeps its colours; page colour spilling into it from next door still flips.
+                bool keep = picture || (dark && (differs || !nextToLight));
+                result = float4(keep ? c : flipped, 1);
             } else if (picture) {
                 result = float4(c * levels.z, levels.z);
             } else {

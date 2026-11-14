@@ -364,7 +364,9 @@ internal sealed unsafe class ContentOverlay : Form
             _context.Unmap(staging, 0);
         }
 
-        return _finder.Find(stats, columns, rows);
+        float[] mask = _finder.Find(stats, columns, rows);
+        if (_look == ContentLook.Dark) PictureFinder.MarkAlreadyDark(mask, stats);
+        return mask;
     }
 
     [StructLayout(LayoutKind.Sequential)]
