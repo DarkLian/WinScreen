@@ -321,7 +321,37 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     {
         lock (_gate)
             return _changed.TryGetValue(window, out ChangedWindow? state) && state.Identity.Matches() &&
-                   state.PlacementBeforeRollUp is not null;
+                   state.PlacementBeforeRollUp is not null && StillRolledUp(window, state);
+    }
+
+    /// <summary>
+    /// Whether a rolled-up window still is. Maximized or made taller since, by the person or the app, the roll-up is
+    /// over: a maximized one gets its height back for when it's restored, and a size the person chose is kept. So the
+    /// menu's tick and the next Roll up follow the window rather than a size from before. Minimized still counts.
+    /// </summary>
+    private bool StillRolledUp(nint window, ChangedWindow state)
+    {
+        if (state.PlacementBeforeRollUp is null) return false;
+        if (User32.IsIconic(window) || !User32.IsWindow(window)) return true;
+        if (!User32.IsZoomed(window) && User32.GetWindowRect(window, out Rect now) &&
+            now.Bottom - now.Top <= RolledHeight(window) + Dpi.Scale(RollUpSlack, Dpi.Of(window)))
+            return true;
+        Diagnostics.Log.Event("rollUp.ended", ("maximized", User32.IsZoomed(window)), ("program", Diagnostics.LogValue.ProgramOf(window)));
+        try
+        {
+            RollDown(window, state);
+        }
+        catch (WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
+        state.PlacementBeforeRollUp = null;
+        TrySaveJournal();
+        return false;
+    }
+
+    private static int RolledHeight(nint window)
+    {
+        uint dpi = (uint)Dpi.Of(window);
+        return User32.GetSystemMetricsForDpi(CaptionMetric, dpi) +
+               2 * (User32.GetSystemMetricsForDpi(FrameMetric, dpi) + User32.GetSystemMetricsForDpi(PaddingMetric, dpi));
     }
 
     /// <summary>
@@ -334,7 +364,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         lock (_gate)
         {
             ChangedWindow state = Track(window);
-            if (state.PlacementBeforeRollUp is not null)
+            if (state.PlacementBeforeRollUp is not null && StillRolledUp(window, state))
             {
                 Prepare(window, state);
                 RollDown(window, state);
@@ -365,8 +395,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             }
 
             uint dpi = (uint)Dpi.Of(window);
-            int height = User32.GetSystemMetricsForDpi(CaptionMetric, dpi) +
-                         2 * (User32.GetSystemMetricsForDpi(FrameMetric, dpi) + User32.GetSystemMetricsForDpi(PaddingMetric, dpi));
+            int height = RolledHeight(window);
             if (!User32.GetWindowRect(window, out Rect before))
                 throw Failure(T("actions.readPosition"), window);
             const uint flags = User32.SWP_NOMOVE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE;
@@ -392,6 +421,13 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         if (state.PlacementBeforeRollUp is not { } before)
             return;
         WindowPlacement placement = ReadPlacement(window);
+        // Made taller since by the person or the app: that size stays, there is nothing to give back.
+        if (placement.ShowCommand != ShowMaximized && placement.ShowCommand != ShowMinimized &&
+            placement.NormalPosition.Bottom - placement.NormalPosition.Top > RolledHeight(window) + Dpi.Scale(RollUpSlack, Dpi.Of(window)))
+        {
+            state.PlacementBeforeRollUp = null;
+            return;
+        }
         Rect normal = placement.NormalPosition;
         placement.NormalPosition = new Rect(normal.Left, normal.Top, normal.Right,
             normal.Top + before.NormalPosition.Bottom - before.NormalPosition.Top);
@@ -447,6 +483,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                     _changed.Remove(window);
                     continue;
                 }
+
+                if (state.PlacementBeforeRollUp is not null) StillRolledUp(window, state);
+                if (state.BorderlessFilled) StillFilled(window, state);
 
                 if (state.Hidden || state.PlacementBeforePeek is not null)
                     continue;

@@ -29,16 +29,49 @@ public sealed partial class WindowController
     internal bool IsBorderlessFilled(nint window)
     {
         lock (_gate) return _changed.TryGetValue(window, out var state) && state.Identity.Matches() &&
-            state.PlacementBeforeBorderless is not null && state.BorderlessFilled;
+            state.PlacementBeforeBorderless is not null && state.BorderlessFilled && StillFilled(window, state);
     }
 
     public bool IsBorderless(nint window)
     {
         lock (_gate) return _changed.TryGetValue(window, out var state) && state.Identity.Matches() &&
-                            state.PlacementBeforeBorderless is not null;
+                            state.PlacementBeforeBorderless is not null && StillFilled(window, state);
     }
 
-
+    /// <summary>
+    /// Whether a window WinScreen filled still fills a display. Once the app maximizes it with its own button, or it
+    /// stops covering a display, Fill display is over: its frame comes back and the app is left as it chose, maximized
+    /// or not, with its size from before Fill display as the one its restore goes back to. Minimized still counts, and
+    /// so does the app's own full screen, which covers the display too. True for anything that isn't Fill display.
+    /// </summary>
+    private bool StillFilled(nint window, ChangedWindow state)
+    {
+        if (!state.BorderlessFilled || state.PlacementBeforeBorderless is not { } before) return true;
+        if (!User32.IsWindow(window) || User32.IsIconic(window)) return true;
+        bool zoomed = User32.IsZoomed(window);
+        if (!zoomed && WindowInfo.FillsMonitor(window)) return true;
+        Diagnostics.Log.Event("fill.ended", ("maximized", zoomed), ("program", Diagnostics.LogValue.ProgramOf(window)));
+        try
+        {
+            state.Identity.Require();
+            WriteStyle(window, state, ((long)User32.GetWindowLongPtr(window, User32.GWL_STYLE) & ~BorderlessMask) | state.BorderlessBits);
+            User32.SetWindowPos(window, 0, 0, 0, 0, 0, User32.SWP_FRAMECHANGED | User32.SWP_NOMOVE |
+                User32.SWP_NOSIZE | User32.SWP_NOACTIVATE | User32.SWP_NOZORDER);
+            if (zoomed)
+            {
+                WindowPlacement now = ReadPlacement(window);
+                now.NormalPosition = before.NormalPosition;
+                WritePlacement(window, now);
+            }
+        }
+        catch (WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
+        state.BorderlessBits = 0;
+        state.PlacementBeforeBorderless = null;
+        state.BorderlessOrigin = null;
+        state.BorderlessFilled = false;
+        TrySaveJournal();
+        return false;
+    }
 
     public bool IsOutOfSwitcher(nint window)
     {
@@ -106,8 +139,9 @@ public sealed partial class WindowController
         lock (_gate)
         {
             ChangedWindow state = Track(window);
-            // Undo is allowed even when a filled window triggers full-screen detection.
-            if (state.PlacementBeforeBorderless is not null)
+            // Undo is allowed even when a filled window triggers full-screen detection. A fill the app has since left
+            // is already over, so the press fills it again.
+            if (state.PlacementBeforeBorderless is not null && StillFilled(window, state))
             {
                 Prepare(window, state);
                 RemoveBorderless(window, state);
