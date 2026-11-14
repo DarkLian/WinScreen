@@ -1694,7 +1694,7 @@ public sealed partial class TrayApplication : ApplicationContext
 
     /// <summary>Layered Glass when it's chosen in Settings, otherwise the colour-key Glass. Dark goes first.</summary>
     private void ToggleGlass(nint window) => SwitchLook(window, GlassLook(window), DarkLook(window),
-        _settings.Effects.LayeredGlass ? Look.LayeredGlass : Look.ColorGlass);
+        _settings.Effects.LayeredGlass && Glass.ContentOverlay.GraphicsCardPresent ? Look.LayeredGlass : Look.ColorGlass);
 
     /// <summary>
     /// Turns <paramref name="current"/> off when the window has it; otherwise turns <paramref name="other"/> off and

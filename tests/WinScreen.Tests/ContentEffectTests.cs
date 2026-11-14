@@ -84,10 +84,11 @@ public sealed class PictureFinderTests
     }
 
     [Fact]
-    public void Settings_that_never_chose_get_picture_keeping_dark_and_plain_glass_and_a_choice_stays()
+    public void Settings_that_never_chose_get_picture_keeping_dark_and_glass_and_a_choice_stays()
     {
         EffectPreferences effects = AppSettings.Parse("{}").Effects;
-        Assert.False(effects.LayeredGlass);
+        Assert.True(effects.LayeredGlass); // The default since 15 Nov 2026, at the owner's choice.
+        Assert.False(AppSettings.Parse("""{"Effects":{"LayeredGlass":false}}""").Effects.LayeredGlass);
         Assert.True(effects.PictureSafeDark); // The default since 14 Nov 2026, at the owner's choice.
         Assert.False(AppSettings.Parse("""{"Effects":{"PictureSafeDark":false}}""").Effects.PictureSafeDark);
         Assert.Equal(15, effects.BackgroundPercent);
