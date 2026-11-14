@@ -10,7 +10,7 @@ using Xunit.Abstractions;
 namespace WinScreen.Tests;
 
 /// <summary>
-/// The toolbar and Anchors on a second display at another scale (roadmap P2-3, step 7.2): each is the size its
+/// The toolbar, Anchors and a view's state chip on a second display at another scale (roadmap P2-3, step 7.2): each is the size its
 /// display asks for, wherever it was before. The menus have their own test (<see cref="MixedScaleMenuTests"/>).
 /// </summary>
 [Trait("Category", "RealWindows")]
@@ -98,5 +98,37 @@ public sealed class MixedScaleSurfaceTests(ITestOutputHelper output)
                 });
             }
         });
+    }
+
+    /// <summary>
+    /// A view's state chip, shown on one display and then the other, with the same words and with new ones: its text is
+    /// drawn at its display's scale and fits inside it.
+    /// </summary>
+    [MultiDisplayFact]
+    public void A_views_state_chip_fits_its_words_on_either_display()
+    {
+        WithBothScales(() => WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var view = new Form { ShowInTaskbar = false };
+            using var chip = new Pip.PipStateChip(view);
+            int baseHeight = TextRenderer.MeasureText("Ag", Control.DefaultFont).Height;
+            Screen[] order = [.. Screen.AllScreens, .. Screen.AllScreens];
+            Pip.PipChipState[] states = [Pip.PipChipState.Starting, Pip.PipChipState.Starting, Pip.PipChipState.SourceMinimized, Pip.PipChipState.SourceMinimized];
+            for (int i = 0; i < order.Length; i++)
+            {
+                Screen screen = order[i];
+                Point at = new(screen.WorkingArea.Left + 80, screen.WorkingArea.Top + 200);
+                int dpi = DpiAt(at);
+                chip.Hide();
+                chip.Show(states[i % states.Length], at);
+                Pump(400);
+                Size words = TextRenderer.MeasureText(chip.Text, chip.Font);
+                output.WriteLine($"{screen.DeviceName} at {dpi} dpi: chip {chip.ClientSize} at {chip.DeviceDpi} dpi, words {words}, font {chip.Font.Height}px");
+                Assert.Equal(dpi, chip.DeviceDpi);
+                Assert.InRange(TextRenderer.MeasureText("Ag", chip.Font).Height, baseHeight * dpi / 96 - 3, baseHeight * dpi / 96 + 3);
+                Assert.True(chip.ClientSize.Width >= words.Width && chip.ClientSize.Height >= words.Height,
+                    $"The words {words} don't fit the chip {chip.ClientSize} on {screen.DeviceName}.");
+            }
+        }));
     }
 }

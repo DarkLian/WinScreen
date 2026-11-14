@@ -67,8 +67,7 @@ internal sealed class PipStateChip : Form
         {
             _state = state;
             Text = Words(state);
-            Size text = TextRenderer.MeasureText(Text, Font);
-            ClientSize = new Size(text.Width + 2 * Padding_, text.Height + Padding_);
+            Fit();
             Cursor = OffersAction(state) ? Cursors.Hand : Cursors.Default;
             Invalidate();
         }
@@ -76,7 +75,26 @@ internal sealed class PipStateChip : Form
         Location = new Point(bottomLeft.X, bottomLeft.Y - Height);
         if (Visible) return;
         Show();
+        // Shown on a display at another scale, its words are now drawn at that scale: measured again there.
+        if (Fit()) Location = new Point(bottomLeft.X, bottomLeft.Y - Height);
         WinScreen.Windows.TopLayer.Raise(Handle);
+    }
+
+    /// <summary>Sizes the chip around its words at its display's scale. True when the size changed.</summary>
+    private bool Fit()
+    {
+        Size text = TextRenderer.MeasureText(Text, Font);
+        int padding = Dpi.Scale(Padding_, DeviceDpi);
+        Size wanted = new(text.Width + 2 * padding, text.Height + padding);
+        if (ClientSize == wanted) return false;
+        ClientSize = wanted;
+        return true;
+    }
+
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(e);
+        Fit();
     }
 
     protected override bool ShowWithoutActivation => true;
