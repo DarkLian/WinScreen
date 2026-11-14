@@ -103,6 +103,7 @@ internal sealed unsafe class ContentOverlay : Form
         }
         catch (Exception failure) when (failure is SharpGen.Runtime.SharpGenException or COMException or InvalidOperationException or NotSupportedException or ArgumentException)
         {
+            Diagnostics.Log.Error("effect.deviceFailed", failure);
             Release();
             throw new WindowOperationException(Localization.UiText.T("errors.glass.unavailable"));
         }
