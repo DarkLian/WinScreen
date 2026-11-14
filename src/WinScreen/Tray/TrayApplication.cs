@@ -813,8 +813,10 @@ public sealed partial class TrayApplication : ApplicationContext
         Point cursor = Cursor.Position;
         // Windows drops a slow hook without saying so. Input with no callback means it has, so put it back, ending
         // any drag it was in the middle of (its release will never be seen).
+        // An ordinary copy's hook isn't told about input aimed at an administrator window, so silence there is expected.
         bool silent = _modifierDrag.Active && cursor != _hookCursor &&
-            System.Diagnostics.Stopwatch.GetElapsedTime(_modifierDrag.LastCallback).TotalSeconds > HookSilenceSeconds;
+            System.Diagnostics.Stopwatch.GetElapsedTime(_modifierDrag.LastCallback).TotalSeconds > HookSilenceSeconds &&
+            CanReach(User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = cursor.X, Y = cursor.Y }), User32.GA_ROOT));
         _hookCursor = cursor;
         try
         {
