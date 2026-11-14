@@ -151,7 +151,8 @@ changes a title bar that Windows draws.
 - **Glass** makes a window's background see-through.
 
 A window has Dark mode or Glass, not both: turning one on turns the other off.
-- **Crop** keeps just the part of a window you drag over. Clicks on the rest reach what's behind.
+- **Crop** keeps just the part of a window you drag over. Clicks on the rest reach what's behind. Click a highlighted
+  part instead of dragging, and the crop follows that part when the window is resized.
 - **Shrink** turns a window into a small live tile. Click the tile to bring the window back.
 
 In **Settings → Appearance** you can make Glass fade only the background while keeping text and pictures, and
