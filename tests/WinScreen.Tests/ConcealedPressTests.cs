@@ -173,6 +173,56 @@ public sealed class ConcealedPressTests
     }
 
     /// <summary>
+    /// The effect is put straight above its window, and the window stays where it was among the others, even when
+    /// WinScreen has a window of its own further down (Settings left open, say): Windows tends to place a new window
+    /// next to its program's others, and the window used to be moved down under it (the owner, 15 Nov: Chrome "jumped
+    /// to the bottom" under Glass, Notepad++ "disappeared" under Dark).
+    /// </summary>
+    [GraphicsCardTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void An_effect_keeps_its_window_where_it_was_among_the_others(bool dark)
+    {
+        using var below = new TargetProcess(new Rectangle(Spot.Left + 200, Spot.Top + 100, 500, 400), "1E64C8", "Window below");
+        using var target = new TargetProcess(Spot, "F0F0F0", "Window above");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var own = new Form { Text = "WinScreen's own window, low down", StartPosition = FormStartPosition.Manual, Bounds = new Rectangle(20, 20, 300, 200), ShowInTaskbar = false };
+            own.Show();
+            Desktop.GainForegroundRights();
+            Desktop.Activate(below.Handle);
+            Desktop.Activate(target.Handle);
+            User32.SetWindowPos(own.Handle, User32.HWND_BOTTOM, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+            var overlap = new Point(Spot.Left + 260, Spot.Top + 160);
+            Assert.Equal(target.Handle, User32.GetAncestor(Desktop.TopWindowAt(overlap), User32.GA_ROOT));
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            try
+            {
+                Assert.True(effects.Toggle(target.Handle, dark ? ContentLook.Dark : ContentLook.Glass));
+                long end = Environment.TickCount64 + 800;
+                while (Environment.TickCount64 < end) { Application.DoEvents(); Thread.Sleep(10); }
+                nint top = User32.GetAncestor(Desktop.TopWindowAt(overlap), User32.GA_ROOT);
+                Assert.True(top == target.Handle, $"The window went down the stack: \"{WindowInfo.Title(top)}\" is over it now.");
+                Assert.True(Above(target.Handle, below.Handle), "The window is under the one it was above.");
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
+    /// <summary>Whether <paramref name="upper"/> comes before <paramref name="lower"/> in the order of windows.</summary>
+    private static bool Above(nint upper, nint lower)
+    {
+        for (nint w = User32.GetWindow(lower, 3); w != 0; w = User32.GetWindow(w, 3)) // GW_HWNDPREV
+            if (w == upper) return true;
+        return false;
+    }
+
+    /// <summary>
     /// The two looks that need no graphics card: plain Glass (one colour of the window made see-through with a colour
     /// key) and the filter kind of Dark (Windows' magnifier over the window).
     /// </summary>

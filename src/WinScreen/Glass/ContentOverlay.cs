@@ -38,6 +38,7 @@ internal sealed unsafe class ContentOverlay : Form
     private readonly User32.WinEventProc _eventProc;
     private readonly List<nint> _hooks = [];
     private const uint NextBelow = 2; // GW_HWNDNEXT
+    private const uint PreviousAbove = 3; // GW_HWNDPREV
     private volatile bool _stopping;
     private ContentLevels _levels;
     private Thread? _renderer;
@@ -148,10 +149,27 @@ internal sealed unsafe class ContentOverlay : Form
         // Hidden windows in between don't count: Windows keeps an input method's window right under ours.
         if (topmost == raised && NextShown(Handle) == _source)
             return;
-        if (topmost) WinScreen.Windows.TopLayer.Raise(Handle);
-        else User32.SetWindowPos(Handle, User32.HWND_NOTOPMOST, 0, 0, 0, 0,
+        // The overlay goes to the window, never the window to the overlay: it is put straight above the window, which
+        // stays where it is among the others. Moving the window under the overlay sent it down the stack wherever
+        // Windows had first placed the overlay, below other windows (the owner's report, 15 Nov).
+        if (topmost != raised)
+            User32.SetWindowPos(Handle, topmost ? User32.HWND_TOPMOST : User32.HWND_NOTOPMOST, 0, 0, 0, 0,
+                User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        nint above = PreviousShown(_source);
+        if (above == Handle) return; // Already right, with only hidden windows between.
+        // Nothing above in its own band (the window is the band's first): the top of that band. Placing it after a
+        // window of the other band would move it into that band.
+        bool sameBand = above != 0 && ((User32.GetWindowLongPtr(above, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0) == topmost;
+        User32.SetWindowPos(Handle, sameBand ? above : topmost ? User32.HWND_TOPMOST : User32.HWND_TOP, 0, 0, 0, 0,
             User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
-        User32.SetWindowPos(_source, Handle, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+    }
+
+    /// <summary>The first window above <paramref name="window"/> that is showing, other than this overlay's own band.</summary>
+    private nint PreviousShown(nint window)
+    {
+        nint above = User32.GetWindow(window, PreviousAbove);
+        while (above != 0 && above != Handle && !User32.IsWindowVisible(above)) above = User32.GetWindow(above, PreviousAbove);
+        return above;
     }
 
     /// <summary>The first window under <paramref name="window"/> that is showing.</summary>

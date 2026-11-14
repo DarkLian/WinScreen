@@ -434,6 +434,38 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.False(_app.HasExited, "The new copy closed.");
     }
 
+    /// <summary>
+    /// Turning Glass or Dark on keeps the window where it is among the others: the effect is put above it, it isn't
+    /// moved under the effect. Before, Windows sometimes placed the effect below other windows, and the window was
+    /// sent down with it: Chrome "jumped to the bottom" under Glass, Notepad++ "disappeared" under Dark (the owner, 15
+    /// Nov). The hotkey is pressed while another program has the keyboard, as in daily use.
+    /// </summary>
+    [GraphicsCardTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Glass_and_Dark_keep_the_window_where_it_was_among_the_others(bool dark)
+    {
+        var settings = new AppSettings { WelcomeShown = true, Effects = new EffectPreferences { LayeredGlass = true, PictureSafeDark = true } };
+        settings.Hotkeys[dark ? AppCommand.ToggleDark : AppCommand.ToggleGlass] = "Ctrl+Alt+F20";
+        RestartWith(settings);
+        using var below = new TargetProcess(new Rectangle(Spot.Left + 200, Spot.Top + 100, 500, 400), "1E64C8", "Window below");
+        using var target = new TargetProcess(Spot, "F0F0F0", "Window above");
+        Focus(below);
+        Focus(target);
+        var overlap = new Point(Spot.Left + 260, Spot.Top + 160);
+        Assert.Equal(target.Handle, User32.GetAncestor(Desktop.TopWindowAt(overlap), User32.GA_ROOT));
+
+        Hotkey(Keys.F20, target);
+        Assert.True(Desktop.WaitFor(() => WinScreen.Windows.WindowInfo.IsConcealed(target.Handle), 3000), "The effect didn't turn on.");
+        Thread.Sleep(1500);
+        nint top = User32.GetAncestor(Desktop.TopWindowAt(overlap), User32.GA_ROOT);
+        Assert.True(top == target.Handle, $"The window went down the stack: {WinScreen.Windows.WindowInfo.ClassName(top)} \"{WinScreen.Windows.WindowInfo.Title(top)}\" is over it now.");
+        if (dark)
+            Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(new Rectangle(overlap, new Size(8, 8))), Desktop.DarkPage, 40),
+                "The window's dark picture isn't on top.");
+        Hotkey(Keys.F20, target);
+    }
+
     /// <summary>On a maximized window the toolbar shows on its title bar at the top of the screen, and its pin button works.</summary>
     [Fact]
     public void The_toolbar_appears_on_a_maximized_windows_title_bar_and_works()

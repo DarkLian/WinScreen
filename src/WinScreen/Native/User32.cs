@@ -148,6 +148,7 @@ internal static partial class User32
     public static partial bool EnumWindows(nint callback, nint state);
     public const int WM_HOTKEY = 0x0312;
 
+    public static readonly nint HWND_TOP = 0;
     public static readonly nint HWND_TOPMOST = -1;
     public static readonly nint HWND_NOTOPMOST = -2;
     public static readonly nint HWND_BOTTOM = 1;
