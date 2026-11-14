@@ -140,4 +140,9 @@ public sealed class LanguageRestartTests
     [InlineData(new string[0], null)]
     public void The_page_is_read_from_the_arguments(string[] arguments, int? page) =>
         Assert.Equal(page, Elevation.SettingsPage(arguments));
+
+    /// <summary>The new copy's arguments are not a command for a running copy: it starts as WinScreen.</summary>
+    [Fact]
+    public void A_restarted_copy_starts_rather_than_answering_a_command() =>
+        Assert.IsType<CommandLineRequest.None>(CommandLine.Parse(["--elevated", "--after", "12", "--settings-page", "4"]));
 }

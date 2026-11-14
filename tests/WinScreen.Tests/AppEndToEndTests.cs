@@ -406,6 +406,34 @@ public sealed class AppEndToEndTests : IDisposable
             "Ctrl+Alt+A didn't add an Anchor to an administrator app.");
     }
 
+    /// <summary>
+    /// The copy a language change starts: the program itself, with the arguments a restart gives it, after the old
+    /// copy has closed and the new language was saved. It must run on (not take its arguments for a command), in the
+    /// new language, and open Settings.
+    /// </summary>
+    [Fact]
+    public void A_copy_started_by_a_restart_runs_in_the_new_language_and_opens_Settings()
+    {
+        Desktop.PostMessage(_appWindow, User32.WM_CLOSE, 0, 0);
+        Assert.True(_app.WaitForExit(4000));
+        int previous = _app.Id;
+        _app.Dispose();
+        new AppSettings { WelcomeShown = true, Language = "zh-Hans" }.Save(Path.Combine(_data, "settings.json"));
+
+        var start = new ProcessStartInfo(Program) { UseShellExecute = false };
+        start.Environment["WINSCREEN_DATA"] = _data;
+        foreach (string argument in new[] { "--elevated", "--after", previous.ToString(), "--settings-page", "7" })
+            start.ArgumentList.Add(argument);
+        _app = Process.Start(start)!;
+        _appWindow = WaitForAppWindow();
+
+        string title = WinScreen.Localization.UiText.Translate("settings.window.title",
+            WinScreen.Localization.UiText.GetCatalog("zh-Hans"), WinScreen.Localization.UiText.GetCatalog("en"));
+        Assert.True(Desktop.WaitFor(() => Desktop.FindProcessWindow(_app.Id, text => text.Contains(title, StringComparison.Ordinal)) != 0, 8000),
+            $"The new copy didn't open Settings in the new language (\"{title}\").");
+        Assert.False(_app.HasExited, "The new copy closed.");
+    }
+
     /// <summary>On a maximized window the toolbar shows on its title bar at the top of the screen, and its pin button works.</summary>
     [Fact]
     public void The_toolbar_appears_on_a_maximized_windows_title_bar_and_works()

@@ -336,6 +336,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         if (!User32.IsZoomed(window) && User32.GetWindowRect(window, out Rect now) &&
             now.Bottom - now.Top <= RolledHeight(window) + Dpi.Scale(RollUpSlack, Dpi.Of(window)))
             return true;
+        if (!AnswersQuickly(window)) return true; // Hung: left as it is, and asked again on a later tick.
         Diagnostics.Log.Event("rollUp.ended", ("maximized", User32.IsZoomed(window)), ("program", Diagnostics.LogValue.ProgramOf(window)));
         try
         {
@@ -1578,6 +1579,13 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         return new WindowOperationException(string.Format(T("errors.window.operationFailed"), action,
             WindowInfo.Title(window), reason));
     }
+
+    /// <summary>
+    /// Whether the window answers within a tenth of a second. The checks that follow a window from a query or the
+    /// periodic refresh ask this before changing it, so a hung app never holds WinScreen up; they try again later.
+    /// </summary>
+    private static bool AnswersQuickly(nint window) =>
+        User32.SendMessageTimeout(window, 0, 0, 0, 0x3, 100, out _) != 0;
 
     private static void EnsureResponsive(nint window)
     {

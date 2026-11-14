@@ -50,6 +50,7 @@ public sealed partial class WindowController
         if (!User32.IsWindow(window) || User32.IsIconic(window)) return true;
         bool zoomed = User32.IsZoomed(window);
         if (!zoomed && WindowInfo.FillsMonitor(window)) return true;
+        if (!AnswersQuickly(window)) return true; // Hung: left as it is, and asked again on a later tick.
         Diagnostics.Log.Event("fill.ended", ("maximized", zoomed), ("program", Diagnostics.LogValue.ProgramOf(window)));
         try
         {

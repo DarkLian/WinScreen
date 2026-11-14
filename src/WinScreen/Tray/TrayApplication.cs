@@ -516,6 +516,8 @@ public sealed partial class TrayApplication : ApplicationContext
         ThemedMessage.Show(_settingsWindow is { IsDisposed: false } owner ? owner : null,
             string.Format(T("settings.language.restart"), views, changed), "WinScreen", okCancel: true) == DialogResult.OK;
 
+    private bool _restarting;
+
     /// <summary>True once WinScreen has started to exit, for tests.</summary>
     internal bool Exiting { get; private set; }
 
@@ -538,8 +540,10 @@ public sealed partial class TrayApplication : ApplicationContext
                 string.Join(Environment.NewLine, _windows.RestoreFailures));
             return;
         }
+        _restarting = true;
         if (!StartCopy(page))
         {
+            _restarting = false;
             Alert(T("errors.operation.title"), T("errors.app.restartFailed"));
             return;
         }
@@ -1306,7 +1310,9 @@ public sealed partial class TrayApplication : ApplicationContext
         _toolbar.Dispose();
         _flash.Dispose();
         _snapPreview.Dispose();
-        Task.Run(_updates.ApplyOnExit).GetAwaiter().GetResult();
+        // A restart starts the new copy before this one is gone: an update installed now would replace the files
+        // it runs from. It installs at the next ordinary exit instead.
+        if (!_restarting) Task.Run(_updates.ApplyOnExit).GetAwaiter().GetResult();
         _updates.Dispose();
         _hotkeys.Dispose();
         _tray.Visible = false;
