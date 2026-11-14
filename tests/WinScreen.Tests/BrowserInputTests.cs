@@ -13,7 +13,7 @@ namespace WinScreen.Tests;
 [Trait("Category", "Interactive")]
 public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper output)
 {
-    private const string EdgePath = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
+    internal const string EdgePath = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
     [StructLayout(LayoutKind.Sequential)]
     private struct CursorInfo { public int Size; public int Flags; public nint Cursor; public int X, Y; }
     [DllImport("user32.dll")] private static extern bool GetCursorInfo(ref CursorInfo info);

@@ -30,4 +30,7 @@ internal interface IPipCaptureBackend : IPipRenderBackend
 
     /// <summary>Changes the frame limit and filter without restarting capture.</summary>
     void SetPacing(int frameRate, Settings.PipScaling scaling) { }
+
+    /// <summary>Hands the newest frame's tile brightness to <paramref name="done"/>, on any thread; null when there is none.</summary>
+    void RequestSample(Action<FrameSample?> done) => done(null);
 }

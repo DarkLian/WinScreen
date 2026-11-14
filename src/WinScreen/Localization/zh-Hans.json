@@ -321,6 +321,8 @@
   "pip.titleBarAlways.default": "新视图始终显示标题栏",
   "pip.titlePrefix": "画中画 - ",
   "pip.useSettings": "使用设置",
+  "pip.video.follow": "显示最大的视频",
+  "pip.video.none": "此窗口中没有找到正在播放的画面。请先播放视频，再试一次。",
   "pip.views.empty": "没有打开的视图",
   "pip.zoom.reset": "重置裁剪和缩放",
   "placement.bottom": "下方居中",

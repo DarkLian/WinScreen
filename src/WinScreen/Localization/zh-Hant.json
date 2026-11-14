@@ -321,6 +321,8 @@
   "pip.titleBarAlways.default": "新檢視一律顯示標題列",
   "pip.titlePrefix": "子母畫面 - ",
   "pip.useSettings": "使用設定",
+  "pip.video.follow": "顯示最大的影片",
+  "pip.video.none": "此視窗中沒有找到正在播放的畫面。請先播放影片，再試一次。",
   "pip.views.empty": "沒有開啟的檢視",
   "pip.zoom.reset": "重設裁切和縮放",
   "placement.bottom": "下方置中",
