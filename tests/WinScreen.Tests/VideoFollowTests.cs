@@ -98,19 +98,24 @@ public sealed class VideoFollowTests
     [Theory]
     [InlineData("chrome")]
     [InlineData("edge")]
-    public void A_browser_view_crops_to_the_playing_video(string which)
+    public void A_browser_view_crops_to_the_whole_player_when_only_part_of_the_video_moves(string which)
     {
         string path = which == "edge" ? BrowserInputTests.EdgePath : Path.Combine(AppContext.BaseDirectory, "chrome-win64", "chrome.exe");
         if (!File.Exists(path)) { Skipped.Because(which + " isn't here."); return; }
+        // Like a talking head: a 640 by 360 video that is still and dark but for a patch in its middle.
         const string html = """
             <!doctype html><html><head><title>VideoFollow</title></head><body style="margin:20px;font:16px sans-serif">
             <p>Some text above the video, which stays still.</p>
-            <canvas id="c" width="480" height="270" style="display:none"></canvas>
-            <video id="v" width="480" height="270" muted autoplay style="display:block"></video>
+            <canvas id="c" width="640" height="360" style="display:none"></canvas>
+            <video id="v" width="640" height="360" muted autoplay style="display:block"></video>
             <div style="width:200px;height:120px;background:linear-gradient(red,blue);margin-top:10px"></div>
             <script>
               const c = document.getElementById('c'), g = c.getContext('2d'); let n = 0;
-              setInterval(() => { for (let i = 0; i < 40; i++) { g.fillStyle = 'hsl(' + ((n * 7 + i * 31) % 360) + ',70%,' + (20 + (n * 13 + i * 17) % 60) + '%)'; g.fillRect((i % 8) * 60, Math.floor(i / 8) * 54, 60, 54); } n++; }, 50);
+              setInterval(() => {
+                g.fillStyle = '#141414'; g.fillRect(0, 0, 640, 360);
+                for (let i = 0; i < 12; i++) { g.fillStyle = 'hsl(' + ((n * 7 + i * 31) % 360) + ',70%,' + (25 + (n * 13 + i * 17) % 50) + '%)'; g.fillRect(240 + (i % 4) * 40, 120 + Math.floor(i / 4) * 40, 40, 40); }
+                n++;
+              }, 50);
               const v = document.getElementById('v'); v.srcObject = c.captureStream(20); v.play();
             </script>
             </body></html>
@@ -134,7 +139,7 @@ public sealed class VideoFollowTests
                 string[] videoNotices = [Localization.UiText.T("pip.video.none")];
                 Assert.True(Pump(() => !view.Crop.IsEmpty || notices.Intersect(videoNotices).Any(), 12000), "Nothing was found in time.");
                 Assert.Empty(notices.Intersect(videoNotices)); // Hiding the original can bring its own notice on Windows 10.
-                Size wanted = new(480 * Native.Dpi.Of(window) / 96, 270 * Native.Dpi.Of(window) / 96);
+                Size wanted = new(640 * Native.Dpi.Of(window) / 96, 360 * Native.Dpi.Of(window) / 96);
                 Assert.True(Math.Abs(view.Crop.Width - wanted.Width) <= 40 && Math.Abs(view.Crop.Height - wanted.Height) <= 40,
                     $"Cropped to {view.Crop}, the video is {wanted}.");
                 view.FollowLargestVideo(false);

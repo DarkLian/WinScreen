@@ -91,4 +91,73 @@ public sealed class MotionFinderTests
     [InlineData(0, 0, 100, 100, 50, 0, 100, 100, 1.0 / 3)]
     public void Overlap_is_shared_area_over_joint_area(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh, double expected) =>
         Assert.Equal(expected, PipWindow.Overlap(new Rectangle(ax, ay, aw, ah), new Rectangle(bx, by, bw, bh)), 3);
+
+    [Fact]
+    public void A_found_video_keeps_its_crop_unless_it_grows_or_is_clearly_elsewhere_twice()
+    {
+        var crop = new Rectangle(100, 100, 400, 225);
+        int elsewhere = 0;
+        // Part of the video went still: the smaller area inside is not a reason to shrink.
+        Assert.Null(PipWindow.NextCrop(crop, new Rectangle(150, 120, 200, 100), ref elsewhere));
+        // A little off, as one look sees it: kept.
+        Assert.Null(PipWindow.NextCrop(crop, new Rectangle(108, 100, 400, 225), ref elsewhere));
+        // The player grew around it: follows.
+        Assert.Equal(new Rectangle(80, 80, 600, 340), PipWindow.NextCrop(crop, new Rectangle(80, 80, 600, 340), ref elsewhere));
+        // Somewhere else once is a passing animation; twice running is the video after a scroll.
+        var moved = new Rectangle(100, 600, 400, 225);
+        Assert.Null(PipWindow.NextCrop(crop, moved, ref elsewhere));
+        Assert.Equal(moved, PipWindow.NextCrop(crop, moved, ref elsewhere));
+        // Seen back in place between two such looks: starts counting again.
+        elsewhere = 0;
+        Assert.Null(PipWindow.NextCrop(crop, moved, ref elsewhere));
+        Assert.Null(PipWindow.NextCrop(crop, crop, ref elsewhere));
+        Assert.Null(PipWindow.NextCrop(crop, moved, ref elsewhere));
+    }
+
+    [Fact]
+    public void A_calm_scene_that_changes_only_now_and_then_is_still_found()
+    {
+        var video = new Rectangle(80, 40, 320, 184);
+        // Each tile changes only every fourth frame, at different times.
+        Rectangle? found = Find(20, i =>
+        {
+            FrameSample sample = Frame(0, video);
+            FrameSample moving = Frame(i, video);
+            for (int k = 0; k < sample.Brightness.Length; k++)
+                if ((k + i) % 4 == 0) sample.Brightness[k] = moving.Brightness[k];
+            return sample;
+        });
+        Assert.Equal(video, found);
+    }
+
+    /// <summary>A player of one still shade on a page of another, with only part of the picture moving.</summary>
+    private static FrameSample Player(int frame, byte page, byte player, Rectangle box, Rectangle moving)
+    {
+        FrameSample sample = Frame(frame, moving);
+        int columns = sample.Columns;
+        for (int y = 0; y < sample.Rows; y++)
+            for (int x = 0; x < columns; x++)
+            {
+                var tile = new Point(x * FrameSample.Tile, y * FrameSample.Tile);
+                if (!moving.Contains(tile)) sample.Brightness[y * columns + x] = box.Contains(tile) ? player : page;
+            }
+        return sample;
+    }
+
+    [Theory]
+    [InlineData(200, 30)] // A dark player on a light page.
+    [InlineData(15, 0)] // A black player on a dark page.
+    public void Only_part_of_the_picture_moving_still_finds_the_whole_player(byte page, byte player)
+    {
+        var box = new Rectangle(80, 40, 400, 224);
+        var face = new Rectangle(200, 104, 160, 96);
+        Assert.Equal(box, Find(10, i => Player(i, page, player, box, face)));
+    }
+
+    [Fact]
+    public void Movement_with_no_border_around_it_is_what_is_shown()
+    {
+        var face = new Rectangle(200, 104, 160, 96);
+        Assert.Equal(face, Find(10, i => Player(i, 200, 200, Rectangle.Empty, face)));
+    }
 }

@@ -11,12 +11,13 @@ namespace WinScreen.Pip;
 /// </summary>
 public sealed partial class PipWindow
 {
-    private const int SamplesPerLook = 10, SampleMilliseconds = 150, PauseMilliseconds = 2500;
+    // The first look is the longest, so a calm scene still shows as moving; later looks only check where it is.
+    private const int FirstLookSamples = 20, SamplesPerLook = 14, SampleMilliseconds = 150, PauseMilliseconds = 2500;
 
     private readonly System.Windows.Forms.Timer _videoTimer = new() { Interval = SampleMilliseconds };
     private MotionFinder _motion = new();
     private bool _followingVideo, _videoFound, _sampleOut, _cropByFollow, _videoTimerHooked, _fromScreen;
-    private int _samples;
+    private int _samples, _seenElsewhere;
     private long _nextLook;
 
     /// <summary>True while the view follows the largest moving picture in its source.</summary>
@@ -28,6 +29,7 @@ public sealed partial class PipWindow
         _followingVideo = on;
         _videoFound = false;
         _samples = 0;
+        _seenElsewhere = 0;
         _motion = new MotionFinder();
         _nextLook = 0;
         if (!_videoTimerHooked)
@@ -88,7 +90,7 @@ public sealed partial class PipWindow
             _samples = 0;
         }
         _motion.Add(sample);
-        if (++_samples < SamplesPerLook) return;
+        if (++_samples < (_videoFound ? SamplesPerLook : FirstLookSamples)) return;
 
         Rectangle? moving = _motion.Largest();
         Size surface = _motion.Surface;
@@ -112,9 +114,9 @@ public sealed partial class PipWindow
         }
         if (crop.Width > 0 && crop.Height > 0)
         {
-            // A video that only moved a little, or one that paused, keeps its crop.
-            if (!_videoFound || Overlap(crop, _crop) < 0.85)
+            if ((_videoFound ? NextCrop(_crop, crop, ref _seenElsewhere) : crop) is { } next)
             {
+                crop = next;
                 _cropByFollow = true;
                 try { SetCrop(crop); }
                 finally { _cropByFollow = false; }
@@ -133,6 +135,25 @@ public sealed partial class PipWindow
     private void CropChanging()
     {
         if (_followingVideo && !_cropByFollow) FollowLargestVideo(false);
+    }
+
+    /// <summary>
+    /// Where a crop that already shows a video goes after another look: never smaller, since a video with a still part
+    /// is still the same video; larger when the moving area takes in the whole crop; elsewhere only when the video is
+    /// found clearly elsewhere twice running, as after the page scrolled. Null to keep the crop.
+    /// </summary>
+    internal static Rectangle? NextCrop(Rectangle current, Rectangle found, ref int seenElsewhere)
+    {
+        if (current.IsEmpty) return found;
+        if (Overlap(current, found) >= 0.3 || current.Contains(found) || found.Contains(current))
+        {
+            seenElsewhere = 0;
+            bool grew = found.Contains(current) && (long)found.Width * found.Height * 10 > (long)current.Width * current.Height * 11;
+            return grew ? found : null;
+        }
+        if (++seenElsewhere < 2) return null;
+        seenElsewhere = 0;
+        return found;
     }
 
     internal static double Overlap(Rectangle a, Rectangle b)
