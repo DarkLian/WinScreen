@@ -41,6 +41,8 @@ anchors.avoid 7987B0BABC7984F6
 anchors.avoid.help 3373EA76334C298A
 anchors.controls.view 0E27576D43D92473
 anchors.every.title 59F339524B3C656D
+anchors.everyDesktop DCFB870270015ED7
+anchors.everyDesktop.help EB6E754831C3064B
 anchors.limit 8128963F415D32D3
 anchors.look.dark A6B75D0680322A61
 anchors.look.label C8FFBDF15754D1D2

@@ -39,6 +39,8 @@
   "anchors.avoid.help": "开启后，锚点不会出现在屏幕截图或屏幕共享中。",
   "anchors.controls.view": "此窗口有视图。",
   "anchors.every.title": "所有浮动锚点",
+  "anchors.everyDesktop": "在所有桌面上显示锚点",
+  "anchors.everyDesktop.help": "点击锚点会切换到其窗口所在的桌面。关闭后，每个锚点只在其窗口所在的桌面上显示。",
   "anchors.limit": "自动锚点数量上限",
   "anchors.look.dark": "深色",
   "anchors.look.label": "样式",

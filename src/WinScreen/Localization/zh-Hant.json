@@ -39,6 +39,8 @@
   "anchors.avoid.help": "開啟後，錨點不會出現在螢幕擷取畫面或螢幕分享中。",
   "anchors.controls.view": "此視窗有檢視。",
   "anchors.every.title": "所有浮動錨點",
+  "anchors.everyDesktop": "在所有桌面上顯示錨點",
+  "anchors.everyDesktop.help": "點選錨點會切換到其視窗所在的桌面。關閉後，每個錨點只在其視窗所在的桌面上顯示。",
   "anchors.limit": "自動錨點數量上限",
   "anchors.look.dark": "深色",
   "anchors.look.label": "樣式",

@@ -39,6 +39,8 @@
   "anchors.avoid.help": "While this is on, Anchors don't appear in screenshots or screen sharing.",
   "anchors.controls.view": "This window has a view.",
   "anchors.every.title": "Every Anchor",
+  "anchors.everyDesktop": "Show Anchors on every desktop",
+  "anchors.everyDesktop.help": "Clicking one takes you to its window's desktop. Turn this off to show each Anchor only on its window's desktop.",
   "anchors.limit": "Most automatic Anchors",
   "anchors.look.dark": "Dark",
   "anchors.look.label": "Style",

@@ -28,6 +28,7 @@ public sealed class AnchorSet : IDisposable
         {
             DropClosedWindows();
             Restyle();
+            FollowDesktops();
         };
     }
 
@@ -53,8 +54,8 @@ public sealed class AnchorSet : IDisposable
         {
             if (_hidden == value) return;
             _hidden = value;
-            foreach (AnchorButton anchor in _anchors.Values.Where(anchor => !anchor.IsDisposed))
-                anchor.Visible = !value;
+            foreach ((nint window, AnchorButton anchor) in _anchors.Where(pair => !pair.Value.IsDisposed))
+                anchor.Visible = ShowsNow(window);
             SyncTaskbar(); // A window with no taskbar button and no Anchor in sight would be hard to find.
         }
     }
@@ -189,8 +190,24 @@ public sealed class AnchorSet : IDisposable
         };
         Created?.Invoke(anchor.Handle);
         Style(anchor);
-        if (!_hidden) anchor.Show();
+        if (ShowsNow(anchor.Target)) anchor.Show();
         _watch.Enabled = true;
+    }
+
+    /// <summary>Whether an Anchor is in sight now: not while all are hidden, and only on its window's desktop when Settings says so.</summary>
+    private bool ShowsNow(nint window) =>
+        !_hidden && (_preferences.EveryDesktop || Native.VirtualDesktops.OnCurrentDesktop(window));
+
+    /// <summary>After a switch of virtual desktop, each Anchor shows or hides as its window's desktop is shown or not.</summary>
+    private void FollowDesktops()
+    {
+        if (_hidden || _preferences.EveryDesktop) return;
+        foreach ((nint window, AnchorButton anchor) in _anchors.ToArray())
+        {
+            if (anchor.IsDisposed) continue;
+            bool show = ShowsNow(window);
+            if (anchor.Visible != show) anchor.Visible = show;
+        }
     }
 
     private void Restyle()

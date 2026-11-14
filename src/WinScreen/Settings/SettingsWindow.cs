@@ -37,6 +37,7 @@ public sealed class SettingsWindow : Form
     private readonly CheckBox _anchorAvoid = new SwitchBox { Text = T("anchors.avoid"), AutoSize = true };
     private readonly CheckBox _anchorPreview = new SwitchBox { Text = T("anchors.preview"), AutoSize = true };
     private readonly CheckBox _anchorOffTaskbar = new SwitchBox { Text = T("anchors.offTaskbar"), AutoSize = true };
+    private readonly CheckBox _anchorEveryDesktop = new SwitchBox { Text = T("anchors.everyDesktop"), AutoSize = true };
     private readonly ThemedList _anchorOnly = new();
     private readonly ThemedList _anchorExcluded = new();
     private readonly ComboBox _newAnchorOnly = ProgramPicker();
@@ -351,7 +352,7 @@ private readonly ErrorProvider _errors = new();
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
             [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
             [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',
-            [_anchorOffTaskbar] = '\uE7C4',
+            [_anchorOffTaskbar] = '\uE7C4', [_anchorEveryDesktop] = '\uE7F4',
         };
         foreach (Control control in Every(this))
         {
@@ -845,6 +846,7 @@ private readonly ErrorProvider _errors = new();
             AvoidContent = _anchorAvoid.Checked,
             HoverPreview = _anchorPreview.Checked,
             OffTaskbar = _anchorOffTaskbar.Checked,
+            EveryDesktop = _anchorEveryDesktop.Checked,
         }.Validated();
         draft.StartWithWindows = _startWithWindows.Checked;
         draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
@@ -1261,6 +1263,7 @@ private readonly ErrorProvider _errors = new();
         _anchorAvoid.Checked = anchors.AvoidContent;
         _anchorPreview.Checked = anchors.HoverPreview;
         _anchorOffTaskbar.Checked = anchors.OffTaskbar;
+        _anchorEveryDesktop.Checked = anchors.EveryDesktop;
         _anchorOnly.Items.Clear();
         _anchorOnly.Items.AddRange(anchors.OnlyPrograms.Cast<object>().ToArray());
         _anchorExcluded.Items.Clear();
@@ -1596,7 +1599,8 @@ private readonly ErrorProvider _errors = new();
             SettingRow(T("anchors.side.label"), _anchorSide), SettingRow(T("anchors.look.label"), _anchorLook),
             SettingRow(T("anchors.limit"), _anchorLimit), SettingRow(T("anchors.size"), _anchorSize),
             _anchorRecency, _anchorAvoid, Note(T("anchors.avoid.help"))));
-        page.Controls.Add(Section(T("anchors.every.title"), _anchorPreview, _anchorOffTaskbar, Note(T("anchors.offTaskbar.help"))));
+        page.Controls.Add(Section(T("anchors.every.title"), _anchorPreview, _anchorOffTaskbar, Note(T("anchors.offTaskbar.help")),
+            _anchorEveryDesktop, Note(T("anchors.everyDesktop.help"))));
         page.Controls.Add(Section(T("anchors.auto.only"), Programs(_anchorOnly, _newAnchorOnly, null, T("programs.empty.included"))));
         page.Controls.Add(Section(T("anchors.auto.excluded"), Programs(_anchorExcluded, _newAnchorExcluded, null, T("programs.empty.excluded")),
             Note(T("programs.alwaysLeftAlone"))));

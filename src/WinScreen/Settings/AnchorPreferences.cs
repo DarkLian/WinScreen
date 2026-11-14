@@ -21,6 +21,11 @@ public sealed record AnchorPreferences
     public bool HoverPreview { get; init; } = true;
     /// <summary>A window with an Anchor the person added has no taskbar button while the Anchor is there.</summary>
     public bool OffTaskbar { get; init; }
+    /// <summary>
+    /// Anchors show on every virtual desktop, so one can take you back to its window's desktop. Off, an Anchor shows only
+    /// on its window's desktop.
+    /// </summary>
+    public bool EveryDesktop { get; init; } = true;
 
     internal AnchorPreferences Validated() => this with
     {
