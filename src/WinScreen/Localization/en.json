@@ -321,8 +321,6 @@
   "pip.titleBarAlways.default": "Always show the title bar on new views",
   "pip.titlePrefix": "PiP - ",
   "pip.useSettings": "Use Settings",
-  "pip.video.follow": "Show the largest video",
-  "pip.video.none": "No moving picture was found in this window. Start the video, then try again.",
   "pip.views.empty": "No open views",
   "pip.zoom.reset": "Reset crop and zoom",
   "placement.bottom": "Bottom center",

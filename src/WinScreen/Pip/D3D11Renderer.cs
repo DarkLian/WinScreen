@@ -20,7 +20,7 @@ internal sealed class D3D11Renderer : IDisposable
     private ID3D11DeviceContext _context = null!;
     private IDXGISwapChain1? _swapChain;
     private ID3D11RenderTargetView? _renderTarget;
-    private ID3D11Texture2D? _cache, _scaled, _sample;
+    private ID3D11Texture2D? _cache, _scaled;
     private ID3D11ShaderResourceView? _sourceView, _scaledView;
     private ID3D11UnorderedAccessView? _scaledOutput;
     private ID3D11VertexShader? _vertex;
@@ -150,24 +150,6 @@ internal sealed class D3D11Renderer : IDisposable
         return null;
     }
 
-    /// <summary>The cached frame's tile brightness, read back through a staging copy. Only while a view looks for a video.</summary>
-    internal unsafe FrameSample? Sample(bool pictures = false)
-    {
-        if (_cache is null) return null;
-        Texture2DDescription cached = _cache.Description;
-        if (_sample is null || _sample.Description.Width != cached.Width || _sample.Description.Height != cached.Height)
-        {
-            _sample?.Dispose();
-            _sample = null;
-            _sample = Device.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, cached.Width, cached.Height, 1, 1,
-                BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read));
-        }
-        _context.CopyResource(_sample, _cache);
-        MappedSubresource map = _context.Map(_sample, 0, MapMode.Read);
-        try { return FrameSample.From((byte*)map.DataPointer, (int)map.RowPitch, SourceSize, pictures); }
-        finally { _context.Unmap(_sample, 0); }
-    }
-
     internal void Cache(ID3D11Texture2D texture, Size content)
     {
         var desc = texture.Description;
@@ -293,7 +275,7 @@ internal sealed class D3D11Renderer : IDisposable
         if (_disposed) return;
         _disposed = true;
         _context?.ClearState();
-        _sourceView?.Dispose(); _cache?.Dispose(); _sample?.Dispose();
+        _sourceView?.Dispose(); _cache?.Dispose();
         _scaledOutput?.Dispose(); _scaledView?.Dispose(); _scaled?.Dispose();
         _renderTarget?.Dispose(); _swapChain?.Dispose();
         _constants?.Dispose(); _sampler?.Dispose(); _compute?.Dispose(); _pixel?.Dispose(); _vertex?.Dispose();

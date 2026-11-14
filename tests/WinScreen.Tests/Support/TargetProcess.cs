@@ -144,15 +144,6 @@ internal sealed class TargetProcess : IDisposable
             throw new InvalidOperationException("Test target didn't add a corner control.");
     }
 
-    /// <summary>Adds a part of the window, in client coordinates, that keeps changing like a playing video.</summary>
-    internal void AddMovie(Rectangle part)
-    {
-        _process.StandardInput.WriteLine($"movie {part.X} {part.Y} {part.Width} {part.Height}");
-        _process.StandardInput.Flush();
-        if (NextReport() != "movie")
-            throw new InvalidOperationException("Test target didn't add a moving part.");
-    }
-
     /// <summary>Plays silence on a loop, which gives the process a sound session in Windows' mixer.</summary>
     internal void PlaySilence()
     {

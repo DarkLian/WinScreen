@@ -11,7 +11,7 @@ namespace WinScreen.Pip;
 public sealed partial class PipWindow
 {
     /// <summary>Builds the view's menu, once, from the constructor.</summary>
-    [MemberNotNull(nameof(_hideItem), nameof(_goToItem), nameof(_muteItem), nameof(_videoItem), nameof(_useOriginalItem), nameof(_autoMoveItem), nameof(_removeCropItem), nameof(_viewOnlyItem),
+    [MemberNotNull(nameof(_hideItem), nameof(_goToItem), nameof(_muteItem), nameof(_useOriginalItem), nameof(_autoMoveItem), nameof(_removeCropItem), nameof(_viewOnlyItem),
         nameof(_helpItem), nameof(_useHeader), nameof(_originalHeader), nameof(_interactiveItem), nameof(_middleScrollItem),
         nameof(_enhancedHoverItem))]
     private void BuildMenu()
@@ -63,8 +63,6 @@ public sealed partial class PipWindow
         _removeCropItem = new ToolStripMenuItem(T("pip.zoom.reset"), MenuParts.Icon(MenuParts.Crop),
             (_, _) => { ResetZoom(); SetCrop(Rectangle.Empty); });
         _menu.Items.Add(_removeCropItem);
-        _videoItem = new ToolStripMenuItem(T("pip.video.follow"), null, (_, _) => FollowLargestVideo(!_followingVideo));
-        _menu.Items.Add(_videoItem);
         _menu.Items.Add(options);
         _menu.Items.Add(presets);
 
@@ -127,7 +125,6 @@ public sealed partial class PipWindow
         _goToItem.Enabled = _useOriginalItem.Enabled = _interactiveItem.Enabled = there;
         if (!there) _hideItem.Enabled = false;
         _removeCropItem.Enabled = !_crop.IsEmpty || _zoom != PipGeometry.WholeView;
-        _videoItem.Checked = _followingVideo;
     }
 
     /// <summary>Mutes or unmutes the original's program, and says so when that couldn't be done.</summary>

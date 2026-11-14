@@ -62,7 +62,6 @@ public sealed partial class PipWindow : Form
     private ToolStripMenuItem _hideItem;
     private ToolStripItem _goToItem;
     private ToolStripMenuItem _muteItem;
-    private ToolStripMenuItem _videoItem;
     private ToolStripItem _useOriginalItem;
     private readonly string _program;
     private readonly bool _javaSource;
@@ -600,7 +599,6 @@ public sealed partial class PipWindow : Form
     /// <param name="crop">The part to show, measured from the window's visible top-left corner.</param>
     public void SetCrop(Rectangle crop)
     {
-        CropChanging();
         if (crop != _crop)
             _zoom = PipGeometry.WholeView;
         _crop = crop;
@@ -997,8 +995,6 @@ public sealed partial class PipWindow : Form
         DropTaskbarProxy();
         _watch.Dispose();
         _autoMove.Dispose();
-        _followingVideo = false;
-        _videoTimer.Dispose();
         ClaimEscape(false);
         EndLive();
         // Teardown must never submit another draw: the source or destination HWND may already be gone.

@@ -22,48 +22,6 @@ internal sealed class PictureFinder(Func<long>? clock = null)
 
     public (float R, float G, float B) Page { get; private set; }
 
-    /// <summary>The pictures the last <see cref="Find"/> saw, in tiles: what a view's Show the largest video matches movement to.</summary>
-    public IReadOnlyList<Rectangle> Blocks { get; private set; } = [];
-
-    /// <summary>
-    /// A tile's statistics from its pixels (blue, green, red, alpha), the same as the effects' graphics-card pass works
-    /// them out, for a frame that is on the CPU already.
-    /// </summary>
-    internal static unsafe TileStats StatsOf(byte* pixels, int pitch, int left, int top)
-    {
-        var hist = new int[32];
-        var sum = new float[32 * 3];
-        int flat = 0;
-        float previous = -1;
-        for (int y = 0; y < Tile; y++)
-        {
-            byte* row = pixels + (top + y) * pitch + left * 4;
-            for (int x = 0; x < Tile; x++)
-            {
-                float b = row[x * 4] / 255f, g = row[x * 4 + 1] / 255f, r = row[x * 4 + 2] / 255f;
-                float l = r * 0.3f + g * 0.59f + b * 0.11f;
-                int bin = Math.Min(31, (int)(l * 32));
-                hist[bin]++; sum[bin * 3] += r; sum[bin * 3 + 1] += g; sum[bin * 3 + 2] += b;
-                if (Math.Abs(l - previous) < 0.006f) flat++;
-                previous = l;
-            }
-        }
-        int best = 0, used = 0;
-        for (int j = 0; j < 32; j++) { if (hist[j] > hist[best]) best = j; if (hist[j] >= 3) used++; }
-        bool picture = hist[best] / 256f < 0.42f && flat < 120 && used >= 7;
-        float n = Math.Max(1, hist[best]);
-        float mr = sum[best * 3] / n, mg = sum[best * 3 + 1] / n, mb = sum[best * 3 + 2] / n;
-        int exact = 0;
-        for (int y = 0; y < Tile; y++)
-        {
-            byte* row = pixels + (top + y) * pitch + left * 4;
-            for (int x = 0; x < Tile; x++)
-                if (Math.Max(Math.Abs(row[x * 4 + 2] / 255f - mr), Math.Max(Math.Abs(row[x * 4 + 1] / 255f - mg), Math.Abs(row[x * 4] / 255f - mb))) < 1.5f / 255)
-                    exact++;
-        }
-        return new TileStats(mr, mg, mb, Math.Min(exact / 256f, 0.999f), picture);
-    }
-
     public float[] Find(TileStats[] tiles, int columns, int rows)
     {
         var mask = new float[tiles.Length];
@@ -180,7 +138,6 @@ internal sealed class PictureFinder(Func<long>? clock = null)
                 }
         }
 
-        Blocks = current.ToArray();
         Hold(mask, current, columns, rows, k => IsPage(k));
         for (int k = 0; k < mask.Length; k++)
             if (mask[k] == None && tiles[k].Exact > 0.9f)

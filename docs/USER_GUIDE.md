@@ -77,8 +77,6 @@ turn on **Always show title bar** in **Size and options**, or for every new view
   view or exit WinScreen. An app you had muted yourself stays muted.
 - **Size and options:** frame limit, opacity, size, position lock and click-through, just for this view.
 - **Presets:** save the crop, size and place under a name and use it again later.
-- **Show the largest video:** crops the view to the largest moving picture in the window, such as a playing video,
-  and keeps following it if it moves. Start the video first. Cropping by hand or **Reset crop and zoom** stops it.
 - **Interactive** lets you point, click, select text, drag and scroll in the picture. Ready for Chrome, Edge, Brave,
   Vivaldi, Firefox, Electron apps and File Explorer; *experimental* for other apps.
   **Keep hidden** stays checked and locked while this is on. Turning it off restores your previous hiding choice.

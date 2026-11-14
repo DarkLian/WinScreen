@@ -102,30 +102,6 @@ internal static class Program
                             Console.WriteLine("button");
                             Console.Out.Flush();
                         });
-                    if (parts[0] == "movie")
-                        window.BeginInvoke(() =>
-                        {
-                            // A part of the window that keeps changing like a playing video: random grey blocks.
-                            string[] at = parts[1].Split(' ');
-                            var movie = new Panel { Bounds = new Rectangle(int.Parse(at[0]), int.Parse(at[1]), int.Parse(at[2]), int.Parse(at[3])) };
-                            var random = new Random(1);
-                            movie.Paint += (_, e) =>
-                            {
-                                for (int y = 0; y < movie.Height; y += 12)
-                                    for (int x = 0; x < movie.Width; x += 12)
-                                    {
-                                        int grey = random.Next(20, 236);
-                                        using var brush = new SolidBrush(Color.FromArgb(grey, grey, grey));
-                                        e.Graphics.FillRectangle(brush, x, y, 12, 12);
-                                    }
-                            };
-                            var frames = new System.Windows.Forms.Timer { Interval = 60 };
-                            frames.Tick += (_, _) => movie.Invalidate();
-                            frames.Start();
-                            window.Controls.Add(movie);
-                            Console.WriteLine("movie");
-                            Console.Out.Flush();
-                        });
                     if (parts[0] == "sound")
                         window.BeginInvoke(() =>
                         {

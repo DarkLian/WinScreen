@@ -323,8 +323,6 @@ pip.titleBarAlways CB76705368DCCE44
 pip.titleBarAlways.default 675C78939EFE2416
 pip.titlePrefix FDF6F0886C4E04DF
 pip.useSettings 93F68EDC1766DFC1
-pip.video.follow 6926790A5389EECF
-pip.video.none 4A8D9BD2E60B0D43
 pip.views.empty AE4D3A6EAF1AA1B5
 pip.zoom.reset ACFA6ED837EDB412
 placement.bottom 225873475ADEFE49

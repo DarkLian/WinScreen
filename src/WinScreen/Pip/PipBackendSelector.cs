@@ -261,13 +261,6 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         advanced.SetViewport(_viewport, captureCrop);
     }
 
-    /// <summary>The newest captured frame's tile brightness; null when smooth capture isn't what shows the picture.</summary>
-    internal void RequestSample(Action<FrameSample?> done, bool pictures = false)
-    {
-        if (_active && _advanced is { } capture) capture.RequestSample(done, pictures);
-        else done(null);
-    }
-
     internal bool Retry()
     {
         if (!_policy.Retry(Stopwatch.GetTimestamp(), Stopwatch.Frequency)) return false;

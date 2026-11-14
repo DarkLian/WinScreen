@@ -31,8 +31,6 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     private readonly bool _software;
     private readonly Thread _worker;
     private View _view;
-    private Action<FrameSample?>? _sampleWanted;
-    private volatile bool _sampleWithPictures;
     private bool _dirty = true;
     private volatile bool _stopping;
     private volatile PipSessionState _state = PipSessionState.Starting;
@@ -65,17 +63,6 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         _worker = new Thread(Run) { IsBackground = true, Name = "WinScreen PiP capture" };
         _worker.SetApartmentState(ApartmentState.MTA);
         _worker.Start();
-    }
-
-    public void RequestSample(Action<FrameSample?> done, bool pictures = false)
-    {
-        lock (_viewGate)
-        {
-            if (_stopping) { done(null); return; }
-            _sampleWithPictures = pictures;
-            Interlocked.Exchange(ref _sampleWanted, done)?.Invoke(null);
-            _wake.Set();
-        }
     }
 
     public PipBackendKind Kind => _software ? PipBackendKind.WgcSoftware : PipBackendKind.WgcHardware;
@@ -273,13 +260,6 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                         if (_software) Diagnostics.Capabilities = renderer.Capabilities with { WarpUsable = true };
                     }
                 }
-                if (ready && renderer.HasFrame && Interlocked.Exchange(ref _sampleWanted, null) is { } wanted)
-                {
-                    FrameSample? sample = null;
-                    try { sample = renderer.Sample(_sampleWithPictures); }
-                    catch (SharpGen.Runtime.SharpGenException failure) { WinScreen.Diagnostics.Log.Swallowed(failure); }
-                    wanted(sample);
-                }
                 if (submitted) renderer.EndWork();
                 if (!everPresented && Stopwatch.GetElapsedTime(Started).TotalSeconds > 5)
                     throw new TimeoutException("No presentable WGC frame within five seconds.");
@@ -317,7 +297,6 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
             Release(() => pool?.Dispose());
             Release(() => winrtDevice?.Dispose());
             Release(() => renderer?.Dispose());
-            Interlocked.Exchange(ref _sampleWanted, null)?.Invoke(null);
             if (_state != PipSessionState.Failed) _state = PipSessionState.Stopped;
             lock (_viewGate) _wake.Dispose();
             _completion.TrySetResult();
