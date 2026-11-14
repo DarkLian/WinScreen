@@ -705,7 +705,8 @@ public sealed class AppEndToEndTests : IDisposable
     {
         string chrome = Path.Combine(AppContext.BaseDirectory, "chrome-win64", "chrome.exe");
         if (!File.Exists(chrome)) { Skipped.Because("The portable Chrome isn't in the test output."); return; }
-        var settings = new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.Arrange, AppCommand.ShowWindowMenu], Placement = ToolbarPlacement.Right } };
+        // With the drag gesture on, as the owner has it: its hook's check is what closed the menus.
+        var settings = new AppSettings { WelcomeShown = true, ModifierDrag = true, Toolbar = new() { Buttons = [AppCommand.Arrange, AppCommand.ShowWindowMenu], Placement = ToolbarPlacement.Right } };
         settings.Hotkeys[AppCommand.ToggleBorderlessFill] = "Ctrl+Alt+F20";
         RestartWith(settings);
         var (browser, window, root) = BrowserInputTests.Open("<!doctype html><title>FillMenus</title><body style='background:#fff'>", "FillMenus", app: false, chrome);

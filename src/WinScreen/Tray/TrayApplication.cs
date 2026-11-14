@@ -759,9 +759,16 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private bool Paused => _settings.PauseInFullScreen && FullScreenNow() != FullScreenState.None;
 
-    /// <summary>Full screen as WinScreen takes it: a window it filled itself with Fill display is not a game to step back for.</summary>
+    /// <summary>
+    /// Full screen as WinScreen takes it: a window it filled itself with Fill display is not a game to step back for.
+    /// One of WinScreen's own windows in front (a menu it opened) is not a game either: Windows can go on calling the
+    /// filled window behind it full screen, and the menu was closed the moment it opened (the owner, 15 Nov).
+    /// </summary>
     private FullScreenState FullScreenNow() =>
-        FullScreenPolicy.Seen(FullScreen.Current(), User32.GetForegroundWindow(), _windows.FilledByWinScreen);
+        FullScreenPolicy.Seen(FullScreen.Current(), User32.GetForegroundWindow(), window => _windows.FilledByWinScreen(window) || IsOwn(window));
+
+    private static bool IsOwn(nint window) =>
+        User32.GetWindowThreadProcessId(window, out uint process) != 0 && process == Environment.ProcessId;
 
     /// <summary>Covers its display as a game or a full-screen app does, rather than because WinScreen filled it.</summary>
     private bool FillsLikeAGame(nint window) =>
