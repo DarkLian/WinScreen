@@ -173,6 +173,40 @@ public sealed class ConcealedPressTests
     }
 
     /// <summary>
+    /// The two looks that need no graphics card: plain Glass (one colour of the window made see-through with a colour
+    /// key) and the filter kind of Dark (Windows' magnifier over the window).
+    /// </summary>
+    [Theory]
+    [InlineData("plainGlass")]
+    [InlineData("filterDark")]
+    public void Every_part_of_a_window_under_a_look_without_a_graphics_card_still_takes_a_press(string look)
+    {
+        using var behind = new TargetProcess(new Rectangle(Spot.Left - 60, Spot.Top - 60, Spot.Width + 220, Spot.Height + 160), "1E64C8", "WinScreen behind");
+        using var target = new TargetProcess(Spot, "F0F0F0");
+        target.UseFrame();
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(target.Handle);
+            var windows = new WindowController([]);
+            using var dark = new WinScreen.Dark.DarkMode();
+            try
+            {
+                Assert.True(look == "plainGlass" ? windows.ToggleGlass(target.Handle) : dark.Toggle(target.Handle));
+                long end = Environment.TickCount64 + 600;
+                while (Environment.TickCount64 < end) { Application.DoEvents(); Thread.Sleep(10); }
+                if (look == "plainGlass")
+                    // Windows passes presses through a colour key's see-through colour by design: the page is a choice
+                    // for the owner (see the roadmap, F3). Its frame stays usable.
+                    DragAndClose(target.Handle, point => RequireOurs(point, target, behind), () => Application.DoEvents());
+                else
+                    PressEveryPart(target, behind, () => Application.DoEvents());
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
+
+    /// <summary>
     /// The same on real programs the owner saw it on: a browser's page and its own title bar, and a File Explorer
     /// window, each under picture-keeping Dark. Only windows this test opens are pressed.
     /// </summary>
