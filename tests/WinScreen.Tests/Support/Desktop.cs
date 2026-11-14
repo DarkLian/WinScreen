@@ -153,7 +153,9 @@ internal static partial class Desktop
             bool received = false;
             WaitFor(() => received, 2000, () =>
             {
-                while (PeekMessage(out ThreadMessage message, 0, 0, 0, 1))
+                // Only the hotkey: on a thread with windows, taking every message out never ends (a window waiting to
+                // paint keeps one there).
+                while (PeekMessage(out ThreadMessage message, 0, User32.WM_HOTKEY, User32.WM_HOTKEY, 1))
                     received |= message.Message == User32.WM_HOTKEY;
             });
             if (!received)
