@@ -1150,6 +1150,10 @@ internal sealed class ThemedCheckList : CheckedListBox
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<object, bool>? Tagged { get; set; }
 
+    /// <summary>An icon drawn between the box and the words, given the entry and the size in pixels; the words then line up in one column.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<object, int, Image?>? IconOf { get; set; }
+
     private void ApplyRowHeight()
     {
         if (IsHandleCreated) Native.User32.SendMessage(Handle, ListRows.LB_SETITEMHEIGHT, 0, RowHeight);
@@ -1195,6 +1199,17 @@ internal sealed class ThemedCheckList : CheckedListBox
             }
         }
         int textLeft = box.Right + SettingsStyle.Unit(this, 10);
+        if (IconOf is not null)
+        {
+            int iconSize = SettingsStyle.Unit(this, 16);
+            if (IconOf(Items[e.Index], iconSize) is { } icon)
+            {
+                var place = new Rectangle(box.Right + SettingsStyle.Unit(this, 6), row.Top + (row.Height - iconSize) / 2, iconSize, iconSize);
+                if (Enabled) g.DrawImage(icon, place);
+                else ControlPaint.DrawImageDisabled(g, icon, place.X, place.Y, BackColor);
+            }
+            textLeft = box.Right + SettingsStyle.Unit(this, 28);
+        }
         string text = GetItemText(Items[e.Index]) ?? "";
         const TextFormatFlags format = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
             TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;

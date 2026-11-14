@@ -1577,6 +1577,9 @@ private readonly ErrorProvider _errors = new();
         _toolbarTrigger.Items.AddRange([T("toolbar.trigger.titleBar"), T("toolbar.trigger.minimize")]);
         foreach (AppCommand command in ToolbarPreferences.DefaultButtons()) _toolbarButtons.Items.Add(new ToolbarChoice(command));
         _toolbarButtons.Tagged = item => item is ToolbarChoice { Command: var command } && CommandCatalog.IsExperimental(command);
+        // Each button with the icon it has on the bar, so the list reads like the bar.
+        _toolbarButtons.IconOf = (item, pixels) => item is ToolbarChoice { Command: var shown }
+            ? Tray.ColorIcons.Of(MenuParts.IconOf(shown) ?? MenuParts.More, pixels) : null;
         FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("toolbar.settings.title"), _showToolbar, SettingRow(T("toolbar.placement.label"), _toolbarPlacement),
             SettingRow(T("toolbar.trigger.label"), _toolbarTrigger), SettingRow(T("toolbar.delay.label"), _toolbarDelay),
