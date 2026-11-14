@@ -102,6 +102,24 @@ internal static class Program
                             Console.WriteLine("button");
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "sound")
+                        window.BeginInvoke(() =>
+                        {
+                            // A second of silence, looped: a sound session in Windows' mixer that nobody hears.
+                            var wave = new MemoryStream();
+                            var writer = new BinaryWriter(wave);
+                            const int rate = 8000, bytes = rate * 2;
+                            writer.Write("RIFF"u8); writer.Write(36 + bytes); writer.Write("WAVEfmt "u8); writer.Write(16);
+                            writer.Write((short)1); writer.Write((short)1); writer.Write(rate); writer.Write(rate * 2);
+                            writer.Write((short)2); writer.Write((short)16); writer.Write("data"u8); writer.Write(bytes);
+                            writer.Write(new byte[bytes]);
+                            wave.Position = 0;
+                            var player = new System.Media.SoundPlayer(wave);
+                            player.PlayLooping();
+                            window.Tag = player;
+                            Console.WriteLine("sound");
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "corner")
                         window.BeginInvoke(() =>
                         {

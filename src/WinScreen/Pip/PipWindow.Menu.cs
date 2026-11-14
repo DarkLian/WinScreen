@@ -11,7 +11,7 @@ namespace WinScreen.Pip;
 public sealed partial class PipWindow
 {
     /// <summary>Builds the view's menu, once, from the constructor.</summary>
-    [MemberNotNull(nameof(_hideItem), nameof(_goToItem), nameof(_useOriginalItem), nameof(_autoMoveItem), nameof(_removeCropItem), nameof(_viewOnlyItem),
+    [MemberNotNull(nameof(_hideItem), nameof(_goToItem), nameof(_muteItem), nameof(_useOriginalItem), nameof(_autoMoveItem), nameof(_removeCropItem), nameof(_viewOnlyItem),
         nameof(_helpItem), nameof(_useHeader), nameof(_originalHeader), nameof(_interactiveItem), nameof(_middleScrollItem),
         nameof(_enhancedHoverItem))]
     private void BuildMenu()
@@ -56,6 +56,8 @@ public sealed partial class PipWindow
         _menu.Items.Add(_hideItem);
         _useOriginalItem = _menu.Items.Add(T("menu.original.use"), MenuParts.Icon(MenuParts.Undo), (_, _) => UseOriginal());
         _goToItem = _menu.Items.Add(T("menu.original.goTo"), MenuParts.Icon(MenuParts.NewWindow), (_, _) => GoToSource());
+        _muteItem = new ToolStripMenuItem(T("menu.original.mute"), null, (_, _) => ChooseMute(!_muteItem!.Checked));
+        _menu.Items.Add(_muteItem);
 
         _menu.Items.Add(MenuParts.Header(T("menu.group.picture")));
         _removeCropItem = new ToolStripMenuItem(T("pip.zoom.reset"), MenuParts.Icon(MenuParts.Crop),
@@ -84,7 +86,7 @@ public sealed partial class PipWindow
         };
         MenuRenderer.Apply(_menu);
         // Turning the view's options on and off leaves the menu open for the next one.
-        foreach (ToolStripItem item in new ToolStripItem[] { _hideItem, _autoMoveItem, _interactiveItem, _viewOnlyItem, _middleScrollItem, _enhancedHoverItem })
+        foreach (ToolStripItem item in new ToolStripItem[] { _hideItem, _muteItem, _autoMoveItem, _interactiveItem, _viewOnlyItem, _middleScrollItem, _enhancedHoverItem })
             StayingOpen.Keep(item);
         StayingOpen.Follow(_menu, RefreshMenuItems);
         _menu.Closed += (_, _) => { ReturnFocusAfterMenu(); PauseInput(TopLayer.InputBlocked); };
@@ -112,11 +114,24 @@ public sealed partial class PipWindow
         _middleScrollItem.Enabled = !(showInteractionOptions && _enhancedHoverItem.Checked && AppScrollsWithHover);
         _originalHeader.Available = _hideItem.Available = _goToItem.Available = _origin.IsWindow;
         _useOriginalItem.Available = _origin.IsWindow && _hideItem.Checked;
+        bool? muted = _origin.IsWindow ? SoundState?.Invoke() : null;
+        _muteItem.Available = muted is not null;
+        _muteItem.Checked = muted == true;
+        if (muted is not null)
+            _muteItem.Text = PipEnhancedHover.Describe(_source).App is PipHoverApp.Browser or PipHoverApp.Firefox
+                ? T("menu.original.muteBrowser") : T("menu.original.mute");
         // The view closes soon after its window does; until then nothing offers to act on a window that is gone.
         bool there = _origin.IsAvailable;
         _goToItem.Enabled = _useOriginalItem.Enabled = _interactiveItem.Enabled = there;
         if (!there) _hideItem.Enabled = false;
         _removeCropItem.Enabled = !_crop.IsEmpty || _zoom != PipGeometry.WholeView;
+    }
+
+    /// <summary>Mutes or unmutes the original's program, and says so when that couldn't be done.</summary>
+    private void ChooseMute(bool on)
+    {
+        if (SetSound?.Invoke(on) == false) Problem?.Invoke(T("errors.sound.failed"));
+        _muteItem.Checked = SoundState?.Invoke() == true;
     }
 
     /// <summary>One quiet line for each way to handle the picture, for how the view is being used now.</summary>

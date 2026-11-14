@@ -37,6 +37,8 @@ internal enum WindowPart
     /// <summary>A crop still being chosen over the window.</summary>
     CropChoice,
     View,
+    /// <summary>A program muted from a view's menu (<see cref="Windows.ProgramSound"/>).</summary>
+    Sound,
     Tile,
     /// <summary>The filter kind of Dark (a Magnification overlay).</summary>
     FilterDark,
@@ -56,7 +58,7 @@ internal static class PutBackOrder
     /// </summary>
     public static readonly WindowPart[] PutBack =
     [
-        WindowPart.CropChoice, WindowPart.View, WindowPart.Tile, WindowPart.FilterDark, WindowPart.ContentEffect,
+        WindowPart.CropChoice, WindowPart.View, WindowPart.Sound, WindowPart.Tile, WindowPart.FilterDark, WindowPart.ContentEffect,
         WindowPart.Anchor, WindowPart.WindowChanges,
     ];
 
@@ -66,7 +68,7 @@ internal static class PutBackOrder
     /// </summary>
     public static readonly WindowPart[] Exit =
     [
-        WindowPart.CropChoice, WindowPart.WindowChanges, WindowPart.View, WindowPart.Tile, WindowPart.FilterDark,
+        WindowPart.CropChoice, WindowPart.WindowChanges, WindowPart.View, WindowPart.Sound, WindowPart.Tile, WindowPart.FilterDark,
         WindowPart.ContentEffect, WindowPart.Anchor,
     ];
 }

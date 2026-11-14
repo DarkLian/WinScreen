@@ -24,6 +24,25 @@ internal static partial class ProcessInfo
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool GetTokenInformation(nint token, int kind, out int value, int size, out int returned);
 
+    [LibraryImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static unsafe partial bool QueryFullProcessImageName(nint process, uint flags, char* path, ref uint size);
+
+    /// <summary>The full path of a process's program, or "" when Windows won't say. Works for elevated processes too.</summary>
+    public static unsafe string PathOf(uint processId)
+    {
+        if (processId == 0) return "";
+        nint process = OpenProcess(ProcessQueryLimited, false, processId);
+        if (process == 0) return "";
+        try
+        {
+            char* path = stackalloc char[1024];
+            uint size = 1024;
+            return QueryFullProcessImageName(process, 0, path, ref size) ? new string(path, 0, (int)size) : "";
+        }
+        finally { CloseHandle(process); }
+    }
+
     /// <summary>Whether WinScreen itself was started as administrator, which lets it work with such apps too.</summary>
     public static bool SelfElevated { get; } = IsElevated((uint)Environment.ProcessId);
 

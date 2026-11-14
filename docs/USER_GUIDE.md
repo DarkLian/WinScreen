@@ -72,6 +72,9 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 
 - **Keep hidden:** some apps, such as browsers, stop drawing when they're covered. This hides the original
   so the view stays live. It also removes the original from the taskbar and Alt+Tab where supported. Showing the original or closing the view restores its entry.
+- **Mute the original:** silences the app's sound, and nothing else. For a browser it mutes the whole browser,
+  so the item says **Mute the browser**. The sound comes back when you turn it off, restore the window, close the
+  view or exit WinScreen. An app you had muted yourself stays muted.
 - **Size and options:** frame limit, opacity, size, position lock and click-through, just for this view.
 - **Presets:** save the crop, size and place under a name and use it again later.
 - **Interactive** lets you point, click, select text, drag and scroll in the picture. Ready for Chrome, Edge, Brave,

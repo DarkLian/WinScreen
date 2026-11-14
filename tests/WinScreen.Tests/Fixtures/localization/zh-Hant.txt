@@ -146,6 +146,7 @@ errors.rollUp.minimumHeight 458F78330B8313F1
 errors.rollUp.noCaption 1258FF89989F2AE2
 errors.settings.saveFailed DF07F16D226E21EF
 errors.shrink.unavailable 1ADD30E41AB7FEDD
+errors.sound.failed 398510BA49A05E23
 errors.switcher.hideOriginalFirst CAB8D630346A0369
 errors.switcher.windows10 21E46510C7673638
 errors.switcher.windowsManaged E709926DE36AA001
@@ -213,6 +214,8 @@ menu.help 9DB680E03EFB1BF3
 menu.more 38844B135CF70DFC
 menu.original.goTo B9570D77B62DB4D4
 menu.original.keepHidden D447D4DDC4A888DA
+menu.original.mute 6B844C47F3A616D0
+menu.original.muteBrowser 5B9DE606A39E9D7D
 menu.original.use 7D3AFA1DE0168064
 menu.picture.options 7D05E30990E99BFF
 menu.tray.newView 316E755906199FF9

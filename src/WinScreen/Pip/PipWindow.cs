@@ -61,6 +61,7 @@ public sealed partial class PipWindow : Form
     private readonly System.Windows.Forms.Timer _autoMove = new() { Interval = 1000 };
     private ToolStripMenuItem _hideItem;
     private ToolStripItem _goToItem;
+    private ToolStripMenuItem _muteItem;
     private ToolStripItem _useOriginalItem;
     private readonly string _program;
     private readonly bool _javaSource;
@@ -432,6 +433,14 @@ public sealed partial class PipWindow : Form
     /// <summary>The saved presets to offer, and where a new or removed one goes. Set by the owner of the settings.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<IReadOnlyList<PipPreset>>? Presets { get; set; }
+
+    /// <summary>Null when the original's program has no sound to mute; otherwise whether it is muted from this view.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<bool?>? SoundState { get; set; }
+
+    /// <summary>Mutes or unmutes the original's program. False when that couldn't be done.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<bool, bool>? SetSound { get; set; }
     public event Action<PipPreset>? PresetSaved;
     public event Action<string>? PresetRemoved;
     public event Action<PipSourceBookmark>? SourceBookmarkSaved;

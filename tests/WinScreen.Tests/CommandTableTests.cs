@@ -46,10 +46,10 @@ public sealed class CommandTableTests
         // The orders as they were written out by hand before P1-6 step (c): Put back closes WinScreen's own
         // surfaces first; exit restores the windows first and stops there if that fails.
         Assert.Equal(
-            [WindowPart.CropChoice, WindowPart.View, WindowPart.Tile, WindowPart.FilterDark, WindowPart.ContentEffect, WindowPart.Anchor, WindowPart.WindowChanges],
+            [WindowPart.CropChoice, WindowPart.View, WindowPart.Sound, WindowPart.Tile, WindowPart.FilterDark, WindowPart.ContentEffect, WindowPart.Anchor, WindowPart.WindowChanges],
             PutBackOrder.PutBack);
         Assert.Equal(
-            [WindowPart.CropChoice, WindowPart.WindowChanges, WindowPart.View, WindowPart.Tile, WindowPart.FilterDark, WindowPart.ContentEffect, WindowPart.Anchor],
+            [WindowPart.CropChoice, WindowPart.WindowChanges, WindowPart.View, WindowPart.Sound, WindowPart.Tile, WindowPart.FilterDark, WindowPart.ContentEffect, WindowPart.Anchor],
             PutBackOrder.Exit);
         foreach (WindowPart[] order in new[] { PutBackOrder.PutBack, PutBackOrder.Exit })
             Assert.Equal(Enum.GetValues<WindowPart>().Order(), order.Order());

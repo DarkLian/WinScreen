@@ -80,7 +80,7 @@ public sealed partial class TrayApplication
         {
             if (_pips.TryGetValue(window, out var existing)) existing.Close();
             else OpenViewOf(window);
-        }) with { IsOn = window => _pips.ContainsKey(window), Undoes = [WindowPart.View], Opens = window => !_pips.ContainsKey(window) && Native.User32.IsIconic(window) },
+        }) with { IsOn = window => _pips.ContainsKey(window), Undoes = [WindowPart.View, WindowPart.Sound], Opens = window => !_pips.ContainsKey(window) && Native.User32.IsIconic(window) },
         Define(AppCommand.PickPipSource, _ => ShowPicker()) with { Target = CommandTarget.NoWindow, Opens = Always },
         Define(AppCommand.ToggleShrink, window => Shrink(window)) with { IsOn = window => _shrunk.ContainsKey(window), Undoes = [WindowPart.Tile] },
         Define(AppCommand.ToggleCrop, window => ToggleCrop(window)) with { IsOn = window => _windows.IsCropped(window), Undoes = [WindowPart.CropChoice, WindowPart.WindowChanges] },
@@ -193,6 +193,7 @@ public sealed partial class TrayApplication
     {
         WindowPart.CropChoice => _croppingWindow == window,
         WindowPart.View => _pips.ContainsKey(window),
+        WindowPart.Sound => _sound.Has(window),
         WindowPart.Tile => _shrunk.ContainsKey(window),
         WindowPart.FilterDark => _dark.IsDark(window),
         WindowPart.ContentEffect => _content.Has(window),
@@ -208,6 +209,7 @@ public sealed partial class TrayApplication
         {
             case WindowPart.CropChoice: if (_croppingWindow == window) CancelCrop(); break;
             case WindowPart.View: if (_pips.TryGetValue(window, out var view)) view.Close(); break;
+            case WindowPart.Sound: _sound.Unmute(window); break;
             case WindowPart.Tile: if (_shrunk.TryGetValue(window, out var tile)) tile.Close(); break;
             case WindowPart.FilterDark: if (_dark.IsDark(window)) _dark.Toggle(window); break;
             case WindowPart.ContentEffect: _content.TurnOff(window); break;
@@ -224,6 +226,7 @@ public sealed partial class TrayApplication
         {
             case WindowPart.CropChoice: CancelCrop(); break;
             case WindowPart.View: foreach (PipWindow view in _viewsInOrder.ToArray()) view.Close(); break;
+            case WindowPart.Sound: return _sound.UnmuteAll();
             case WindowPart.Tile: foreach (var tile in _shrunk.Values.ToArray()) tile.Close(); break;
             case WindowPart.FilterDark: _dark.TurnAllOff(); break;
             case WindowPart.ContentEffect: _content.TurnAllOff(); break;

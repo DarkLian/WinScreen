@@ -144,6 +144,17 @@ internal sealed class TargetProcess : IDisposable
             throw new InvalidOperationException("Test target didn't add a corner control.");
     }
 
+    /// <summary>Plays silence on a loop, which gives the process a sound session in Windows' mixer.</summary>
+    internal void PlaySilence()
+    {
+        _process.StandardInput.WriteLine("sound");
+        _process.StandardInput.Flush();
+        if (NextReport() != "sound")
+            throw new InvalidOperationException("Test target didn't start its sound.");
+    }
+
+    internal int ProcessId => _process.Id;
+
     /// <summary>Gives the window a new size; it keeps its top-left corner.</summary>
     internal void Resize(int width, int height)
     {

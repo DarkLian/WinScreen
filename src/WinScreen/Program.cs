@@ -15,6 +15,9 @@ internal static class Program
         Environment.GetEnvironmentVariable("WINSCREEN_DATA")
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinScreen");
 
+    /// <summary>What WinScreen muted, until it is unmuted (<see cref="ProgramSound"/>).</summary>
+    private static string SoundJournal => Path.Combine(DataFolder, "muted-programs.json");
+
     [STAThread]
     private static void Main(string[] arguments)
     {
@@ -79,23 +82,28 @@ internal static class Program
         var windows = new WindowController(settings.ExcludedPrograms,
             new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")));
         windows.RecoverFromJournal();
+        ProgramSound.Recover(Native.AudioSessions.Instance, SoundJournal);
+        var sound = new ProgramSound(Native.AudioSessions.Instance, SoundJournal);
 
-        // A crash must not leave someone's window see-through and impossible to click.
+        // A crash must not leave someone's window see-through and impossible to click, nor a program muted.
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
             windows.RestoreAll();
+            ProgramSound.Recover(Native.AudioSessions.Instance, SoundJournal);
             Log.Event("app.exited");
             Log.Flush(TimeSpan.FromMilliseconds(500));
         };
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {
             windows.RestoreAll();
+            ProgramSound.Recover(Native.AudioSessions.Instance, SoundJournal);
             if (e.ExceptionObject is Exception crash) Log.Error("app.crashed", crash);
             Log.Flush(TimeSpan.FromSeconds(1));
         };
         Application.ThreadException += (_, e) =>
         {
             windows.RestoreAll();
+            ProgramSound.Recover(Native.AudioSessions.Instance, SoundJournal);
             Log.Error("app.stopped", e.Exception);
             Log.Flush(TimeSpan.FromSeconds(1));
             MessageBox.Show(e.Exception.Message, T("errors.app.unexpectedStop"), MessageBoxButtons.OK,
@@ -103,7 +111,7 @@ internal static class Program
             Application.Exit();
         };
 
-        Application.Run(new TrayApplication(windows, settings, settingsPath));
+        Application.Run(new TrayApplication(windows, settings, settingsPath, sound));
     }
 
     /// <summary>What the watcher does after the app was killed: the same recovery as the next start.</summary>
@@ -115,6 +123,8 @@ internal static class Program
         Log.Start(DataFolder, "watcher");
         var windows = new WindowController(settings.ExcludedPrograms, new ChangeJournal(Path.Combine(DataFolder, "changed-windows.json")));
         windows.RecoverFromJournal();
+        // Sessions on a device that isn't there now wait for the next start; they don't keep the watcher going.
+        ProgramSound.Recover(Native.AudioSessions.Instance, SoundJournal);
         bool done = !windows.RecoveryBlocked && windows.PendingRestores == 0;
         Log.Event("watcher.recovered", ("done", done), ("left", windows.PendingRestores));
         Log.Flush(TimeSpan.FromSeconds(1));

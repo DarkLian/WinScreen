@@ -58,6 +58,7 @@ public sealed partial class TrayApplication : ApplicationContext
     private nint _croppingWindow;
     private readonly WindowToolbar _toolbar;
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 250 };
+    private readonly ProgramSound _sound;
     private readonly System.Windows.Forms.Timer _updateTimer = new() { Interval = 30_000 };
     private readonly AutomaticUpdates _updates;
     private bool _updatesWereOn;
@@ -66,9 +67,10 @@ public sealed partial class TrayApplication : ApplicationContext
     private CropOverlay? _cropping;
     private WindowMenuHost? _windowMenu;
 
-    public TrayApplication(WindowController windows, AppSettings settings, string settingsPath)
+    internal TrayApplication(WindowController windows, AppSettings settings, string settingsPath, ProgramSound? sound = null)
     {
         _windows = windows;
+        _sound = sound ?? new ProgramSound(Native.AudioSessions.Instance, null);
         _placer = new WindowPlacer(windows);
         _commands = new CommandTable(CommandAreas());
         _modifierDrag = new MouseGestures(CanDrag, _placer.Remember);
@@ -736,7 +738,8 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private void Watch()
     {
-        _recoveryWatcher.Follow(_windows.NeedsRecoveryWatcher);
+        _sound.Reapply();
+        _recoveryWatcher.Follow(_windows.NeedsRecoveryWatcher || _sound.AnyMuted);
         nint foreground = User32.GetForegroundWindow();
         _savedViews.ConcealIfLeft(foreground);
         if (_content.Count > 0) _content.DropClosed();
@@ -1415,7 +1418,9 @@ public sealed partial class TrayApplication : ApplicationContext
         identity.Require();
         var pip = new PipWindow(window, _windows);
         _pips[window] = pip;
-        pip.FormClosed += (_, _) => _pips.Remove(window);
+        pip.FormClosed += (_, _) => { _pips.Remove(window); _sound.Unmute(window); };
+        pip.SoundState = () => _sound.State(window);
+        pip.SetSound = on => on ? _sound.Mute(window) : _sound.Unmute(window);
         OpenView(pip);
         return pip;
     }

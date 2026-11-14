@@ -1008,6 +1008,61 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => Copies() == 2), "The watcher didn't start.");
     }
 
+    /// <summary>What a killed copy of WinScreen leaves when it had muted a program: the session muted and written down.</summary>
+    private string LeaveMuted(TargetProcess target)
+    {
+        string journal = Path.Combine(_data, "muted-programs.json");
+        ProgramSoundRealTests.SetMuted(target, true);
+        Windows.ProgramSound.Save(journal, ProgramSoundRealTests.SessionsOf(target.ProcessId)
+            .Select(session => new Windows.MutedSession(session.Device, session.Identifier, session.Instance, Native.ProcessInfo.PathOf((uint)target.ProcessId)))
+            .ToArray());
+        Assert.True(ProgramSoundRealTests.Muted(target));
+        return journal;
+    }
+
+    [Fact]
+    public void A_program_left_muted_is_unmuted_by_the_next_start()
+    {
+        using var target = new TargetProcess(Spot);
+        if (ProgramSoundRealTests.StartSound(target).Length == 0) { Skipped.Because("No output device here, so no sound session."); return; }
+        try
+        {
+            // Closed first: a normal exit unmutes what is written down, which isn't what this test is about.
+            Desktop.PostMessage(_appWindow, User32.WM_CLOSE, 0, 0);
+            Assert.True(_app.WaitForExit(4000));
+            _app.Dispose();
+            string journal = LeaveMuted(target);
+            _app = Start();
+            _appWindow = WaitForAppWindow();
+            Assert.True(Desktop.WaitFor(() => !ProgramSoundRealTests.Muted(target), 5000), "The program stayed muted after a start.");
+            Assert.False(File.Exists(journal));
+        }
+        finally { ProgramSoundRealTests.SetMuted(target, false); }
+    }
+
+    [Fact]
+    public void The_watcher_unmutes_a_program_after_a_forced_kill()
+    {
+        using var target = new TargetProcess(Spot);
+        if (ProgramSoundRealTests.StartSound(target).Length == 0) { Skipped.Because("No output device here, so no sound session."); return; }
+        try
+        {
+            // The watcher the app starts while something is muted, started here for the app as it is.
+            var start = new ProcessStartInfo(Program) { UseShellExecute = false };
+            start.Environment["WINSCREEN_DATA"] = _data;
+            start.ArgumentList.Add("--watch");
+            start.ArgumentList.Add(_app.Id.ToString());
+            using Process watcher = Process.Start(start)!;
+            string journal = LeaveMuted(target);
+            Thread.Sleep(500);
+            _app.Kill();
+            Assert.True(Desktop.WaitFor(() => !ProgramSoundRealTests.Muted(target), 5000), "The watcher left the program muted.");
+            Assert.True(watcher.WaitForExit(5000), "The watcher stayed.");
+            Assert.False(File.Exists(journal));
+        }
+        finally { ProgramSoundRealTests.SetMuted(target, false); }
+    }
+
     [Fact]
     public void A_forced_kill_reveals_a_hidden_window_within_two_seconds_and_the_watcher_leaves()
     {
