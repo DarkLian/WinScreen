@@ -1029,11 +1029,10 @@ public sealed class AppEndToEndTests : IDisposable
     /// warning during the visit. The browser comes back where it was and as it was, and the helper was never in it,
     /// although Choose for me is on.
     /// </summary>
-    [Fact]
-    public void A_browser_used_without_experimental_features_comes_back_when_WinScreen_is_ended_during_a_visit()
+    [Theory]
+    [MemberData(nameof(BrowserInputTests.BrowserCases), MemberType = typeof(BrowserInputTests))]
+    public void A_browser_used_without_experimental_features_comes_back_when_WinScreen_is_ended_during_a_visit(string path)
     {
-        string? path = BrowserInputTests.BrowserCases().Select(c => (string)c[0]).FirstOrDefault(File.Exists);
-        if (path is null) { Skipped.Because("No Chrome or Edge found."); return; }
         // Without the helper beside the program, "it was never in the browser" would say nothing.
         Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(Program))!, "WinScreen.Hover.dll")),
             "The program under test has no WinScreen.Hover.dll.");

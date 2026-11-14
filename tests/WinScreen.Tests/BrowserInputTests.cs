@@ -135,7 +135,17 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         return string.Join(">", seen);
     }
 
-    public static IEnumerable<object[]> BrowserCases() => ToolbarCases().Select(c => (string)c[0]).Distinct().Select(path => new object[] { path });
+    /// <summary>
+    /// Every Chrome-family browser at hand: Chrome, Edge where Windows still has it, and the portable Brave and Vivaldi
+    /// in the test output's test-apps folder (official builds, signatures checked; not in Git), when downloaded.
+    /// </summary>
+    public static IEnumerable<object[]> BrowserCases()
+    {
+        foreach (string path in ToolbarCases().Select(c => (string)c[0]).Distinct()) yield return [path];
+        string apps = Path.Combine(AppContext.BaseDirectory, "test-apps");
+        foreach (string portable in new[] { Path.Combine(apps, "brave", "brave.exe"), Path.Combine(apps, "vivaldi", "Application", "vivaldi.exe") })
+            if (File.Exists(portable)) yield return [portable];
+    }
 
     [Theory]
     [MemberData(nameof(BrowserCases))]
@@ -227,17 +237,8 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         // CSS/DOM effects and cleanup for the native helper's validated rollout.
     }
 
-    /// <summary>
-    /// Every Chrome-family browser at hand: Chrome, Edge where Windows still has it, and the portable Brave and Vivaldi
-    /// in the test output's test-apps folder (official builds, signatures checked; not in Git), when downloaded.
-    /// </summary>
-    public static IEnumerable<object[]> HoverBrowsers()
-    {
-        foreach (object[] browser in BrowserCases()) yield return browser;
-        string apps = Path.Combine(AppContext.BaseDirectory, "test-apps");
-        foreach (string portable in new[] { Path.Combine(apps, "brave", "brave.exe"), Path.Combine(apps, "vivaldi", "Application", "vivaldi.exe") })
-            if (File.Exists(portable)) yield return [portable];
-    }
+    /// <summary>The same browsers, for the Enhanced hover test.</summary>
+    public static IEnumerable<object[]> HoverBrowsers() => BrowserCases();
 
     [NativeHoverTheory]
     [MemberData(nameof(HoverBrowsers))]

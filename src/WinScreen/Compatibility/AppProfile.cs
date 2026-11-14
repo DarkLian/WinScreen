@@ -103,11 +103,24 @@ internal static class AppProfiles
         },
         new("Brave and Vivaldi")
         {
-            // The same engine as Chrome and Edge, and treated the same, but no test has run either: Interactive stays
-            // experimental for them until one does.
+            // The same engine as Chrome and Edge, treated the same, and since 14 Nov 2026 run through every browser
+            // input test with the switch off and the recovery test, on both versions (the portable copies in test-apps).
             Programs = ["brave", "vivaldi"],
             Hover = PipHoverApp.Browser, ChosenForMe = true, SideEdgeAlways = true, ScrollsWithHover = true,
-            VerifiedBy = [new("AppProfileTests.Every_row_is_reached_by_its_own_example", Logic)],
+            InteractiveWithoutSwitch = true,
+            VerifiedBy =
+            [
+                new("BrowserInputTests.A_browser_used_through_a_view_shows_its_own_pointer_and_takes_clicks_selection_and_keys", Both),
+                new("BrowserInputTests.A_double_click_selects_a_word_in_a_page_used_through_a_view", Both),
+                new("BrowserInputTests.Two_pages_in_two_views_take_drags_double_clicks_and_menus_each_on_its_own", Both),
+                new("PipMessageInputTests.A_browser_scrolls_under_the_wheel_in_a_view_used_directly", Both),
+                new("BrowserInputTests.A_browser_view_is_used_directly_without_experimental_features_and_never_gets_the_helper", Both),
+                new("BrowserInputTests.Enhanced_hover_keeps_css_previews_and_dom_state_and_clears_on_leave_and_disable", Both),
+            ],
+            RecoveredBy =
+            [
+                new("AppEndToEndTests.A_browser_used_without_experimental_features_comes_back_when_WinScreen_is_ended_during_a_visit", Both),
+            ],
         },
         new("Firefox")
         {
