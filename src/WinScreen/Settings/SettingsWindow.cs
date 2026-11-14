@@ -822,7 +822,7 @@ private readonly ErrorProvider _errors = new();
 
         draft.ExcludedPrograms = Programs(_excluded, _newExcluded);
         draft.IncludedPrograms = Programs(_included, _newIncluded);
-        draft.ShowToolbar = _showToolbar.Checked;
+        foreach (var (box, _, write) in Switches) write(draft, box.Checked);
         draft.Toolbar = new ToolbarPreferences
         {
             Placement = (ToolbarPlacement)Math.Max(0, _toolbarPlacement.SelectedIndex),
@@ -846,28 +846,13 @@ private readonly ErrorProvider _errors = new();
             HoverPreview = _anchorPreview.Checked,
             OffTaskbar = _anchorOffTaskbar.Checked,
         }.Validated();
-        draft.ShowNotifications = _showNotifications.Checked;
-        draft.MenuTransparency = _menuTransparency.Checked;
-        draft.AutomaticUpdates = _automaticUpdates.Checked;
-        draft.ExperimentalFeatures = _experimental.Checked;
         draft.StartWithWindows = _startWithWindows.Checked;
-        draft.RunAsAdministrator = _runAsAdministrator.Checked;
         draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
         draft.Theme = Themes[Math.Max(0, _theme.SelectedIndex)];
-        draft.PauseInFullScreen = _pauseInFullScreen.Checked;
-        draft.AllowPipInFullScreen = _allowPip.Checked;
-        draft.ModifierDrag = _modifierDrag.Checked;
         draft.ModifierKey = (ModifierKey)Math.Max(0, _modifierKey.SelectedIndex);
-        draft.SnapWhileDragging = _snapWhileDragging.Checked;
-        draft.WindowMenu = _windowMenu.Checked;
         draft.WindowMenuGesture = (WindowMenuGesture)Math.Max(0, _windowMenuGesture.SelectedIndex);
         draft.WindowMenuExclusions = Programs(_windowMenuExclusions, _newMenuExclusion);
         draft.ModifierExclusions = Programs(_modifierExclusions, _newModifierExclusion);
-        draft.PausePinWhenMaximized = _pausePin.Checked;
-        draft.OpaqueOnHover = _opaqueOnHover.Checked;
-        draft.HighlightPinned = _highlightPinned.Checked;
-        draft.PipAutoMove = _pipAutoMove.Checked;
-        draft.PipMiddleClickScroll = _pipMiddleScroll.Checked;
         draft.PipOriginalPrograms = Programs(_originalPrograms, _newOriginalProgram);
         draft.PipHover = new PipHoverPreferences
         {
@@ -881,8 +866,6 @@ private readonly ErrorProvider _errors = new();
         };
         draft.DefaultOpacityPercent = Number(_defaultOpacity);
         draft.OpacityStepPercent = Number(_opacityStep);
-        draft.OpacityWheel = _opacityWheel.Checked;
-        draft.DetectAlreadyDark = _detectDark.Checked;
         draft.Effects = new EffectPreferences
         {
             LayeredGlass = _layeredGlass.Checked, PictureSafeDark = _pictureSafeDark.Checked,
@@ -900,12 +883,38 @@ private readonly ErrorProvider _errors = new();
         draft.Pip.Scaling = (PipScaling)Math.Max(0, _pipScaling.SelectedIndex);
         draft.Pip.OpacityPercent = Number(_pipOpacity);
         draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
-        draft.HideCaptureBorder = _pipCaptureBorder.Checked;
         draft.PipViews = new PipViewPreferences { MinimizeToTaskbar = _pipTaskbar.Checked, AlwaysShowTitleBar = _pipTitleBar.Checked,
             HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
             HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds }.Validated();
         return draft;
     }
+
+    /// <summary>
+    /// The plain on/off settings: each switch with the setting it reads and writes (roadmap P2-9). Filling Settings
+    /// in and reading it back both go through this list, so a new one is one line here.
+    /// </summary>
+    private (CheckBox Box, Func<AppSettings, bool> Read, Action<AppSettings, bool> Write)[] Switches =>
+    [
+        (_showToolbar, settings => settings.ShowToolbar, (settings, on) => settings.ShowToolbar = on),
+        (_showNotifications, settings => settings.ShowNotifications, (settings, on) => settings.ShowNotifications = on),
+        (_menuTransparency, settings => settings.MenuTransparency, (settings, on) => settings.MenuTransparency = on),
+        (_automaticUpdates, settings => settings.AutomaticUpdates, (settings, on) => settings.AutomaticUpdates = on),
+        (_experimental, settings => settings.ExperimentalFeatures, (settings, on) => settings.ExperimentalFeatures = on),
+        (_runAsAdministrator, settings => settings.RunAsAdministrator, (settings, on) => settings.RunAsAdministrator = on),
+        (_pauseInFullScreen, settings => settings.PauseInFullScreen, (settings, on) => settings.PauseInFullScreen = on),
+        (_allowPip, settings => settings.AllowPipInFullScreen, (settings, on) => settings.AllowPipInFullScreen = on),
+        (_modifierDrag, settings => settings.ModifierDrag, (settings, on) => settings.ModifierDrag = on),
+        (_snapWhileDragging, settings => settings.SnapWhileDragging, (settings, on) => settings.SnapWhileDragging = on),
+        (_windowMenu, settings => settings.WindowMenu, (settings, on) => settings.WindowMenu = on),
+        (_pausePin, settings => settings.PausePinWhenMaximized, (settings, on) => settings.PausePinWhenMaximized = on),
+        (_opaqueOnHover, settings => settings.OpaqueOnHover, (settings, on) => settings.OpaqueOnHover = on),
+        (_highlightPinned, settings => settings.HighlightPinned, (settings, on) => settings.HighlightPinned = on),
+        (_pipAutoMove, settings => settings.PipAutoMove, (settings, on) => settings.PipAutoMove = on),
+        (_pipMiddleScroll, settings => settings.PipMiddleClickScroll, (settings, on) => settings.PipMiddleClickScroll = on),
+        (_opacityWheel, settings => settings.OpacityWheel, (settings, on) => settings.OpacityWheel = on),
+        (_detectDark, settings => settings.DetectAlreadyDark, (settings, on) => settings.DetectAlreadyDark = on),
+        (_pipCaptureBorder, settings => settings.HideCaptureBorder, (settings, on) => settings.HideCaptureBorder = on),
+    ];
 
     internal void AddExcluded(string program) { AddProgram(_excluded, program); QueueApplyRefresh(); }
 
@@ -1234,9 +1243,8 @@ private readonly ErrorProvider _errors = new();
         _included.Items.AddRange(values.IncludedPrograms.Cast<object>().ToArray());
         _setups.Items.AddRange(values.SavedSetups.Cast<object>().ToArray());
         _startWithWindows.Checked = _startup.IsOn;
-        _runAsAdministrator.Checked = values.RunAsAdministrator;
+        foreach (var (box, read, _) in Switches) box.Checked = read(values);
         _runAsAdministrator.Enabled = Native.ProcessInfo.CanElevate || values.RunAsAdministrator; // Still able to turn off.
-        _showToolbar.Checked = values.ShowToolbar;
         ToolbarPreferences toolbar = values.Toolbar.Validated();
         _toolbarPlacement.SelectedIndex = (int)toolbar.Placement;
         _toolbarTrigger.SelectedIndex = (int)toolbar.Trigger;
@@ -1257,28 +1265,14 @@ private readonly ErrorProvider _errors = new();
         _anchorOnly.Items.AddRange(anchors.OnlyPrograms.Cast<object>().ToArray());
         _anchorExcluded.Items.Clear();
         _anchorExcluded.Items.AddRange(anchors.ExcludedPrograms.Cast<object>().ToArray());
-        _showNotifications.Checked = values.ShowNotifications;
-        _menuTransparency.Checked = values.MenuTransparency;
-        _automaticUpdates.Checked = values.AutomaticUpdates;
-        _experimental.Checked = values.ExperimentalFeatures;
         _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, values.Language));
         _theme.SelectedIndex = Math.Max(0, Array.IndexOf(Themes, values.Theme));
-        _pauseInFullScreen.Checked = values.PauseInFullScreen;
-        _allowPip.Checked = values.AllowPipInFullScreen;
-        _modifierDrag.Checked = values.ModifierDrag;
         _modifierKey.SelectedIndex = (int)values.ModifierKey;
-        _snapWhileDragging.Checked = values.SnapWhileDragging;
-        _windowMenu.Checked = values.WindowMenu;
         _windowMenuGesture.SelectedIndex = (int)values.WindowMenuGesture;
         _windowMenuExclusions.Items.Clear();
         _windowMenuExclusions.Items.AddRange(values.WindowMenuExclusions.Cast<object>().ToArray());
         _modifierExclusions.Items.Clear();
         _modifierExclusions.Items.AddRange(values.ModifierExclusions.Cast<object>().ToArray());
-        _pausePin.Checked = values.PausePinWhenMaximized;
-        _opaqueOnHover.Checked = values.OpaqueOnHover;
-        _highlightPinned.Checked = values.HighlightPinned;
-        _pipAutoMove.Checked = values.PipAutoMove;
-        _pipMiddleScroll.Checked = values.PipMiddleClickScroll;
         _loadingHover = true;
         _hover = values.PipHover;
         _hoverAutomatic.Checked = values.PipHover.ChooseForMe;
@@ -1302,13 +1296,10 @@ private readonly ErrorProvider _errors = new();
         _pipScaling.SelectedIndex = (int)pip.Scaling;
         _pipOpacity.Value = pip.OpacityPercent;
         _pipDiagnostics.Checked = pip.ShowDiagnostics;
-        _pipCaptureBorder.Checked = values.HideCaptureBorder;
         _pipTaskbar.Checked = values.PipViews.MinimizeToTaskbar;
         _pipTitleBar.Checked = values.PipViews.AlwaysShowTitleBar;
         _pipPreview.SelectedIndex = (int)values.PipViews.Validated().HoverPreview;
         _opacityStep.Value = Math.Clamp(values.OpacityStepPercent, 1, 25);
-        _opacityWheel.Checked = values.OpacityWheel;
-        _detectDark.Checked = values.DetectAlreadyDark;
         EffectPreferences effects = values.Effects.Validated();
         _layeredGlass.Checked = effects.LayeredGlass;
         _pictureSafeDark.Checked = effects.PictureSafeDark;
