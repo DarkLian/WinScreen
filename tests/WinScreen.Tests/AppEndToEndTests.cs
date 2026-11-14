@@ -522,6 +522,61 @@ public sealed class AppEndToEndTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The toolbar on a program that isn't a test window, by either trigger: Notepad++ answers "minimize button"
+    /// over its own, yet the owner never saw the bar open there (F9).
+    /// </summary>
+    [Theory]
+    [InlineData(ToolbarTrigger.TitleBar, false)]
+    [InlineData(ToolbarTrigger.MinimizeButton, false)]
+    [InlineData(ToolbarTrigger.TitleBar, true)]
+    [InlineData(ToolbarTrigger.MinimizeButton, true)]
+    public void The_toolbar_opens_on_Notepad_plus_plus(ToolbarTrigger trigger, bool maximized)
+    {
+        string notepad = Path.Combine(AppContext.BaseDirectory, "test-apps", "notepad++", "notepad++.exe");
+        if (!File.Exists(notepad)) { Skipped.Because("The portable Notepad++ isn't in the test output."); return; }
+        RestartWith(new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.TogglePin], Trigger = trigger, Placement = ToolbarPlacement.Left } });
+        string file = Path.Combine(Path.GetTempPath(), $"winscreen-toolbar-{Guid.NewGuid():N}.txt");
+        File.WriteAllText(file, "toolbar");
+        using var app = Process.Start(new ProcessStartInfo(notepad) { ArgumentList = { "-multiInst", "-nosession", file } })!;
+        try
+        {
+            nint window = 0;
+            Assert.True(Desktop.WaitFor(() => { app.Refresh(); return (window = app.MainWindowHandle) != 0; }, 15000), "Notepad++ didn't open.");
+            Thread.Sleep(1000);
+            User32.SetWindowPos(window, 0, 200, 120, 900, 600, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+            if (maximized) User32.ShowWindow(window, User32.SW_MAXIMIZE);
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Thread.Sleep(500);
+            Rectangle bounds = Rectangle.Intersect(Desktop.BoundsOf(window), Screen.FromHandle(window).Bounds);
+            int wanted = trigger == ToolbarTrigger.MinimizeButton ? User32.HTMINBUTTON : User32.HTCAPTION;
+            Point rest = Point.Empty;
+            for (int y = bounds.Top + 8; y < bounds.Top + 30 && rest.IsEmpty; y += 2)
+                for (int x = trigger == ToolbarTrigger.MinimizeButton ? bounds.Right - 10 : bounds.Left + 50; x > bounds.Left && x < bounds.Right && rest.IsEmpty;
+                     x += trigger == ToolbarTrigger.MinimizeButton ? -4 : 4)
+                {
+                    User32.SendMessageTimeout(window, User32.WM_NCHITTEST, 0, (nint)((y << 16) | (x & 0xFFFF)), 2, 500, out nint hit);
+                    if (hit == wanted) rest = new Point(trigger == ToolbarTrigger.MinimizeButton ? x - 10 : x + 10, y + 4);
+                }
+            Assert.False(rest.IsEmpty, $"Notepad++ answered {wanted} nowhere along its top.");
+            Desktop.RequireWindowAt(rest, window);
+            Desktop.MoveMouse(new Point(rest.X - 20, rest.Y));
+            Desktop.MoveMouse(rest);
+            Assert.True(Desktop.WaitFor(() =>
+            {
+                nint bar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar");
+                return bar != 0 && Desktop.IsWindowVisible(bar);
+            }, 4000), $"The toolbar didn't open on Notepad++ ({(maximized ? "maximized" : "normal")}) with the pointer at {rest} on its {trigger}.");
+        }
+        finally
+        {
+            if (!app.HasExited) app.Kill();
+            app.WaitForExit(3000);
+            File.Delete(file);
+        }
+    }
+
     [Fact]
     public void An_anchor_brings_forward_minimizes_and_closes_its_window()
     {

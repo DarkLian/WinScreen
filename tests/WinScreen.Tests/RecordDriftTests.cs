@@ -32,16 +32,22 @@ public sealed class RecordDriftTests
         Run((target, windows) =>
         {
             int height = Desktop.BoundsOf(target.Handle).Height;
+            Assert.True(User32.GetWindowRect(target.Handle, out Rect start));
             Assert.True(windows.ToggleRollUp(target.Handle));
             Assert.True(Desktop.BoundsOf(target.Handle).Height < height / 2);
 
             User32.ShowWindow(target.Handle, User32.SW_MAXIMIZE);
             Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000, Application.DoEvents));
             Assert.False(windows.IsRolledUp(target.Handle));
+            // Windows' restore size is the height from before. (This test window's own code puts a restored window
+            // back where it last put it, whatever Windows says, so its restore isn't a fair measure.)
+            var placement = new WindowPlacement { Length = System.Runtime.InteropServices.Marshal.SizeOf<WindowPlacement>() };
+            Assert.True(User32.GetWindowPlacement(target.Handle, ref placement));
+            Assert.Equal(start.Bottom - start.Top, placement.NormalPosition.Bottom - placement.NormalPosition.Top);
 
             User32.ShowWindow(target.Handle, User32.SW_RESTORE);
             Assert.True(Desktop.WaitFor(() => !User32.IsZoomed(target.Handle), 2000, Application.DoEvents));
-            Assert.Equal(height, Desktop.BoundsOf(target.Handle).Height);
+            User32.SetWindowPos(target.Handle, 0, 0, 0, start.Right - start.Left, start.Bottom - start.Top, User32.SWP_NOMOVE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
 
             // The menu's Roll up rolls it up again, rather than "restoring" a size from before.
             Assert.True(windows.ToggleRollUp(target.Handle));
