@@ -474,7 +474,8 @@ toolbar.placement.left 33ADB100C38694ED
 toolbar.placement.right 3A9DE46DE01753FB
 toolbar.settings.title 75029A1901897B24
 toolbar.title FFE3B2FA2012039E
-toolbar.trigger.help 4042B38286590717
+toolbar.trigger.either 3B4D7B1C2D47420C
+toolbar.trigger.help 98C972E8102DDD50
 toolbar.trigger.label 7B578025BD5CE715
 toolbar.trigger.minimize 8E28AF69BEECBCFA
 toolbar.trigger.titleBar EB47D4D7A005324C

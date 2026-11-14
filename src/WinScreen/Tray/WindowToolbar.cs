@@ -254,11 +254,12 @@ public sealed class WindowToolbar : Form
         int reserved = Dpi.Scale(CaptionButtonsWidth, dpi);
         int caption = Dpi.Scale(CaptionHeight, dpi);
         var bar = new Rectangle(ToolbarGeometry.PlaceAt(window, Size, area, reserved, caption, _preferences.Placement), Size);
-        bool minimizeTrigger = _preferences.Trigger == ToolbarTrigger.MinimizeButton;
+        Rectangle buttonsZone = ToolbarGeometry.CaptionButtonsZone(window, area, reserved, caption);
+        // With Either, resting on the buttons counts as the minimize trigger; anywhere else on the bar's spot, the title bar.
+        bool minimizeTrigger = _preferences.Trigger == ToolbarTrigger.MinimizeButton ||
+                               (_preferences.Trigger == ToolbarTrigger.Either && buttonsZone.Contains(cursor));
         if (minimizeTrigger) bar.Y = ToolbarGeometry.BelowCaption(window, Height, area, caption);
-        Rectangle zone = minimizeTrigger
-            ? ToolbarGeometry.CaptionButtonsZone(window, area, reserved, caption)
-            : ToolbarGeometry.HoverZone(window, bar, area, reserved, caption);
+        Rectangle zone = minimizeTrigger ? buttonsZone : ToolbarGeometry.HoverZone(window, bar, area, reserved, caption);
         bool moved = Math.Abs(cursor.X - _hoverPoint.X) > StillPixels ||
                      Math.Abs(cursor.Y - _hoverPoint.Y) > StillPixels;
         if (!zone.Contains(cursor) || moved)
@@ -273,7 +274,7 @@ public sealed class WindowToolbar : Form
             return;
 
         _hoverTime = 0;
-        if (!MatchesTrigger(foreground, cursor, _preferences.Trigger))
+        if (!MatchesTrigger(foreground, cursor, minimizeTrigger ? ToolbarTrigger.MinimizeButton : ToolbarTrigger.TitleBar))
             return;
 
         try
@@ -296,15 +297,21 @@ public sealed class WindowToolbar : Form
     }
 
     /// <summary>
-    /// Asks the window itself, so tabs, menus and other content drawn at the top of an app
-    /// don't count as its title bar.
+    /// Asks the window itself, so tabs, menus and other content drawn at the top of an app don't count as its title
+    /// bar. Some apps draw their title bar in a window of its own inside the main one (File Explorer, Windows
+    /// Terminal), and the main window answers "content" all along its top; so the window under the pointer is asked
+    /// too, when it belongs to this one.
     /// </summary>
     internal static bool MatchesTrigger(nint window, Point cursor, ToolbarTrigger trigger)
     {
+        nint wanted = trigger == ToolbarTrigger.MinimizeButton ? User32.HTMINBUTTON : User32.HTCAPTION;
         nint position = (nint)((cursor.Y << 16) | (cursor.X & 0xFFFF));
-        return User32.SendMessageTimeout(window, User32.WM_NCHITTEST, 0, position, AbortIfHung,
-            CaptionCheckMilliseconds, out nint hit) != 0 && hit ==
-            (trigger == ToolbarTrigger.MinimizeButton ? User32.HTMINBUTTON : User32.HTCAPTION);
+        if (Answers(window) == wanted) return true;
+        nint under = User32.WindowFromPoint(new NativePoint { X = cursor.X, Y = cursor.Y });
+        return under != 0 && under != window && User32.GetAncestor(under, User32.GA_ROOT) == window && Answers(under) == wanted;
+
+        nint Answers(nint asked) => User32.SendMessageTimeout(asked, User32.WM_NCHITTEST, 0, position, AbortIfHung,
+            CaptionCheckMilliseconds, out nint hit) != 0 ? hit : -1;
     }
 
     /// <summary>What is on shows on a tinted button, as the coloured icons keep their own colours.</summary>

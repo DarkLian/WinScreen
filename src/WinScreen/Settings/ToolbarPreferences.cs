@@ -4,7 +4,8 @@ using System.Text.Json.Serialization;
 namespace WinScreen.Settings;
 
 public enum ToolbarPlacement { Left, Centre, Right }
-public enum ToolbarTrigger { TitleBar, MinimizeButton }
+/// <summary>Where resting the pointer opens the toolbar. Either: the title bar or the minimize button, whichever it rests on.</summary>
+public enum ToolbarTrigger { TitleBar, MinimizeButton, Either }
 
 public sealed record ToolbarPreferences
 {

@@ -637,7 +637,11 @@ public sealed class AppEndToEndTests : IDisposable
     {
         string notepad = Path.Combine(AppContext.BaseDirectory, "test-apps", "notepad++", "notepad++.exe");
         if (!File.Exists(notepad)) { Skipped.Because("The portable Notepad++ isn't in the test output."); return; }
-        RestartWith(new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.TogglePin], Trigger = trigger, Placement = ToolbarPlacement.Left } });
+        // The minimize trigger with the toolbar as it comes (centred, every button), as the owner has it; the title
+        // bar trigger on the left, clear of what another tool may keep at the top centre.
+        RestartWith(new AppSettings { WelcomeShown = true, Toolbar = trigger == ToolbarTrigger.MinimizeButton
+            ? new() { Trigger = trigger }
+            : new() { Buttons = [AppCommand.TogglePin], Trigger = trigger, Placement = ToolbarPlacement.Left } });
         string file = Path.Combine(Path.GetTempPath(), $"winscreen-toolbar-{Guid.NewGuid():N}.txt");
         File.WriteAllText(file, "toolbar");
         using var app = Process.Start(new ProcessStartInfo(notepad) { ArgumentList = { "-multiInst", "-nosession", file } })!;
@@ -664,8 +668,10 @@ public sealed class AppEndToEndTests : IDisposable
                 }
             Assert.False(rest.IsEmpty, $"Notepad++ answered {wanted} nowhere along its top.");
             Desktop.RequireWindowAt(rest, window);
-            Desktop.MoveMouse(new Point(rest.X - 20, rest.Y));
-            Desktop.MoveMouse(rest);
+            // Real input, as a hand gives: it brings Windows' own hover look and tooltip over the caption buttons.
+            Desktop.SlideMouse(new Point(rest.X - 20, rest.Y));
+            Thread.Sleep(50);
+            Desktop.SlideMouse(rest);
             Assert.True(Desktop.WaitFor(() =>
             {
                 nint bar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar");
@@ -681,6 +687,62 @@ public sealed class AppEndToEndTests : IDisposable
     }
 
     private static int WindowLeft(nint window) => User32.GetWindowRect(window, out Rect r) ? r.Left : 0;
+
+    /// <summary>
+    /// File Explorer draws its title bar in a window of its own inside the main one, and the main window answers
+    /// "content" all along its top, so the toolbar never opened on it (the owner, F9). By each trigger, and by the
+    /// third choice on either spot.
+    /// </summary>
+    [Theory]
+    [InlineData(ToolbarTrigger.TitleBar, false)]
+    [InlineData(ToolbarTrigger.MinimizeButton, true)]
+    [InlineData(ToolbarTrigger.Either, false)]
+    [InlineData(ToolbarTrigger.Either, true)]
+    public void The_toolbar_opens_on_File_Explorer(ToolbarTrigger trigger, bool onMinimize)
+    {
+        // On the right, so the bar's spot is on the empty part of the title bar rather than on a tab.
+        RestartWith(new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.TogglePin], Trigger = trigger, Placement = ToolbarPlacement.Right } });
+        string root = Directory.CreateTempSubdirectory("WinScreenToolbarExplorer-").FullName;
+        nint window = 0;
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", root) { UseShellExecute = true })?.Dispose();
+            Assert.True(Desktop.WaitFor(() =>
+            {
+                foreach (var process in Process.GetProcessesByName("explorer"))
+                    using (process)
+                        if (process.MainWindowTitle.StartsWith(Path.GetFileName(root), StringComparison.Ordinal)) window = process.MainWindowHandle;
+                return window != 0;
+            }, 15000), "File Explorer didn't open the folder.");
+            Thread.Sleep(1500);
+            User32.SetWindowPos(window, 0, 200, 120, 1000, 600, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Thread.Sleep(500);
+            Assert.True(User32.GetWindowRect(window, out Rect r));
+            int scale = Dpi.Of(window);
+            // The minimize button, from the right edge; or the bar's own spot: the width of the window's buttons in
+            // from the right, then one button's width.
+            var rest = onMinimize
+                ? new Point(r.Right - Dpi.Scale(125, scale), r.Top + Dpi.Scale(14, scale))
+                : new Point(r.Right - Dpi.Scale(150 + 17, scale), r.Top + Dpi.Scale(14, scale));
+            Desktop.RequireWindowAt(rest, window);
+            Desktop.SlideMouse(new Point(rest.X - 20, rest.Y));
+            Thread.Sleep(50);
+            Desktop.SlideMouse(rest);
+            Assert.True(Desktop.WaitFor(() =>
+            {
+                nint bar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar");
+                return bar != 0 && Desktop.IsWindowVisible(bar);
+            }, 4000), $"The toolbar didn't open on File Explorer with the pointer at {rest} ({trigger}).");
+        }
+        finally
+        {
+            if (window != 0 && User32.IsWindow(window)) Desktop.PostMessage(window, User32.WM_CLOSE, 0, 0);
+            Thread.Sleep(500);
+            try { Directory.Delete(root, true); } catch (IOException) { }
+        }
+    }
 
     [Fact]
     public void An_anchor_brings_forward_minimizes_and_closes_its_window()

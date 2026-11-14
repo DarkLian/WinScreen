@@ -474,7 +474,8 @@ toolbar.placement.left 6A24B14F33C72BE4
 toolbar.placement.right 1CF1D4D0B24B0B16
 toolbar.settings.title 3166D8AF51F15EB6
 toolbar.title 950E86BD27102E63
-toolbar.trigger.help B5AB1CC9F05F9D41
+toolbar.trigger.either 29670BCD2A3C1722
+toolbar.trigger.help AECBBEECA32970A8
 toolbar.trigger.label 744F92AC15A70C48
 toolbar.trigger.minimize 95D2FC7866E1C48F
 toolbar.trigger.titleBar C3EBE56C4633EF87
