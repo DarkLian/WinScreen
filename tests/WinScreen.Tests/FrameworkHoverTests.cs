@@ -30,21 +30,28 @@ public sealed class FrameworkHoverTests(Xunit.Abstractions.ITestOutputHelper out
     public void An_electron_app_known_only_by_its_folder_keeps_css_hover() =>
         Run(Path.Combine("electron", ElectronFixture), new PipHoverPreferences { ChooseForMe = false, Electron = true }, PipHoverApp.Electron);
 
-    private const string ElectronFixture = "HoverFixture.exe";
+    internal const string ElectronFixture = "HoverFixture.exe";
 
     /// <summary>Puts a small app into Electron's "resources\app" folder and gives Electron another name.</summary>
-    private static bool PrepareElectronFixture(string exe)
+    internal static bool PrepareElectronFixture(string exe)
     {
         string folder = Path.GetDirectoryName(exe)!, electron = Path.Combine(folder, "electron.exe");
         if (!File.Exists(electron)) return false;
         string app = Directory.CreateDirectory(Path.Combine(folder, "resources", "app")).FullName;
         File.WriteAllText(Path.Combine(app, "package.json"), """{"name":"hover-fixture","version":"1.0.0","main":"main.js"}""");
         File.WriteAllText(Path.Combine(app, "main.js"), """
-            const {app, BrowserWindow} = require('electron');
+            const {app, BrowserWindow, Menu} = require('electron');
             const page = process.argv.find(a => a.endsWith('.html'));
             const data = process.argv.find(a => a.startsWith('--fixture-data='));
             if (data) app.setPath('userData', data.slice('--fixture-data='.length));
-            app.whenReady().then(() => new BrowserWindow({width: 1000, height: 700}).loadFile(page));
+            // Plain: no menu bar, so the page starts at the client area's corner.
+            if (process.argv.includes('--fixture-plain')) Menu.setApplicationMenu(null);
+            app.whenReady().then(() => {
+              const w = new BrowserWindow({width: 1000, height: 700});
+              // Electron has no context menu of its own; apps make one like this, by the pointer.
+              w.webContents.on('context-menu', () => Menu.buildFromTemplate([{role: 'copy'}, {role: 'paste'}, {role: 'selectAll'}]).popup({window: w}));
+              w.loadFile(page);
+            });
             app.on('window-all-closed', () => app.quit());
             """);
         if (!File.Exists(exe) || new FileInfo(exe).Length != new FileInfo(electron).Length) File.Copy(electron, exe, true);

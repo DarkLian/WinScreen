@@ -346,6 +346,123 @@ public sealed partial class AppCompatibilityTests(Xunit.Abstractions.ITestOutput
             Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
         }, log, experimental: false));
 
+    /// <summary>
+    /// The same page in a plain Electron app, known to WinScreen only by Electron's files beside it: the tests' Electron
+    /// download under another name. Used directly without experimental features since 14 Nov 2026 (roadmap P1-3).
+    /// </summary>
+    private void WithElectron(Action<nint, Point, int, StringBuilder> body)
+    {
+        var log = new StringBuilder();
+        if (OpenElectron(Page.Replace(" at=${mozInnerScreenX},${mozInnerScreenY}", ""), "Probe") is not var (process, window, root))
+            return;
+        try
+        {
+            Assert.True(window != 0, "The Electron app didn't open the page.");
+            User32.SetWindowPos(window, 0, 120, 80, 900, 700, 0x14);
+            Settle(1500);
+            // No menu bar: the page starts at the client area's corner.
+            var client = new NativePoint();
+            ClientToScreen(window, ref client);
+            Rectangle home = Desktop.BoundsOf(window);
+            Point page = new(client.X - home.Left, client.Y - home.Top);
+            log.AppendLine($"page offset {page}");
+            User32.GetWindowThreadProcessId(window, out uint owner);
+            body(window, page, (int)owner, log); // Its menus belong to the process that has the window.
+        }
+        finally
+        {
+            output.WriteLine(log.ToString());
+            CloseElectron(process, root);
+        }
+    }
+
+    /// <summary>Starts the Electron fixture on a page and finds its window (0 if none); null when Electron isn't in test-apps.</summary>
+    internal static (Process Process, nint Window, string Root)? OpenElectron(string html, string title)
+    {
+        string exe = Path.Combine(Apps, "electron", FrameworkHoverTests.ElectronFixture);
+        if (!FrameworkHoverTests.PrepareElectronFixture(exe)) { Skipped.Because("Electron isn't in test-apps."); return null; }
+        string root = Directory.CreateTempSubdirectory("winscreen-electron-page").FullName;
+        string page = Path.Combine(root, "page.html");
+        File.WriteAllText(page, html);
+        var start = new ProcessStartInfo(exe) { UseShellExecute = false };
+        foreach (string arg in new[] { "--fixture-data=" + Path.Combine(root, "data"), "--fixture-plain", page })
+            start.ArgumentList.Add(arg);
+        Process process = Process.Start(start)!;
+        nint window = 0;
+        Desktop.WaitFor(() =>
+        {
+            for (nint w = User32.GetWindow(User32.GetDesktopWindow(), 5); w != 0; w = User32.GetWindow(w, 2))
+            {
+                if (!User32.IsWindowVisible(w) || WindowInfo.ClassName(w) != "Chrome_WidgetWin_1" || !WindowInfo.Title(w).StartsWith(title, StringComparison.Ordinal)) continue;
+                User32.GetWindowThreadProcessId(w, out uint pid);
+                if (string.Equals(ImageOf((int)pid), exe, StringComparison.OrdinalIgnoreCase)) { window = w; return true; }
+            }
+            return false;
+        }, 40000);
+        if (window != 0 && User32.IsZoomed(window)) User32.ShowWindow(window, User32.SW_RESTORE);
+        return (process, window, root);
+    }
+
+    internal static void CloseElectron(Process process, string root)
+    {
+        using (process) CloseTree(process);
+        CloseCopy(Path.Combine(Apps, "electron", FrameworkHoverTests.ElectronFixture));
+        try { Directory.Delete(root, true); } catch (IOException) { }
+    }
+
+    [Fact]
+    public void An_electron_app_takes_clicks_and_a_double_click_through_a_view() => WithElectron((window, page, _, log) =>
+        Visit(window, (view, at) =>
+        {
+            Point P(int x, int y) => at(new Point(page.X + x, page.Y + y));
+            Click(P(600, 230), times: 1); Click(P(600, 230)); Click(P(600, 230));
+            Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains("c=3 "), 2000), "Clicks: " + WindowInfo.Title(window));
+            Click(P(45, 32), times: 2); // A double-click selects a word, with or without the space after it.
+            Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains("sel=8 ") || WindowInfo.Title(window).Contains("sel=9 "), 2000),
+                "Double-click: " + WindowInfo.Title(window));
+            Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
+        }, log, experimental: false));
+
+    [Fact]
+    public void An_electron_app_takes_a_drag_selection_through_a_view() => WithElectron((window, page, _, log) =>
+        Visit(window, (view, at) =>
+        {
+            Point P(int x, int y) => at(new Point(page.X + x, page.Y + y));
+            Drag(P(150, 52), P(380, 97)); // From the first line to the third.
+            Assert.True(Desktop.WaitFor(() => int.Parse(WindowInfo.Title(window).Split("sel=")[1].Split(' ')[0]) > 25, 2000),
+                "Drag selection: " + WindowInfo.Title(window));
+            Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
+        }, log, experimental: false));
+
+    [Fact]
+    public void An_electron_app_takes_typing_through_a_view() => WithElectron((window, page, _, log) =>
+        Visit(window, (view, at) =>
+        {
+            Point P(int x, int y) => at(new Point(page.X + x, page.Y + y));
+            Click(P(600, 365));
+            Desktop.Press(Keys.A); Desktop.Press(Keys.B); Desktop.Press(Keys.C);
+            Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains("val=abc"), 2000), "Typing: " + WindowInfo.Title(window));
+        }, log, experimental: false));
+
+    [Fact]
+    public void An_electron_app_scrolls_under_the_wheel_and_opens_its_menu_by_the_pointer_through_a_view() => WithElectron((window, page, owner, log) =>
+        Visit(window, (view, at) =>
+        {
+            Point P(int x, int y) => at(new Point(page.X + x, page.Y + y));
+            Desktop.SlideMouse(P(300, 300)); Thread.Sleep(150);
+            for (int i = 0; i < 3; i++) { mouse_event(0x800, 0, 0, unchecked((uint)-120), 0); Thread.Sleep(100); }
+            Assert.True(Desktop.WaitFor(() => !WindowInfo.Title(window).EndsWith(" s=0", StringComparison.Ordinal), 2000), "Wheel: " + WindowInfo.Title(window));
+            int before = Popups(owner, window).Count;
+            Click(P(300, 250), right: true);
+            List<nint> menus = [];
+            Assert.True(Desktop.WaitFor(() => (menus = Popups(owner, window)).Count > before, 2000), "No context menu.");
+            Rectangle menu = Desktop.BoundsOf(menus[^1]);
+            log.AppendLine($"menu {menu} pointer {Desktop.CursorPosition()}");
+            Assert.True(Rectangle.Inflate(menu, 60, 60).Contains(Desktop.CursorPosition()), $"The menu isn't by the pointer: {menu}.");
+            Desktop.Press(Keys.Escape);
+            Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
+        }, log, experimental: false));
+
     /// <summary>A visible Firefox window of the given copy whose title starts so.</summary>
     private static nint FirefoxWindow(string executable, string title)
     {

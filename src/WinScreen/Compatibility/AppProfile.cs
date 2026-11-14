@@ -144,11 +144,20 @@ internal static class AppProfiles
         {
             Programs = ["explorer"], WindowClass = "CabinetWClass",
             Hover = PipHoverApp.FileExplorer, // Not chosen for the person: its tab menus stop responding with the helper on.
+            InteractiveWithoutSwitch = true, // Since 14 Nov 2026; every input test below runs with the switch off.
             VerifiedBy =
             [
                 new("ExplorerHoverTests.A_hovered_row_stays_highlighted_in_the_view_only_with_enhanced_hover", Both),
                 new("ExplorerInputTests.Double_clicking_a_folder_in_a_view_navigates_explorer", Both),
+                new("ExplorerInputTests.A_submenu_opens_beside_its_menu_and_takes_the_click_through_a_view", Both),
+                new("ExplorerInputTests.A_file_is_renamed_by_typing_through_a_view", Both),
+                new("ExplorerInputTests.A_drag_selects_files_through_a_view", Both),
+                new("ExplorerInputTests.The_wheel_scrolls_the_file_list_through_a_view", Both),
                 new("ExplorerInputTests.Explorer_tab_menus_remain_stationary_during_sustained_navigation", Windows11),
+            ],
+            RecoveredBy =
+            [
+                new("AppEndToEndTests.File_explorer_used_without_experimental_features_comes_back_when_WinScreen_is_ended_during_a_visit", Both),
             ],
         },
         new("The Windows shell: desktop and taskbar")
@@ -160,11 +169,20 @@ internal static class AppProfiles
         {
             WindowClass = "Chrome_WidgetWin_1", ElectronFiles = true,
             Hover = PipHoverApp.Electron, ChosenForMe = true, SideEdgeAlways = true, ScrollsWithHover = true,
+            InteractiveWithoutSwitch = true, // Since 14 Nov 2026; the four input tests on the plain app run with the switch off.
             VerifiedBy =
             [
                 new("FrameworkHoverTests.An_electron_app_keeps_css_hover_when_chosen_in_settings", Both),
                 new("FrameworkHoverTests.An_electron_app_known_only_by_its_folder_keeps_css_hover", Both),
+                new("AppCompatibilityTests.An_electron_app_takes_clicks_and_a_double_click_through_a_view", Both),
+                new("AppCompatibilityTests.An_electron_app_takes_a_drag_selection_through_a_view", Both),
+                new("AppCompatibilityTests.An_electron_app_takes_typing_through_a_view", Both),
+                new("AppCompatibilityTests.An_electron_app_scrolls_under_the_wheel_and_opens_its_menu_by_the_pointer_through_a_view", Both),
                 new("AppCompatibilityTests.An_electron_editor_takes_a_double_click_typing_and_its_context_menu_through_a_view", Windows11),
+            ],
+            RecoveredBy =
+            [
+                new("AppEndToEndTests.An_electron_app_used_without_experimental_features_comes_back_when_WinScreen_is_ended_during_a_visit", Both),
             ],
         },
         new("Java apps, such as IntelliJ IDEA")

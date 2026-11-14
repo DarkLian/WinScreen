@@ -88,7 +88,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
             Thread.Sleep(800);
             WindowMenuBuilderTests.OnUiThread(() =>
             {
-                using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = true };
+                using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = false };
                 view.ShowOnTop();
                 view.Location = new Point(900, 220);
                 view.SetInteractive(true);
@@ -187,7 +187,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
             }, 15000), "Explorer did not open the probe folder.");
             WindowMenuBuilderTests.OnUiThread(() =>
             {
-                using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = true };
+                using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = false };
                 view.ShowOnTop();
                 view.Location = new Point(900, 220);
                 view.SetInteractive(true);
@@ -335,5 +335,179 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
             if (window != 0) CloseWindow(window);
             Directory.Delete(root, true);
         }
+    }
+
+    // ── Used directly without experimental features (roadmap P1-3, 14 Nov 2026) ─────────────────────────────────────
+
+    /// <summary>The folder's Explorer window, opened by the test, or 0.</summary>
+    private static nint OpenFolder(string root)
+    {
+        nint window = 0;
+        Process.Start(new ProcessStartInfo("explorer.exe", root) { UseShellExecute = true });
+        Desktop.WaitFor(() =>
+        {
+            foreach (var process in Process.GetProcessesByName("explorer"))
+                using (process)
+                    if (process.MainWindowTitle.StartsWith(Path.GetFileName(root), StringComparison.Ordinal))
+                        window = process.MainWindowHandle;
+            return window != 0;
+        }, 15000);
+        return window;
+    }
+
+    /// <summary>The names of the items selected in the test's Explorer window, as Explorer itself reports them.</summary>
+    internal static string[] Selected(nint window)
+    {
+        if (Type.GetTypeFromProgID("Shell.Application") is not { } type || Activator.CreateInstance(type) is not { } shell) return [];
+        try
+        {
+            foreach (dynamic tab in ((dynamic)shell).Windows())
+            {
+                if ((long)tab.HWND != window.ToInt64()) continue;
+                var names = new List<string>();
+                foreach (dynamic item in tab.Document.SelectedItems()) names.Add((string)item.Name);
+                return [.. names];
+            }
+        }
+        catch (System.Runtime.InteropServices.COMException) { }
+        catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException) { }
+        finally { System.Runtime.InteropServices.Marshal.ReleaseComObject(shell); }
+        return [];
+    }
+
+    /// <summary>
+    /// Opens a folder in Explorer, a view of it used directly with experimental features off, and runs the steps on
+    /// another thread with a mapping from a point on the screen over the original to the view.
+    /// </summary>
+    private static void InView(string root, Action<nint, PipWindow, Func<Point, Point>> steps)
+    {
+        nint window = 0;
+        try
+        {
+            window = OpenFolder(root);
+            Assert.True(window != 0, "Explorer did not open the probe folder.");
+            User32.ShowWindow(window, 9);
+            User32.SetWindowPos(window, 0, 100, 80, 900, 640, 0x14);
+            Thread.Sleep(1200);
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = false };
+                view.ShowOnTop();
+                view.Location = new Point(1050, 220);
+                view.SetInteractive(true);
+                Assert.True(view.CanInteract, "File Explorer isn't used directly without experimental features.");
+                Exception? failure = null;
+                Point home = Desktop.CursorPosition();
+                var driver = new Thread(() =>
+                {
+                    try
+                    {
+                        Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
+                        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No visit.");
+                        Thread.Sleep(500);
+                        Point ToView(Point onScreen)
+                        {
+                            Rectangle source = Desktop.BoundsOf(window);
+                            var (area, shown) = view.LiveInteraction!.CurrentGeometry;
+                            return new(area.Left + (int)Math.Round((onScreen.X - source.Left - shown.Left) * (double)area.Width / shown.Width),
+                                area.Top + (int)Math.Round((onScreen.Y - source.Top - shown.Top) * (double)area.Height / shown.Height));
+                        }
+                        steps(window, view, ToView);
+                    }
+                    catch (Exception e) { failure = e; }
+                    finally { Desktop.MouseButton(false); Desktop.MoveMouse(home); }
+                });
+                driver.Start();
+                while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
+                view.Close();
+                if (failure is not null) throw new Xunit.Sdk.XunitException(failure.ToString());
+            });
+        }
+        finally
+        {
+            PipInteraction.DiagnoseInput = false;
+            if (window != 0) CloseWindow(window);
+            try { Directory.Delete(root, true); } catch (IOException) { }
+        }
+    }
+
+    private static Point Middle(Rectangle bounds) => new(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2);
+
+    /// <summary>A file in the list by the name Explorer shows, which leaves out known extensions: the tests' files have none.</summary>
+    private static BrowserAccessibility.Control Item(nint window, string name) =>
+        Assert.Single(BrowserAccessibility.Read(window), c => c.Type == 50007 && c.Name == name && c.Bounds.Width > 0);
+
+    /// <summary>A click selects a file, F2 and typing rename it, through a view.</summary>
+    [Fact]
+    public void A_file_is_renamed_by_typing_through_a_view()
+    {
+        string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
+        File.WriteAllText(Path.Combine(root, "rename-me"), "x");
+        InView(root, (window, view, toView) =>
+        {
+            Desktop.SlideMouse(toView(Middle(Item(window, "rename-me").Bounds)));
+            Thread.Sleep(150);
+            Desktop.MouseButton(true); Thread.Sleep(50); Desktop.MouseButton(false);
+            Assert.True(Desktop.WaitFor(() => Selected(window).SequenceEqual(["rename-me"]), 3000),
+                "The click didn't select the file: " + string.Join(",", Selected(window)));
+            Desktop.Press(Keys.F2);
+            Thread.Sleep(400);
+            foreach (Keys key in new[] { Keys.T, Keys.Y, Keys.P, Keys.E, Keys.D }) Desktop.Press(key);
+            Desktop.Press(Keys.Enter);
+            Assert.True(Desktop.WaitFor(() => File.Exists(Path.Combine(root, "typed")), 4000),
+                "Typing didn't rename it: " + string.Join(",", Directory.GetFiles(root).Select(Path.GetFileName)));
+            Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
+        });
+    }
+
+    /// <summary>A drag over the empty part of the list selects the files it crosses, through a view.</summary>
+    [Fact]
+    public void A_drag_selects_files_through_a_view()
+    {
+        string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
+        foreach (string name in new[] { "a-first", "b-second", "c-third" }) File.WriteAllText(Path.Combine(root, name), "x");
+        InView(root, (window, view, toView) =>
+        {
+            Rectangle first = Item(window, "a-first").Bounds, third = Item(window, "c-third").Bounds;
+            // From the empty space right of the list's rows, up and across the three of them.
+            Rectangle list = Desktop.BoundsOf(window);
+            Point start = new(Math.Min(list.Right - 40, third.Right + 120), third.Bottom + 30);
+            Point end = new(first.Left + first.Width / 3, first.Top + first.Height / 2);
+            Desktop.SlideMouse(toView(start));
+            Thread.Sleep(150);
+            Desktop.MouseButton(true);
+            Thread.Sleep(100);
+            for (int step = 1; step <= 12; step++)
+            {
+                Desktop.SlideMouse(toView(new Point(start.X + (end.X - start.X) * step / 12, start.Y + (end.Y - start.Y) * step / 12)));
+                Thread.Sleep(40);
+            }
+            Thread.Sleep(150);
+            Desktop.MouseButton(false);
+            Assert.True(Desktop.WaitFor(() => Selected(window).Length == 3, 3000),
+                "The drag selected: " + string.Join(",", Selected(window)));
+        });
+    }
+
+    /// <summary>The wheel scrolls a long list, through a view.</summary>
+    [Fact]
+    public void The_wheel_scrolls_the_file_list_through_a_view()
+    {
+        string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
+        for (int i = 0; i < 120; i++) File.WriteAllText(Path.Combine(root, $"file-{i:000}"), "x");
+        InView(root, (window, view, toView) =>
+        {
+            PipInteraction.DiagnoseInput = true;
+            Rectangle before = Item(window, "file-000").Bounds;
+            Desktop.SlideMouse(toView(new Point(before.Left + before.Width / 2, before.Top + before.Height * 3)));
+            Thread.Sleep(200);
+            for (int i = 0; i < 4; i++) { mouse_event(0x800, 0, 0, unchecked((uint)-120), 0); Thread.Sleep(100); }
+            Assert.True(Desktop.WaitFor(() => BrowserAccessibility.Read(window).FirstOrDefault(c => c.Type == 50007 && c.Name == "file-000") is not { } now ||
+                    now.Bounds.Width == 0 || now.Bounds.Top < before.Top - 10, 3000),
+                $"The list didn't scroll: first row was {before}, now {BrowserAccessibility.Read(window).FirstOrDefault(c => c.Type == 50007 && c.Name == "file-000")?.Bounds}; " +
+                "outcomes " + string.Join(",", view.PressOutcomes) + Environment.NewLine +
+                string.Join(Environment.NewLine, view.LiveInteraction?.InputDiagnostics ?? []));
+            Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
+        });
     }
 }

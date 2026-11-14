@@ -1163,6 +1163,145 @@ public sealed class AppEndToEndTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The same recovery check for an Electron app (roadmap P1-3, 14 Nov 2026): experimental features off, a view used directly
+    /// from its own menu, a click and typing that land in the page, then WinScreen ends without warning during the
+    /// visit. The app comes back where it was and as it was, and the helper was never in it.
+    /// </summary>
+    [Fact]
+    public void An_electron_app_used_without_experimental_features_comes_back_when_WinScreen_is_ended_during_a_visit()
+    {
+        RestartWith(new AppSettings { WelcomeShown = true, ShowToolbar = false }, experimental: false);
+        const string page = """
+            <!doctype html><title>Kept c=0 val=</title>
+            <style>body{margin:0;font:22px sans-serif}#b{position:fixed;left:0;top:0;width:100vw;height:50vh}
+            #i{position:fixed;left:20px;top:62vh;width:80vw;height:20vh;font-size:40px}</style><button id=b>Press</button><input id=i>
+            <script>let c=0;const r=()=>document.title=`Kept c=${c} val=${i.value}`;b.onclick=()=>{c++;r()};i.oninput=r;</script>
+            """;
+        if (AppCompatibilityTests.OpenElectron(page, "Kept") is not var (process, window, root)) return;
+        Point home = Desktop.CursorPosition();
+        try
+        {
+            Assert.NotEqual(0, window);
+            User32.SetWindowPos(window, 0, 120, 80, 900, 700, 0x14);
+            Thread.Sleep(1500);
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == window), "The Electron app didn't come to the front.");
+            Rectangle originalBounds = Desktop.BoundsOf(window);
+            long style = Desktop.ExStyle(window);
+            Desktop.Press(Keys.P, Keys.ControlKey, Keys.Menu);
+            nint pip = WaitForPip();
+            Rectangle view = Desktop.BoundsOf(pip);
+            Desktop.RightClickOn(new Point(view.Left + 60, view.Top + 60), pip);
+            Assert.True(Desktop.WaitFor(ForegroundIsApp), "The view's menu didn't open.");
+            Desktop.Press(Keys.I); // Interactive, offered for Electron apps with experimental features off.
+            Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.IsConcealed(window)), "Interactive wasn't offered, or didn't hide the app.");
+            Assert.True(Desktop.WaitFor(() => Copies() == 2), "The watcher didn't start.");
+            Desktop.Press(Keys.Escape);
+            Thread.Sleep(500);
+
+            view = Desktop.BoundsOf(pip);
+            Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height * 3 / 10));
+            Thread.Sleep(600);
+            Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+            Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.Title(window).StartsWith("Kept c=1", StringComparison.Ordinal), 3000),
+                "The click didn't land: " + Windows.WindowInfo.Title(window) + $"\nview {view}, pointer {Desktop.CursorPosition()}\n" + LogTail());
+            Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height * 3 / 4));
+            Thread.Sleep(300);
+            Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+            Thread.Sleep(400);
+            Desktop.Press(Keys.A); Desktop.Press(Keys.B); Desktop.Press(Keys.C);
+            Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.Title(window).StartsWith("Kept c=1 val=abc", StringComparison.Ordinal), 3000),
+                "The typing didn't land: " + Windows.WindowInfo.Title(window) + "\n" + LogTail());
+            Assert.Equal(0, User32.GetProp(window, Windows.WindowController.EnhancedHoverOwnerProperty));
+
+            _app.Kill(); // During the visit: the pointer is still on the view.
+            Assert.True(Desktop.WaitFor(() => !Windows.WindowInfo.IsConcealed(window) && Desktop.BoundsOf(window) == originalBounds &&
+                Desktop.ExStyle(window) == style && Desktop.Alpha(window) is null or 255, 5000),
+                $"The Electron app didn't come back: concealed={Windows.WindowInfo.IsConcealed(window)} bounds={Desktop.BoundsOf(window)} " +
+                $"(was {originalBounds}) style=0x{Desktop.ExStyle(window):X} (was 0x{style:X}) alpha={Desktop.Alpha(window)}");
+            Assert.True(Desktop.WaitFor(() => Copies() == 0, 3000), "The watcher stayed.");
+        }
+        finally
+        {
+            Desktop.MoveMouse(home);
+            AppCompatibilityTests.CloseElectron(process, root);
+        }
+    }
+
+    /// <summary>
+    /// The same recovery check for File Explorer (roadmap P1-3, 14 Nov 2026): experimental features off, a view used
+    /// directly from its own menu, a click on it, then WinScreen ends without warning during the visit.
+    /// The folder window comes back where it was and as it was, and the helper was never in it.
+    /// </summary>
+    [Fact]
+    public void File_explorer_used_without_experimental_features_comes_back_when_WinScreen_is_ended_during_a_visit()
+    {
+        RestartWith(new AppSettings { WelcomeShown = true, ShowToolbar = false }, experimental: false);
+        string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
+        File.WriteAllText(Path.Combine(root, "kept"), "x");
+        nint window = 0;
+        Point home = Desktop.CursorPosition();
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", root) { UseShellExecute = true });
+            Assert.True(Desktop.WaitFor(() =>
+            {
+                foreach (var explorer in Process.GetProcessesByName("explorer"))
+                    using (explorer)
+                        if (explorer.MainWindowTitle.StartsWith(Path.GetFileName(root), StringComparison.Ordinal))
+                            window = explorer.MainWindowHandle;
+                return window != 0;
+            }, 15000), "Explorer did not open the probe folder.");
+            User32.ShowWindow(window, 9);
+            User32.SetWindowPos(window, 0, 120, 80, 600, 420, 0x14); // Small, so the file is large in the view.
+            Thread.Sleep(1500);
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == window), "Explorer didn't come to the front.");
+            Rectangle originalBounds = Desktop.BoundsOf(window);
+            long style = Desktop.ExStyle(window);
+            Desktop.Press(Keys.P, Keys.ControlKey, Keys.Menu);
+            nint pip = WaitForPip();
+            Rectangle view = Desktop.BoundsOf(pip);
+            Desktop.RightClickOn(new Point(view.Left + 60, view.Top + 60), pip);
+            Assert.True(Desktop.WaitFor(ForegroundIsApp), "The view's menu didn't open.");
+            Desktop.Press(Keys.I); // Interactive, offered for File Explorer with experimental features off.
+            Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.IsConcealed(window)), "Interactive wasn't offered, or didn't hide Explorer.");
+            Assert.True(Desktop.WaitFor(() => Copies() == 2), "The watcher didn't start.");
+            Desktop.Press(Keys.Escape);
+            Thread.Sleep(500);
+
+            // A visit: the pointer on the view, then a click there. What a click does in Explorer through a view is
+            // checked by ExplorerInputTests; from this test's process, which can't see the view's mapping, a click
+            // aimed at a file didn't select it in the Windows 10 VM (14 Nov 2026, not understood), so this test
+            // checks the recovery only.
+            view = Desktop.BoundsOf(pip);
+            Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
+            Thread.Sleep(600);
+            Desktop.SlideMouse(new Point(view.Left + view.Width * 65 / 100, view.Top + view.Height * 75 / 100));
+            Thread.Sleep(300);
+            Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+            Thread.Sleep(300);
+            Assert.Equal(0, User32.GetProp(window, Windows.WindowController.EnhancedHoverOwnerProperty));
+
+            _app.Kill(); // During the visit: the pointer is still on the view.
+            Assert.True(Desktop.WaitFor(() => !Windows.WindowInfo.IsConcealed(window) && Desktop.BoundsOf(window) == originalBounds &&
+                Desktop.ExStyle(window) == style && Desktop.Alpha(window) is null or 255, 5000),
+                $"Explorer didn't come back: concealed={Windows.WindowInfo.IsConcealed(window)} bounds={Desktop.BoundsOf(window)} " +
+                $"(was {originalBounds}) style=0x{Desktop.ExStyle(window):X} (was 0x{style:X}) alpha={Desktop.Alpha(window)}");
+            Assert.True(Desktop.WaitFor(() => Copies() == 0, 3000), "The watcher stayed.");
+        }
+        finally
+        {
+            Desktop.MoveMouse(home);
+            if (window != 0) User32.PostMessage(window, User32.WM_CLOSE, 0, 0);
+            Thread.Sleep(500);
+            try { Directory.Delete(root, true); } catch (IOException) { }
+        }
+    }
+
     /// <summary>Runs WinScreen.exe with arguments, as a script would, and returns its exit code and what it wrote.</summary>
     private (int Exit, string Output) Script(params string[] arguments)
     {

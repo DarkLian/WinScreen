@@ -159,8 +159,8 @@ public sealed class AppProfileTests
     [InlineData("brave", "Chrome_WidgetWin_1", false, true)]
     [InlineData("vivaldi", "Chrome_WidgetWin_1", false, true)]
     [InlineData("firefox", "MozillaWindowClass", false, true)]
-    [InlineData("Code", "Chrome_WidgetWin_1", true, false)]
-    [InlineData("explorer", "CabinetWClass", false, false)]
+    [InlineData("Code", "Chrome_WidgetWin_1", true, true)]
+    [InlineData("explorer", "CabinetWClass", false, true)]
     [InlineData("ApplicationFrameHost", "ApplicationFrameWindow", false, false)]
     [InlineData("WinScreen.TestTarget", "WindowsForms10.Window.8.app.0.1", false, false)]
     public void Only_kinds_with_their_evidence_are_used_through_a_view_without_experimental_features(string program, string windowClass,
