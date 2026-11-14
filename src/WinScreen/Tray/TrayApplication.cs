@@ -454,6 +454,7 @@ public sealed partial class TrayApplication : ApplicationContext
         AppSettings before = _settings.Clone();
         _settings.CopyFrom(settings);
         _setupNone.Clear();
+        RulesChanged();
         ApplyPreferences(experimentalBefore, before);
         Native.Translucency.Allowed = _settings.MenuTransparency;
         if (_settings.Theme != themeBefore) ChangeTheme();
@@ -865,7 +866,7 @@ public sealed partial class TrayApplication : ApplicationContext
             _setupRetryAt.GetValueOrDefault(window) > Environment.TickCount64)
             return;
         if (_setupDone.TryGetValue(window, out var done) && done.Matches() &&
-            !(cameForward && _ruleOf.TryGetValue(window, out var applied) && applied.EveryTime))
+            !(cameForward && ((_ruleOf.TryGetValue(window, out var applied) && applied.EveryTime) || _ruleRenewed.Contains(window))))
             return;
         if (_setupNone.TryGetValue(window, out var none) && none.Matches() &&
             _setupNoneTitle.GetValueOrDefault(window) == WindowInfo.Title(window))
@@ -875,6 +876,7 @@ public sealed partial class TrayApplication : ApplicationContext
             _setupDone.Remove(stale);
             _setupRetryAt.Remove(stale);
             _ruleOf.Remove(stale);
+            _ruleRenewed.Remove(stale);
         }
         foreach (var stale in _setupNone.Where(pair => !pair.Value.Matches()).Select(pair => pair.Key).ToArray())
         {
@@ -916,6 +918,7 @@ public sealed partial class TrayApplication : ApplicationContext
             RestoreSavedView(window, setup);
             _setupDone[window] = identity;
             _ruleOf[window] = setup;
+            _ruleRenewed.Remove(window);
             _setupRetryAt.Remove(window);
             Diagnostics.Log.Event("rule.applied", ("program", Diagnostics.LogValue.ProgramOf(window)), ("narrowed", setup.Narrowed),
                 ("everyTime", setup.EveryTime));
@@ -929,6 +932,34 @@ public sealed partial class TrayApplication : ApplicationContext
 
     /// <summary>The rule last applied to each window, for what it asks of the toolbar.</summary>
     private readonly Dictionary<nint, ProgramSetup> _ruleOf = [];
+    /// <summary>Windows whose rule was changed in Settings since it was applied: they get it again when they come forward.</summary>
+    private readonly HashSet<nint> _ruleRenewed = [];
+
+    /// <summary>
+    /// Saved setups were changed in Settings. A window whose rule changed, went off or was removed follows at once in
+    /// what it asks of the toolbar, and gets the rest the next time it comes forward; whatever the old rule did stays
+    /// as it is, like any other change the person can undo.
+    /// </summary>
+    private void RulesChanged()
+    {
+        foreach ((nint window, ProgramSetup old) in _ruleOf.ToArray())
+        {
+            if (!_setupDone.TryGetValue(window, out var done) || !done.Matches())
+                continue; // Gone; the next look clears it.
+            ProgramSetup? now = _settings.SetupForWindow(window);
+            if (now is null)
+            {
+                // No rule for it any more: looked at afresh, as a window that never had one.
+                _ruleOf.Remove(window);
+                _setupDone.Remove(window);
+                _ruleRenewed.Remove(window);
+                continue;
+            }
+            _ruleOf[window] = now;
+            if (System.Text.Json.JsonSerializer.Serialize(now) != System.Text.Json.JsonSerializer.Serialize(old))
+                _ruleRenewed.Add(window);
+        }
+    }
     private readonly Dictionary<nint, string> _setupNoneTitle = [];
     private nint _setupForeground;
 

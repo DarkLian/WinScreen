@@ -72,6 +72,72 @@ public sealed class RuleWindowTests
         finally { Directory.Delete(folder, true); }
     }
 
+    private static void Save(TrayApplication app, AppSettings settings) =>
+        Assert.Empty((System.Collections.IEnumerable)typeof(TrayApplication)
+            .GetMethod("Apply", BindingFlags.Instance | BindingFlags.NonPublic, [typeof(AppSettings)])!.Invoke(app, [settings])!);
+
+    [Fact]
+    public void A_rule_changed_turned_off_or_removed_in_Settings_reaches_a_window_already_open()
+    {
+        string folder = Directory.CreateTempSubdirectory("winscreen-rules-").FullName;
+        using var target = new TargetProcess(new Rectangle(300, 300, 420, 300), title: "WinScreen test target - rule change");
+        using var other = new TargetProcess(new Rectangle(380, 380, 420, 300), title: "WinScreen test target - other");
+        target.UseFrame();
+        Desktop.GainForegroundRights();
+        try
+        {
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
+                AppSettings With(params ProgramSetup[] rules) => new()
+                {
+                    ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
+                    Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
+                    SavedSetups = [.. rules],
+                };
+                ProgramSetup Rule(bool noToolbar, bool pinned = false, bool off = false) => new()
+                {
+                    Program = "WinScreen.TestTarget", TitleContains = "rule change", NoToolbar = noToolbar, Pinned = pinned, Off = off,
+                };
+                using var app = new TrayApplication(controller, With(Rule(noToolbar: true)), Path.Combine(folder, "settings.json"));
+                void ComeForward(nint window)
+                {
+                    Desktop.Activate(window);
+                    Apply(app, window);
+                }
+                try
+                {
+                    ComeForward(target.Handle);
+                    Assert.False(ToolbarOffered(app, target.Handle), "No toolbar wasn't applied.");
+
+                    // Changed: the toolbar at once, the rest when the window comes forward again.
+                    Save(app, With(Rule(noToolbar: false, pinned: true)));
+                    Assert.True(ToolbarOffered(app, target.Handle), "Clearing No toolbar didn't reach the open window.");
+                    Assert.False(controller.IsPinned(target.Handle), "The changed rule acted before the window came forward.");
+                    ComeForward(other.Handle);
+                    ComeForward(target.Handle);
+                    Assert.True(controller.IsPinned(target.Handle), "The changed rule didn't act when the window came forward.");
+
+                    Save(app, With(Rule(noToolbar: true, pinned: true)));
+                    Assert.False(ToolbarOffered(app, target.Handle), "Ticking No toolbar didn't reach the open window.");
+
+                    Save(app, With(Rule(noToolbar: true, pinned: true, off: true)));
+                    Assert.True(ToolbarOffered(app, target.Handle), "Turning the rule off left the toolbar away.");
+
+                    // On again, it is a rule the window hasn't had: it comes with the next look.
+                    Save(app, With(Rule(noToolbar: true)));
+                    ComeForward(target.Handle);
+                    Assert.False(ToolbarOffered(app, target.Handle), "Turning the rule on again left the toolbar there.");
+                    Save(app, With());
+                    Assert.True(ToolbarOffered(app, target.Handle), "Removing the rule left the toolbar away.");
+                    Assert.True(controller.IsPinned(target.Handle), "Removing the rule undid what it had done.");
+                }
+                finally { app.ExitThread(); }
+            });
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
     [Fact]
     public void A_window_whose_title_comes_to_match_later_gets_the_rule_then()
     {
