@@ -1190,6 +1190,11 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.Equal(0, Script("--run", "RestoreWindow", "--window", "title:scripted").Exit);
         Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & 0x8) == 0), "Put back didn't unpin it.");
 
+        // A command that calls other programs' objects (a view asks Windows' capture), which can't run inside the
+        // message that brings it: this failed with RPC_E_CANTCALLOUT_ININPUTSYNCCALL until commands ran just after it.
+        Assert.Equal(0, Script("--run", "OpenPip", "--window", "title:scripted").Exit);
+        Assert.Equal(0, Script("--run", "RestoreWindow", "--window", "title:scripted").Exit);
+
         Assert.Equal(6, Script("--run", "TogglePin", "--window", "title:no window is called this").Exit);
         (int exit, string output) = Script("--run", "Nope");
         Assert.Equal(2, exit);

@@ -21,6 +21,8 @@ public sealed partial class TrayApplication : ApplicationContext
     private readonly WindowController _windows;
     private readonly WindowPlacer _placer;
     private readonly CommandTable _commands;
+    private readonly Dictionary<int, CommandLineExit> _commandLineResults = [];
+    private int _commandLineTicket;
     private readonly MouseGestures _modifierDrag;
     private nint _hookForeground;
     private bool _hookForegroundExcluded;
@@ -132,9 +134,19 @@ public sealed partial class TrayApplication : ApplicationContext
 
         _hotkeys.Pressed += id => Run((AppCommand)id, TargetOf(User32.GetForegroundWindow()));
         _hotkeys.CloseRequested += ExitThread;
-        _hotkeys.CopyDataReceived = data => CommandLine.Received(data) is { } request
-            ? (int)RunFromCommandLine(request.Command, request.Target)
-            : null;
+        // A command from the command line runs just after its message is answered, never inside it (see CommandLine).
+        _hotkeys.CopyDataReceived = data =>
+        {
+            if (CommandLine.Received(data) is { } request)
+            {
+                int ticket = ++_commandLineTicket;
+                _toolbar.BeginInvoke(() => _commandLineResults[ticket] = RunFromCommandLine(request.Command, request.Target));
+                return ticket;
+            }
+            if (CommandLine.AskedFor(data) is { } asked)
+                return _commandLineResults.Remove(asked, out CommandLineExit exit) ? (int)exit : CommandLine.Pending;
+            return null;
+        };
 
         _tray.Icon = LoadIcon();
         _tray.Text = "WinScreen";

@@ -38,10 +38,21 @@ internal enum CommandLineExit
 /// <c>WinScreen.exe --list-commands</c>. The command goes to the running copy, which runs it as a hotkey would and
 /// answers how it went; nothing is run by this second copy itself.
 /// </summary>
+/// <remarks>
+/// Two steps, because a command can't run inside the message that brings it: Windows refuses calls to other
+/// programs' objects there (RPC_E_CANTCALLOUT_ININPUTSYNCCALL), which picture-keeping Dark and Glass, views and the
+/// accessibility route all make. So the running copy answers at once with a ticket and runs the command just
+/// after, and this copy asks for the ticket's result until there is one.
+/// </remarks>
 internal static class CommandLine
 {
     /// <summary>What the WM_COPYDATA from a command line holds: "WSR1".</summary>
     internal const nint MessageKind = 0x57535231;
+    /// <summary>What the WM_COPYDATA asking for a ticket's result holds: "WSR2", then the ticket.</summary>
+    internal const nint ResultKind = 0x57535232;
+    /// <summary>The answer to a result question while the command is still running.</summary>
+    internal const int Pending = 255;
+    private const int ResultMilliseconds = 60000;
     private const uint TimeoutMilliseconds = 15000;
     private const uint AbortIfHung = 0x0002;
 
@@ -136,23 +147,38 @@ internal static class CommandLine
         _ => T("cli.notDone"),
     };
 
-    /// <summary>Gives the command to the running copy of this same program, and waits for its answer.</summary>
+    /// <summary>Gives the command to the running copy of this same program, and waits for how it went.</summary>
     private static CommandLineExit Send(AppCommand command, string target)
     {
         nint window = User32.FindWindow(null, HotkeyHost.WindowTitle);
         // Another copy, such as an installed one beside this portable one, isn't the one asked for.
         if (window == 0 || !string.Equals(Windows.WindowInfo.ExecutablePath(window), Environment.ProcessPath, StringComparison.OrdinalIgnoreCase))
             return CommandLineExit.NotRunning;
-        string text = Encode(command, target);
+        if (Ask(window, MessageKind, Encode(command, target)) is not { } ticket || ticket <= 0) return CommandLineExit.NotRunning;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (clock.ElapsedMilliseconds < ResultMilliseconds)
+        {
+            Thread.Sleep(50);
+            if (Ask(window, ResultKind, ticket.ToString(System.Globalization.CultureInfo.InvariantCulture)) is not { } answer)
+                return CommandLineExit.NotRunning;
+            if (answer != Pending)
+                return Enum.IsDefined((CommandLineExit)answer) ? (CommandLineExit)answer : CommandLineExit.Failed;
+        }
+        return CommandLineExit.Failed;
+    }
+
+    /// <summary>One WM_COPYDATA to the running copy and its answer, or null when it couldn't be reached.</summary>
+    private static int? Ask(nint window, nint kind, string text)
+    {
         nint data = Marshal.StringToHGlobalUni(text);
         nint message = Marshal.AllocHGlobal(Marshal.SizeOf<CopyData>());
         try
         {
-            Marshal.StructureToPtr(new CopyData { Kind = MessageKind, Size = (text.Length + 1) * 2, Data = data }, message, false);
+            Marshal.StructureToPtr(new CopyData { Kind = kind, Size = (text.Length + 1) * 2, Data = data }, message, false);
             // A copy running as administrator doesn't take messages from one that isn't; that fails here, by design.
             if (User32.SendMessageTimeout(window, User32.WM_COPYDATA, 0, message, AbortIfHung, TimeoutMilliseconds, out nint answer) == 0)
-                return CommandLineExit.NotRunning;
-            return Enum.IsDefined((CommandLineExit)(int)answer) ? (CommandLineExit)(int)answer : CommandLineExit.Failed;
+                return null;
+            return (int)answer;
         }
         finally
         {
@@ -162,10 +188,18 @@ internal static class CommandLine
     }
 
     /// <summary>Reads a command-line request a running copy received, or null for anything else.</summary>
-    internal static (AppCommand Command, string Target)? Received(nint copyData)
+    internal static (AppCommand Command, string Target)? Received(nint copyData) =>
+        Text(copyData, MessageKind) is { } text ? Decode(text) : null;
+
+    /// <summary>Reads a question for a ticket's result, or null for anything else.</summary>
+    internal static int? AskedFor(nint copyData) =>
+        Text(copyData, ResultKind) is { } text && int.TryParse(text, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out int ticket) ? ticket : null;
+
+    private static string? Text(nint copyData, nint kind)
     {
         var data = Marshal.PtrToStructure<CopyData>(copyData);
-        if (data.Kind != MessageKind || data.Size <= 0 || data.Size > 4096 || data.Data == 0) return null;
-        return Decode(Marshal.PtrToStringUni(data.Data, data.Size / 2).TrimEnd('\0'));
+        if (data.Kind != kind || data.Size <= 0 || data.Size > 4096 || data.Data == 0) return null;
+        return Marshal.PtrToStringUni(data.Data, data.Size / 2).TrimEnd('\0');
     }
 }
