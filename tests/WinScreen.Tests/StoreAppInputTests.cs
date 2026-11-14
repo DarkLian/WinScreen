@@ -106,7 +106,8 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
 
     /// <summary>
     /// Roadmap P2-12: a double-click on text in a Store app selects the word there, through the text's own pattern,
-    /// as it would on the app itself. The Settings app's search box, on both versions; one already open is left alone.
+    /// as it would on the app itself. The Settings app's search box, or on Windows 11 its Installed apps page's; one
+    /// already open is left alone.
     /// </summary>
     [Fact]
     public void A_double_click_in_a_store_apps_text_box_selects_the_word_there()
@@ -115,23 +116,27 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
         try { Process.Start(new ProcessStartInfo("ms-settings:") { UseShellExecute = true })?.Dispose(); }
         catch (System.ComponentModel.Win32Exception) { Skipped.Because("The Settings app can't be started here."); return; }
         nint window = 0;
-        // The search box: the widest text box (Windows 11 has another, small one, in the title bar).
-        BrowserAccessibility.Control? Search() => BrowserAccessibility.Read(window, 24).Where(c => c.Type == 50004 && c.Bounds.Width > 0)
+        // A search box in the page, the widest one. Newer Windows 11 Settings has its main search box in the title bar,
+        // which the app reports as caption: a press there moves the view (as on any title bar), so there is no text to
+        // reach through it. Its Installed apps page has a search box of its own in the page, which is used there.
+        BrowserAccessibility.Control? Search() => BrowserAccessibility.Read(window, 24)
+            .Where(c => c.Type == 50004 && c.Bounds.Width > 0 && c.Bounds.Top - Desktop.BoundsOf(window).Top >= 60)
             .MaxBy(c => c.Bounds.Width);
-        Desktop.WaitFor(() => (window = Desktop.FindWindow("ApplicationFrameWindow", "Settings")) != 0 && Search() is not null, 20000);
+        Desktop.WaitFor(() => (window = Desktop.FindWindow("ApplicationFrameWindow", "Settings")) != 0 &&
+            BrowserAccessibility.Read(window, 24).Any(c => c.Type == 50004), 20000);
         var log = new StringBuilder();
         try
         {
-            Assert.True(window != 0 && Search() is not null, "No Settings window with a search box.");
+            Assert.True(window != 0, "No Settings window.");
             User32.ShowWindow(window, 9);
             Thread.Sleep(800);
-            // Newer Windows 11 Settings has its search box in the title bar, which the app reports as caption: a press
-            // there moves the view (as on any title bar), so there is no text to reach through it.
-            if (Search()!.Bounds.Top - Desktop.BoundsOf(window).Top < 60)
+            if (Search() is null)
             {
-                Skipped.Because("This Settings app has its search box in the title bar.");
-                return;
+                Process.Start(new ProcessStartInfo("ms-settings:appsfeatures") { UseShellExecute = true })?.Dispose();
+                Desktop.WaitFor(() => Search() is not null, 15000);
+                log.AppendLine("Installed apps page: its search box is in the page.");
             }
+            Assert.True(Search() is not null, "No search box in the Settings page.");
             Visit(window, (view, _) =>
             {
                 Point ToView(Point screen)
@@ -143,9 +148,14 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 }
                 Rectangle box = Search()!.Bounds;
                 Click(ToView(new Point(box.Left + box.Width / 2, box.Top + box.Height / 2)));
-                foreach (Keys key in new[] { Keys.H, Keys.U, Keys.E, Keys.Space, Keys.Z, Keys.O, Keys.O, Keys.M })
-                    Desktop.Press(key);
-                Assert.True(Desktop.WaitFor(() => Search()?.Value == "hue zoom", 3000), "Typing: " + Search()?.Value);
+                // Pasted, not typed: an input method for another language (as on the owner's PC) would turn the letters
+                // into its own.
+                var paste = new Thread(() => Clipboard.SetText("hue zoom"));
+                paste.SetApartmentState(ApartmentState.STA);
+                paste.Start();
+                paste.Join();
+                Desktop.Press(Keys.V, Keys.ControlKey);
+                Assert.True(Desktop.WaitFor(() => Search()?.Value == "hue zoom", 3000), "Pasting: " + Search()?.Value);
                 // The first word starts just inside the box: a little over its padding, scaled with the box.
                 box = Search()!.Bounds;
                 Point word = ToView(new Point(box.Left + box.Height * 2 / 3, box.Top + box.Height / 2));
