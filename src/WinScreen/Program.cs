@@ -15,9 +15,6 @@ internal static class Program
         Environment.GetEnvironmentVariable("WINSCREEN_DATA")
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinScreen");
 
-    /// <summary>Windows 10 version 2004. Older builds lack what hiding views from screen capture needs.</summary>
-    private const int MinimumBuild = 19041;
-
     [STAThread]
     private static void Main(string[] arguments)
     {
@@ -56,7 +53,7 @@ internal static class Program
             return;
         }
 
-        if (Environment.OSVersion.Version.Build < MinimumBuild)
+        if (Environment.OSVersion.Version.Build < Native.WindowsBuild.Minimum)
         {
             Settings.ThemedMessage.Show(null, T("errors.app.windowsTooOld"), "WinScreen");
             return;

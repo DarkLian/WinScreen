@@ -49,7 +49,6 @@ public sealed class PipWindow : Form
     private bool _cursorFromFrame;
 
     private const int WM_DISPLAYCHANGE = 0x007E;
-    private const int MinimumExclusionBuild = 19041;
     private const double ZoomStep = 1.25;
     private const int SmallLongSide = 320;
     private const int MediumLongSide = StartLongSide;
@@ -822,7 +821,7 @@ public sealed class PipWindow : Form
     {
         if (_origin.IsWindow)
             return;
-        if (Environment.OSVersion.Version.Build < MinimumExclusionBuild ||
+        if (Environment.OSVersion.Version.Build < WindowsBuild.Minimum ||
             !User32.SetWindowDisplayAffinity(Handle, User32.WDA_EXCLUDEFROMCAPTURE))
             throw new WindowOperationException(T("errors.pip.screenUnsupported"));
     }
