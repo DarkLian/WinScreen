@@ -85,6 +85,7 @@ internal static partial class User32
     public const uint SWP_FRAMECHANGED = 0x20;
     public const uint SWP_ASYNCWINDOWPOS = 0x4000;
 
+    public const int SW_HIDE = 0;
     public const int SW_SHOWNOACTIVATE = 4;
     public const int SW_RESTORE = 9;
     public const int SW_MINIMIZE = 6;

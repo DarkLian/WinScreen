@@ -314,6 +314,7 @@ public sealed partial class PipWindow : Form
     {
         if (_suspended || _cleaned) return;
         _usingOriginal = false; // A minimized view has no picture to hide the original behind; it stays shown.
+        StepAside(false);
         CancelPress();
         EndLive();
         CacheTaskbarPicture();
@@ -636,6 +637,7 @@ public sealed partial class PipWindow : Form
     private void ChangeInteractionMode(bool interactive, bool hidden)
     {
         _usingOriginal = false; // Any other choice about the original replaces "use it, then hide it again".
+        StepAside(false);
         if (!interactive || !hidden) EndLive();
         bool changed = SetConcealment(hidden);
         PublishInteractionMode(interactive && changed);
@@ -1087,8 +1089,36 @@ public sealed partial class PipWindow : Form
         _usingFromInteractive = interactive;
         _originalTookFocus = User32.GetForegroundWindow() == _source;
         _originalLeftAt = 0;
+        StepAside(true); // The original is in front now; the view would only cover part of it.
         CheckState();
     }
+
+    /// <summary>The view and the parts of it that were showing, put out of sight while the original is in use.</summary>
+    private nint[] _steppedAside = [];
+
+    /// <summary>
+    /// Hides the view while its original is in use (Use it, then hide again), and brings back exactly what was showing
+    /// once that ends, whichever way it ends.
+    /// </summary>
+    private void StepAside(bool aside)
+    {
+        if (aside)
+        {
+            if (_steppedAside.Length > 0 || !IsHandleCreated) return;
+            _steppedAside = [.. OwnedForms.Where(part => part.IsHandleCreated && User32.IsWindowVisible(part.Handle)).Select(part => part.Handle), Handle];
+            foreach (nint window in _steppedAside) User32.ShowWindow(window, User32.SW_HIDE);
+            return;
+        }
+        if (_steppedAside.Length == 0) return;
+        nint[] back = _steppedAside;
+        _steppedAside = [];
+        foreach (nint window in back.Reverse())
+            if (User32.IsWindow(window)) User32.ShowWindow(window, User32.SW_SHOWNOACTIVATE);
+        StayOnTop();
+    }
+
+    /// <summary>True while the view is out of sight for its original in use, for tests.</summary>
+    internal bool SteppedAside => _steppedAside.Length > 0;
 
     /// <summary>
     /// Hides the original again once the focus has been with it and has left for another window. Its own dialogs
@@ -1097,7 +1127,7 @@ public sealed partial class PipWindow : Form
     private void FollowOriginalInUse()
     {
         if (!_usingOriginal) return;
-        if (_suspended || _thumbnail is null || _windows.IsHidden(_source)) { _usingOriginal = false; return; }
+        if (_suspended || _thumbnail is null || _windows.IsHidden(_source)) { _usingOriginal = false; StepAside(false); return; }
         nint foreground = User32.GetForegroundWindow();
         User32.GetWindowThreadProcessId(_source, out uint process);
         if (foreground == _source || (foreground != 0 && SourcePopups.IsPopupOf(foreground, _source, process)))
