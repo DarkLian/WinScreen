@@ -20,6 +20,7 @@ public sealed class CropOverlay : Form
     private readonly Rectangle _covers;
     private ElementFinder? _finder;
     private Rectangle _hint;
+    private FoundElement? _hintElement;
 
     public CropOverlay(Rectangle window)
     {
@@ -38,6 +39,9 @@ public sealed class CropOverlay : Form
 
     public event Action<Rectangle>? Chosen;
 
+    /// <summary>The control taken with a click, when the part is one; null for a part dragged out by hand.</summary>
+    internal FoundElement? ChosenElement { get; private set; }
+
     public void ShowOnTop()
     {
         Show();
@@ -47,16 +51,19 @@ public sealed class CropOverlay : Form
     }
 
     /// <summary>Marks the control under the pointer, so a click can take it without any dragging.</summary>
-    private void ShowHint(Rectangle? found)
+    private void ShowHint(FoundElement? found)
     {
         if (IsDisposed || !IsHandleCreated)
             return;
         BeginInvoke(() =>
         {
-            Rectangle hint = found is { } rectangle
+            Rectangle hint = found?.Bounds is { } rectangle
                 ? Rectangle.Intersect(new Rectangle(rectangle.Location - (Size)_covers.Location, rectangle.Size), ClientRectangle)
                 : Rectangle.Empty;
-            if (hint == _hint || _pressed)
+            if (_pressed)
+                return;
+            _hintElement = hint.IsEmpty ? null : found;
+            if (hint == _hint)
                 return;
             _hint = hint;
             Invalidate();
@@ -133,7 +140,10 @@ public sealed class CropOverlay : Form
         Rectangle part = _selection;
         // A press and release with no real drag takes the highlighted control.
         if (part.Width < SmallestSide && part.Height < SmallestSide && _hint.Width > 0 && _hint.Height > 0)
+        {
             part = _hint;
+            ChosenElement = _hintElement;
+        }
         bool bigEnough = part.Width >= SmallestSide && part.Height >= SmallestSide;
         Finish();
         if (bigEnough)

@@ -102,6 +102,19 @@ internal static class Program
                             Console.WriteLine("button");
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "corner")
+                        window.BeginInvoke(() =>
+                        {
+                            // A control held to the bottom-right corner, which moves when the window is resized.
+                            var corner = new Button
+                            {
+                                Text = "Corner control", Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+                                Bounds = new Rectangle(window.ClientSize.Width - 160, window.ClientSize.Height - 70, 140, 50),
+                            };
+                            window.Controls.Add(corner);
+                            Console.WriteLine("corner");
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "popup")
                         window.BeginInvoke(() =>
                         {

@@ -135,6 +135,22 @@ internal sealed class TargetProcess : IDisposable
             throw new InvalidOperationException("Test target didn't add a button.");
     }
 
+    /// <summary>Adds a control 140 by 50 held 20 and 20 from the bottom-right corner, which moves when the window is resized.</summary>
+    internal void AddCornerControl()
+    {
+        _process.StandardInput.WriteLine("corner");
+        _process.StandardInput.Flush();
+        if (NextReport() != "corner")
+            throw new InvalidOperationException("Test target didn't add a corner control.");
+    }
+
+    /// <summary>Gives the window a new size; it keeps its top-left corner.</summary>
+    internal void Resize(int width, int height)
+    {
+        _process.StandardInput.WriteLine($"size {width} {height}");
+        _process.StandardInput.Flush();
+    }
+
     internal void Animate(int rate)
     {
         _process.StandardInput.WriteLine("animate " + rate);

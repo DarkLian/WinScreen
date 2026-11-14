@@ -72,6 +72,65 @@ public sealed class RuleWindowTests
         finally { Directory.Delete(folder, true); }
     }
 
+    /// <summary>
+    /// A crop made by clicking a control follows the control when the window is resized (roadmap P2-11, step 8.1),
+    /// and a crop dragged out by hand keeps its rectangle.
+    /// </summary>
+    [Fact]
+    public void A_crop_of_a_control_follows_it_when_the_window_is_resized()
+    {
+        string folder = Directory.CreateTempSubdirectory("winscreen-crop-").FullName;
+        using var target = new TargetProcess(new Rectangle(300, 300, 400, 300));
+        target.AddCornerControl();
+        try
+        {
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
+                var settings = new AppSettings
+                {
+                    ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
+                    Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
+                };
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                try
+                {
+                    Rectangle bounds = Desktop.BoundsOf(target.Handle);
+                    FoundElement? control = null;
+                    Assert.True(Desktop.WaitFor(() =>
+                        (control = ElementFinder.FindElement(target.Handle, new Point(bounds.Right - 60, bounds.Bottom - 40)))?.Bounds.Size == new Size(140, 50), 3000));
+                    Rectangle part = new(control!.Bounds.Location - (Size)bounds.Location, control.Bounds.Size);
+                    controller.Crop(target.Handle, part);
+                    typeof(TrayApplication).GetMethod("RememberCropControl", BindingFlags.Instance | BindingFlags.NonPublic)!
+                        .Invoke(app, [target.Handle, control, WindowIdentity.Capture(target.Handle)]);
+                    MethodInfo follow = typeof(TrayApplication).GetMethod("FollowCropControls", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+                    target.Resize(600, 420);
+                    Rectangle wanted = part with { X = part.X + 200, Y = part.Y + 120 };
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+                    while (WindowInfo.ShapeOf(target.Handle) != wanted && clock.ElapsedMilliseconds < 4000)
+                    {
+                        follow.Invoke(app, []);
+                        Application.DoEvents();
+                        Thread.Sleep(50);
+                    }
+                    Assert.Equal(wanted, WindowInfo.ShapeOf(target.Handle));
+
+                    // Dragged out by hand: the rectangle stays.
+                    Rectangle drawn = new(10, 10, 120, 80);
+                    controller.Crop(target.Handle, drawn);
+                    typeof(TrayApplication).GetMethod("RememberCropControl", BindingFlags.Instance | BindingFlags.NonPublic)!
+                        .Invoke(app, [target.Handle, null, WindowIdentity.Capture(target.Handle)]);
+                    target.Resize(420, 320);
+                    for (int i = 0; i < 20; i++) { follow.Invoke(app, []); Application.DoEvents(); Thread.Sleep(50); }
+                    Assert.Equal(drawn, WindowInfo.ShapeOf(target.Handle));
+                }
+                finally { app.ExitThread(); }
+            });
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
     private static void Save(TrayApplication app, AppSettings settings) =>
         Assert.Empty((System.Collections.IEnumerable)typeof(TrayApplication)
             .GetMethod("Apply", BindingFlags.Instance | BindingFlags.NonPublic, [typeof(AppSettings)])!.Invoke(app, [settings])!);

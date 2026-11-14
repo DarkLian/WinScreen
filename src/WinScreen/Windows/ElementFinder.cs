@@ -17,7 +17,8 @@ internal sealed unsafe class ElementFinder : IDisposable
     private const uint InProcessServer = 1;
 
     // Places in the COM tables of IUIAutomation, IUIAutomationTreeWalker and IUIAutomationElement.
-    private const int ElementFromHandle = 6, ControlViewWalker = 14, FirstChild = 4, NextSibling = 6, BoundingRectangle = 43;
+    private const int ElementFromHandle = 6, ControlViewWalker = 14, FirstChild = 4, NextSibling = 6, ControlType = 21,
+        BoundingRectangle = 43;
 
     private readonly nint _overlay;
     private readonly AutoResetEvent _asked = new(false);
@@ -34,8 +35,8 @@ internal sealed unsafe class ElementFinder : IDisposable
         thread.Start();
     }
 
-    /// <summary>Raised off the UI thread with the control's rectangle on screen, or null when there's no answer.</summary>
-    public event Action<Rectangle?>? Found;
+    /// <summary>Raised off the UI thread with the control under the pointer, or null when there's no answer.</summary>
+    public event Action<FoundElement?>? Found;
 
     public void Ask(Point screen)
     {
@@ -71,14 +72,60 @@ internal sealed unsafe class ElementFinder : IDisposable
 
             long question = Interlocked.Read(ref _question);
             var point = new Point((int)(question >> 32), (int)question);
-            Rectangle? found = WindowBelow(_overlay, point) is var window and not 0 ? Find(window, point) : null;
+            FoundElement? found = WindowBelow(_overlay, point) is var window and not 0 ? FindElement(window, point) : null;
             if (!_stopping)
                 Found?.Invoke(found);
         }
     }
 
     /// <summary>The smallest control at a screen point in this window, or the window's own rectangle if it has none.</summary>
-    internal static Rectangle? Find(nint window, Point point)
+    internal static Rectangle? Find(nint window, Point point) => FindElement(window, point)?.Bounds;
+
+    /// <summary>The smallest control at a screen point in this window, with the way to find it again.</summary>
+    internal static FoundElement? FindElement(nint window, Point point)
+    {
+        var path = new List<int>();
+        return Walk(window, (walker, element) =>
+        {
+            for (int level = 0; level < DeepestLevel; level++)
+            {
+                nint inside = ChildAt(walker, element, point, out int index);
+                if (inside == 0)
+                    break;
+                Marshal.Release(element);
+                element = inside;
+                path.Add(index);
+            }
+            return (element, BoundsOf(element) is { Width: > 0, Height: > 0 } found
+                ? new FoundElement(found, window, [.. path], ControlTypeOf(element)) : null);
+        });
+    }
+
+    /// <summary>
+    /// Where a control found earlier is now, by the same way down the window's controls and of the same kind; null
+    /// when the window's controls have changed so that it isn't there any more (roadmap P2-11, step 8.1).
+    /// </summary>
+    internal static Rectangle? Locate(FoundElement earlier)
+    {
+        return Walk<Rectangle?>(earlier.Window, (walker, element) =>
+        {
+            foreach (int index in earlier.Path)
+            {
+                nint child = ChildNumber(walker, element, index);
+                Marshal.Release(element);
+                element = child;
+                if (element == 0) return (0, null);
+            }
+            return (element, ControlTypeOf(element) == earlier.ControlType && BoundsOf(element) is { Width: > 0, Height: > 0 } now
+                ? now : null);
+        });
+    }
+
+    /// <summary>
+    /// Runs a look at a window's controls from its own element down, on the calling thread. The step is given the
+    /// window's element and hands back whichever element it holds at the end, which is released here.
+    /// </summary>
+    private static T? Walk<T>(nint window, Func<nint, nint, (nint Held, T? Result)> step)
     {
         nint automation = 0, walker = 0, element = 0;
         Guid implementation = new("FF48DBA4-60EF-4201-AA87-54103EEF594E"), wanted = new("30CBE57D-D9D0-452A-AB13-7AC5AC4825EE");
@@ -88,22 +135,14 @@ internal sealed unsafe class ElementFinder : IDisposable
                 ((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(automation, ElementFromHandle))(automation, window, &element) != 0 ||
                 element == 0 ||
                 ((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(automation, ControlViewWalker))(automation, &walker) != 0)
-                return null;
-
-            for (int level = 0; level < DeepestLevel; level++)
-            {
-                nint inside = ChildAt(walker, element, point);
-                if (inside == 0)
-                    break;
-                Marshal.Release(element);
-                element = inside;
-            }
-
-            return BoundsOf(element) is { Width: > 0, Height: > 0 } found ? found : null;
+                return default;
+            (nint held, T? result) = step(walker, element);
+            element = held;
+            return result;
         }
         catch (COMException)
         {
-            return null; // An app that won't say just means dragging by hand.
+            return default; // An app that won't say just means dragging by hand.
         }
         finally
         {
@@ -113,16 +152,42 @@ internal sealed unsafe class ElementFinder : IDisposable
         }
     }
 
-    /// <summary>The child of <paramref name="element"/> containing the point, which the caller releases, or 0.</summary>
-    private static nint ChildAt(nint walker, nint element, Point point)
+    /// <summary>The child at this place among <paramref name="element"/>'s children, which the caller releases, or 0.</summary>
+    private static nint ChildNumber(nint walker, nint element, int index)
     {
+        nint child = 0;
+        if (((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(walker, FirstChild))(walker, element, &child) != 0)
+            return 0;
+        for (int sibling = 0; child != 0 && sibling < index; sibling++)
+        {
+            nint next = 0;
+            int result = ((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(walker, NextSibling))(walker, child, &next);
+            Marshal.Release(child);
+            child = result == 0 ? next : 0;
+        }
+        return child;
+    }
+
+    private static int ControlTypeOf(nint element)
+    {
+        int type;
+        return ((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(element, ControlType))(element, &type) == 0 ? type : 0;
+    }
+
+    /// <summary>The child of <paramref name="element"/> containing the point, which the caller releases, or 0.</summary>
+    private static nint ChildAt(nint walker, nint element, Point point, out int index)
+    {
+        index = -1;
         nint child = 0;
         if (((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(walker, FirstChild))(walker, element, &child) != 0)
             return 0;
         for (int sibling = 0; child != 0 && sibling < MostSiblings; sibling++)
         {
             if (BoundsOf(child) is { } bounds && bounds.Contains(point))
+            {
+                index = sibling;
                 return child;
+            }
             nint next = 0;
             int result = ((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(walker, NextSibling))(walker, child, &next);
             Marshal.Release(child);
@@ -164,3 +229,9 @@ internal sealed unsafe class ElementFinder : IDisposable
     [DllImport("ole32.dll")]
     private static extern int CoCreateInstance(in Guid implementation, nint outer, uint context, in Guid wanted, out nint instance);
 }
+
+/// <summary>
+/// A control found in a window: where it was on screen, and the way to it among the window's controls (the place of
+/// each among its parent's children) with its kind, to find it again after the window changes.
+/// </summary>
+internal sealed record FoundElement(Rectangle Bounds, nint Window, int[] Path, int ControlType);

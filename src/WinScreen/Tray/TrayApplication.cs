@@ -758,6 +758,7 @@ public sealed partial class TrayApplication : ApplicationContext
         }
 
         FollowModifierHook(foreground);
+        FollowCropControls();
         _windows.Refresh(Cursor.Position, _settings.OpaqueOnHover, _settings.PausePinWhenMaximized);
         _borders.Show(_settings.HighlightPinned ? _windows.VisiblePinnedWindows() : []);
     }
@@ -1093,6 +1094,7 @@ public sealed partial class TrayApplication : ApplicationContext
             {
                 identity.Require();
                 _windows.Crop(window, part);
+                RememberCropControl(window, overlay.ChosenElement, identity);
                 User32.SetForegroundWindow(window);
             }
             catch (Exception failure) when (IsExpected(failure))

@@ -32,6 +32,29 @@ public sealed class ElementFinderTests
         Assert.Equal(new Point(spot.Left + 20, spot.Top + 30), found!.Value.Location);
     }
 
+    /// <summary>A control found once is found again after the window is resized and it has moved (roadmap step 8.1).</summary>
+    [Fact]
+    public void A_control_is_found_again_where_it_moved_to()
+    {
+        var spot = new Rectangle(240, 200, 400, 300);
+        using var target = new TargetProcess(spot);
+        target.AddCornerControl();
+        FoundElement? found = null;
+        Assert.True(Desktop.WaitFor(() =>
+        {
+            Rectangle bounds = Desktop.BoundsOf(target.Handle);
+            found = ElementFinder.FindElement(target.Handle, new Point(bounds.Right - 60, bounds.Bottom - 40));
+            return found?.Bounds.Size == new Size(140, 50);
+        }, 3000), found?.ToString() ?? "no answer");
+        Rectangle before = found!.Bounds;
+
+        target.Resize(600, 420);
+        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(target.Handle).Width == 600, 3000), "The window wasn't resized.");
+        Rectangle? now = null;
+        Assert.True(Desktop.WaitFor(() => (now = ElementFinder.Locate(found)) == before with { X = before.X + 200, Y = before.Y + 120 }, 3000),
+            $"Found at {now?.ToString() ?? "nothing"}, was {before}.");
+    }
+
     [Fact]
     public void A_window_that_has_gone_is_no_answer_rather_than_a_failure()
     {
