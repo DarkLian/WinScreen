@@ -1195,6 +1195,17 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.Equal(0, Script("--run", "OpenPip", "--window", "title:scripted").Exit);
         Assert.Equal(0, Script("--run", "RestoreWindow", "--window", "title:scripted").Exit);
 
+        // A command that opens a dialog answers once the dialog is open, not once it is closed (roadmap step 6.5).
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Equal(0, Script("--run", "PlaceExactly", "--window", "title:scripted").Exit);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(30), $"The script waited {clock.Elapsed} for the dialog to close.");
+        string dialogTitle = CommandCatalog.Name(AppCommand.PlaceExactly);
+        nint dialog = 0;
+        Assert.True(Desktop.WaitFor(() => (dialog = Desktop.FindProcessWindow(_app.Id, title => title == dialogTitle)) != 0),
+            "The dialog didn't open.");
+        Desktop.PostMessage(dialog, User32.WM_CLOSE, 0, 0);
+        Assert.True(Desktop.WaitFor(() => Desktop.FindProcessWindow(_app.Id, title => title == dialogTitle) == 0), "The dialog didn't close.");
+
         Assert.Equal(6, Script("--run", "TogglePin", "--window", "title:no window is called this").Exit);
         (int exit, string output) = Script("--run", "Nope");
         Assert.Equal(2, exit);

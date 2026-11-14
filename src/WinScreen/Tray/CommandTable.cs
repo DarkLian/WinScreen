@@ -88,6 +88,12 @@ internal sealed record CommandDefinition(AppCommand Command, Action<nint, Rectan
 
     /// <summary>The parts of a window this command can change, which Put back takes away; empty when it leaves nothing.</summary>
     public WindowPart[] Undoes { get; init; } = [];
+
+    /// <summary>
+    /// True when running the command on this window opens a menu or dialog that waits for the person. A script that
+    /// ran it is told how it went once that is open, not once it is closed.
+    /// </summary>
+    public Func<nint, bool>? Opens { get; init; }
 }
 
 /// <summary>Every command, defined once, gathered from the lists each area contributes.</summary>

@@ -18,6 +18,8 @@ public sealed partial class TrayApplication
 
     private static CommandDefinition Define(AppCommand command, Action<nint> run) => new(command, (window, _) => run(window));
 
+    private static bool Always(nint window) => true;
+
     /// <summary>Changes WinScreen makes to the window itself, all through <see cref="WindowController"/>.</summary>
     private IEnumerable<CommandDefinition> WindowCommands() =>
     [
@@ -44,7 +46,7 @@ public sealed partial class TrayApplication
         Define(AppCommand.ToggleRollUp, window => _windows.ToggleRollUp(window))
             with { IsOn = window => _windows.IsRolledUp(window), Undoes = [WindowPart.WindowChanges] },
         Define(AppCommand.SendToBottom, window => _windows.SendToBottom(window)),
-        Define(AppCommand.ShowWindowInfo, ShowWindowInfo),
+        Define(AppCommand.ShowWindowInfo, ShowWindowInfo) with { Opens = Always },
         Define(AppCommand.SaveWindowSetup, window => SaveSetup(window))
             with { IsOn = window => _settings.SetupForWindow(window) is not null },
     ];
@@ -52,11 +54,11 @@ public sealed partial class TrayApplication
     /// <summary>Where a window is: the nine places, another display, exact bounds, and back.</summary>
     private IEnumerable<CommandDefinition> ArrangeCommands() =>
     [
-        Define(AppCommand.Arrange, window => ShowArrangeMenu(window)),
+        Define(AppCommand.Arrange, window => ShowArrangeMenu(window)) with { Opens = Always },
         .. Enum.GetValues<AppCommand>().Where(command => CommandCatalog.AnchorOf(command) is not null).Select(command =>
             Define(command, window => _placer.Align(window, CommandCatalog.AnchorOf(command)!.Value))),
         Define(AppCommand.MoveToNextDisplay, window => _placer.MoveToNextDisplay(window)),
-        Define(AppCommand.PlaceExactly, window => PlaceExactly(window)),
+        Define(AppCommand.PlaceExactly, window => PlaceExactly(window)) with { Opens = Always },
         Define(AppCommand.RestorePlacement, window =>
         {
             if (!_placer.RestorePrior(window))
@@ -68,7 +70,7 @@ public sealed partial class TrayApplication
             nint underPointer = Native.User32.GetAncestor(
                 Native.User32.WindowFromPoint(new Native.NativePoint { X = point.X, Y = point.Y }), Native.User32.GA_ROOT);
             ShowWindowMenu(underPointer, point);
-        }) with { Target = CommandTarget.UnderPointer },
+        }) with { Target = CommandTarget.UnderPointer, Opens = Always },
     ];
 
     /// <summary>Views of a window or of the screen, Shrink tiles and crops.</summary>
@@ -78,8 +80,8 @@ public sealed partial class TrayApplication
         {
             if (_pips.TryGetValue(window, out var existing)) existing.Close();
             else OpenViewOf(window);
-        }) with { IsOn = window => _pips.ContainsKey(window), Undoes = [WindowPart.View] },
-        Define(AppCommand.PickPipSource, _ => ShowPicker()) with { Target = CommandTarget.NoWindow },
+        }) with { IsOn = window => _pips.ContainsKey(window), Undoes = [WindowPart.View], Opens = window => !_pips.ContainsKey(window) && Native.User32.IsIconic(window) },
+        Define(AppCommand.PickPipSource, _ => ShowPicker()) with { Target = CommandTarget.NoWindow, Opens = Always },
         Define(AppCommand.ToggleShrink, window => Shrink(window)) with { IsOn = window => _shrunk.ContainsKey(window), Undoes = [WindowPart.Tile] },
         Define(AppCommand.ToggleCrop, window => ToggleCrop(window)) with { IsOn = window => _windows.IsCropped(window), Undoes = [WindowPart.CropChoice, WindowPart.WindowChanges] },
     ];
@@ -119,10 +121,36 @@ public sealed partial class TrayApplication
     /// A command from the command line (roadmap P2-2), run as a hotkey would run it, on the window the script named:
     /// the active one, the one under the pointer, or the topmost open window whose title contains some text.
     /// </summary>
-    private CommandLineExit RunFromCommandLine(AppCommand command, string target)
+    /// <remarks>
+    /// <paramref name="answer"/> is told how it went, once. A command that opens a menu or dialog answers once that
+    /// is open: a message posted before it runs is handled by the menu's or dialog's own loop. If the command
+    /// returns before that, its own outcome is the answer.
+    /// </remarks>
+    private void RunFromCommandLine(AppCommand command, string target, Action<CommandLineExit> answer)
     {
+        bool answered = false;
+        void Answer(CommandLineExit exit)
+        {
+            if (answered) return;
+            answered = true;
+            answer(exit);
+        }
+        Answer(Validate(command, target, out nint window) is { } refused ? refused : Run());
+
+        CommandLineExit Run()
+        {
+            Diagnostics.Log.Event("command.fromCommandLine", ("name", command));
+            if (_commands.TryGet(command, out CommandDefinition definition) && definition.Opens?.Invoke(window) == true)
+                _toolbar.BeginInvoke(() => Answer(CommandLineExit.Done));
+            return CommandLine.ExitFor(RunOnDisplay(command, window, null));
+        }
+    }
+
+    /// <summary>The window a command from the command line is for, or why it can't run.</summary>
+    private CommandLineExit? Validate(AppCommand command, string target, out nint window)
+    {
+        window = 0;
         if (!_commands.TryGet(command, out CommandDefinition definition)) return CommandLineExit.Usage;
-        nint window = 0;
         if (definition.Target == CommandTarget.Window)
         {
             if (target.StartsWith("title:", StringComparison.OrdinalIgnoreCase))
@@ -137,8 +165,7 @@ public sealed partial class TrayApplication
                 window = TargetOf(Native.User32.GetForegroundWindow());
             if (window == 0 && command != AppCommand.RestoreWindow) return CommandLineExit.NoWindow;
         }
-        Diagnostics.Log.Event("command.fromCommandLine", ("name", command));
-        return CommandLine.ExitFor(RunOnDisplay(command, window, null));
+        return null;
     }
 
     /// <summary>

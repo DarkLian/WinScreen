@@ -21,7 +21,7 @@ public sealed partial class TrayApplication : ApplicationContext
     private readonly WindowController _windows;
     private readonly WindowPlacer _placer;
     private readonly CommandTable _commands;
-    private readonly Dictionary<int, CommandLineExit> _commandLineResults = [];
+    private readonly Dictionary<int, (CommandLineExit Exit, long At)> _commandLineResults = [];
     private int _commandLineTicket;
     private readonly MouseGestures _modifierDrag;
     private nint _hookForeground;
@@ -140,11 +140,17 @@ public sealed partial class TrayApplication : ApplicationContext
             if (CommandLine.Received(data) is { } request)
             {
                 int ticket = ++_commandLineTicket;
-                _toolbar.BeginInvoke(() => _commandLineResults[ticket] = RunFromCommandLine(request.Command, request.Target));
+                _toolbar.BeginInvoke(() => RunFromCommandLine(request.Command, request.Target,
+                    exit => _commandLineResults[ticket] = (exit, Environment.TickCount64)));
                 return ticket;
             }
             if (CommandLine.AskedFor(data) is { } asked)
-                return _commandLineResults.Remove(asked, out CommandLineExit exit) ? (int)exit : CommandLine.Pending;
+            {
+                // A result nobody has asked for in a minute belongs to a script that gave up.
+                foreach (int stale in _commandLineResults.Where(pair => Environment.TickCount64 - pair.Value.At > 60000).Select(pair => pair.Key).ToArray())
+                    _commandLineResults.Remove(stale);
+                return _commandLineResults.Remove(asked, out var result) ? (int)result.Exit : CommandLine.Pending;
+            }
             return null;
         };
 
