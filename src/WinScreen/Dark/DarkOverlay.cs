@@ -13,11 +13,20 @@ internal sealed class DarkOverlay : Form
     private const int WS_VISIBLE = 0x10000000;
 
     /// <summary>Swaps light and dark without shifting hues.</summary>
+    /// <summary>
+    /// What a white page becomes in Dark mode, both kinds: #191919, the owner's choice (14 Nov 2026), rather than black.
+    /// Everything darkened is lifted in step, so black text still becomes white.
+    /// </summary>
+    internal const float Background = 25f / 255;
+
+    private const float Range = 1 - Background;
+
+    // Light and dark swap and colours keep their hue; then the result is scaled into Background..1.
     private static readonly float[] SmartInversion =
     [
-        0.3333f, -0.6667f, -0.6667f, 0, 0,
-        -0.6667f, 0.3333f, -0.6667f, 0, 0,
-        -0.6667f, -0.6667f, 0.3333f, 0, 0,
+        0.3333f * Range, -0.6667f * Range, -0.6667f * Range, 0, 0,
+        -0.6667f * Range, 0.3333f * Range, -0.6667f * Range, 0, 0,
+        -0.6667f * Range, -0.6667f * Range, 0.3333f * Range, 0, 0,
         0, 0, 0, 1, 0,
         1, 1, 1, 0, 1,
     ];

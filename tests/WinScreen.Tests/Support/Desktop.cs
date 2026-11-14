@@ -230,6 +230,9 @@ internal static partial class Desktop
         return Color.FromArgb((int)(red / count), (int)(green / count), (int)(blue / count));
     }
 
+    /// <summary>What Dark mode turns a white page into: #191919, the owner's choice.</summary>
+    internal static readonly Color DarkPage = Color.FromArgb(25, 25, 25);
+
     public static bool IsNear(Color actual, Color expected, int tolerance = 24)
     {
         return Math.Abs(actual.R - expected.R) <= tolerance

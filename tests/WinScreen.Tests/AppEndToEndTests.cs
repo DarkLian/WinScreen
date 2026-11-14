@@ -239,15 +239,18 @@ public sealed class AppEndToEndTests : IDisposable
         var sample = new Rectangle(target.Center.X - 20, target.Center.Y - 20, 40, 40);
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)));
 
+        // A window that turns dark itself: picture-keeping Dark, the default with a graphics card, leaves dark parts as
+        // they are; the filter, without one, turns them light.
+        Color darkWindow = Glass.ContentOverlay.GraphicsCardPresent ? Color.Black : Color.White;
         Hotkey(Keys.D, target);
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.Black)),
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage)),
             $"Dark mode showed {Desktop.ColorOnScreen(sample)}.");
 
         target.SetColors("000000");
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)),
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), darkWindow)),
             "Dark mode didn't follow the window.");
         target.SetColors("FFFFFF");
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.Black)),
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage)),
             "Dark mode didn't follow the window back.");
 
         // Off and on again in the same run, as a person would.
@@ -255,13 +258,13 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)),
             "Dark mode didn't turn off.");
         Hotkey(Keys.D, target);
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.Black)),
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage)),
             "Dark mode didn't turn on again.");
         target.SetColors("000000");
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)),
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), darkWindow)),
             "The second dark mode didn't follow the window.");
         target.SetColors("FFFFFF");
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.Black)));
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage)));
 
         Hotkey(Keys.R, target);
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)),

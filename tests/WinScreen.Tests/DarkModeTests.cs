@@ -90,7 +90,7 @@ public class DarkModeTests
 
             using var dark = new DarkMode();
             Assert.True(dark.Toggle(target.Handle));
-            Assert.True(Shows(target, Color.Black, pump), $"Dark mode showed {Desktop.ColorOnScreen(Sample(target))}.");
+            Assert.True(Shows(target, Desktop.DarkPage, pump), $"Dark mode showed {Desktop.ColorOnScreen(Sample(target))}.");
 
             Assert.False(dark.Toggle(target.Handle));
             Assert.True(Shows(target, White, pump), $"Turning it off left {Desktop.ColorOnScreen(Sample(target))}.");
@@ -123,7 +123,7 @@ public class DarkModeTests
             Desktop.Activate(target.Handle);
             using var dark = new DarkMode();
             dark.Toggle(target.Handle);
-            Assert.True(Shows(target, Color.Black, pump));
+            Assert.True(Shows(target, Desktop.DarkPage, pump));
 
             target.SetColors("000000");
             Assert.True(Shows(target, White, pump),
@@ -144,18 +144,18 @@ public class DarkModeTests
             {
                 Desktop.Activate(first.Handle);
                 dark.Toggle(first.Handle);
-                Assert.True(Shows(first, Color.Black, pump), $"Round {round}: {Desktop.ColorOnScreen(Sample(first))}.");
+                Assert.True(Shows(first, Desktop.DarkPage, pump), $"Round {round}: {Desktop.ColorOnScreen(Sample(first))}.");
 
                 first.SetColors("000000");
                 Assert.True(Shows(first, White, pump),
                     $"Round {round} didn't follow: {Desktop.ColorOnScreen(Sample(first))}.");
                 first.SetColors("FFFFFF");
-                Assert.True(Shows(first, Color.Black, pump),
+                Assert.True(Shows(first, Desktop.DarkPage, pump),
                     $"Round {round} didn't follow back: {Desktop.ColorOnScreen(Sample(first))}.");
 
                 Desktop.Activate(second.Handle);
                 dark.Toggle(second.Handle);
-                Assert.True(Shows(second, Color.Black, pump),
+                Assert.True(Shows(second, Desktop.DarkPage, pump),
                     $"Round {round}, second window: {Desktop.ColorOnScreen(Sample(second))}.");
 
                 dark.TurnAllOff();
@@ -175,23 +175,23 @@ public class DarkModeTests
             windows.TogglePin(target.Handle);
             using var dark = new DarkMode();
             dark.Toggle(target.Handle);
-            Assert.True(Shows(target, Color.Black, pump),
+            Assert.True(Shows(target, Desktop.DarkPage, pump),
                 $"A pinned window showed {Desktop.ColorOnScreen(Sample(target))}.");
 
             target.SetColors("000000");
             Assert.True(Shows(target, White, pump), "Dark mode didn't follow a pinned window.");
             target.SetColors("FFFFFF");
-            Assert.True(Shows(target, Color.Black, pump));
+            Assert.True(Shows(target, Desktop.DarkPage, pump));
 
             windows.TogglePin(target.Handle);
             Desktop.Activate(target.Handle);
-            Assert.True(Shows(target, Color.Black, pump),
+            Assert.True(Shows(target, Desktop.DarkPage, pump),
                 $"After unpinning it showed {Desktop.ColorOnScreen(Sample(target))}.");
 
             dark.Toggle(target.Handle);
             windows.TogglePin(target.Handle);
             dark.Toggle(target.Handle);
-            Assert.True(Shows(target, Color.Black, pump),
+            Assert.True(Shows(target, Desktop.DarkPage, pump),
                 $"Pinned first, dark on later showed {Desktop.ColorOnScreen(Sample(target))}.");
             windows.RestoreAll();
         });
@@ -207,7 +207,7 @@ public class DarkModeTests
             Desktop.Activate(target.Handle);
             using var dark = new DarkMode();
             dark.Toggle(target.Handle);
-            Assert.True(Shows(target, Color.Black, pump));
+            Assert.True(Shows(target, Desktop.DarkPage, pump));
             Assert.Equal(target.Handle, Desktop.TopWindowAt(target.Center));
         });
     }
@@ -223,13 +223,13 @@ public class DarkModeTests
             Desktop.Activate(target.Handle);
             using var dark = new DarkMode();
             dark.Toggle(target.Handle);
-            Assert.True(Shows(target, Color.Black, pump));
+            Assert.True(Shows(target, Desktop.DarkPage, pump));
             Desktop.Activate(other.Handle);
             Assert.True(Shows(target, White, pump),
                 $"The window on top came out {Desktop.ColorOnScreen(Sample(target))}.");
 
             var uncovered = new Rectangle(target.Bounds.Left + 20, target.Bounds.Top + 20, 40, 40);
-            Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(uncovered), Color.Black),
+            Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(uncovered), Desktop.DarkPage),
                 $"The rest of the window came out {Desktop.ColorOnScreen(uncovered)}.");
         });
     }
@@ -268,7 +268,7 @@ public class DarkModeTests
                 dark.Ignore(window);
             };
             dark.Toggle(target.Handle);
-            Assert.True(Shows(target, Color.Black, pump));
+            Assert.True(Shows(target, Desktop.DarkPage, pump));
             anchors.Toggle(target.Handle);
             var anchor = Assert.Single(Application.OpenForms.OfType<AnchorButton>());
             Assert.Equal(anchor.Handle, Assert.Single(created));
@@ -298,7 +298,7 @@ public class DarkModeTests
             Assert.Equal(expected, dark.Toggle(target.Handle));
             Assert.Equal(expected, dark.IsDark(target.Handle));
             Assert.Equal(expected ? 0 : 1, notices.Count);
-            if (expected) Assert.True(Shows(target, Color.Black, pump));
+            if (expected) Assert.True(Shows(target, Desktop.DarkPage, pump));
         });
     }
 
@@ -328,11 +328,11 @@ public class DarkModeTests
                 Assert.True(ShowsColor(White), $"Borderless showed {Desktop.ColorOnScreen(Middle())}.");
                 using var dark = new DarkMode();
                 Assert.True(dark.Toggle(target.Handle));
-                Assert.True(ShowsColor(Color.Black), $"Dark on a borderless window showed {Desktop.ColorOnScreen(Middle())}.");
+                Assert.True(ShowsColor(Desktop.DarkPage), $"Dark on a borderless window showed {Desktop.ColorOnScreen(Middle())}.");
                 Rectangle frame = Desktop.BoundsOf(target.Handle);
                 Native.User32.SetWindowPos(target.Handle, 0, frame.Left + 120, frame.Top + 60, 0, 0,
                     Native.User32.SWP_NOSIZE | Native.User32.SWP_NOZORDER | Native.User32.SWP_NOACTIVATE);
-                Assert.True(ShowsColor(Color.Black), $"Dark didn't follow the move: {Desktop.ColorOnScreen(Middle())}.");
+                Assert.True(ShowsColor(Desktop.DarkPage), $"Dark didn't follow the move: {Desktop.ColorOnScreen(Middle())}.");
                 Assert.False(dark.Toggle(target.Handle));
                 Assert.True(ShowsColor(White));
                 Assert.True(windows.IsBorderless(target.Handle));

@@ -87,6 +87,8 @@ internal static class ContentShaders
                 float3 flipped = saturate(lerp(1 - c + 2 * hue, c + (1 - 2 * light), coloured));
                 // A part that is dark already keeps its colours; page colour spilling into it from next door still flips.
                 bool keep = picture || (dark && (differs || !nextToLight));
+                // A white page becomes #191919 rather than black, as the filter kind does; the rest is lifted in step.
+                flipped = 25.0 / 255 + flipped * (1 - 25.0 / 255);
                 result = float4(keep ? c : flipped, 1);
             } else if (picture) {
                 result = float4(c * levels.z, levels.z);
