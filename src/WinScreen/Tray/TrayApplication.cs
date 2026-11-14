@@ -1611,9 +1611,12 @@ public sealed partial class TrayApplication : ApplicationContext
     private Look GlassLook(nint window) =>
         _windows.IsGlass(window) ? Look.ColorGlass : _content.Has(window, Glass.ContentLook.Glass) ? Look.LayeredGlass : Look.None;
 
-    /// <summary>Dark mode, or picture-keeping Dark when it's chosen in Settings. Glass goes first: the two can't share a window.</summary>
+    /// <summary>
+    /// Picture-keeping Dark when it's chosen in Settings (the default) and there is a graphics card for it, otherwise the
+    /// filter. Glass goes first: the two can't share a window.
+    /// </summary>
     private void ToggleDark(nint window) => SwitchLook(window, DarkLook(window), GlassLook(window),
-        _settings.Effects.PictureSafeDark ? Look.PictureDark : Look.FilterDark);
+        _settings.Effects.PictureSafeDark && Glass.ContentOverlay.GraphicsCardPresent ? Look.PictureDark : Look.FilterDark);
 
     /// <summary>Layered Glass when it's chosen in Settings, otherwise the colour-key Glass. Dark goes first.</summary>
     private void ToggleGlass(nint window) => SwitchLook(window, GlassLook(window), DarkLook(window),

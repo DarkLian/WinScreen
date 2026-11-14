@@ -162,6 +162,24 @@ internal sealed unsafe class ContentOverlay : Form
         return below;
     }
 
+    /// <summary>True when the PC has a graphics card the effects can use, rather than Windows' software renderer. Asked once.</summary>
+    internal static bool GraphicsCardPresent => GraphicsCard.Value;
+
+    private static readonly Lazy<bool> GraphicsCard = new(() =>
+    {
+        try
+        {
+            using IDXGIFactory1 factory = CreateDXGIFactory1<IDXGIFactory1>();
+            if (factory.EnumAdapters1(0, out IDXGIAdapter1? adapter).Failure || adapter is null) return false;
+            using (adapter) return adapter.Description1.VendorId != SoftwareRendererVendor;
+        }
+        catch (SharpGen.Runtime.SharpGenException failure)
+        {
+            Diagnostics.Log.Swallowed(failure);
+            return false;
+        }
+    });
+
     private void CreateDevice(Size size)
     {
         D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.BgraSupport, [FeatureLevel.Level_11_0],
