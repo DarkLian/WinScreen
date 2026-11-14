@@ -104,6 +104,68 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern void mouse_event(uint flags, uint x, uint y, uint data, nuint extra);
 
+    /// <summary>
+    /// Roadmap P2-12: a double-click on text in a Store app selects the word there, through the text's own pattern,
+    /// as it would on the app itself. The Settings app's search box, on both versions; one already open is left alone.
+    /// </summary>
+    [Fact]
+    public void A_double_click_in_a_store_apps_text_box_selects_the_word_there()
+    {
+        if (Desktop.FindWindow("ApplicationFrameWindow", "Settings") != 0) { Skipped.Because("Settings is already open."); return; }
+        try { Process.Start(new ProcessStartInfo("ms-settings:") { UseShellExecute = true })?.Dispose(); }
+        catch (System.ComponentModel.Win32Exception) { Skipped.Because("The Settings app can't be started here."); return; }
+        nint window = 0;
+        // The search box: the widest text box (Windows 11 has another, small one, in the title bar).
+        BrowserAccessibility.Control? Search() => BrowserAccessibility.Read(window, 24).Where(c => c.Type == 50004 && c.Bounds.Width > 0)
+            .MaxBy(c => c.Bounds.Width);
+        Desktop.WaitFor(() => (window = Desktop.FindWindow("ApplicationFrameWindow", "Settings")) != 0 && Search() is not null, 20000);
+        var log = new StringBuilder();
+        try
+        {
+            Assert.True(window != 0 && Search() is not null, "No Settings window with a search box.");
+            User32.ShowWindow(window, 9);
+            Thread.Sleep(800);
+            // Newer Windows 11 Settings has its search box in the title bar, which the app reports as caption: a press
+            // there moves the view (as on any title bar), so there is no text to reach through it.
+            if (Search()!.Bounds.Top - Desktop.BoundsOf(window).Top < 60)
+            {
+                Skipped.Because("This Settings app has its search box in the title bar.");
+                return;
+            }
+            Visit(window, (view, _) =>
+            {
+                Point ToView(Point screen)
+                {
+                    Rectangle source = Desktop.BoundsOf(window);
+                    var (area, shown) = view.LiveInteraction!.CurrentGeometry;
+                    return new Point(area.Left + (int)Math.Round((screen.X - source.Left - shown.Left) * (double)area.Width / shown.Width),
+                        area.Top + (int)Math.Round((screen.Y - source.Top - shown.Top) * (double)area.Height / shown.Height));
+                }
+                Rectangle box = Search()!.Bounds;
+                Click(ToView(new Point(box.Left + box.Width / 2, box.Top + box.Height / 2)));
+                foreach (Keys key in new[] { Keys.H, Keys.U, Keys.E, Keys.Space, Keys.Z, Keys.O, Keys.O, Keys.M })
+                    Desktop.Press(key);
+                Assert.True(Desktop.WaitFor(() => Search()?.Value == "hue zoom", 3000), "Typing: " + Search()?.Value);
+                // The first word starts just inside the box: a little over its padding, scaled with the box.
+                box = Search()!.Bounds;
+                Point word = ToView(new Point(box.Left + box.Height * 2 / 3, box.Top + box.Height / 2));
+                Desktop.SlideMouse(word);
+                Thread.Sleep(150);
+                for (int i = 0; i < 2; i++) { mouse_event(2, 0, 0, 0, 0); Thread.Sleep(30); mouse_event(4, 0, 0, 0, 0); Thread.Sleep(60); } // A double-click.
+                Thread.Sleep(400);
+                Desktop.Press(Keys.Delete);
+                Assert.True(Desktop.WaitFor(() => Search()?.Value is " zoom" or "zoom", 3000),
+                    "After a double-click on a word and Delete: '" + Search()?.Value + "'");
+                Assert.Contains(PressOutcome.Delivered, view.PressOutcomes);
+            }, log);
+        }
+        finally
+        {
+            output.WriteLine(log.ToString());
+            Close(window);
+        }
+    }
+
     [Fact]
     public void Calculator_adds_through_a_view_takes_keys_and_says_what_it_cannot_do()
     {

@@ -6,7 +6,8 @@ namespace WinScreen.Tests.Support;
 // Test-only UIA traversal: coordinates come from the browser, including its DPI and frame layout.
 internal static unsafe class BrowserAccessibility
 {
-    internal sealed record Control(string Name, int Type, Rectangle Bounds, bool Focused, bool Enabled);
+    /// <param name="Value">What a text box holds (UI Automation's value), or empty.</param>
+    internal sealed record Control(string Name, int Type, Rectangle Bounds, bool Focused, bool Enabled, string Value = "");
     /// <param name="maxDepth">How deep to walk; Electron apps nest their content deeper than most.</param>
     /// <param name="raw">Walk every element, not only controls: some apps show text only there.</param>
     internal static List<Control> Read(nint window, int maxDepth = 16, bool raw = false)
@@ -40,7 +41,8 @@ internal static unsafe class BrowserAccessibility
             ((delegate* unmanaged[Stdcall]<nint, Rect*, int>)Slot(element, 43))(element, &bounds);
             ((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(element, 28))(element, &enabled);
             controls.Add(new(name == 0 ? "" : Marshal.PtrToStringBSTR(name), type,
-                Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom), focus != 0, enabled != 0));
+                Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom), focus != 0, enabled != 0,
+                type == 50004 ? ValueOf(element) : ""));
             if (name != 0) Marshal.FreeBSTR(name);
             // Browser controls only; do not walk the page's accessibility tree.
             if (type == 50030) return;
@@ -60,6 +62,17 @@ internal static unsafe class BrowserAccessibility
             if (child != 0) Marshal.Release(child);
         }
     }
+    /// <summary>IUIAutomationElement::GetCurrentPropertyValue(UIA_ValueValuePropertyId): a VARIANT holding a BSTR.</summary>
+    private static string ValueOf(nint element)
+    {
+        byte* variant = stackalloc byte[24];
+        new Span<byte>(variant, 24).Clear();
+        if (((delegate* unmanaged[Stdcall]<nint, int, byte*, int>)Slot(element, 10))(element, 30045, variant) < 0) return "";
+        try { return *(ushort*)variant == 8 ? Marshal.PtrToStringBSTR(*(nint*)(variant + 8)) ?? "" : ""; }
+        finally { VariantClear(variant); }
+    }
+
+    [DllImport("oleaut32.dll")] private static extern int VariantClear(byte* variant);
     private static nint Slot(nint com, int index) => (*(nint**)com)[index];
     [DllImport("ole32.dll")] private static extern int CoCreateInstance(in Guid cls, nint outer, uint context, in Guid iid, out nint instance);
 }

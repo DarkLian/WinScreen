@@ -176,8 +176,10 @@ internal sealed class PipControlInput
                     if (shown >= 0) return new(true, "menu");
                     continue; // Text inside a control has no menu of its own; its control may.
                 }
-                if (type == 50004 && kind == Request.DoubleClick) // In a text box it selects a word: no equivalent.
-                    return new(false, "a double-click in a text box", true);
+                // In text a double-click selects a word: done through the text's own pattern where it offers one
+                // (roadmap P2-12), and said to be impossible where it doesn't.
+                if (type is 50004 or 50030 && kind == Request.DoubleClick)
+                    return SelectWordAt(element, at) ? new(true, "select word") : new(false, "a double-click in a text box", true);
                 if (type == 50004) // Edit controls need keyboard focus, without changing their value.
                     return ((delegate* unmanaged[Stdcall]<nint, int>)Slot(element, 3))(element) >= 0
                         ? new(true, "focus") : new(false, "focus refused");
@@ -275,6 +277,32 @@ internal sealed class PipControlInput
     private static readonly (int Id, string Name)[] Patterns = [(10000, "invoke"), (10010, "select"), (10015, "toggle"), (10005, "expand")];
 
     private const int NoContextMenuInterface = int.MinValue;
+
+    /// <summary>
+    /// Selects the word at a screen point through the element's text pattern: IUIAutomationTextPattern::RangeFromPoint,
+    /// then the range's ExpandToEnclosingUnit(word) and Select. False when the element offers no text pattern or any
+    /// step is refused.
+    /// </summary>
+    private static unsafe bool SelectWordAt(nint element, Point at)
+    {
+        const int TextPatternId = 10014, TextUnitWord = 2;
+        nint pattern = 0, range = 0;
+        try
+        {
+            if (((delegate* unmanaged[Stdcall]<nint, int, nint*, int>)Slot(element, 16))(element, TextPatternId, &pattern) < 0 || pattern == 0)
+                return false;
+            var point = new NativePoint { X = at.X, Y = at.Y };
+            if (((delegate* unmanaged[Stdcall]<nint, NativePoint, nint*, int>)Slot(pattern, 3))(pattern, point, &range) < 0 || range == 0)
+                return false;
+            return ((delegate* unmanaged[Stdcall]<nint, int, int>)Slot(range, 6))(range, TextUnitWord) >= 0 &&
+                   ((delegate* unmanaged[Stdcall]<nint, int>)Slot(range, 16))(range) >= 0;
+        }
+        finally
+        {
+            if (range != 0) Marshal.Release(range);
+            if (pattern != 0) Marshal.Release(pattern);
+        }
+    }
 
     /// <summary>IUIAutomationElement3::ShowContextMenu (Windows 10 1703 and later).</summary>
     private static unsafe int ShowContextMenu(nint element)
