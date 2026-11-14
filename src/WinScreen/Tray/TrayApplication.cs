@@ -1684,6 +1684,10 @@ public sealed partial class TrayApplication : ApplicationContext
                 if (_windows.IsGlass(window) != on) _windows.ToggleGlass(window);
                 break;
         }
+        // Which kind ran, and what became of the original: hidden under the effect, and whether it still takes presses.
+        Diagnostics.Log.Event("effect", ("look", look), ("on", on), ("program", Diagnostics.LogValue.ProgramOf(window)),
+            ("concealed", WindowInfo.IsConcealed(window)),
+            ("clickThrough", (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TRANSPARENT) != 0));
     }
 
     private int OpacityDelta(int steps) => steps * (int)Math.Round(Math.Clamp(_settings.OpacityStepPercent, 1, 25) * 255 / 100.0);

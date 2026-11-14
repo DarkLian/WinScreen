@@ -36,6 +36,27 @@ public static class UiText
 
     internal static IReadOnlyDictionary<string, string> GetCatalog(string language) => Catalogs[language];
 
+    /// <summary>
+    /// The key of the message a person was shown, so the log can name it without its text: the first line is
+    /// matched against each message in the current language, with "{0}" and the like standing for anything.
+    /// Null when nothing matches. Only for failures, since it reads the whole catalog.
+    /// </summary>
+    internal static string? KeyOf(string message, string prefix = "errors.")
+    {
+        string first = message.Split('\n')[0].TrimEnd('\r');
+        foreach (string language in new[] { Language, "en" })
+            foreach ((string key, string text) in Catalogs[language])
+            {
+                if (!key.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                if (text == first) return key;
+                if (text.Contains('{') && System.Text.RegularExpressions.Regex.IsMatch(first,
+                        "^" + System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Escape(text), @"\\\{\d+}", ".*") + "$",
+                        System.Text.RegularExpressions.RegexOptions.Singleline, TimeSpan.FromMilliseconds(50)))
+                    return key;
+            }
+        return null;
+    }
+
     private static FrozenDictionary<string, FrozenDictionary<string, string>> LoadCatalogs() =>
         new[] { "en", "zh-Hans", "zh-Hant" }.ToFrozenDictionary(language => language, language =>
         {

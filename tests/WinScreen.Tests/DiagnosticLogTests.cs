@@ -91,6 +91,40 @@ public sealed class DiagnosticLogTests : IDisposable
         Assert.Contains("(repeated 999 more times) capture.fallback", lines[1]);
     }
 
+    /// <summary>A refusal names the message the person saw by its key, so a log says why without holding a title.</summary>
+    [Fact]
+    public void A_refusal_is_logged_by_the_name_of_its_message_and_never_its_text()
+    {
+        using var log = new DiagnosticLog(_folder);
+        string message = string.Format(Localization.UiText.T("errors.hotkeys.duplicate"), "Budget 2026", "Excel", "Ctrl+B");
+        log.Enqueue(new LogEntry("command.failed", [], new Windows.WindowOperationException(message), "A.cs:1"));
+        log.Enqueue(new LogEntry("command.failed", [], new Windows.WindowOperationException(Localization.UiText.T("errors.borderless.noFrame")), "A.cs:2"));
+        Assert.True(log.Flush(TimeSpan.FromSeconds(5)));
+
+        string text = Read();
+        Assert.Contains("reason=errors.hotkeys.duplicate", text);
+        Assert.Contains("reason=errors.borderless.noFrame", text);
+        Assert.DoesNotContain("Budget", text);
+    }
+
+    /// <summary>A count of repeats comes where the run ends, before whatever came next, so the order holds.</summary>
+    [Fact]
+    public void Repeats_are_counted_where_they_end_and_the_order_of_lines_holds()
+    {
+        using var log = new DiagnosticLog(_folder);
+        foreach (string name in new[] { "press", "press", "press", "menu.open", "press", "menu.closed" })
+            log.Enqueue(Entry(name));
+        Assert.True(log.Flush(TimeSpan.FromSeconds(5)));
+
+        string[] lines = Read().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(5, lines.Length);
+        Assert.EndsWith(" press", lines[0]);
+        Assert.EndsWith("(repeated 2 more times) press", lines[1]);
+        Assert.EndsWith(" menu.open", lines[2]);
+        Assert.EndsWith(" press", lines[3]);
+        Assert.EndsWith(" menu.closed", lines[4]);
+    }
+
     [Fact]
     public void Writing_carries_on_while_someone_has_the_files_open()
     {

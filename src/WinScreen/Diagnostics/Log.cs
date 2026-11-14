@@ -133,7 +133,8 @@ internal sealed class DiagnosticLog : IDisposable
     private readonly ConcurrentQueue<LogEntry> _queue = new();
     private readonly AutoResetEvent _wake = new(false);
     private readonly Thread _writer;
-    private readonly Dictionary<string, (long Since, int Repeats)> _recent = [];
+    // The last line written, and how often it has come again since, straight after itself.
+    private (string Body, long Since, long Last, int Repeats)? _run;
     private int _queued;
     private int _dropped;
     private int _failures;
@@ -239,33 +240,35 @@ internal sealed class DiagnosticLog : IDisposable
         foreach (ManualResetEventSlim flushed in flushes) flushed.Set();
     }
 
-    /// <summary>The first of a run of identical lines is written; the rest are counted and summed up once.</summary>
+    /// <summary>
+    /// The first of a run of identical lines is written; the rest are counted and summed up where the run ends,
+    /// before the next different line, so the order of events holds. A run longer than the merge time is summed up
+    /// then and starts again.
+    /// </summary>
     private void Add(StringBuilder lines, LogEntry entry)
     {
         string body = Body(entry);
-        if (_recent.TryGetValue(body, out var seen) && entry.Ticks - seen.Since < _mergeFor.Ticks)
+        if (_run is { } run && run.Body == body && entry.Ticks - run.Since < _mergeFor.Ticks)
         {
-            _recent[body] = (seen.Since, seen.Repeats + 1);
+            _run = run with { Last = entry.Ticks, Repeats = run.Repeats + 1 };
             return;
         }
-        if (_recent.TryGetValue(body, out seen) && seen.Repeats > 0) lines.Append(Repeated(body, seen.Repeats));
-        _recent[body] = (entry.Ticks, 0);
+        EndRun(lines);
+        _run = (body, entry.Ticks, entry.Ticks, 0);
         lines.Append(Stamp(entry.Ticks)).Append(' ').Append(body).AppendLine();
     }
 
     private void EndMerges(StringBuilder lines, bool all)
     {
-        long now = DateTime.UtcNow.Ticks;
-        foreach ((string body, (long since, int repeats)) in _recent.ToArray())
-        {
-            if (!all && now - since < _mergeFor.Ticks) continue;
-            if (repeats > 0) lines.Append(Repeated(body, repeats));
-            _recent.Remove(body);
-        }
+        if (_run is { } run && (all || DateTime.UtcNow.Ticks - run.Since >= _mergeFor.Ticks)) EndRun(lines);
     }
 
-    private static string Repeated(string body, int repeats) =>
-        $"{Stamp(DateTime.UtcNow.Ticks)} (repeated {repeats} more times) {body}{Environment.NewLine}";
+    private void EndRun(StringBuilder lines)
+    {
+        if (_run is { Repeats: > 0 } run)
+            lines.Append(Stamp(run.Last)).Append(" (repeated ").Append(run.Repeats).Append(" more times) ").Append(run.Body).AppendLine();
+        _run = null;
+    }
 
     private static string Stamp(long ticks) =>
         new DateTime(ticks, DateTimeKind.Utc).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
@@ -278,6 +281,9 @@ internal sealed class DiagnosticLog : IDisposable
         {
             body.Append(" at=").Append(entry.Site);
             body.Append(" error=").Append(Chain(error));
+            // Which refusal it was, by the name of the message the person saw, never its text.
+            if (error is Windows.WindowOperationException refusal)
+                body.Append(" reason=").Append(Localization.UiText.KeyOf(refusal.Message) ?? "unknown");
             body.Append(" code=").Append(LogValue.Code(error.HResult).Text);
             body.Append(" via=").Append(Frames(error));
         }
