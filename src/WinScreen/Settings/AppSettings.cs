@@ -611,13 +611,30 @@ public sealed class AppSettings
         KeepNewerFile(path);
         string temporary = path + ".tmp";
         // Straight to disk, as the change journal is: a power cut mustn't leave an empty settings file.
-        using (var file = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 4096,
-                   FileOptions.WriteThrough))
+        Dictionary<AppCommand, string> hotkeys = Hotkeys;
+        Hotkeys = WrittenHotkeys(hotkeys);
+        try
         {
+            using var file = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 4096,
+                FileOptions.WriteThrough);
             JsonSerializer.Serialize(file, this, Format);
             file.Flush(flushToDisk: true);
         }
+        finally { Hotkeys = hotkeys; }
         File.Move(temporary, path, overwrite: true);
+    }
+
+    /// <summary>
+    /// The hotkeys worth writing: a key, or an empty entry that clears a default. A command without a key and
+    /// without a default is left out, since a missing entry already reads as "none". So a command added in this
+    /// version reaches the file only once it is given a key, and an older version reading the file (which treats a
+    /// command it doesn't know as damage, up to 1.0.0) is spared it until then (roadmap step 6.4).
+    /// </summary>
+    internal static Dictionary<AppCommand, string> WrittenHotkeys(Dictionary<AppCommand, string> hotkeys)
+    {
+        Dictionary<AppCommand, string> defaults = new AppSettings().Hotkeys;
+        return hotkeys.Where(pair => !string.IsNullOrEmpty(pair.Value) || defaults.ContainsKey(pair.Key))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
     }
 
     /// <summary>

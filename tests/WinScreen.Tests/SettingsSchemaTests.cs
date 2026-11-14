@@ -125,6 +125,47 @@ public sealed class SettingsSchemaTests : IDisposable
         Assert.Equal("Ctrl+Alt+N", loaded.Hotkeys[AppCommand.OpacityUp]);
     }
 
+    // ── What an older version finds in a file this one wrote (roadmap step 6.4) ─────────────────────────────────────
+
+    private static HashSet<string> HotkeyNames(string json) =>
+        JsonNode.Parse(json)!["Hotkeys"]!.AsObject().Select(pair => pair.Key).ToHashSet(StringComparer.Ordinal);
+
+    [Fact]
+    public void A_file_written_here_names_no_command_newer_than_1_0_0_unless_it_was_given_a_key()
+    {
+        HashSet<string> published = HotkeyNames(SettingsFixtureTests.Fixture("1.0.0"));
+        // Settings writes an entry for every command, empty ones too.
+        var settings = new AppSettings();
+        foreach (AppCommand command in CommandCatalog.All) settings.Hotkeys.TryAdd(command, "");
+        settings.Save(SettingsFile);
+        HashSet<string> written = HotkeyNames(File.ReadAllText(SettingsFile));
+        Assert.Empty(written.Except(published));
+        Assert.All(CommandCatalog.All, command => Assert.True(settings.Hotkeys.ContainsKey(command))); // the copy in memory keeps every entry
+
+        // A key cleared that had a default is written, as an empty entry, so the default doesn't come back.
+        settings.Hotkeys[AppCommand.TogglePin] = "";
+        AppCommand newest = Enum.GetValues<AppCommand>().First(command => !published.Contains(command.ToString()));
+        settings.Hotkeys[newest] = "Ctrl+Alt+F11";
+        settings.Save(SettingsFile);
+        AppSettings loaded = AppSettings.Load(SettingsFile);
+        Assert.Equal("", loaded.Hotkeys[AppCommand.TogglePin]);
+        Assert.Equal("Ctrl+Alt+F11", loaded.Hotkeys[newest]);
+        Assert.Contains(newest.ToString(), HotkeyNames(File.ReadAllText(SettingsFile)));
+    }
+
+    [Theory]
+    [MemberData(nameof(SettingsFixtureTests.Versions), MemberType = typeof(SettingsFixtureTests))]
+    public void Every_published_file_keeps_its_hotkeys_through_a_save(string version)
+    {
+        File.WriteAllText(SettingsFile, SettingsFixtureTests.Fixture(version));
+        AppSettings first = AppSettings.Load(SettingsFile);
+        first.Save(SettingsFile);
+        AppSettings second = AppSettings.Load(SettingsFile);
+        // A missing entry means no key, as an empty one does.
+        string[] Keys(AppSettings settings) => Enum.GetValues<AppCommand>().Select(command => settings.Hotkeys.GetValueOrDefault(command, "")).ToArray();
+        Assert.Equal(Keys(first), Keys(second));
+    }
+
     [Fact]
     public void A_file_this_version_understands_is_not_kept_aside()
     {
