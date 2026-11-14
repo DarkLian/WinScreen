@@ -697,6 +697,67 @@ public sealed class AppEndToEndTests : IDisposable
     private static int WindowLeft(nint window) => User32.GetWindowRect(window, out Rect r) ? r.Left : 0;
 
     /// <summary>
+    /// Chrome on Fill display: the toolbar's Arrange window and Window menu stay open (the owner, 15 Nov, on beta 8:
+    /// they closed right after opening).
+    /// </summary>
+    [Fact]
+    public void The_toolbar_menus_stay_open_on_Chrome_filled_by_WinScreen()
+    {
+        string chrome = Path.Combine(AppContext.BaseDirectory, "chrome-win64", "chrome.exe");
+        if (!File.Exists(chrome)) { Skipped.Because("The portable Chrome isn't in the test output."); return; }
+        var settings = new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.Arrange, AppCommand.ShowWindowMenu], Placement = ToolbarPlacement.Right } };
+        settings.Hotkeys[AppCommand.ToggleBorderlessFill] = "Ctrl+Alt+F20";
+        RestartWith(settings);
+        var (browser, window, root) = BrowserInputTests.Open("<!doctype html><title>FillMenus</title><body style='background:#fff'>", "FillMenus", app: false, chrome);
+        try
+        {
+            if (User32.IsZoomed(window)) User32.ShowWindow(window, User32.SW_RESTORE);
+            User32.SetWindowPos(window, 0, 200, 120, 1000, 640, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Desktop.Press(Keys.F20, Keys.ControlKey, Keys.Menu);
+            Rectangle display = Screen.FromHandle(window).Bounds;
+            Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(window) == display, 3000), "Fill display didn't fill the display.");
+            Desktop.Activate(window);
+            foreach (int button in new[] { 0, 1 })
+            {
+                // An empty part of Chrome's tab strip, where the right-placed bar opens: clear of tabs and buttons.
+                int scale = Dpi.Of(window);
+                var rest = new Point(display.Right - Dpi.Scale(150 + 50, scale), display.Top + Dpi.Scale(12, scale));
+                Desktop.SlideMouse(new Point(display.Left + display.Width / 2, display.Top + display.Height / 2));
+                Assert.True(Desktop.WaitFor(() => Desktop.FindProcessWindow(_app.Id, t => t == "WinScreen toolbar") is var b && (b == 0 || !Desktop.IsWindowVisible(b)), 3000));
+                Desktop.RequireWindowAt(rest, window);
+                Desktop.SlideMouse(new Point(rest.X - 20, rest.Y));
+                Thread.Sleep(50);
+                Desktop.SlideMouse(rest);
+                nint toolbar = 0;
+                Assert.True(Desktop.WaitFor(() =>
+                {
+                    toolbar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar");
+                    return toolbar != 0 && Desktop.IsWindowVisible(toolbar);
+                }, 4000), $"The toolbar didn't appear on the filled Chrome (button {button}).");
+                Rectangle bar = Desktop.BoundsOf(toolbar);
+                Desktop.ClickOn(new Point(bar.Left + bar.Height / 2 + button * (bar.Height + bar.Height * 8 / 34), bar.Top + bar.Height / 2), toolbar);
+                nint menu = 0;
+                Assert.True(Desktop.WaitFor(() =>
+                {
+                    Desktop.EachProcessWindow(_app.Id, w =>
+                    {
+                        Rectangle b = Desktop.BoundsOf(w);
+                        if (menu == 0 && b.Height > 120 && b.Width > 120 && Desktop.IsWindowVisible(w)) menu = w;
+                    });
+                    return menu != 0;
+                }, 2000), $"Button {button} opened no menu on the filled Chrome.");
+                Thread.Sleep(900);
+                Assert.True(Desktop.IsWindowVisible(menu), $"The menu of button {button} closed by itself on the filled Chrome.");
+                Desktop.Press(Keys.Escape);
+                Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(menu)));
+            }
+        }
+        finally { BrowserInputTests.Close(browser, root); }
+    }
+
+    /// <summary>
     /// File Explorer draws its title bar in a window of its own inside the main one, and the main window answers
     /// "content" all along its top, so the toolbar never opened on it (the owner, F9). By each trigger, and by the
     /// third choice on either spot.
