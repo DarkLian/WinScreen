@@ -160,4 +160,39 @@ public sealed class MotionFinderTests
         var face = new Rectangle(200, 104, 160, 96);
         Assert.Equal(face, Find(10, i => Player(i, 200, 200, Rectangle.Empty, face)));
     }
+
+    /// <summary>
+    /// A rich, picture-like player on a white page, still but for a patch in its middle, as real pixels: the picture
+    /// finder's block for the player is what is shown, not just the patch.
+    /// </summary>
+    [Fact]
+    public unsafe void Movement_inside_a_picture_gives_the_whole_picture()
+    {
+        var player = new Rectangle(96, 48, 384, 224);
+        var patch = new Rectangle(240, 128, 96, 64);
+        byte[] Pixels(int frame)
+        {
+            var pixels = new byte[Surface.Width * Surface.Height * 4];
+            var still = new Random(7);
+            var moving = new Random(100 + frame);
+            for (int y = 0; y < Surface.Height; y++)
+                for (int x = 0; x < Surface.Width; x++)
+                {
+                    int k = (y * Surface.Width + x) * 4;
+                    var at = new Point(x, y);
+                    if (patch.Contains(at)) { byte v = (byte)moving.Next(256); pixels[k] = v; pixels[k + 1] = (byte)(255 - v); pixels[k + 2] = (byte)moving.Next(256); }
+                    else if (player.Contains(at)) { pixels[k] = (byte)still.Next(40, 200); pixels[k + 1] = (byte)still.Next(60, 220); pixels[k + 2] = (byte)still.Next(20, 180); }
+                    else { pixels[k] = pixels[k + 1] = pixels[k + 2] = 255; }
+                    pixels[k + 3] = 255;
+                }
+            return pixels;
+        }
+        var finder = new MotionFinder();
+        for (int i = 0; i < 10; i++)
+        {
+            byte[] pixels = Pixels(i);
+            fixed (byte* start = pixels) finder.Add(FrameSample.From(start, Surface.Width * 4, Surface, pictures: i == 9));
+        }
+        Assert.Equal(player, finder.Largest());
+    }
 }

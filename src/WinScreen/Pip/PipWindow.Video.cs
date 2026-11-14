@@ -45,9 +45,11 @@ public sealed partial class PipWindow
     {
         if (!_followingVideo || _sampleOut || _suspended || Environment.TickCount64 < _nextLook) return;
         if (_thumbnail is not { } capture) return;
+        // The last frame of a look also brings the picture finder's tiles, to match the movement to its picture.
+        bool last = _samples == (_videoFound ? SamplesPerLook : FirstLookSamples) - 1;
         if (capture.Kind == PipBackendKind.DwmThumbnail)
         {
-            Took(ScreenSample(), fromScreen: true);
+            Took(ScreenSample(last), fromScreen: true);
             return;
         }
         _sampleOut = true;
@@ -55,11 +57,11 @@ public sealed partial class PipWindow
         {
             try { BeginInvoke(() => Took(sample, fromScreen: false)); }
             catch (InvalidOperationException closed) { Diagnostics.Log.Swallowed(closed); } // The view closed meanwhile.
-        });
+        }, last);
     }
 
     /// <summary>The view's own picture as it is on screen, or null while it can't be read.</summary>
-    private unsafe FrameSample? ScreenSample()
+    private unsafe FrameSample? ScreenSample(bool pictures)
     {
         if (!Visible || WindowState == FormWindowState.Minimized) return null;
         Rectangle area = RectangleToScreen(PictureArea);
@@ -69,7 +71,7 @@ public sealed partial class PipWindow
             using var bitmap = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb);
             using (var graphics = Graphics.FromImage(bitmap)) graphics.CopyFromScreen(area.Location, Point.Empty, area.Size);
             BitmapData data = bitmap.LockBits(new Rectangle(Point.Empty, area.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-            try { return FrameSample.From((byte*)data.Scan0, data.Stride, area.Size); }
+            try { return FrameSample.From((byte*)data.Scan0, data.Stride, area.Size, pictures); }
             finally { bitmap.UnlockBits(data); }
         }
         catch (System.ComponentModel.Win32Exception locked)

@@ -151,7 +151,7 @@ internal sealed class D3D11Renderer : IDisposable
     }
 
     /// <summary>The cached frame's tile brightness, read back through a staging copy. Only while a view looks for a video.</summary>
-    internal unsafe FrameSample? Sample()
+    internal unsafe FrameSample? Sample(bool pictures = false)
     {
         if (_cache is null) return null;
         Texture2DDescription cached = _cache.Description;
@@ -164,7 +164,7 @@ internal sealed class D3D11Renderer : IDisposable
         }
         _context.CopyResource(_sample, _cache);
         MappedSubresource map = _context.Map(_sample, 0, MapMode.Read);
-        try { return FrameSample.From((byte*)map.DataPointer, (int)map.RowPitch, SourceSize); }
+        try { return FrameSample.From((byte*)map.DataPointer, (int)map.RowPitch, SourceSize, pictures); }
         finally { _context.Unmap(_sample, 0); }
     }
 

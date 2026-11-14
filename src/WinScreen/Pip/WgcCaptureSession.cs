@@ -32,6 +32,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     private readonly Thread _worker;
     private View _view;
     private Action<FrameSample?>? _sampleWanted;
+    private volatile bool _sampleWithPictures;
     private bool _dirty = true;
     private volatile bool _stopping;
     private volatile PipSessionState _state = PipSessionState.Starting;
@@ -66,11 +67,12 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         _worker.Start();
     }
 
-    public void RequestSample(Action<FrameSample?> done)
+    public void RequestSample(Action<FrameSample?> done, bool pictures = false)
     {
         lock (_viewGate)
         {
             if (_stopping) { done(null); return; }
+            _sampleWithPictures = pictures;
             Interlocked.Exchange(ref _sampleWanted, done)?.Invoke(null);
             _wake.Set();
         }
@@ -274,7 +276,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                 if (ready && renderer.HasFrame && Interlocked.Exchange(ref _sampleWanted, null) is { } wanted)
                 {
                     FrameSample? sample = null;
-                    try { sample = renderer.Sample(); }
+                    try { sample = renderer.Sample(_sampleWithPictures); }
                     catch (SharpGen.Runtime.SharpGenException failure) { WinScreen.Diagnostics.Log.Swallowed(failure); }
                     wanted(sample);
                 }

@@ -5,6 +5,25 @@ internal sealed record FrameSample(Size Surface, int Columns, int Rows, byte[] B
 {
     public const int Tile = 8;
 
+    /// <summary>
+    /// The picture finder's tiles for this frame, in tiles of <see cref="Glass.PictureFinder.Tile"/>; only on a frame
+    /// taken with them, as the last of a look is.
+    /// </summary>
+    public Glass.TileStats[]? Pictures { get; init; }
+
+    /// <summary>From a frame's pixels, with the picture finder's tiles when asked.</summary>
+    internal static unsafe FrameSample From(byte* pixels, int pitch, Size surface, bool pictures)
+    {
+        FrameSample sample = From(pixels, pitch, surface);
+        if (!pictures) return sample;
+        int tile = Glass.PictureFinder.Tile, columns = surface.Width / tile, rows = surface.Height / tile;
+        var stats = new Glass.TileStats[columns * rows];
+        for (int y = 0; y < rows; y++)
+            for (int x = 0; x < columns; x++)
+                stats[y * columns + x] = Glass.PictureFinder.StatsOf(pixels, pitch, x * tile, y * tile);
+        return sample with { Pictures = stats };
+    }
+
     /// <summary>From a frame's pixels (blue, green, red, alpha), reading 4 points in each tile.</summary>
     internal static unsafe FrameSample From(byte* pixels, int pitch, Size surface)
     {
@@ -108,13 +127,40 @@ internal sealed class MotionFinder
             Rectangle area = Trim(moving, columns, Rectangle.FromLTRB(left, top, right + 1, bottom + 1));
             if (area.Width < SmallestColumns || area.Height < SmallestRows) continue;
             if (Count(moving, columns, area) * 100 < area.Width * area.Height * 45) continue; // Scattered changes, not one picture.
-            area = ToPlayer(_previous.Brightness, columns, rows, area);
+            // The picture around the movement takes in a scene's still parts; the page's edge takes in a plain player frame.
+            area = ToPlayer(_previous.Brightness, columns, rows, PictureAround(area) ?? area);
             if (area.Width < PlayerColumns || area.Height < PlayerRows) continue;
             if (area.Width * area.Height > best.Width * best.Height) best = area;
         }
         if (best.IsEmpty) return null;
         var pixels = new Rectangle(best.X * FrameSample.Tile, best.Y * FrameSample.Tile, best.Width * FrameSample.Tile, best.Height * FrameSample.Tile);
         return Rectangle.Intersect(pixels, new Rectangle(Point.Empty, _previous.Surface));
+    }
+
+    /// <summary>
+    /// The picture that what moves is in, as the picture finder sees the last frame: a player is one large, rich block,
+    /// letterbox included. Null when no picture holds most of the movement. In this finder's tiles.
+    /// </summary>
+    private Rectangle? PictureAround(Rectangle moving)
+    {
+        if (_previous?.Pictures is not { } stats) return null;
+        int tile = Glass.PictureFinder.Tile, columns = _previous.Surface.Width / tile, rows = _previous.Surface.Height / tile;
+        if (stats.Length != columns * rows || columns == 0 || rows == 0) return null;
+        var finder = new Glass.PictureFinder();
+        finder.Find(stats, columns, rows);
+        int scale = tile / FrameSample.Tile;
+        long movingArea = (long)moving.Width * moving.Height;
+        Rectangle? best = null;
+        foreach (Rectangle block in finder.Blocks)
+        {
+            var mine = new Rectangle(block.X * scale, block.Y * scale, block.Width * scale, block.Height * scale);
+            Rectangle shared = Rectangle.Intersect(mine, moving);
+            Rectangle both = Rectangle.Union(mine, moving);
+            if ((long)shared.Width * shared.Height * 2 >= movingArea &&
+                (best is null || (long)both.Width * both.Height > (long)best.Value.Width * best.Value.Height))
+                best = both;
+        }
+        return best;
     }
 
     /// <summary>
