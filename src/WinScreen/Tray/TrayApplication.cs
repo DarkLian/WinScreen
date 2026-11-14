@@ -115,7 +115,7 @@ public sealed partial class TrayApplication : ApplicationContext
         _content = new Glass.ContentEffects(_windows);
         _content.Problem += text => Alert(T("errors.operation.title"), text);
         _content.Created += handle => _dark.Ignore(handle);
-        _automaticAnchors = new AutomaticAnchors(_anchors, CanHaveAutomaticAnchor, () => Paused || FullScreen.IsActive());
+        _automaticAnchors = new AutomaticAnchors(_anchors, CanHaveAutomaticAnchor, () => Paused || FullScreenNow() != FullScreenState.None);
         _anchors.Created += _dark.Ignore;
         _anchors.HasView = _pips.ContainsKey;
         _anchors.SetOffTaskbar = (window, off) =>
@@ -697,7 +697,15 @@ public sealed partial class TrayApplication : ApplicationContext
         WindowInfo.IsMainWindow(window) && _windows.CanControl(window) && !WindowInfo.IsConcealed(window) &&
         !_windows.IsHidden(window) && _settings.Anchors.Allows(WindowInfo.ProgramOf(window)) && CanReach(window);
 
-    private bool Paused => _settings.PauseInFullScreen && FullScreen.IsActive();
+    private bool Paused => _settings.PauseInFullScreen && FullScreenNow() != FullScreenState.None;
+
+    /// <summary>Full screen as WinScreen takes it: a window it filled itself with Fill display is not a game to step back for.</summary>
+    private FullScreenState FullScreenNow() =>
+        FullScreenPolicy.Seen(FullScreen.Current(), User32.GetForegroundWindow(), _windows.FilledByWinScreen);
+
+    /// <summary>Covers its display as a game or a full-screen app does, rather than because WinScreen filled it.</summary>
+    private bool FillsLikeAGame(nint window) =>
+        !User32.IsZoomed(window) && WindowInfo.FillsMonitor(window) && !_windows.FilledByWinScreen(window);
 
     private FullScreenAction FullScreenDecision(AppCommand command, nint window)
     {
@@ -708,7 +716,7 @@ public sealed partial class TrayApplication : ApplicationContext
             AppCommand.ToggleAnchor => _anchors.Has(window),
             _ => false,
         };
-        return FullScreenPolicy.Decide(command, FullScreen.Current(), _settings.PauseInFullScreen,
+        return FullScreenPolicy.Decide(command, FullScreenNow(), _settings.PauseInFullScreen,
             _settings.AllowPipInFullScreen, targetHasView, _viewsInOrder.Count > 0, _windows.IsBorderless(window));
     }
 
@@ -800,7 +808,7 @@ public sealed partial class TrayApplication : ApplicationContext
             (_settings.ModifierDrag && !_hookForegroundExcluded) ||
             ((_settings.WindowMenu || fallbackMenu) && !menuExcluded) ||
             (_settings.OpacityWheel && !programExcluded),
-            FullScreen.Current(), !User32.IsZoomed(foreground) && WindowInfo.FillsMonitor(foreground), false, FullScreen.IsAway());
+            FullScreenNow(), FillsLikeAGame(foreground), false, FullScreen.IsAway());
         if (!run && _windowMenu is { IsDisposed: false }) _windowMenu.Close();
         Point cursor = Cursor.Position;
         // Windows drops a slow hook without saying so. Input with no callback means it has, so put it back, ending
@@ -834,7 +842,7 @@ public sealed partial class TrayApplication : ApplicationContext
     {
         // A maximized window can be dragged out of maximized; one that fills the screen without being maximized is
         // a game or a full-screen app.
-        if (!CanGesture(window) || User32.IsIconic(window) || (!User32.IsZoomed(window) && WindowInfo.FillsMonitor(window)))
+        if (!CanGesture(window) || User32.IsIconic(window) || FillsLikeAGame(window))
             return false;
         // CanGesture has already turned away administrator apps.
         return !_settings.ModifierExclusions.Contains(WindowInfo.ProgramOf(window), StringComparer.OrdinalIgnoreCase);
@@ -855,11 +863,12 @@ public sealed partial class TrayApplication : ApplicationContext
     }
 
     private bool CanOpenWindowMenu(nint window) => CanGesture(window) && !User32.IsIconic(window) &&
-        !WindowInfo.FillsMonitor(window) && !_settings.WindowMenuExclusions.Contains(WindowInfo.ProgramOf(window),
+        (!WindowInfo.FillsMonitor(window) || _windows.FilledByWinScreen(window)) && !_settings.WindowMenuExclusions.Contains(WindowInfo.ProgramOf(window),
             StringComparer.OrdinalIgnoreCase);
 
-    private bool CanChangeOpacity(nint window) => FullScreen.Current() == FullScreenState.None &&
-        !FullScreen.IsAway() && !User32.IsIconic(window) && !WindowInfo.FillsMonitor(window) && CanGesture(window);
+    private bool CanChangeOpacity(nint window) => FullScreenNow() == FullScreenState.None &&
+        !FullScreen.IsAway() && !User32.IsIconic(window) && (!WindowInfo.FillsMonitor(window) || _windows.FilledByWinScreen(window)) &&
+        CanGesture(window);
 
     /// <summary>
     /// Gives a window its rule (a saved setup, roadmap P1-5) the first time it comes forward, and never again unless

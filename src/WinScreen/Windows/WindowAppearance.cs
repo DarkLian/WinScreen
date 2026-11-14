@@ -9,15 +9,22 @@ public sealed partial class WindowController
     internal const long BorderlessMask = User32.WS_CAPTION | User32.WS_THICKFRAME;
     internal const long SwitcherMask = User32.WS_EX_TOOLWINDOW | User32.WS_EX_APPWINDOW;
 
-    private sealed record GestureState(nint Window, bool Hidden, bool Peeking);
+    private sealed record GestureState(nint Window, bool Hidden, bool Peeking, bool Filled);
     private volatile GestureState[] _gestureState = [];
 
     private void PublishGestureState() => _gestureState = _changed.Select(pair => new GestureState(pair.Key,
-        pair.Value.Hidden, pair.Value.PlacementBeforePeek is not null)).ToArray();
+        pair.Value.Hidden, pair.Value.PlacementBeforePeek is not null,
+        pair.Value.PlacementBeforeBorderless is not null && pair.Value.BorderlessFilled)).ToArray();
 
     // The mouse hook must never wait for the controller's UI-thread lock.
     internal bool GestureBlocked(nint window) => _gestureState.Any(state =>
         state.Window == window && (state.Hidden || state.Peeking));
+
+    /// <summary>
+    /// The window covers its display because WinScreen filled it. Lock-free, from the last saved state, so the mouse
+    /// hook and the full-screen checks can ask.
+    /// </summary>
+    internal bool FilledByWinScreen(nint window) => _gestureState.Any(state => state.Window == window && state.Filled);
 
     internal bool IsBorderlessFilled(nint window)
     {
@@ -30,6 +37,8 @@ public sealed partial class WindowController
         lock (_gate) return _changed.TryGetValue(window, out var state) && state.Identity.Matches() &&
                             state.PlacementBeforeBorderless is not null;
     }
+
+
 
     public bool IsOutOfSwitcher(nint window)
     {

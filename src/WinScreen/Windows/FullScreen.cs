@@ -44,6 +44,14 @@ public static partial class FullScreen
 /// </summary>
 public static class FullScreenPolicy
 {
+    /// <summary>
+    /// What WinScreen treats as full screen. Windows calls any foreground window that covers its display a
+    /// full-screen app, and Fill display makes one; a window WinScreen filled itself is not a game to step back for.
+    /// A game's own exclusive mode and a presentation still count.
+    /// </summary>
+    public static FullScreenState Seen(FullScreenState reported, nint foreground, Func<nint, bool> filledByWinScreen) =>
+        reported == FullScreenState.Busy && foreground != 0 && filledByWinScreen(foreground) ? FullScreenState.None : reported;
+
     /// <param name="targetHasView">The command would take away a view of the window it was aimed at.</param>
     /// <param name="anyViewOpen">A view is open somewhere. A hotkey pressed in a game is aimed at the game, not at the view.</param>
     public static FullScreenAction Decide(AppCommand command, FullScreenState state, bool pause, bool allowPip,

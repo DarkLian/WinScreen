@@ -463,6 +463,65 @@ public sealed class AppEndToEndTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// On a window WinScreen filled with Fill display, the toolbar still shows and its menu stays open. Windows reports
+    /// such a window as a full-screen app, and WinScreen used to pause for it as for a game (the owner, F5).
+    /// </summary>
+    [Fact]
+    public void The_toolbar_and_its_menu_work_on_a_window_WinScreen_filled()
+    {
+        // On the left, clear of whatever another tool may keep at the top centre of a window.
+        var settings = new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.ShowWindowMenu], Placement = ToolbarPlacement.Left } };
+        settings.Hotkeys[AppCommand.ToggleBorderlessFill] = "Ctrl+Alt+F20";
+        RestartWith(settings);
+        using var target = new TargetProcess(Spot);
+        target.UseTitleBar();
+        Focus(target);
+        Hotkey(Keys.F20, target);
+        Rectangle display = Screen.FromHandle(target.Handle).Bounds;
+        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(target.Handle) == display, 3000), "Fill display didn't fill the display.");
+        Focus(target);
+        try
+        {
+            for (int round = 0; round < 3; round++)
+            {
+                Desktop.MoveMouse(new Point(display.Left + display.Width / 2, display.Top + display.Height / 2));
+                Thread.Sleep(400);
+                var rest = new Point(display.Left + WinScreen.Native.Dpi.Scale(34, WinScreen.Native.Dpi.Of(target.Handle)) + 12, display.Top + 12);
+                Desktop.RequireWindowAt(rest, target.Handle);
+                Desktop.MoveMouse(new Point(rest.X + 30, rest.Y));
+                Desktop.MoveMouse(rest);
+                nint toolbar = 0;
+                Assert.True(Desktop.WaitFor(() =>
+                {
+                    toolbar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar");
+                    return toolbar != 0 && Desktop.IsWindowVisible(toolbar);
+                }, 4000), $"The toolbar didn't appear on the filled window (round {round}).");
+                Rectangle bar = Desktop.BoundsOf(toolbar);
+                Desktop.ClickOn(new Point(bar.Left + bar.Height / 2, bar.Top + bar.Height / 2), toolbar);
+                nint menu = 0;
+                Assert.True(Desktop.WaitFor(() =>
+                {
+                    Desktop.EachProcessWindow(_app.Id, window =>
+                    {
+                        Rectangle bounds = Desktop.BoundsOf(window);
+                        if (menu == 0 && bounds.Height > 120 && bounds.Width > 120 && Desktop.IsWindowVisible(window)) menu = window;
+                    });
+                    return menu != 0;
+                }, 2000), $"The Window menu didn't open (round {round}).");
+                Thread.Sleep(900);
+                Assert.True(Desktop.IsWindowVisible(menu), $"The Window menu closed by itself (round {round}).");
+                Desktop.Press(Keys.Escape);
+                Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(menu)));
+                Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle), "The window didn't get the keyboard back.");
+            }
+        }
+        finally
+        {
+            if (User32.GetForegroundWindow() == target.Handle) Hotkey(Keys.F20, target);
+        }
+    }
+
     [Fact]
     public void An_anchor_brings_forward_minimizes_and_closes_its_window()
     {
