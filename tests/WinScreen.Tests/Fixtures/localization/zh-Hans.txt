@@ -93,6 +93,7 @@ errors.admin.task 92F2037080A178C9
 errors.app.alreadyRunning 94DF4FFB40BD66C2
 errors.app.exitRestoreFailed 4FDBC89286EEB101
 errors.app.otherFolder 4E9C46BF552B049D
+errors.app.restartFailed 42DA52079E1B01EC
 errors.app.shutdownRefused 2C1F978F7464DA71
 errors.app.shutdownUnconfirmed 92527A29273CD51A
 errors.app.unexpectedStop B48164A2DED25AB2
@@ -385,7 +386,8 @@ settings.fullScreen.allowPip 7A203992E47724AA
 settings.fullScreen.pause B8912A5EE18EC45C
 settings.general 40FAE00B7C6D8AC0
 settings.hotkeys.captureHelp DC07356156CCD4C2
-settings.language 29B4B10DCC9B2E55
+settings.language 9F6FEE1ABA17A565
+settings.language.restart 74112E5A36F7D750
 settings.language.system 217CFE7DB1E3D10A
 settings.menus.transparency E1B9731B026929E9
 settings.menus.transparency.help 038A14B6FC87BC99

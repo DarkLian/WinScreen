@@ -553,11 +553,12 @@ public sealed class AppEndToEndTests : IDisposable
             int wanted = trigger == ToolbarTrigger.MinimizeButton ? User32.HTMINBUTTON : User32.HTCAPTION;
             Point rest = Point.Empty;
             for (int y = bounds.Top + 8; y < bounds.Top + 30 && rest.IsEmpty; y += 2)
-                for (int x = trigger == ToolbarTrigger.MinimizeButton ? bounds.Right - 10 : bounds.Left + 50; x > bounds.Left && x < bounds.Right && rest.IsEmpty;
+                // For the title bar, the spot the left-placed bar opens over: one caption height in from the window's edge.
+                for (int x = trigger == ToolbarTrigger.MinimizeButton ? bounds.Right - 10 : WindowLeft(window) + Dpi.Scale(34, Dpi.Of(window)) + 6; x > bounds.Left && x < bounds.Right && rest.IsEmpty;
                      x += trigger == ToolbarTrigger.MinimizeButton ? -4 : 4)
                 {
                     User32.SendMessageTimeout(window, User32.WM_NCHITTEST, 0, (nint)((y << 16) | (x & 0xFFFF)), 2, 500, out nint hit);
-                    if (hit == wanted) rest = new Point(trigger == ToolbarTrigger.MinimizeButton ? x - 10 : x + 10, y + 4);
+                    if (hit == wanted) rest = new Point(trigger == ToolbarTrigger.MinimizeButton ? x - 10 : x, y + 4);
                 }
             Assert.False(rest.IsEmpty, $"Notepad++ answered {wanted} nowhere along its top.");
             Desktop.RequireWindowAt(rest, window);
@@ -576,6 +577,8 @@ public sealed class AppEndToEndTests : IDisposable
             File.Delete(file);
         }
     }
+
+    private static int WindowLeft(nint window) => User32.GetWindowRect(window, out Rect r) ? r.Left : 0;
 
     [Fact]
     public void An_anchor_brings_forward_minimizes_and_closes_its_window()

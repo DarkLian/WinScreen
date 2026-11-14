@@ -111,7 +111,7 @@ internal static class Program
             Application.Exit();
         };
 
-        Application.Run(new TrayApplication(windows, settings, settingsPath, sound));
+        Application.Run(new TrayApplication(windows, settings, settingsPath, sound, Elevation.SettingsPage(arguments)));
     }
 
     /// <summary>What the watcher does after the app was killed: the same recovery as the next start.</summary>

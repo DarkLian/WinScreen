@@ -67,8 +67,10 @@ public sealed partial class TrayApplication : ApplicationContext
     private CropOverlay? _cropping;
     private WindowMenuHost? _windowMenu;
 
-    internal TrayApplication(WindowController windows, AppSettings settings, string settingsPath, ProgramSound? sound = null)
+    internal TrayApplication(WindowController windows, AppSettings settings, string settingsPath, ProgramSound? sound = null,
+        int? settingsPage = null)
     {
+        AskToRestart = AskInSettings;
         _windows = windows;
         _sound = sound ?? new ProgramSound(Native.AudioSessions.Instance, null);
         _placer = new WindowPlacer(windows);
@@ -197,6 +199,18 @@ public sealed partial class TrayApplication : ApplicationContext
             await _updates.Check();
         };
         _updateTimer.Start();
+
+        // Restarted for a change made in Settings: Settings comes back on the same page.
+        if (settingsPage is { } page)
+        {
+            var reopen = new System.Windows.Forms.Timer { Interval = 300 };
+            reopen.Tick += (_, _) =>
+            {
+                reopen.Dispose();
+                OpenSettings(page: page);
+            };
+            reopen.Start();
+        }
     }
 
     private ContextMenuStrip BuildMenu()
@@ -468,6 +482,8 @@ public sealed partial class TrayApplication : ApplicationContext
         if (_settings.Theme != themeBefore) ChangeTheme();
         if (adminChanged && _settings.RunAsAdministrator && !ProcessInfo.SelfElevated)
             _toolbar.BeginInvoke(RestartAsAdministrator); // After Settings has finished saving.
+        else if (_settings.Language != before.Language)
+            _toolbar.BeginInvoke(RestartForLanguage);
         return [];
     }
 
@@ -488,6 +504,46 @@ public sealed partial class TrayApplication : ApplicationContext
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(failure); }
         if (_settingsWindow is { IsDisposed: false } open) open.LoadValues(_settings);
         Alert(T("settings.admin"), T("settings.admin.declined"), ToolTipIcon.Info);
+    }
+
+    /// <summary>Asks before a restart closes views and puts windows back. Tests answer it themselves.</summary>
+    internal Func<int, int, bool> AskToRestart { get; init; }
+
+    /// <summary>Starts the copy that takes over, opening Settings on the page given. Tests stand in for it.</summary>
+    internal Func<int, bool> StartCopy { get; init; } = Elevation.StartFreshCopy;
+
+    private bool AskInSettings(int views, int changed) =>
+        ThemedMessage.Show(_settingsWindow is { IsDisposed: false } owner ? owner : null,
+            string.Format(T("settings.language.restart"), views, changed), "WinScreen", okCancel: true) == DialogResult.OK;
+
+    /// <summary>True once WinScreen has started to exit, for tests.</summary>
+    internal bool Exiting { get; private set; }
+
+    /// <summary>
+    /// A new language needs a new start. It goes the way exit does, so every view closes and every window is put
+    /// back first; if one can't be, WinScreen stays running and says so. With views or changed windows it asks first;
+    /// with nothing open it just restarts. The new copy opens Settings on the same page.
+    /// </summary>
+    private void RestartForLanguage()
+    {
+        int page = _settingsWindow is { IsDisposed: false } open ? open.PageIndex : 0;
+        int views = _viewsInOrder.Count, changed = _windows.PendingRestores;
+        if (views + changed > 0 && !AskToRestart(views, changed))
+            return; // Kept: the language changes at the next start.
+        Diagnostics.Log.Event("app.restarting", ("views", views), ("windows", changed));
+        if (_settingsWindow is { IsDisposed: false } settings) settings.Close();
+        if (!TakeEverythingAwayForExit())
+        {
+            Alert(T("recovery.attention"), T("errors.app.exitRestoreFailed") + Environment.NewLine +
+                string.Join(Environment.NewLine, _windows.RestoreFailures));
+            return;
+        }
+        if (!StartCopy(page))
+        {
+            Alert(T("errors.operation.title"), T("errors.app.restartFailed"));
+            return;
+        }
+        ExitThread();
     }
 
     /// <summary>
@@ -1255,6 +1311,7 @@ public sealed partial class TrayApplication : ApplicationContext
         _hotkeys.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
+        Exiting = true;
         base.ExitThreadCore();
     }
 

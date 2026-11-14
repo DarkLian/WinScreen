@@ -80,6 +80,38 @@ internal static class Elevation
         catch (Win32Exception) { return false; } // Including "The operation was canceled by the user."
     }
 
+    /// <summary>Followed by a page number: open Settings on that page once started.</summary>
+    public const string SettingsPageArgument = "--settings-page";
+
+    /// <summary>
+    /// Starts a copy with this one's rights that takes over once this one has closed, and opens Settings on
+    /// <paramref name="settingsPage"/>. It doesn't ask for administrator rights again. False when it couldn't start.
+    /// </summary>
+    public static bool StartFreshCopy(int settingsPage)
+    {
+        try
+        {
+            var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
+            foreach (string argument in new[] { ElevatedArgument, AfterArgument, Environment.ProcessId.ToString(),
+                         SettingsPageArgument, settingsPage.ToString() })
+                start.ArgumentList.Add(argument);
+            Process.Start(start)?.Dispose();
+            return true;
+        }
+        catch (Win32Exception failure)
+        {
+            Diagnostics.Log.Swallowed(failure);
+            return false;
+        }
+    }
+
+    /// <summary>The Settings page to open once started, from the arguments.</summary>
+    public static int? SettingsPage(IReadOnlyList<string> arguments)
+    {
+        int at = arguments.ToList().IndexOf(SettingsPageArgument);
+        return at >= 0 && at + 1 < arguments.Count && int.TryParse(arguments[at + 1], out int page) && page >= 0 ? page : null;
+    }
+
     /// <summary>The copy this one should wait for, from its arguments.</summary>
     public static int? WaitingFor(IReadOnlyList<string> arguments)
     {
