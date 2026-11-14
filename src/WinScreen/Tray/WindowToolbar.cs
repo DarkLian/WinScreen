@@ -169,6 +169,18 @@ public sealed class WindowToolbar : Form
     private static char ButtonIcon(AppCommand command) => MenuParts.IconOf(command) ?? MenuParts.More;
 
 
+    /// <summary>
+    /// Moved onto a display at another scale: Windows Forms has just rescaled the bar on top of the size it was given
+    /// for that display, so it is laid out again (roadmap P2-3; measured in the two-display VM, 14 Nov 2026: the bar
+    /// came out 23 px high around 34 px buttons).
+    /// </summary>
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(e);
+        _arrangement = "";
+        Arrange(e.DeviceDpiNew);
+    }
+
     /// <summary>Sizes the buttons for this monitor and lays out the ones currently available.</summary>
     private void Arrange(int dpi)
     {
