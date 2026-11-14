@@ -667,6 +667,14 @@ public sealed class AppEndToEndTests : IDisposable
                     if (hit == wanted) rest = new Point(trigger == ToolbarTrigger.MinimizeButton ? x - 10 : x, y + 4);
                 }
             Assert.False(rest.IsEmpty, $"Notepad++ answered {wanted} nowhere along its top.");
+            // The minimize button where it is drawn, as a person aims at it. Notepad++'s own answer puts "minimize"
+            // over the drawn maximize button, which is where this test used to rest (the owner, 15 Nov).
+            if (trigger == ToolbarTrigger.MinimizeButton)
+            {
+                Rectangle drawn = WinScreen.Windows.WindowInfo.CaptionButtonBounds(window, WinScreen.Windows.WindowInfo.CaptionButton.Minimize)
+                    ?? throw new InvalidOperationException("Windows reports no minimize button for Notepad++.");
+                rest = new Point(drawn.Left + drawn.Width / 2, drawn.Top + drawn.Height / 2);
+            }
             Desktop.RequireWindowAt(rest, window);
             // Real input, as a hand gives: it brings Windows' own hover look and tooltip over the caption buttons.
             Desktop.SlideMouse(new Point(rest.X - 20, rest.Y));

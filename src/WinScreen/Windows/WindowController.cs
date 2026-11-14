@@ -1597,6 +1597,31 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
 /// <summary>Read-only facts about a window.</summary>
 public static class WindowInfo
 {
+    /// <summary>The caption buttons Windows reports, in its order: minimize, maximize, close.</summary>
+    public enum CaptionButton { Minimize = 2, Maximize = 3, Close = 5 }
+
+    /// <summary>
+    /// Where Windows draws one of a window's caption buttons, in screen pixels, or null when it reports none. This is
+    /// where a person sees the button. An app's own answer to "what is here" can follow an older, narrower layout and
+    /// say "minimize" over the drawn maximize button (Notepad++, PrismLauncher: the owner, 15 Nov).
+    /// </summary>
+    public static Rectangle? CaptionButtonBounds(nint window, CaptionButton button)
+    {
+        const int size = 4 + 16 + 6 * 4 + 6 * 16; // TITLEBARINFOEX: size, title bar, six states, six rectangles
+        nint buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            for (int i = 0; i < size; i += 4) Marshal.WriteInt32(buffer, i, 0);
+            Marshal.WriteInt32(buffer, 0, size);
+            if (User32.SendMessageTimeout(window, 0x033F /* WM_GETTITLEBARINFOEX */, 0, buffer, 0x2, 100, out _) == 0) return null;
+            int at = 4 + 16 + 6 * 4 + (int)button * 16;
+            int left = Marshal.ReadInt32(buffer, at), top = Marshal.ReadInt32(buffer, at + 4);
+            int right = Marshal.ReadInt32(buffer, at + 8), bottom = Marshal.ReadInt32(buffer, at + 12);
+            return right > left && bottom > top ? Rectangle.FromLTRB(left, top, right, bottom) : null;
+        }
+        finally { Marshal.FreeHGlobal(buffer); }
+    }
+
     public static string ExecutablePath(nint window)
     {
         User32.GetWindowThreadProcessId(window, out uint pid);

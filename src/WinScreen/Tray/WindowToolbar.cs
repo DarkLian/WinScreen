@@ -304,6 +304,10 @@ public sealed class WindowToolbar : Form
     /// </summary>
     internal static bool MatchesTrigger(nint window, Point cursor, ToolbarTrigger trigger)
     {
+        // The minimize button where Windows draws it, when Windows says: the app's own answer can be off by a button.
+        if (trigger == ToolbarTrigger.MinimizeButton &&
+            WindowInfo.CaptionButtonBounds(window, WindowInfo.CaptionButton.Minimize) is { } drawn)
+            return drawn.Contains(cursor);
         nint wanted = trigger == ToolbarTrigger.MinimizeButton ? User32.HTMINBUTTON : User32.HTCAPTION;
         nint position = (nint)((cursor.Y << 16) | (cursor.X & 0xFFFF));
         if (Answers(window) == wanted) return true;
