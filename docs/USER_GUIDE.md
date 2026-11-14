@@ -160,8 +160,9 @@ A window has Dark mode or Glass, not both: turning one on turns the other off.
   part instead of dragging, and the crop follows that part when the window is resized.
 - **Shrink** turns a window into a small live tile. Click the tile to bring the window back.
 
-In **Settings → Appearance** you can make Glass fade only the background while keeping text and pictures, and
-make Dark mode leave pictures and video as they are. You can also choose how solid the background, text and pictures stay.
+Dark mode leaves pictures and video as they are, and parts that are dark already stay dark. On a PC without a graphics
+card it turns everything dark, pictures too. In **Settings → Appearance** you can turn that off, make Glass fade only
+the background while keeping text and pictures, and choose how solid the background, text and pictures stay.
 Windows shows a colored border around a window while these two options are working.
 
 ## Remember a program's setup
