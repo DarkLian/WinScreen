@@ -24,3 +24,6 @@ mcp.json
 # Local WinScreen runtime data
 /settings.json
 /changed-windows.json
+
+# Website build output (site/build.py)
+_site/

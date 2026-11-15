@@ -1,0 +1,212 @@
+:root {
+  --bg: #f3f3f3;
+  --surface: #ffffff;
+  --text: #1a1a1a;
+  --muted: #5d5d5d;
+  --border: #e0e0e0;
+  --accent: #005fb8;
+  --accent-text: #ffffff;
+  --code: #f0f0f0;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202020;
+    --surface: #2b2b2b;
+    --text: #f3f3f3;
+    --muted: #c5c5c5;
+    --border: #3d3d3d;
+    --accent: #60cdff;
+    --accent-text: #003b5c;
+    --code: #1c1c1c;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.6 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Microsoft YaHei UI",
+        "Microsoft JhengHei UI", "Yu Gothic UI", "Malgun Gothic", sans-serif;
+}
+
+a { color: var(--accent); }
+
+img { max-width: 100%; height: auto; }
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.langs { position: relative; }
+
+.langs summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.langs summary::-webkit-details-marker { display: none; }
+
+.langs nav {
+  position: absolute;
+  right: 0;
+  margin-top: 6px;
+  display: grid;
+  min-width: 190px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+
+.langs nav a {
+  padding: 6px 10px;
+  border-radius: 4px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.langs nav a:hover, .langs nav a:focus-visible { background: var(--bg); }
+
+.langs nav a[aria-current="page"] { font-weight: 600; color: var(--accent); }
+
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 16px 48px;
+}
+
+.hero {
+  text-align: center;
+  padding: 48px 0 24px;
+}
+
+.hero h1 {
+  margin: 8px 0 4px;
+  font-size: 40px;
+  line-height: 1.2;
+}
+
+.lead {
+  max-width: 680px;
+  margin: 0 auto 20px;
+  font-size: 18px;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 10px;
+}
+
+.button {
+  display: inline-block;
+  min-width: 140px;
+  padding: 9px 20px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.meta { margin: 0; color: var(--muted); font-size: 13px; }
+
+.status { margin: 16px auto 0; max-width: 680px; }
+
+.readme {
+  padding: 8px 32px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.readme h2 {
+  margin: 32px 0 12px;
+  padding-bottom: 6px;
+  font-size: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.readme h3 { margin: 24px 0 8px; font-size: 18px; }
+
+.readme p[align="center"] { text-align: center; }
+
+.readme table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.readme th, .readme td {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.readme code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--code);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.readme pre {
+  overflow-x: auto;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: var(--code);
+}
+
+.readme pre code { padding: 0; background: none; }
+
+footer {
+  padding: 24px 16px 40px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .hero { padding-top: 32px; }
+  .hero h1 { font-size: 32px; }
+  .readme { padding: 4px 16px 16px; }
+}
