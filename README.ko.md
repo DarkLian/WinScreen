@@ -43,6 +43,18 @@
   <img src="docs/assets/demos/anchors.gif" width="880" alt="앵커를 클릭하면 창이 돌아옵니다. 어느 데스크톱에서든 됩니다. 파일을 앵커 위로 끌면 그 창에 넣을 수 있습니다.">
 </p>
 
+작은 화면을 원하는 부분만 남기고 잘라 확대할 수 있습니다. 화면 일부의 작은 화면도 똑같이 쓸 수 있습니다.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="작은 화면을 원하는 부분만 남기고 잘라 확대할 수 있습니다. 화면 일부의 작은 화면도 똑같이 쓸 수 있습니다.">
+</p>
+
+유리 효과는 배경만 흐리게 합니다. 창을 한 번 맞춰 두고 Ctrl+Alt+Shift+S를 누르면 다음부터 그대로 열립니다.
+
+<p align="center">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="유리 효과는 배경만 흐리게 합니다. 창을 한 번 맞춰 두고 Ctrl+Alt+Shift+S를 누르면 다음부터 그대로 열립니다.">
+</p>
+
 ## 메뉴
 
 <p align="center">

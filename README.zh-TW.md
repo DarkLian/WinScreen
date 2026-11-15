@@ -41,6 +41,18 @@
   <img src="docs/assets/demos/anchors.gif" width="880" alt="錨點點一下就把視窗帶回來，在哪個桌面都可以。把檔案拖到錨點上，就能放進它的視窗。">
 </p>
 
+把檢視裁切到你要的部分並放大。螢幕某一部分的檢視也是同樣的用法。
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="把檢視裁切到你要的部分並放大。螢幕某一部分的檢視也是同樣的用法。">
+</p>
+
+玻璃效果只淡化背景。把視窗設定好，按 Ctrl+Alt+Shift+S，下次開啟時就是這個樣子。
+
+<p align="center">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="玻璃效果只淡化背景。把視窗設定好，按 Ctrl+Alt+Shift+S，下次開啟時就是這個樣子。">
+</p>
+
 ## 選單
 
 <p align="center">

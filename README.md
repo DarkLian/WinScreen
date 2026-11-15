@@ -41,6 +41,18 @@ Anchors bring windows back with a click, from any desktop. Drag a file onto one 
   <img src="docs/assets/demos/anchors.gif" width="880" alt="Anchors bring windows back with a click, from any desktop. Drag a file onto one to drop it into its window.">
 </p>
 
+Crop a view to the part you want and zoom in. A view of a region of the screen works the same way.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Crop a view to the part you want and zoom in. A view of a region of the screen works the same way.">
+</p>
+
+Glass fades only the background. Set a window up once, press Ctrl+Alt+Shift+S, and it opens that way next time.
+
+<p align="center">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glass fades only the background. Set a window up once, press Ctrl+Alt+Shift+S, and it opens that way next time.">
+</p>
+
 ## Menus
 
 <p align="center">

@@ -43,6 +43,18 @@ Anker holen Fenster mit einem Klick zurück, von jedem Desktop aus. Zieh eine Da
   <img src="docs/assets/demos/anchors.gif" width="880" alt="Anker holen Fenster mit einem Klick zurück, von jedem Desktop aus. Zieh eine Datei auf einen Anker, um sie in sein Fenster abzulegen.">
 </p>
 
+Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein. Eine Ansicht eines Bildschirmausschnitts funktioniert genauso.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein. Eine Ansicht eines Bildschirmausschnitts funktioniert genauso.">
+</p>
+
+Glas blendet nur den Hintergrund aus. Richte ein Fenster einmal ein, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.
+
+<p align="center">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glas blendet nur den Hintergrund aus. Richte ein Fenster einmal ein, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.">
+</p>
+
 ## Menüs
 
 <p align="center">

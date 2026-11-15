@@ -43,6 +43,18 @@ As âncoras trazem uma janela de volta com um clique, de qualquer área de traba
   <img src="docs/assets/demos/anchors.gif" width="880" alt="As âncoras trazem uma janela de volta com um clique, de qualquer área de trabalho. Arraste um arquivo para uma âncora para soltá-lo na janela dela.">
 </p>
 
+Corte uma visualização na parte que você quer e amplie. Uma visualização de parte da tela funciona do mesmo jeito.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Corte uma visualização na parte que você quer e amplie. Uma visualização de parte da tela funciona do mesmo jeito.">
+</p>
+
+Vidro esmaece só o fundo. Ajuste uma janela uma vez, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.
+
+<p align="center">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Vidro esmaece só o fundo. Ajuste uma janela uma vez, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.">
+</p>
+
 ## Menus
 
 <p align="center">

@@ -43,6 +43,18 @@ Las anclas traen una ventana de vuelta con un clic, desde cualquier escritorio. 
   <img src="docs/assets/demos/anchors.gif" width="880" alt="Las anclas traen una ventana de vuelta con un clic, desde cualquier escritorio. Arrastra un archivo sobre una para soltarlo en su ventana.">
 </p>
 
+Recorta una vista a la parte que quieres y amplíala. Una vista de parte de la pantalla funciona igual.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Recorta una vista a la parte que quieres y amplíala. Una vista de parte de la pantalla funciona igual.">
+</p>
+
+Cristal difumina solo el fondo. Configura una ventana una vez, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.
+
+<p align="center">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Cristal difumina solo el fondo. Configura una ventana una vez, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.">
+</p>
+
 ## Menús
 
 <p align="center">

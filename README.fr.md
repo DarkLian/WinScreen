@@ -43,6 +43,18 @@ Les ancres ramènent une fenêtre d'un clic, depuis n'importe quel bureau. Faite
   <img src="docs/assets/demos/anchors.gif" width="880" alt="Les ancres ramènent une fenêtre d'un clic, depuis n'importe quel bureau. Faites glisser un fichier sur une ancre pour le déposer dans sa fenêtre.">
 </p>
 
+Rognez une vue sur la partie qui vous intéresse et zoomez. Une vue d'une partie de l'écran fonctionne de la même façon.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Rognez une vue sur la partie qui vous intéresse et zoomez. Une vue d'une partie de l'écran fonctionne de la même façon.">
+</p>
+
+L'effet verre n'atténue que l'arrière-plan. Réglez une fenêtre une fois, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.
+
+<p align="center">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="L'effet verre n'atténue que l'arrière-plan. Réglez une fenêtre une fois, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.">
+</p>
+
 ## Menus
 
 <p align="center">

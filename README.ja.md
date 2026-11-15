@@ -43,6 +43,18 @@ WinScreen のアプリとユーザーガイドは、英語と中国語のみで�
   <img src="docs/assets/demos/anchors.gif" width="880" alt="アンカーをクリックするとウィンドウが戻ります。どのデスクトップからでも使えます。ファイルをアンカーにドラッグすると、そのウィンドウにドロップできます。">
 </p>
 
+ビューを必要な部分だけに切り抜いて拡大できます。画面の一部のビューも同じように使えます。
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="ビューを必要な部分だけに切り抜いて拡大できます。画面の一部のビューも同じように使えます。">
+</p>
+
+ガラス効果は背景だけを薄くします。ウィンドウを一度整えて Ctrl+Alt+Shift+S を押せば、次からその状態で開きます。
+
+<p align="center">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="ガラス効果は背景だけを薄くします。ウィンドウを一度整えて Ctrl+Alt+Shift+S を押せば、次からその状態で開きます。">
+</p>
+
 ## メニュー
 
 <p align="center">
