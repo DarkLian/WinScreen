@@ -92,6 +92,35 @@ public sealed class WindowAppearanceTests
         finally { windows.RestoreAll(); }
     }
 
+    /// <summary>
+    /// Windows 11 draws a window's backdrop over its whole size even when only part is kept, so a cropped Chrome window
+    /// left a dark panel over what was behind (the owner, 15 Nov). The backdrop is off while cropped and back after.
+    /// </summary>
+    [Fact]
+    public void A_crop_turns_the_backdrop_off_and_puts_it_back()
+    {
+        if (Environment.OSVersion.Version.Build < 22621) { Skipped.Because("Window backdrops are Windows 11 22H2 and later."); return; }
+        using var target = new TargetProcess(Spot);
+        target.UseFrame();
+        nint window = target.CreatePlainWindow(Spot, framed: true);
+        Assert.Equal(0, Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_SYSTEMBACKDROP_TYPE, 2, sizeof(int))); // Mica
+        var windows = new WindowController([]);
+        try
+        {
+            windows.Crop(window, new Rectangle(0, 0, 150, 100));
+            Assert.Equal(Dwmapi.DWMSBT_NONE, Backdrop(window));
+            windows.RemoveCrop(window);
+            Assert.Equal(2, Backdrop(window));
+            windows.Crop(window, new Rectangle(0, 0, 150, 100));
+            windows.RestoreAll();
+            Assert.Equal(2, Backdrop(window));
+        }
+        finally { windows.RestoreAll(); }
+
+        static int Backdrop(nint window) =>
+            Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_SYSTEMBACKDROP_TYPE, out int value, sizeof(int)) == 0 ? value : -1;
+    }
+
     [Theory]
     [InlineData("hidden")]
     [InlineData("crop")]

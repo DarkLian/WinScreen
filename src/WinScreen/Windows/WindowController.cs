@@ -78,6 +78,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public Color? GlassColor { get; set; }
         [NotJournalled(CurrentState)] public bool PinPaused { get; set; }
         public bool Cropped { get; set; }
+        [NotJournalled("Windows 11's backdrop and corners a crop turned off; after a crash the app's own come back when it next opens.")]
+        public (int Backdrop, int Corners)? LookBeforeCrop { get; set; }
         [NotJournalled("Transient: how often another program took the pin away in the current run of takings.")]
         public int PinRestores { get; set; }
         [NotJournalled("Transient: when the current run of takings began.")]
@@ -285,6 +287,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                     User32.DeleteObject(region);
                     throw Failure(T("actions.crop"), window);
                 }
+                if (!croppedBefore) HideFrameLook(window, state);
                 // Some apps put their own shape straight back (Windows Forms ones with a frame, for one), so a crop
                 // that didn't stay is said to have failed rather than shown as on.
                 if (WindowInfo.ShapeOf(window) is null)
@@ -321,6 +324,31 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         if (User32.SetWindowRgn(window, 0, true) == 0)
             throw Failure(T("actions.uncrop"), window);
         state.Cropped = false;
+        RestoreFrameLook(window, state);
+    }
+
+    /// <summary>
+    /// Windows 11 still draws a window's backdrop (Mica, which Chrome's and other apps' windows use), border and rounded
+    /// corners over its whole size when only part is kept, so the rest showed as a dark panel covering what's behind
+    /// (the owner, 15 Nov). They are off while cropped and back when the crop ends.
+    /// </summary>
+    private static void HideFrameLook(nint window, ChangedWindow state)
+    {
+        int backdrop = Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_SYSTEMBACKDROP_TYPE, out int b, sizeof(int)) == 0 ? b : 0;
+        int corners = Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_WINDOW_CORNER_PREFERENCE, out int c, sizeof(int)) == 0 ? c : 0;
+        state.LookBeforeCrop = (backdrop, corners);
+        Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_SYSTEMBACKDROP_TYPE, Dwmapi.DWMSBT_NONE, sizeof(int));
+        Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_WINDOW_CORNER_PREFERENCE, Dwmapi.DWMWCP_DONOTROUND, sizeof(int));
+        Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_BORDER_COLOR, Dwmapi.DWMWA_COLOR_NONE, sizeof(int));
+    }
+
+    private static void RestoreFrameLook(nint window, ChangedWindow state)
+    {
+        if (state.LookBeforeCrop is not { } look) return;
+        state.LookBeforeCrop = null;
+        Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_SYSTEMBACKDROP_TYPE, look.Backdrop, sizeof(int));
+        Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_WINDOW_CORNER_PREFERENCE, look.Corners, sizeof(int));
+        Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_BORDER_COLOR, Dwmapi.DWMWA_COLOR_DEFAULT, sizeof(int));
     }
 
     public bool IsRolledUp(nint window)
@@ -624,7 +652,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     {
         if (!state.Cropped || User32.IsIconic(window) || WindowInfo.ShapeOf(window) is not null) return;
         state.Cropped = false;
-        Diagnostics.Log.Event("crop.ended", ("program", Diagnostics.LogValue.ProgramOf(window)));
+        RestoreFrameLook(window, state);
+        Diagnostics.Log.Event("crop.ended",("program", Diagnostics.LogValue.ProgramOf(window)));
     }
 
     private void FollowHover(nint window, ChangedWindow state, Point cursor, bool opaqueOnHover)
