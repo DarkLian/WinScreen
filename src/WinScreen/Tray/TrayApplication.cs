@@ -195,6 +195,7 @@ public sealed partial class TrayApplication : ApplicationContext
         else if (firstRun)
             Balloon(T("app.running"), T("tray.welcome"),
                 ToolTipIcon.None);
+        OfferWhatsNew(firstRun);
         if (_windows.RecoveryWarning is { } warning)
             Alert(T("recovery.attention"), warning);
 
@@ -247,6 +248,7 @@ public sealed partial class TrayApplication : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem(T("settings.title"), MenuParts.Icon(MenuParts.Settings), (_, _) => OpenSettings()));
         menu.Items.Add(new ToolStripMenuItem(T("updates.check"), MenuParts.Icon(MenuParts.Sync), async (_, _) => await CheckForUpdates()));
+        menu.Items.Add(new ToolStripMenuItem(T("whatsNew.open"), null, (_, _) => WhatsNew.Show()));
         menu.Items.Add(new ToolStripMenuItem(T("app.saveDiagnostics"), MenuParts.Icon(MenuParts.Save), (_, _) => SaveDiagnostics()));
         menu.Items.Add(new ToolStripMenuItem(T("app.about"), MenuParts.Icon(MenuParts.Info), (_, _) => ThemedMessage.Show(null,
             string.Format(T("app.version"), AppInfo.Version), "WinScreen")));
@@ -1319,6 +1321,21 @@ public sealed partial class TrayApplication : ApplicationContext
         bool installed = VelopackUpdateSession.IsInstalled;
         Balloon(T("updates.title"), string.Format((installed ? T("updates.available") : T("updates.availablePortable")), version),
             ToolTipIcon.Info, installed ? () => _ = DownloadToldVersion() : () => OpenReleasePage(version));
+    }
+
+    /// <summary>
+    /// The first start of a published version after an update says so once, quietly: WinScreen often starts at sign-in
+    /// with nobody watching, so never a window by itself. A click opens the list.
+    /// </summary>
+    private void OfferWhatsNew(bool firstRun)
+    {
+        string version = AppInfo.Version;
+        if (WhatsNew.ShouldOffer(version, _settings.LastSeenVersion, firstRun, WhatsNew.Published) && _settings.ShowNotifications)
+            Balloon(T("updates.title"), string.Format(T("whatsNew.offer"), version), ToolTipIcon.Info, WhatsNew.Show);
+        if (_settings.LastSeenVersion == version) return;
+        _settings.LastSeenVersion = version;
+        try { _settings.Save(_settingsPath); }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(failure); }
     }
 
     private async Task DownloadToldVersion() => Balloon(T("updates.title"), await _updates.CheckNow(), ToolTipIcon.Info);

@@ -26,6 +26,7 @@
     <AssemblyMetadata Include="ReleaseType" Value="$(WinScreenReleaseType)" />
     <EmbeddedResource Include="Updates\update-public-key.pem" LogicalName="WinScreen.UpdatePublicKey" Condition="Exists('Updates\update-public-key.pem')" />
     <EmbeddedResource Include="Localization\*.json" WithCulture="false" LogicalName="WinScreen.Localization.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Updates\whats-new.json" LogicalName="WinScreen.WhatsNew" />
     <InternalsVisibleTo Include="WinScreen.Tests" />
     <None Include="..\..\LICENSE" Link="LICENSE" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

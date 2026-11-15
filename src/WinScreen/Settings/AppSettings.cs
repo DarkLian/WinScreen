@@ -423,6 +423,9 @@ public sealed class AppSettings
     public bool MenuTransparency { get; set; } = true;
     public UpdateMode Updates { get; set; }
 
+    /// <summary>The version that last started, so What's new is offered once after an update; null before 1.1.0.</summary>
+    public string? LastSeenVersion { get; set; }
+
     /// <summary>
     /// Written for copies from before the three choices, which know only this switch; this version reads
     /// <see cref="Updates"/> and takes this only from an older file (<see cref="ChooseUpdates"/>).

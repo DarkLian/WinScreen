@@ -503,6 +503,10 @@ updates.ready 4790544A79BCB7B8
 updates.repositoryRequired 25C3497343CA83AA
 updates.title EB819EA9ED97F0F2
 updates.upToDate D3474430AEDF927D
+whatsNew.none A5AD9A8CA0F68417
+whatsNew.offer AA45DEAA93C600E6
+whatsNew.open 0BE647DEB27EFECC
+whatsNew.title 5C79C6F9BD710D6F
 window.arrange 03201E8633F61807
 window.borderless D370B533FE7C40AB
 window.clickThrough 9AFD0556809A9F25

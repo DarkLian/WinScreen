@@ -1,0 +1,43 @@
+{
+  "1.1.0": {
+    "en": [
+      "Rules: what a program's windows get when they come forward can now match more windows and do more.",
+      "Commands from scripts, preset sizes, and Minimize to an Anchor.",
+      "More apps and browsers can be used through a view without turning on experimental features.",
+      "A view's menu can mute the original's program until it is put back.",
+      "A crop of a part you clicked follows it when the window is resized.",
+      "Dark keeps pictures and video as they are, and Glass and Dark never leave a window that can't be clicked.",
+      "The toolbar opens on more apps, by the title bar, the minimize button, or either.",
+      "A view keeps updating while you are on another virtual desktop, and Anchors can stay on their window's desktop.",
+      "Pin, Roll up, opacity and Fill display follow what an app does to its window.",
+      "Changing the language restarts WinScreen by itself.",
+      "Choose whether WinScreen tells you about new versions or installs them for you, and see what's new after an update."
+    ],
+    "zh-Hans": [
+      "规则：程序窗口出现在前台时所获得的设置，现在可以匹配更多窗口，也能做更多事情。",
+      "可从脚本运行命令，提供预设大小，以及“最小化到锚点”。",
+      "更多应用和浏览器无需开启实验性功能即可通过视图使用。",
+      "视图菜单可以将原窗口所属程序静音，直到将其放回。",
+      "裁剪你点击的部分后，窗口调整大小时裁剪会跟随该部分。",
+      "深色模式会保留图片和视频的原样，玻璃和深色效果也不会再让窗口无法点击。",
+      "工具栏可在更多应用上打开，可通过标题栏、最小化按钮或两者之一打开。",
+      "切换到另一个虚拟桌面时，视图会继续更新；锚点也可以只显示在其窗口所在的桌面上。",
+      "置顶、卷起、透明度和填满显示器会跟随应用对其窗口所做的更改。",
+      "更改语言后，WinScreen 会自行重新启动。",
+      "可选择让 WinScreen 告诉你新版本或为你安装，并在更新后查看新功能。"
+    ],
+    "zh-Hant": [
+      "規則：程式視窗出現在前景時所取得的設定，現在可以符合更多視窗，也能做更多事情。",
+      "可從指令碼執行命令，提供預設大小，以及「最小化到錨點」。",
+      "更多應用程式和瀏覽器無需開啟實驗性功能即可透過檢視使用。",
+      "檢視選單可以將原視窗所屬程式靜音，直到將其放回。",
+      "裁切你點選的部分後，視窗調整大小時裁切會跟隨該部分。",
+      "深色模式會保留圖片和影片的原樣，玻璃和深色效果也不會再讓視窗無法點選。",
+      "工具列可在更多應用程式上開啟，可透過標題列、最小化按鈕或兩者之一開啟。",
+      "切換到另一個虛擬桌面時，檢視會繼續更新；錨點也可以只顯示在其視窗所在的桌面上。",
+      "置頂、捲起、透明度和填滿顯示器會跟隨應用程式對其視窗所做的變更。",
+      "變更語言後，WinScreen 會自行重新啟動。",
+      "可選擇讓 WinScreen 告訴你新版本或為你安裝，並在更新後查看新功能。"
+    ]
+  }
+}

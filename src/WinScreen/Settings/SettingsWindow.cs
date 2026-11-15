@@ -1406,6 +1406,9 @@ private readonly ErrorProvider _errors = new();
             Text = string.Format(T("app.version"), AppInfo.Version), AutoSize = true,
             ForeColor = SettingsStyle.Secondary, Font = SettingsStyle.CaptionFont, Margin = new Padding(3, 2, 3, 0),
         });
+        var whatsNew = new PlainButton { Text = T("whatsNew.open"), AutoSize = true, Margin = new Padding(3, 6, 3, 0) };
+        whatsNew.Click += (_, _) => WhatsNew.Show();
+        page.Controls.Add(whatsNew);
         return page;
     }
 
