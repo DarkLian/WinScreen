@@ -1,0 +1,217 @@
+<p align="center">
+  <img src="docs/assets/winscreen.png" width="96" alt="WinScreen のアイコン">
+</p>
+
+<h1 align="center">WinScreen</h1>
+
+<p align="center">
+  <strong>安定版。</strong><em>実験的</em>と書かれた機能は、まだ変わることがあります。今いちばん役に立つのは、皆さんのフィードバックです。
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/status-stable-brightgreen" alt="状態：安定版">
+  <a href="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml"><img src="https://github.com/DarkLian/WinScreen/actions/workflows/build.yml/badge.svg" alt="ビルド"></a>
+  <a href="https://github.com/DarkLian/WinScreen/releases"><img src="https://img.shields.io/github/v/release/DarkLian/WinScreen?label=release" alt="最新リリース"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6" alt="Windows 10 と 11">
+  <img src="https://img.shields.io/badge/arch-x64-4c8bf5" alt="x64">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/DarkLian/WinScreen" alt="MIT ライセンス"></a>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português (Brasil)</a>
+</p>
+
+WinScreen のアプリとユーザーガイドは、英語と中国語のみです。
+
+## メニュー
+
+<p align="center">
+  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="WinScreen の設定画面、General ページ、ダーク表示">
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="ウィンドウのメニュー、Effects メニューを開いたところ">
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="設定画面、Appearance ページ、不透明度のスライダー">
+</p>
+
+## ツールバーとアンカー
+
+<p align="center">
+  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="ウィンドウのタイトルバーに出るツールバー">
+  <img src="docs/assets/screenshots/anchors.png" width="364" alt="画面の端にある 3 つのアンカー、背景なし">
+</p>
+
+## 小さなビューからアプリを使う
+
+ウィンドウで **Ctrl+Alt+P** を押すと、そのウィンドウの小さなライブビューが常に手前に表示されます。ビューのメニューで
+**Interactive** をオンにすると、ビューの中でそのままアプリを使えます。クリック、入力、スクロール、テキストの選択、
+メニューを開くこともできます。Chrome、Edge、Brave、Vivaldi、Firefox、Electron アプリ、エクスプローラーに対応しています。
+ほかのアプリでは*（実験的）*です。本物のウィンドウは邪魔にならないよう隠れたままなので、動画やチャット、文書を画面の隅に
+置いたまま作業できます。
+
+**Enhanced hover** を使うと、ブラウザーや VS Code、Discord のようなアプリでホバー効果がそのまま働きます。ゲームのように
+ビューではうまく動かないアプリは、ビューをクリックすると本物のウィンドウを呼び戻し、ほかへ切り替えるとまた隠すこともできます。
+詳しくは[対応状況](docs/FEATURE_COMPATIBILITY.md)（英語）をご覧ください。
+
+## 機能
+
+**ウィンドウ**
+- 常に手前に固定、色付きの枠も選べます
+- 半透明：既定の濃さ、ポインターの下で Ctrl+Alt+ホイール、マウスを乗せている間は不透明に戻す
+- クリックを透過
+- 枠なし、ディスプレイいっぱいに表示、ダークなタイトルバー
+- プログラムごとの設定をタイトルやクラスで覚え、一度だけ、または毎回適用
+
+**ピクチャー・イン・ピクチャー**
+- ウィンドウ、ディスプレイ全体、画面の一部のライブビュー
+- 切り抜き、拡大、サイズ変更、決まったサイズ、プリセット、保存したソース
+- クリックしたウィンドウの一部に切り抜き、ウィンドウのサイズが変わってもそのまま保つ
+- 元のウィンドウを隠したまま、ビューを更新し続ける
+- 元のウィンドウの音をビューから消音
+- ビューからアプリを使う：Chrome、Edge、Brave、Vivaldi、Firefox、Electron アプリ、エクスプローラー。ほかのアプリ、Enhanced hover、中クリックスクロールは*（実験的）*
+- ビューごとのフレームレート上限、不透明度、位置の固定、クリックの透過
+- ビューをタスクバーに最小化、ホバーでプレビュー、読み取り用の拡大鏡
+- 文字や画像を避けて動くビュー*（実験的）*
+
+**アンカー**
+- クリックひとつでウィンドウを呼び戻す、浮かんだボタン
+- ファイルをドロップしたり、ポインターを置いてライブプレビューを見たり
+- ウィンドウが隠れると自動で追加、自動で削除
+- ウィンドウをアンカーに最小化
+- ウィンドウをタスクバーから外す、または一時的にすべて隠す
+- すべての仮想デスクトップに表示、またはウィンドウのあるデスクトップだけに表示
+
+**配置**
+- 画面の 9 か所、次のディスプレイ、正確な位置とサイズ、前の位置
+- Alt または Win を押しながらドラッグして移動とサイズ変更、端に吸着
+- タイトルバーまで巻き上げる*（実験的）*、いちばん後ろへ送る
+
+**効果** *（実験的）*
+- 画像や動画はそのままのダークモード、またはシンプルなフィルター
+- 背景だけを薄くするガラス効果
+- ウィンドウの切り抜き、ライブタイルへの縮小
+
+**ふだんの使い方**
+- タイトルバーのツールバー、Ctrl+右クリックのウィンドウメニュー、すべてそろったトレイメニュー
+- 変更できるショートカットと、すべての操作を検索できる一覧
+- スクリプト用のコマンドライン
+- キーボードだけで使える設定画面とメニュー
+- Windows 11 の設定に似た見た目、ライトとダーク
+- 手を付けないプログラム、または対象にするプログラムだけを指定
+- ゲームや全画面アプリの間は一時停止
+- タスクマネージャーのようなアプリのために、必要なときは管理者として実行
+- Ctrl+Alt+R ですべて元どおり。WinScreen が突然止まってもウィンドウは戻ります
+- 自動更新、ほかの PC に移せる設定
+- English、简体中文、繁體中文
+
+## インストール
+
+[Releases](https://github.com/DarkLian/WinScreen/releases) から **WinScreen-…-x64-Setup.exe** をダウンロードして実行します。
+Windows 10（バージョン 2004 以降）と Windows 11 の、64 ビットの Intel または AMD の PC（x64）で動きます。
+ほかの環境や、各機能でできること・できないことは[対応状況](docs/FEATURE_COMPATIBILITY.md)（英語）をご覧ください。
+
+ほかに何もインストールする必要はなく、管理者権限なしで動きます。WinScreen はシステムトレイに常駐します。
+
+インストーラーには署名がないため、Windows が「認識されないアプリ」と表示することがあります。**詳細情報**を選び、
+**実行**を押してください。削除するには、Windows の **設定 → アプリ → インストールされているアプリ** を開きます。
+
+[Scoop](https://scoop.sh) なら 2 行でインストールできます（ポータブル版、Scoop が更新します）：
+
+```
+scoop bucket add winscreen https://github.com/DarkLian/WinScreen
+scoop install winscreen
+```
+
+## はじめかた
+
+1. 変えたいウィンドウをクリックします。
+2. **Ctrl+Alt+T** で手前に固定、**Ctrl+Alt+P** でライブビュー、**Ctrl+Alt+A** でアンカーです。
+3. トレイアイコンをクリックすると設定、右クリックするとすべてのコマンドが出ます。
+4. **Ctrl+Alt+R** を押すと、すべてのウィンドウが元に戻ります。
+
+| すること | ショートカット |
+| --- | --- |
+| 手前に固定・解除 | Ctrl+Alt+T |
+| ライブビューを開く・閉じる | Ctrl+Alt+P |
+| アンカーを追加・削除 | Ctrl+Alt+A |
+| 透明度を上げる・下げる | Ctrl+Alt+Down / Up |
+| 既定の半透明をオン・オフ | Ctrl+Alt+O |
+| クリックの透過をオン・オフ | Ctrl+Alt+C |
+| このウィンドウを元に戻す | Ctrl+Alt+U |
+| すべてのウィンドウを元に戻す | Ctrl+Alt+R |
+
+すべての機能は **[ユーザーガイド](docs/USER_GUIDE.md)**（英語）で説明しています。
+
+## Q&A
+
+### AI スロップ!?
+
+このプロジェクトは純粋な情熱から、そして実際の問題を解決するために生まれました。クローズドソースの有料アプリに代わる、
+無料で特化したツールを、AI エージェントの力を借りて作っています。互換性や信頼性には疑問があるかもしれませんが、だからこそ
+コミュニティの助けがいちばん必要です。AI は強力で修正も速いとはいえ、私自身の使い方とエージェントだけでは、すべての問題を
+見つけることはできません。それでも AI スロップだと思うなら、それで構いません。考えを変えさせることはできませんし、
+変えさせるつもりもありません。ほかの信頼できる選択肢を探してください（AI を使わずに作られたものがあれば、ですが）。
+
+### 実績のある既存のツールを使えばいいのでは？
+
+[PowerToys](https://github.com/microsoft/powertoys) は活発に保守されていますが、機能の幅を重視していて、特定の用途に
+絞った強化はありません。WinScreen は、Windows の一部のユーティリティに特化して、それを補うために存在します。
+PowerToys をまねるためのものではありません。それでは意味がありません。
+
+[WindowTop](https://windowtop.info/) は、このプロジェクトのきっかけになったアプリです。ただ、クローズドソースで有料です。
+WinScreen は、有料の壁の向こうにある機能を使いたい人（と私自身）のために、無料でオープンソースの選択肢を目指しています。
+さらに、ビジネスの制約がないので、身軽にすばやく更新できます。バグの修正や、本当に必要とされる機能の追加に、すばやく
+応えて改良を重ねていくつもりです（しっかりしたテストとともに、そうありたいと思っています）。
+
+ほかに見つけた多くのプロジェクトは、開発が止まっているか、有料か、あるいは本物の AI スロップで、更新されず、私が初日に
+見つけた問題も放置され、GitHub も散らかっています。
+**無料で、オープンソースで、特定の用途に絞った強化を、継続的なサポートとともに提供する選択肢は、今のところ存在しません。**
+
+### このプロジェクトは継続的に保守されますか？
+
+できる限り努力します。ただ、情熱で動いている非営利のプロジェクトなので、コミュニティの支えが大きな励みになります。
+常に保守し続けると約束はできませんが、そうなっても MIT ライセンスなので、誰でもフォークして存続させられます。
+それがオープンソースの精神です！
+
+### 安全ですか？
+
+このプロジェクトは完全にオープンソースです。誰でもコードを確認でき（AI に分析させることもできます）、自分でビルドできます。
+さらに安全を重視するなら、自動更新をオフにして、AI でコードを分析してください。
+
+オープンソースだから絶対に安全というわけではありませんが、すべてが公開されていて、誰でも確認し、疑問を持ち、問題を
+指摘できます。セキュリティ上の懸念は、ぜひ報告してください。
+
+## 更新
+
+設定（Settings）で、新しいバージョンについて WinScreen がすることを選べます：何もしない（既定）、知らせる、または
+WinScreen を閉じるときにインストールする、のいずれかです。ポータブル版は自分で更新できないので、知らせたうえで新しい
+バージョンのページを開きます。手動で更新するには、WinScreen を閉じてから新しいインストーラーを実行します。設定はそのまま残ります。
+
+## ご意見をお聞かせください
+
+WinScreen は DarkLian が AI エージェントの力を借りて作っています。いちばんの助けは、使ってみてどうだったかを教えて
+もらうことです。アイデアの共有、問題の報告、ちょっと気になることでも、[Issue を作成](https://github.com/DarkLian/WinScreen/issues)
+してください。何がいちばん役に立つかは **[Contributing](CONTRIBUTING.md)**（英語）をご覧ください。
+
+WinScreen が役に立ったら、[Ko-fi で支援](https://ko-fi.com/darklian)していただけます。
+
+## 自分でビルドする
+
+`global.json` に書かれた .NET 10 SDK が必要です。`.\build.ps1 -SkipInteractive` を実行すると、`dist\release` にインストーラーができます。
+
+## コード署名のポリシー
+
+**WinScreen には署名がありません。** [SignPath Foundation](https://signpath.org/) の無料のコード署名は、プロジェクトが
+もっと広く使われてからでないと受けられないため、あとで改めて申請します。
+
+- **関わる人：** [DarkLian](https://github.com/DarkLian) が AI エージェントの助けを借りて WinScreen のコードを書いて
+  レビューし、すべてのリリースを承認します。ほかの誰もコードを変更したり、リリースを公開したりできません。
+- **プライバシー：** WinScreen は、あなたやあなたの PC についての情報をどこにも送りません。オンラインになるのは、新しい
+  バージョンについて知らせるかインストールするよう選んだときか、**Check for updates** を選んだときだけで、そのときも
+  GitHub にいちばん新しいバージョンを尋ねるだけです。問題の解決に役立つ短いログを PC に残しますが、あなたが自分で送らない限り、
+  PC の外に出ることはありません。
+
+## ライセンス
+
+[MIT](LICENSE)
