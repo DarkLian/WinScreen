@@ -103,6 +103,20 @@ def split_readme(text):
     return (status.group(1) if status else ''), body
 
 
+def open_lists(body):
+    """GitHub starts a list right under a line of text; Python-Markdown needs a blank line first. Adds one."""
+    out, fenced = [], False
+    item = re.compile(r'^(?:[-*+]|\d+\.) ')
+    for line in body.split('\n'):
+        if line.startswith('```'):
+            fenced = not fenced
+        if not fenced and item.match(line) and out and out[-1].strip() and not item.match(out[-1]) \
+                and not out[-1].startswith(' '):
+            out.append('')
+        out.append(line)
+    return '\n'.join(out)
+
+
 def fix_links(page_html, prefix):
     def repl(m):
         attr, url = m.group(1), m.group(2)
@@ -121,7 +135,7 @@ def page(lang, langs_html, alternates, ver):
     code, readme, html_lang, native, title, description, download, source = lang
     prefix = '' if code == 'en' else '../'
     status, body = split_readme((ROOT / readme).read_text(encoding='utf-8'))
-    content = markdown.markdown(body, extensions=['tables', 'fenced_code'], output_format='html')
+    content = markdown.markdown(open_lists(body), extensions=['tables', 'fenced_code'], output_format='html')
     content = fix_links(content, prefix)
     status = fix_links(status, prefix)
     url = BASE_URL + folder(code)
