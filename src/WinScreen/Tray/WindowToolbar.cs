@@ -99,6 +99,8 @@ public sealed class WindowToolbar : Form
                 }
                 _run(command, _window);
                 ShowStates();
+                // Pin on top puts the window over the bar that is still open on it.
+                KeepAbove(Handle, _window);
             };
             _tips.SetToolTip(button, name);
             _buttons[command] = button;
@@ -292,8 +294,7 @@ public sealed class WindowToolbar : Form
         Location = bar.Location;
         ShowStates();
         Show();
-        // A pinned target is in the topmost group too, and Show alone can leave the bar underneath it.
-        WinScreen.Windows.TopLayer.Raise(Handle);
+        KeepAbove(Handle, foreground);
     }
 
     /// <summary>
@@ -333,4 +334,25 @@ public sealed class WindowToolbar : Form
                                       User32.GetWindowRect(_window, out var current) &&
                                       Rectangle.FromLTRB(current.Left, current.Top, current.Right, current.Bottom) ==
                                       _targetBounds;
+
+    /// <summary>
+    /// Puts the bar over its window. A pinned window is in the topmost group too, and Show alone can leave the bar
+    /// underneath it. Windows also doesn't let WinScreen, which isn't the program in front, put the bar over the pinned
+    /// window in front: the bar stayed underneath and its buttons couldn't be clicked (the owner, 15 Nov). Going lower
+    /// is always allowed, so then the window goes just under the bar, one place down.
+    /// </summary>
+    internal static void KeepAbove(nint bar, nint window)
+    {
+        WinScreen.Windows.TopLayer.Raise(bar);
+        if (IsAbove(window, bar))
+            User32.SetWindowPos(window, bar, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+    }
+
+    /// <summary>Whether <paramref name="upper"/> comes before <paramref name="lower"/> in the order of windows.</summary>
+    private static bool IsAbove(nint upper, nint lower)
+    {
+        for (nint w = User32.GetWindow(lower, 3); w != 0; w = User32.GetWindow(w, 3)) // GW_HWNDPREV
+            if (w == upper) return true;
+        return false;
+    }
 }
