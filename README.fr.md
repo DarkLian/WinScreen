@@ -150,14 +150,15 @@ Le **[guide d'utilisation](docs/USER_GUIDE.md)** (en anglais) explique chaque fo
 
 ## Questions et réponses
 
-### Du « AI slop » !?
+### Est-ce du « AI slop » ?
 
-Le projet existe par pure passion, et pour résoudre de vrais problèmes : il propose des alternatives gratuites et
-spécialisées à des applications fermées et payantes, créées avec l'aide d'agents d'IA. La compatibilité et la fiabilité
-peuvent laisser à désirer, mais c'est justement là que l'aide de la communauté compte le plus. Je ne peux pas découvrir
-tous les problèmes avec ma seule utilisation et mes agents, même si l'IA est puissante et rapide pour corriger. Et si
-vous pensez quand même que c'est du « AI slop », alors c'en est. Je ne peux pas changer votre avis et je ne m'en
-donnerai pas la peine. Trouvez simplement une autre alternative fiable (s'il en existe une faite sans IA).
+WinScreen est né d'une passion, pour résoudre des problèmes que j'avais vraiment, et il est construit avec beaucoup
+d'aide d'agents d'IA. Je préfère le dire d'emblée.
+
+Ce que je peux faire, c'est vérifier le travail : chaque version est testée sous Windows 10 et Windows 11, les fonctions
+pas encore fiables sont marquées *expérimentales*, et les bogues signalés sont corrigés au lieu d'être laissés de côté.
+Ce que je ne peux pas faire seul, c'est couvrir chaque version de Windows, chaque PC et chaque application. C'est là que
+vos signalements aident le plus : si quelque chose ne fonctionne pas chez vous, [ouvrez une issue](https://github.com/DarkLian/WinScreen/issues).
 
 ### Pourquoi ne pas simplement utiliser des outils existants et éprouvés ?
 

@@ -147,14 +147,15 @@ La **[guía del usuario](docs/USER_GUIDE.md)** (en inglés) explica todas las fu
 
 ## Preguntas y respuestas
 
-### ¿¡Basura hecha con IA!?
+### ¿Es basura hecha con IA?
 
-El proyecto existe por pura pasión, y para resolver problemas de verdad: ofrece alternativas gratuitas y especializadas
-a aplicaciones cerradas y de pago, creadas con la ayuda de agentes de IA. La compatibilidad y la fiabilidad pueden ser
-discutibles, pero es justo ahí donde más se necesita la ayuda de la comunidad. No puedo descubrir todos los problemas
-solo con mi propio uso y mis agentes, aunque la IA sea potente y rápida corrigiendo fallos. Y si aun así crees que es
-basura hecha con IA, entonces lo es. No puedo ni voy a molestarme en cambiar lo que piensas. Simplemente busca otra
-alternativa fiable (si existe alguna hecha sin IA).
+WinScreen nació de la pasión, para resolver problemas que yo tenía de verdad, y se construye con mucha ayuda de agentes
+de IA. Prefiero decirlo desde el principio.
+
+Lo que sí puedo hacer es comprobar el trabajo: cada versión se prueba en Windows 10 y Windows 11, las funciones que aún
+no son fiables están marcadas como *experimentales*, y los errores que se reportan se corrigen en lugar de quedarse
+abiertos. Lo que no puedo hacer solo es cubrir cada versión de Windows, cada PC y cada aplicación. Ahí es donde más
+ayudan tus reportes: si algo no te funciona, [abre un issue](https://github.com/DarkLian/WinScreen/issues).
 
 ### ¿Por qué no usar herramientas maduras que ya existen?
 
