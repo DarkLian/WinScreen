@@ -1,0 +1,29 @@
+{
+    "version": "{{VERSION}}",
+    "description": "Keep any window, or part of one, in view while you work.",
+    "homepage": "https://github.com/{{REPOSITORY}}",
+    "license": "MIT",
+    "notes": "WinScreen is in the tray. Scoop updates it: in Settings, leave New versions at Off or Tell me about them.",
+    "architecture": {
+        "64bit": {
+            "url": "{{ZIP_URL}}",
+            "hash": "{{ZIP_SHA256}}"
+        }
+    },
+    "shortcuts": [
+        [
+            "WinScreen.exe",
+            "WinScreen"
+        ]
+    ],
+    "checkver": {
+        "github": "https://github.com/{{REPOSITORY}}"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/{{REPOSITORY}}/releases/download/v$version/WinScreen-$version-release-x64-Portable.zip"
+            }
+        }
+    }
+}
