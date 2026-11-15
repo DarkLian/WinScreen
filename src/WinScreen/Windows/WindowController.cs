@@ -78,6 +78,12 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public Color? GlassColor { get; set; }
         [NotJournalled(CurrentState)] public bool PinPaused { get; set; }
         public bool Cropped { get; set; }
+        [NotJournalled("Transient: how often another program took the pin away in the current run of takings.")]
+        public int PinRestores { get; set; }
+        [NotJournalled("Transient: when the current run of takings began.")]
+        public long PinTakenSince { get; set; }
+        [NotJournalled("Transient: the window's look didn't match the record on the last check.")]
+        public bool LayerDriftSeen { get; set; }
         [NotJournalled("A level in between: recovery puts back OriginalAlpha.")] public byte AlphaBeforeHiding { get; set; } = 255;
         [NotJournalled("A level in between: recovery puts back OriginalAlpha.")] public byte? AlphaFromClickThrough { get; set; }
         public WindowPlacement? PlacementBeforePeek { get; set; }
@@ -475,6 +481,19 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     /// <summary>Applies the options that depend on where the mouse is and what the windows are doing.</summary>
     public void Refresh(Point cursor, bool opaqueOnHover, bool pausePinWhenMaximized)
     {
+        var undone = new List<(nint Window, string Text)>();
+        RefreshRecords(cursor, opaqueOnHover, pausePinWhenMaximized, undone);
+        foreach ((nint window, string text) in undone) ChangeUndone?.Invoke(window, text);
+    }
+
+    /// <summary>
+    /// Something the person or the app did undid one of WinScreen's changes, and WinScreen let go of it: the window,
+    /// and what to tell the person.
+    /// </summary>
+    public event Action<nint, string>? ChangeUndone;
+
+    private void RefreshRecords(Point cursor, bool opaqueOnHover, bool pausePinWhenMaximized, List<(nint Window, string Text)> undone)
+    {
         lock (_gate)
         {
             foreach ((nint window, ChangedWindow state) in _changed.ToArray())
@@ -493,6 +512,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
 
                 try
                 {
+                    if (StillLayered(window, state) is { } layer) undone.Add((window, layer));
+                    StillCropped(window, state);
+                    if (StillPinned(window, state) is { } pin) undone.Add((window, pin));
                     FollowHover(window, state, cursor, opaqueOnHover);
                     FollowMaximized(window, state, pausePinWhenMaximized);
                 }
@@ -503,6 +525,106 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 }
             }
         }
+    }
+
+    private const int PinTakingsAllowed = 3;
+    private const long PinTakingSpan = 10_000;
+
+    /// <summary>
+    /// Another program took "always on top" away from a pinned window: it is put back, unless the window now covers
+    /// its display (the app's own full screen, left alone). A program that keeps taking it wins after a few tries
+    /// rather than the two fighting forever: Pin is let go of, and the person is told.
+    /// </summary>
+    private string? StillPinned(nint window, ChangedWindow state)
+    {
+        if (!state.Pinned || state.PinPaused || User32.IsIconic(window) || IsTopmost(window)) return null;
+        if (CoversItsDisplay(window) || !AnswersQuickly(window)) return null;
+        long now = Environment.TickCount64;
+        if (state.PinTakenSince == 0 || now - state.PinTakenSince > PinTakingSpan)
+        {
+            state.PinTakenSince = now;
+            state.PinRestores = 0;
+        }
+        if (++state.PinRestores > PinTakingsAllowed)
+        {
+            state.Pinned = false;
+            state.PinTakenSince = 0;
+            Diagnostics.Log.Event("pin.lost", ("program", Diagnostics.LogValue.ProgramOf(window)));
+            return string.Format(T("errors.pin.taken"), WindowInfo.Title(window));
+        }
+        try
+        {
+            SetTopmost(window, true, state.Identity);
+            Diagnostics.Log.Event("pin.restored", ("program", Diagnostics.LogValue.ProgramOf(window)));
+        }
+        catch (WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
+        return null;
+    }
+
+    private static bool CoversItsDisplay(nint window) =>
+        User32.GetWindowRect(window, out Rect r) &&
+        Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).Contains(Screen.FromHandle(window).Bounds);
+
+    /// <summary>
+    /// The app rewrote its own transparency or click-through: WinScreen lets go of its opacity, Glass and click-through
+    /// on that window rather than fight the app or later put back something the app now owns. It has to be seen on two
+    /// checks in a row, so a moment in passing doesn't count.
+    /// </summary>
+    private string? StillLayered(nint window, ChangedWindow state)
+    {
+        if (!state.Layered && !state.ClickThrough || state.HiddenButUsable) return null;
+        long style;
+        try { style = ReadExStyle(window); }
+        catch (WindowOperationException) { return null; }
+        bool layerLost = state.Layered && (style & User32.WS_EX_LAYERED) == 0;
+        bool throughLost = state.ClickThrough && (style & User32.WS_EX_TRANSPARENT) == 0;
+        bool rewritten = false;
+        if (state.Layered && !layerLost && User32.GetLayeredWindowAttributes(window, out _, out byte alpha, out uint flags))
+        {
+            byte expected = state.SolidWhileHovered ? (byte)255 : state.Alpha;
+            rewritten = ((flags & User32.LWA_ALPHA) != 0 ? alpha : (byte)255) != expected ||
+                        state.GlassColor is not null != ((flags & User32.LWA_COLORKEY) != 0);
+        }
+        if (!layerLost && !throughLost && !rewritten)
+        {
+            state.LayerDriftSeen = false;
+            return null;
+        }
+        if (!state.LayerDriftSeen)
+        {
+            state.LayerDriftSeen = true;
+            return null;
+        }
+        state.LayerDriftSeen = false;
+        Diagnostics.Log.Event("layered.rewritten", ("layer", layerLost || rewritten), ("clickThrough", throughLost),
+            ("program", Diagnostics.LogValue.ProgramOf(window)));
+        if (layerLost || rewritten)
+        {
+            state.OwnedStyles &= ~User32.WS_EX_LAYERED; // Put back must leave the app's own layering alone.
+            state.Layered = false;
+            state.Alpha = 255;
+            state.GlassColor = null;
+            state.SolidWhileHovered = false;
+            state.AlphaFromClickThrough = null;
+        }
+        if (throughLost)
+        {
+            state.OwnedStyles &= ~User32.WS_EX_TRANSPARENT;
+            state.ClickThrough = false;
+        }
+        TrySaveJournal();
+        return string.Format(T("errors.layered.rewritten"), WindowInfo.Title(window));
+    }
+
+    /// <summary>
+    /// An app that took its crop off itself is no longer cropped, so the menu stops showing it. A crop keeps its
+    /// rectangle through a resize (8.1: one made from a control follows the control instead).
+    /// </summary>
+    private static void StillCropped(nint window, ChangedWindow state)
+    {
+        if (!state.Cropped || User32.IsIconic(window) || WindowInfo.ShapeOf(window) is not null) return;
+        state.Cropped = false;
+        Diagnostics.Log.Event("crop.ended", ("program", Diagnostics.LogValue.ProgramOf(window)));
     }
 
     private void FollowHover(nint window, ChangedWindow state, Point cursor, bool opaqueOnHover)

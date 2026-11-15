@@ -116,6 +116,7 @@ public sealed partial class TrayApplication : ApplicationContext
         _windows.ConcealmentChanged += _recoveryWatcher.Follow;
         _content = new Glass.ContentEffects(_windows);
         _content.Problem += text => Alert(T("errors.operation.title"), text);
+        _windows.ChangeUndone += (_, text) => Alert(T("errors.operation.title"), text, ToolTipIcon.Info);
         _content.Created += handle => _dark.Ignore(handle);
         _automaticAnchors = new AutomaticAnchors(_anchors, CanHaveAutomaticAnchor, () => Paused || FullScreenNow() != FullScreenState.None);
         _anchors.Created += _dark.Ignore;
