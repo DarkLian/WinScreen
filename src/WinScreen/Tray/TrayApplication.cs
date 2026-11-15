@@ -49,6 +49,9 @@ public sealed partial class TrayApplication : ApplicationContext
     private readonly Dictionary<nint, WindowIdentity> _setupNone = [];
     private readonly SavedViews _savedViews = new();
     private readonly Dictionary<nint, long> _setupRetryAt = [];
+    /// <summary>When a saved setup first looked at each window, so a new window can draw before it's judged dark.</summary>
+    private readonly Dictionary<nint, long> _setupFirstSeen = [];
+    private const long NewWindowDrawsWithin = 6000;
     private readonly ToolStripMenuItem _targetTitle = new();
     private readonly ToolStripMenuItem _statusItem = new();
     private string _lastStatus = T("tray.noActions");
@@ -982,6 +985,7 @@ public sealed partial class TrayApplication : ApplicationContext
         {
             _setupDone.Remove(stale);
             _setupRetryAt.Remove(stale);
+            _setupFirstSeen.Remove(stale);
             _ruleOf.Remove(stale);
             _ruleRenewed.Remove(stale);
         }
@@ -1000,6 +1004,16 @@ public sealed partial class TrayApplication : ApplicationContext
                 _setupNoneTitle[window] = WindowInfo.Title(window);
             }
             catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
+            return;
+        }
+        // A new window may not have drawn yet: Chrome shows a blank dark frame first, which Dark mode took for a window
+        // that is dark already and left alone (the owner, 16 Nov). The setup waits for it a few seconds.
+        long now = Environment.TickCount64;
+        if (!_setupFirstSeen.TryGetValue(window, out long firstSeen)) _setupFirstSeen[window] = firstSeen = now;
+        if (setup.Dark && _settings.ExperimentalFeatures && now - firstSeen < NewWindowDrawsWithin &&
+            DarkLook(window) == Look.None && _dark.LooksDark(window))
+        {
+            _setupRetryAt[window] = now + 500;
             return;
         }
         try

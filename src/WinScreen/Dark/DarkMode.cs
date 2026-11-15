@@ -48,12 +48,16 @@ public sealed class DarkMode : IDisposable
     /// </summary>
     public bool RefusesAsAlreadyDark(nint window)
     {
-        if (!DetectAlreadyDark || !Windows.WindowInfo.TryGetVisibleBounds(window, out Rectangle bounds) ||
-            Windows.ScreenColors.Brightness(Windows.ScreenColors.MostCommon(bounds)) >= .35)
+        if (!LooksDark(window))
             return false;
         Notice?.Invoke(Localization.UiText.T("dark.alreadyDark"));
         return true;
     }
+
+    /// <summary>Whether Settings leaves already-dark windows unchanged and this one looks dark now. Says nothing.</summary>
+    public bool LooksDark(nint window) =>
+        DetectAlreadyDark && Windows.WindowInfo.TryGetVisibleBounds(window, out Rectangle bounds) &&
+        Windows.ScreenColors.Brightness(Windows.ScreenColors.MostCommon(bounds)) < .35;
 
     private DarkOverlay Add(nint window)
     {

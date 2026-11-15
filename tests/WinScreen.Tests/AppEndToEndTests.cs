@@ -257,6 +257,27 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)), "Restore didn't end dark mode.");
     }
 
+    /// <summary>
+    /// A saved setup with Dark mode, on a window that opens dark and draws its light page a moment later, as Chrome
+    /// does: Dark mode waits for the page instead of taking the window for one that is dark already (the owner, 16 Nov).
+    /// </summary>
+    [Fact]
+    public void A_remembered_dark_mode_waits_for_a_new_window_to_draw()
+    {
+        if (!Glass.ContentOverlay.GraphicsCardPresent) { Skipped.Because("Needs picture-keeping Dark, which needs a graphics card."); return; }
+        var settings = new AppSettings { WelcomeShown = true };
+        settings.SavedSetups.Add(new ProgramSetup { Program = "WinScreen.TestTarget", Dark = true });
+        RestartWith(settings);
+        using var target = new TargetProcess(Spot, "000000");
+        Focus(target);
+        Thread.Sleep(900);
+        target.SetColors("FFFFFF");
+        var sample = new Rectangle(target.Center.X - 20, target.Center.Y - 20, 40, 40);
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage), 6000),
+            $"Dark mode didn't come: {Desktop.ColorOnScreen(sample)}.");
+        Hotkey(Keys.R, target);
+    }
+
     [Fact]
     public void Dark_mode_works_from_the_hotkey()
     {
