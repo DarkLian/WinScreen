@@ -64,7 +64,10 @@ public sealed class VirtualDesktopViewTests
     /// <summary>Where the window was, as measured, before the test left its desktop.</summary>
     private static Rectangle _before;
 
-    private static void WithChromeView(Action<nint, PipWindow, TestDesktop> test)
+    private static void WithChromeView(Action<nint, PipWindow, TestDesktop> test) => WithChromeView(null, test);
+
+    /// <param name="first">Done on the window's own desktop, before the new one is made.</param>
+    private static void WithChromeView(Action<PipWindow>? first, Action<nint, PipWindow, TestDesktop> test)
     {
         string chrome = Path.Combine(AppContext.BaseDirectory, "chrome-win64", "chrome.exe");
         if (!File.Exists(chrome)) { Skipped.Because("The portable Chrome isn't in the test output."); return; }
@@ -85,6 +88,7 @@ public sealed class VirtualDesktopViewTests
                 Assert.True(VirtualDesktops.DesktopOf(window) is { } own && own == VirtualDesktops.CurrentDesktop(), "Chrome didn't open on the desktop in front.");
                 try
                 {
+                    if (first is not null) { first(view); TestDesktop.Pump(1000); }
                     using var desktop = new TestDesktop();
                     test(window, view, desktop);
                 }
@@ -197,6 +201,66 @@ public sealed class VirtualDesktopViewTests
                 seen += $" [{VirtualDesktops.DesktopOf(window)?.ToString()[..8] ?? "none"} keeps={view.KeepsUpdating} visible={User32.IsWindowVisible(window)}]";
             }
             Assert.True(VirtualDesktops.DesktopOf(window) == desktop.Home, $"Kept hidden before: {keptBefore}. Then:{seen}");
+        });
+    }
+
+    private static ToolStripMenuItem Item(PipWindow view, string key) =>
+        view.ContextMenuStrip!.Items.OfType<ToolStripMenuItem>().Single(i => i.Text == Localization.UiText.T(key));
+
+    /// <summary>
+    /// The owner's report (15 Nov): Interactive, then Ctrl+Win+D, then Go to it broke. On the new desktop Windows gave
+    /// the hidden original the focus (it is on every desktop), the view took that for the person asking for it and
+    /// showed it, ending Interactive, and a moment later hid it again as "away".
+    /// </summary>
+    [Fact]
+    public void An_interactive_view_stays_interactive_on_a_new_desktop_and_Go_to_it_still_works()
+    {
+        if (Skip()) return;
+        WithChromeView(view =>
+        {
+            view.SetInteractive(true);
+            Assert.True(Item(view, "menu.view.interactive").Checked, "Chrome's view didn't become interactive.");
+            // The person has just used the view's menu: the pointer rests on it, so the view is in use when they switch.
+            Cursor.Position = new Point(view.Bounds.Left + view.Bounds.Width / 2, view.Bounds.Top + view.Bounds.Height / 2);
+            TestDesktop.Pump(1200);
+        },
+        (window, view, desktop) =>
+        {
+            TestDesktop.Pump(2000);
+            Shot("interactive-on-new-desktop");
+            Assert.True(Item(view, "menu.view.interactive").Checked, "Making a desktop turned Interactive off.");
+            Assert.True(Item(view, "menu.original.keepHidden").Checked, "The person's hide became something else.");
+            Assert.False(view.HiddenWhileAway, "The person's hide was swapped for the temporary one.");
+            Assert.NotEqual(window, User32.GetForegroundWindow());
+
+            view.GoToSource();
+            string State() => $"in front: {(VirtualDesktops.CurrentDesktop() == desktop.Home ? "home" : "made")}, window on: " +
+                $"{(VirtualDesktops.DesktopOf(window) is not { } d ? "none" : d == desktop.Home ? "home" : "made")}, focused: " +
+                $"{User32.GetForegroundWindow() == window} (in front: {(User32.GetForegroundWindow() == view.Handle ? "the view" : WindowInfo.ClassName(User32.GetForegroundWindow()))}), visible: {User32.IsWindowVisible(window)}, away: {view.HiddenWhileAway}, " +
+                $"keep hidden: {Item(view, "menu.original.keepHidden").Checked}, interactive: {Item(view, "menu.view.interactive").Checked}, " +
+                $"going to: {view.GoingTo}, taken back: {view.GoingToTakes}";
+            string seen = State();
+            // A timeline of the focus and the desktop in front, for a failure.
+            var timeline = new System.Text.StringBuilder();
+            string last = "";
+            long start = Environment.TickCount64;
+            while (Environment.TickCount64 - start < 7000)
+            {
+                nint f = User32.GetForegroundWindow();
+                string now = $"{(VirtualDesktops.CurrentDesktop() == desktop.Home ? "home" : "made")}/" +
+                    $"{(f == window ? "window" : f == view.Handle ? "view" : WindowInfo.ClassName(f))}/going={view.GoingTo}";
+                if (now != last) timeline.Append($" {Environment.TickCount64 - start}ms:{now}");
+                last = now;
+                TestDesktop.Pump(100);
+            }
+            bool went = VirtualDesktops.CurrentDesktop() == desktop.Home && User32.GetForegroundWindow() == window;
+            seen += ". Timeline:" + timeline;
+            Shot("after-go-to-it");
+            Assert.True(went, $"Go to it didn't take the person to the window on its own desktop. Right after: {seen}. Later: {State()}");
+            TestDesktop.Pump(1500);
+            Assert.True(User32.IsWindowVisible(window) && VirtualDesktops.DesktopOf(window) == desktop.Home);
+            Assert.False(view.HiddenWhileAway);
+            Assert.False(Item(view, "menu.original.keepHidden").Checked);
         });
     }
 

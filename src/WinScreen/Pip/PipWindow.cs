@@ -1558,6 +1558,17 @@ public sealed partial class PipWindow : Form
         _sourceWasFocused = focused;
         if (!arrived || _live is not null || !_hideItem.Checked && _awayFrom == Guid.Empty || Environment.TickCount64 - _liveEndedAt < RevealGrace)
             return;
+        // A hidden original is on every desktop, so on switching to one with nothing else on it Windows hands it the
+        // focus. That is the switch, not the person asking for the window: the view takes the focus instead, and
+        // Keep hidden, Interactive and "hidden while away" stay as they were.
+        Guid? desktop = VirtualDesktops.CurrentDesktop();
+        if (desktop is not null && _seenDesktop is not null && desktop != _seenDesktop)
+        {
+            _seenDesktop = desktop;
+            User32.SetForegroundWindow(Handle);
+            Diagnostics.Log.Event("view.switchFocusKept", ("program", Diagnostics.LogValue.ProgramOf(_source)));
+            return;
+        }
         LastReveal = Environment.TickCount64;
         if (_suspended) ResumeView();
         GoToSource();
@@ -1566,6 +1577,9 @@ public sealed partial class PipWindow : Form
     /// <summary>The original's desktop while it is hidden because the person is on another one, or empty.</summary>
     private Guid _awayFrom;
     private int _desktopTick;
+
+    /// <summary>The desktop in front when the view last looked, to tell a desktop switch from the person's own doing.</summary>
+    private Guid? _seenDesktop;
 
     /// <summary>Whether the original is hidden for now because the person is on another desktop, for tests.</summary>
     internal bool HiddenWhileAway => _awayFrom != Guid.Empty;
@@ -1576,6 +1590,7 @@ public sealed partial class PipWindow : Form
     /// </summary>
     private void FollowDesktops()
     {
+        _seenDesktop = VirtualDesktops.CurrentDesktop();
         bool away = _awayFrom != Guid.Empty;
         // Hidden already by something else (another view, a look) is left to it.
         bool mayHide = !away && _origin.IsWindow && _origin.IsAvailable && !_hideItem.Checked && !_windows.IsHidden(_source) && !_usingOriginal && _live is null &&
@@ -1623,6 +1638,7 @@ public sealed partial class PipWindow : Form
         if (Text != title) Text = title;
         RevealIfActivatedElsewhere();
         FollowOriginalInUse();
+        FinishGoingTo();
         if (_suspended) return;
         if (++_desktopTick % 5 == 0) FollowDesktops();
         if (IsDisposed) return;
@@ -1894,5 +1910,52 @@ public sealed partial class PipWindow : Form
         if (User32.IsIconic(_source))
             User32.ShowWindow(_source, User32.SW_RESTORE);
         User32.SetForegroundWindow(_source);
+        // On another desktop, Windows switches to the window's own and then may hand the focus to the last window
+        // used there, often this view, which shows on every desktop. The view finishes the job once the switch is over.
+        if (!VirtualDesktops.OnCurrentDesktop(_source))
+        {
+            _goingToUntil = Environment.TickCount64 + GoingToFor;
+            _goingToSettledSince = 0;
+        }
     }
+
+    private long _goingToUntil;
+    private const long GoingToFor = 5000;
+
+    /// <summary>After Go to it from another desktop: once the window's desktop is in front, the window has the focus.</summary>
+    private void FinishGoingTo()
+    {
+        if (_goingToUntil == 0) return;
+        // Windows cloaks windows for a moment while it switches desktops, so only time or a closed window ends this.
+        if (Environment.TickCount64 > _goingToUntil || !_origin.IsWindow || !User32.IsWindow(_source))
+        {
+            _goingToUntil = 0;
+            return;
+        }
+        if (_windows.IsHidden(_source)) return;
+        if (!VirtualDesktops.OnCurrentDesktop(_source)) { _goingToSettledSince = 0; return; } // Still switching.
+        // Only taken back from this view or from nothing, never from a window the person went to meanwhile.
+        nint front = User32.GetForegroundWindow();
+        if (front == Handle || front == 0)
+        {
+            GoingToTakes++;
+            _goingToSettledSince = 0;
+            User32.SetForegroundWindow(_source);
+        }
+        else if (front == _source)
+        {
+            long now = Environment.TickCount64;
+            if (_goingToSettledSince == 0) _goingToSettledSince = now;
+            else if (now - _goingToSettledSince >= GoingToSettled) _goingToUntil = 0;
+        }
+        else _goingToSettledSince = 0; // Another window, such as Windows' own during the switch: wait and see.
+    }
+
+    private long _goingToSettledSince;
+    private const long GoingToSettled = 1500;
+
+    /// <summary>How often Go to it took the focus back from this view, for tests.</summary>
+    internal int GoingToTakes { get; private set; }
+
+    internal bool GoingTo => _goingToUntil != 0;
 }
