@@ -177,6 +177,36 @@ public sealed class WindowPlacementTests
         Assert.Equal(before, FrameOf(target.Handle));
     }
 
+    /// <summary>
+    /// Dark mode and Glass keep the window nearly invisible under an overlay that draws it again and follows it, so
+    /// it can still be placed and sized. A window a view keeps hidden can't, as before.
+    /// </summary>
+    [Fact]
+    public void A_window_drawn_by_an_effect_can_be_placed_and_a_hidden_one_cannot()
+    {
+        using var target = new TargetProcess(Spot);
+        var windows = new WindowController([]);
+        var placer = new WindowPlacer(windows);
+        try
+        {
+            windows.ConcealSolid(target.Handle);
+            placer.SetFrame(target.Handle, new Rectangle(500, 300, 500, 350));
+            Assert.Equal(new Rectangle(500, 300, 500, 350), FrameOf(target.Handle));
+            placer.Align(target.Handle, WindowAnchor.TopLeft);
+            Assert.Equal(Screen.FromHandle(target.Handle).WorkingArea.Location, FrameOf(target.Handle).Location);
+            windows.Show(target.Handle);
+
+            windows.Hide(target.Handle);
+            Rectangle hidden = FrameOf(target.Handle);
+            Assert.Throws<WindowOperationException>(() => placer.Align(target.Handle, WindowAnchor.BottomRight));
+            Assert.Equal(hidden, FrameOf(target.Handle));
+        }
+        finally
+        {
+            windows.RestoreAll();
+        }
+    }
+
     [Fact]
     public void A_pinned_window_sent_to_the_bottom_is_unpinned_first()
     {

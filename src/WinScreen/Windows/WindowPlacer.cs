@@ -136,7 +136,8 @@ public sealed class WindowPlacer(WindowController windows)
     {
         if (windows.Refusal(window) is { } refusal)
             throw new WindowOperationException(refusal);
-        if (windows.IsHidden(window) || windows.IsPeeking(window))
+        // A window under Dark mode or Glass is drawn again on top, by an overlay that follows it, so it can be placed.
+        if (windows.IsHidden(window) && !windows.IsDrawnByEffect(window) || windows.IsPeeking(window))
             throw new WindowOperationException(T("errors.window.showFirst"));
     }
 

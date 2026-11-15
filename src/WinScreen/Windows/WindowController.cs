@@ -886,6 +886,13 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             return _changed.TryGetValue(window, out ChangedWindow? state) && state.Identity.Matches() && state.Hidden;
     }
 
+    /// <summary>Hidden only so an effect (Dark mode, Glass) can draw it again on top: it is still there to use and move.</summary>
+    public bool IsDrawnByEffect(nint window)
+    {
+        lock (_gate)
+            return _changed.TryGetValue(window, out ChangedWindow? state) && state.Identity.Matches() && state.Hidden && state.HiddenButUsable;
+    }
+
     public bool IsPeeking(nint window)
     {
         lock (_gate)
