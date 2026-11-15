@@ -13,7 +13,8 @@ internal sealed class TestDesktop : IDisposable
     private const string Key = @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\VirtualDesktops";
     private readonly string _before;
 
-    public TestDesktop()
+    /// <param name="atSwitch">Done the moment the new desktop is in front, as Windows does its own things then.</param>
+    public TestDesktop(Action? atSwitch = null)
     {
         _before = Ids();
         Home = VirtualDesktops.CurrentDesktop() ?? throw new InvalidOperationException("The desktop in front can't be read.");
@@ -21,6 +22,7 @@ internal sealed class TestDesktop : IDisposable
         Desktop.WaitFor(() => VirtualDesktops.CurrentDesktop() is { } now && now != Home, 5000, Application.DoEvents);
         Made = VirtualDesktops.CurrentDesktop() ?? Guid.Empty;
         if (Made == Home || Made == Guid.Empty) throw new InvalidOperationException("Ctrl+Win+D made no desktop.");
+        atSwitch?.Invoke();
         Pump(1500);
     }
 

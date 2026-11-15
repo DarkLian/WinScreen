@@ -1553,6 +1553,12 @@ public sealed partial class PipWindow : Form
     /// </summary>
     private void RevealIfActivatedElsewhere()
     {
+        Guid? desktop = VirtualDesktops.CurrentDesktop();
+        if (desktop is not null && desktop != _seenDesktop)
+        {
+            if (_seenDesktop is not null) _desktopSwitchedAt = Environment.TickCount64;
+            _seenDesktop = desktop;
+        }
         bool focused = _origin.IsWindow && User32.GetForegroundWindow() == _source;
         bool arrived = focused && !_sourceWasFocused;
         _sourceWasFocused = focused;
@@ -1561,10 +1567,8 @@ public sealed partial class PipWindow : Form
         // A hidden original is on every desktop, so on switching to one with nothing else on it Windows hands it the
         // focus. That is the switch, not the person asking for the window: the view takes the focus instead, and
         // Keep hidden, Interactive and "hidden while away" stay as they were.
-        Guid? desktop = VirtualDesktops.CurrentDesktop();
-        if (desktop is not null && _seenDesktop is not null && desktop != _seenDesktop)
+        if (_desktopSwitchedAt != 0 && Environment.TickCount64 - _desktopSwitchedAt < SwitchFocusGrace)
         {
-            _seenDesktop = desktop;
             User32.SetForegroundWindow(Handle);
             Diagnostics.Log.Event("view.switchFocusKept", ("program", Diagnostics.LogValue.ProgramOf(_source)));
             return;
@@ -1580,6 +1584,8 @@ public sealed partial class PipWindow : Form
 
     /// <summary>The desktop in front when the view last looked, to tell a desktop switch from the person's own doing.</summary>
     private Guid? _seenDesktop;
+    private long _desktopSwitchedAt;
+    private const long SwitchFocusGrace = 1000;
 
     /// <summary>Whether the original is hidden for now because the person is on another desktop, for tests.</summary>
     internal bool HiddenWhileAway => _awayFrom != Guid.Empty;
@@ -1590,7 +1596,6 @@ public sealed partial class PipWindow : Form
     /// </summary>
     private void FollowDesktops()
     {
-        _seenDesktop = VirtualDesktops.CurrentDesktop();
         bool away = _awayFrom != Guid.Empty;
         // Hidden already by something else (another view, a look) is left to it.
         bool mayHide = !away && _origin.IsWindow && _origin.IsAvailable && !_hideItem.Checked && !_windows.IsHidden(_source) && !_usingOriginal && _live is null &&

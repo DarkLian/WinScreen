@@ -67,7 +67,8 @@ public sealed class VirtualDesktopViewTests
     private static void WithChromeView(Action<nint, PipWindow, TestDesktop> test) => WithChromeView(null, test);
 
     /// <param name="first">Done on the window's own desktop, before the new one is made.</param>
-    private static void WithChromeView(Action<PipWindow>? first, Action<nint, PipWindow, TestDesktop> test)
+    /// <param name="atSwitch">Done with the window the moment the new desktop is in front.</param>
+    private static void WithChromeView(Action<PipWindow>? first, Action<nint, PipWindow, TestDesktop> test, Action<nint>? atSwitch = null)
     {
         string chrome = Path.Combine(AppContext.BaseDirectory, "chrome-win64", "chrome.exe");
         if (!File.Exists(chrome)) { Skipped.Because("The portable Chrome isn't in the test output."); return; }
@@ -89,7 +90,7 @@ public sealed class VirtualDesktopViewTests
                 try
                 {
                     if (first is not null) { first(view); TestDesktop.Pump(1000); }
-                    using var desktop = new TestDesktop();
+                    using var desktop = new TestDesktop(atSwitch is null ? null : () => atSwitch(window));
                     test(window, view, desktop);
                 }
                 finally { windows.RestoreAll(); }
@@ -262,6 +263,33 @@ public sealed class VirtualDesktopViewTests
             Assert.False(view.HiddenWhileAway);
             Assert.False(Item(view, "menu.original.keepHidden").Checked);
         });
+    }
+
+    /// <summary>
+    /// What Windows did on the owner's PC (15 Nov log: view.awayHidden seconds after an Interactive view was made, which
+    /// can't happen while Interactive holds): on the new desktop it gave the hidden original the focus. That is the
+    /// switch, not the person asking for the window.
+    /// </summary>
+    [Fact]
+    public void The_focus_Windows_gives_a_hidden_original_on_a_new_desktop_changes_nothing()
+    {
+        if (Skip()) return;
+        WithChromeView(view =>
+        {
+            Cursor.Position = new Point(40, 40); // Not resting on the view.
+            view.SetInteractive(true);
+            Assert.True(Item(view, "menu.view.interactive").Checked, "Chrome's view didn't become interactive.");
+        },
+        (window, view, desktop) =>
+        {
+            TestDesktop.Pump(1000);
+            Shot("focus-after-switch");
+            Assert.True(Item(view, "menu.view.interactive").Checked, "The focus Windows gave on the new desktop turned Interactive off.");
+            Assert.True(Item(view, "menu.original.keepHidden").Checked, "The person's hide became something else.");
+            Assert.False(view.HiddenWhileAway, "The person's hide was swapped for the temporary one.");
+            Assert.NotEqual(window, User32.GetForegroundWindow());
+        },
+        atSwitch: Desktop.Activate); // As Windows does the moment the new desktop is in front.
     }
 
     [Fact]
