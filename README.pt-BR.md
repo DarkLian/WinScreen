@@ -208,6 +208,9 @@ Se o WinScreen for útil para você, você pode [apoiá-lo no Ko-fi](https://ko-
 Você precisa do SDK do .NET 10 indicado em `global.json`. Execute `.\build.ps1 -SkipInteractive` e o instalador
 aparece em `dist\release`.
 
+Como cada recurso se comporta com cada tipo de janela, e em que parte do código isso é decidido, está em
+[Compatibilidade dos recursos](docs/FEATURE_COMPATIBILITY.md) (em inglês).
+
 ## Política de assinatura de código
 
 **O WinScreen não é assinado.** A assinatura de código gratuita da [SignPath Foundation](https://signpath.org/) exige

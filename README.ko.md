@@ -202,6 +202,9 @@ WinScreen이 쓸모 있었다면 [Ko-fi에서 후원](https://ko-fi.com/darklian
 `global.json`에 적힌 .NET 10 SDK가 필요합니다. `.\build.ps1 -SkipInteractive`를 실행하면 `dist\release`에 설치 파일이
 생깁니다.
 
+각 기능이 모든 종류의 창에서 어떻게 동작하는지, 그리고 코드의 어디에서 그것을 정하는지는
+[기능 호환성](docs/FEATURE_COMPATIBILITY.md)(영어)에 정리되어 있습니다.
+
 ## 코드 서명 정책
 
 **WinScreen은 서명되어 있지 않습니다.** [SignPath Foundation](https://signpath.org/)의 무료 코드 서명은 프로젝트가 먼저

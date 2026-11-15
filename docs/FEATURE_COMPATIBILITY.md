@@ -1,7 +1,7 @@
 # WinScreen feature compatibility
 
 What each WinScreen feature does with each kind of window, as the code behaves today (last checked
-2026-11-13). Where the code and its tests don't settle a case, it says
+2026-11-15, version 1.1.0). Where the code and its tests don't settle a case, it says
 **Unverified** rather than guessing.
 
 Paths are relative to `src/WinScreen/` unless they start with `tests/`.
@@ -28,8 +28,10 @@ Paths are relative to `src/WinScreen/` unless they start with `tests/`.
   - Games, and apps with anti-cheat, should use **Show original** instead.
 - **Enhanced hover** needs an x64 PC and a 64-bit app.
 - **Snap Layouts** from Windows 11 aren't offered while moving a window with Alt+drag; WinScreen snaps to edges itself.
-- **Virtual desktops:** views and Anchors show on every desktop (Anchors can be kept to their window's). A window kept
-  hidden by a view comes back on the desktop you're on, not the one it came from.
+- **Virtual desktops:** views and Anchors show on every desktop (Anchors can be kept to their window's). A view keeps
+  updating while you're on another desktop. A window kept hidden by a view goes back to its own desktop when it's shown
+  again; that move uses an undocumented part of Windows, so where it isn't available the window stays on the desktop
+  you're on.
 
 ## Supported systems
 
@@ -149,6 +151,16 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 **Own transparency** windows (the app made itself see-through): Opacity, Click-through, hiding and Glass are refused
 with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows/WindowController.cs`).
 
+**When something else undoes a change.** WinScreen keeps checking the windows it changed. When the app itself or
+another program undoes a change, it either puts it back or lets go of it, and says so; it never fights forever.
+
+| What happened | What WinScreen does | Where |
+|---|---|---|
+| Another program took "always on top" from a pinned window | Pins it again. If it is taken more than three times within ten seconds, WinScreen lets go of the pin and says "Another program keeps taking…". It leaves the window alone while it covers its display (the app's own full screen), is minimized, isn't answering, or while the pin is paused for a maximized window. | `WindowController.StillPinned` |
+| The app rewrote its own transparency or click-through | Seen on two checks in a row (a moment in passing doesn't count), WinScreen lets go of its opacity, Glass colour and click-through on that window and says so. Put back then leaves the app's own transparency alone. | `WindowController.StillLayered` |
+| The app took the crop off itself | The window is no longer shown as cropped. Otherwise a crop keeps its rectangle through a resize. | `WindowController.StillCropped` |
+| A window with Dark or Glass stops taking clicks | Four times a second, each window with a look is asked where a press at its middle would go. If presses keep going elsewhere for a second, that look is turned off and the person is told. Windows that are cloaked or on another virtual desktop aren't judged, nor a spot where something of the person's is above the window. | `Windows/PressWatch.cs` |
+
 **Window information** shows a window's program, file, process and size, with a button to open its folder. It
 follows the same rules as the other window changes.
 
@@ -231,6 +243,7 @@ something away, so they also work while a full-screen app runs (`CommandCatalog.
 | WinScreen's tray menu, window menu and Settings | ✅ | From the top down: WinScreen's tips, its menus and Settings, the taskbar and its hidden-icons panel, then views and other pinned windows. While a WinScreen menu or the hidden-icons panel is open, views stop taking input and stay below it. A click on a view while its own menu is open closes the menu. |
 | Move away from the pointer | 🧪 ⚠️ | Experimental **and** "Move out of the way" on. Needs a recent Windows (`errors.pip.autoMoveUnsupported`). |
 | Keep updating, taskbar and Alt+Tab | ✅ / ⚠️ | Keep updating takes the original off the shell's task list where supported and changes nothing else about the window, so the view keeps showing its own minimize, maximize and close buttons. Its taskbar button goes, and it also leaves Alt+Tab, on Windows 10 and 11. The entry comes back when the original is shown or the view closes, and after a forced exit. Store apps keep the taskbar button Windows owns; choosing it shows the original. On Windows 10 with smooth capture the button stays, to keep the view updating. The separate option that also takes a window out of Alt+Tab gives it a tool window's frame, which has a small close button only. |
+| Other virtual desktops | ✅ / ⚠️ | A view shows on every desktop. Many apps stop drawing while their window's desktop isn't shown, so while you're on another desktop the view hides its original for that time and shows it again when you're back (`Pip/AwayFromDesktop.cs`). It doesn't do this when something else already hid the original. An original that the view hid and that is shown again from another desktop goes back to its own (`Native/VirtualDesktopsInternal.cs`): this uses an undocumented Windows interface, each move is checked afterwards, and where it can't be done the window stays where Windows put it. |
 | Rendering | ⚠️ | Auto, Standard (compositor thumbnail) or Smooth (screen capture). Auto tries Smooth first. Smooth falls back to Standard when it isn't available. Frame rate and scaling only apply to Smooth. |
 | Title bar, size and hover preview | ✅ | Every view has a title bar. A view resizes from its edges and corners and keeps the picture's shape; with **Keep aspect ratio** off for that view, the picture fits inside the shape chosen. The hover preview (Settings) shows either a larger picture of the whole view, only while the view is shown at under half its source's width (or its crop's), or a magnifier around the pointer. Checked in the Windows 10 VM. |
 | Yellow capture border (Smooth, and Glass) | ⚠️ | Smooth capture can make Windows draw a yellow border around the captured window. While the original is hidden, a view uses Standard capture wherever that border can't be turned off (Windows 10), so no border shows at the screen edge, and goes back to the chosen mode when the original is shown. Visible originals and Glass keep the border setting. |
@@ -387,6 +400,9 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 
 ## Known gaps and things to check
 
+- **Moving a window back to its own virtual desktop** relies on an undocumented Windows interface, checked against
+  the documented answer after every move. A Windows update can stop it; the window then stays on the desktop you're
+  on, as before 1.1.0.
 - **Win 11 Snap Layouts panel** and Snap Assist aren't available to Alt-drag (no public API). Edge snapping is
   WinScreen's own.
 - **Elevated windows:** most changes find out they can't reach one when they try, and then say so; gestures, the

@@ -209,6 +209,9 @@ Si WinScreen te resulta útil, puedes [apoyarlo en Ko-fi](https://ko-fi.com/dark
 Necesitas el SDK de .NET 10 indicado en `global.json`. Ejecuta `.\build.ps1 -SkipInteractive` y el instalador
 aparecerá en `dist\release`.
 
+Cómo se comporta cada función con cada tipo de ventana, y en qué parte del código se decide, está en
+[Compatibilidad de funciones](docs/FEATURE_COMPATIBILITY.md) (en inglés).
+
 ## Política de firma de código
 
 **WinScreen no está firmado.** La firma de código gratuita de [SignPath Foundation](https://signpath.org/) requiere que
