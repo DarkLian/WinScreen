@@ -483,7 +483,8 @@ public sealed class SettingsWindowTests : IDisposable
                 return [];
             });
             _ = window.Handle;
-            ComboBox box = Descendants(window).OfType<ComboBox>().Skip(2).First();
+            // The first box a program's name is typed into (choice lists come before it on the General page).
+            ComboBox box = Descendants(window).OfType<ComboBox>().First(combo => combo.DropDownStyle == ComboBoxStyle.DropDown);
             box.Text = "Typed.exe";
             window.SetDefaultOpacity(60);
             Assert.True(window.SaveChanges());
