@@ -90,6 +90,12 @@ internal sealed unsafe class ContentOverlay : Form
 
     public void SetLevels(ContentLevels levels) => _levels = levels;
 
+    /// <summary>How see-through the whole effect is: the window's own opacity, which it can't show while hidden.</summary>
+    public void SetOpacity(byte alpha)
+    {
+        if (IsHandleCreated) User32.SetLayeredWindowAttributes(Handle, 0, alpha, User32.LWA_ALPHA);
+    }
+
     /// <summary>Sets everything up on this thread, then processes frames on its own. Throws if the window can't be captured.</summary>
     public void Start()
     {

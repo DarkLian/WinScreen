@@ -7,9 +7,20 @@ namespace WinScreen.Glass;
 /// but clickable under an overlay, and puts it back exactly when turned off, on exit, or after a crash
 /// through the same recovery as hidden windows.
 /// </summary>
-internal sealed class ContentEffects(WindowController windows) : IDisposable
+internal sealed class ContentEffects : IDisposable
 {
+    private readonly WindowController windows;
     private readonly Dictionary<nint, ContentOverlay> _overlays = [];
+
+    public ContentEffects(WindowController windows)
+    {
+        this.windows = windows;
+        // The effect draws the window, so it shows the window as see-through as the person made it.
+        windows.OpacityChanged += (window, alpha) =>
+        {
+            if (_overlays.TryGetValue(window, out ContentOverlay? overlay) && !overlay.IsDisposed) overlay.SetOpacity(alpha);
+        };
+    }
     private ContentLevels _levels = new(0.15f, 1, 0.9f);
 
     /// <summary>Raised when an effect had to stop, with a message for the person.</summary>
@@ -49,8 +60,10 @@ internal sealed class ContentEffects(WindowController windows) : IDisposable
         var overlay = new ContentOverlay(window, look, _levels);
         try
         {
+            byte opacity = windows.OpacityOf(window);
             windows.HideOwned(window, overlay, solid: true);
             overlay.Start();
+            overlay.SetOpacity(opacity);
         }
         catch
         {

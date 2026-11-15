@@ -757,10 +757,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         lock (_gate)
         {
             ChangedWindow state = Track(window);
-            byte alpha = (byte)Math.Clamp(state.Alpha + delta, MinimumOpacity, 255);
-            ApplyAlpha(window, state, alpha);
-            SaveJournal();
-            return alpha;
+            byte alpha = (byte)Math.Clamp((state.Hidden ? state.AlphaBeforeHiding : state.Alpha) + delta, MinimumOpacity, 255);
+            return Opacity(window, state, alpha);
         }
     }
 
@@ -768,13 +766,28 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     public byte SetOpacity(nint window, byte alpha)
     {
         lock (_gate)
+            return Opacity(window, Track(window), Math.Max(alpha, MinimumOpacity));
+    }
+
+    /// <summary>Raised when a window's opacity changes, with the opacity it has when shown.</summary>
+    public event Action<nint, byte>? OpacityChanged;
+
+    /// <summary>
+    /// A hidden window keeps the opacity for when it's shown: given now, it showed the window through whatever hid it,
+    /// and under Dark mode or Glass, which draw it again, the window lost its see-through (the owner, 16 Nov).
+    /// </summary>
+    private byte Opacity(nint window, ChangedWindow state, byte alpha)
+    {
+        if (state.Hidden)
         {
-            ChangedWindow state = Track(window);
-            alpha = Math.Max(alpha, MinimumOpacity);
-            ApplyAlpha(window, state, alpha);
-            SaveJournal();
-            return alpha;
+            Prepare(window, state);
+            state.Layered = true;
+            state.AlphaBeforeHiding = alpha;
         }
+        else ApplyAlpha(window, state, alpha);
+        SaveJournal();
+        OpacityChanged?.Invoke(window, alpha);
+        return alpha;
     }
 
     /// <summary>The opacity WinScreen has given this window; 255 for a window it hasn't changed.</summary>

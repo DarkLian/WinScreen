@@ -174,6 +174,43 @@ public sealed class ContentEffectTests
         });
     }
 
+    /// <summary>
+    /// Dark mode draws the window again, so it shows the window as see-through as the person made it, before or after
+    /// turning Dark on; and making it more see-through under Dark leaves the hidden original hidden (the owner, 16 Nov).
+    /// </summary>
+    [GraphicsCardTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Dark_mode_keeps_the_windows_see_through(bool seeThroughFirst)
+    {
+        using var behind = new TargetProcess(new Rectangle(250, 180, 520, 400), "1E64C8");
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        User32.SetWindowPos(target.Handle, 0, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            try
+            {
+                if (seeThroughFirst) windows.SetOpacity(target.Handle, 128);
+                Assert.True(effects.Toggle(target.Handle, ContentLook.Dark));
+                if (!seeThroughFirst) windows.SetOpacity(target.Handle, 128);
+                Assert.True(WindowInfo.IsConcealed(target.Handle), "The original came out from under the effect.");
+                // Half the dark page, half the blue window behind.
+                Color expected = Color.FromArgb((25 + 0x1E) / 2, (25 + 0x64) / 2, (25 + 0xC8) / 2);
+                Pump(() => Desktop.IsNear(Middle(bounds), expected, 24));
+                Assert.True(Desktop.IsNear(Middle(bounds), expected, 24), $"{Middle(bounds)} rather than {expected}");
+                Assert.Equal(128, windows.OpacityOf(target.Handle));
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
     [GraphicsCardFact]
     public void Picture_safe_Dark_turns_a_light_page_dark_and_follows_the_window()
     {
