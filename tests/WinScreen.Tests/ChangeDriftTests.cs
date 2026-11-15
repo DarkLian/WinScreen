@@ -61,6 +61,25 @@ public sealed class ChangeDriftTests
     }
 
     [Fact]
+    public void A_pin_taken_away_by_the_program_in_front_is_put_back_without_taking_the_focus()
+    {
+        using var front = new TargetProcess(new Rectangle(900, 300, 360, 260), "1E64C8", title: "In front");
+        Run(true, (target, windows, told) =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(target.Handle);
+            Assert.True(windows.TogglePin(target.Handle));
+            Desktop.Activate(front.Handle);
+            TakeTopmost(target.Handle);
+            Tick(windows);
+            Assert.True(Topmost(target.Handle), "The pin wasn't put back while another window was in front.");
+            Assert.Equal(front.Handle, User32.GetForegroundWindow());
+            Assert.True(windows.IsPinned(target.Handle));
+            Assert.Empty(told);
+        });
+    }
+
+    [Fact]
     public void A_program_that_keeps_taking_the_pin_wins_and_the_person_is_told()
     {
         Run(true, (target, windows, told) =>

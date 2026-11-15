@@ -1559,7 +1559,8 @@ public sealed partial class PipWindow : Form
     private void FollowDesktops()
     {
         bool away = _awayFrom != Guid.Empty;
-        bool mayHide = !away && _origin.IsWindow && _origin.IsAvailable && !_hideItem.Checked && !_usingOriginal && _live is null &&
+        // Hidden already by something else (another view, a look) is left to it.
+        bool mayHide = !away && _origin.IsWindow && _origin.IsAvailable && !_hideItem.Checked && !_windows.IsHidden(_source) && !_usingOriginal && _live is null &&
             _thumbnail is not null && !SwitcherHidingStopsView && !User32.IsIconic(_source);
         bool here = away || !mayHide || VirtualDesktops.OnCurrentDesktop(_source);
         if (!away && here) return; // The usual case costs one question.

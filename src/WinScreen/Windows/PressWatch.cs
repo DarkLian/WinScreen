@@ -50,6 +50,9 @@ internal sealed class PressWatch
     public static bool? TakesPresses(nint window, nint overlay)
     {
         if (!User32.IsWindow(window) || !User32.IsWindowVisible(window) || User32.IsIconic(window)) return null;
+        // Left on another virtual desktop (cloaked by Windows): what is under its middle now is another desktop's.
+        if (!VirtualDesktops.OnCurrentDesktop(window) ||
+            Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return null;
         if (!WindowInfo.TryGetVisibleBounds(window, out Rectangle bounds) || bounds.Width < 4 || bounds.Height < 4) return null;
         var middle = new Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2);
         if (!Screen.AllScreens.Any(screen => screen.Bounds.Contains(middle))) return null;

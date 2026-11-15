@@ -121,6 +121,47 @@ public sealed class VirtualDesktopViewTests
     }
 
     [Fact]
+    public void A_window_left_on_another_desktop_is_not_judged_by_the_look_watchdog()
+    {
+        if (Skip()) return;
+        using var target = new TargetProcess(new Rectangle(300, 220, 460, 320), "E8E8E8");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(target.Handle);
+            Assert.True(PressWatch.TakesPresses(target.Handle, 0));
+            using var desktop = new TestDesktop();
+            Assert.Null(PressWatch.TakesPresses(target.Handle, 0));
+        });
+    }
+
+    [Fact]
+    public void A_view_of_a_window_something_else_hid_leaves_it_alone_on_another_desktop()
+    {
+        if (Skip()) return;
+        using var target = new TargetProcess(new Rectangle(300, 220, 460, 320), "E8E8E8");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            try
+            {
+                using var view = new PipWindow(target.Handle, windows);
+                var problems = new List<string>();
+                view.Problem += problems.Add;
+                view.ShowOnTop();
+                view.Bounds = new Rectangle(1100, 160, 320, 240);
+                TestDesktop.Pump(1500);
+                windows.ConcealSolid(target.Handle); // As a look does.
+                using var desktop = new TestDesktop();
+                TestDesktop.Pump(2000);
+                Assert.False(view.HiddenWhileAway);
+                Assert.Empty(problems);
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
+
+    [Fact]
     public void Closing_the_view_on_another_desktop_leaves_nothing_hidden()
     {
         if (Skip()) return;
