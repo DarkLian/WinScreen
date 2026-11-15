@@ -1,3 +1,4 @@
+using WinScreen.Native;
 using WinScreen.Pip;
 using Xunit;
 using Step = WinScreen.Pip.AwayFromDesktop.Step;
@@ -9,6 +10,13 @@ public sealed class AwayFromDesktopTests
 {
     private static readonly Guid Home = new("6d1a8dd0-0000-0000-0000-000000000001");
     private static readonly Guid Other = new("6d1a8dd0-0000-0000-0000-000000000002");
+
+    [Fact]
+    public void The_table_of_desktop_interfaces_names_each_version_once()
+    {
+        Assert.Equal(VirtualDesktopsInternal.Known.Length, VirtualDesktopsInternal.Known.Select(row => row.Manager).Distinct().Count());
+        Assert.All(VirtualDesktopsInternal.Known, row => Assert.InRange(row.FindDesktop, 12, 14));
+    }
 
     [Fact]
     public void An_original_on_another_desktop_is_hidden_for_now() =>

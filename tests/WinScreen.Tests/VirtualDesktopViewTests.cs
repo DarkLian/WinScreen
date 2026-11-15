@@ -162,7 +162,7 @@ public sealed class VirtualDesktopViewTests
     }
 
     [Fact]
-    public void Closing_the_view_on_another_desktop_leaves_nothing_hidden()
+    public void Closing_the_view_on_another_desktop_puts_the_original_back_on_its_own()
     {
         if (Skip()) return;
         WithChromeView((window, view, desktop) =>
@@ -173,6 +173,30 @@ public sealed class VirtualDesktopViewTests
             TestDesktop.Pump(500);
             Assert.True(User32.IsWindowVisible(window));
             Assert.True(VirtualDesktops.DesktopOf(window) is not null, "The original was left showing on every desktop.");
+            Assert.True(VirtualDesktopsInternal.Supported, "This Windows's desktop interface isn't in the table.");
+            Assert.Equal(desktop.Home, VirtualDesktops.DesktopOf(window));
+        });
+    }
+
+    [Fact]
+    public void Keep_hidden_turned_off_on_another_desktop_puts_the_original_back_on_its_own()
+    {
+        if (Skip()) return;
+        WithChromeView((window, view, desktop) =>
+        {
+            desktop.GoHome();
+            view.SetOriginalHidden(true); // The person's own choice, made at home.
+            desktop.GoToMade();
+            TestDesktop.Pump(800);
+            bool keptBefore = view.KeepsUpdating;
+            view.SetOriginalHidden(false);
+            string seen = "";
+            for (int look = 0; look < 6 && VirtualDesktops.DesktopOf(window) != desktop.Home; look++)
+            {
+                TestDesktop.Pump(500);
+                seen += $" [{VirtualDesktops.DesktopOf(window)?.ToString()[..8] ?? "none"} keeps={view.KeepsUpdating} visible={User32.IsWindowVisible(window)}]";
+            }
+            Assert.True(VirtualDesktops.DesktopOf(window) == desktop.Home, $"Kept hidden before: {keptBefore}. Then:{seen}");
         });
     }
 

@@ -673,6 +673,8 @@ public sealed partial class PipWindow : Form
                     T("errors.pip.previewNotReady"));
             if (hidden)
             {
+                // Remembered before hiding: a hidden original shows on every desktop and has none of its own.
+                if (!_windows.IsConcealedBy(_source, this)) _ownDesktop = VirtualDesktops.DesktopOf(_source);
                 _windows.HideOwned(_source, this);
                 if (SwitcherHidingStopsView) Problem?.Invoke(T("errors.switcher.windows10"));
                 // A Store app keeps the taskbar button Windows owns; activating it shows the app (FollowSource).
@@ -689,6 +691,7 @@ public sealed partial class PipWindow : Form
             else
             {
                 _windows.ShowOwned(_source, this);
+                ReturnToOwnDesktop();
                 _parkedCaptureFallback = false;
                 _thumbnail?.Configure(BackendPreferences());
                 _popups?.ShowAll();
@@ -712,6 +715,21 @@ public sealed partial class PipWindow : Form
             Problem?.Invoke(failure.Message);
             return false;
         }
+    }
+
+    /// <summary>The desktop the original was on when hidden, or null.</summary>
+    private Guid? _ownDesktop;
+
+    /// <summary>
+    /// Shown again while another desktop is in front, Windows puts the original there; it goes back to its own instead
+    /// (undocumented, INV-19: where that can't be done it stays where Windows put it, as before).
+    /// </summary>
+    private void ReturnToOwnDesktop()
+    {
+        Guid? own = _ownDesktop;
+        _ownDesktop = null;
+        if (own is not { } desktop || VirtualDesktops.Exists(desktop) == false || VirtualDesktops.CurrentDesktop() == desktop) return;
+        VirtualDesktopsInternal.MoveTo(_source, desktop);
     }
 
     /// <summary>
