@@ -113,9 +113,20 @@ internal static class ContentShaders
                 result = float4(c * levels.z, levels.z);
             } else {
                 float d = smoothstep(0.03, 0.30, away);
-                float alpha = lerp(levels.x, levels.y, d);
                 float3 ink = d > 0.001 ? saturate((c - (1 - d) * page.rgb) / d) : c;
-                result = float4(lerp(page.rgb * levels.x, ink * levels.y, d), alpha);
+                // Text keeps a thin halo of the page colour, a few pixels wide: dark text on a light page sat right on
+                // whatever was behind, often dark, and couldn't be read (the owner, 15 Nov). The rest of the background
+                // fades as chosen.
+                float halo = 0;
+                // Only strong contrast, as text has, makes a halo: a panel's faint border doesn't.
+                for (int py = -3; py <= 3; py++) for (int px = -3; px <= 3; px++) {
+                    float3 n = source.Load(int3(clamp(int2(id.xy) + int2(px, py), int2(0,0), int2(ow - 1, oh - 1)), 0)).rgb;
+                    float nd = smoothstep(0.18, 0.45, length(n - page.rgb));
+                    halo = max(halo, nd * saturate(1 - length(float2(px, py)) / 4.0));
+                }
+                float under = lerp(levels.x, max(levels.x, 0.9), smoothstep(0.0, 0.45, halo));
+                float alpha = lerp(under, levels.y, d);
+                result = float4(lerp(page.rgb * under, ink * levels.y, d), alpha);
             }
             output[id.xy] = result;
         }
