@@ -22,6 +22,17 @@ public sealed class WhatsNewTests
         Assert.False(WhatsNew.ShouldOffer("0.1.0", null, firstRun: false, published: true));
     }
 
+    [Fact]
+    public void A_local_build_leaves_the_published_release_its_offer()
+    {
+        // The owner runs local betas of 1.1.0, then the published 1.1.0 arrives.
+        string? lastSeen = WhatsNew.Remember("1.1.0-beta.11", null, published: false);
+        Assert.Null(lastSeen);
+        Assert.True(WhatsNew.ShouldOffer("1.1.0", lastSeen, firstRun: false, published: true));
+        Assert.Equal("1.1.0", WhatsNew.Remember("1.1.0", lastSeen, published: true));
+        Assert.Equal("1.0.0", WhatsNew.Remember("1.1.0-beta.11", "1.0.0", published: false));
+    }
+
     [Theory]
     [InlineData("en")]
     [InlineData("zh-Hans")]

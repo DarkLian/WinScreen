@@ -1337,8 +1337,9 @@ public sealed partial class TrayApplication : ApplicationContext
         string version = AppInfo.Version;
         if (WhatsNew.ShouldOffer(version, _settings.LastSeenVersion, firstRun, WhatsNew.Published) && _settings.ShowNotifications)
             Balloon(T("updates.title"), string.Format(T("whatsNew.offer"), version), ToolTipIcon.Info, WhatsNew.Show);
-        if (_settings.LastSeenVersion == version) return;
-        _settings.LastSeenVersion = version;
+        string? remembered = WhatsNew.Remember(version, _settings.LastSeenVersion, WhatsNew.Published);
+        if (_settings.LastSeenVersion == remembered) return;
+        _settings.LastSeenVersion = remembered;
         try { _settings.Save(_settingsPath); }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(failure); }
     }

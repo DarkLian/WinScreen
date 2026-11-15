@@ -31,6 +31,12 @@ internal static class WhatsNew
     internal static bool ShouldOffer(string current, string? lastSeen, bool firstRun, bool published) =>
         published && !firstRun && (lastSeen is null || Core(lastSeen) != Core(current)) && For(current, "en") is not null;
 
+    /// <summary>
+    /// The version to keep as last seen. Only a published copy records itself: a local build of 1.1.0's betas must not
+    /// make the published 1.1.0 look already seen.
+    /// </summary>
+    internal static string? Remember(string current, string? lastSeen, bool published) => published ? current : lastSeen;
+
     /// <summary>Whether this copy was published, rather than built locally.</summary>
     internal static bool Published => typeof(WhatsNew).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
         .Any(metadata => metadata.Key == "ReleaseType" && metadata.Value == "release");
