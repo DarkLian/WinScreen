@@ -173,8 +173,9 @@ problems. I welcome any security concerns you report.
 
 ## Updates
 
-Turn on automatic updates in Settings and WinScreen installs new versions when you close it. To update by hand, close
-WinScreen and run the newer installer. Your settings stay as they are.
+In Settings, choose what WinScreen does about new versions: nothing (the default), tell you about them, or install
+them for you when you close it. A portable copy can't update itself, so it tells you and opens the new version's page.
+To update by hand, close WinScreen and run the newer installer. Your settings stay as they are.
 
 ## Tell us what you think
 
@@ -195,8 +196,9 @@ more widely used first, so we'll apply again later.
 
 - **Who's involved:** [DarkLian](https://github.com/DarkLian) writes and reviews WinScreen's code, with help from AI
   agents, and approves every release. Nobody else can change the code or publish a release.
-- **Privacy:** WinScreen doesn't send anything about you or your PC anywhere. It only goes online when you turn on
-  automatic updates or choose **Check for updates**, and then it just asks GitHub for a newer version. It keeps a short
+- **Privacy:** WinScreen doesn't send anything about you or your PC anywhere. It only goes online when you ask to hear
+  about new versions or have them installed, or choose **Check for updates**, and then it just asks GitHub which version
+  is newest. It keeps a short
   log on your PC to help fix problems, which never leaves your PC unless you send it yourself.
 
 ## License

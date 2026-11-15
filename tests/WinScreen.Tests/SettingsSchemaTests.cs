@@ -360,4 +360,35 @@ public sealed class SettingsSchemaTests : IDisposable
         File.WriteAllText(SettingsFile, """{ "ShowToolbar": true, "ShowToolbar": false }""");
         Assert.False(AppSettings.Load(SettingsFile).ShowToolbar);
     }
+
+    [Theory]
+    [InlineData("true", UpdateMode.Install)]
+    [InlineData("false", UpdateMode.Off)]
+    [InlineData(null, UpdateMode.Off)]
+    public void The_one_update_switch_becomes_the_three_choices(string? automatic, UpdateMode expected)
+    {
+        string json = $$"""{ "SchemaVersion": 1 {{(automatic is null ? "" : $", \"AutomaticUpdates\": {automatic}")}} }""";
+        Assert.Equal(expected, AppSettings.Parse(json).Updates);
+    }
+
+    [Fact]
+    public void A_choice_made_in_this_version_is_kept_and_older_copies_still_read_their_switch()
+    {
+        new AppSettings { Updates = UpdateMode.TellMe }.Save(SettingsFile);
+        Assert.Equal(UpdateMode.TellMe, AppSettings.Load(SettingsFile).Updates);
+        using (JsonDocument saved = JsonDocument.Parse(File.ReadAllText(SettingsFile)))
+            Assert.False(saved.RootElement.GetProperty("AutomaticUpdates").GetBoolean());
+
+        new AppSettings { Updates = UpdateMode.Install }.Save(SettingsFile);
+        using (JsonDocument saved = JsonDocument.Parse(File.ReadAllText(SettingsFile)))
+            Assert.True(saved.RootElement.GetProperty("AutomaticUpdates").GetBoolean());
+        // The switch an older copy writes back is only read from an older file, never over the choice.
+        Assert.Equal(UpdateMode.Off, AppSettings.Parse("""{ "SchemaVersion": 2, "Updates": 0, "AutomaticUpdates": true }""").Updates);
+    }
+
+    [Fact]
+    public void An_unknown_update_choice_from_a_newer_version_is_off()
+    {
+        Assert.Equal(UpdateMode.Off, AppSettings.Parse("""{ "SchemaVersion": 2, "Updates": 9 }""").Updates);
+    }
 }

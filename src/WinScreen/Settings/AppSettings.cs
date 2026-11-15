@@ -294,6 +294,12 @@ public static class CommandCatalog
     };
 }
 
+/// <summary>
+/// Whether WinScreen looks for new versions (D12). Off means no network at all; Tell me only says one is out; Install
+/// for me downloads it and installs it when WinScreen closes (a portable copy, which can't, tells instead).
+/// </summary>
+public enum UpdateMode { Off = 0, TellMe = 1, Install = 2 }
+
 /// <summary>Everything a person can choose, stored as JSON in their app data folder.</summary>
 public sealed class AppSettings
 {
@@ -303,7 +309,7 @@ public sealed class AppSettings
     private static readonly JsonSerializerOptions Format = new() { WriteIndented = true };
 
     /// <summary>The format this version writes. Raise it only together with a new step in <see cref="Migrations"/>.</summary>
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     /// <summary>
     /// Steps that bring a saved file up to date before it is read, in order: step <c>n</c> turns format <c>n</c>
@@ -312,7 +318,16 @@ public sealed class AppSettings
     internal static readonly Action<JsonObject>[] Migrations =
     [
         OfferWindowMenuButton, // 0 → 1
+        ChooseUpdates, // 1 → 2
     ];
+
+    /// <summary>The one switch becomes the three choices: on is Install for me, off is Off (D12).</summary>
+    private static void ChooseUpdates(JsonObject root)
+    {
+        if (root.ContainsKey(nameof(Updates))) return;
+        bool automatic = root[nameof(AutomaticUpdates)] is JsonValue value && value.TryGetValue(out bool on) && on;
+        root[nameof(Updates)] = (int)(automatic ? UpdateMode.Install : UpdateMode.Off);
+    }
 
     /// <summary>Settings from before the toolbar's Window menu button get it once; after that, taking it off stays off.</summary>
     private static void OfferWindowMenuButton(JsonObject root)
@@ -406,7 +421,13 @@ public sealed class AppSettings
     public bool ShowNotifications { get; set; } = true;
     /// <summary>Menus get Windows 11's blurred background while its Transparency effects is on; off keeps them plain.</summary>
     public bool MenuTransparency { get; set; } = true;
-    public bool AutomaticUpdates { get; set; }
+    public UpdateMode Updates { get; set; }
+
+    /// <summary>
+    /// Written for copies from before the three choices, which know only this switch; this version reads
+    /// <see cref="Updates"/> and takes this only from an older file (<see cref="ChooseUpdates"/>).
+    /// </summary>
+    public bool AutomaticUpdates => Updates == UpdateMode.Install;
     public string Language { get; set; } = "system";
 
     /// <summary>How WinScreen's own windows look: "system" follows Windows, or "light" or "dark".</summary>
@@ -581,6 +602,7 @@ public sealed class AppSettings
             if (setup.Place is { } place && !Enum.IsDefined(place)) setup.Place = null;
         loaded.Language = loaded.Language is "en" or "zh-Hans" or "zh-Hant" ? loaded.Language : "system";
         loaded.Theme = loaded.Theme is "light" or "dark" ? loaded.Theme : "system";
+        loaded.Updates = Enum.IsDefined(loaded.Updates) ? loaded.Updates : UpdateMode.Off;
         loaded.DefaultOpacityPercent =
             Math.Clamp(loaded.DefaultOpacityPercent, LowestOpacityPercent, HighestOpacityPercent);
         foreach ((AppCommand command, string hotkey) in defaults.Hotkeys)

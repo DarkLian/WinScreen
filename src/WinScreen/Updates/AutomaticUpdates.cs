@@ -23,6 +23,8 @@ internal static class AppInfo
 
 internal interface IUpdateSession : IDisposable
 {
+    /// <summary>A newer version the signed feed offers, without downloading it, or null.</summary>
+    Task<string?> NewerVersion(CancellationToken cancellation);
     Task<bool> Download(CancellationToken cancellation);
     Task ApplyOnExit(CancellationToken cancellation);
 }
@@ -31,11 +33,13 @@ internal interface IUpdateSession : IDisposable
 /// One check at a time. Automatic updates check on a timer; a check the person asks for works either way.
 /// Turning automatic updates off cancels a check in progress and discards a downloaded update.
 /// </summary>
-internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> createSession, Action<string> status)
-    : IDisposable
+internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> createSession, Action<string> status,
+    Action<string>? available = null) : IDisposable
 {
     private CancellationTokenSource? _generation;
     private bool _automatic;
+    private bool _telling;
+    private string? _told;
     private IUpdateSession? _pending;
     private bool _busy;
     private bool _disposed;
@@ -61,8 +65,51 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         _pending = null;
     }
 
-    /// <summary>The timer's check, which does nothing while automatic updates are off.</summary>
-    internal Task Check() => _automatic ? Run(quiet: false) : Task.CompletedTask;
+    /// <summary>
+    /// "Tell me": the timer's check only looks whether a newer version is out and says so, once per version. Also what
+    /// a copy that can't install (a portable one) does with "Install for me".
+    /// </summary>
+    internal void SetTelling(bool telling)
+    {
+        if (_disposed) return;
+        _telling = telling;
+    }
+
+    /// <summary>The newest version told about, or null.</summary>
+    internal string? Available => _told;
+
+    /// <summary>The timer's check: installs, tells, or does nothing at all (no network) when updates are off.</summary>
+    internal Task Check() => _automatic ? Run(quiet: false) : _telling ? Tell() : Task.CompletedTask;
+
+    private async Task Tell()
+    {
+        if (_disposed || _busy || _pending is not null)
+            return;
+        _busy = true;
+        IUpdateSession? session = null;
+        var generation = _generation ??= new CancellationTokenSource();
+        try
+        {
+            session = createSession(generation.Token);
+            if (session is null) return;
+            string? version = await session.NewerVersion(generation.Token);
+            if (version is not null && version != _told && !_disposed && _generation == generation)
+            {
+                _told = version;
+                available?.Invoke(version);
+            }
+        }
+        catch (Exception caught)
+        {
+            // Quiet: a look nobody asked for right now isn't worth a message when it fails.
+            Diagnostics.Log.Swallowed(caught);
+        }
+        finally
+        {
+            session?.Dispose();
+            _busy = false;
+        }
+    }
 
     private async Task Run(bool quiet)
     {
@@ -94,6 +141,35 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
             _lastCheckFailed = true;
             if (_generation == generation && !_disposed && !quiet)
                 status(UiText.T("updates.checkFailed"));
+        }
+        finally
+        {
+            session?.Dispose();
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// At the person's request, for a copy that can't install: whether a newer version is out, and whether the look
+    /// failed. Works whatever the setting, since the person asked.
+    /// </summary>
+    internal async Task<(string? Version, bool Failed)> LookNow()
+    {
+        if (_disposed || _busy) return (null, false);
+        _busy = true;
+        IUpdateSession? session = null;
+        try
+        {
+            session = createSession(CancellationToken.None);
+            if (session is null) return (null, true);
+            string? version = await session.NewerVersion(CancellationToken.None);
+            if (version is not null) _told = version;
+            return (version, false);
+        }
+        catch (Exception caught)
+        {
+            Diagnostics.Log.Swallowed(caught);
+            return (null, true);
         }
         finally
         {
@@ -160,13 +236,15 @@ internal sealed class VelopackUpdateSession : IUpdateSession
     }
 
     private readonly UpdateTransport _transport;
+    private readonly SignedUpdateSource _source;
     private readonly UpdateManager _manager;
     private VelopackAsset? _pending;
 
     private VelopackUpdateSession(string repository, string publicKey, CancellationToken cancellation)
     {
         _transport = new UpdateTransport(repository);
-        _manager = new UpdateManager(new SignedUpdateSource(repository, publicKey, _transport, cancellation),
+        _source = new SignedUpdateSource(repository, publicKey, _transport, cancellation);
+        _manager = new UpdateManager(_source,
             new UpdateOptions { AllowVersionDowngrade = false, ExplicitChannel = UpdateChannel.Current });
     }
 
@@ -184,6 +262,17 @@ internal sealed class VelopackUpdateSession : IUpdateSession
             return null;
         return new VelopackUpdateSession(repository, publicKey, cancellation);
     }
+
+    public async Task<string?> NewerVersion(CancellationToken cancellation)
+    {
+        string? version = await UpdateNews.NewerVersion(_source, AppInfo.Version);
+        cancellation.ThrowIfCancellationRequested();
+        return version;
+    }
+
+    /// <summary>The built-in repository, or null for a copy built without one.</summary>
+    internal static string? Repository => typeof(VelopackUpdateSession).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+        .FirstOrDefault(metadata => metadata.Key == "UpdateRepository")?.Value is { Length: > 0 } repository ? repository : null;
 
     public async Task<bool> Download(CancellationToken cancellation)
     {

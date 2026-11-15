@@ -85,7 +85,7 @@ public sealed partial class TrayApplication : ApplicationContext
         {
             if (_settings.ShowNotifications)
                 Balloon(T("updates.title"), message, ToolTipIcon.None);
-        });
+        }, TellAboutVersion);
         _toolbar = new WindowToolbar(CanUseToolbar, IsOn, IsAvailable, Run) { OpenMenu = ShowToolbarMenu };
         _ = _toolbar.Handle;
         _modifierDrag.MenuEligible = CanOpenWindowMenu;
@@ -161,6 +161,12 @@ public sealed partial class TrayApplication : ApplicationContext
 
         _tray.Icon = LoadIcon();
         _tray.Text = "WinScreen";
+        _tray.BalloonTipClicked += (_, _) =>
+        {
+            Action? action = _balloonAction;
+            _balloonAction = null;
+            action?.Invoke();
+        };
         _tray.ContextMenuStrip = BuildMenu();
         // A view being used directly has its original under it, ready for clicks. Opening WinScreen's own
         // menu or Settings ends that first, and they stay above every view.
@@ -670,10 +676,14 @@ public sealed partial class TrayApplication : ApplicationContext
         });
         Part(() =>
         {
-            if (_settings.AutomaticUpdates && !_updatesWereOn)
+            // A copy that can't install (a portable one) tells instead (D14). Off means no network at all.
+            bool looking = _settings.Updates != UpdateMode.Off;
+            bool installing = _settings.Updates == UpdateMode.Install && VelopackUpdateSession.IsInstalled;
+            if (looking && !_updatesWereOn)
                 _updateTimer.Interval = 30_000; // Check soon after it's turned on, then every few hours.
-            _updatesWereOn = _settings.AutomaticUpdates;
-            _updates.SetEnabled(_settings.AutomaticUpdates);
+            _updatesWereOn = looking;
+            _updates.SetEnabled(installing);
+            _updates.SetTelling(looking && !installing);
         });
         Pip.PipHoverApps.Preferences = _settings.PipHover;
         Pip.PipOriginalApps.Programs = _settings.PipOriginalPrograms;
@@ -1283,10 +1293,48 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private async Task CheckForUpdates()
     {
-        string result = !VelopackUpdateSession.IsInstalled
-            ? T("updates.installedOnly")
-            : await _updates.CheckNow();
-        Balloon(T("updates.title"), result, ToolTipIcon.Info);
+        if (!VelopackUpdateSession.IsConfigured)
+        {
+            Balloon(T("updates.title"), T("updates.repositoryRequired"), ToolTipIcon.Info);
+            return;
+        }
+        if (!VelopackUpdateSession.IsInstalled)
+        {
+            // A portable copy can't replace itself: it says whether a newer one is out and offers its page (D14).
+            (string? version, bool failed) = await _updates.LookNow();
+            if (version is not null) TellAboutVersion(version);
+            else Balloon(T("updates.title"), failed ? T("updates.checkFailed") : T("updates.upToDate"), ToolTipIcon.Info);
+            return;
+        }
+        Balloon(T("updates.title"), await _updates.CheckNow(), ToolTipIcon.Info);
+    }
+
+    /// <summary>
+    /// "Tell me", or a copy that can't install: a newer version is out. A click downloads it for an installed copy (it
+    /// installs on exit), or opens its release page for a portable one. Shown even with notifications off: telling is
+    /// what the person chose.
+    /// </summary>
+    private void TellAboutVersion(string version)
+    {
+        bool installed = VelopackUpdateSession.IsInstalled;
+        Balloon(T("updates.title"), string.Format((installed ? T("updates.available") : T("updates.availablePortable")), version),
+            ToolTipIcon.Info, installed ? () => _ = DownloadToldVersion() : () => OpenReleasePage(version));
+    }
+
+    private async Task DownloadToldVersion() => Balloon(T("updates.title"), await _updates.CheckNow(), ToolTipIcon.Info);
+
+    private void OpenReleasePage(string version)
+    {
+        try
+        {
+            if (VelopackUpdateSession.Repository is not { } repository) return;
+            using var browser = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                UpdateNews.ReleasePage(repository, version).AbsoluteUri) { UseShellExecute = true });
+        }
+        catch (Exception failure) when (failure is InvalidDataException or System.ComponentModel.Win32Exception)
+        {
+            Diagnostics.Log.Swallowed(failure);
+        }
     }
 
     protected override void ExitThreadCore()
@@ -1831,8 +1879,17 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private void ShowStatus() => _statusItem.Text = T("tray.resultPrefix") + MenuText(_lastStatus);
 
-    private void Balloon(string title, string text, ToolTipIcon icon) =>
+    /// <summary>
+    /// What a click on the balloon showing now does, or nothing. Windows reports a click on any balloon the same way,
+    /// so each balloon sets it, and one without an action clears it: a later error can't open an earlier offer.
+    /// </summary>
+    private Action? _balloonAction;
+
+    private void Balloon(string title, string text, ToolTipIcon icon, Action? onClick = null)
+    {
+        _balloonAction = onClick;
         _tray.ShowBalloonTip(BalloonMilliseconds, title, string.IsNullOrEmpty(text) ? " " : text, icon);
+    }
 
     /// <summary>Keeps the tray menu a sensible width whatever a window calls itself. "&amp;" would otherwise vanish as a shortcut mark.</summary>
     private static string MenuText(string text)

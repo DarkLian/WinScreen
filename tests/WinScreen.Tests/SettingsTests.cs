@@ -54,7 +54,7 @@ public class SettingsTests
         var settings = new AppSettings
         {
             OpaqueOnHover = true, ExcludedPrograms = ["exampleprogram"], ShowNotifications = false,
-            Language = "zh-Hant", AutomaticUpdates = true
+            Language = "zh-Hant", Updates = UpdateMode.TellMe
         };
         settings.Hotkeys[AppCommand.TogglePin] = "Ctrl+Shift+F9";
         settings.Save(path);
@@ -63,7 +63,7 @@ public class SettingsTests
 
         Assert.True(loaded.OpaqueOnHover);
         Assert.False(loaded.ShowNotifications);
-        Assert.True(loaded.AutomaticUpdates);
+        Assert.Equal(UpdateMode.TellMe, loaded.Updates);
         Assert.Equal("zh-Hant", loaded.Language);
         Assert.Equal(["exampleprogram"], loaded.ExcludedPrograms);
         Assert.Equal("Ctrl+Shift+F9", loaded.Hotkeys[AppCommand.TogglePin]);
@@ -263,7 +263,7 @@ public sealed class SettingsWindowTests : IDisposable
             window.SetOption(nameof(AppSettings.PipAutoMove), true);
             window.SetOption(nameof(AppSettings.PipMiddleClickScroll), true);
             window.SetOption(nameof(AppSettings.ShowNotifications), false);
-            window.SetOption(nameof(AppSettings.AutomaticUpdates), true);
+            window.SetUpdateMode(UpdateMode.Install);
             window.AddIncluded("AnotherProgram.EXE");
             window.SetDefaultOpacity(60);
 
@@ -282,7 +282,7 @@ public sealed class SettingsWindowTests : IDisposable
             Assert.True(applied.PipAutoMove);
             Assert.True(applied.PipMiddleClickScroll);
             Assert.False(applied.ShowNotifications);
-            Assert.True(applied.AutomaticUpdates);
+            Assert.Equal(UpdateMode.Install, applied.Updates);
             Assert.Equal(["AnotherProgram"], applied.IncludedPrograms);
             Assert.Equal(60, applied.DefaultOpacityPercent);
         });

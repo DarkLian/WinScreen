@@ -11,6 +11,14 @@ public sealed class AutomaticUpdatesTests
         internal int Applications;
         internal bool Disposed;
         internal Func<CancellationToken, Task<bool>> Fetch = _ => Task.FromResult(true);
+        internal string? Newer = "9.9.9";
+        internal int Looks;
+
+        public Task<string?> NewerVersion(CancellationToken cancellation)
+        {
+            Looks++;
+            return Task.FromResult(Newer);
+        }
 
         public Task<bool> Download(CancellationToken cancellation)
         {
@@ -138,5 +146,46 @@ public sealed class AutomaticUpdatesTests
         Assert.Empty(messages);
         await updates.ApplyOnExit();
         Assert.Equal(1, session.Applications);
+    }
+
+    [Fact]
+    public async Task Telling_only_looks_and_says_each_new_version_once()
+    {
+        var session = new Session();
+        var told = new List<string>();
+        using var updates = new AutomaticUpdates(_ => session, _ => { }, told.Add);
+        updates.SetTelling(true);
+        await updates.Check();
+        await updates.Check();
+        Assert.Equal(["9.9.9"], told);
+        Assert.Equal(0, session.Downloads);
+        session.Newer = "10.0.0";
+        await updates.Check();
+        Assert.Equal(["9.9.9", "10.0.0"], told);
+        await updates.ApplyOnExit();
+        Assert.Equal(0, session.Applications);
+    }
+
+    [Fact]
+    public async Task Off_means_no_session_at_all()
+    {
+        int sources = 0;
+        using var updates = new AutomaticUpdates(_ => { sources++; return new Session(); }, _ => { }, _ => { });
+        updates.SetTelling(true);
+        updates.SetTelling(false);
+        await updates.Check();
+        Assert.Equal(0, sources);
+    }
+
+    [Fact]
+    public async Task A_look_the_person_asks_for_works_whatever_the_setting_and_says_when_it_failed()
+    {
+        var session = new Session();
+        using var updates = new AutomaticUpdates(_ => session, _ => { });
+        Assert.Equal(("9.9.9", false), await updates.LookNow());
+        session.Newer = null;
+        Assert.Equal(((string?)null, false), await updates.LookNow());
+        using var failing = new AutomaticUpdates(_ => throw new HttpRequestException("offline"), _ => { });
+        Assert.Equal(((string?)null, true), await failing.LookNow());
     }
 }

@@ -150,6 +150,7 @@ public class InvariantTests
         ["WinScreen.Settings.PipScaling"] = "Auto=0 Crisp=1 Smooth=2",
         ["WinScreen.Settings.ToolbarPlacement"] = "Left=0 Centre=1 Right=2",
         ["WinScreen.Settings.ToolbarTrigger"] = "TitleBar=0 MinimizeButton=1 Either=2",
+        ["WinScreen.Settings.UpdateMode"] = "Off=0 TellMe=1 Install=2",
         ["WinScreen.Settings.WindowMenuGesture"] = "CtrlRightClick=0 CtrlShiftRightClick=1 CtrlMiddleClick=2",
         ["WinScreen.Windows.WindowAnchor"] = "TopLeft=0 Top=1 TopRight=2 Left=3 Center=4 Right=5 BottomLeft=6 Bottom=7 BottomRight=8",
     };

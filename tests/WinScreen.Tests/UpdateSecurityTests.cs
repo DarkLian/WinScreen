@@ -270,4 +270,57 @@ public sealed class UpdateSecurityTests
             Directory.Delete(directory, true);
         }
     }
+
+    private static SignedUpdateSource SourceOffering(RSA key, string tag, VelopackAsset asset, bool signed = true)
+    {
+        byte[] feed = Feed(asset);
+        byte[] signature = signed ? key.SignData(feed, HashAlgorithmName.SHA256, RSASignaturePadding.Pss) : new byte[384];
+        var handler = new Handler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/latest"))
+            {
+                var redirect = new HttpResponseMessage(HttpStatusCode.Redirect);
+                redirect.Headers.Location = new Uri($"https://github.com/owner/repo/releases/tag/{tag}");
+                return redirect;
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(request.RequestUri.AbsolutePath.EndsWith(".sig") ? signature : feed),
+            };
+        });
+        return new SignedUpdateSource("owner/repo", key.ExportSubjectPublicKeyInfoPem(), new UpdateTransport("owner/repo", handler),
+            CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData("0.4.1", "0.4.2")]
+    [InlineData("0.4.2-beta", "0.4.2")]
+    [InlineData("0.4.2", null)]
+    [InlineData("0.5.0", null)]
+    [InlineData("1.1.0-beta.11-local", null)]
+    public async Task Telling_reads_the_signed_feed_and_names_only_a_newer_version(string current, string? expected)
+    {
+        using var key = RSA.Create(3072);
+        Assert.Equal(expected, await UpdateNews.NewerVersion(SourceOffering(key, "v0.4.2", Asset([1, 2, 3])), current));
+    }
+
+    [Fact]
+    public async Task Telling_trusts_nothing_the_signature_doesnt_cover()
+    {
+        using var key = RSA.Create(3072);
+        await Assert.ThrowsAsync<CryptographicException>(() =>
+            UpdateNews.NewerVersion(SourceOffering(key, "v0.4.2", Asset([1, 2, 3]), signed: false), "0.4.1"));
+        // A prerelease tag isn't followed, as for an update.
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            UpdateNews.NewerVersion(SourceOffering(key, "v0.4.2-beta", Asset([1, 2, 3])), "0.4.1"));
+    }
+
+    [Fact]
+    public void The_release_page_is_made_from_the_repository_and_a_stable_version_only()
+    {
+        Assert.Equal("https://github.com/owner/repo/releases/tag/v1.2.3", UpdateNews.ReleasePage("owner/repo", "1.2.3").AbsoluteUri);
+        Assert.Throws<InvalidDataException>(() => UpdateNews.ReleasePage("owner/repo", "1.2.3-beta"));
+        Assert.Throws<InvalidDataException>(() => UpdateNews.ReleasePage("owner/repo", "1.2.3/../../evil"));
+        Assert.Throws<InvalidDataException>(() => UpdateNews.ReleasePage("owner/../x", "1.2.3"));
+    }
 }

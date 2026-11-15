@@ -13,7 +13,7 @@ public sealed class SettingsSwitchTests
     private static readonly string[] Plain =
     [
         nameof(AppSettings.ShowToolbar), nameof(AppSettings.ShowNotifications), nameof(AppSettings.MenuTransparency),
-        nameof(AppSettings.AutomaticUpdates), nameof(AppSettings.ExperimentalFeatures), nameof(AppSettings.RunAsAdministrator),
+        nameof(AppSettings.ExperimentalFeatures), nameof(AppSettings.RunAsAdministrator),
         nameof(AppSettings.PauseInFullScreen), nameof(AppSettings.AllowPipInFullScreen), nameof(AppSettings.ModifierDrag),
         nameof(AppSettings.SnapWhileDragging), nameof(AppSettings.WindowMenu), nameof(AppSettings.PausePinWhenMaximized),
         nameof(AppSettings.OpaqueOnHover), nameof(AppSettings.HighlightPinned), nameof(AppSettings.PipAutoMove),

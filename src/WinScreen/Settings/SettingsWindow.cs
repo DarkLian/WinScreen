@@ -77,8 +77,7 @@ public sealed class SettingsWindow : Form
     private readonly CheckBox _showNotifications = new SwitchBox
         { Text = T("settings.notifications.enable"), AutoSize = true };
 
-    private readonly CheckBox _automaticUpdates = new SwitchBox
-        { Text = T("updates.enable"), AutoSize = true };
+    private readonly ComboBox _updateMode = new ThemedCombo { Width = 240 };
 
     private readonly CheckBox _experimental = new SwitchBox
         { Text = T("settings.experimental.enable"), AutoSize = true };
@@ -199,6 +198,7 @@ private readonly ErrorProvider _errors = new();
         _hoverAutomatic.CheckedChanged += (_, _) => ShowHoverChoices();
         _language.Items.AddRange([T("settings.language.system"), "English", "简体中文", "繁體中文"]);
         _theme.Items.AddRange([T("settings.theme.system"), T("settings.theme.light"), T("settings.theme.dark")]);
+        _updateMode.Items.AddRange([T("updates.mode.off"), T("updates.mode.tellMe"), T("updates.mode.install")]);
 
         Text = T("settings.window.title");
         Icon = TrayApplication.LoadIcon();
@@ -338,7 +338,7 @@ private readonly ErrorProvider _errors = new();
         var icons = new Dictionary<Control, char>
         {
             [_language] = '\uE774', [_theme] = '\uE790', [_menuTransparency] = '\uE706', [_startWithWindows] = '\uE7E8', [_runAsAdministrator] = '\uE7EF',
-            [_showNotifications] = '\uEA8F', [_automaticUpdates] = '\uE896', [_pauseInFullScreen] = '\uE7FC', [_allowPip] = '\uE8A7',
+            [_showNotifications] = '\uEA8F', [_updateMode] = '\uE896', [_pauseInFullScreen] = '\uE7FC', [_allowPip] = '\uE8A7',
             [_experimental] = '\uE945',
             [_modifierDrag] = '\uE7C2', [_modifierKey] = '\uE765', [_snapWhileDragging] = '\uE90C', [_windowMenu] = '\uE712',
             [_windowMenuGesture] = '\uE962',
@@ -851,6 +851,7 @@ private readonly ErrorProvider _errors = new();
         draft.StartWithWindows = _startWithWindows.Checked;
         draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
         draft.Theme = Themes[Math.Max(0, _theme.SelectedIndex)];
+        draft.Updates = (UpdateMode)Math.Max(0, _updateMode.SelectedIndex);
         draft.ModifierKey = (ModifierKey)Math.Max(0, _modifierKey.SelectedIndex);
         draft.WindowMenuGesture = (WindowMenuGesture)Math.Max(0, _windowMenuGesture.SelectedIndex);
         draft.WindowMenuExclusions = Programs(_windowMenuExclusions, _newMenuExclusion);
@@ -900,7 +901,6 @@ private readonly ErrorProvider _errors = new();
         (_showToolbar, settings => settings.ShowToolbar, (settings, on) => settings.ShowToolbar = on),
         (_showNotifications, settings => settings.ShowNotifications, (settings, on) => settings.ShowNotifications = on),
         (_menuTransparency, settings => settings.MenuTransparency, (settings, on) => settings.MenuTransparency = on),
-        (_automaticUpdates, settings => settings.AutomaticUpdates, (settings, on) => settings.AutomaticUpdates = on),
         (_experimental, settings => settings.ExperimentalFeatures, (settings, on) => settings.ExperimentalFeatures = on),
         (_runAsAdministrator, settings => settings.RunAsAdministrator, (settings, on) => settings.RunAsAdministrator = on),
         (_pauseInFullScreen, settings => settings.PauseInFullScreen, (settings, on) => settings.PauseInFullScreen = on),
@@ -1186,6 +1186,8 @@ private readonly ErrorProvider _errors = new();
         return names;
     }
 
+    internal void SetUpdateMode(UpdateMode mode) => _updateMode.SelectedIndex = (int)mode;
+
     internal void SetOption(string option, bool on)
     {
         CheckBox box = option switch
@@ -1193,7 +1195,6 @@ private readonly ErrorProvider _errors = new();
             nameof(AppSettings.ShowToolbar) => _showToolbar,
             nameof(AppSettings.ShowNotifications) => _showNotifications,
             nameof(AppSettings.MenuTransparency) => _menuTransparency,
-            nameof(AppSettings.AutomaticUpdates) => _automaticUpdates,
             nameof(AppSettings.ExperimentalFeatures) => _experimental,
             nameof(AppSettings.PauseInFullScreen) => _pauseInFullScreen,
             nameof(AppSettings.AllowPipInFullScreen) => _allowPip,
@@ -1270,6 +1271,7 @@ private readonly ErrorProvider _errors = new();
         _anchorExcluded.Items.AddRange(anchors.ExcludedPrograms.Cast<object>().ToArray());
         _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, values.Language));
         _theme.SelectedIndex = Math.Max(0, Array.IndexOf(Themes, values.Theme));
+        _updateMode.SelectedIndex = (int)values.Updates;
         _modifierKey.SelectedIndex = (int)values.ModifierKey;
         _windowMenuGesture.SelectedIndex = (int)values.WindowMenuGesture;
         _windowMenuExclusions.Items.Clear();
@@ -1386,13 +1388,13 @@ private readonly ErrorProvider _errors = new();
         _menuTransparency.Enabled = blurWorks;
         var startup = new List<Control> { language, theme, _menuTransparency,
             Note(blurWorks ? T("settings.menus.transparency.help") : T("settings.menus.transparency.windows11")), _startWithWindows, _runAsAdministrator,
-            Note(adminWorks ? T("settings.admin.help") : T("settings.admin.unavailable")), _showNotifications, _automaticUpdates };
-        bool updatesWork = VelopackUpdateSession.IsConfigured && VelopackUpdateSession.IsInstalled;
-        _automaticUpdates.Enabled = updatesWork;
+            Note(adminWorks ? T("settings.admin.help") : T("settings.admin.unavailable")), _showNotifications,
+            SettingRow(T("updates.mode.label"), _updateMode), Note(T("updates.mode.help")) };
+        _updateMode.Enabled = VelopackUpdateSession.IsConfigured;
         if (!VelopackUpdateSession.IsConfigured)
             startup.Add(Note(T("updates.repositoryRequired")));
         else if (!VelopackUpdateSession.IsInstalled)
-            startup.Add(Note(T("updates.installedOnly")));
+            startup.Add(Note(T("updates.portable")));
 
         FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("settings.startupAndUpdates"), startup.ToArray()));

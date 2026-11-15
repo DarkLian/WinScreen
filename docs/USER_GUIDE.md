@@ -211,9 +211,12 @@ If something didn't work, the tray menu's **Last result** shows what happened.
 
 ## Updates
 
-Turn on automatic updates in **Settings → General**. WinScreen downloads new versions in the background and installs them
-when you close it. You can also choose **Check for updates** from the tray menu at any time. To update by hand, close WinScreen and run
-the newer installer. Your settings stay as they are.
+In **Settings → General → New versions**, choose **Off** (the default: WinScreen never goes online for this), **Tell me
+about them**, or **Install them for me**, which downloads a new version in the background and installs it when you
+close WinScreen. Either of the last two only asks GitHub which version is newest, and sends nothing else. A portable
+copy can't update itself: it tells you, and a click opens the new version's page. You can also choose **Check for
+updates** from the tray menu at any time. To update by hand, close WinScreen and run the newer installer. Your
+settings stay as they are.
 
 ## Reporting a problem
 
