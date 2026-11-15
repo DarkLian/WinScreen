@@ -218,6 +218,7 @@ menu.group.place E9463DCCF0541A97
 menu.group.use B67EE66346D8C6DF
 menu.help FD28E5CBDEAE15EF
 menu.more D47D7CB0E4F8FD2B
+menu.original.awayHidden 83832693E98DDE4A
 menu.original.goTo 6C2DC8489D1A429E
 menu.original.keepHidden BFD62F38EB7F415E
 menu.original.mute 999FD2CEF5CEF198
@@ -314,6 +315,7 @@ pip.sources.restoreWarning 63AA3D6A8FBB149E
 pip.sources.search A29D27B98BA3068C
 pip.sources.selectRegion FD1E61D37A805AEC
 pip.sources.window 19734A1B58CABC22
+pip.state.awayHidden C261947F642711B0
 pip.state.clickThrough 7E8308EA95BE838F
 pip.state.fallback 9B38D74263D9CA6A
 pip.state.live B64AC05F17E64D03

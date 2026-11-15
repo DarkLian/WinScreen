@@ -109,7 +109,9 @@ public sealed class VirtualDesktopViewTests
             TestDesktop.Pump(1500);
             Assert.True(view.HiddenWhileAway, "The view didn't hide its original while the person is on another desktop.");
             Assert.False(view.KeepsUpdating, "Hidden for now reads as the person's own Keep hidden, which a saved setup would keep.");
-            Assert.DoesNotContain(Localization.UiText.T("pip.state.originalHidden"), view.StateDescription);
+            // Not the person's Keep hidden, but said for what it is, so a hidden window never looks shown.
+            Assert.DoesNotContain(Localization.UiText.T("pip.state.originalHidden"), view.StateDescription.Split(", "));
+            Assert.Contains(Localization.UiText.T("pip.state.awayHidden"), view.StateDescription.Split(", "));
             int changes = Changes(view);
             Shot("view-on-another-desktop");
             Assert.True(changes >= 5, $"The view froze on the other desktop: it changed {changes} times in 10 looks.");

@@ -11,7 +11,7 @@ namespace WinScreen.Pip;
 public sealed partial class PipWindow
 {
     /// <summary>Builds the view's menu, once, from the constructor.</summary>
-    [MemberNotNull(nameof(_hideItem), nameof(_goToItem), nameof(_muteItem), nameof(_useOriginalItem), nameof(_autoMoveItem), nameof(_removeCropItem), nameof(_viewOnlyItem),
+    [MemberNotNull(nameof(_hideItem), nameof(_awayItem), nameof(_goToItem), nameof(_muteItem), nameof(_useOriginalItem), nameof(_autoMoveItem), nameof(_removeCropItem), nameof(_viewOnlyItem),
         nameof(_helpItem), nameof(_useHeader), nameof(_originalHeader), nameof(_interactiveItem), nameof(_middleScrollItem),
         nameof(_enhancedHoverItem))]
     private void BuildMenu()
@@ -52,6 +52,9 @@ public sealed partial class PipWindow
         _menu.Items.Add(_autoMoveItem);
 
         _menu.Items.Add(_originalHeader = MenuParts.Header(T("menu.group.original")));
+        // Hidden for now while the person is on another desktop: said, so a hidden window never looks shown.
+        _awayItem = new ToolStripMenuItem(T("menu.original.awayHidden"), MenuParts.Icon(MenuParts.View)) { Enabled = false };
+        _menu.Items.Add(_awayItem);
         _hideItem.Image = MenuParts.Icon(MenuParts.View);
         _menu.Items.Add(_hideItem);
         _useOriginalItem = _menu.Items.Add(T("menu.original.use"), MenuParts.Icon(MenuParts.Undo), (_, _) => UseOriginal());
@@ -113,6 +116,7 @@ public sealed partial class PipWindow
         // With Enhanced hover on, a browser's own middle-click scrolling works and is the better one.
         _middleScrollItem.Enabled = !(showInteractionOptions && _enhancedHoverItem.Checked && AppScrollsWithHover);
         _originalHeader.Available = _hideItem.Available = _goToItem.Available = _origin.IsWindow;
+        _awayItem.Available = _origin.IsWindow && _awayFrom != Guid.Empty;
         _useOriginalItem.Available = _origin.IsWindow && _hideItem.Checked;
         bool? muted = _origin.IsWindow ? SoundState?.Invoke() : null;
         _muteItem.Available = muted is not null;

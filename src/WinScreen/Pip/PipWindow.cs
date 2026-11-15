@@ -60,6 +60,7 @@ public sealed partial class PipWindow : Form
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 50 };
     private readonly System.Windows.Forms.Timer _autoMove = new() { Interval = 1000 };
     private ToolStripMenuItem _hideItem;
+    private ToolStripMenuItem _awayItem;
     private ToolStripItem _goToItem;
     private ToolStripMenuItem _muteItem;
     private ToolStripItem _useOriginalItem;
@@ -302,6 +303,7 @@ public sealed partial class PipWindow : Form
         _suspended ? T("pip.state.suspended") : _thumbnail?.StatusText ?? T("common.unavailable"),
         InputDescription,
         _hideItem.Checked ? T("pip.state.originalHidden") : "",
+        _awayFrom != Guid.Empty ? T("pip.state.awayHidden") : "",
     }.Where(value => value.Length > 0));
 
     internal void RetryCapture()
