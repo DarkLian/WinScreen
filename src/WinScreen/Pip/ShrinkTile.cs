@@ -166,8 +166,13 @@ public sealed class ShrinkTile : Form
     /// thing the person did, which is when Windows lets WinScreen put a window in front; after the tile has gone,
     /// Windows refused, and the window came back behind whatever was open.
     /// </summary>
+    /// <summary>Whether the person brought the window back, rather than something else closing the tile.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool BringBack { get; set; }
+
     private void ShowWindowAndClose()
     {
+        BringBack = true;
         if (_hid && _identity.Matches())
         {
             try

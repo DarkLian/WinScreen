@@ -231,6 +231,32 @@ public sealed class AppEndToEndTests : IDisposable
             "The new hotkey didn't pin.");
     }
 
+    /// <summary>
+    /// A shrunk window can't keep Dark mode while it's a tile; when the person brings it back, Dark mode comes back
+    /// with it. It seemed to vanish before (the owner, 15 Nov).
+    /// </summary>
+    [Fact]
+    public void Dark_mode_comes_back_with_a_window_brought_back_from_its_tile()
+    {
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        Focus(target);
+        var sample = new Rectangle(target.Center.X - 20, target.Center.Y - 20, 40, 40);
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)));
+        Hotkey(Keys.D, target);
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage)), "Dark mode didn't turn on.");
+
+        Hotkey(Keys.W, target); // Shrink.
+        Assert.True(Desktop.WaitFor(() => WinScreen.Windows.WindowInfo.IsConcealed(target.Handle), 3000), "The window didn't shrink.");
+        Thread.Sleep(800);
+        Focus(target);
+        Hotkey(Keys.W, target); // And back.
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage), 4000),
+            $"Dark mode didn't come back: {Desktop.ColorOnScreen(sample)}.");
+
+        Hotkey(Keys.R, target);
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)), "Restore didn't end dark mode.");
+    }
+
     [Fact]
     public void Dark_mode_works_from_the_hotkey()
     {

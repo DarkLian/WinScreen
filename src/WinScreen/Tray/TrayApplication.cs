@@ -1,4 +1,4 @@
-﻿using static WinScreen.Localization.UiText;
+using static WinScreen.Localization.UiText;
 using System.Runtime.InteropServices;
 using WinScreen.Anchors;
 using WinScreen.Dark;
@@ -404,7 +404,7 @@ public sealed partial class TrayApplication : ApplicationContext
         foreach (var (source, tile) in _shrunk)
         {
             var item = new ToolStripMenuItem(MenuText(tile.Text) + " - " + T("pip.state.originalHidden"));
-            item.DropDownItems.Add(T("window.show"), null, (_, _) => tile.Close());
+            item.DropDownItems.Add(T("window.show"), null, (_, _) => { tile.BringBack = true; tile.Close(); });
             items.Add(item);
         }
         foreach (nint source in _content.Sources)
@@ -1146,6 +1146,7 @@ public sealed partial class TrayApplication : ApplicationContext
     {
         if (_shrunk.TryGetValue(window, out var existing))
         {
+            existing.BringBack = true;
             existing.Close();
             return;
         }
@@ -1155,11 +1156,22 @@ public sealed partial class TrayApplication : ApplicationContext
             preview.Close();
             if (!preview.IsDisposed) return;
         }
+        // The tile hides the window, which an effect can't share, so Dark mode or Glass is off while it's a tile and
+        // comes back when the person brings the window back (the owner, 15 Nov: it seemed to vanish).
+        Glass.ContentLook? look = _content.Has(window, Glass.ContentLook.Dark) ? Glass.ContentLook.Dark
+            : _content.Has(window, Glass.ContentLook.Glass) ? Glass.ContentLook.Glass : null;
         _content.TurnOff(window);
         if (_content.Has(window)) return;
         var tile = new ShrinkTile(window, _windows);
         _shrunk[window] = tile;
-        tile.FormClosed += (_, _) => _shrunk.Remove(window);
+        tile.FormClosed += (_, _) =>
+        {
+            _shrunk.Remove(window);
+            if (look is not { } back || !tile.BringBack || !_settings.ExperimentalFeatures || !User32.IsWindow(window) || _content.Has(window))
+                return;
+            try { _content.Toggle(window, back); }
+            catch (WindowOperationException failure) { Alert(T("errors.operation.title"), failure.Message); }
+        };
         tile.Problem += text => Alert(T("errors.operation.title"), text);
         tile.ShowOnTop();
         if (!tile.IsDisposed)

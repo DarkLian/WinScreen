@@ -163,7 +163,8 @@ changes a title bar that Windows draws.
 A window has Dark mode or Glass, not both: turning one on turns the other off.
 - **Crop** keeps just the part of a window you drag over. Clicks on the rest reach what's behind. Click a highlighted
   part instead of dragging, and the crop follows that part when the window is resized.
-- **Shrink** turns a window into a small live tile. Click the tile to bring the window back.
+- **Shrink** turns a window into a small live tile. Click the tile to bring the window back. Dark mode or Glass is
+  off while it's a tile and comes back with the window.
 
 Dark mode leaves pictures and video as they are, and parts that are dark already stay dark. Glass fades only the
 background and keeps text and pictures. On a PC without a graphics card, Dark mode turns everything dark, pictures too,
