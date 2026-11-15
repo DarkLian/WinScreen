@@ -501,6 +501,8 @@ updates.mode.tellMe 391DDE5B196AAF12
 updates.portable CDE911B696C4833B
 updates.ready 4790544A79BCB7B8
 updates.repositoryRequired 25C3497343CA83AA
+updates.restart 3AF8CB0B4AE8F761
+updates.restart.ask 485CC7BD5677506B
 updates.title EB819EA9ED97F0F2
 updates.upToDate D3474430AEDF927D
 whatsNew.none A5AD9A8CA0F68417

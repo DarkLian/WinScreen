@@ -247,7 +247,12 @@ public sealed partial class TrayApplication : ApplicationContext
             ThemedMessage.Show(null, _lastStatus, "WinScreen");
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem(T("settings.title"), MenuParts.Icon(MenuParts.Settings), (_, _) => OpenSettings()));
-        menu.Items.Add(new ToolStripMenuItem(T("updates.check"), MenuParts.Icon(MenuParts.Sync), async (_, _) => await CheckForUpdates()));
+        var check = new ToolStripMenuItem(T("updates.check"), MenuParts.Icon(MenuParts.Sync), async (_, _) => await CheckForUpdates());
+        var restart = new ToolStripMenuItem(T("updates.restart"), MenuParts.Icon(MenuParts.Sync), (_, _) => RestartToUpdate()) { Visible = false };
+        // While an update waits, Restart to update takes Check for updates' place.
+        menu.Opening += (_, _) => { restart.Visible = _updates.Ready; check.Visible = !restart.Visible; };
+        menu.Items.Add(check);
+        menu.Items.Add(restart);
         menu.Items.Add(new ToolStripMenuItem(T("whatsNew.open"), null, (_, _) => WhatsNew.Show()));
         menu.Items.Add(new ToolStripMenuItem(T("app.saveDiagnostics"), MenuParts.Icon(MenuParts.Save), (_, _) => SaveDiagnostics()));
         menu.Items.Add(new ToolStripMenuItem(T("app.about"), MenuParts.Icon(MenuParts.Info), (_, _) => ThemedMessage.Show(null,
@@ -1267,7 +1272,7 @@ public sealed partial class TrayApplication : ApplicationContext
         // the other colours: nothing was asked of the view.
         if (!reopening) EndVisits();
         _settingsWindow = new SettingsWindow(_settings, _startup, Apply, command => _hotkeys.IsRegistered((int)command))
-            { TopMost = !quietly, PageIndex = page, Quiet = quietly };
+            { TopMost = !quietly, PageIndex = page, Quiet = quietly, UpdateReady = () => _updates.Ready, RestartToUpdate = RestartToUpdate };
         _settingsWindow.TakeUnsaved(unsaved);
         if (bounds is { } where) { _settingsWindow.StartPosition = FormStartPosition.Manual; _settingsWindow.Bounds = where; }
         SettingsWindow opened = _settingsWindow;
@@ -1338,6 +1343,25 @@ public sealed partial class TrayApplication : ApplicationContext
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(failure); }
     }
 
+    private bool _restartForUpdate;
+
+    /// <summary>
+    /// Installs a downloaded update now: WinScreen exits the ordinary way (every view closed, every window put back,
+    /// or it stays and says so) and the installer starts it again. It asks first when something would be closed.
+    /// </summary>
+    internal void RestartToUpdate()
+    {
+        if (!_updates.Ready) return;
+        int views = _viewsInOrder.Count, changed = _windows.PendingRestores;
+        if (views + changed > 0 && ThemedMessage.Show(_settingsWindow is { IsDisposed: false } owner ? owner : null,
+                string.Format(T("updates.restart.ask"), views, changed), "WinScreen", okCancel: true) != DialogResult.OK)
+            return;
+        Diagnostics.Log.Event("app.restartingToUpdate", ("views", views), ("windows", changed));
+        _restartForUpdate = true;
+        ExitThread();
+        if (!Exiting) _restartForUpdate = false; // Something couldn't be put back: still running, still waiting.
+    }
+
     private async Task DownloadToldVersion() => Balloon(T("updates.title"), await _updates.CheckNow(), ToolTipIcon.Info);
 
     private void OpenReleasePage(string version)
@@ -1386,7 +1410,7 @@ public sealed partial class TrayApplication : ApplicationContext
         _snapPreview.Dispose();
         // A restart starts the new copy before this one is gone: an update installed now would replace the files
         // it runs from. It installs at the next ordinary exit instead.
-        if (!_restarting) Task.Run(_updates.ApplyOnExit).GetAwaiter().GetResult();
+        if (!_restarting) Task.Run(() => _updates.ApplyOnExit(_restartForUpdate)).GetAwaiter().GetResult();
         _updates.Dispose();
         _hotkeys.Dispose();
         _tray.Visible = false;

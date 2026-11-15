@@ -499,6 +499,8 @@
   "updates.portable": "此副本無法自行更新。有新版本時，WinScreen 會告訴你，並可開啟其頁面。",
   "updates.ready": "更新已就緒，將在 WinScreen 關閉時安裝。",
   "updates.repositoryRequired": "此版本的 WinScreen 無法檢查更新。",
+  "updates.restart": "重新啟動以更新",
+  "updates.restart.ask": "WinScreen 將重新啟動以安裝更新。它的 {0} 個檢視會關閉，它變更過的 {1} 個視窗會先被放回。現在重新啟動嗎？",
   "updates.title": "WinScreen 更新",
   "updates.upToDate": "WinScreen 已是最新版本。",
   "whatsNew.none": "此版本沒有變更清單。",

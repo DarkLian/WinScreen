@@ -501,6 +501,8 @@ updates.mode.tellMe 3B888814E45AE878
 updates.portable AAECEDA0CE4E1ECC
 updates.ready 07407B27F83175CD
 updates.repositoryRequired 142975C7E8D80BFB
+updates.restart E34937A0294E77CD
+updates.restart.ask AF7A7CC437246D6B
 updates.title EB819EA9ED97F0F2
 updates.upToDate D3474430AEDF927D
 whatsNew.none 9EBA60F4E9B47724

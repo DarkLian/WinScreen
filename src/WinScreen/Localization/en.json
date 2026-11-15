@@ -499,6 +499,8 @@
   "updates.portable": "This copy can't update itself. When a new version is out, WinScreen says so and can open its page.",
   "updates.ready": "Update ready. It installs when WinScreen closes.",
   "updates.repositoryRequired": "This copy of WinScreen can't check for updates.",
+  "updates.restart": "Restart to update",
+  "updates.restart.ask": "WinScreen restarts to install the update. Its {0} views close and the {1} windows it changed are put back first. Restart now?",
   "updates.title": "WinScreen update",
   "updates.upToDate": "WinScreen is up to date.",
   "whatsNew.none": "This version has no list of changes.",

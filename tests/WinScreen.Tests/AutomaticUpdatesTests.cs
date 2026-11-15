@@ -26,10 +26,13 @@ public sealed class AutomaticUpdatesTests
             return Fetch(cancellation);
         }
 
-        public Task ApplyOnExit(CancellationToken cancellation)
+        internal bool? Restarted;
+
+        public Task ApplyOnExit(CancellationToken cancellation, bool restart)
         {
             cancellation.ThrowIfCancellationRequested();
             Applications++;
+            Restarted = restart;
             return Task.CompletedTask;
         }
 
@@ -187,5 +190,29 @@ public sealed class AutomaticUpdatesTests
         Assert.Equal(((string?)null, false), await updates.LookNow());
         using var failing = new AutomaticUpdates(_ => throw new HttpRequestException("offline"), _ => { });
         Assert.Equal(((string?)null, true), await failing.LookNow());
+    }
+
+    [Fact]
+    public async Task Restart_to_update_is_offered_only_for_a_downloaded_update_and_asks_the_installer_to_start_it_again()
+    {
+        var session = new Session();
+        using var updates = new AutomaticUpdates(_ => session, _ => { });
+        Assert.False(updates.Ready);
+        updates.SetEnabled(true);
+        await updates.Check();
+        Assert.True(updates.Ready);
+        await updates.ApplyOnExit(restart: true);
+        Assert.True(session.Restarted);
+    }
+
+    [Fact]
+    public async Task An_ordinary_exit_installs_without_starting_again()
+    {
+        var session = new Session();
+        using var updates = new AutomaticUpdates(_ => session, _ => { });
+        updates.SetEnabled(true);
+        await updates.Check();
+        await updates.ApplyOnExit();
+        Assert.False(session.Restarted);
     }
 }

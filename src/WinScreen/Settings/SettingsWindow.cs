@@ -1188,6 +1188,15 @@ private readonly ErrorProvider _errors = new();
 
     internal void SetUpdateMode(UpdateMode mode) => _updateMode.SelectedIndex = (int)mode;
 
+    /// <summary>Whether a downloaded update waits; Restart to update shows only then.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<bool>? UpdateReady { get; init; }
+
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Action? RestartToUpdate { get; init; }
+
+    private readonly PlainButton _restartToUpdate = new() { AutoSize = true, Visible = false };
+
     internal void SetOption(string option, bool on)
     {
         CheckBox box = option switch
@@ -1391,6 +1400,12 @@ private readonly ErrorProvider _errors = new();
             Note(adminWorks ? T("settings.admin.help") : T("settings.admin.unavailable")), _showNotifications,
             SettingRow(T("updates.mode.label"), _updateMode), Note(T("updates.mode.help")) };
         _updateMode.Enabled = VelopackUpdateSession.IsConfigured;
+        _restartToUpdate.Text = T("updates.restart");
+        _restartToUpdate.Size = _restartToUpdate.GetPreferredSize(Size.Empty); // Hidden until needed, so laid out by nobody before.
+        _restartToUpdate.Click += (_, _) => RestartToUpdate?.Invoke();
+        startup.Add(_restartToUpdate);
+        // Shown each time Settings comes forward: an update can finish downloading while it is open.
+        Activated += (_, _) => _restartToUpdate.Visible = UpdateReady?.Invoke() == true;
         if (!VelopackUpdateSession.IsConfigured)
             startup.Add(Note(T("updates.repositoryRequired")));
         else if (!VelopackUpdateSession.IsInstalled)

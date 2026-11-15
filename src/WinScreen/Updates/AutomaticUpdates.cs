@@ -26,7 +26,8 @@ internal interface IUpdateSession : IDisposable
     /// <summary>A newer version the signed feed offers, without downloading it, or null.</summary>
     Task<string?> NewerVersion(CancellationToken cancellation);
     Task<bool> Download(CancellationToken cancellation);
-    Task ApplyOnExit(CancellationToken cancellation);
+    /// <param name="restart">Start WinScreen again once the update is in (Restart to update).</param>
+    Task ApplyOnExit(CancellationToken cancellation, bool restart);
 }
 
 /// <summary>
@@ -191,13 +192,16 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
             : UiText.T("updates.upToDate");
     }
 
-    internal async Task ApplyOnExit()
+    /// <summary>An update is downloaded, checked, and waits for WinScreen to close.</summary>
+    internal bool Ready => !_disposed && _generation is not null && _pending is not null;
+
+    internal async Task ApplyOnExit(bool restart = false)
     {
         if (!_disposed && _generation is not null && _pending is not null)
         {
             try
             {
-                await _pending.ApplyOnExit(_generation.Token);
+                await _pending.ApplyOnExit(_generation.Token, restart);
             }
             catch (Exception caught)
             {
@@ -292,13 +296,13 @@ internal sealed class VelopackUpdateSession : IUpdateSession
         return true;
     }
 
-    public async Task ApplyOnExit(CancellationToken cancellation)
+    public async Task ApplyOnExit(CancellationToken cancellation, bool restart)
     {
         if (_pending is not { } asset)
             return;
         await UpdateSecurity.VerifyPackage(PackagePath(asset), asset, cancellation);
         cancellation.ThrowIfCancellationRequested();
-        _manager.WaitExitThenApplyUpdates(asset, silent: true, restart: false);
+        _manager.WaitExitThenApplyUpdates(asset, silent: true, restart: restart);
     }
 
     public void Dispose() => _transport.Dispose();
