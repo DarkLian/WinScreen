@@ -67,11 +67,11 @@ public sealed class InteractiveViewTests
     private static void Drive(TargetProcess source, Action<PipWindow, Func<Action, bool>> steps, Point? viewAt = null) =>
         Drive(source.Handle, steps, viewAt);
 
-    private static void Drive(nint source, Action<PipWindow, Func<Action, bool>> steps, Point? viewAt = null)
+    private static void Drive(nint source, Action<PipWindow, Func<Action, bool>> steps, Point? viewAt = null, WindowController? windows = null)
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
-            using var view = new PipWindow(source, new WindowController([])) { AllowInteractive = true };
+            using var view = new PipWindow(source, windows ?? new WindowController([])) { AllowInteractive = true };
             var problems = new List<string>();
             view.Problem += problems.Add;
             view.Notice += problems.Add;
@@ -401,6 +401,41 @@ public sealed class InteractiveViewTests
                 "Keys were left going to the hidden window.");
             Assert.Equal(other.Handle, User32.GetForegroundWindow());
         });
+    }
+
+    /// <summary>
+    /// The window in front before the visit can be one WinScreen keeps hidden, such as another view's original. Keys don't
+    /// go back to it: put in front, it counted as the person going to it and came out of its view (the owner, 15 Nov).
+    /// </summary>
+    [Fact]
+    public void Keys_never_go_back_to_a_window_WinScreen_keeps_hidden()
+    {
+        using var other = new TargetProcess(new Rectangle(1000, 80, 300, 200), "1E64C8");
+        using var source = new TargetProcess(SourceSpot);
+        source.UseFrame();
+        var windows = new WindowController([]);
+        Desktop.GainForegroundRights();
+        Desktop.Activate(other.Handle);
+        windows.Hide(other.Handle);
+        Assert.Equal(other.Handle, User32.GetForegroundWindow());
+        try
+        {
+            Drive(source.Handle, (view, _) =>
+            {
+                Rectangle frame = view.Bounds;
+                Hover(new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2), view);
+                Desktop.MouseButton(true);
+                Desktop.MouseButton(false);
+                Assert.NotNull(source.NextReport());
+                Desktop.MoveMouse(new Point(frame.Left - 60, frame.Top + 40));
+                Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null, 2000));
+                Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() != source.Handle, 1000),
+                    "Keys were left going to the hidden window.");
+                Thread.Sleep(300);
+                Assert.NotEqual(other.Handle, User32.GetForegroundWindow());
+            }, windows: windows);
+        }
+        finally { windows.RestoreAll(); }
     }
 
     [Fact]

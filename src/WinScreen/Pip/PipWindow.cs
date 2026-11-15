@@ -1305,7 +1305,10 @@ public sealed partial class PipWindow : Form
         SetInputPassesThrough(false);
         if (User32.GetForegroundWindow() == _source)
         {
-            nint back = _foregroundBeforeLive != 0 && _foregroundBeforeLive != _source ? _foregroundBeforeLive : Handle;
+            // Not to a window WinScreen keeps hidden, such as another view's original: put in front, it counted as the person
+            // going to it, and came back out of its view (the owner, 15 Nov: a full-screen video covered the screen).
+            nint back = _foregroundBeforeLive != 0 && _foregroundBeforeLive != _source && User32.IsWindow(_foregroundBeforeLive) &&
+                        !_windows.IsHidden(_foregroundBeforeLive) ? _foregroundBeforeLive : Handle;
             User32.SetForegroundWindow(back); // Keys mustn't go to a window that can't be seen.
         }
 
