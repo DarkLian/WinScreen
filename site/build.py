@@ -230,6 +230,8 @@ def main():
 
     shutil.copytree(ROOT / 'docs' / 'assets', out / 'assets')
     shutil.copy(SITE / 'style.css', out / 'style.css')
+    for proof in SITE.glob('google*.html'):  # Search Console ownership file, served as is
+        shutil.copy(proof, out / proof.name)
     (out / '.nojekyll').write_text('', encoding='utf-8')
     (out / 'robots.txt').write_text(f'User-agent: *\nAllow: /\nSitemap: {BASE_URL}sitemap.xml\n', encoding='utf-8')
     urls = ''.join(f'  <url><loc>{BASE_URL}{folder(c)}</loc></url>\n' for c, *_ in LANGUAGES)
