@@ -105,6 +105,7 @@
   "errors.crop.empty": "Select an area to keep.",
   "errors.dark.filterUnavailable": "Dark mode isn't available on this PC right now.",
   "errors.effects.otherStayed": "The other effect couldn't be turned off, so nothing changed.",
+  "errors.effects.stoppedPresses": "Glass or Dark was turned off on \"{0}\", because the window had stopped taking clicks.",
   "errors.experimental.enableFirst": "Turn on experimental features in Settings to use this.",
   "errors.fullScreen.exclusiveView": "Views can't appear over a game in exclusive full screen. Switch the game to borderless or windowed mode.",
   "errors.fullScreen.paused": "Commands are paused while a full-screen app is running.",

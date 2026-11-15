@@ -105,6 +105,7 @@
   "errors.crop.empty": "请选择要保留的区域。",
   "errors.dark.filterUnavailable": "此电脑目前无法使用深色模式。",
   "errors.effects.otherStayed": "无法关闭另一个效果，因此没有做任何更改。",
+  "errors.effects.stoppedPresses": "已关闭「{0}」的玻璃或深色效果，因为该窗口不再响应点击。",
   "errors.experimental.enableFirst": "请先在设置中开启实验性功能。",
   "errors.fullScreen.exclusiveView": "视图无法显示在独占全屏的游戏上方。请把游戏切换为无边框或窗口模式。",
   "errors.fullScreen.paused": "全屏应用运行期间，命令已暂停。",

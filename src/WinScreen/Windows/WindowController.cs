@@ -1706,8 +1706,11 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     /// Whether the window answers within a tenth of a second. The checks that follow a window from a query or the
     /// periodic refresh ask this before changing it, so a hung app never holds WinScreen up; they try again later.
     /// </summary>
-    private static bool AnswersQuickly(nint window) =>
-        User32.SendMessageTimeout(window, 0, 0, 0, 0x3, 100, out _) != 0;
+    private static bool AnswersQuickly(nint window) => AnswersWithin(window, 100);
+
+    /// <summary>Whether the window's program answers a message within this many milliseconds.</summary>
+    internal static bool AnswersWithin(nint window, uint milliseconds) =>
+        User32.SendMessageTimeout(window, 0, 0, 0, 0x3, milliseconds, out _) != 0;
 
     private static void EnsureResponsive(nint window)
     {

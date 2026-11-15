@@ -107,6 +107,7 @@ errors.crop.customShape 44DF0CFCBC778971
 errors.crop.empty AD4A6E115CF73DB4
 errors.dark.filterUnavailable 4D9482839E403A4A
 errors.effects.otherStayed 9832F5B5ECFD260C
+errors.effects.stoppedPresses 61DEEE1D2A4CB857
 errors.experimental.enableFirst 1D1CB9169B652397
 errors.fullScreen.exclusiveView 2205B92BD7E85212
 errors.fullScreen.paused 749E3E321DFF2A96
@@ -121,10 +122,12 @@ errors.identity.originalGone EC8D4327EF8EC573
 errors.identity.processUnverifiable DF4B08C101639FBE
 errors.identity.windowChanged E37C506A6747A74F
 errors.identity.windowGone CED6C57638E0BCD1
+errors.layered.rewritten 8537B686C080503C
 errors.opacity.customTransparency 2272450F2991E9C0
 errors.opacity.refused EAB97A3851D6775F
 errors.operation.title 5C832B2B714E9D88
 errors.pin.foregroundDenied 9EE40C90C8914140
+errors.pin.taken 5E349FCB0CC2678B
 errors.pip.advancedUnavailable FE981F19DA53CFED
 errors.pip.autoMoveUnsupported E93383AEBB2CB7CB
 errors.pip.clickUnverified 9EFC2C3AEAD703DE

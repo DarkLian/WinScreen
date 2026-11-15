@@ -18,6 +18,12 @@ public sealed class DarkMode : IDisposable
 
     public bool IsDark(nint window) => _overlays.ContainsKey(window);
 
+    internal IEnumerable<nint> Targets => _overlays.Keys;
+
+    /// <summary>The filter's own window over a window, or 0.</summary>
+    internal nint OverlayOf(nint window) =>
+        _overlays.TryGetValue(window, out DarkOverlay? overlay) && overlay.IsHandleCreated ? overlay.Handle : 0;
+
     /// <summary>Turns dark mode on or off for a window. Returns the new state.</summary>
     public bool Toggle(nint window)
     {

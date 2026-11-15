@@ -839,6 +839,7 @@ public sealed partial class TrayApplication : ApplicationContext
         FollowModifierHook(foreground);
         FollowCropControls();
         _windows.Refresh(Cursor.Position, _settings.OpaqueOnHover, _settings.PausePinWhenMaximized);
+        FollowLookPresses();
         _borders.Show(_settings.HighlightPinned ? _windows.VisiblePinnedWindows() : []);
     }
 
@@ -1770,6 +1771,33 @@ public sealed partial class TrayApplication : ApplicationContext
         Diagnostics.Log.Event("effect", ("look", look), ("on", on), ("program", Diagnostics.LogValue.ProgramOf(window)),
             ("concealed", WindowInfo.IsConcealed(window)),
             ("clickThrough", (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TRANSPARENT) != 0));
+    }
+
+    private readonly PressWatch _pressWatch = new();
+
+    /// <summary>
+    /// The watchdog (11.1, INV-18): a look whose window has stopped taking presses for a second is turned off, and the
+    /// person is told. Colour-key Glass is left out: Windows passes presses on its see-through colour by design.
+    /// </summary>
+    private void FollowLookPresses()
+    {
+        if (_content.Count == 0 && !_dark.Targets.Any()) return;
+        var answers = _content.Sources.Select(window => (window, PressWatch.TakesPresses(window, _content.OverlayOf(window))))
+            .Concat(_dark.Targets.Select(window => (window, PressWatch.TakesPresses(window, _dark.OverlayOf(window)))))
+            .ToList();
+        foreach (nint window in _pressWatch.Check(answers, Environment.TickCount64))
+        {
+            Look look = DarkLook(window) is var dark and not Look.None ? dark : GlassLook(window);
+            if (look is Look.None or Look.ColorGlass) continue;
+            try { SetLook(window, look, false); }
+            catch (Exception failure) when (IsExpected(failure))
+            {
+                Diagnostics.Log.Swallowed(failure);
+                continue;
+            }
+            Diagnostics.Log.Event("effect.watchdog", ("look", look), ("program", Diagnostics.LogValue.ProgramOf(window)));
+            Alert(T("errors.operation.title"), string.Format(T("errors.effects.stoppedPresses"), WindowInfo.Title(window)));
+        }
     }
 
     private int OpacityDelta(int steps) => steps * (int)Math.Round(Math.Clamp(_settings.OpacityStepPercent, 1, 25) * 255 / 100.0);

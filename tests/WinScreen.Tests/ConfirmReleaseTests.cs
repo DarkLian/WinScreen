@@ -226,4 +226,27 @@ public sealed class ConfirmReleaseTests : IDisposable
         Assert.Equal(1, code);
         Assert.Contains("isn't a release version", output);
     }
+
+    [Fact]
+    public void Tests_only_some_runs_switch_on_are_named_until_a_run_passed_them_for_real()
+    {
+        Ready();
+        (int code, string output) = Confirm();
+        Assert.True(code == 0, output);
+        Assert.Contains("Windows 11 opt-in: WinScreen as administrator", output);
+        Assert.Contains("Windows 11 opt-in: an administrator app, WinScreen not elevated", output);
+        Assert.Contains("Windows 11 opt-in: views across virtual desktops", output);
+
+        // An elevated targeted run passed the administrator test; the desktop test only returned early.
+        string elevated = Directory.CreateDirectory(Path.Combine(Results, "host", "20261114-113000")).FullName;
+        Json(elevated, new { commit = Commit, clean = true, tool = "host", windows = "11", all = false, administrator = true, filter = "FullyQualifiedName~As_administrator" });
+        Trx(elevated, "packaged", ("WinScreen.Tests.AppEndToEndTests.As_administrator_WinScreen_reaches_administrator_apps", "Passed"),
+            ("WinScreen.Tests.VirtualDesktopViewTests.A_view_keeps_following", "Passed"));
+        File.WriteAllText(Path.Combine(elevated, "packaged.returned-early.txt"), "WinScreen.Tests.VirtualDesktopViewTests.A_view_keeps_following\tOff.\n");
+        Finished(elevated);
+        (code, output) = Confirm();
+        Assert.True(code == 0, output);
+        Assert.DoesNotContain("Windows 11 opt-in: WinScreen as administrator", output);
+        Assert.Contains("Windows 11 opt-in: views across virtual desktops", output);
+    }
 }

@@ -187,6 +187,32 @@ else {
     $gate.Add("Release-Gate-Windows-11: $($hostRun.Name) ($(Sum $outcomes)$passedAgain)")
 }
 
+# Tests only some runs switch on: an administrator prompt, an elevated shell, a virtual desktop of their own. Each is
+# named under "did not run" until a clean run on this PC for the commit has passed it for real (not returned early),
+# since the full run always skips them.
+$optIn = [ordered]@{
+    'WinScreen.Tests.AppEndToEndTests.An_administrator_app_gets_no_toolbar_and_no_anchors_and_says_why' =
+        'an administrator app, WinScreen not elevated (WINSCREEN_TEST_ELEVATED=1, one prompt)'
+    'WinScreen.Tests.AppEndToEndTests.As_administrator_WinScreen_reaches_administrator_apps' =
+        'WinScreen as administrator (WINSCREEN_TEST_ELEVATED=1, from an elevated shell)'
+    'WinScreen.Tests.VirtualDesktopViewTests.' = 'views across virtual desktops (WINSCREEN_TEST_DESKTOPS=1)'
+}
+$passedForReal = New-Object System.Collections.Generic.HashSet[string]
+foreach ($candidate in @(Get-ChildItem -LiteralPath $hostFolder -Directory -ErrorAction SilentlyContinue)) {
+    $record = Read-Record $candidate.FullName
+    if (-not $record -or $record.commit -ne $Commit -or -not $record.clean) { continue }
+    foreach ($outcome in @(Get-RunOutcomes $candidate.FullName)) {
+        foreach ($name in $outcome.PassedTests) {
+            if ($outcome.EarlyTests -notcontains $name) { [void]$passedForReal.Add($name) }
+        }
+    }
+}
+foreach ($test in $optIn.Keys) {
+    if (-not @($passedForReal | Where-Object { $_.StartsWith($test, [StringComparison]::Ordinal) }).Count) {
+        $notRun.Add("Windows 11 opt-in: $($optIn[$test]) - no run for $short passed it")
+    }
+}
+
 # Logic.
 $logic = Find-Run (Join-Path $ResultsRoot 'logic') '*'
 if (-not $logic) { $problems.Add("No logic run for $short. Run tools\Invoke-LogicRun.ps1.") }

@@ -25,6 +25,10 @@ internal sealed class ContentEffects(WindowController windows) : IDisposable
     public int Count => _overlays.Count;
     internal IEnumerable<nint> Sources => _overlays.Keys;
 
+    /// <summary>The look's own window over a source, or 0.</summary>
+    internal nint OverlayOf(nint window) =>
+        _overlays.TryGetValue(window, out ContentOverlay? overlay) && overlay.IsHandleCreated ? overlay.Handle : 0;
+
     public void SetLevels(ContentLevels levels)
     {
         _levels = levels;
