@@ -1600,7 +1600,9 @@ public sealed partial class PipWindow : Form
     {
         bool away = _awayFrom != Guid.Empty;
         // Hidden already by something else (another view, a look) is left to it.
-        bool mayHide = !away && _origin.IsWindow && _origin.IsAvailable && !_hideItem.Checked && !_windows.IsHidden(_source) && !_usingOriginal && _live is null &&
+        // Not while Go to it is taking the person to the window's desktop: until that switch is over the window is on
+        // another desktop, and hiding it then would cancel the switch.
+        bool mayHide = !away && _goingToUntil == 0 && _origin.IsWindow && _origin.IsAvailable && !_hideItem.Checked && !_windows.IsHidden(_source) && !_usingOriginal && _live is null &&
             _thumbnail is not null && !SwitcherHidingStopsView && !User32.IsIconic(_source);
         bool here = away || !mayHide || VirtualDesktops.OnCurrentDesktop(_source);
         if (!away && here) return; // The usual case costs one question.
