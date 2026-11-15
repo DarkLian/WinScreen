@@ -391,7 +391,7 @@ internal sealed unsafe class ContentOverlay : Form
         }
 
         float[] mask = _finder.Find(stats, columns, rows);
-        if (_look == ContentLook.Dark) PictureFinder.MarkAlreadyDark(mask, stats);
+        if (_look == ContentLook.Dark) PictureFinder.MarkAlreadyDark(mask, stats, columns, rows);
         return mask;
     }
 

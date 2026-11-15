@@ -60,13 +60,14 @@ internal static class ContentShaders
             bool inside = m > 0.75;
             bool panel = m > 0.1 && m < 0.3;
             bool dark = m > 0.03 && m < 0.08;
-            bool near = m > 0.3, edge = false, nextToLight = false;
+            bool near = m > 0.3, edge = false, nextToLight = false, nextToDark = false;
             for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
                 float n = mask.Load(int3(clamp(tile + int2(x,y), 0, int2(tw,th) - 1),0));
                 // Near any picture; but inside one only among its own tiles, not among tiles that decide by pixel.
                 if (n > 0.3) near = true;
                 if (!(n > 0.75)) edge = true;
                 if (!(n > 0.03 && n < 0.08)) nextToLight = true;
+                if (n > 0.03 && n < 0.08) nextToDark = true;
             }
             float3 d3 = abs(c - page.rgb);
             bool differs = max(d3.r, max(d3.g, d3.b)) > 2.5 / 255;
@@ -87,6 +88,24 @@ internal static class ContentShaders
                 float3 flipped = saturate(lerp(1 - c + 2 * hue, c + (1 - 2 * light), coloured));
                 // A part that is dark already keeps its colours; page colour spilling into it from next door still flips.
                 bool keep = picture || (dark && (differs || !nextToLight));
+                // Light at a dark part's edge next to light parts may be a light panel under a bar, not the bar's: it decides below.
+                if (keep && !picture && nextToLight && light > 0.6) keep = false;
+                // A tile that is only partly in a dark part, such as a title bar's lower edge with the page under it,
+                // and white in a dark part next to the page, which may be the page spilling in or the bar's own white
+                // title (the owner, 15 Nov: an active title lost its lower half): each pixel goes by what is around it,
+                // so the bar's text keeps its colour and the page flips.
+                // Text in a bar has the bar above and below it; the page next to a bar has it on one side only. The bar's
+                // own last row, dark, has it on one side and stays.
+                if (!keep && (dark || nextToDark)) {
+                    uint above = 0, below = 0;
+                    for (int ny = 1; ny <= 3; ny++) for (int nx = -3; nx <= 3; nx++) {
+                        int2 up = clamp(int2(id.xy) + int2(nx, -ny), int2(0,0), int2(ow - 1, oh - 1));
+                        int2 down = clamp(int2(id.xy) + int2(nx, ny), int2(0,0), int2(ow - 1, oh - 1));
+                        if (dot(source.Load(int3(up, 0)).rgb, float3(0.3,0.59,0.11)) < 0.3) above++;
+                        if (dot(source.Load(int3(down, 0)).rgb, float3(0.3,0.59,0.11)) < 0.3) below++;
+                    }
+                    keep = min(above, below) >= 7 || (light < 0.3 && max(above, below) >= 14);
+                }
                 // A white page becomes #191919 rather than black, as the filter kind does; the rest is lifted in step.
                 flipped = 25.0 / 255 + flipped * (1 - 25.0 / 255);
                 result = float4(keep ? c : flipped, 1);

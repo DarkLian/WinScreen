@@ -175,14 +175,41 @@ internal sealed class PictureFinder(Func<long>? clock = null)
     /// For Dark: marks the parts that are dark already, a tile whose own colour is dark and that isn't a picture, so a
     /// dark title bar, toolbar or panel stays dark instead of turning light.
     /// </summary>
-    public static void MarkAlreadyDark(float[] mask, TileStats[] tiles)
+    /// <remarks>
+    /// A dark part is bigger than one tile: at least two by two of them, or four in a row, as a bar is. One tile that
+    /// is mostly the ink of a big bold letter isn't, or the letter stayed dark on the darkened page (the owner, 15 Nov).
+    /// </remarks>
+    public static void MarkAlreadyDark(float[] mask, TileStats[] tiles, int columns, int rows)
     {
-        for (int k = 0; k < mask.Length && k < tiles.Length; k++)
+        int count = Math.Min(mask.Length, tiles.Length);
+        if (columns <= 0 || rows <= 0 || columns * rows > count) return;
+        var dark = new bool[count];
+        for (int k = 0; k < count; k++)
         {
             TileStats t = tiles[k];
-            if (mask[k] is None or Panel && 0.3f * t.R + 0.59f * t.G + 0.11f * t.B < 0.25f)
-                mask[k] = AlreadyDark;
+            dark[k] = mask[k] is None or Panel && 0.3f * t.R + 0.59f * t.G + 0.11f * t.B < 0.25f;
         }
+
+        bool At(int x, int y) => x >= 0 && y >= 0 && x < columns && y < rows && dark[y * columns + x];
+        int Run(int x, int y, int dx, int dy)
+        {
+            int n = 0;
+            for (int i = 1; i < 4 && At(x + dx * i, y + dy * i); i++) n++;
+            return n;
+        }
+
+        for (int y = 0; y < rows; y++)
+            for (int x = 0; x < columns; x++)
+            {
+                if (!dark[y * columns + x]) continue;
+                bool block = false;
+                for (int dy = -1; dy <= 0 && !block; dy++)
+                    for (int dx = -1; dx <= 0 && !block; dx++)
+                        block = At(x + dx, y + dy) && At(x + dx + 1, y + dy) && At(x + dx, y + dy + 1) && At(x + dx + 1, y + dy + 1);
+                bool row = 1 + Run(x, y, -1, 0) + Run(x, y, 1, 0) >= 4;
+                bool column = 1 + Run(x, y, 0, -1) + Run(x, y, 0, 1) >= 4;
+                if (block || row || column) mask[y * columns + x] = AlreadyDark;
+            }
     }
 
     /// <summary>Forgets held pictures, for when the window was resized or scrolled a long way.</summary>

@@ -61,6 +61,30 @@ public sealed class PictureFinderTests
         Assert.Equal(Rectangle.FromLTRB(5, 4, 17, 14), Found(mask));
     }
 
+    /// <summary>
+    /// For Dark, a dark bar or panel stays as it is, but one tile that is mostly the ink of a big bold letter isn't a
+    /// dark part: it stayed dark on the darkened page, a smudge on the heading (the owner, 15 Nov).
+    /// </summary>
+    [Fact]
+    public void A_dark_bar_stays_dark_and_one_bold_letter_does_not()
+    {
+        var ink = new TileStats(0.1f, 0.1f, 0.12f, 0.4f, false);
+        TileStats? Parts(int x, int y) =>
+            y is 0 or 1 ? new TileStats(0.12f, 0.12f, 0.12f, 1, false) :   // A title bar two tiles tall.
+            y == 10 && x < 6 ? new TileStats(0.15f, 0.15f, 0.15f, 1, false) : // A thin toolbar, one tile tall.
+            (x, y) == (20, 5) ? ink :                                          // The letter.
+            (x, y) is (25, 8) or (26, 8) ? ink :                               // Two letters side by side.
+            null;
+        TileStats[] tiles = Page(Rectangle.Empty, Parts);
+        float[] mask = new PictureFinder().Find(tiles, Columns, Rows);
+        PictureFinder.MarkAlreadyDark(mask, tiles, Columns, Rows);
+        Assert.Equal(PictureFinder.AlreadyDark, mask[0 * Columns + 7]);
+        Assert.Equal(PictureFinder.AlreadyDark, mask[1 * Columns + 39]);
+        Assert.Equal(PictureFinder.AlreadyDark, mask[10 * Columns + 3]);
+        Assert.NotEqual(PictureFinder.AlreadyDark, mask[5 * Columns + 20]);
+        Assert.NotEqual(PictureFinder.AlreadyDark, mask[8 * Columns + 25]);
+    }
+
     [Fact]
     public void Text_and_small_things_are_not_pictures()
     {
