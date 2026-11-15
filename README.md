@@ -111,6 +111,13 @@ You don't need anything else installed, and it runs without administrator rights
 The installer isn't signed, so Windows may say it doesn't recognize it. Choose **More info**, then **Run anyway**.
 To remove it, go to **Settings → Apps → Installed apps** in Windows.
 
+With [Scoop](https://scoop.sh), it installs in two lines (the portable version, updated by Scoop):
+
+```
+scoop bucket add winscreen https://github.com/DarkLian/WinScreen
+scoop install winscreen
+```
+
 ## Quick start
 
 1. Click the window you want to change.

@@ -10,7 +10,8 @@ After you install WinScreen, its icon sits in the system tray (look under the sm
 - **Right-click** it for every command, including putting windows back and exiting. Menus stay open while you turn
   things on and off, so you can change several at once.
 - **Hotkeys** work on the window you're using. The tray menu works on the window named under **Last window**.
-- **Rest the pointer** on the middle of a window's title bar to show the toolbar.
+- **Rest the pointer** on the middle of a window's title bar to show the toolbar. In **Settings → Toolbar** you can
+  have it open from the minimize button instead, or from either.
 
 Some features are marked *experimental*. Turn them on in **Settings → General → Experimental**.
 
@@ -46,6 +47,9 @@ Other commands, like moving a window to a corner, have no shortcut until you giv
 - **Ctrl+Alt+C** lets clicks pass through the window to whatever is behind it. Press it again to turn it off.
 
 If you can't reach a click-through window, press **Ctrl+Alt+R** to put every window back.
+
+If another program takes "always on top" away from a pinned window, WinScreen pins it again. If an app changes its
+own transparency, WinScreen lets go of the opacity and click-through it set, and tells you.
 
 In **Settings → Appearance** you can change the opacity step, give pinned windows a colored border, and turn on
 **Ctrl+Alt+wheel**, which changes the opacity of the window under the pointer.
@@ -165,7 +169,8 @@ Dark mode leaves pictures and video as they are, and parts that are dark already
 background and keeps text and pictures. On a PC without a graphics card, Dark mode turns everything dark, pictures too,
 and Glass makes one color see-through, where clicks go through to what's behind. In **Settings → Appearance** you can
 turn either off and choose how solid the background, text and pictures stay. Windows shows a colored border around a
-window while these two are working.
+window while these two are working. If a window under Dark mode or Glass ever stops taking clicks, WinScreen turns
+the effect off and tells you.
 
 ## Remember a program's setup
 
@@ -218,6 +223,9 @@ copy can't update itself: it tells you, and a click opens the new version's page
 updates** from the tray menu at any time. To update by hand, close WinScreen and run the newer installer. Your
 settings stay as they are.
 
+After an update, WinScreen offers once to show what's new. **What's new** is also in the tray menu and at the end of
+**Settings → General**.
+
 ## Reporting a problem
 
 Choose **Save diagnostics** from the tray menu. WinScreen saves a small file and shows it in File Explorer; attach it to
@@ -235,8 +243,8 @@ Nothing leaves your PC unless you send it yourself.
 - Commands pause while a game or full-screen app is in front. Views can't appear over games in exclusive full screen.
 - A minimized app stops drawing, so its view shows the last picture.
 - Protected video may show as black in a view.
-- Views show on every virtual desktop. A window kept hidden by a view comes back on the desktop you're on when you show
-  it again, not the one it came from. To move it back, open Task View (**Win+Tab**), right-click it and choose **Move to**.
+- Views show on every virtual desktop and keep updating while you're on another one. A window kept hidden by a view
+  goes back to its own desktop when it's shown again.
 - When **Transparency effects** is on in Windows' own Settings, WinScreen's menus get the same blurred background as Windows' own.
   To keep them plain, turn off **Transparency effects in menus** in **Settings → General**.
 - In smooth mode Windows draws a yellow border around the window being shown. On Windows 11 WinScreen asks to leave it

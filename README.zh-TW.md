@@ -108,6 +108,13 @@
 安裝程式未經簽署，Windows 可能提示無法辨識。請點選 **其他資訊**，然後點選 **仍要執行**。
 如需解除安裝，請開啟 Windows 的 **設定 → 應用程式 → 已安裝的應用程式**。
 
+使用 [Scoop](https://scoop.sh) 時，兩行即可安裝（可攜版，由 Scoop 更新）：
+
+```
+scoop bucket add winscreen https://github.com/DarkLian/WinScreen
+scoop install winscreen
+```
+
 ## 快速上手
 
 1. 點選要變更的視窗。

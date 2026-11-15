@@ -108,6 +108,13 @@
 安装程序未签名，Windows 可能提示无法识别。请点击 **更多信息**，然后点击 **仍要运行**。
 如需卸载，请打开 Windows 的 **设置 → 应用 → 已安装的应用**。
 
+使用 [Scoop](https://scoop.sh) 时，两行即可安装（便携版，由 Scoop 更新）：
+
+```
+scoop bucket add winscreen https://github.com/DarkLian/WinScreen
+scoop install winscreen
+```
+
 ## 快速上手
 
 1. 点击要更改的窗口。
