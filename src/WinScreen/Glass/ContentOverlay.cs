@@ -162,6 +162,14 @@ internal sealed unsafe class ContentOverlay : Form
         bool sameBand = above != 0 && ((User32.GetWindowLongPtr(above, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0) == topmost;
         User32.SetWindowPos(Handle, sameBand ? above : topmost ? User32.HWND_TOPMOST : User32.HWND_TOP, 0, 0, 0, 0,
             User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        if (sameBand || NextShown(Handle) == _source) return;
+        // Windows doesn't let a program that isn't in front put a window at the top, as after a toolbar button, which
+        // never takes the focus: the overlay stayed where it was made, under other windows. Going lower is always
+        // allowed, so the overlay goes just under the window, and the window just under the overlay: the window moves
+        // one place, past its own overlay, and nothing else changes.
+        User32.SetWindowPos(Handle, _source, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        User32.SetWindowPos(_source, Handle, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        Diagnostics.Log.Event("effect.raisedPastWindow", ("ok", NextShown(Handle) == _source));
     }
 
     /// <summary>The first window above <paramref name="window"/> that is showing, other than this overlay's own band.</summary>

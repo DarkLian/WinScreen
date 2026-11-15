@@ -214,6 +214,47 @@ public sealed class ConcealedPressTests
         });
     }
 
+    /// <summary>
+    /// Turned on from the toolbar, which never takes the focus, WinScreen isn't the program in front, and Windows
+    /// ignores its asking to put the effect at the top: the effect stayed under other windows and the window looked
+    /// gone or covered (seen recording the toolbar demo, 15 Nov). It still goes right above its window.
+    /// </summary>
+    [GraphicsCardTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void An_effect_turned_on_while_WinScreen_isnt_in_front_goes_right_above_its_window(bool dark)
+    {
+        using var below = new TargetProcess(new Rectangle(Spot.Left + 200, Spot.Top + 100, 500, 400), "1E64C8", "Window below");
+        using var target = new TargetProcess(Spot, "F0F0F0", "Window above");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(target.Handle);
+            Desktop.Activate(below.Handle);
+            Desktop.Activate(target.Handle);
+            User32.GetWindowThreadProcessId(User32.GetForegroundWindow(), out uint front);
+            Assert.NotEqual((uint)Environment.ProcessId, front);
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            try
+            {
+                Assert.True(effects.Toggle(target.Handle, dark ? ContentLook.Dark : ContentLook.Glass));
+                long end = Environment.TickCount64 + 800;
+                while (Environment.TickCount64 < end) { Application.DoEvents(); Thread.Sleep(10); }
+                nint over = User32.GetWindow(target.Handle, 3); // GW_HWNDPREV
+                while (over != 0 && !User32.IsWindowVisible(over)) over = User32.GetWindow(over, 3);
+                User32.GetWindowThreadProcessId(over, out uint owner);
+                Assert.True(owner == (uint)Environment.ProcessId, $"Right above the window is \"{WindowInfo.Title(over)}\", not its effect.");
+                Assert.True(Above(target.Handle, below.Handle), "The window is under the one it was above.");
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
     /// <summary>Whether <paramref name="upper"/> comes before <paramref name="lower"/> in the order of windows.</summary>
     private static bool Above(nint upper, nint lower)
     {
