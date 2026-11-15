@@ -637,6 +637,7 @@ public sealed partial class PipWindow : Form
     private void ChangeInteractionMode(bool interactive, bool hidden)
     {
         _usingOriginal = false; // Any other choice about the original replaces "use it, then hide it again".
+        _awayFrom = Guid.Empty; // And any choice replaces "hidden while you're on another desktop".
         StepAside(false);
         if (!interactive || !hidden) EndLive();
         bool changed = SetConcealment(hidden);
@@ -647,8 +648,14 @@ public sealed partial class PipWindow : Form
     private void PublishInteractionMode(bool interactive)
     {
         bool hidden = _origin.IsWindow && _origin.IsAvailable && _windows.IsConcealedBy(_source, this);
-        if (!hidden) EndLive();
-        _hideItem.Checked = hidden;
+        if (!hidden)
+        {
+            EndLive();
+            _awayFrom = Guid.Empty;
+        }
+        // Hidden only while the person is on another desktop isn't their Keep hidden: the menu, the saved setup and
+        // the state line don't show it.
+        _hideItem.Checked = hidden && _awayFrom == Guid.Empty;
         _interactiveItem.Checked = interactive && hidden;
         _hideItem.Enabled = !_interactiveItem.Checked;
     }
@@ -1003,7 +1010,7 @@ public sealed partial class PipWindow : Form
         _selecting = false;
         _thumbnail?.Dispose();
         _thumbnail = null;
-        if (_hideItem.Checked && _origin.IsAvailable)
+        if ((_hideItem.Checked || _awayFrom != Guid.Empty) && _origin.IsAvailable)
             ChangeInteractionMode(false, false);
         _popups?.ShowAll();
         _closeCheck?.Dispose();
@@ -1531,11 +1538,47 @@ public sealed partial class PipWindow : Form
         bool focused = _origin.IsWindow && User32.GetForegroundWindow() == _source;
         bool arrived = focused && !_sourceWasFocused;
         _sourceWasFocused = focused;
-        if (!arrived || _live is not null || !_hideItem.Checked || Environment.TickCount64 - _liveEndedAt < RevealGrace)
+        if (!arrived || _live is not null || !_hideItem.Checked && _awayFrom == Guid.Empty || Environment.TickCount64 - _liveEndedAt < RevealGrace)
             return;
         LastReveal = Environment.TickCount64;
         if (_suspended) ResumeView();
         GoToSource();
+    }
+
+    /// <summary>The original's desktop while it is hidden because the person is on another one, or empty.</summary>
+    private Guid _awayFrom;
+    private int _desktopTick;
+
+    /// <summary>Whether the original is hidden for now because the person is on another desktop, for tests.</summary>
+    internal bool HiddenWhileAway => _awayFrom != Guid.Empty;
+
+    /// <summary>
+    /// Many apps stop drawing while their desktop isn't shown, which freezes the view. While the person is on another
+    /// desktop the original is hidden for now, which keeps it drawing; it comes back once they return to its desktop.
+    /// </summary>
+    private void FollowDesktops()
+    {
+        bool away = _awayFrom != Guid.Empty;
+        bool mayHide = !away && _origin.IsWindow && _origin.IsAvailable && !_hideItem.Checked && !_usingOriginal && _live is null &&
+            _thumbnail is not null && !SwitcherHidingStopsView && !User32.IsIconic(_source);
+        bool here = away || !mayHide || VirtualDesktops.OnCurrentDesktop(_source);
+        if (!away && here) return; // The usual case costs one question.
+        AwayFromDesktop.Step step = AwayFromDesktop.Decide(_awayFrom, mayHide, here,
+            away ? null : VirtualDesktops.DesktopOf(_source), VirtualDesktops.CurrentDesktop(), away ? VirtualDesktops.Exists(_awayFrom) : null);
+        if (step == AwayFromDesktop.Step.Hide)
+        {
+            Guid desktop = VirtualDesktops.DesktopOf(_source) ?? Guid.Empty;
+            ChangeInteractionMode(false, true);
+            if (!_windows.IsConcealedBy(_source, this)) return;
+            _awayFrom = desktop;
+            PublishInteractionMode(false);
+            Diagnostics.Log.Event("view.awayHidden", ("program", Diagnostics.LogValue.ProgramOf(_source)));
+        }
+        else if (step == AwayFromDesktop.Step.ShowAgain)
+        {
+            ChangeInteractionMode(false, false);
+            Diagnostics.Log.Event("view.awayShown", ("program", Diagnostics.LogValue.ProgramOf(_source)));
+        }
     }
 
     private bool _sourceWasFocused;
@@ -1562,6 +1605,8 @@ public sealed partial class PipWindow : Form
         RevealIfActivatedElsewhere();
         FollowOriginalInUse();
         if (_suspended) return;
+        if (++_desktopTick % 5 == 0) FollowDesktops();
+        if (IsDisposed) return;
 
         try
         {
