@@ -23,6 +23,26 @@
 
 Pour l'instant, l'application et le guide n'existent qu'en anglais et en chinois.
 
+## En action
+
+Deux vues au-dessus d'un éditeur de code : l'une lit une vidéo, l'autre s'utilise directement dans la vue. Elles vous suivent sur un autre bureau virtuel.
+
+<p align="center">
+  <img src="docs/assets/demos/views.gif" width="880" alt="Deux vues au-dessus d'un éditeur de code : l'une lit une vidéo, l'autre s'utilise directement dans la vue. Elles vous suivent sur un autre bureau virtuel.">
+</p>
+
+La barre d'outils sur la barre de titre d'une fenêtre : les commandes de la fenêtre, à un clic.
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="La barre d'outils sur la barre de titre d'une fenêtre : les commandes de la fenêtre, à un clic.">
+</p>
+
+Les ancres ramènent une fenêtre d'un clic, depuis n'importe quel bureau. Faites glisser un fichier sur une ancre pour le déposer dans sa fenêtre.
+
+<p align="center">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="Les ancres ramènent une fenêtre d'un clic, depuis n'importe quel bureau. Faites glisser un fichier sur une ancre pour le déposer dans sa fenêtre.">
+</p>
+
 ## Menus
 
 <p align="center">

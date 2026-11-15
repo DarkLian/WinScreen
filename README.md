@@ -21,6 +21,26 @@
   <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português (Brasil)</a> · <a href="README.ru.md">Русский</a> · <a href="README.uk.md">Українська</a>
 </p>
 
+## See it in action
+
+Two views over a code editor: one plays a video, the other you use right inside the view. They stay with you on another virtual desktop.
+
+<p align="center">
+  <img src="docs/assets/demos/views.gif" width="880" alt="Two views over a code editor: one plays a video, the other you use right inside the view. They stay with you on another virtual desktop.">
+</p>
+
+The toolbar on a window's title bar: the window's commands, one click away.
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="The toolbar on a window's title bar: the window's commands, one click away.">
+</p>
+
+Anchors bring windows back with a click, from any desktop. Drag a file onto one to drop it into its window.
+
+<p align="center">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="Anchors bring windows back with a click, from any desktop. Drag a file onto one to drop it into its window.">
+</p>
+
 ## Menus
 
 <p align="center">

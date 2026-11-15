@@ -21,6 +21,26 @@
   <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português (Brasil)</a> · <a href="README.ru.md">Русский</a> · <a href="README.uk.md">Українська</a>
 </p>
 
+## 實際效果
+
+程式碼編輯器上方的兩個檢視：一個播放影片，另一個可以直接在檢視裡使用。切換到另一個虛擬桌面，它們也還在。
+
+<p align="center">
+  <img src="docs/assets/demos/views.gif" width="880" alt="程式碼編輯器上方的兩個檢視：一個播放影片，另一個可以直接在檢視裡使用。切換到另一個虛擬桌面，它們也還在。">
+</p>
+
+視窗標題列上的工具列：視窗的各種命令，點一下就行。
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="視窗標題列上的工具列：視窗的各種命令，點一下就行。">
+</p>
+
+錨點點一下就把視窗帶回來，在哪個桌面都可以。把檔案拖到錨點上，就能放進它的視窗。
+
+<p align="center">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="錨點點一下就把視窗帶回來，在哪個桌面都可以。把檔案拖到錨點上，就能放進它的視窗。">
+</p>
+
 ## 選單
 
 <p align="center">

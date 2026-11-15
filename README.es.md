@@ -23,6 +23,26 @@
 
 Por ahora, la aplicación y la guía solo están en inglés y chino.
 
+## En acción
+
+Dos vistas sobre un editor de código: una reproduce un video y la otra se usa dentro de la propia vista. Te acompañan en otro escritorio virtual.
+
+<p align="center">
+  <img src="docs/assets/demos/views.gif" width="880" alt="Dos vistas sobre un editor de código: una reproduce un video y la otra se usa dentro de la propia vista. Te acompañan en otro escritorio virtual.">
+</p>
+
+La barra de herramientas en la barra de título de una ventana: los comandos de la ventana, a un clic.
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="La barra de herramientas en la barra de título de una ventana: los comandos de la ventana, a un clic.">
+</p>
+
+Las anclas traen una ventana de vuelta con un clic, desde cualquier escritorio. Arrastra un archivo sobre una para soltarlo en su ventana.
+
+<p align="center">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="Las anclas traen una ventana de vuelta con un clic, desde cualquier escritorio. Arrastra un archivo sobre una para soltarlo en su ventana.">
+</p>
+
 ## Menús
 
 <p align="center">

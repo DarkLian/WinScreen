@@ -23,6 +23,26 @@
 
 Por enquanto, o aplicativo e o guia estão só em inglês e chinês.
 
+## Veja funcionando
+
+Duas visualizações sobre um editor de código: uma toca um vídeo, a outra você usa direto na visualização. Elas continuam com você em outra área de trabalho virtual.
+
+<p align="center">
+  <img src="docs/assets/demos/views.gif" width="880" alt="Duas visualizações sobre um editor de código: uma toca um vídeo, a outra você usa direto na visualização. Elas continuam com você em outra área de trabalho virtual.">
+</p>
+
+A barra de ferramentas na barra de título de uma janela: os comandos da janela, a um clique.
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="A barra de ferramentas na barra de título de uma janela: os comandos da janela, a um clique.">
+</p>
+
+As âncoras trazem uma janela de volta com um clique, de qualquer área de trabalho. Arraste um arquivo para uma âncora para soltá-lo na janela dela.
+
+<p align="center">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="As âncoras trazem uma janela de volta com um clique, de qualquer área de trabalho. Arraste um arquivo para uma âncora para soltá-lo na janela dela.">
+</p>
+
 ## Menus
 
 <p align="center">

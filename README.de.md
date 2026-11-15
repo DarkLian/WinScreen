@@ -23,6 +23,26 @@
 
 Die App und die Anleitung gibt es bisher nur auf Englisch und Chinesisch.
 
+## So sieht es aus
+
+Zwei Ansichten über einem Code-Editor: Eine spielt ein Video ab, die andere benutzt du direkt in der Ansicht. Auch auf einem anderen virtuellen Desktop bleiben sie bei dir.
+
+<p align="center">
+  <img src="docs/assets/demos/views.gif" width="880" alt="Zwei Ansichten über einem Code-Editor: Eine spielt ein Video ab, die andere benutzt du direkt in der Ansicht. Auch auf einem anderen virtuellen Desktop bleiben sie bei dir.">
+</p>
+
+Die Symbolleiste auf der Titelleiste eines Fensters: die Befehle des Fensters, einen Klick entfernt.
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="Die Symbolleiste auf der Titelleiste eines Fensters: die Befehle des Fensters, einen Klick entfernt.">
+</p>
+
+Anker holen Fenster mit einem Klick zurück, von jedem Desktop aus. Zieh eine Datei auf einen Anker, um sie in sein Fenster abzulegen.
+
+<p align="center">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="Anker holen Fenster mit einem Klick zurück, von jedem Desktop aus. Zieh eine Datei auf einen Anker, um sie in sein Fenster abzulegen.">
+</p>
+
 ## Menüs
 
 <p align="center">

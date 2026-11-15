@@ -21,6 +21,26 @@
   <a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.de.md">Deutsch</a> · <a href="README.fr.md">Français</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português (Brasil)</a> · <a href="README.ru.md">Русский</a> · <a href="README.uk.md">Українська</a>
 </p>
 
+## 实际效果
+
+代码编辑器上方的两个视图：一个播放视频，另一个可以直接在视图里使用。切换到另一个虚拟桌面，它们也还在。
+
+<p align="center">
+  <img src="docs/assets/demos/views.gif" width="880" alt="代码编辑器上方的两个视图：一个播放视频，另一个可以直接在视图里使用。切换到另一个虚拟桌面，它们也还在。">
+</p>
+
+窗口标题栏上的工具栏：窗口的各种命令，点一下就行。
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="窗口标题栏上的工具栏：窗口的各种命令，点一下就行。">
+</p>
+
+锚点点一下就把窗口带回来，在哪个桌面都可以。把文件拖到锚点上，就能放进它的窗口。
+
+<p align="center">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="锚点点一下就把窗口带回来，在哪个桌面都可以。把文件拖到锚点上，就能放进它的窗口。">
+</p>
+
 ## 菜单
 
 <p align="center">
