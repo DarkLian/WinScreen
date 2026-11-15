@@ -37,7 +37,7 @@ You can change or clear any of these in **Settings → Actions and shortcuts**. 
 
 Other commands, like moving a window to a corner, have no shortcut until you give them one.
 
-<p align="center"><img src="assets/screenshots/settings-actions.png" width="640" alt="Settings, Actions and shortcuts page"></p>
+<p align="center"><img src="assets/screenshots/settings-actions.png" width="880" alt="Settings, Actions and shortcuts page"></p>
 
 ## Pin and see-through
 

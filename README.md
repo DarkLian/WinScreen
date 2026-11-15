@@ -24,11 +24,13 @@
 ## Menus
 
 <p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="720" alt="WinScreen Settings, General page, in the dark look">
+  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="WinScreen Settings, General page, in the dark look">
 </p>
 <p align="center">
   <img src="docs/assets/screenshots/window-menu.png" width="360" alt="A window's menu, with the Effects menu open">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="440" alt="Settings, Appearance page, with sliders for opacity">
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="Settings, Appearance page, with sliders for opacity">
 </p>
 
 ## Toolbar and Anchors

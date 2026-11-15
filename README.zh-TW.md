@@ -24,11 +24,13 @@
 ## 選單
 
 <p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="720" alt="WinScreen 設定的「一般」頁面（深色）">
+  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="WinScreen 設定的「一般」頁面（深色）">
 </p>
 <p align="center">
   <img src="docs/assets/screenshots/window-menu.png" width="360" alt="視窗選單，已開啟「效果」子選單">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="440" alt="設定的「外觀」頁面，用滑桿調整不透明度">
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="設定的「外觀」頁面，用滑桿調整不透明度">
 </p>
 
 ## 工具列和錨點

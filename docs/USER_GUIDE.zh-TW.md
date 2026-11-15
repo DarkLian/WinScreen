@@ -35,7 +35,7 @@
 
 其他命令（例如把視窗移到角落）預設沒有快捷鍵，需要時可以自己設定。
 
-<p align="center"><img src="assets/screenshots/settings-actions.png" width="640" alt="設定的「操作與快捷鍵」頁面"></p>
+<p align="center"><img src="assets/screenshots/settings-actions.png" width="880" alt="設定的「操作與快捷鍵」頁面"></p>
 
 ## 置頂與透明
 
