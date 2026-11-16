@@ -505,7 +505,8 @@ private readonly ErrorProvider _errors = new();
     {
         bool wasPending = _pending;
         _setups.Items.Clear();
-        _setups.Items.AddRange(_settings.SavedSetups.Where(setup => !_removedSetups.Contains(setup)).Cast<object>().ToArray());
+        _setups.Items.AddRange(_settings.SavedSetups.Where(setup => !_removedSetups.Contains(setup))
+            .Select(setup => _changedSetups.GetValueOrDefault(setup, setup)).Cast<object>().ToArray());
         if (!wasPending) MarkSaved();
         else RefreshApply();
     }
@@ -756,7 +757,12 @@ private readonly ErrorProvider _errors = new();
     {
         AppSettings draft = Draft((_pendingImport ?? _settings).Clone());
         draft.Imported = _pendingImport is not null;
-        // Setups are taken from what's in effect, so one saved from a window's menu meanwhile is kept.
+        // Setups are taken from what's in effect, so one saved from a window's menu meanwhile is kept; the changes made
+        // here go in the place of the setups they were made to. The draft is a copy, in the same order.
+        if (_pendingImport is null)
+            foreach ((ProgramSetup original, ProgramSetup changed) in _changedSetups)
+                if (_settings.SavedSetups.FindIndex(setup => ReferenceEquals(setup, original)) is var at and >= 0 && at < draft.SavedSetups.Count)
+                    draft.SavedSetups[at] = System.Text.Json.JsonSerializer.Deserialize<ProgramSetup>(System.Text.Json.JsonSerializer.Serialize(changed))!;
         draft.SavedSetups.RemoveAll(setup => _removedSetups.Any(removed =>
             removed.Program == setup.Program && removed.ExecutablePath == setup.ExecutablePath));
         try
@@ -794,6 +800,7 @@ private readonly ErrorProvider _errors = new();
             }
             _pendingImport = null;
             _removedSetups.Clear();
+            _changedSetups.Clear();
             RefreshFeatures();
             return true;
         }
@@ -935,16 +942,38 @@ private readonly ErrorProvider _errors = new();
         var copy = System.Text.Json.JsonSerializer.Deserialize<ProgramSetup>(System.Text.Json.JsonSerializer.Serialize(setup))!;
         using var dialog = new RuleDialog(copy);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        _setups.Items[index] = dialog.Result();
+        ReplaceSetup(setup, dialog.Result());
+    }
+
+    /// <summary>
+    /// A setup as changed, in the list's place of the one shown. What is saved is built from the setups in effect (so
+    /// one saved from a window's menu meanwhile is kept), so the change is kept against the setup it was made to.
+    /// </summary>
+    internal void ReplaceSetup(ProgramSetup shown, ProgramSetup changed)
+    {
+        int index = _setups.Items.IndexOf(shown);
+        if (index < 0) return;
+        ProgramSetup original = _changedSetups.FirstOrDefault(pair => ReferenceEquals(pair.Value, shown)).Key ?? shown;
+        _changedSetups[original] = changed;
+        _setups.Items[index] = changed;
         _setups.SelectedIndex = index;
         QueueApplyRefresh();
     }
+
+    /// <summary>Setups in effect, each with the change made to it here and not yet saved.</summary>
+    private readonly Dictionary<ProgramSetup, ProgramSetup> _changedSetups = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Forgets a program's saved setup, the way the Remove button does.</summary>
     internal void RemoveSetup(ProgramSetup setup)
     {
         _setups.Items.Remove(setup);
         _removedSetups.Add(setup);
+        // A setup changed here and then removed: the one in effect goes, not the change.
+        if (_changedSetups.FirstOrDefault(pair => ReferenceEquals(pair.Value, setup)).Key is { } original)
+        {
+            _changedSetups.Remove(original);
+            _removedSetups.Add(original);
+        }
         QueueApplyRefresh();
     }
 
@@ -1555,6 +1584,7 @@ private readonly ErrorProvider _errors = new();
             {
                 _pendingImport = SettingsTransfer.Import(dialog.FileName, _settings);
                 _removedSetups.Clear();
+                _changedSetups.Clear();
                 LoadValues();
                 // Brought in whole, at once: what was in effect before is kept as a backup.
                 if (ApplyChanges()) _status.Text = T("settings.transfer.imported");

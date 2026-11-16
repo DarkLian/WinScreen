@@ -589,6 +589,42 @@ public sealed class SettingsWindowTests : IDisposable
         });
     }
 
+    /// <summary>
+    /// A setup changed with Change (kept to some titles, put in a place) is saved and used, not only shown in the list,
+    /// and a setup saved from a window's menu meanwhile is kept beside it.
+    /// </summary>
+    [Fact]
+    public void A_changed_setup_is_saved_with_its_change_and_one_saved_meanwhile_is_kept()
+    {
+        OnUiThread(() =>
+        {
+            var settings = new AppSettings();
+            settings.SavedSetups.Add(new ProgramSetup { Program = "chrome", Pinned = true });
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), draft => { settings.CopyFrom(draft); return []; });
+            _ = window.Handle;
+            ListBox list = Descendants(window).OfType<ListBox>().First(box => box.Items.OfType<ProgramSetup>().Any());
+            ProgramSetup shown = list.Items.OfType<ProgramSetup>().Single();
+            window.ReplaceSetup(shown, new ProgramSetup { Program = "chrome", Pinned = true, TitleContains = "Trip", Place = WinScreen.Windows.WindowAnchor.TopRight });
+            Assert.True(window.HasChanges);
+            settings.SavedSetups.Add(new ProgramSetup { Program = "notepad", Pinned = true });
+            window.SetupsChanged();
+            Assert.Contains(list.Items.OfType<ProgramSetup>(), setup => setup.TitleContains == "Trip");
+            Assert.True(window.ApplyChanges());
+            Assert.Equal(2, settings.SavedSetups.Count);
+            ProgramSetup saved = settings.SavedSetups.Single(setup => setup.Program == "chrome");
+            Assert.Equal("Trip", saved.TitleContains);
+            Assert.Equal(WinScreen.Windows.WindowAnchor.TopRight, saved.Place);
+            Assert.False(window.HasChanges);
+
+            // Changed again and then removed: it goes, with nothing of it left behind.
+            shown = list.Items.OfType<ProgramSetup>().Single(setup => setup.Program == "chrome");
+            window.ReplaceSetup(shown, new ProgramSetup { Program = "chrome", Pinned = true, TitleContains = "Other" });
+            window.RemoveSetup(list.Items.OfType<ProgramSetup>().Single(setup => setup.Program == "chrome"));
+            Assert.True(window.ApplyChanges());
+            Assert.Equal("notepad", Assert.Single(settings.SavedSetups).Program);
+        });
+    }
+
     [Fact]
     public void A_key_that_cant_be_a_hotkey_is_explained_and_keys_with_modifiers_are_not_clears()
     {
