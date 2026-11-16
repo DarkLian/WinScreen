@@ -57,6 +57,8 @@ In **Settings → Appearance** you can change the opacity step, give pinned wind
 ## Picture-in-Picture views
 
 Press **Ctrl+Alt+P** to open a small live view of the window you're using. Press it again to close it.
+The window itself is hidden while its view is open, so the view keeps going even when other windows cover it.
+To see the window again, turn off **Keep hidden** in the view's menu.
 To show a whole display or part of the screen, right-click the tray icon and choose **New view**. For part of the
 screen, choose **Region** and drag over the area.
 You can save a display or area there and open it again later from **Picture-in-Picture views → Saved sources**.
@@ -74,8 +76,9 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 
 **Useful options in the view's menu**
 
-- **Keep hidden:** some apps, such as browsers, stop drawing when they're covered. This hides the original
-  so the view stays live. It also removes the original from the taskbar and Alt+Tab where supported. Showing the original or closing the view restores its entry.
+- **Keep hidden:** on for every new view. Some apps, such as browsers, stop drawing when they're covered, so this
+  hides the original and the view stays live. It also removes the original from the taskbar and Alt+Tab where supported.
+  Turn it off to show the original; closing the view brings it back too.
 - **Mute the original:** silences the app's sound, and nothing else. For a browser it mutes the whole browser,
   so the item says **Mute the browser**. The sound comes back when you turn it off, restore the window, close the
   view or exit WinScreen. An app you had muted yourself stays muted.

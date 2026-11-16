@@ -91,7 +91,7 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **Borderless** | WinScreen's own Borderless or Fill display is on for it (`PlacementBeforeBorderless`). |
 | **Fills the screen** | Covers the whole monitor and has no standard title bar: a game or a full-screen app (`WindowInfo.FillsMonitor`, `Windows/WindowController.cs`). A normal maximized window doesn't count because it has a title bar. |
 | **Pinned** | Kept on top by WinScreen (`TogglePin`). Windows that pin themselves are "topmost" but not pinned by WinScreen. |
-| **Hidden** | Hidden by WinScreen behind a view, a tile or Keep updating (`state.Hidden`). A view's menu shows Keep updating as **Keep hidden**, under **Original window**. |
+| **Hidden** | Hidden by WinScreen behind a view, a tile or Keep updating (`state.Hidden`). A view's menu shows Keep updating as **Keep hidden**, under **Original window**. A view the person opens starts with it on, since many apps stop drawing while covered; a saved view keeps its saved choice, and a window that can't be hidden (Fill display, one that refuses to be see-through) keeps its view without a message (`PipWindow.HideOriginalByDefault`, `NewViewHidingTests`). |
 | **Click-through** | WinScreen's Click-through is on. |
 | **Custom shape** | The app gives its window a region of its own (`WindowInfo.ShapeOf`). |
 | **Own transparency** | The app made itself layered without WinScreen (`EnsureLayeringSafe`). |

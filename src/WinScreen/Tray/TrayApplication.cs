@@ -1099,7 +1099,8 @@ public sealed partial class TrayApplication : ApplicationContext
     {
         if (!_savedViews.ShouldOpen(setup, _pips.ContainsKey(window)))
             return;
-        if (OpenViewOf(window) is not { IsDisposed: false } pip)
+        // Its saved Keep hidden decides, not the default for new views: kept, it hides once the person leaves the window.
+        if (OpenViewOf(window, hideOriginal: false) is not { IsDisposed: false } pip)
             return;
         pip.ApplyPreset(setup.View!);
         _savedViews.Opened(setup);
@@ -1607,8 +1608,11 @@ public sealed partial class TrayApplication : ApplicationContext
             (T("common.copy"), () => WindowUtilities.CopyText(text), true)).ShowInFront();
     }
 
-    /// <summary>Opens a view of a window, or returns null when the person chose not to restore a minimized one.</summary>
-    private PipWindow? OpenViewOf(nint window)
+    /// <summary>
+    /// Opens a view of a window, or returns null when the person chose not to restore a minimized one. A new view hides
+    /// its original (Keep hidden), so it keeps changing when the original is covered.
+    /// </summary>
+    private PipWindow? OpenViewOf(nint window, bool hideOriginal = true)
     {
         if (_shrunk.TryGetValue(window, out var tile))
         {
@@ -1628,6 +1632,7 @@ public sealed partial class TrayApplication : ApplicationContext
         pip.SoundState = () => _sound.State(window);
         pip.SetSound = on => on ? _sound.Mute(window) : _sound.Unmute(window);
         OpenView(pip);
+        if (hideOriginal && !pip.IsDisposed) pip.HideOriginalByDefault();
         return pip;
     }
 

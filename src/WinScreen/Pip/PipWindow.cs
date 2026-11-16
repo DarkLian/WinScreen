@@ -638,16 +638,27 @@ public sealed partial class PipWindow : Form
         ChangeInteractionMode(_interactiveItem.Checked, hidden);
     }
 
+    /// <summary>
+    /// A new view starts with Keep hidden, so it keeps changing when something covers the original: many apps,
+    /// browsers first, stop drawing while covered. Nobody asked for it, so a window that can't be hidden (one
+    /// filled with Fill display, one that refuses to be see-through, an administrator's) just stays as it is, unsaid.
+    /// </summary>
+    internal void HideOriginalByDefault()
+    {
+        if (!_origin.IsWindow || _hideItem.Checked) return;
+        ChangeInteractionMode(_interactiveItem.Checked, true, quiet: true);
+    }
+
     // All mode changes converge here. Menu state is published from actual concealment, including failure and
     // recovery; an interactive view never advertises a visible original as interactive.
-    private void ChangeInteractionMode(bool interactive, bool hidden)
+    private void ChangeInteractionMode(bool interactive, bool hidden, bool quiet = false)
     {
         _usingOriginal = false; // Any other choice about the original replaces "use it, then hide it again".
         EndDrop();
         _awayFrom = Guid.Empty; // And any choice replaces "hidden while you're on another desktop".
         StepAside(false);
         if (!interactive || !hidden) EndLive();
-        bool changed = SetConcealment(hidden);
+        bool changed = SetConcealment(hidden, quiet);
         PublishInteractionMode(interactive && changed);
         CheckState();
     }
@@ -667,7 +678,7 @@ public sealed partial class PipWindow : Form
         _hideItem.Enabled = !_interactiveItem.Checked;
     }
 
-    private bool SetConcealment(bool hidden)
+    private bool SetConcealment(bool hidden, bool quiet = false)
     {
         if (!_origin.IsWindow)
             return false;
@@ -683,7 +694,7 @@ public sealed partial class PipWindow : Form
                 // Remembered before hiding: a hidden original shows on every desktop and has none of its own.
                 if (!_windows.IsConcealedBy(_source, this)) _ownDesktop = VirtualDesktops.DesktopOf(_source);
                 _windows.HideOwned(_source, this);
-                if (SwitcherHidingStopsView) Problem?.Invoke(T("errors.switcher.windows10"));
+                if (SwitcherHidingStopsView) { if (!quiet) Problem?.Invoke(T("errors.switcher.windows10")); }
                 // A Store app keeps the taskbar button Windows owns; activating it shows the app (FollowSource).
                 // Only its taskbar entry goes, which Windows 11 also leaves out of Alt+Tab; a tool window's frame
                 // would replace the original's own caption buttons in the view.
@@ -719,7 +730,8 @@ public sealed partial class PipWindow : Form
                 }
             }
 
-            Problem?.Invoke(failure.Message);
+            if (quiet) Diagnostics.Log.Swallowed(failure);
+            else Problem?.Invoke(failure.Message);
             return false;
         }
     }

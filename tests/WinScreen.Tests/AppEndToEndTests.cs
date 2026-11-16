@@ -108,6 +108,21 @@ public sealed class AppEndToEndTests : IDisposable
         Desktop.Activate(target.Handle);
     }
 
+    /// <summary>
+    /// A new view hides its original (Keep hidden); this shows it again from the view's menu and gives it the keys,
+    /// for a test about a view beside a shown original.
+    /// </summary>
+    private void ShowOriginalAgain(nint pip, TargetProcess target)
+    {
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0), "The new view didn't hide its original.");
+        Rectangle view = Desktop.BoundsOf(pip);
+        Desktop.RightClickOn(new Point(view.Left + 60, view.Top + 60), pip);
+        Assert.True(Desktop.WaitFor(ForegroundIsApp), "The view's menu didn't open.");
+        Desktop.Press(Keys.K); // Keep hidden, off
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) is null or 255), "The original wasn't shown again.");
+        Focus(target);
+    }
+
     private static Rectangle Near(Rectangle window, int partsOfFour)
     {
         return new Rectangle(window.Left + window.Width * partsOfFour / 4 - 10, window.Top + window.Height / 2 - 10, 20,
@@ -1355,12 +1370,8 @@ public sealed class AppEndToEndTests : IDisposable
         Rectangle originalBounds = Desktop.BoundsOf(target.Handle);
         Focus(target);
         Hotkey(Keys.P, target);
-        nint pip = WaitForPip();
-        Rectangle view = Desktop.BoundsOf(pip);
-        Point point = new(view.Left + 60, view.Top + 60);
-        Desktop.RightClickOn(point, pip);
-        Assert.True(Desktop.WaitFor(ForegroundIsApp));
-        Desktop.Press(Keys.K); // &Keep updating
+        WaitForPip();
+        // A new view hides its original (Keep hidden).
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0));
         // Hidden, it leaves the taskbar but keeps its own styles, so its caption buttons stay its own.
         Assert.True(Desktop.WaitFor(() => File.Exists(Path.Combine(_data, "changed-windows.json")) &&
@@ -1393,6 +1404,9 @@ public sealed class AppEndToEndTests : IDisposable
 
         Hotkey(Keys.P, target);
         nint pip = WaitForPip();
+        ShowOriginalAgain(pip, target);
+        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(target.Handle) == full && User32.IsZoomed(target.Handle)),
+            "Shown again, the original wasn't back where it was, maximized.");
 
         // Position this fixture directly; the dedicated title-bar test covers dragging.
         Assert.True(User32.SetWindowPos(pip, 0, 40, 40, 0, 0,
@@ -1417,19 +1431,27 @@ public sealed class AppEndToEndTests : IDisposable
     }
 
     [Fact]
-    public void The_view_menu_hides_the_original()
+    public void A_new_view_hides_its_original_and_the_menu_shows_it_again()
     {
         using var target = new TargetProcess(Spot, "C81E1E", "WinScreen PiP source");
         Focus(target);
         Hotkey(Keys.P, target);
         nint pip = WaitForPip();
 
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0), "The new view didn't hide its original.");
+        // Windows 10 can't capture a window off the taskbar with smooth capture, so there it keeps its button.
+        if (Environment.OSVersion.Version.Build >= 22000)
+            Assert.True(Desktop.WaitFor(() => File.Exists(Path.Combine(_data, "changed-windows.json")) &&
+                File.ReadAllText(Path.Combine(_data, "changed-windows.json")).Contains("\"TaskbarButtonRemoved\":true")),
+                "The hidden original kept its taskbar button.");
+        ShowOriginalAgain(pip, target);
+        Assert.Equal(target.Handle, User32.GetForegroundWindow());
+
         Rectangle view = Desktop.BoundsOf(pip);
         Desktop.RightClickOn(new Point(view.Left + 60, view.Top + 60), pip);
         Assert.True(Desktop.WaitFor(() => ForegroundIsApp()), "The view's menu didn't open.");
         Desktop.Press(Keys.K);
-
-        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0), "The original wasn't hidden.");
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(target.Handle) == 0), "Keep hidden didn't hide the original again.");
     }
 
     /// <summary>The end of WinScreen's own log, for a failure message.</summary>
@@ -1458,6 +1480,7 @@ public sealed class AppEndToEndTests : IDisposable
         Focus(first);
         Hotkey(Keys.P, first);
         nint pip = WaitForPip();
+        ShowOriginalAgain(pip, first);
         Hotkey(Keys.S, first);
         string settingsFile = Path.Combine(_data, "settings.json");
         ProgramSetup setup = null!;
@@ -2095,6 +2118,7 @@ public sealed class AppEndToEndTests : IDisposable
         Focus(target);
         Hotkey(Keys.P, target);
         nint pip = WaitForPip();
+        ShowOriginalAgain(pip, target);
         Rectangle bounds = Desktop.BoundsOf(pip);
         Desktop.MoveMouse(new Point(bounds.Left + 60, bounds.Top + 60));
         int dpi = Dpi.Of(pip), height = Dpi.Scale(28, dpi);
