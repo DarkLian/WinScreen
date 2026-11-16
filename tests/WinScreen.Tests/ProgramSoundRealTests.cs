@@ -62,7 +62,7 @@ public sealed class ProgramSoundRealTests
                 MethodInfo putBack = typeof(TrayApplication).GetMethod("PutBack", BindingFlags.Instance | BindingFlags.NonPublic, [typeof(nint)])!;
                 PipWindow Open()
                 {
-                    var view = (PipWindow)open.Invoke(app, [target.Handle])!;
+                    var view = (PipWindow)open.Invoke(app, [target.Handle, true])!; // Hide the original, as a view the person opens does.
                     Application.DoEvents();
                     return view;
                 }
