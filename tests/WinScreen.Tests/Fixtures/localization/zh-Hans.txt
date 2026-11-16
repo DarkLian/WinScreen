@@ -182,7 +182,7 @@ features.autoAnchors CBD283E70D5D8C7D
 features.disabled 3FD47EDCE45B3603
 features.dragShortcut BA6026AEDE12F042
 features.enabled 8DA97DDDA990E7C4
-features.help 1E0FEDD66C06AB56
+features.help 3B362F00B20CA11D
 features.moveResize 534D2940DBECBC97
 features.name 25F5CE57A1909740
 features.noShortcut BDA050585A00F0F6
