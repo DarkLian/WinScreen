@@ -230,7 +230,7 @@ internal static class Program
                     if (parts[0] == "browserlike")
                         window.BeginInvoke(window.BehaveLikeBrowser);
                     if (parts[0] == "droptarget")
-                        window.BeginInvoke(window.TakeDrops);
+                        window.BeginInvoke(() => window.TakeDrops(parts.Length > 1 && parts[1] == "activate"));
                     if (parts[0] == "dragsource")
                         window.BeginInvoke(() => window.StartDragsWith(parts[1]));
                     if (parts[0] == "captionhit")
@@ -539,7 +539,7 @@ internal sealed partial class TargetForm : Form
     }
 
     /// <summary>Takes text dropped on it and reports it with the spot it landed on, in its own coordinates.</summary>
-    public void TakeDrops()
+    public void TakeDrops(bool activate = false)
     {
         AllowDrop = true;
         DragEnter += (_, e) => e.Effect = e.Data?.GetDataPresent(DataFormats.UnicodeText) == true ? DragDropEffects.Copy : DragDropEffects.None;
@@ -547,6 +547,11 @@ internal sealed partial class TargetForm : Form
         {
             Point at = PointToClient(new Point(e.X, e.Y));
             Report($"drop {e.Data?.GetData(DataFormats.UnicodeText)} {at.X} {at.Y}");
+            if (activate)
+            {
+                Activate(); // As a browser does: it comes forward for a drop.
+                Report("activated " + (ContainsFocus ? "yes" : "no"));
+            }
         };
         Report("droptarget");
     }

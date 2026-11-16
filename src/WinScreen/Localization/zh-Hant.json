@@ -180,7 +180,7 @@
   "features.disabled": "關閉",
   "features.dragShortcut": "{0}+拖曳",
   "features.enabled": "開啟",
-  "features.help": "選取一個操作來變更快捷鍵。儲存後生效。",
+  "features.help": "選取一個操作來變更快捷鍵。",
   "features.moveResize": "按住按鍵移動和調整大小",
   "features.name": "功能",
   "features.noShortcut": "—",

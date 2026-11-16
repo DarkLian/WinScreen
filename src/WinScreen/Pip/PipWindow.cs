@@ -1183,6 +1183,7 @@ public sealed partial class PipWindow : Form
         _dropReleasedAt = 0;
         _dropOutsideSince = 0;
         _dropTookFocus = false;
+        _foregroundBeforeDrop = User32.GetForegroundWindow();
         StepAside(true);
         Diagnostics.Log.Event("view.dropHandedOver", ("program", Diagnostics.LogValue.ProgramOf(_source)));
     }
@@ -1204,9 +1205,11 @@ public sealed partial class PipWindow : Form
 
     /// <summary>
     /// While the original is out for a drop. The drag is over once both buttons are up (Escape with a button still held
-    /// ends it too, and the release follows). Then it hides, unless the drop opened something of its own or took the
-    /// focus: then it waits, as Use it does, for the focus to go elsewhere. A drag that only passes over, leaving the
-    /// original with a button still down, hides it at once, so it isn't left in the way of where the drag is going.
+    /// ends it too, and the release follows). Then it hides, unless the drop opened something of its own (a "Replace or
+    /// skip?" dialog, a menu): then it waits, as Use it does, for the focus to go elsewhere. The original itself taking
+    /// the focus doesn't keep it out: a browser comes forward for any drop, and the person let go to be done. A drag
+    /// that only passes over, leaving the original with a button still down, hides it at once, so it isn't left in the
+    /// way of where the drag is going.
     /// </summary>
     private void FollowDrop()
     {
@@ -1225,7 +1228,7 @@ public sealed partial class PipWindow : Form
         if (_dropReleasedAt == 0) _dropReleasedAt = now;
         nint foreground = User32.GetForegroundWindow();
         User32.GetWindowThreadProcessId(_source, out uint process);
-        if (foreground == _source || (foreground != 0 && SourcePopups.IsPopupOf(foreground, _source, process)))
+        if (foreground != 0 && foreground != _source && SourcePopups.IsPopupOf(foreground, _source, process))
         {
             _dropTookFocus = true;
             _dropReleasedAt = now;
@@ -1235,14 +1238,27 @@ public sealed partial class PipWindow : Form
         EndDrop();
     }
 
-    /// <summary>The original back in its hiding place and the view back as it was. Safe to call at any time.</summary>
+    /// <summary>
+    /// The original back in its hiding place and the view back as it was. Safe to call at any time. If the original
+    /// had the focus, it goes back to the window that had it before the drag (or to the view): keys mustn't go to a
+    /// window that can't be seen.
+    /// </summary>
     private void EndDrop()
     {
         if (_dropSince == 0) return;
         _dropSince = 0;
         try { _windows.ReturnToParking(_source); }
         catch (WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
-        if (!_usingOriginal) StepAside(false);
+        if (!_usingOriginal)
+        {
+            StepAside(false);
+            if (User32.GetForegroundWindow() == _source)
+            {
+                nint back = _foregroundBeforeDrop != 0 && _foregroundBeforeDrop != _source && User32.IsWindow(_foregroundBeforeDrop) &&
+                            !_windows.IsHidden(_foregroundBeforeDrop) ? _foregroundBeforeDrop : Handle;
+                User32.SetForegroundWindow(back);
+            }
+        }
         Diagnostics.Log.Event("view.dropEnded", ("tookFocus", _dropTookFocus));
     }
 
@@ -1251,6 +1267,7 @@ public sealed partial class PipWindow : Form
 
     private long _dropSince, _dropReleasedAt, _dropOutsideSince;
     private bool _dropTookFocus;
+    private nint _foregroundBeforeDrop;
     private const long DropSettles = 500, DropPassedBy = 300;
 
     /// <summary>True while the original is out for something dragged onto the view, for tests.</summary>
@@ -1874,7 +1891,10 @@ public sealed partial class PipWindow : Form
         if (_live?.Scrolling == true) Cursor.Current = _live.ScrollCursor;
         else if (_wasScrolling) Cursor.Current = Cursors.Default;
         _wasScrolling = _live?.Scrolling == true;
-        bool unavailable = _suspended || _selecting || _overrides.ClickThrough || (_inputPaused && !_menu.Visible);
+        // Stepped aside, the view is out of sight for its original: its parts stay away too, even with the pointer
+        // where the view was.
+        bool unavailable = _suspended || _selecting || _overrides.ClickThrough || (_inputPaused && !_menu.Visible) ||
+            _steppedAside.Length > 0;
         if (unavailable)
         {
             _titleBar?.Dismiss();
@@ -1986,7 +2006,7 @@ public sealed partial class PipWindow : Form
     {
         if (_offer != PressOffer.None && (Environment.TickCount64 >= _offerUntil || !CanOffer)) _offer = PressOffer.None;
         PipChipState state = PipStateChip.Decide(_origin.IsMinimized, BackendState,
-            Bounds.Contains(Cursor.Position), _selecting || _pressed, _offer);
+            Bounds.Contains(Cursor.Position), _selecting || _pressed || _steppedAside.Length > 0, _offer);
         if (state == PipChipState.None)
         {
             _chip?.Hide();

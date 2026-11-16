@@ -190,9 +190,9 @@ internal sealed class TargetProcess : IDisposable
     }
 
     /// <summary>Makes the window take dropped text and report "drop TEXT X Y", in its own coordinates.</summary>
-    internal void TakeDrops()
+    internal void TakeDrops(bool activate = false)
     {
-        _process.StandardInput.WriteLine("droptarget");
+        _process.StandardInput.WriteLine(activate ? "droptarget activate" : "droptarget");
         _process.StandardInput.Flush();
         if (NextReport() != "droptarget") throw new InvalidOperationException("The target did not start taking drops.");
     }

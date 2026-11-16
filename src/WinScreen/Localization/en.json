@@ -180,7 +180,7 @@
   "features.disabled": "Off",
   "features.dragShortcut": "{0}+drag",
   "features.enabled": "On",
-  "features.help": "Select an action to change its shortcut. Changes take effect when you save.",
+  "features.help": "Select an action to change its shortcut.",
   "features.moveResize": "Move and resize with a key",
   "features.name": "Feature",
   "features.noShortcut": "—",

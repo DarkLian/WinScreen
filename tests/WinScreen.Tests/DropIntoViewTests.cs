@@ -92,7 +92,11 @@ public sealed class DropIntoViewTests
                 Assert.False(WindowInfo.IsConcealed(source.Handle), "The original is out but can't be seen.");
                 Glide(aim, new Point(aim.X + 2, aim.Y + 2), 3);
                 Glide(new Point(aim.X + 2, aim.Y + 2), aim, 3);
-                Pump(150);
+                // Long enough for the view's title bar or note to come up if they followed the pointer: they would
+                // sit on top of the original, where the drop is aimed.
+                Pump(900);
+                Assert.Null(view.TitleBarBounds);
+                Assert.Null(view.ChipBounds);
             }
             finally { Desktop.MouseButton(false); }
 
@@ -116,6 +120,60 @@ public sealed class DropIntoViewTests
             if (interactive) view.SetInteractive(false);
             view.SetOriginalHidden(false);
             Assert.Equal(new Rectangle(60, 80, 600, 400), Desktop.BoundsOf(source.Handle));
+        });
+    }
+
+    /// <summary>
+    /// A browser comes forward for any drop. That isn't the person asking for the window: it still hides once the
+    /// button is up, and the keys go back to the window the drag came from, not to one that can't be seen.
+    /// </summary>
+    [Fact]
+    public void An_original_that_comes_forward_for_the_drop_still_hides_again_and_hands_the_keys_back()
+    {
+        using var source = new TargetProcess(new Rectangle(60, 80, 600, 400), "C81E1E", "WinScreen drop target");
+        using var dragger = new TargetProcess(new Rectangle(760, 600, 300, 200), "1E64C8", "WinScreen drag source");
+        source.TakeDrops(activate: true);
+        dragger.StartDragsWith("forward");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            var windows = new WindowController([]);
+            using var view = new PipWindow(source.Handle, windows);
+            view.ShowOnTop();
+            view.Location = new Point(760, 80);
+            view.SetOriginalHidden(true);
+            Pump(800);
+            Rectangle parked = Desktop.BoundsOf(source.Handle);
+            Point aim = Middle(view.RectangleToScreen(view.ClientRectangle));
+            Point start = Middle(Desktop.BoundsOf(dragger.Handle));
+
+            Desktop.Activate(dragger.Handle); // In front of anything else on the screen, such as a test runner's console.
+            Desktop.RequireWindowAt(start, dragger.Handle);
+            Desktop.MoveMouse(start);
+            Pump(100);
+            Desktop.MouseButton(true);
+            try
+            {
+                Glide(start, new Point(start.X, start.Y - 20), 4);
+                Desktop.MoveMouse(aim);
+                Pump(40);
+                Glide(aim, new Point(aim.X + 1, aim.Y), 2);
+                Assert.True(Desktop.WaitFor(() => view.HandingOverDrop, 2000, () => Pump(20)), "The view didn't hand the drag over.");
+                Glide(new Point(aim.X + 1, aim.Y), aim, 2);
+                Glide(aim, new Point(aim.X + 2, aim.Y + 2), 3);
+                Pump(150);
+            }
+            finally { Desktop.MouseButton(false); }
+
+            Assert.NotNull(ReportStarting(source, "drop forward", 3000));
+            Assert.Equal("activated yes", ReportStarting(source, "activated", 2000));
+            // Hidden as quickly as any other drop: not waiting for the person to click somewhere else.
+            Assert.True(Desktop.WaitFor(() => !view.HandingOverDrop, 2000, () => Pump(20)), "The original stayed out after it took the focus.");
+            Assert.True(WindowInfo.IsConcealed(source.Handle));
+            Assert.Equal(parked, Desktop.BoundsOf(source.Handle));
+            Assert.True(User32.IsWindowVisible(view.Handle), "The view didn't come back.");
+            Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == dragger.Handle, 2000, () => Pump(20)),
+                "The keys didn't go back to the window the drag came from.");
         });
     }
 
