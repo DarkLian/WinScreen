@@ -14,10 +14,12 @@ public sealed class AutomaticUpdatesTests
         internal string? Newer = "9.9.9";
         internal int Looks;
 
+        internal Task<string?>? Answer;
+
         public Task<string?> NewerVersion(CancellationToken cancellation)
         {
             Looks++;
-            return Task.FromResult(Newer);
+            return Answer ?? Task.FromResult(Newer);
         }
 
         public Task<bool> Download(CancellationToken cancellation)
@@ -190,6 +192,24 @@ public sealed class AutomaticUpdatesTests
         Assert.Equal(((string?)null, false), await updates.LookNow());
         using var failing = new AutomaticUpdates(_ => throw new HttpRequestException("offline"), _ => { });
         Assert.Equal(((string?)null, true), await failing.LookNow());
+    }
+
+    /// <summary>
+    /// While a look is under way, one the person asks for can't run. It must not be taken for "up to date": the tray
+    /// asks <see cref="AutomaticUpdates.Busy"/> first and says a check is already going, as an installed copy does.
+    /// </summary>
+    [Fact]
+    public async Task While_a_look_is_under_way_the_copy_says_it_is_busy_rather_than_up_to_date()
+    {
+        var answer = new TaskCompletionSource<string?>();
+        var session = new Session { Answer = answer.Task };
+        using var updates = new AutomaticUpdates(_ => session, _ => { });
+        updates.SetTelling(true);
+        Task timed = updates.Check();
+        Assert.True(updates.Busy);
+        answer.SetResult("9.9.9");
+        await timed;
+        Assert.False(updates.Busy);
     }
 
     [Fact]

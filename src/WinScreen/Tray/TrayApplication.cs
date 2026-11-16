@@ -1341,6 +1341,11 @@ public sealed partial class TrayApplication : ApplicationContext
         if (!VelopackUpdateSession.IsInstalled)
         {
             // A portable copy can't replace itself: it says whether a newer one is out and offers its page (D14).
+            if (_updates.Busy)
+            {
+                Balloon(T("updates.title"), T("updates.alreadyChecking"), ToolTipIcon.Info);
+                return;
+            }
             (string? version, bool failed) = await _updates.LookNow();
             if (version is not null) TellAboutVersion(version);
             else Balloon(T("updates.title"), failed ? T("updates.checkFailed") : T("updates.upToDate"), ToolTipIcon.Info);

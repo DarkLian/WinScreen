@@ -154,6 +154,9 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
     /// At the person's request, for a copy that can't install: whether a newer version is out, and whether the look
     /// failed. Works whatever the setting, since the person asked.
     /// </summary>
+    /// <summary>A check or a look is under way, so another can't start now.</summary>
+    internal bool Busy => _busy;
+
     internal async Task<(string? Version, bool Failed)> LookNow()
     {
         if (_disposed || _busy) return (null, false);
