@@ -223,6 +223,62 @@ public sealed class PipScreenViewTests
         });
     }
 
+    /// <summary>The overlay is dimmed, so words drawn on it let app text show through. They're solid in a box of
+    /// their own instead, which doesn't take the keys or stand in the way of a drag that starts on it.</summary>
+    [Fact]
+    public void The_region_overlay_words_are_solid_and_a_drag_can_start_on_them()
+    {
+        OnUiThread(pump =>
+        {
+            Desktop.GainForegroundRights();
+            Rectangle work = Screen.PrimaryScreen!.WorkingArea;
+            Rectangle area = new(work.Left + 100, work.Top + 100, Math.Min(900, work.Width - 200), Math.Min(560, work.Height - 200));
+            var overlay = new CropOverlay(area);
+            Rectangle? chosen = null;
+            overlay.Chosen += part => chosen = part;
+            try
+            {
+                overlay.ShowOnTop();
+                overlay.Activate();
+                Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == overlay.Handle, 2000, () => pump(20)));
+                pump(200);
+
+                CropOverlay.Instructions words = Assert.Single(overlay.OwnedForms.OfType<CropOverlay.Instructions>());
+                Assert.True(words.Visible);
+                Assert.True(area.Contains(words.Bounds), $"{words.Bounds} is outside {area}.");
+                Point middle = new(words.Left + words.Width / 2, words.Top + words.Height / 2);
+                Point centre = new(area.Left + area.Width / 2, area.Top + area.Height / 2);
+                Assert.True(Math.Abs(middle.X - centre.X) <= 1 && Math.Abs(middle.Y - centre.Y) <= 1, $"{middle} is not the middle {centre}.");
+                Assert.Equal(overlay.Handle, User32.GetForegroundWindow());
+                // The box's corner, inside its padding, is its own solid colour whatever is under the overlay.
+                Color corner = Desktop.ColorOnScreen(new Rectangle(words.Left + 2, words.Top + 2, 6, 6));
+                Assert.True(Desktop.IsNear(corner, words.BackColor, 6), $"The box shows {corner}, not {words.BackColor}.");
+
+                Desktop.MoveMouse(middle);
+                pump(80);
+                Desktop.MouseButton(true);
+                pump(80);
+                Assert.False(words.Visible);
+                for (int step = 1; step <= 8; step++)
+                {
+                    Desktop.MoveMouse(new Point(middle.X + 200 * step / 8, middle.Y + 120 * step / 8));
+                    pump(20);
+                }
+                pump(100);
+                Desktop.MouseButton(false);
+                Assert.True(Desktop.WaitFor(() => chosen is not null, 2000, () => pump(20)));
+                Assert.InRange(chosen!.Value.Width, 195, 205);
+                Assert.InRange(chosen.Value.Height, 115, 125);
+                Assert.True(words.IsDisposed);
+            }
+            finally
+            {
+                if (!overlay.IsDisposed) overlay.Close();
+                pump(100);
+            }
+        });
+    }
+
     [Fact]
     public void A_screen_view_has_nothing_to_fall_back_on()
     {

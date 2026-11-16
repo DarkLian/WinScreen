@@ -76,6 +76,10 @@ internal sealed class InputFrame : Panel
             _hooked.Add(inner);
             inner.Enter += (_, _) => Restyle();
             inner.Leave += (_, _) => Restyle();
+            // In a dialog that opens on the box, Enter comes before the focus does: the fill follows the focus itself.
+            inner.GotFocus += (_, _) => Restyle();
+            inner.LostFocus += (_, _) => Restyle();
+            foreach (Control part in inner.Controls) { part.GotFocus += (_, _) => Restyle(); part.LostFocus += (_, _) => Restyle(); }
             inner.EnabledChanged += (_, _) => Restyle();
             inner.MouseEnter += (_, _) => Hover(true);
             inner.MouseLeave += (_, _) => Hover(false);

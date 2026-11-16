@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
+using WinScreen.Native;
 using WinScreen.Settings;
+using WinScreen.Tests.Support;
 using WinScreen.Tray;
 using WinScreen.Windows;
 using Xunit;
@@ -43,6 +45,41 @@ public sealed class ThemedDialogTests
                     }
             }
             finally { MenuStyle.UseTheme("system"); }
+        });
+    }
+
+    /// <summary>A box with the focus is one colour, the focused one, inside and around the text alike.</summary>
+    [Fact]
+    [Trait("Category", "RealWindows")]
+    public void A_focused_box_in_a_dialog_is_one_colour()
+    {
+        DarkModeTests.OnUiThread(pump =>
+        {
+            Desktop.GainForegroundRights();
+            using var dialog = new RuleDialog(new ProgramSetup { Program = "app" });
+            dialog.Show();
+            dialog.Activate();
+            Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == dialog.Handle, 2000, () => pump(20)));
+            pump(200);
+            TextBox[] boxes = All(dialog).OfType<TextBox>().Where(box => box.Parent is InputFrame).ToArray();
+            Assert.True(boxes.Length >= 2);
+
+            foreach (TextBox box in boxes.Take(2))
+            {
+                if (!box.Focused)
+                {
+                    Rectangle on = box.RectangleToScreen(box.ClientRectangle);
+                    Desktop.ClickOn(new Point(on.Left + on.Width / 2, on.Top + on.Height / 2), dialog.Handle);
+                    Assert.True(Desktop.WaitFor(() => box.Focused, 2000, () => pump(20)));
+                    pump(100);
+                }
+                Color surface = box.Parent!.Parent!.BackColor;
+                Assert.Equal(SettingsStyle.ActiveOn(surface), box.BackColor);
+                foreach (TextBox other in boxes.Where(other => other != box))
+                    Assert.NotEqual(SettingsStyle.ActiveOn(surface), other.BackColor);
+            }
+            dialog.Close();
+            pump(100);
         });
     }
 

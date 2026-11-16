@@ -1,4 +1,5 @@
 ﻿using static WinScreen.Localization.UiText;
+using WinScreen.Native;
 using WinScreen.Pip;
 
 namespace WinScreen.Windows;
@@ -21,6 +22,7 @@ public sealed class CropOverlay : Form
     private ElementFinder? _finder;
     private Rectangle _hint;
     private FoundElement? _hintElement;
+    private Instructions? _words;
 
     public CropOverlay(Rectangle window)
     {
@@ -46,6 +48,8 @@ public sealed class CropOverlay : Form
     {
         Show();
         WindowController.Pin(Handle);
+        _words = new Instructions(this, T("crop.instructions"));
+        _words.ShowOver(_covers);
         _finder = new ElementFinder(Handle);
         _finder.Found += ShowHint;
     }
@@ -75,6 +79,8 @@ public sealed class CropOverlay : Form
     {
         base.OnDpiChanged(e);
         Bounds = _covers;
+        if (_words is { Visible: true })
+            _words.ShowOver(_covers);
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -95,10 +101,6 @@ public sealed class CropOverlay : Form
             e.Graphics.DrawRectangle(pen, _hint);
         }
 
-        const TextFormatFlags centred = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
-                                        TextFormatFlags.WordBreak;
-        TextRenderer.DrawText(e.Graphics, T("crop.instructions"), Font, ClientRectangle,
-            ForeColor, centred);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -113,6 +115,7 @@ public sealed class CropOverlay : Form
             _dragStart = e.Location;
             _selection = Rectangle.Empty;
             _pressed = true;
+            _words?.Hide();
             Invalidate();
         }
     }
@@ -171,6 +174,97 @@ public sealed class CropOverlay : Form
         _finished = true;
         _finder?.Dispose();
         _finder = null;
+        _words?.Close();
         Close();
+    }
+
+    /// <summary>The instructions, solid on a dark box in a window of their own over the dimmed one, so app text
+    /// under the dimming can't show through them. Clicks and the pointer pass through to the overlay.</summary>
+    internal sealed class Instructions : Form
+    {
+        private const int WM_NCHITTEST = 0x0084;
+        private const int WM_MOUSEACTIVATE = 0x0021;
+        private const int HTTRANSPARENT = -1;
+        private const int MA_NOACTIVATE = 3;
+        private const int Widest = 520;
+        private const int Margin_ = 16;
+        private const int Padding_ = 14;
+
+        public Instructions(Form overlay, string words)
+        {
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.Manual;
+            Owner = overlay;
+            Text = words;
+            Font = new Font("Segoe UI", 11f);
+            BackColor = SystemInformation.HighContrast ? SystemColors.Window : Color.FromArgb(32, 32, 32);
+            ForeColor = SystemInformation.HighContrast ? SystemColors.WindowText : Color.White;
+        }
+
+        /// <summary>Shows the words in the middle of an area of the screen, wrapped to fit it.</summary>
+        public void ShowOver(Rectangle area)
+        {
+            Place(area);
+            if (!Visible)
+            {
+                Show();
+                Place(area); // Measured again at the scale of the display it's now on.
+            }
+        }
+
+        private void Place(Rectangle area)
+        {
+            int padding = Dpi.Scale(Padding_, DeviceDpi);
+            int widest = Math.Max(Dpi.Scale(120, DeviceDpi),
+                Math.Min(Dpi.Scale(Widest, DeviceDpi), area.Width - 2 * Dpi.Scale(Margin_, DeviceDpi)));
+            Size text = TextRenderer.MeasureText(Text, Font, new Size(widest - 2 * padding, int.MaxValue),
+                TextFormatFlags.WordBreak);
+            Size size = new(text.Width + 2 * padding, text.Height + 2 * padding);
+            Bounds = new Rectangle(area.Left + (area.Width - size.Width) / 2, area.Top + (area.Height - size.Height) / 2,
+                size.Width, size.Height);
+        }
+
+        protected override bool ShowWithoutActivation => true;
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams parameters = base.CreateParams;
+                parameters.ExStyle |= (int)(User32.WS_EX_NOACTIVATE | User32.WS_EX_TOOLWINDOW | User32.WS_EX_TOPMOST);
+                return parameters;
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            int padding = Dpi.Scale(Padding_, DeviceDpi);
+            Rectangle words = Rectangle.Inflate(ClientRectangle, -padding, -padding);
+            TextRenderer.DrawText(e.Graphics, Text, Font, words, ForeColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.WordBreak);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_NCHITTEST)
+            {
+                m.Result = HTTRANSPARENT;
+                return;
+            }
+            if (m.Msg == WM_MOUSEACTIVATE)
+            {
+                m.Result = MA_NOACTIVATE;
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) Font.Dispose();
+            base.Dispose(disposing);
+        }
     }
 }
