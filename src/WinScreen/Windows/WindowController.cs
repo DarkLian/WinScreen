@@ -101,6 +101,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public bool ReachableWanted { get; set; }
         [NotJournalled("Transient: when a parked window was first seen on screen, not covering a monitor; 0 if not.")]
         public long LooseSince { get; set; }
+        [NotJournalled("Transient: on the screen for a drag to end in it; the journal keeps its home and how it was hidden.")]
+        public bool ShownForDrop { get; set; }
         [NotJournalled("Transient: covered a monitor (full screen) since it was parked.")]
         public bool CoveredAMonitor { get; set; }
         public long? SwitcherBits { get; set; }

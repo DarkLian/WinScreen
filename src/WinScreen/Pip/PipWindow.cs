@@ -197,6 +197,7 @@ public sealed partial class PipWindow : Form
 
         _watch.Tick += (_, _) => FollowSource();
         _autoMove.Tick += (_, _) => MoveAwayFromContent();
+        AllowDrop = true; // A drag over the view goes to its original: see OnDragEnter.
     }
 
     /// <summary>Raised when Windows refuses something, with a message for the person.</summary>
@@ -316,6 +317,7 @@ public sealed partial class PipWindow : Form
     {
         if (_suspended || _cleaned) return;
         _usingOriginal = false; // A minimized view has no picture to hide the original behind; it stays shown.
+        EndDrop();
         StepAside(false);
         CancelPress();
         EndLive();
@@ -639,6 +641,7 @@ public sealed partial class PipWindow : Form
     private void ChangeInteractionMode(bool interactive, bool hidden)
     {
         _usingOriginal = false; // Any other choice about the original replaces "use it, then hide it again".
+        EndDrop();
         _awayFrom = Guid.Empty; // And any choice replaces "hidden while you're on another desktop".
         StepAside(false);
         if (!interactive || !hidden) EndLive();
@@ -1119,6 +1122,137 @@ public sealed partial class PipWindow : Form
         StepAside(true); // The original is in front now; the view would only cover part of it.
         CheckState();
     }
+
+    /// <summary>
+    /// Something dragged onto the view (a file, a picture, some text) goes to the original: a drop can only land in the
+    /// real window under the pointer, and WinScreen can't hand the data on. So the hidden original comes up under the
+    /// pointer at its own size, placed so that the spot the pointer was on in the view is under it, and the view steps
+    /// aside. Windows then offers the drag to the original as to any window. Once the buttons are up it hides again.
+    /// The view itself never takes the drop.
+    /// </summary>
+    protected override void OnDragEnter(DragEventArgs e)
+    {
+        base.OnDragEnter(e);
+        e.Effect = DragDropEffects.None;
+        AskForDrop();
+    }
+
+    /// <summary>Again on each move over the view: a drag that came in over the border reaches the picture later.</summary>
+    protected override void OnDragOver(DragEventArgs e)
+    {
+        base.OnDragOver(e);
+        e.Effect = DragDropEffects.None;
+        AskForDrop();
+    }
+
+    private void AskForDrop()
+    {
+        if (_dropAsked || _dropSince != 0 || !_hideItem.Checked || _usingOriginal || _suspended || _thumbnail is null ||
+            !_origin.IsWindow || !_windows.IsParked(_source) || _lastShown.IsEmpty) return;
+        _dropAsked = true;
+        // After this call returns: the drag is in the middle of asking this window.
+        BeginInvoke(() =>
+        {
+            _dropAsked = false;
+            HandOverDrop();
+        });
+    }
+
+    private bool _dropAsked;
+
+    private void HandOverDrop()
+    {
+        if (IsDisposed || _dropSince != 0 || !_origin.IsAvailable || !_windows.IsParked(_source) || !DragButtonsDown()) return;
+        // Where the pointer is now: it may have gone on into the view since the drag came in at its edge.
+        Point pointer = Cursor.Position;
+        if (!RectangleToScreen(PictureArea).Contains(pointer)) return;
+        EndLive();
+        Point spot = SourceSpotAt(pointer);
+        if (!User32.GetWindowRect(_source, out Rect bounds)) return;
+        Rectangle at = DropPlace(pointer, spot, new Size(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top),
+            Screen.FromPoint(pointer).WorkingArea);
+        try { _windows.ShowParkedForDrop(_source, at.Location); }
+        catch (WindowOperationException failure)
+        {
+            Diagnostics.Log.Swallowed(failure);
+            return;
+        }
+        _dropSince = Environment.TickCount64;
+        _dropReleasedAt = 0;
+        _dropOutsideSince = 0;
+        _dropTookFocus = false;
+        StepAside(true);
+        Diagnostics.Log.Event("view.dropHandedOver", ("program", Diagnostics.LogValue.ProgramOf(_source)));
+    }
+
+    /// <summary>The spot in the original, from its top-left corner, that the view shows at a point on the screen.</summary>
+    internal Point SourceSpotAt(Point screen) => PipGeometry.PointToSource(PointToClient(screen), PictureArea, _lastShown);
+
+    /// <summary>
+    /// Where the original goes for a drop: the spot it shows under the pointer, kept on the pointer's monitor. If it
+    /// has to move to fit, the aim shifts, but the window is in plain sight.
+    /// </summary>
+    internal static Rectangle DropPlace(Point pointer, Point spot, Size size, Rectangle area)
+    {
+        int x = pointer.X - spot.X, y = pointer.Y - spot.Y;
+        x = size.Width >= area.Width ? area.Left : Math.Clamp(x, area.Left, area.Right - size.Width);
+        y = size.Height >= area.Height ? area.Top : Math.Clamp(y, area.Top, area.Bottom - size.Height);
+        return new Rectangle(new Point(x, y), size);
+    }
+
+    /// <summary>
+    /// While the original is out for a drop. The drag is over once both buttons are up (Escape with a button still held
+    /// ends it too, and the release follows). Then it hides, unless the drop opened something of its own or took the
+    /// focus: then it waits, as Use it does, for the focus to go elsewhere. A drag that only passes over, leaving the
+    /// original with a button still down, hides it at once, so it isn't left in the way of where the drag is going.
+    /// </summary>
+    private void FollowDrop()
+    {
+        if (_dropSince == 0) return;
+        if (!_origin.IsAvailable || !_windows.IsShownForDrop(_source)) { EndDrop(); return; }
+        long now = Environment.TickCount64;
+        if (DragButtonsDown())
+        {
+            bool inside = User32.GetWindowRect(_source, out Rect r) &&
+                Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).Contains(Cursor.Position);
+            if (inside) _dropOutsideSince = 0;
+            else if (_dropOutsideSince == 0) _dropOutsideSince = now;
+            else if (now - _dropOutsideSince >= DropPassedBy) EndDrop();
+            return;
+        }
+        if (_dropReleasedAt == 0) _dropReleasedAt = now;
+        nint foreground = User32.GetForegroundWindow();
+        User32.GetWindowThreadProcessId(_source, out uint process);
+        if (foreground == _source || (foreground != 0 && SourcePopups.IsPopupOf(foreground, _source, process)))
+        {
+            _dropTookFocus = true;
+            _dropReleasedAt = now;
+            return;
+        }
+        if (now - _dropReleasedAt < (_dropTookFocus ? UseOriginalGrace : DropSettles)) return;
+        EndDrop();
+    }
+
+    /// <summary>The original back in its hiding place and the view back as it was. Safe to call at any time.</summary>
+    private void EndDrop()
+    {
+        if (_dropSince == 0) return;
+        _dropSince = 0;
+        try { _windows.ReturnToParking(_source); }
+        catch (WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
+        if (!_usingOriginal) StepAside(false);
+        Diagnostics.Log.Event("view.dropEnded", ("tookFocus", _dropTookFocus));
+    }
+
+    private static bool DragButtonsDown() =>
+        (User32.GetAsyncKeyState(0x01) & 0x8000) != 0 || (User32.GetAsyncKeyState(0x02) & 0x8000) != 0;
+
+    private long _dropSince, _dropReleasedAt, _dropOutsideSince;
+    private bool _dropTookFocus;
+    private const long DropSettles = 500, DropPassedBy = 300;
+
+    /// <summary>True while the original is out for something dragged onto the view, for tests.</summary>
+    internal bool HandingOverDrop => _dropSince != 0;
 
     /// <summary>The view and the parts of it that were showing, put out of sight while the original is in use.</summary>
     private nint[] _steppedAside = [];
@@ -1648,7 +1782,9 @@ public sealed partial class PipWindow : Form
 
         string title = T("pip.titlePrefix") + _origin.Title;
         if (Text != title) Text = title;
-        RevealIfActivatedElsewhere();
+        if (_dropSince == 0) RevealIfActivatedElsewhere();
+        else _sourceWasFocused = User32.GetForegroundWindow() == _source; // A drop may focus it; that isn't asking for it.
+        FollowDrop();
         FollowOriginalInUse();
         FinishGoingTo();
         if (_suspended) return;

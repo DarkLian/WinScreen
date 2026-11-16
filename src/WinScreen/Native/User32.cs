@@ -327,6 +327,9 @@ internal static partial class User32
     public static partial short GetKeyState(int virtualKey);
 
     [LibraryImport("user32.dll")]
+    public static partial short GetAsyncKeyState(int virtualKey);
+
+    [LibraryImport("user32.dll")]
     public static partial nint GetShellWindow();
 
     [LibraryImport("user32.dll")]

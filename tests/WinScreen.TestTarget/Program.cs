@@ -229,6 +229,10 @@ internal static class Program
                         window.BeginInvoke(window.RecordMessages);
                     if (parts[0] == "browserlike")
                         window.BeginInvoke(window.BehaveLikeBrowser);
+                    if (parts[0] == "droptarget")
+                        window.BeginInvoke(window.TakeDrops);
+                    if (parts[0] == "dragsource")
+                        window.BeginInvoke(() => window.StartDragsWith(parts[1]));
                     if (parts[0] == "captionhit")
                         window.BeginInvoke(() => window.UseCaptionHit(int.Parse(parts[1])));
                     if (parts[0] == "titlebar")
@@ -517,6 +521,34 @@ internal sealed partial class TargetForm : Form
     {
         base.OnMouseDown(e);
         Report($"click {e.X} {e.Y} real={InputIsReal}");
+        if (_dragText is { } text && e.Button == MouseButtons.Left)
+        {
+            // Windows' own drag and drop, as File Explorer or a browser starts it: it follows the real pointer.
+            DragDropEffects done = DoDragDrop(text, DragDropEffects.Copy);
+            Report("dragged " + done);
+        }
+    }
+
+    private string? _dragText;
+
+    /// <summary>A press on the window starts a real drag of this text.</summary>
+    public void StartDragsWith(string text)
+    {
+        _dragText = text;
+        Report("dragsource");
+    }
+
+    /// <summary>Takes text dropped on it and reports it with the spot it landed on, in its own coordinates.</summary>
+    public void TakeDrops()
+    {
+        AllowDrop = true;
+        DragEnter += (_, e) => e.Effect = e.Data?.GetDataPresent(DataFormats.UnicodeText) == true ? DragDropEffects.Copy : DragDropEffects.None;
+        DragDrop += (_, e) =>
+        {
+            Point at = PointToClient(new Point(e.X, e.Y));
+            Report($"drop {e.Data?.GetData(DataFormats.UnicodeText)} {at.X} {at.Y}");
+        };
+        Report("droptarget");
     }
 
     protected override void OnKeyPress(KeyPressEventArgs e)

@@ -189,6 +189,22 @@ internal sealed class TargetProcess : IDisposable
         if (NextReport() != "recordmessages") throw new InvalidOperationException("Message recording did not start.");
     }
 
+    /// <summary>Makes the window take dropped text and report "drop TEXT X Y", in its own coordinates.</summary>
+    internal void TakeDrops()
+    {
+        _process.StandardInput.WriteLine("droptarget");
+        _process.StandardInput.Flush();
+        if (NextReport() != "droptarget") throw new InvalidOperationException("The target did not start taking drops.");
+    }
+
+    /// <summary>Makes a left press on the window start a real drag of this text (one word), as File Explorer starts one.</summary>
+    internal void StartDragsWith(string text)
+    {
+        _process.StandardInput.WriteLine("dragsource " + text);
+        _process.StandardInput.Flush();
+        if (NextReport() != "dragsource") throw new InvalidOperationException("The target did not become a drag source.");
+    }
+
     /// <summary>Makes the window handle the mouse as a browser page does, and report the messages involved.</summary>
     internal void BehaveLikeBrowser()
     {

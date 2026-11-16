@@ -101,6 +101,9 @@ turn on **Always show title bar** in **Size and options**, or for every new view
   **Settings → Picture-in-Picture → Using apps through a view** and turn on **Show original** for it. Apps built with Java always work this way.
   If a click on a view doesn't get through, the view says so. Click that note to use the original instead.
   If it keeps happening with an app, the note offers to turn on **Show original** for it.
+- **Drag something onto a view**, such as a file, a picture or some text, and the original window comes up under the
+  pointer so you can drop it there. It hides again when you let go. This doesn't work while WinScreen runs as
+  administrator.
 
 Views pause direct use while a WinScreen menu or the tray overflow panel is open.
 

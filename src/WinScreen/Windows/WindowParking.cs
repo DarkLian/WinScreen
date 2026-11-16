@@ -79,9 +79,51 @@ public sealed partial class WindowController
         {
             if (!_changed.TryGetValue(window, out var state) || !state.Parked) return;
             state.Identity.Require();
+            state.ShownForDrop = false;
             Conceal(window, state);
             FinishPeek(window, state);
             SaveJournal();
+        }
+    }
+
+    /// <summary>
+    /// Brings a parked original onto the screen with its top-left corner at a point, at its own size, in plain sight
+    /// and taking the pointer, above everything, without activating it: a drag over its view ends in it, since a drop
+    /// can only go to the real window under the pointer. Its home and its record stay as they were, so recovery and
+    /// closing the view put it back where it was. <see cref="ReturnToParking"/> hides and parks it again.
+    /// </summary>
+    internal void ShowParkedForDrop(nint window, Point topLeft)
+    {
+        lock (_gate)
+        {
+            if (!_changed.TryGetValue(window, out var state) || !state.Parked || !User32.IsWindow(window)) return;
+            state.Identity.Require();
+            state.ShownForDrop = true;
+            state.LooseSince = 0;
+            if (!User32.SetWindowPos(window, User32.HWND_TOPMOST, topLeft.X, topLeft.Y, 0, 0,
+                    User32.SWP_NOSIZE | User32.SWP_NOACTIVATE)) throw Failure(T("actions.move"), window);
+            ApplyAlpha(window, state, state.AlphaBeforeHiding);
+            WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
+        }
+    }
+
+    internal bool IsShownForDrop(nint window)
+    {
+        lock (_gate) return _changed.TryGetValue(window, out var state) && state.ShownForDrop;
+    }
+
+    /// <summary>After <see cref="ShowParkedForDrop"/>: hidden as before, and off the screen again.</summary>
+    internal void ReturnToParking(nint window)
+    {
+        lock (_gate)
+        {
+            if (!_changed.TryGetValue(window, out var state) || !state.ShownForDrop) return;
+            state.ShownForDrop = false;
+            if (!User32.IsWindow(window) || !state.Parked) return;
+            state.Identity.Require();
+            Conceal(window, state);
+            Repark(window);
+            if (state.HoverParking) SetParkedHoverSurface(window, true);
         }
     }
 
@@ -103,6 +145,7 @@ public sealed partial class WindowController
             if (!_changed.TryGetValue(window, out var state) || !state.Parked || !User32.IsWindow(window)) return;
             state.Identity.Require();
             state.ReachableWanted = reachable;
+            if (state.ShownForDrop) return; // Its own look while on the screen; parked again, it follows this.
             ApplyReachable(window, state, reachable && OffScreen(window));
         }
     }
@@ -131,7 +174,7 @@ public sealed partial class WindowController
     {
         lock (_gate)
         {
-            if (!_changed.TryGetValue(window, out var state) || !state.Parked || !User32.IsWindow(window)) return;
+            if (!_changed.TryGetValue(window, out var state) || !state.Parked || state.ShownForDrop || !User32.IsWindow(window)) return;
             long style = ReadExStyle(window);
             if (state.Layered && (style & User32.WS_EX_LAYERED) == 0)
             {
