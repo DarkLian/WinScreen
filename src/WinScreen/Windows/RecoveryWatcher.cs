@@ -65,9 +65,23 @@ internal sealed class RecoveryWatcher : IDisposable
         }
     }
 
+    /// <summary>
+    /// Tells the watcher to go, and ends it if it is still there. A watcher still starting opens the stop signal only
+    /// after this copy has closed it; the signal is then gone, and if this copy exits next, the watcher would take a
+    /// normal close for a death and run a recovery (reading the settings and writing a log beside a closed app). It
+    /// recovers only after this copy has died, so while this copy is alive, ending it loses nothing.
+    /// </summary>
     private void Stop()
     {
         _stop?.Set();
+        if (_watcher is { } watcher)
+        {
+            try { watcher.Kill(); }
+            catch (Exception gone) when (gone is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                Diagnostics.Log.Swallowed(gone); // Already gone, or exiting on its own.
+            }
+        }
         _stop?.Dispose();
         _stop = null;
         _watcher?.Dispose();

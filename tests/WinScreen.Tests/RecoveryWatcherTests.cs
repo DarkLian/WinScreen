@@ -24,12 +24,33 @@ public sealed class RecoveryWatcherTests
         }
     }
 
+    /// <summary>A process that waits half a minute, standing in for a watcher.</summary>
+    private static Process Waiting() =>
+        Process.Start(new ProcessStartInfo("cmd.exe", "/c ping -n 30 127.0.0.1") { CreateNoWindow = true, UseShellExecute = false })!;
+
+    /// <summary>
+    /// A watcher told to go is ended, not trusted to see the signal: one still starting would find the signal gone
+    /// once this copy closes it, and take a normal close for a death.
+    /// </summary>
+    [Fact]
+    public void A_watcher_told_to_go_is_gone_even_if_it_never_saw_the_signal()
+    {
+        int id = 0;
+        using var watcher = new RecoveryWatcher(_ => { Process started = Waiting(); id = started.Id; return started; });
+        watcher.Follow(true);
+        Assert.NotEqual(0, id);
+        // Opened apart from the watcher's own object, which it disposes when it lets the copy go.
+        using Process copy = Process.GetProcessById(id);
+        watcher.Follow(false);
+        Assert.True(copy.WaitForExit(3000), "A watcher that never looked at the signal kept running.");
+    }
+
     [Fact]
     public void A_failed_launch_is_retried_after_a_short_backoff()
     {
         int attempts = 0;
         using var watcher = new RecoveryWatcher(_ => ++attempts == 1
-            ? throw new System.ComponentModel.Win32Exception(5) : Process.GetCurrentProcess());
+            ? throw new System.ComponentModel.Win32Exception(5) : Waiting());
         watcher.Follow(true);
         watcher.Follow(true);
         Assert.Equal(1, attempts);
