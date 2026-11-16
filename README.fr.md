@@ -55,25 +55,6 @@ L'effet verre n'atténue que l'arrière-plan. Réglez une fenêtre une fois, app
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="L'effet verre n'atténue que l'arrière-plan. Réglez une fenêtre une fois, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.">
 </p>
 
-## Menus
-
-<p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="Paramètres de WinScreen, page General, en thème sombre">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="Le menu d'une fenêtre, avec le menu Effects ouvert">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="Paramètres, page Appearance, avec des curseurs d'opacité">
-</p>
-
-## Barre d'outils et ancres
-
-<p align="center">
-  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="La barre d'outils sur la barre de titre d'une fenêtre">
-  <img src="docs/assets/screenshots/anchors.png" width="364" alt="Trois ancres au bord de l'écran, sans arrière-plan">
-</p>
-
 ## Utilisez vos applications dans une petite vue
 
 Appuyez sur **Ctrl+Alt+P** sur une fenêtre pour en obtenir une petite vue en direct qui reste au premier plan. Activez

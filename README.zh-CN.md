@@ -53,25 +53,6 @@
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="玻璃效果只淡化背景。把窗口设置好，按 Ctrl+Alt+Shift+S，下次打开时就是这个样子。">
 </p>
 
-## 菜单
-
-<p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="WinScreen 设置的“常规”页面（深色）">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="窗口菜单，已打开“效果”子菜单">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="设置的“外观”页面，用滑块调整不透明度">
-</p>
-
-## 工具栏和锚点
-
-<p align="center">
-  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="窗口标题栏上的工具栏">
-  <img src="docs/assets/screenshots/anchors.png" width="364" alt="屏幕边缘的三个锚点，无背景">
-</p>
-
 ## 通过小视图使用应用
 
 在窗口上按 **Ctrl+Alt+P**，即可打开一个置顶的小实时视图。在视图菜单中开启**交互**，就能直接在视图里使用应用：

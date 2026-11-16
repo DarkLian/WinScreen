@@ -53,25 +53,6 @@ Glass fades only the background. Set a window up once, press Ctrl+Alt+Shift+S, a
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glass fades only the background. Set a window up once, press Ctrl+Alt+Shift+S, and it opens that way next time.">
 </p>
 
-## Menus
-
-<p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="WinScreen Settings, General page, in the dark look">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="A window's menu, with the Effects menu open">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="Settings, Appearance page, with sliders for opacity">
-</p>
-
-## Toolbar and Anchors
-
-<p align="center">
-  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="The toolbar on a window's title bar">
-  <img src="docs/assets/screenshots/anchors.png" width="364" alt="Three Anchors at the edge of the screen, with no background">
-</p>
-
 ## Use apps through a small view
 
 Press **Ctrl+Alt+P** on a window for a small live view of it that stays on top. Turn on **Interactive** in the view's

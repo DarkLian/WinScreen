@@ -55,25 +55,6 @@ Cristal difumina solo el fondo. Configura una ventana una vez, pulsa Ctrl+Alt+Ma
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Cristal difumina solo el fondo. Configura una ventana una vez, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.">
 </p>
 
-## Menús
-
-<p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="Configuración de WinScreen, página General, en el aspecto oscuro">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="El menú de una ventana, con el menú Effects abierto">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="Configuración, página Appearance, con controles deslizantes de opacidad">
-</p>
-
-## Barra de herramientas y anclas
-
-<p align="center">
-  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="La barra de herramientas en la barra de título de una ventana">
-  <img src="docs/assets/screenshots/anchors.png" width="364" alt="Tres anclas en el borde de la pantalla, sin fondo">
-</p>
-
 ## Usa aplicaciones desde una vista pequeña
 
 Pulsa **Ctrl+Alt+P** sobre una ventana para tener una pequeña vista en vivo de ella que se queda encima. Activa

@@ -55,25 +55,6 @@ Vidro esmaece só o fundo. Ajuste uma janela uma vez, pressione Ctrl+Alt+Shift+S
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Vidro esmaece só o fundo. Ajuste uma janela uma vez, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.">
 </p>
 
-## Menus
-
-<p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="Configurações do WinScreen, página General, no tema escuro">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="O menu de uma janela, com o menu Effects aberto">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="Configurações, página Appearance, com controles deslizantes de opacidade">
-</p>
-
-## Barra de ferramentas e âncoras
-
-<p align="center">
-  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="A barra de ferramentas na barra de título de uma janela">
-  <img src="docs/assets/screenshots/anchors.png" width="364" alt="Três âncoras na borda da tela, sem fundo">
-</p>
-
 ## Use aplicativos por uma pequena visualização
 
 Pressione **Ctrl+Alt+P** em uma janela para ter uma pequena visualização ao vivo dela, que fica sempre visível. Ative

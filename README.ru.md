@@ -55,25 +55,6 @@
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Стекло делает прозрачным только фон. Настройте окно один раз, нажмите Ctrl+Alt+Shift+S, и в следующий раз оно откроется так же.">
 </p>
 
-## Меню
-
-<p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="Параметры WinScreen, страница General, тёмная тема">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="Меню окна с открытым меню Effects">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="Параметры, страница Appearance, с ползунками прозрачности">
-</p>
-
-## Панель инструментов и якоря
-
-<p align="center">
-  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="Панель инструментов в заголовке окна">
-  <img src="docs/assets/screenshots/anchors.png" width="364" alt="Три якоря у края экрана, без фона">
-</p>
-
 ## Пользуйтесь приложениями через маленькое окно
 
 Нажмите **Ctrl+Alt+P** в любом окне, и появится его маленькая живая копия поверх всех окон. Включите **Interactive** в

@@ -55,25 +55,6 @@
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="유리 효과는 배경만 흐리게 합니다. 창을 한 번 맞춰 두고 Ctrl+Alt+Shift+S를 누르면 다음부터 그대로 열립니다.">
 </p>
 
-## 메뉴
-
-<p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="WinScreen 설정, General 페이지, 어두운 테마">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="창 메뉴, Effects 메뉴를 연 모습">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="설정, Appearance 페이지, 불투명도 슬라이더">
-</p>
-
-## 도구 모음과 앵커
-
-<p align="center">
-  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="창 제목 표시줄에 나타난 도구 모음">
-  <img src="docs/assets/screenshots/anchors.png" width="364" alt="화면 가장자리에 있는 앵커 3개, 배경 없음">
-</p>
-
 ## 작은 화면으로 앱 사용하기
 
 창에서 **Ctrl+Alt+P**를 누르면 항상 위에 떠 있는 작은 실시간 화면이 생깁니다. 화면 메뉴에서 **Interactive**를 켜면

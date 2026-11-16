@@ -53,25 +53,6 @@
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="玻璃效果只淡化背景。把視窗設定好，按 Ctrl+Alt+Shift+S，下次開啟時就是這個樣子。">
 </p>
 
-## 選單
-
-<p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="WinScreen 設定的「一般」頁面（深色）">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="視窗選單，已開啟「效果」子選單">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="設定的「外觀」頁面，用滑桿調整不透明度">
-</p>
-
-## 工具列和錨點
-
-<p align="center">
-  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="視窗標題列上的工具列">
-  <img src="docs/assets/screenshots/anchors.png" width="364" alt="螢幕邊緣的三個錨點，無背景">
-</p>
-
 ## 透過小檢視使用應用程式
 
 在視窗上按 **Ctrl+Alt+P**，即可開啟一個置頂的小即時檢視。在檢視選單中開啟**互動**，就能直接在檢視裡使用應用程式：

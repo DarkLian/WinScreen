@@ -55,25 +55,6 @@ Glas blendet nur den Hintergrund aus. Richte ein Fenster einmal ein, drück Strg
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glas blendet nur den Hintergrund aus. Richte ein Fenster einmal ein, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.">
 </p>
 
-## Menüs
-
-<p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="WinScreen-Einstellungen, Seite General, im dunklen Design">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="Das Menü eines Fensters, mit geöffnetem Effects-Menü">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="Einstellungen, Seite Appearance, mit Schiebereglern für die Deckkraft">
-</p>
-
-## Symbolleiste und Anker
-
-<p align="center">
-  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="Die Symbolleiste auf der Titelleiste eines Fensters">
-  <img src="docs/assets/screenshots/anchors.png" width="364" alt="Drei Anker am Bildschirmrand, ohne Hintergrund">
-</p>
-
 ## Apps über eine kleine Ansicht benutzen
 
 Drück **Strg+Alt+P** auf einem Fenster, und du bekommst eine kleine Live-Ansicht davon, die immer im Vordergrund bleibt.

@@ -55,25 +55,6 @@
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Скло робить прозорим лише тло. Налаштуйте вікно один раз, натисніть Ctrl+Alt+Shift+S, і наступного разу воно відкриється так само.">
 </p>
 
-## Меню
-
-<p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="Параметри WinScreen, сторінка General, темна тема">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="Меню вікна з відкритим меню Effects">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="Параметри, сторінка Appearance, з повзунками прозорості">
-</p>
-
-## Панель інструментів і якорі
-
-<p align="center">
-  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="Панель інструментів у заголовку вікна">
-  <img src="docs/assets/screenshots/anchors.png" width="364" alt="Три якорі біля краю екрана, без тла">
-</p>
-
 ## Користуйтеся застосунками через маленьке вікно
 
 Натисніть **Ctrl+Alt+P** у будь-якому вікні, і з'явиться його маленька жива копія поверх усіх вікон. Увімкніть

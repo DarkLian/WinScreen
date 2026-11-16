@@ -55,25 +55,6 @@ WinScreen のアプリとユーザーガイドは、英語と中国語のみで�
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="ガラス効果は背景だけを薄くします。ウィンドウを一度整えて Ctrl+Alt+Shift+S を押せば、次からその状態で開きます。">
 </p>
 
-## メニュー
-
-<p align="center">
-  <img src="docs/assets/screenshots/settings-general.png" width="880" alt="WinScreen の設定画面、General ページ、ダーク表示">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/window-menu.png" width="360" alt="ウィンドウのメニュー、Effects メニューを開いたところ">
-</p>
-<p align="center">
-  <img src="docs/assets/screenshots/settings-appearance.png" width="880" alt="設定画面、Appearance ページ、不透明度のスライダー">
-</p>
-
-## ツールバーとアンカー
-
-<p align="center">
-  <img src="docs/assets/screenshots/toolbar.png" width="486" alt="ウィンドウのタイトルバーに出るツールバー">
-  <img src="docs/assets/screenshots/anchors.png" width="364" alt="画面の端にある 3 つのアンカー、背景なし">
-</p>
-
 ## 小さなビューからアプリを使う
 
 ウィンドウで **Ctrl+Alt+P** を押すと、そのウィンドウの小さなライブビューが常に手前に表示されます。ビューのメニューで
