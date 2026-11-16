@@ -14,14 +14,17 @@ internal static unsafe partial class VirtualDesktopsInternal
 {
     /// <summary>
     /// The versions of the manager interface, newest first. Windows changes the id whenever the layout changes, so an id
-    /// that answers says which slots to call. Asking for an id Windows doesn't have is simply refused.
+    /// that answers says which slots to call. Asking for an id Windows doesn't have is simply refused. Only a version
+    /// someone has called on a real Windows is used: a wrong slot is a call into the shell with the wrong arguments,
+    /// which nothing can catch. The others are kept for when they are measured (roadmap 12.5, TD-61); until then those
+    /// Windows versions get the documented behaviour (INV-19).
     /// </summary>
-    internal static readonly (Guid Manager, int FindDesktop, string Windows)[] Known =
+    internal static readonly (Guid Manager, int FindDesktop, string Windows, bool Measured)[] Known =
     [
-        (new("53F5CA0B-158F-4124-900C-057158060B27"), 14, "Windows 11 24H2 and later (measured on 26300)"),
-        (new("A3175F2D-239C-4BD2-8AA0-EEBA8B0B138E"), 14, "Windows 11 22H2/23H2"),
-        (new("B2F925B9-5A0F-4D2E-9F4D-2B1507593C10"), 13, "Windows 11 21H2"),
-        (new("F31574D6-B682-4CDC-BD56-1827860ABEC6"), 12, "Windows 10"),
+        (new("53F5CA0B-158F-4124-900C-057158060B27"), 14, "Windows 11 24H2 and later (measured on 26300)", true),
+        (new("A3175F2D-239C-4BD2-8AA0-EEBA8B0B138E"), 14, "Windows 11 22H2/23H2", false),
+        (new("B2F925B9-5A0F-4D2E-9F4D-2B1507593C10"), 13, "Windows 11 21H2", false),
+        (new("F31574D6-B682-4CDC-BD56-1827860ABEC6"), 12, "Windows 10", false),
     ];
 
     private const int MoveViewToDesktop = 4; // The same slot in every version above.
@@ -51,8 +54,9 @@ internal static unsafe partial class VirtualDesktopsInternal
             try
             {
                 var query = (delegate* unmanaged[Stdcall]<nint, Guid*, Guid*, nint*, int>)(*(nint**)provider)[3];
-                foreach ((Guid id, int find, _) in Known)
+                foreach ((Guid id, int find, _, bool measured) in Known)
                 {
+                    if (!measured) continue;
                     Guid service = ManagerService, iid = id;
                     nint manager;
                     if (query(provider, &service, &iid, &manager) == 0 && manager != 0)

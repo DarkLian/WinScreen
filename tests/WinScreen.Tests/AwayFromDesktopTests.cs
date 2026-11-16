@@ -18,6 +18,15 @@ public sealed class AwayFromDesktopTests
         Assert.All(VirtualDesktopsInternal.Known, row => Assert.InRange(row.FindDesktop, 12, 14));
     }
 
+    /// <summary>
+    /// Only versions called on a real Windows are used (TD-61): the Windows 10 and Windows 11 21H2 to 23H2 rows wait to
+    /// be measured, and get the documented behaviour meanwhile. Marking one measured is a deliberate change here.
+    /// </summary>
+    [Fact]
+    public void Only_measured_desktop_interfaces_are_used() =>
+        Assert.Equal(["Windows 11 24H2 and later (measured on 26300)"],
+            VirtualDesktopsInternal.Known.Where(row => row.Measured).Select(row => row.Windows));
+
     [Fact]
     public void An_original_on_another_desktop_is_hidden_for_now() =>
         Assert.Equal(Step.Hide, AwayFromDesktop.Decide(Guid.Empty, mayHide: true, originalHere: false, Home, Other, null));

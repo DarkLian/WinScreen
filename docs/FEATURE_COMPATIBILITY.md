@@ -29,9 +29,9 @@ Paths are relative to `src/WinScreen/` unless they start with `tests/`.
 - **Enhanced hover** needs an x64 PC and a 64-bit app.
 - **Snap Layouts** from Windows 11 aren't offered while moving a window with Alt+drag; WinScreen snaps to edges itself.
 - **Virtual desktops:** views and Anchors show on every desktop (Anchors can be kept to their window's). A view keeps
-  updating while you're on another desktop. A window kept hidden by a view goes back to its own desktop when it's shown
-  again; that move uses an undocumented part of Windows, so where it isn't available the window stays on the desktop
-  you're on.
+  updating while you're on another desktop. On Windows 11 24H2 and later, a window kept hidden by a view goes back to
+  its own desktop when it's shown again; that move uses an undocumented part of Windows, so elsewhere, or where it
+  isn't available, the window stays on the desktop you're on.
 
 ## Supported systems
 
@@ -401,8 +401,8 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 ## Known gaps and things to check
 
 - **Moving a window back to its own virtual desktop** relies on an undocumented Windows interface, checked against
-  the documented answer after every move. A Windows update can stop it; the window then stays on the desktop you're
-  on, as before 1.1.0.
+  the documented answer after every move. It is used only on Windows 11 24H2 and later, the versions it was tried on;
+  elsewhere, or if a Windows update stops it, the window stays on the desktop you're on, as before 1.1.0.
 - **Win 11 Snap Layouts panel** and Snap Assist aren't available to Alt-drag (no public API). Edge snapping is
   WinScreen's own.
 - **Elevated windows:** most changes find out they can't reach one when they try, and then say so; gestures, the
