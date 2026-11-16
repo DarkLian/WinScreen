@@ -25,6 +25,12 @@
 
 ## 실제 모습
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="YouTube에서 5분 데모 보기"></a>
+</p>
+
+<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>YouTube에서 5분 데모 보기</strong></a></p>
+
 코드 편집기 위의 작은 화면 두 개: 하나는 동영상을 재생하고, 다른 하나는 화면 안에서 바로 사용합니다. 다른 가상 데스크톱으로 가도 그대로 따라옵니다.
 
 <p align="center">

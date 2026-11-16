@@ -23,6 +23,12 @@
 
 ## 实际效果
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="在 YouTube 上观看 5 分钟演示"></a>
+</p>
+
+<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>在 YouTube 上观看 5 分钟演示</strong></a></p>
+
 代码编辑器上方的两个视图：一个播放视频，另一个可以直接在视图里使用。切换到另一个虚拟桌面，它们也还在。
 
 <p align="center">

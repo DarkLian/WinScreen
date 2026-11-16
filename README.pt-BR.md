@@ -25,6 +25,12 @@ Por enquanto, o aplicativo e o guia estão só em inglês e chinês.
 
 ## Veja funcionando
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Veja a demonstração de 5 minutos no YouTube"></a>
+</p>
+
+<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Veja a demonstração de 5 minutos no YouTube</strong></a></p>
+
 Duas visualizações sobre um editor de código: uma toca um vídeo, a outra você usa direto na visualização. Elas continuam com você em outra área de trabalho virtual.
 
 <p align="center">

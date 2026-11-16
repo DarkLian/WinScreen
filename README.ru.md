@@ -25,6 +25,12 @@
 
 ## Как это выглядит
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Смотреть 5-минутное демо на YouTube"></a>
+</p>
+
+<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Смотреть 5-минутное демо на YouTube</strong></a></p>
+
 Две копии поверх редактора кода: одна показывает видео, а второй можно пользоваться прямо в копии. На другом виртуальном рабочем столе они остаются с вами.
 
 <p align="center">

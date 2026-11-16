@@ -25,6 +25,12 @@ Die App und die Anleitung gibt es bisher nur auf Englisch und Chinesisch.
 
 ## So sieht es aus
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Die 5-minütige Demo auf YouTube ansehen"></a>
+</p>
+
+<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Die 5-minütige Demo auf YouTube ansehen</strong></a></p>
+
 Zwei Ansichten über einem Code-Editor: Eine spielt ein Video ab, die andere benutzt du direkt in der Ansicht. Auch auf einem anderen virtuellen Desktop bleiben sie bei dir.
 
 <p align="center">

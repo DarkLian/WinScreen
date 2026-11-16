@@ -23,6 +23,12 @@
 
 ## 實際效果
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="在 YouTube 上觀看 5 分鐘示範"></a>
+</p>
+
+<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>在 YouTube 上觀看 5 分鐘示範</strong></a></p>
+
 程式碼編輯器上方的兩個檢視：一個播放影片，另一個可以直接在檢視裡使用。切換到另一個虛擬桌面，它們也還在。
 
 <p align="center">

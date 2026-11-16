@@ -23,6 +23,12 @@
 
 ## See it in action
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Watch the 5-minute demo on YouTube"></a>
+</p>
+
+<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Watch the 5-minute demo on YouTube</strong></a></p>
+
 Two views over a code editor: one plays a video, the other you use right inside the view. They stay with you on another virtual desktop.
 
 <p align="center">
