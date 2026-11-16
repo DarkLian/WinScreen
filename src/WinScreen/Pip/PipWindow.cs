@@ -197,7 +197,9 @@ public sealed partial class PipWindow : Form
 
         _watch.Tick += (_, _) => FollowSource();
         _autoMove.Tick += (_, _) => MoveAwayFromContent();
-        AllowDrop = true; // A drag over the view goes to its original: see OnDragEnter.
+        // A drag over the view goes to its original: see OnDragEnter. Windows takes drops only on a thread set up for them,
+        // as WinScreen's own is; anywhere else the view would fail to open.
+        AllowDrop = Thread.CurrentThread.GetApartmentState() == ApartmentState.STA;
     }
 
     /// <summary>Raised when Windows refuses something, with a message for the person.</summary>

@@ -43,8 +43,10 @@ public sealed class DropIntoViewTests
 
     private static Point Middle(Rectangle r) => new(r.Left + r.Width / 2, r.Top + r.Height / 2);
 
-    [Fact]
-    public void A_drag_onto_a_view_drops_into_the_original_at_the_spot_shown_and_it_hides_again()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_drag_onto_a_view_drops_into_the_original_at_the_spot_shown_and_it_hides_again(bool interactive)
     {
         using var source = new TargetProcess(new Rectangle(60, 80, 600, 400), "C81E1E", "WinScreen drop target");
         using var dragger = new TargetProcess(new Rectangle(760, 600, 300, 200), "1E64C8", "WinScreen drag source");
@@ -54,10 +56,11 @@ public sealed class DropIntoViewTests
         {
             Desktop.GainForegroundRights();
             var windows = new WindowController([]);
-            using var view = new PipWindow(source.Handle, windows);
+            using var view = new PipWindow(source.Handle, windows) { AllowInteractive = true };
             view.ShowOnTop();
             view.Location = new Point(760, 80);
-            view.SetOriginalHidden(true);
+            if (interactive) view.SetInteractive(true);
+            else view.SetOriginalHidden(true);
             Pump(800);
             Assert.True(windows.IsParked(source.Handle));
             Rectangle parked = Desktop.BoundsOf(source.Handle);
@@ -109,8 +112,57 @@ public sealed class DropIntoViewTests
             Assert.True(User32.IsWindowVisible(view.Handle), "The view didn't come back.");
 
             // Its home is kept: Keep hidden off puts it back where it was before the view.
+            if (interactive) view.SetInteractive(false);
             view.SetOriginalHidden(false);
             Assert.Equal(new Rectangle(60, 80, 600, 400), Desktop.BoundsOf(source.Handle));
+        });
+    }
+
+    [Fact]
+    public void A_drag_cancelled_with_Escape_over_the_original_drops_nothing_and_it_hides_again()
+    {
+        using var source = new TargetProcess(new Rectangle(60, 80, 600, 400), "C81E1E", "WinScreen drop target");
+        using var dragger = new TargetProcess(new Rectangle(760, 600, 300, 200), "1E64C8", "WinScreen drag source");
+        source.TakeDrops();
+        dragger.StartDragsWith("cancelled");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            var windows = new WindowController([]);
+            using var view = new PipWindow(source.Handle, windows);
+            view.ShowOnTop();
+            view.Location = new Point(760, 80);
+            view.SetOriginalHidden(true);
+            Pump(800);
+            Rectangle parked = Desktop.BoundsOf(source.Handle);
+            Point aim = Middle(view.RectangleToScreen(view.ClientRectangle));
+            Point start = Middle(Desktop.BoundsOf(dragger.Handle));
+
+            Desktop.RequireWindowAt(start, dragger.Handle);
+            Desktop.MoveMouse(start);
+            Pump(100);
+            Desktop.MouseButton(true);
+            try
+            {
+                Glide(start, new Point(start.X, start.Y - 20), 4);
+                Desktop.MoveMouse(aim);
+                Pump(40);
+                Glide(aim, new Point(aim.X + 1, aim.Y), 2);
+                Assert.True(Desktop.WaitFor(() => view.HandingOverDrop, 2000, () => Pump(20)), "The view didn't hand the drag over.");
+                Glide(new Point(aim.X + 1, aim.Y), aim, 2);
+                Desktop.Press(Keys.Escape);
+                Assert.NotNull(ReportStarting(dragger, "dragged None", 3000));
+                // The button is still down: the original waits for it.
+                Pump(300);
+                Assert.True(view.HandingOverDrop);
+            }
+            finally { Desktop.MouseButton(false); }
+
+            Assert.True(Desktop.WaitFor(() => !view.HandingOverDrop, 3000, () => Pump(20)), "The original didn't hide again.");
+            Assert.Null(ReportStarting(source, "drop ", 300));
+            Assert.True(WindowInfo.IsConcealed(source.Handle));
+            Assert.Equal(parked, Desktop.BoundsOf(source.Handle));
+            Assert.True(User32.IsWindowVisible(view.Handle));
         });
     }
 
