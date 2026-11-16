@@ -1735,30 +1735,32 @@ public sealed partial class PipWindow : Form
         _sourceWasFocused = focused;
         nint before = _foregroundBefore;
         if (!focused) _foregroundBefore = foreground;
-        if (!arrived || _live is not null || !_hideItem.Checked && _awayFrom == Guid.Empty || Environment.TickCount64 - _liveEndedAt < RevealGrace)
-            return;
-        // The window that had the focus was just minimized or closed (this view's own minimize too), so Windows passed
-        // the focus on, and a hidden original, lifted above the rest, was first in line. That is Windows, not the
-        // person asking for the window: it stays hidden, and the focus goes where it would have gone without it.
-        if (HandedOnByWindows(before))
+        if (!arrived) return;
+        long now = Environment.TickCount64;
+        var facts = new ViewState.Facts(Hidden: _hideItem.Checked, Away: _awayFrom != Guid.Empty, Visiting: _live is not null,
+            JustAfterVisit: now - _liveEndedAt < RevealGrace, HandedOn: HandedOnByWindows(before),
+            JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && now - _desktopSwitchedAt < SwitchFocusGrace);
+        switch (ViewState.OriginalArrived(facts))
         {
-            nint next = NextWindowForFocus();
-            User32.SetForegroundWindow(next != 0 ? next : User32.GetShellWindow());
-            Diagnostics.Log.Event("view.handOffKept", ("program", Diagnostics.LogValue.ProgramOf(_source)));
-            return;
+            case ViewState.Arrival.PassFocusOn:
+                // The window that had the focus was just minimized or closed (this view's own minimize too), so Windows
+                // passed the focus on, and a hidden original, lifted above the rest, was first in line.
+                nint next = NextWindowForFocus();
+                User32.SetForegroundWindow(next != 0 ? next : User32.GetShellWindow());
+                Diagnostics.Log.Event("view.handOffKept", ("program", Diagnostics.LogValue.ProgramOf(_source)));
+                break;
+            case ViewState.Arrival.ViewTakesFocus:
+                // A hidden original is on every desktop, so on switching to one with nothing else on it Windows hands it
+                // the focus. Keep hidden, Interactive and "hidden while away" stay as they were.
+                User32.SetForegroundWindow(Handle);
+                Diagnostics.Log.Event("view.switchFocusKept", ("program", Diagnostics.LogValue.ProgramOf(_source)));
+                break;
+            case ViewState.Arrival.Show:
+                LastReveal = now;
+                if (_suspended) ResumeView();
+                GoToSource();
+                break;
         }
-        // A hidden original is on every desktop, so on switching to one with nothing else on it Windows hands it the
-        // focus. That is the switch, not the person asking for the window: the view takes the focus instead, and
-        // Keep hidden, Interactive and "hidden while away" stay as they were.
-        if (_desktopSwitchedAt != 0 && Environment.TickCount64 - _desktopSwitchedAt < SwitchFocusGrace)
-        {
-            User32.SetForegroundWindow(Handle);
-            Diagnostics.Log.Event("view.switchFocusKept", ("program", Diagnostics.LogValue.ProgramOf(_source)));
-            return;
-        }
-        LastReveal = Environment.TickCount64;
-        if (_suspended) ResumeView();
-        GoToSource();
     }
 
     /// <summary>The last window other than the original that had the focus, as the view last saw it.</summary>
