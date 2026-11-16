@@ -1095,16 +1095,10 @@ public sealed partial class PipWindow : Form
     internal PipStateProblem StateProblem()
     {
         if (_cleaned) return PipStateProblem.None;
-        bool live = _live is not null, hidden = _hideItem.Checked, interactive = _interactiveItem.Checked;
-        if (interactive && !hidden) return PipStateProblem.InteractiveWithOriginalShown;
-        if (live && !interactive) return PipStateProblem.VisitWithoutInteractive;
-        if (live && (_suspended || _inputPaused)) return PipStateProblem.VisitWhilePaused;
-        if (_usingOriginal && (hidden || live)) return PipStateProblem.UsingHiddenOriginal;
-        if (_usingOriginal && _suspended) return PipStateProblem.UsingOriginalWhileMinimized;
-        if (interactive && !CanInteract) return PipStateProblem.InteractiveNotAllowed;
-        if (_live is { } visit && !_allowInteractive && (visit.EnhancedHover || visit.MiddleClickScroll))
-            return PipStateProblem.ExperimentalVisitWithoutSwitch;
-        return PipStateProblem.None;
+        return ViewState.ProblemOf(new ViewState.Modes(Interactive: _interactiveItem.Checked, Hidden: _hideItem.Checked,
+            Visiting: _live is not null, Suspended: _suspended, InputPaused: _inputPaused, UsingOriginal: _usingOriginal,
+            MayInteract: CanInteract, ExperimentalSwitch: _allowInteractive,
+            VisitUsesExperimental: _live is { } visit && (visit.EnhancedHover || visit.MiddleClickScroll)));
     }
 
     private void CheckState()

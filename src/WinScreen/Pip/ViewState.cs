@@ -39,4 +39,30 @@ internal static class ViewState
         if (facts.JustAfterDesktopSwitch) return Arrival.ViewTakesFocus;
         return Arrival.Show;
     }
+
+    /// <summary>The view's modes at one moment, as the checks below see them.</summary>
+    /// <param name="Interactive">Used directly (the menu's tick).</param>
+    /// <param name="Hidden">Keep hidden (the menu's tick).</param>
+    /// <param name="Visiting">A visit is under way.</param>
+    /// <param name="Suspended">The view is minimized.</param>
+    /// <param name="InputPaused">Its input is paused (a menu open, the screen blocked).</param>
+    /// <param name="UsingOriginal">"Use it, then hide again" is going on.</param>
+    /// <param name="MayInteract">Its kind of app, or the experimental switch, allows direct use.</param>
+    /// <param name="ExperimentalSwitch">Experimental features are on.</param>
+    /// <param name="VisitUsesExperimental">The visit has Enhanced hover or middle-click scrolling.</param>
+    internal readonly record struct Modes(bool Interactive, bool Hidden, bool Visiting, bool Suspended, bool InputPaused,
+        bool UsingOriginal, bool MayInteract, bool ExperimentalSwitch, bool VisitUsesExperimental);
+
+    /// <summary>The first combination of modes that must never happen, or none (checked on every change of mode).</summary>
+    internal static PipStateProblem ProblemOf(Modes m)
+    {
+        if (m.Interactive && !m.Hidden) return PipStateProblem.InteractiveWithOriginalShown;
+        if (m.Visiting && !m.Interactive) return PipStateProblem.VisitWithoutInteractive;
+        if (m.Visiting && (m.Suspended || m.InputPaused)) return PipStateProblem.VisitWhilePaused;
+        if (m.UsingOriginal && (m.Hidden || m.Visiting)) return PipStateProblem.UsingHiddenOriginal;
+        if (m.UsingOriginal && m.Suspended) return PipStateProblem.UsingOriginalWhileMinimized;
+        if (m.Interactive && !m.MayInteract) return PipStateProblem.InteractiveNotAllowed;
+        if (m.Visiting && !m.ExperimentalSwitch && m.VisitUsesExperimental) return PipStateProblem.ExperimentalVisitWithoutSwitch;
+        return PipStateProblem.None;
+    }
 }

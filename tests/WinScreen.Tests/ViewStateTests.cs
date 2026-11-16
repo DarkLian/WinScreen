@@ -60,4 +60,39 @@ public sealed class ViewStateTests
         Assert.Equal(Arrival.Show, OriginalArrived(new Facts(Hidden: true, Away: false, Visiting: false,
             JustAfterVisit: false, HandedOn: false, JustAfterDesktopSwitch: false)));
     }
+
+    public static TheoryData<int> EveryModeCombination()
+    {
+        var all = new TheoryData<int>();
+        for (int bits = 0; bits < 512; bits++) all.Add(bits);
+        return all;
+    }
+
+    /// <summary>
+    /// Every combination of the view's nine modes: none of the forbidden pairs passes as fine, and a combination with
+    /// none of them is fine. The forbidden pairs, as ARCHITECTURE.md lists them under INV-20:
+    /// used directly with the original shown; a visit without direct use, or while minimized or paused; "use it, then
+    /// hide again" with the original hidden or visited, or while minimized; direct use not allowed for the app; a visit
+    /// with experimental help while experimental features are off.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(EveryModeCombination))]
+    public void Every_combination_of_modes_is_judged_by_the_forbidden_pairs(int bits)
+    {
+        bool B(int i) => (bits & (1 << i)) != 0;
+        var m = new Modes(Interactive: B(0), Hidden: B(1), Visiting: B(2), Suspended: B(3), InputPaused: B(4),
+            UsingOriginal: B(5), MayInteract: B(6), ExperimentalSwitch: B(7), VisitUsesExperimental: B(8));
+        var broken = new List<PipStateProblem>();
+        if (m.Interactive && !m.Hidden) broken.Add(PipStateProblem.InteractiveWithOriginalShown);
+        if (m.Visiting && !m.Interactive) broken.Add(PipStateProblem.VisitWithoutInteractive);
+        if (m.Visiting && (m.Suspended || m.InputPaused)) broken.Add(PipStateProblem.VisitWhilePaused);
+        if (m.UsingOriginal && (m.Hidden || m.Visiting)) broken.Add(PipStateProblem.UsingHiddenOriginal);
+        if (m.UsingOriginal && m.Suspended) broken.Add(PipStateProblem.UsingOriginalWhileMinimized);
+        if (m.Interactive && !m.MayInteract) broken.Add(PipStateProblem.InteractiveNotAllowed);
+        if (m.Visiting && !m.ExperimentalSwitch && m.VisitUsesExperimental) broken.Add(PipStateProblem.ExperimentalVisitWithoutSwitch);
+
+        PipStateProblem found = ProblemOf(m);
+        if (broken.Count == 0) Assert.Equal(PipStateProblem.None, found);
+        else Assert.Contains(found, broken); // One of them, the first in the order checked.
+    }
 }
