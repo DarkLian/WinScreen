@@ -49,6 +49,154 @@ public sealed class StateMatrixTests
     private static bool Topmost(nint window) => (Desktop.ExStyle(window) & User32.WS_EX_TOPMOST) != 0;
     private static bool Transparent(nint window) => (Desktop.ExStyle(window) & User32.WS_EX_TRANSPARENT) != 0;
 
+    // ---- Drift: what the person or the app does to a window WinScreen changed (11.2, ROADMAP F10) ----
+
+    private static readonly string[] Changes =
+        ["rollup", "fill", "pin", "opacity", "clickthrough", "glass", "crop", "pin+opacity", "rollup+pin", "fill+pin", "clickthrough+crop"];
+    private static readonly string[] Actions =
+        ["maximize", "restore", "resize", "minimize-show", "topmost-taken", "layer-rewritten"];
+
+    public static TheoryData<string, string> ChangeAndAction()
+    {
+        var data = new TheoryData<string, string>();
+        foreach (string change in Changes)
+            foreach (string action in Actions)
+                data.Add(change, action);
+        return data;
+    }
+
+    /// <summary>
+    /// The table of F10 as one theory: each change WinScreen holds, alone and in pairs that share a window, against
+    /// each thing the person or the app can do to it. After WinScreen's checks have run, the row's rule held, what
+    /// WinScreen thinks the window has (the menu's ticks) matches what it has, and it can still be moved, resized and
+    /// closed.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ChangeAndAction))]
+    public void What_the_person_or_the_app_does_to_a_changed_window_leaves_it_usable_and_its_ticks_true(string change, string action)
+    {
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        target.UseFrame();
+        // A Windows Forms form with a frame puts its own shape back, so crops are tried on a window that keeps one.
+        nint window = change.Contains("crop") ? target.CreatePlainWindow(Spot, framed: true) : target.Handle;
+        var windows = new WindowController([]);
+        var undone = new List<string>();
+        windows.ChangeUndone += (_, text) => undone.Add(text);
+        Desktop.Activate(window);
+        try
+        {
+            foreach (string part in change.Split('+'))
+                switch (part)
+                {
+                    case "rollup": Assert.True(windows.ToggleRollUp(window)); break;
+                    case "fill":
+                        Assert.True(windows.ToggleBorderless(window, fill: true));
+                        Assert.True(Desktop.WaitFor(() => WindowInfo.FillsMonitor(window), 2000), "Fill display didn't fill.");
+                        break;
+                    case "pin": Assert.True(windows.TogglePin(window)); break;
+                    case "opacity": Assert.Equal((byte)128, windows.SetOpacity(window, 128)); break;
+                    case "clickthrough": Assert.True(windows.ToggleClickThrough(window)); break;
+                    case "glass": Assert.True(windows.ToggleGlass(window)); break;
+                    case "crop": windows.Crop(window, new Rectangle(20, 20, 260, 180)); break;
+                }
+
+            bool layered = (Desktop.ExStyle(window) & User32.WS_EX_LAYERED) != 0;
+            switch (action)
+            {
+                case "maximize":
+                    User32.ShowWindow(window, User32.SW_MAXIMIZE);
+                    break;
+                case "restore":
+                    User32.ShowWindow(window, User32.SW_MAXIMIZE);
+                    Thread.Sleep(200);
+                    Check(); // WinScreen's pass runs every 250 ms, so it sees the window maximized on the way.
+                    User32.ShowWindow(window, User32.SW_RESTORE);
+                    break;
+                case "resize":
+                    User32.SetWindowPos(window, 0, Spot.Left, Spot.Top, Spot.Width + 80, Spot.Height + 160, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+                    break;
+                case "minimize-show":
+                    User32.ShowWindow(window, Minimize);
+                    Assert.True(Desktop.WaitFor(() => User32.IsIconic(window), 2000), "It didn't minimize.");
+                    Check();
+                    User32.ShowWindow(window, User32.SW_RESTORE);
+                    break;
+                case "topmost-taken":
+                    User32.SetWindowPos(window, User32.HWND_NOTOPMOST, 0, 0, 0, 0, 0x13);
+                    break;
+                case "layer-rewritten":
+                    // The app sets its own extended style without WinScreen's transparency or click-through.
+                    if (layered)
+                        User32.SetWindowLongPtr(window, User32.GWL_EXSTYLE,
+                            (nint)(Desktop.ExStyle(window) & ~(User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT)));
+                    break;
+            }
+            Thread.Sleep(300);
+            Check();
+            Check();
+
+            // The row's rule.
+            string row = $"{change} after {action}: ";
+            bool outsized = action is "maximize" or "restore" or "resize";
+            if (change.Contains("rollup"))
+                Assert.True(windows.IsRolledUp(window) == (action is "minimize-show" or "topmost-taken" or "layer-rewritten"), row + "Roll up's tick is wrong.");
+            if (change.Contains("fill"))
+            {
+                bool stillFilled = !outsized;
+                Assert.True(windows.IsBorderless(window) == stillFilled, row + "Fill display's tick is wrong.");
+                if (!stillFilled)
+                    Assert.True((User32.GetWindowLongPtr(window, User32.GWL_STYLE) & User32.WS_CAPTION) == User32.WS_CAPTION, row + "The frame didn't come back.");
+            }
+            if (change.Contains("pin"))
+            {
+                Assert.True(windows.IsPinned(window), row + "Pin was let go of.");
+                Assert.True(Topmost(window), row + "Pinned, but not on top.");
+            }
+            if (action == "layer-rewritten" && layered)
+            {
+                Assert.NotEmpty(undone);
+                Assert.Equal((byte)255, windows.OpacityOf(window));
+                Assert.False(windows.IsClickThrough(window), row + "Still ticked click-through.");
+                Assert.False(windows.IsGlass(window), row + "Still ticked Glass.");
+            }
+            if (change.Contains("crop"))
+                Assert.True(windows.IsCropped(window), row + "The crop was dropped.");
+            Consistent(row);
+
+            // Still usable: moved and resized as asked, then closed.
+            if (User32.IsIconic(window) || User32.IsZoomed(window)) User32.ShowWindow(window, User32.SW_RESTORE);
+            if (windows.IsBorderless(window)) Assert.False(windows.ToggleBorderless(window, fill: true));
+            Thread.Sleep(150);
+            var wanted = new Rectangle(Spot.Left + 60, Spot.Top + 40, Spot.Width + 40, Spot.Height + 30);
+            Assert.True(User32.SetWindowPos(window, 0, wanted.X, wanted.Y, wanted.Width, wanted.Height, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE),
+                row + "It couldn't be moved.");
+            Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(window) == wanted, 2000), $"{row}Moved and resized to {Desktop.BoundsOf(window)}, not {wanted}.");
+            Check();
+            Consistent(row + "after moving: ");
+            User32.PostMessage(window, 0x0010, 0, 0); // WM_CLOSE
+            Assert.True(Desktop.WaitFor(() => !User32.IsWindow(window), 3000), row + "It couldn't be closed.");
+        }
+        finally { windows.RestoreAll(); }
+
+        void Check() => windows.Refresh(new Point(-30000, -30000), false, pausePinWhenMaximized: false);
+
+        // What WinScreen says matches the window.
+        void Consistent(string row)
+        {
+            if (!User32.IsWindow(window)) return;
+            if (windows.IsRolledUp(window))
+                Assert.True(!User32.IsZoomed(window) && FrameOf(window).Height < Spot.Height / 2, row + $"Ticked rolled up, but it's {FrameOf(window)}.");
+            if (windows.IsBorderless(window))
+                Assert.True(User32.IsIconic(window) || WindowInfo.FillsMonitor(window), row + "Ticked Fill display, but it doesn't fill.");
+            if (windows.IsPinned(window)) Assert.True(Topmost(window), row + "Ticked Pin, but not on top.");
+            Assert.True(windows.IsClickThrough(window) == Transparent(window), row + "Click-through's tick and the window differ.");
+            if (windows.OpacityOf(window) < 255 && !windows.IsGlass(window))
+                Assert.Equal((byte?)windows.OpacityOf(window), Desktop.Alpha(window));
+            Assert.True(windows.IsCropped(window) == (WindowInfo.ShapeOf(window) is not null), row + "Crop's tick and the window's shape differ.");
+        }
+    }
+
     // ---- Minimized ----
 
     /// <summary>A change made to a minimized window leaves it minimized, and is there when it comes back.</summary>

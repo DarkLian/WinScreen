@@ -562,13 +562,14 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
 
     /// <summary>
     /// Another program took "always on top" away from a pinned window: it is put back, unless the window now covers
-    /// its display (the app's own full screen, left alone). A program that keeps taking it wins after a few tries
-    /// rather than the two fighting forever: Pin is let go of, and the person is told.
+    /// its display as the app's own full screen, which is left alone. Covering it because WinScreen filled it is not
+    /// that, so the pin goes back there too. A program that keeps taking it wins after a few tries rather than the two
+    /// fighting forever: Pin is let go of, and the person is told.
     /// </summary>
     private string? StillPinned(nint window, ChangedWindow state)
     {
         if (!state.Pinned || state.PinPaused || User32.IsIconic(window) || IsTopmost(window)) return null;
-        if (CoversItsDisplay(window) || !AnswersQuickly(window)) return null;
+        if (CoversItsDisplay(window) && !state.BorderlessFilled || !AnswersQuickly(window)) return null;
         long now = Environment.TickCount64;
         if (state.PinTakenSince == 0 || now - state.PinTakenSince > PinTakingSpan)
         {
