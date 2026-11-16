@@ -672,6 +672,92 @@ public sealed class AppEndToEndTests : IDisposable
     }
 
     /// <summary>
+    /// The toolbar's Window menu opens every time, fifty presses in a row, on a normal, a maximized and a filled window,
+    /// and the window has the keys again after each (the owner, F5 and F11: the menu closed at once, or the press did
+    /// nothing with a flicker of the window).
+    /// </summary>
+    [Theory]
+    [InlineData("normal")]
+    [InlineData("maximized")]
+    [InlineData("filled")]
+    public void The_toolbar_menu_opens_fifty_times_in_a_row(string state)
+    {
+        const int Presses = 50;
+        var settings = new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.ShowWindowMenu], Placement = ToolbarPlacement.Left } };
+        settings.Hotkeys[AppCommand.ToggleBorderlessFill] = "Ctrl+Alt+F20";
+        RestartWith(settings);
+        using var target = new TargetProcess(Spot);
+        // Maximized without a frame, the test window would cover the taskbar too, as a full-screen app does, and
+        // WinScreen rightly pauses for those: a maximized app has its frame.
+        if (state == "maximized") target.UseFrame();
+        else target.UseTitleBar();
+        Focus(target);
+        if (state == "maximized")
+        {
+            User32.ShowWindow(target.Handle, User32.SW_MAXIMIZE);
+            Assert.True(Desktop.WaitFor(() => User32.IsZoomed(target.Handle), 2000), "It didn't maximize.");
+        }
+        else if (state == "filled")
+        {
+            Hotkey(Keys.F20, target);
+            Rectangle display = Screen.FromHandle(target.Handle).Bounds;
+            Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(target.Handle) == display, 3000), "Fill display didn't fill the display.");
+        }
+        Focus(target);
+        Rectangle visible = Rectangle.Intersect(
+            WinScreen.Windows.WindowInfo.TryGetFrameBounds(target.Handle, out Rectangle frame, out _) ? frame : Desktop.BoundsOf(target.Handle),
+            Screen.FromHandle(target.Handle).Bounds);
+        var rest = new Point(visible.Left + WinScreen.Native.Dpi.Scale(34, WinScreen.Native.Dpi.Of(target.Handle)) + 12, visible.Top + 12);
+        var failures = new List<string>();
+        try
+        {
+            for (int press = 0; press < Presses; press++)
+            {
+                nint toolbar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar");
+                if (toolbar == 0 || !Desktop.IsWindowVisible(toolbar))
+                {
+                    Desktop.MoveMouse(new Point(visible.Left + visible.Width / 2, visible.Top + visible.Height / 2));
+                    Thread.Sleep(300);
+                    Desktop.RequireWindowAt(rest, target.Handle);
+                    Desktop.MoveMouse(new Point(rest.X + 30, rest.Y));
+                    Desktop.MoveMouse(rest);
+                    Assert.True(Desktop.WaitFor(() =>
+                    {
+                        toolbar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar");
+                        return toolbar != 0 && Desktop.IsWindowVisible(toolbar);
+                    }, 4000), $"The toolbar didn't appear on the {state} window (press {press}).");
+                }
+                Rectangle bar = Desktop.BoundsOf(toolbar);
+                Desktop.ClickOn(new Point(bar.Left + bar.Height / 2, bar.Top + bar.Height / 2), toolbar);
+                Thread.Sleep(500);
+                nint menu = 0;
+                Desktop.EachProcessWindow(_app.Id, window =>
+                {
+                    Rectangle bounds = Desktop.BoundsOf(window);
+                    if (menu == 0 && bounds.Height > 120 && bounds.Width > 120 && Desktop.IsWindowVisible(window)) menu = window;
+                });
+                if (menu == 0)
+                {
+                    failures.Add($"press {press}: no menu open half a second later");
+                    continue;
+                }
+                Desktop.Press(Keys.Escape);
+                if (!Desktop.WaitFor(() => !Desktop.IsWindowVisible(menu), 2000))
+                    failures.Add($"press {press}: Escape didn't close the menu");
+                if (!Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle, 2000))
+                    failures.Add($"press {press}: the window didn't get the keys back ({WinScreen.Windows.WindowInfo.Title(User32.GetForegroundWindow())})");
+            }
+            Assert.True(failures.Count == 0, $"{failures.Count} of {Presses} presses on the {state} window went wrong:{Environment.NewLine}" +
+                string.Join(Environment.NewLine, failures));
+            if (state == "filled") Assert.Equal(Screen.FromHandle(target.Handle).Bounds, Desktop.BoundsOf(target.Handle));
+        }
+        finally
+        {
+            if (state == "filled" && User32.GetForegroundWindow() == target.Handle) Hotkey(Keys.F20, target);
+        }
+    }
+
+    /// <summary>
     /// The toolbar on a program that isn't a test window, by either trigger: Notepad++ answers "minimize button"
     /// over its own, yet the owner never saw the bar open there (F9).
     /// </summary>
