@@ -43,8 +43,22 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
     private string? _told;
     private IUpdateSession? _pending;
     private bool _busy;
+    /// <summary>Done when the check or look under way ends.</summary>
+    private TaskCompletionSource? _idle;
     private bool _disposed;
     private bool _lastCheckFailed;
+
+    private void Begin()
+    {
+        _busy = true;
+        _idle = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private void End()
+    {
+        _busy = false;
+        _idle?.TrySetResult();
+    }
 
     internal void SetEnabled(bool enabled)
     {
@@ -86,7 +100,7 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
     {
         if (_disposed || _busy || _pending is not null)
             return;
-        _busy = true;
+        Begin();
         IUpdateSession? session = null;
         var generation = _generation ??= new CancellationTokenSource();
         try
@@ -108,7 +122,7 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         finally
         {
             session?.Dispose();
-            _busy = false;
+            End();
         }
     }
 
@@ -117,7 +131,7 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         if (_disposed || _busy || _pending is not null)
             return;
         var generation = _generation ??= new CancellationTokenSource();
-        _busy = true;
+        Begin();
         _lastCheckFailed = false;
         IUpdateSession? session = null;
         try
@@ -146,21 +160,21 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         finally
         {
             session?.Dispose();
-            _busy = false;
+            End();
         }
     }
 
     /// <summary>
     /// At the person's request, for a copy that can't install: whether a newer version is out, and whether the look
-    /// failed. Works whatever the setting, since the person asked.
+    /// failed. Works whatever the setting, since the person asked. A check already under way (the timer's) is waited
+    /// for first, so the person gets the answer to their own look rather than none.
     /// </summary>
-    /// <summary>A check or a look is under way, so another can't start now.</summary>
-    internal bool Busy => _busy;
-
     internal async Task<(string? Version, bool Failed)> LookNow()
     {
-        if (_disposed || _busy) return (null, false);
-        _busy = true;
+        while (_busy && !_disposed && _idle is { } running)
+            await running.Task;
+        if (_disposed) return (null, true);
+        Begin();
         IUpdateSession? session = null;
         try
         {
@@ -178,7 +192,7 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         finally
         {
             session?.Dispose();
-            _busy = false;
+            End();
         }
     }
 

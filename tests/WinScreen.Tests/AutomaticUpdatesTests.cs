@@ -195,21 +195,32 @@ public sealed class AutomaticUpdatesTests
     }
 
     /// <summary>
-    /// While a look is under way, one the person asks for can't run. It must not be taken for "up to date": the tray
-    /// asks <see cref="AutomaticUpdates.Busy"/> first and says a check is already going, as an installed copy does.
+    /// A look the person asks for while the timer's is under way waits for it, then looks itself: it must not be
+    /// taken for "up to date", nor end with no answer when the timer's says nothing new.
     /// </summary>
     [Fact]
-    public async Task While_a_look_is_under_way_the_copy_says_it_is_busy_rather_than_up_to_date()
+    public async Task A_look_asked_for_while_one_is_under_way_waits_and_answers()
     {
         var answer = new TaskCompletionSource<string?>();
         var session = new Session { Answer = answer.Task };
         using var updates = new AutomaticUpdates(_ => session, _ => { });
         updates.SetTelling(true);
         Task timed = updates.Check();
-        Assert.True(updates.Busy);
+        Task<(string? Version, bool Failed)> asked = updates.LookNow();
+        Assert.False(asked.IsCompleted);
+        Assert.Equal(1, session.Looks);
         answer.SetResult("9.9.9");
         await timed;
-        Assert.False(updates.Busy);
+        Assert.Equal(("9.9.9", false), await asked);
+        Assert.Equal(2, session.Looks);
+    }
+
+    [Fact]
+    public async Task A_look_after_closing_is_not_taken_for_up_to_date()
+    {
+        var updates = new AutomaticUpdates(_ => new Session(), _ => { });
+        updates.Dispose();
+        Assert.Equal(((string?)null, true), await updates.LookNow());
     }
 
     [Fact]
