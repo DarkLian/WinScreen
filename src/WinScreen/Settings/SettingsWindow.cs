@@ -506,7 +506,7 @@ private readonly ErrorProvider _errors = new();
         bool wasPending = _pending;
         _setups.Items.Clear();
         _setups.Items.AddRange(_settings.SavedSetups.Where(setup => !_removedSetups.Contains(setup))
-            .Select(setup => _changedSetups.GetValueOrDefault(setup, setup)).Cast<object>().ToArray());
+            .Select(setup => ChangeOf(setup)?.After ?? setup).Cast<object>().ToArray());
         if (!wasPending) MarkSaved();
         else RefreshApply();
     }
@@ -727,6 +727,20 @@ private readonly ErrorProvider _errors = new();
         base.Dispose(disposing);
     }
 
+    /// <summary>
+    /// One of WinScreen's own shortcuts pressed while a shortcut box has the keys: Windows hands it to WinScreen as the
+    /// command, so the box never sees it. It goes in the box instead, as if typed there, and nothing runs. True when a
+    /// box took it.
+    /// </summary>
+    internal bool TakeShortcut(string combination)
+    {
+        if (string.IsNullOrEmpty(combination) || !ContainsFocus) return false;
+        if (_hotkeys.Values.FirstOrDefault(box => box.Focused) is not { } focused) return false;
+        focused.Text = combination;
+        _status.Text = "";
+        return true;
+    }
+
     /// <summary>Called when a key combination is pressed in a hotkey box.</summary>
     internal void CaptureHotkey(AppCommand command, Keys keyData, bool win = false)
     {
@@ -760,9 +774,9 @@ private readonly ErrorProvider _errors = new();
         // Setups are taken from what's in effect, so one saved from a window's menu meanwhile is kept; the changes made
         // here go in the place of the setups they were made to. The draft is a copy, in the same order.
         if (_pendingImport is null)
-            foreach ((ProgramSetup original, ProgramSetup changed) in _changedSetups)
-                if (_settings.SavedSetups.FindIndex(setup => ReferenceEquals(setup, original)) is var at and >= 0 && at < draft.SavedSetups.Count)
-                    draft.SavedSetups[at] = System.Text.Json.JsonSerializer.Deserialize<ProgramSetup>(System.Text.Json.JsonSerializer.Serialize(changed))!;
+            foreach (SetupChange change in _changedSetups)
+                if (draft.SavedSetups.FindIndex(setup => Written(setup) == change.Before) is var at and >= 0)
+                    draft.SavedSetups[at] = System.Text.Json.JsonSerializer.Deserialize<ProgramSetup>(Written(change.After))!;
         draft.SavedSetups.RemoveAll(setup => _removedSetups.Any(removed =>
             removed.Program == setup.Program && removed.ExecutablePath == setup.ExecutablePath));
         try
@@ -953,15 +967,28 @@ private readonly ErrorProvider _errors = new();
     {
         int index = _setups.Items.IndexOf(shown);
         if (index < 0) return;
-        ProgramSetup original = _changedSetups.FirstOrDefault(pair => ReferenceEquals(pair.Value, shown)).Key ?? shown;
-        _changedSetups[original] = changed;
+        if (_changedSetups.Find(change => ReferenceEquals(change.After, shown)) is { } earlier) earlier.After = changed;
+        else _changedSetups.Add(new SetupChange(Written(shown), changed));
         _setups.Items[index] = changed;
         _setups.SelectedIndex = index;
         QueueApplyRefresh();
     }
 
-    /// <summary>Setups in effect, each with the change made to it here and not yet saved.</summary>
-    private readonly Dictionary<ProgramSetup, ProgramSetup> _changedSetups = new(ReferenceEqualityComparer.Instance);
+    /// <summary>
+    /// A change made here and not yet saved, kept against the setup as it was written when the change was made: what is
+    /// in effect is a fresh copy after every save, so the setup is found again by what it says, not by which object it is.
+    /// </summary>
+    private sealed class SetupChange(string before, ProgramSetup after)
+    {
+        public string Before { get; } = before;
+        public ProgramSetup After { get; set; } = after;
+    }
+
+    private readonly List<SetupChange> _changedSetups = [];
+
+    private SetupChange? ChangeOf(ProgramSetup inEffect) => _changedSetups.Find(change => change.Before == Written(inEffect));
+
+    private static string Written(ProgramSetup setup) => System.Text.Json.JsonSerializer.Serialize(setup);
 
     /// <summary>Forgets a program's saved setup, the way the Remove button does.</summary>
     internal void RemoveSetup(ProgramSetup setup)
@@ -969,11 +996,7 @@ private readonly ErrorProvider _errors = new();
         _setups.Items.Remove(setup);
         _removedSetups.Add(setup);
         // A setup changed here and then removed: the one in effect goes, not the change.
-        if (_changedSetups.FirstOrDefault(pair => ReferenceEquals(pair.Value, setup)).Key is { } original)
-        {
-            _changedSetups.Remove(original);
-            _removedSetups.Add(original);
-        }
+        _changedSetups.RemoveAll(change => ReferenceEquals(change.After, setup));
         QueueApplyRefresh();
     }
 

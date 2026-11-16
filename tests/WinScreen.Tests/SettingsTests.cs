@@ -604,7 +604,12 @@ public sealed class SettingsWindowTests : IDisposable
             _ = window.Handle;
             ListBox list = Descendants(window).OfType<ListBox>().First(box => box.Items.OfType<ProgramSetup>().Any());
             ProgramSetup shown = list.Items.OfType<ProgramSetup>().Single();
+            // Something else saved first, as a shortcut set a moment before: what's in effect is a fresh copy after it.
+            window.SetOption(nameof(AppSettings.ShowNotifications), !settings.ShowNotifications);
+            Assert.True(window.ApplyChanges());
+            Assert.DoesNotContain(settings.SavedSetups, setup => ReferenceEquals(setup, shown));
             window.ReplaceSetup(shown, new ProgramSetup { Program = "chrome", Pinned = true, TitleContains = "Trip", Place = WinScreen.Windows.WindowAnchor.TopRight });
+            Application.DoEvents(); // The check for changes is queued.
             Assert.True(window.HasChanges);
             settings.SavedSetups.Add(new ProgramSetup { Program = "notepad", Pinned = true });
             window.SetupsChanged();

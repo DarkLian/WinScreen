@@ -140,7 +140,14 @@ public sealed partial class TrayApplication : ApplicationContext
             }
         };
 
-        _hotkeys.Pressed += id => Run((AppCommand)id, TargetOf(User32.GetForegroundWindow()));
+        _hotkeys.Pressed += id =>
+        {
+            // Pressed in one of Settings' shortcut boxes, it is the shortcut being typed there, not a command.
+            if (_settingsWindow is { IsDisposed: false } settings &&
+                settings.TakeShortcut(_settings.Hotkeys.GetValueOrDefault((AppCommand)id, "")))
+                return;
+            Run((AppCommand)id, TargetOf(User32.GetForegroundWindow()));
+        };
         _hotkeys.CloseRequested += ExitThread;
         // A command from the command line runs just after its message is answered, never inside it (see CommandLine).
         _hotkeys.CopyDataReceived = data =>
