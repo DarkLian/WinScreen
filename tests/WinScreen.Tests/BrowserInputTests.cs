@@ -91,7 +91,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 try
                 {
                     Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
-                    if (!Desktop.WaitFor(() => view.LiveInteraction is not null)) throw new InvalidOperationException("No direct-input visit started.");
+                    if (!Desktop.WaitFor(() => view.LiveInteraction is not null)) throw new InvalidOperationException($"No direct-input visit started (last visit ended: {view.LastVisitEnd}; {view.StateDescription}).");
                     Rectangle window = Desktop.BoundsOf(source);
                     Point ToView(Point offset)
                     {
@@ -1628,7 +1628,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     }
 
     /// <summary>Processes whose command line names this run's folder, which holds its browser profile.</summary>
-    private static List<int> ProcessesUsing(string root)
+    internal static List<int> ProcessesUsing(string root)
     {
         var ids = new List<int>();
         using var search = new System.Management.ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='chrome.exe' OR Name='msedge.exe' OR Name='brave.exe' OR Name='vivaldi.exe'");

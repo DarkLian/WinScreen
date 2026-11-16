@@ -32,6 +32,12 @@ internal sealed class SourcePopups
     /// <summary>Lifts the menus in use, oldest first, so the newest (a submenu) ends on top of its parent.</summary>
     internal Action<IReadOnlyList<nint>> RaisePopups { get; init; } = popups => Windows.TopLayer.RaiseGroup(popups);
 
+    /// <summary>
+    /// Whether WinScreen itself disabled the original while hidden (roadmap 12.3). A disabled original otherwise means
+    /// its app has a question up; WinScreen's own disabling isn't one. A dialog of the app's is still found as itself.
+    /// </summary>
+    internal Func<bool> DisabledByWinScreen { get; init; } = () => false;
+
     /// <param name="Original">Where its app first put it, to go back to.</param>
     /// <param name="Placed">Where it stays for this opening.</param>
     /// <param name="Order">When it opened: a later popup of the same chain is above an earlier one.</param>
@@ -67,7 +73,8 @@ internal sealed class SourcePopups
                     return true;
                 }, 0);
 
-            bool question = thread != 0 && !IsWindowEnabled(_source), opened = false;
+            // The flag first: it is cleared only once the window is enabled again, so this order never sees a gap.
+            bool question = thread != 0 && !DisabledByWinScreen() && !IsWindowEnabled(_source), opened = false;
             foreach (nint popup in seen.Keys)
             {
                 if (!User32.GetWindowRect(popup, out Rect r)) continue;

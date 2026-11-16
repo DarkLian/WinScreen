@@ -306,6 +306,18 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsWindowVisible(nint hWnd);
 
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsWindowEnabled(nint hWnd);
+
+    /// <summary>Returns whether the window was disabled before, not whether the call worked.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool EnableWindow(nint hWnd, [MarshalAs(UnmanagedType.Bool)] bool enable);
+
+    [LibraryImport("user32.dll")]
+    public static partial nint GetLastActivePopup(nint hWnd);
+
     public const int SB_HORZ = 0;
 
     [LibraryImport("user32.dll")]

@@ -34,6 +34,9 @@ public sealed record WindowRecord(
     /// <summary>Windows 11's thin border was taken off while the window was hidden; it goes back to the default.</summary>
     public bool BorderHidden { get; init; }
 
+    /// <summary>WinScreen disabled the window while it was hidden, so Windows passes over it; it is enabled again.</summary>
+    public bool DisabledWhileHidden { get; init; }
+
     /// <summary>Where a rolled-up window came from. Only its height is used, so moves made since are kept.</summary>
     public int[]? RollUpPlacement { get; init; }
 }
