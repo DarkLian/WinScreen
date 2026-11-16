@@ -124,8 +124,9 @@ public sealed class ConcealmentOwnershipTests
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
                 try
                 {
-                    typeof(TrayApplication).GetMethod(shrink ? "Shrink" : "OpenViewOf", BindingFlags.Instance | BindingFlags.NonPublic)!
-                        .Invoke(app, [target.Handle]);
+                    // OpenViewOf has said whether to hide the original since 17 Nov: a view the person opens does.
+                    MethodInfo open = typeof(TrayApplication).GetMethod(shrink ? "Shrink" : "OpenViewOf", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                    open.Invoke(app, open.GetParameters().Length == 1 ? [target.Handle] : [target.Handle, true]);
                     var mapping = (System.Collections.IDictionary)typeof(TrayApplication)
                         .GetField(shrink ? "_shrunk" : "_pips", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(app)!;
                     if (!shrink) ((WinScreen.Pip.PipWindow)mapping[target.Handle]!).SetOriginalHidden(true);

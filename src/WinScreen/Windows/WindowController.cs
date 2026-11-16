@@ -1392,6 +1392,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         if (state.UsedAt != 0 && Environment.TickCount64 - state.UsedAt < UseSettleMilliseconds) return;
         if (User32.GetForegroundWindow() == window) return;
         if (!User32.IsWindowEnabled(window)) return; // The app's own: it enables it again when its dialog closes.
+        // Enabling and disabling send the window a message and wait: a hung app mustn't hold WinScreen up. Later looks
+        // try again.
+        if (!AnswersQuickly(window)) return;
         state.DisabledWhileHidden = true;
         try { SaveJournal(); }
         catch (WindowOperationException caught)
@@ -1420,7 +1423,11 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     {
         nint popup = User32.GetLastActivePopup(window);
         bool dialogUp = popup != 0 && popup != window && User32.IsWindowVisible(popup) && User32.IsWindowEnabled(popup);
-        if (!dialogUp && !User32.IsWindowEnabled(window)) User32.EnableWindow(window, true);
+        if (!dialogUp && !User32.IsWindowEnabled(window))
+        {
+            EnsureResponsive(window); // A hung app: this step fails like the others and is tried again.
+            User32.EnableWindow(window, true);
+        }
         // Only now: a visit's own thread reads this to tell WinScreen's disabling from a question the app has up, and
         // must never find the window disabled with the flag already gone.
         state.DisabledWhileHidden = false;
