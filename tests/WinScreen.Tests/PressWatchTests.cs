@@ -126,7 +126,7 @@ public sealed class PressWatchTests
                 windows.RestoreAll();
 
                 // A crop that keeps the window's top-left corner: its middle is the window below's.
-                User32.ShowWindow(target.Handle, 6);
+                User32.ShowWindow(target.Handle, User32.SW_MINIMIZE);
                 Desktop.Activate(plain);
                 windows.Crop(plain, new Rectangle(10, 10, 160, 110));
                 Assert.True(Desktop.WaitFor(() => PressWatch.TakesPresses(plain, 0, windows) == true, 2000, Application.DoEvents),
