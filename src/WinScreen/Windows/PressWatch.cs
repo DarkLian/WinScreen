@@ -53,6 +53,9 @@ internal sealed class PressWatch
     {
         if (!User32.IsWindow(window) || !User32.IsWindowVisible(window) || User32.IsIconic(window)) return null;
         if (windows?.IsClickThrough(window) == true) return null;
+        // Hidden by WinScreen behind a tile or a view: see-through and click-through on purpose, and its look waits for
+        // it to come back. An effect's own concealing is different: there the window still takes the presses.
+        if (windows is not null && windows.IsHidden(window) && !windows.IsDrawnByEffect(window)) return null;
         // Left on another virtual desktop (cloaked by Windows): what is under its middle now is another desktop's.
         if (!VirtualDesktops.OnCurrentDesktop(window) ||
             Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return null;

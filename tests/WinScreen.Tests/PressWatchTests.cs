@@ -104,8 +104,9 @@ public sealed class PressWatchTests
     }
 
     /// <summary>
-    /// The person's own Click-through, and a crop that keeps a corner, send presses at the window's middle below by
-    /// choice. Neither may count against a look on the window, or the watchdog would turn it off for nothing.
+    /// The person's own Click-through, a window WinScreen hides behind a tile or a view, and a crop that keeps a corner,
+    /// send presses at the window's middle below by choice. None may count against a look on the window, or the
+    /// watchdog would turn it off for nothing.
     /// </summary>
     [Trait("Category", "RealWindows")]
     [Fact]
@@ -122,6 +123,11 @@ public sealed class PressWatchTests
             {
                 Desktop.Activate(target.Handle);
                 Assert.True(windows.ToggleClickThrough(target.Handle));
+                Assert.Null(PressWatch.TakesPresses(target.Handle, 0, windows));
+                windows.RestoreAll();
+
+                // Hidden behind a tile or a view: filter Dark on a shrunk window was turned off after a second (17 Nov).
+                windows.Hide(target.Handle);
                 Assert.Null(PressWatch.TakesPresses(target.Handle, 0, windows));
                 windows.RestoreAll();
 

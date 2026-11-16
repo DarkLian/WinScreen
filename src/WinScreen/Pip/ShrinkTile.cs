@@ -225,8 +225,14 @@ public sealed class ShrinkTile : Form
 
     private void FollowSource()
     {
-        if (!_identity.Matches() || !_windows.IsHidden(_source) || User32.GetForegroundWindow() == _source)
+        if (!_identity.Matches() || !_windows.IsHidden(_source))
             Close();
+        else if (User32.GetForegroundWindow() == _source)
+        {
+            // Chosen from the taskbar or Alt+Tab: the person brought it back, as with a click on the tile.
+            BringBack = true;
+            Close();
+        }
     }
 
     private Point KeptOnScreen(Rectangle bounds)

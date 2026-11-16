@@ -248,11 +248,17 @@ public sealed class AppEndToEndTests : IDisposable
 
     /// <summary>
     /// A shrunk window can't keep Dark mode while it's a tile; when the person brings it back, Dark mode comes back
-    /// with it. It seemed to vanish before (the owner, 15 Nov).
+    /// with it. It seemed to vanish before (the owner, 15 Nov). Both ways back: Shrink again on the tile, and choosing
+    /// the window itself, as from the taskbar, which counted as something else closing the tile until 17 Nov. Both
+    /// kinds of Dark: the filter is what a PC without a graphics card gets.
     /// </summary>
-    [Fact]
-    public void Dark_mode_comes_back_with_a_window_brought_back_from_its_tile()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Dark_mode_comes_back_with_a_window_brought_back_from_its_tile(bool pictureKeeping)
     {
+        if (!pictureKeeping)
+            RestartWith(new AppSettings { WelcomeShown = true, Effects = new EffectPreferences { PictureSafeDark = false } });
         using var target = new TargetProcess(Spot, "FFFFFF");
         Focus(target);
         var sample = new Rectangle(target.Center.X - 20, target.Center.Y - 20, 40, 40);
@@ -260,16 +266,34 @@ public sealed class AppEndToEndTests : IDisposable
         Hotkey(Keys.D, target);
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage)), "Dark mode didn't turn on.");
 
-        Hotkey(Keys.W, target); // Shrink.
-        Assert.True(Desktop.WaitFor(() => WinScreen.Windows.WindowInfo.IsConcealed(target.Handle), 3000), "The window didn't shrink.");
-        Thread.Sleep(800);
-        Focus(target);
-        Hotkey(Keys.W, target); // And back.
+        nint tile = ShrinkTo(target);
+        Desktop.Press(Keys.W, Keys.ControlKey, Keys.Menu); // Shrink again, on the tile, which has the keys.
+        Assert.True(Desktop.WaitFor(() => !User32.IsWindow(tile), 3000), "Shrink again didn't close the tile.");
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage), 4000),
-            $"Dark mode didn't come back: {Desktop.ColorOnScreen(sample)}.");
+            $"Dark mode didn't come back with Shrink again: {Desktop.ColorOnScreen(sample)}.");
+
+        tile = ShrinkTo(target);
+        Focus(target); // As from the taskbar.
+        Assert.True(Desktop.WaitFor(() => !User32.IsWindow(tile), 3000), "Choosing the window didn't close its tile.");
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage), 4000),
+            $"Dark mode didn't come back with the window chosen: {Desktop.ColorOnScreen(sample)}.");
 
         Hotkey(Keys.R, target);
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)), "Restore didn't end dark mode.");
+    }
+
+    /// <summary>Shrinks the window, which has the keys, and returns its tile once the tile has them.</summary>
+    private nint ShrinkTo(TargetProcess target)
+    {
+        Hotkey(Keys.W, target);
+        nint tile = 0;
+        Assert.True(Desktop.WaitFor(() =>
+        {
+            tile = User32.GetForegroundWindow();
+            return WinScreen.Windows.WindowInfo.IsConcealed(target.Handle) && tile != target.Handle &&
+                   User32.GetWindowThreadProcessId(tile, out uint pid) != 0 && pid == _app.Id;
+        }, 3000), "The window didn't shrink to a tile that has the keys.");
+        return tile;
     }
 
     /// <summary>
@@ -326,7 +350,8 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), darkWindow)),
             "The second dark mode didn't follow the window.");
         target.SetColors("FFFFFF");
-        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage)));
+        Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Desktop.DarkPage)),
+            $"The second dark mode didn't follow the window back: {Desktop.ColorOnScreen(sample)}.");
 
         Hotkey(Keys.R, target);
         Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(sample), Color.White)),

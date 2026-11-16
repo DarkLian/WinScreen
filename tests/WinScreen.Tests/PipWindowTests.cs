@@ -392,9 +392,9 @@ public class PipWindowTests
                 source.Bounds = new Rectangle(120, 90, 900, 600);
             pump(300);
 
-            Desktop.GainForegroundRights();
-            using var pip = new PipWindow(source.Handle, new WindowController([]));
-            pip.ShowOnTop();
+            // A view opens in the bottom-right corner, where notifications appear: one there read as a wrong
+            // bottom edge (a dark, see-through green) on the owner's PC.
+            using PipWindow pip = OpenAwayFromToasts(source.Handle);
             pump(300);
 
             Rectangle b = pip.Bounds;
