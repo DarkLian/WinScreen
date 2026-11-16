@@ -38,6 +38,8 @@ internal sealed class D3D11Renderer : IDisposable
     private readonly PipDiagnostics _diagnostics;
     private bool _disposed;
     private long _lastResize;
+    /// <summary>Windows' software renderer: Auto enlarges with the linear blend, which costs the processor less.</summary>
+    private readonly bool _software;
     internal PipCapabilities Capabilities { get; private set; } = null!;
     internal bool HasFrame => _cache is not null;
     internal int RemovedReason => Device is null ? 0 : Device.DeviceRemovedReason.Code;
@@ -53,6 +55,7 @@ internal sealed class D3D11Renderer : IDisposable
     {
         _preferences = preferences;
         ViewScaling = preferences.Scaling;
+        _software = software;
         _diagnostics = diagnostics;
         try
         {
@@ -219,12 +222,14 @@ internal sealed class D3D11Renderer : IDisposable
             Viewport = new(destination.X, destination.Y, destination.Width, destination.Height),
             Surface = new(SourceSize.Width, SourceSize.Height, client.Width, client.Height),
             Selection = selection is { } s ? new(s.X, s.Y, s.Width, s.Height) : Vector4.Zero,
-            Options = new(opacity / 255f, (int)ViewScaling, 0, selection.HasValue ? 1 : 0),
+            Options = new(opacity / 255f, ViewScaling == PipScaling.Auto && _software ? 3 : (int)ViewScaling, 0, selection.HasValue ? 1 : 0),
         };
         bool compute = _compute is not null && ViewScaling == PipScaling.Auto &&
             crop.Width >= destination.Width && crop.Height >= destination.Height;
+        bool enlarging = crop.Width < destination.Width || crop.Height < destination.Height;
         _diagnostics.FilterMode = ViewScaling == PipScaling.Crisp ? "Nearest texel" :
-            ViewScaling == PipScaling.Smooth || crop.Width < destination.Width || crop.Height < destination.Height ? "Linear" :
+            enlarging && ViewScaling == PipScaling.Auto && !_software ? "Edge-aware enlarge" :
+            ViewScaling == PipScaling.Smooth || enlarging ? "Linear" :
             crop.Size == destination.Size ? "Exact texel" : compute ? "Compute area (16x16)" : "Raster area (PS4)";
         _context.UpdateSubresource(in constants, _constants!);
         if (compute)
