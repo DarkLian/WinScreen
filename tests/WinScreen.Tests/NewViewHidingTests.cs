@@ -128,6 +128,51 @@ public sealed class NewViewHidingTests
         });
     }
 
+    /// <summary>
+    /// Minimizing the window in front (the owner: VS Code), or the view itself, makes Windows give the focus to the
+    /// next window in line, and a hidden original, lifted above the others, was that window. Windows' hand-off isn't
+    /// the person asking for the original: it stays hidden, and Keep hidden stays on.
+    /// </summary>
+    [Theory]
+    [InlineData("another window")]
+    [InlineData("the view")]
+    public void Minimizing_a_window_leaves_a_hidden_original_hidden(string minimized)
+    {
+        using var source = new TargetProcess(Spot, "C81E1E", "Hidden source");
+        using var other = new TargetProcess(new Rectangle(300, 240, 420, 300), "1E64C8", "Window in front");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            var windows = new WindowController([]);
+            try
+            {
+                Desktop.Activate(source.Handle);
+                using var view = OpenView(source.Handle, windows);
+                view.HideOriginalByDefault();
+                Assert.True(view.KeepsUpdating, "The view didn't hide its original.");
+                if (minimized == "another window")
+                {
+                    Desktop.Activate(other.Handle);
+                    TestDesktop.Pump(800);
+                    const int WM_SYSCOMMAND = 0x0112, SC_MINIMIZE = 0xF020; // What its minimize button sends.
+                    Desktop.PostMessage(other.Handle, WM_SYSCOMMAND, SC_MINIMIZE, 0);
+                }
+                else
+                {
+                    Desktop.Activate(view.Handle);
+                    TestDesktop.Pump(800);
+                    view.SuspendView();
+                }
+                TestDesktop.Pump(1500);
+                nint front = User32.GetForegroundWindow();
+                Assert.True(view.KeepsUpdating && windows.IsHidden(source.Handle),
+                    $"Minimizing {minimized} showed the hidden original (foreground: {WindowInfo.Title(front)}).");
+                Assert.NotEqual(source.Handle, front);
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
+
     public static TheoryData<string> ChangesMade() => new() { "pin", "opacity", "clickthrough", "crop", "rollup" };
 
     /// <summary>

@@ -1729,11 +1729,24 @@ public sealed partial class PipWindow : Form
             if (_seenDesktop is not null) _desktopSwitchedAt = Environment.TickCount64;
             _seenDesktop = desktop;
         }
-        bool focused = _origin.IsWindow && User32.GetForegroundWindow() == _source;
+        nint foreground = User32.GetForegroundWindow();
+        bool focused = _origin.IsWindow && foreground == _source;
         bool arrived = focused && !_sourceWasFocused;
         _sourceWasFocused = focused;
+        nint before = _foregroundBefore;
+        if (!focused) _foregroundBefore = foreground;
         if (!arrived || _live is not null || !_hideItem.Checked && _awayFrom == Guid.Empty || Environment.TickCount64 - _liveEndedAt < RevealGrace)
             return;
+        // The window that had the focus was just minimized or closed (this view's own minimize too), so Windows passed
+        // the focus on, and a hidden original, lifted above the rest, was first in line. That is Windows, not the
+        // person asking for the window: it stays hidden, and the focus goes where it would have gone without it.
+        if (HandedOnByWindows(before))
+        {
+            nint next = NextWindowForFocus();
+            User32.SetForegroundWindow(next != 0 ? next : User32.GetShellWindow());
+            Diagnostics.Log.Event("view.handOffKept", ("program", Diagnostics.LogValue.ProgramOf(_source)));
+            return;
+        }
         // A hidden original is on every desktop, so on switching to one with nothing else on it Windows hands it the
         // focus. That is the switch, not the person asking for the window: the view takes the focus instead, and
         // Keep hidden, Interactive and "hidden while away" stay as they were.
@@ -1746,6 +1759,41 @@ public sealed partial class PipWindow : Form
         LastReveal = Environment.TickCount64;
         if (_suspended) ResumeView();
         GoToSource();
+    }
+
+    /// <summary>The last window other than the original that had the focus, as the view last saw it.</summary>
+    private nint _foregroundBefore;
+
+    /// <summary>
+    /// Whether the window that had the focus before the original is gone from use: minimized, closed, or this view
+    /// minimized. A window merely hidden (a menu, the switcher) doesn't count, nor does one still there.
+    /// </summary>
+    private bool HandedOnByWindows(nint before) =>
+        before != 0 && before != _source &&
+        (!User32.IsWindow(before) || User32.IsIconic(before) || before == Handle && _suspended);
+
+    /// <summary>
+    /// The window Windows would have given the focus to without the hidden original: the highest one that is shown,
+    /// can be used, and isn't hidden by WinScreen. Zero when there is none (the desktop takes it).
+    /// </summary>
+    private nint NextWindowForFocus()
+    {
+        const uint GW_CHILD = 5, GW_HWNDNEXT = 2;
+        nint window = User32.GetWindow(User32.GetDesktopWindow(), GW_CHILD);
+        for (int seen = 0; window != 0 && seen < 4096; seen++, window = User32.GetWindow(window, GW_HWNDNEXT))
+        {
+            const long WS_DISABLED = 0x08000000;
+            if (window == _source || window == Handle || !User32.IsWindowVisible(window) || User32.IsIconic(window) ||
+                (User32.GetWindowLongPtr(window, User32.GWL_STYLE) & WS_DISABLED) != 0 || _windows.IsHidden(window) ||
+                WindowInfo.IsConcealed(window))
+                continue;
+            long style = User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE);
+            if ((style & (User32.WS_EX_NOACTIVATE | User32.WS_EX_TOOLWINDOW)) != 0) continue;
+            if (Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) continue;
+            if (!User32.GetWindowRect(window, out Rect bounds) || bounds.Right - bounds.Left < 8 || bounds.Bottom - bounds.Top < 8) continue;
+            return window;
+        }
+        return 0;
     }
 
     /// <summary>The original's desktop while it is hidden because the person is on another one, or empty.</summary>
