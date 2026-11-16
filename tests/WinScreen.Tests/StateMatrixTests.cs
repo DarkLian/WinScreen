@@ -162,6 +162,8 @@ public sealed class StateMatrixTests
             }
             if (change.Contains("crop"))
                 Assert.True(windows.IsCropped(window), row + "The crop was dropped.");
+            if (action != "layer-rewritten" || !layered)
+                Assert.True(undone.Count == 0, row + "WinScreen said a change was undone: " + string.Join(" / ", undone));
             Consistent(row);
 
             // Still usable: moved and resized as asked, then closed.

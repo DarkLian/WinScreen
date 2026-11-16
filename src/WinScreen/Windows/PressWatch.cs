@@ -46,15 +46,20 @@ internal sealed class PressWatch
     /// <summary>
     /// Where a press at the middle of the window would go. The look's own overlay catching it, or a window below
     /// getting it, means the window doesn't take presses; a window above it there is the person's own arrangement.
+    /// A window the person made click-through sends its presses below by their choice, so it can't be told; a cropped
+    /// one is asked at the middle of the part it keeps.
     /// </summary>
-    public static bool? TakesPresses(nint window, nint overlay)
+    public static bool? TakesPresses(nint window, nint overlay, WindowController? windows = null)
     {
         if (!User32.IsWindow(window) || !User32.IsWindowVisible(window) || User32.IsIconic(window)) return null;
+        if (windows?.IsClickThrough(window) == true) return null;
         // Left on another virtual desktop (cloaked by Windows): what is under its middle now is another desktop's.
         if (!VirtualDesktops.OnCurrentDesktop(window) ||
             Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return null;
         if (!WindowInfo.TryGetVisibleBounds(window, out Rectangle bounds) || bounds.Width < 4 || bounds.Height < 4) return null;
         var middle = new Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2);
+        if (WindowInfo.ShapeOf(window) is { Width: >= 4, Height: >= 4 } kept && User32.GetWindowRect(window, out Rect whole))
+            middle = new Point(whole.Left + kept.Left + kept.Width / 2, whole.Top + kept.Top + kept.Height / 2);
         if (!Screen.AllScreens.Any(screen => screen.Bounds.Contains(middle))) return null;
         if (!WindowController.AnswersWithin(window, 100)) return null; // A hung app is its own trouble, not the look's.
         nint hit = User32.WindowFromPoint(new NativePoint { X = middle.X, Y = middle.Y });

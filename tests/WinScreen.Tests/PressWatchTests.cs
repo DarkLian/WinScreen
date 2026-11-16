@@ -102,4 +102,37 @@ public sealed class PressWatchTests
             Assert.Null(PressWatch.TakesPresses(target.Handle, 0));
         });
     }
+
+    /// <summary>
+    /// The person's own Click-through, and a crop that keeps a corner, send presses at the window's middle below by
+    /// choice. Neither may count against a look on the window, or the watchdog would turn it off for nothing.
+    /// </summary>
+    [Trait("Category", "RealWindows")]
+    [Fact]
+    public void Click_through_and_a_crop_chosen_by_the_person_do_not_count_against_a_look()
+    {
+        using var below = new TargetProcess(new Rectangle(280, 200, 500, 360), "1E64C8", title: "Below");
+        using var target = new TargetProcess(new Rectangle(300, 220, 460, 320), "E8E8E8");
+        nint plain = target.CreatePlainWindow(new Rectangle(300, 220, 460, 320), framed: true);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            var windows = new WindowController([]);
+            try
+            {
+                Desktop.Activate(target.Handle);
+                Assert.True(windows.ToggleClickThrough(target.Handle));
+                Assert.Null(PressWatch.TakesPresses(target.Handle, 0, windows));
+                windows.RestoreAll();
+
+                // A crop that keeps the window's top-left corner: its middle is the window below's.
+                User32.ShowWindow(target.Handle, 6);
+                Desktop.Activate(plain);
+                windows.Crop(plain, new Rectangle(10, 10, 160, 110));
+                Assert.True(Desktop.WaitFor(() => PressWatch.TakesPresses(plain, 0, windows) == true, 2000, Application.DoEvents),
+                    "A cropped window should be asked where it still is.");
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
 }

@@ -1905,8 +1905,8 @@ public sealed partial class TrayApplication : ApplicationContext
     private void FollowLookPresses()
     {
         if (_content.Count == 0 && !_dark.Targets.Any()) return;
-        var answers = _content.Sources.Select(window => (window, PressWatch.TakesPresses(window, _content.OverlayOf(window))))
-            .Concat(_dark.Targets.Select(window => (window, PressWatch.TakesPresses(window, _dark.OverlayOf(window)))))
+        var answers = _content.Sources.Select(window => (window, PressWatch.TakesPresses(window, _content.OverlayOf(window), _windows)))
+            .Concat(_dark.Targets.Select(window => (window, PressWatch.TakesPresses(window, _dark.OverlayOf(window), _windows))))
             .ToList();
         foreach (nint window in _pressWatch.Check(answers, Environment.TickCount64))
         {
