@@ -72,6 +72,7 @@ public sealed class DropIntoViewTests
             Assert.InRange(expected.Y, 100, 300);
 
             Point start = Middle(Desktop.BoundsOf(dragger.Handle));
+            Desktop.Activate(dragger.Handle); // In front of anything else on the screen, such as a test runner's console.
             Desktop.RequireWindowAt(start, dragger.Handle);
             Desktop.MoveMouse(start);
             Pump(100);
@@ -138,6 +139,7 @@ public sealed class DropIntoViewTests
             Point aim = Middle(view.RectangleToScreen(view.ClientRectangle));
             Point start = Middle(Desktop.BoundsOf(dragger.Handle));
 
+            Desktop.Activate(dragger.Handle); // In front of anything else on the screen, such as a test runner's console.
             Desktop.RequireWindowAt(start, dragger.Handle);
             Desktop.MoveMouse(start);
             Pump(100);
@@ -187,7 +189,9 @@ public sealed class DropIntoViewTests
             Point aim = Middle(view.RectangleToScreen(view.ClientRectangle));
             Point start = Middle(Desktop.BoundsOf(dragger.Handle));
             Point end = Middle(Desktop.BoundsOf(other.Handle));
+            Desktop.Activate(other.Handle);
 
+            Desktop.Activate(dragger.Handle); // In front of anything else on the screen, such as a test runner's console.
             Desktop.RequireWindowAt(start, dragger.Handle);
             Desktop.MoveMouse(start);
             Pump(100);
