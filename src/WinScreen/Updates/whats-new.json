@@ -1,4 +1,30 @@
 {
+  "1.1.1": {
+    "en": [
+      "Drag files, pictures or text onto a view to drop them in its window.",
+      "Glass keeps text readable over whatever is behind, and Dark mode keeps bold letters and title bars clean.",
+      "Dark mode and Glass stay with a window you move, resize, pin, crop or make click-through.",
+      "Views keep their state when you switch virtual desktops.",
+      "A saved setup changed with Change is now saved and used.",
+      "Many smaller fixes."
+    ],
+    "zh-Hans": [
+      "把文件、图片或文字拖到视图上，即可放进它的窗口。",
+      "玻璃效果下，无论背后是什么，文字都清晰可读；深色模式下，粗体字和标题栏也保持清晰。",
+      "移动、调整大小、置顶、裁剪窗口或让其鼠标穿透时，深色模式和玻璃效果都会保留。",
+      "切换虚拟桌面时，视图会保持原来的状态。",
+      "用“更改”修改的已保存配置，现在会保存并生效。",
+      "还有许多小修正。"
+    ],
+    "zh-Hant": [
+      "把檔案、圖片或文字拖到檢視上，即可放進它的視窗。",
+      "玻璃效果下，無論背後是什麼，文字都清晰易讀；深色模式下，粗體字和標題列也保持清晰。",
+      "移動、調整大小、置頂、裁切視窗或讓其滑鼠穿透時，深色模式和玻璃效果都會保留。",
+      "切換虛擬桌面時，檢視會保持原來的狀態。",
+      "用「變更」修改的已儲存設定，現在會儲存並生效。",
+      "還有許多小修正。"
+    ]
+  },
   "1.1.0": {
     "en": [
       "Rules: what a program's windows get when they come forward can now match more windows and do more.",
