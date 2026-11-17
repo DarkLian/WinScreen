@@ -197,7 +197,7 @@ internal static class AppProfiles
             VerifiedBy =
             [
                 new("StoreAppInputTests.Calculator_adds_through_a_view_takes_keys_and_says_what_it_cannot_do", Both),
-                new("StoreAppInputTests.A_hidden_store_app_brought_forward_from_elsewhere_is_shown_and_its_taskbar_button_stays", Both),
+                new("StoreAppInputTests.A_hidden_store_app_picked_from_the_taskbar_or_switcher_is_shown_and_its_taskbar_button_stays", Both),
             ],
         },
     ];
