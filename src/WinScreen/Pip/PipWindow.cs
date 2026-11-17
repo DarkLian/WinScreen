@@ -2055,12 +2055,20 @@ public sealed partial class PipWindow : Form
     private const long ArrivalSettle = 300;
 
     /// <summary>
-    /// Whether the window that had the focus before the original is gone from use: minimized, closed, or this view
-    /// minimized. A window merely hidden (a menu, the switcher) doesn't count, nor does one still there.
+    /// Whether the window that had the focus before the original is gone from use: minimized, closed, this view
+    /// minimized, or one of WinScreen's own windows hidden (a view's title bar or menu as the view minimizes: owner,
+    /// 17 Nov, after using a view directly the title bar's button had the focus). Another app's window merely hidden
+    /// (the switcher) doesn't count, nor does one still there.
     /// </summary>
     private bool HandedOnByWindows(nint before) =>
         before != 0 && before != _source &&
-        (!User32.IsWindow(before) || User32.IsIconic(before) || before == Handle && _suspended);
+        (!User32.IsWindow(before) || User32.IsIconic(before) || before == Handle && _suspended || OwnHiddenWindow(before));
+
+    private static bool OwnHiddenWindow(nint window)
+    {
+        User32.GetWindowThreadProcessId(window, out uint process);
+        return process == (uint)Environment.ProcessId && !User32.IsWindowVisible(window);
+    }
 
     /// <summary>
     /// The window Windows would have given the focus to without the hidden original: the highest one that is shown,

@@ -180,15 +180,17 @@ public sealed class NewViewHidingTests
     /// original stays hidden; still there, the app or the person asked for it, and it is shown.
     /// </summary>
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void A_window_that_hands_the_original_the_focus_as_it_closes_leaves_it_hidden(bool closes)
+    [InlineData("closes")]
+    [InlineData("stays")]
+    [InlineData("WinScreen's own hides")] // A view's title bar or menu as the view minimizes (owner, 17 Nov).
+    public void A_window_that_hands_the_original_the_focus_as_it_closes_leaves_it_hidden(string what)
     {
         using var source = new TargetProcess(Spot, "C81E1E", "Hidden source");
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             Desktop.GainForegroundRights();
             var windows = new WindowController([]);
+            bool closes = what != "stays";
             using var closing = new Form { Text = "Closing window", StartPosition = FormStartPosition.Manual, Bounds = new Rectangle(320, 260, 420, 300) };
             try
             {
@@ -203,7 +205,8 @@ public sealed class NewViewHidingTests
 
                 User32.SetForegroundWindow(source.Handle); // The app hands its other window the focus first...
                 TestDesktop.Pump(120);
-                if (closes) closing.Close(); // ...and closes this one a moment later.
+                if (what == "closes") closing.Close(); // ...and closes this one a moment later.
+                else if (closes) closing.Hide(); // The test runs in WinScreen's place: this form is one of its own.
                 TestDesktop.Pump(1200);
                 bool hidden = view.KeepsUpdating && windows.IsHidden(source.Handle);
                 if (closes) Assert.True(hidden, "The hand-off from a closing window showed the hidden original.");
