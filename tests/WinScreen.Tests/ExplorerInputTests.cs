@@ -379,7 +379,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
     /// Opens a folder in Explorer, a view of it used directly with experimental features off, and runs the steps on
     /// another thread with a mapping from a point on the screen over the original to the view.
     /// </summary>
-    private static void InView(string root, Action<nint, PipWindow, Func<Point, Point>> steps)
+    private static void InView(string root, Action<nint, PipWindow, Func<Point, Point>> steps, WindowController? windows = null)
     {
         nint window = 0;
         try
@@ -391,7 +391,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
             Thread.Sleep(1200);
             WindowMenuBuilderTests.OnUiThread(() =>
             {
-                using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = false };
+                using var view = new PipWindow(window, windows ?? new WindowController([])) { AllowInteractive = false };
                 view.ShowOnTop();
                 view.Location = new Point(1050, 220);
                 view.SetInteractive(true);
@@ -458,6 +458,95 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 "Typing didn't rename it: " + string.Join(",", Directory.GetFiles(root).Select(Path.GetFileName)));
             Assert.DoesNotContain(PressOutcome.Unconfirmed, view.PressOutcomes);
         });
+    }
+
+    /// <summary>
+    /// A file dragged out of a view: Windows' drag and drop follows the real pointer and can't be passed on as
+    /// messages, so the press waits, and once it moves past the drag distance the real window comes up under the
+    /// pointer with the pressed file there, and the drag is its own (owner, 17 Nov). Onto a folder in the view, to
+    /// another window, and onto another view, which hands its own window over. Both originals stay hidden after.
+    /// </summary>
+    [Theory]
+    [InlineData("to another window")]
+    [InlineData("to a folder in the view")]
+    [InlineData("to another view")]
+    public void A_file_is_dragged_out_of_a_view(string where)
+    {
+        string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
+        string other = Directory.CreateTempSubdirectory("WinScreenTarget-").FullName;
+        File.WriteAllText(Path.Combine(root, "drag-me"), "x");
+        Directory.CreateDirectory(Path.Combine(root, "into"));
+        nint target = 0;
+        PipWindow? second = null;
+        var shared = new WindowController([]);
+        try
+        {
+            if (where != "to a folder in the view")
+            {
+                target = OpenFolder(other);
+                User32.ShowWindow(target, 9);
+                User32.SetWindowPos(target, 0, 60, 600, 800, 380, 0x14);
+                Thread.Sleep(1000);
+            }
+            InView(root, (window, view, toView) =>
+            {
+                if (where == "to another view")
+                    view.Invoke(() =>
+                    {
+                        second = new PipWindow(target, shared);
+                        second.ShowOnTop();
+                        second.Location = new Point(1050, 640);
+                        second.HideOriginalByDefault();
+                    });
+                Thread.Sleep(800);
+                Rectangle file = Item(window, "drag-me").Bounds;
+                Point start = toView(Middle(file));
+                Point end = where switch
+                {
+                    "to another window" => new Point(Desktop.BoundsOf(target).Left + Desktop.BoundsOf(target).Width * 7 / 10, Desktop.BoundsOf(target).Bottom - 80),
+                    "to another view" => new Point(second!.Bounds.Left + second.Bounds.Width * 7 / 10, second.Bounds.Top + second.Bounds.Height * 6 / 10),
+                    _ => toView(Middle(Item(window, "into").Bounds)),
+                };
+                var log = new System.Text.StringBuilder($"start {start} end {end}; ");
+                Desktop.SlideMouse(start);
+                Thread.Sleep(250);
+                Desktop.MouseButton(true);
+                Thread.Sleep(150);
+                Desktop.SlideMouse(new Point(start.X + 8, start.Y + 3)); // Past the drag distance: picked up.
+                Thread.Sleep(400);
+                if (where == "to a folder in the view")
+                {
+                    // The real window is up now at its own size: aim at the folder there.
+                    Rectangle into = Item(window, "into").Bounds;
+                    end = Middle(into);
+                }
+                log.Append($"picked {view.DragsPickedUp} original at {Desktop.BoundsOf(window)} end {end}; ");
+                Point from = Desktop.CursorPosition();
+                for (int step = 1; step <= 30; step++)
+                {
+                    Desktop.SlideMouse(new Point(from.X + (end.X - from.X) * step / 30, from.Y + (end.Y - from.Y) * step / 30));
+                    Thread.Sleep(40);
+                    if (step % 10 == 0)
+                        log.Append($"[{step}: under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} handing={view.HandingOverDrop} second={second?.HandingOverDrop}] ");
+                }
+                Thread.Sleep(500);
+                Desktop.MouseButton(false);
+                Thread.Sleep(2500);
+                string[] arrived = (where == "to a folder in the view" ? Directory.GetFileSystemEntries(Path.Combine(root, "into")) : Directory.GetFileSystemEntries(other)).Select(Path.GetFileName).ToArray()!;
+                log.Append($"after: arrived [{string.Join(",", arrived)}]; source still has it {File.Exists(Path.Combine(root, "drag-me"))}; hidden={view.KeepsUpdating} concealed={WindowInfo.IsConcealed(window)} handing={view.HandingOverDrop}; fg={WindowInfo.ClassName(User32.GetForegroundWindow())}");
+                output.WriteLine(log.ToString());
+                Assert.True(view.DragsPickedUp == 1, "The drag wasn't handed over: " + log);
+                Assert.True(arrived.SequenceEqual(["drag-me"]), "The file didn't arrive: " + log);
+                Assert.True(view.KeepsUpdating && WindowInfo.IsConcealed(window), "The original didn't hide again: " + log);
+                Assert.True(second?.KeepsUpdating != false, "The other view's original didn't hide again: " + log);
+            }, shared);
+        }
+        finally
+        {
+            second?.Invoke(() => second.Close());
+            if (target != 0) CloseWindow(target);
+            try { Directory.Delete(other, true); } catch (IOException) { }
+        }
     }
 
     /// <summary>A drag over the empty part of the list selects the files it crosses, through a view.</summary>

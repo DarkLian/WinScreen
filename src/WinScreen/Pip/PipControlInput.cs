@@ -29,6 +29,8 @@ internal sealed class PipControlInput
         ContextMenu,
         /// <summary>Scroll what scrolls under the point by lines, as the wheel would; negative is up or left.</summary>
         Scroll,
+        /// <summary>Nothing is done: whether an item (a file, a folder, a row) is under the point. "item" or "none".</summary>
+        IsItem,
     }
 
     /// <summary>
@@ -156,6 +158,16 @@ internal sealed class PipControlInput
                 foreach (nint element in path) Marshal.Release(element);
                 path = PathAt(automation, walker, identity.Window, at);
             }
+            if (kind == Request.IsItem)
+            {
+                for (int i = path.Count - 1; i >= 1; i--)
+                {
+                    int type = 0;
+                    ((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(path[i], 21))(path[i], &type);
+                    if (type is ListItem or TreeItem or DataItem) return new(true, "item");
+                }
+                return new(true, "none");
+            }
             // Icons and text can sit inside an actionable control; walk back to that control, but never to the
             // surface itself, which would act on something the pointer isn't on.
             for (int i = path.Count - 1; i >= 1; i--)
@@ -206,6 +218,8 @@ internal sealed class PipControlInput
             if (walker != 0) Marshal.Release(walker);
         }
     }
+
+    private const int ListItem = 50007, TreeItem = 50024, DataItem = 50029;
 
     /// <summary>Scrolls the innermost element under the point that scrolls that way, by small steps (lines).</summary>
     private unsafe Result ScrollAt(WindowIdentity identity, nint host, Point at, int lines, bool horizontal)

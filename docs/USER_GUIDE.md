@@ -107,6 +107,8 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 - **Drag something onto a view**, such as a file, a picture or some text, and the original window comes up under the
   pointer so you can drop it there. It hides again when you let go. This doesn't work while WinScreen runs as
   administrator.
+- **Drag a file out of a File Explorer view** onto a folder in it, another window, the desktop or another view. When
+  you start dragging, the real window comes up under the pointer with your file there, and hides again afterwards.
 
 Views pause direct use while a WinScreen menu or the tray overflow panel is open.
 

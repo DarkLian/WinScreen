@@ -148,6 +148,27 @@ internal sealed class PipInteraction : IDisposable
     /// (browsers and Electron apps). The view's own scrolling then stands aside and the app gets the click.
     /// </summary>
     internal volatile bool AppScrollsWithHover;
+
+    /// <summary>
+    /// The app's drags are handed to the real window (File Explorer). A left press on its content waits: let go
+    /// without moving far, it is delivered as a click then; moved past Windows' drag distance, it raises
+    /// <see cref="DragPickedUp"/> with where it was pressed, and from then on the press is the real window's: nothing
+    /// more is posted for it, and its release goes through to whatever is under the pointer.
+    /// </summary>
+    internal volatile bool HandsOverDrags;
+
+    /// <summary>A press turned into a drag (see <see cref="HandsOverDrags"/>); the point is where it was pressed, on the screen.</summary>
+    internal event Action<Point>? DragPickedUp;
+
+    private Point _pressAt;
+    private bool _leftWaitsForDrag;
+
+    /// <summary>Whether the waiting press is on an item: 1 yes, 0 no, -1 not known yet (asked of UI Automation at the press).</summary>
+    private volatile int _pressOnItem = -1;
+    private volatile bool _pressHandedOver, _handedOverReleased;
+
+    /// <summary>The handed-over press was let go before the view could hand it on.</summary>
+    internal bool HandedOverReleased => _handedOverReleased;
     internal string HoverStatus => $"{(EnhancedHover && _messages.MoveRoute != InputRoute.Messages ? "unavailable: " + _messages.MoveRoute + " route" : _messages.Hover.Status)}; target=0x{_messages.MoveTarget:X}; busy={_appBusy}; outside={_outside}; popup={_inPopup}; enabled={EnhancedHover}; install={_messages.Hover.InstallMilliseconds:F3}ms uninstall={_messages.Hover.UninstallMilliseconds:F3}ms";
     private volatile bool _scrolling;
     internal bool Scrolling => _scrolling;
@@ -228,6 +249,7 @@ internal sealed class PipInteraction : IDisposable
     /// where it took 31 to 57 ms (a fixed 10 ms wait failed every double-click there).
     /// </summary>
     private const int MaxRecheckWait = 100;
+    private const int ItemAnswerWait = 200;
 
     // Set once the view has had a pointer move after the hook stopped sharing for the latest press.
     private readonly ManualResetEventSlim _rechecked = new(true);
@@ -492,6 +514,7 @@ internal sealed class PipInteraction : IDisposable
             return false; // It goes to whatever is really there.
         }
         // Everything inside the picture is kept from the desktop; the worker decides what it means.
+        if (button == MouseButtons.Left) _pressHandedOver = _handedOverReleased = false;
         bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
         if (!alt)
         {
@@ -521,6 +544,12 @@ internal sealed class PipInteraction : IDisposable
 
     private bool OnRelease(Point point, MouseButtons button)
     {
+        if (_pressHandedOver && button == MouseButtons.Left)
+        {
+            _swallowed &= ~button; // The real window has the press now: the release is its own.
+            _handedOverReleased = true;
+            return false;
+        }
         bool swallow = (_swallowed & button) != 0;
         _swallowed &= ~button;
         if (swallow) Enqueue(new(EventKind.Release, point, button));
@@ -601,6 +630,27 @@ internal sealed class PipInteraction : IDisposable
             ViewDragged?.Invoke(moved);
             return;
         }
+        if (_pressHandedOver) return; // The real window takes the pointer from here.
+        if (_leftWaitsForDrag)
+        {
+            if (_stopping || Math.Abs(point.X - _pressAt.X) <= SystemInformation.DragSize.Width / 2 &&
+                Math.Abs(point.Y - _pressAt.Y) <= SystemInformation.DragSize.Height / 2) return;
+            _leftWaitsForDrag = false;
+            // Usually known long since; a slow answer doesn't hold the pointer for more than a moment.
+            for (long until = Environment.TickCount64 + ItemAnswerWait; _pressOnItem < 0 && Environment.TickCount64 < until;) Thread.Sleep(5);
+            if (_pressOnItem == 1)
+            {
+                _pressHandedOver = true;
+                DragPickedUp?.Invoke(_pressAt);
+                return;
+            }
+            // Not on an item (empty space selects what it crosses): the press goes as messages after all, and the move.
+            var (pressView, pressShown) = Geometry();
+            Delivery late = _messages.Press(_pressAt, MouseButtons.Left, pressView, pressShown, menuBar: false);
+            if (late == Delivery.Posted) _heldDelivered |= MouseButtons.Left;
+            if (late == Delivery.Deferred) _pendingClick |= MouseButtons.Left;
+            else Record(Outcome(late), _pressAt, 1, _messages.PressTarget, late == Delivery.Posted, _messages.Why);
+        }
         var (view, shown) = Geometry();
         Publish(point);
         if (_scrolling) { _scrollPoint = point; return; }
@@ -671,6 +721,18 @@ internal sealed class PipInteraction : IDisposable
             Record(PressOutcome.ScrollMode, point, hit);
             return;
         }
+        if (HandsOverDrags && button == MouseButtons.Left && !alt && hit == 1 &&
+            _heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None)
+        {
+            _pressAt = point; // Click or drag: the next moves or the release say which.
+            _leftWaitsForDrag = true;
+            _pressOnItem = -1;
+            Point mapped = _messages.MappedScreen(point, view, shown);
+            if (!PipControlInput.Shared.Submit(_identity, _messages.TargetAt(mapped), mapped, PipControlInput.Request.IsItem,
+                    result => _pressOnItem = result.Done && result.What == "item" ? 1 : 0))
+                _pressOnItem = 0;
+            return;
+        }
         Delivery delivery = _messages.Press(point, button, view, shown, menuBar: hit == 5);
         if (delivery == Delivery.Posted) _heldDelivered |= button;
         if (delivery == Delivery.Deferred) { _pendingClick |= button; return; } // Its outcome comes with the release.
@@ -684,7 +746,22 @@ internal sealed class PipInteraction : IDisposable
              Math.Abs(point.Y - _scrollAnchor.Y) > SystemInformation.DragSize.Height)) _scrolling = false;
         if (button == MouseButtons.Left) _dragging = false;
         var (view, shown) = Geometry();
-        if ((_pendingClick & button) != 0)
+        if (button == MouseButtons.Left && _leftWaitsForDrag)
+        {
+            // Let go without dragging: the click, where it was pressed and where it was let go.
+            _leftWaitsForDrag = false;
+            Delivery pressed = _messages.Press(_pressAt, button, view, shown, menuBar: false);
+            if (pressed == Delivery.Posted) _messages.Release(point, button, view, shown, null, out _);
+            else if (pressed == Delivery.Deferred)
+            {
+                nint target = _messages.PressTarget;
+                _messages.Release(point, button, view, shown, result =>
+                    Record(result.Done ? PressOutcome.Delivered : result.Unsupported ? PressOutcome.Unsupported : PressOutcome.Unconfirmed,
+                        point, 1, target, result.Done, result.What), out _);
+            }
+            if (pressed != Delivery.Deferred) Record(Outcome(pressed), _pressAt, 1, _messages.PressTarget, pressed == Delivery.Posted, _messages.Why);
+        }
+        else if ((_pendingClick & button) != 0)
         {
             _pendingClick &= ~button;
             nint target = _messages.PressTarget;

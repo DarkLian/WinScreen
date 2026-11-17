@@ -1222,10 +1222,63 @@ public sealed partial class PipWindow : Form
         _dropReleasedAt = 0;
         _dropOutsideSince = 0;
         _dropTookFocus = false;
+        _dropFromView = false;
         _foregroundBeforeDrop = User32.GetForegroundWindow();
         StepAside(true);
         Diagnostics.Log.Event("view.dropHandedOver", ("program", Diagnostics.LogValue.ProgramOf(_source)));
     }
+
+    /// <summary>
+    /// Whether a drag that starts in the view is handed to the real window. File Explorer only for now: its files are
+    /// dragged with Windows' own drag and drop, which follows the real pointer and can't be passed on as messages. In a
+    /// browser the same press-and-move mostly selects text, which works through the view as it is.
+    /// </summary>
+    private bool HandsOverDrags => _origin.IsWindow && WindowInfo.ClassName(_source) == "CabinetWClass";
+
+    /// <summary>
+    /// A press in the view turned into a drag: the original comes up under the pointer at its own size, the pressed spot
+    /// where it was pressed, as for a drop (<see cref="HandOverDrop"/>), and the press goes on there with the real
+    /// pointer. The app's own drag then starts from the right place: inside it (managing files), out to another window
+    /// or the desktop, or over another view, which hands its own original over. It hides again as a drop does.
+    /// </summary>
+    private void PickUpDrag(Point pressed)
+    {
+        if (IsDisposed || _live is not { } live || _dropSince != 0 || !_origin.IsAvailable || !_windows.IsParked(_source)) return;
+        Point spot = SourceSpotAt(pressed);
+        if (!User32.GetWindowRect(_source, out Rect bounds)) return;
+        nint before = _foregroundBeforeLive;
+        EndLive(keepFocus: true); // The hook goes first: the press given below must reach the window.
+        // The press was the hook's, so Windows doesn't know the button is down: let go meanwhile, there is nothing to hand on.
+        if (live.HandedOverReleased) return;
+        Point pointer = Cursor.Position;
+        Rectangle at = DropPlace(pointer, spot, new Size(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top),
+            Screen.FromPoint(pointer).WorkingArea);
+        try { _windows.ShowParkedForDrop(_source, at.Location); }
+        catch (WindowOperationException failure)
+        {
+            Diagnostics.Log.Swallowed(failure);
+            return;
+        }
+        // The pressed spot is under the pointer now: the real window gets the press, and the drag is its own from here.
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+        _dropSince = Environment.TickCount64;
+        _dropReleasedAt = 0;
+        _dropOutsideSince = 0;
+        _dropTookFocus = false;
+        _dropFromView = true;
+        _foregroundBeforeDrop = before;
+        StepAside(true);
+        DragsPickedUp++;
+        Diagnostics.Log.Event("view.dragPickedUp", ("program", Diagnostics.LogValue.ProgramOf(_source)));
+    }
+
+    /// <summary>How many drags the view has handed to the original, for tests.</summary>
+    internal int DragsPickedUp { get; private set; }
+
+    private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern void mouse_event(uint flags, int dx, int dy, uint data, nuint extra);
 
     /// <summary>The spot in the original, from its top-left corner, that the view shows at a point on the screen.</summary>
     internal Point SourceSpotAt(Point screen) => PipGeometry.PointToSource(PointToClient(screen), PictureArea, _lastShown);
@@ -1261,7 +1314,9 @@ public sealed partial class PipWindow : Form
                 Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).Contains(Cursor.Position);
             if (inside) _dropOutsideSince = 0;
             else if (_dropOutsideSince == 0) _dropOutsideSince = now;
-            else if (now - _dropOutsideSince >= DropPassedBy) EndDrop();
+            // Out of the way of where the drag is going. Its own drag goes on without it in sight (Windows carries it),
+            // and the focus stays where it is: moving it can cancel a drag.
+            else if (now - _dropOutsideSince >= DropPassedBy) EndDrop(keepFocus: _dropFromView);
             return;
         }
         if (_dropReleasedAt == 0) _dropReleasedAt = now;
@@ -1282,16 +1337,17 @@ public sealed partial class PipWindow : Form
     /// had the focus, it goes back to the window that had it before the drag (or to the view): keys mustn't go to a
     /// window that can't be seen.
     /// </summary>
-    private void EndDrop()
+    private void EndDrop(bool keepFocus = false)
     {
         if (_dropSince == 0) return;
         _dropSince = 0;
         try { _windows.ReturnToParking(_source); }
         catch (WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
+        if (keepFocus) _focusBackAfterDrag = true;
         if (!_usingOriginal)
         {
             StepAside(false);
-            if (User32.GetForegroundWindow() == _source)
+            if (!keepFocus && User32.GetForegroundWindow() == _source)
             {
                 nint back = _foregroundBeforeDrop != 0 && _foregroundBeforeDrop != _source && User32.IsWindow(_foregroundBeforeDrop) &&
                             !_windows.IsHidden(_foregroundBeforeDrop) ? _foregroundBeforeDrop : Handle;
@@ -1305,7 +1361,21 @@ public sealed partial class PipWindow : Form
         (User32.GetAsyncKeyState(0x01) & 0x8000) != 0 || (User32.GetAsyncKeyState(0x02) & 0x8000) != 0;
 
     private long _dropSince, _dropReleasedAt, _dropOutsideSince;
-    private bool _dropTookFocus;
+    private bool _dropTookFocus, _dropFromView, _focusBackAfterDrag;
+
+    /// <summary>
+    /// After its own drag went out of the original: once it is let go, keys mustn't stay with a window that can't be
+    /// seen, so the focus goes back to the window used before (or the view), as after a drop.
+    /// </summary>
+    private void FollowFocusAfterDrag()
+    {
+        if (!_focusBackAfterDrag || DragButtonsDown()) return;
+        _focusBackAfterDrag = false;
+        if (_dropSince != 0 || User32.GetForegroundWindow() != _source || !_windows.IsHidden(_source)) return;
+        nint back = _foregroundBeforeDrop != 0 && _foregroundBeforeDrop != _source && User32.IsWindow(_foregroundBeforeDrop) &&
+                    !_windows.IsHidden(_foregroundBeforeDrop) ? _foregroundBeforeDrop : Handle;
+        User32.SetForegroundWindow(back);
+    }
     private nint _foregroundBeforeDrop;
     private const long DropSettles = 500, DropPassedBy = 300;
 
@@ -1448,6 +1518,8 @@ public sealed partial class PipWindow : Form
         live.ViewDragged += moved => BeginInvokeIfAlive(() => DragLiveView(moved));
         live.CaptionPressed += action => BeginInvokeIfAlive(() => OnCaption(action));
         live.QuestionShown += () => BeginInvokeIfAlive(OnQuestion);
+        live.HandsOverDrags = HandsOverDrags;
+        live.DragPickedUp += pressed => BeginInvokeIfAlive(() => PickUpDrag(pressed));
         _liveStartedZoomed = User32.IsZoomed(_source) || CoversAMonitor(_source);
         try
         {
@@ -1488,7 +1560,8 @@ public sealed partial class PipWindow : Form
     }
 
     /// <summary>In this order: the source stops taking clicks, goes home, the hook goes, the view takes input, keys come back.</summary>
-    private void EndLive()
+    /// <param name="keepFocus">A drag handed to the original: it keeps the focus it has, or the drag would be cancelled.</param>
+    private void EndLive(bool keepFocus = false)
     {
         ClaimEscape(_selecting); // Scrolling must not keep a global Escape claim after a visit/suspension ends.
         if (_live is not { } live)
@@ -1502,7 +1575,7 @@ public sealed partial class PipWindow : Form
         live.Dispose();
         Cursor.Current = Cursors.Default;
         SetInputPassesThrough(false);
-        if (User32.GetForegroundWindow() == _source)
+        if (!keepFocus && User32.GetForegroundWindow() == _source)
         {
             // Not to a window WinScreen keeps hidden, such as another view's original: put in front, it counted as the person
             // going to it, and came back out of its view (the owner, 15 Nov: a full-screen video covered the screen).
@@ -1919,6 +1992,7 @@ public sealed partial class PipWindow : Form
 
         string title = T("pip.titlePrefix") + _origin.Title;
         if (Text != title) Text = title;
+        FollowFocusAfterDrag();
         if (_dropSince == 0) RevealIfActivatedElsewhere();
         else _sourceWasFocused = User32.GetForegroundWindow() == _source; // A drop may focus it; that isn't asking for it.
         FollowDrop();
