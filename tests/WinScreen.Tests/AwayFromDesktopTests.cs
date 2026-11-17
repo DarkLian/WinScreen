@@ -24,7 +24,7 @@ public sealed class AwayFromDesktopTests
     /// </summary>
     [Fact]
     public void Only_measured_desktop_interfaces_are_used() =>
-        Assert.Equal(["Windows 11 24H2 and later (measured on 26300)"],
+        Assert.Equal(["Windows 11 24H2 and later (measured on 26300)", "Windows 10 (measured on 19045)"],
             VirtualDesktopsInternal.Known.Where(row => row.Measured).Select(row => row.Windows));
 
     [Fact]

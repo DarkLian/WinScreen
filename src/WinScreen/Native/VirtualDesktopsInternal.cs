@@ -24,7 +24,7 @@ internal static unsafe partial class VirtualDesktopsInternal
         (new("53F5CA0B-158F-4124-900C-057158060B27"), 14, "Windows 11 24H2 and later (measured on 26300)", true),
         (new("A3175F2D-239C-4BD2-8AA0-EEBA8B0B138E"), 14, "Windows 11 22H2/23H2", false),
         (new("B2F925B9-5A0F-4D2E-9F4D-2B1507593C10"), 13, "Windows 11 21H2", false),
-        (new("F31574D6-B682-4CDC-BD56-1827860ABEC6"), 12, "Windows 10", false),
+        (new("F31574D6-B682-4CDC-BD56-1827860ABEC6"), 12, "Windows 10 (measured on 19045)", true),
     ];
 
     private const int MoveViewToDesktop = 4; // The same slot in every version above.
