@@ -26,6 +26,12 @@ internal enum PipStateProblem
     InteractiveNotAllowed,
     /// <summary>A visit with Enhanced hover or middle-click scrolling while experimental features are off.</summary>
     ExperimentalVisitWithoutSwitch,
+    /// <summary>The original out for a drop or a drag during a visit (a drag ends the visit first).</summary>
+    DropDuringVisit,
+    /// <summary>The original out for a drop or a drag while Keep hidden is off, or while the view is minimized.</summary>
+    DropWithoutHiding,
+    /// <summary>Hidden while on another desktop although Keep hidden is on, or while the original is in use.</summary>
+    AwayWhileHiddenOrInUse,
 }
 
 /// <summary>
@@ -1112,7 +1118,8 @@ public sealed partial class PipWindow : Form
     private ViewState.Modes CurrentModes() => new(Interactive: _interactiveItem.Checked, Hidden: _hideItem.Checked,
         Visiting: _live is not null, Suspended: _suspended, InputPaused: _inputPaused, UsingOriginal: _usingOriginal,
         MayInteract: CanInteract, ExperimentalSwitch: _allowInteractive,
-        VisitUsesExperimental: _live is { } visit && (visit.EnhancedHover || visit.MiddleClickScroll));
+        VisitUsesExperimental: _live is { } visit && (visit.EnhancedHover || visit.MiddleClickScroll),
+        TakingDrop: _dropSince != 0, Away: _awayFrom != Guid.Empty);
 
     /// <summary>How often a request left the view somewhere other than <see cref="ViewState.Apply"/> says, for tests.</summary>
     internal int UnexpectedModes { get; private set; }
@@ -1270,6 +1277,8 @@ public sealed partial class PipWindow : Form
     private void HandOverDrop()
     {
         if (IsDisposed || _dropSince != 0 || !_origin.IsAvailable || !_windows.IsParked(_source) || !DragButtonsDown()) return;
+        ViewState.Modes before = CurrentModes();
+        if (ViewState.Apply(before, ViewState.Request.DropStarts) == before) return;
         // Where the pointer is now: it may have gone on into the view since the drag came in at its edge.
         Point pointer = Cursor.Position;
         if (!RectangleToScreen(PictureArea).Contains(pointer)) return;
@@ -1291,6 +1300,8 @@ public sealed partial class PipWindow : Form
         _dropFromView = false;
         _foregroundBeforeDrop = User32.GetForegroundWindow();
         StepAside(true);
+        CheckState();
+        CheckRequest(before, ViewState.Request.DropStarts);
         Diagnostics.Log.Event("view.dropHandedOver", ("program", Diagnostics.LogValue.ProgramOf(_source)));
     }
 
@@ -1310,6 +1321,8 @@ public sealed partial class PipWindow : Form
     private void PickUpDrag(Point pressed)
     {
         if (IsDisposed || _live is not { } live || _dropSince != 0 || !_origin.IsAvailable || !_windows.IsParked(_source)) return;
+        ViewState.Modes modesBefore = CurrentModes();
+        if (ViewState.Apply(modesBefore, ViewState.Request.DropStarts) == modesBefore) return;
         Point spot = SourceSpotAt(pressed);
         if (!User32.GetWindowRect(_source, out Rect bounds)) return;
         string item = live.PressedItem;
@@ -1373,6 +1386,8 @@ public sealed partial class PipWindow : Form
         _dropFromView = true;
         _foregroundBeforeDrop = before;
         StepAside(true);
+        CheckState();
+        CheckRequest(modesBefore, ViewState.Request.DropStarts);
         DragsPickedUp++;
         Diagnostics.Log.Event("view.dragPickedUp", ("program", Diagnostics.LogValue.ProgramOf(_source)));
     }
@@ -1479,6 +1494,7 @@ public sealed partial class PipWindow : Form
     private void EndDrop(bool keepFocus = false)
     {
         if (_dropSince == 0) return;
+        ViewState.Modes before = CurrentModes();
         _dropSince = 0;
         try { _windows.ReturnToParking(_source); }
         catch (WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
@@ -1496,6 +1512,7 @@ public sealed partial class PipWindow : Form
                 User32.SetForegroundWindow(back);
             }
         }
+        CheckRequest(before, ViewState.Request.DropEnds);
         Diagnostics.Log.Event("view.dropEnded", ("tookFocus", _dropTookFocus));
     }
 
@@ -2114,18 +2131,23 @@ public sealed partial class PipWindow : Form
         if (!away && here) return; // The usual case costs one question.
         AwayFromDesktop.Step step = AwayFromDesktop.Decide(_awayFrom, mayHide, here,
             away ? null : VirtualDesktops.DesktopOf(_source), VirtualDesktops.CurrentDesktop(), away ? VirtualDesktops.Exists(_awayFrom) : null);
+        ViewState.Modes before = CurrentModes();
         if (step == AwayFromDesktop.Step.Hide)
         {
+            if (ViewState.Apply(before, ViewState.Request.LeftDesktop) == before) return;
             Guid desktop = VirtualDesktops.DesktopOf(_source) ?? Guid.Empty;
             ChangeInteractionMode(false, true);
             if (!_windows.IsConcealedBy(_source, this)) return;
             _awayFrom = desktop;
             PublishInteractionMode(false);
+            CheckState();
+            CheckRequest(before, ViewState.Request.LeftDesktop);
             Diagnostics.Log.Event("view.awayHidden", ("program", Diagnostics.LogValue.ProgramOf(_source)));
         }
         else if (step == AwayFromDesktop.Step.ShowAgain)
         {
             ChangeInteractionMode(false, false);
+            CheckRequest(before, ViewState.Request.BackToDesktop);
             Diagnostics.Log.Event("view.awayShown", ("program", Diagnostics.LogValue.ProgramOf(_source)));
         }
     }

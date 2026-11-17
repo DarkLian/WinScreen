@@ -67,24 +67,23 @@ public sealed class ViewStateTests
     public static TheoryData<int> EveryModeCombination()
     {
         var all = new TheoryData<int>();
-        for (int bits = 0; bits < 512; bits++) all.Add(bits);
+        for (int bits = 0; bits < 2048; bits++) all.Add(bits);
         return all;
     }
 
     /// <summary>
-    /// Every combination of the view's nine modes: none of the forbidden pairs passes as fine, and a combination with
+    /// Every combination of the view's eleven modes: none of the forbidden pairs passes as fine, and a combination with
     /// none of them is fine. The forbidden pairs, as ARCHITECTURE.md lists them under INV-20:
     /// used directly with the original shown; a visit without direct use, or while minimized or paused; "use it, then
     /// hide again" with the original hidden or visited, or while minimized; direct use not allowed for the app; a visit
-    /// with experimental help while experimental features are off.
+    /// with experimental help while experimental features are off; the original out for a drop during a visit, while
+    /// Keep hidden is off or while minimized; hidden while away with Keep hidden on or while the original is in use.
     /// </summary>
     [Theory]
     [MemberData(nameof(EveryModeCombination))]
     public void Every_combination_of_modes_is_judged_by_the_forbidden_pairs(int bits)
     {
-        bool B(int i) => (bits & (1 << i)) != 0;
-        var m = new Modes(Interactive: B(0), Hidden: B(1), Visiting: B(2), Suspended: B(3), InputPaused: B(4),
-            UsingOriginal: B(5), MayInteract: B(6), ExperimentalSwitch: B(7), VisitUsesExperimental: B(8));
+        Modes m = ModesOf(bits);
         var broken = new List<PipStateProblem>();
         if (m.Interactive && !m.Hidden) broken.Add(PipStateProblem.InteractiveWithOriginalShown);
         if (m.Visiting && !m.Interactive) broken.Add(PipStateProblem.VisitWithoutInteractive);
@@ -93,6 +92,9 @@ public sealed class ViewStateTests
         if (m.UsingOriginal && m.Suspended) broken.Add(PipStateProblem.UsingOriginalWhileMinimized);
         if (m.Interactive && !m.MayInteract) broken.Add(PipStateProblem.InteractiveNotAllowed);
         if (m.Visiting && !m.ExperimentalSwitch && m.VisitUsesExperimental) broken.Add(PipStateProblem.ExperimentalVisitWithoutSwitch);
+        if (m.TakingDrop && m.Visiting) broken.Add(PipStateProblem.DropDuringVisit);
+        if (m.TakingDrop && (!m.Hidden || m.Suspended)) broken.Add(PipStateProblem.DropWithoutHiding);
+        if (m.Away && (m.Hidden || m.UsingOriginal)) broken.Add(PipStateProblem.AwayWhileHiddenOrInUse);
 
         PipStateProblem found = ProblemOf(m);
         if (broken.Count == 0) Assert.Equal(PipStateProblem.None, found);
@@ -103,12 +105,13 @@ public sealed class ViewStateTests
     {
         bool B(int i) => (bits & (1 << i)) != 0;
         return new Modes(Interactive: B(0), Hidden: B(1), Visiting: B(2), Suspended: B(3), InputPaused: B(4),
-            UsingOriginal: B(5), MayInteract: B(6), ExperimentalSwitch: B(7), VisitUsesExperimental: B(8));
+            UsingOriginal: B(5), MayInteract: B(6), ExperimentalSwitch: B(7), VisitUsesExperimental: B(8), TakingDrop: B(9),
+            Away: B(10));
     }
 
     /// <summary>
     /// Every allowed combination of modes, every request, Keep hidden before direct use either way: no request leads
-    /// to a combination that must never happen (512 × 10 × 2, the allowed ones only).
+    /// to a combination that must never happen (2048 × 14 × 2, the allowed ones only).
     /// </summary>
     [Theory]
     [MemberData(nameof(EveryModeCombination))]
@@ -146,5 +149,42 @@ public sealed class ViewStateTests
         Assert.Equal(minimized, Apply(minimized, Request.VisitStarts));
         // Not where the app may not be used directly.
         Assert.Equal(hidden with { MayInteract = false }, Apply(hidden with { MayInteract = false }, Request.InteractiveOn));
+    }
+
+    /// <summary>
+    /// The original out for a drop or a drag, and hidden while the person is on another desktop (10-5): when they may
+    /// start, that a visit ends for a drag and none starts during one, and that any choice about the original ends both.
+    /// </summary>
+    [Fact]
+    public void Drops_and_desktops_go_through_the_table_too()
+    {
+        var shownView = new Modes(Interactive: false, Hidden: false, Visiting: false, Suspended: false, InputPaused: false,
+            UsingOriginal: false, MayInteract: true, ExperimentalSwitch: false, VisitUsesExperimental: false);
+        Modes hidden = Apply(shownView, Request.KeepHiddenOn);
+        // A drop needs the original hidden by the person, the view on the screen and the original not otherwise in use.
+        Assert.Equal(shownView, Apply(shownView, Request.DropStarts));
+        Modes dropping = Apply(hidden, Request.DropStarts);
+        Assert.True(dropping.TakingDrop);
+        Assert.Equal(dropping, Apply(dropping, Request.DropStarts));
+        Modes minimized = Apply(hidden, Request.Minimize);
+        Assert.Equal(minimized, Apply(minimized, Request.DropStarts));
+        Assert.Equal(hidden, Apply(dropping, Request.DropEnds));
+        // A drag picked up during a visit ends the visit; a visit doesn't start while the original is out.
+        Modes visiting = Apply(Apply(hidden, Request.InteractiveOn), Request.VisitStarts);
+        Modes dragging = Apply(visiting, Request.DropStarts);
+        Assert.True(dragging is { TakingDrop: true, Visiting: false });
+        Assert.Equal(dragging, Apply(dragging, Request.VisitStarts));
+        // Minimizing and every choice about the original end it.
+        foreach (Request choice in new[] { Request.Minimize, Request.KeepHiddenOn, Request.ShowOriginal, Request.InteractiveOff, Request.UseOriginal })
+            Assert.False(Apply(dragging, choice).TakingDrop, choice.ToString());
+        // Hidden while away: only an original that isn't hidden or in use; Keep hidden or showing it ends it.
+        Modes away = Apply(shownView, Request.LeftDesktop);
+        Assert.True(away.Away);
+        Assert.Equal(hidden, Apply(hidden, Request.LeftDesktop));
+        Assert.Equal(dropping, Apply(dropping, Request.LeftDesktop));
+        Assert.Equal(shownView, Apply(away, Request.BackToDesktop));
+        Assert.True(Apply(away, Request.KeepHiddenOn) is { Hidden: true, Away: false });
+        Assert.Equal(away, Apply(away, Request.VisitStarts));
+        Assert.Equal(away, Apply(away, Request.DropStarts));
     }
 }

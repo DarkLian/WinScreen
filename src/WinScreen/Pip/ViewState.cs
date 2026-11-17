@@ -55,8 +55,11 @@ internal static class ViewState
     /// <param name="MayInteract">Its kind of app, or the experimental switch, allows direct use.</param>
     /// <param name="ExperimentalSwitch">Experimental features are on.</param>
     /// <param name="VisitUsesExperimental">The visit has Enhanced hover or middle-click scrolling.</param>
+    /// <param name="TakingDrop">The original is out for something dragged onto the view, or for a drag started in it (10-5).</param>
+    /// <param name="Away">The original is hidden for now because the person is on another desktop (Keep hidden is off).</param>
     internal readonly record struct Modes(bool Interactive, bool Hidden, bool Visiting, bool Suspended, bool InputPaused,
-        bool UsingOriginal, bool MayInteract, bool ExperimentalSwitch, bool VisitUsesExperimental);
+        bool UsingOriginal, bool MayInteract, bool ExperimentalSwitch, bool VisitUsesExperimental, bool TakingDrop = false,
+        bool Away = false);
 
     /// <summary>The first combination of modes that must never happen, or none (checked on every change of mode).</summary>
     internal static PipStateProblem ProblemOf(Modes m)
@@ -68,6 +71,9 @@ internal static class ViewState
         if (m.UsingOriginal && m.Suspended) return PipStateProblem.UsingOriginalWhileMinimized;
         if (m.Interactive && !m.MayInteract) return PipStateProblem.InteractiveNotAllowed;
         if (m.Visiting && !m.ExperimentalSwitch && m.VisitUsesExperimental) return PipStateProblem.ExperimentalVisitWithoutSwitch;
+        if (m.TakingDrop && m.Visiting) return PipStateProblem.DropDuringVisit;
+        if (m.TakingDrop && (!m.Hidden || m.Suspended)) return PipStateProblem.DropWithoutHiding;
+        if (m.Away && (m.Hidden || m.UsingOriginal)) return PipStateProblem.AwayWhileHiddenOrInUse;
         return PipStateProblem.None;
     }
 
@@ -94,6 +100,17 @@ internal static class ViewState
         VisitStarts,
         /// <summary>The visit ends.</summary>
         VisitEnds,
+        /// <summary>
+        /// Something dragged onto the view, or a drag started in it: the original comes out for it (refused unless it is
+        /// hidden by the person and the view is on the screen and not using it otherwise). A visit ends first.
+        /// </summary>
+        DropStarts,
+        /// <summary>The drop or drag is over: the original is back in hiding.</summary>
+        DropEnds,
+        /// <summary>The person went to another desktop: an original that isn't hidden or in use is hidden for now.</summary>
+        LeftDesktop,
+        /// <summary>Back on the original's desktop, or the desktop is gone: it is shown again.</summary>
+        BackToDesktop,
     }
 
     /// <summary>
@@ -102,25 +119,33 @@ internal static class ViewState
     /// failed and left everything as it was). A request that is refused leaves the modes unchanged.
     /// </summary>
     /// <param name="hiddenBeforeInteractive">Keep hidden as it was when direct use was turned on.</param>
+    /// Every choice about the original (Keep hidden, used directly, use it, show it) ends a drop and "hidden while away";
+    /// minimizing ends a drop.
     internal static Modes Apply(Modes m, Request request, bool hiddenBeforeInteractive = false) => request switch
     {
-        Request.KeepHiddenOn => m with { Hidden = true, UsingOriginal = false },
+        Request.KeepHiddenOn => m with { Hidden = true, UsingOriginal = false, TakingDrop = false, Away = false },
         Request.KeepHiddenOff when m.Interactive => m,
-        Request.KeepHiddenOff => m with { Hidden = false, Visiting = false, UsingOriginal = false },
+        Request.KeepHiddenOff => m with { Hidden = false, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false },
         Request.InteractiveOn when m.Interactive || !m.MayInteract => m,
-        Request.InteractiveOn => m with { Interactive = true, Hidden = true, UsingOriginal = false },
+        Request.InteractiveOn => m with { Interactive = true, Hidden = true, UsingOriginal = false, TakingDrop = false, Away = false },
         Request.InteractiveOff when !m.Interactive => m,
-        Request.InteractiveOff => m with { Interactive = false, Hidden = hiddenBeforeInteractive, Visiting = false, UsingOriginal = false },
+        Request.InteractiveOff => m with { Interactive = false, Hidden = hiddenBeforeInteractive, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false },
         Request.UseOriginal when !m.Hidden || m.UsingOriginal || m.Suspended => m,
-        Request.UseOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = true },
-        Request.ShowOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = false },
+        Request.UseOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = true, TakingDrop = false, Away = false },
+        Request.ShowOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false },
         Request.Minimize when m.Suspended => m,
-        Request.Minimize => m with { Suspended = true, Visiting = false, UsingOriginal = false },
+        Request.Minimize => m with { Suspended = true, Visiting = false, UsingOriginal = false, TakingDrop = false },
         Request.Restore => m with { Suspended = false },
-        Request.VisitStarts when !m.Interactive || !m.Hidden || m.Suspended || m.InputPaused || m.Visiting ||
+        Request.VisitStarts when !m.Interactive || !m.Hidden || m.Suspended || m.InputPaused || m.Visiting || m.TakingDrop ||
                                  m.VisitUsesExperimental && !m.ExperimentalSwitch => m,
         Request.VisitStarts => m with { Visiting = true },
         Request.VisitEnds => m with { Visiting = false },
+        Request.DropStarts when !m.Hidden || m.Suspended || m.UsingOriginal || m.TakingDrop || m.Away => m,
+        Request.DropStarts => m with { TakingDrop = true, Visiting = false },
+        Request.DropEnds => m with { TakingDrop = false },
+        Request.LeftDesktop when m.Hidden || m.UsingOriginal || m.Visiting || m.TakingDrop || m.Away => m,
+        Request.LeftDesktop => m with { Away = true },
+        Request.BackToDesktop => m with { Away = false },
         _ => m,
     };
 }
