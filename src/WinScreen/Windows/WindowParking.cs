@@ -82,7 +82,6 @@ public sealed partial class WindowController
             state.ShownForDrop = false;
             Conceal(window, state);
             FinishPeek(window, state);
-            FollowEnabled(window, state);
             SaveJournal();
         }
     }
@@ -105,7 +104,6 @@ public sealed partial class WindowController
                     User32.SWP_NOSIZE | User32.SWP_NOACTIVATE)) throw Failure(T("actions.move"), window);
             ApplyAlpha(window, state, state.AlphaBeforeHiding);
             WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
-            FollowEnabled(window, state);
         }
     }
 
@@ -126,7 +124,6 @@ public sealed partial class WindowController
             Conceal(window, state);
             Repark(window);
             if (state.HoverParking) SetParkedHoverSurface(window, true);
-            FollowEnabled(window, state);
         }
     }
 
@@ -148,7 +145,6 @@ public sealed partial class WindowController
             if (!_changed.TryGetValue(window, out var state) || !state.Parked || !User32.IsWindow(window)) return;
             state.Identity.Require();
             state.ReachableWanted = reachable;
-            FollowEnabled(window, state);
             if (state.ShownForDrop) return; // Its own look while on the screen; parked again, it follows this.
             ApplyReachable(window, state, reachable && OffScreen(window));
         }
@@ -179,7 +175,6 @@ public sealed partial class WindowController
         lock (_gate)
         {
             if (!_changed.TryGetValue(window, out var state) || !state.Parked || state.ShownForDrop || !User32.IsWindow(window)) return;
-            FollowEnabledDrift(window, state);
             long style = ReadExStyle(window);
             if (state.Layered && (style & User32.WS_EX_LAYERED) == 0)
             {
@@ -266,7 +261,6 @@ public sealed partial class WindowController
             try
             {
                 if (previous != enabled) Repark(window);
-                FollowEnabled(window, state);
                 if (enabled && !User32.SetWindowPos(window, 0, 0, 0, 0, 0,
                     User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE)) throw Failure(T("actions.move"), window);
             }

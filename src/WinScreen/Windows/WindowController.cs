@@ -109,8 +109,11 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public bool TaskbarButtonRemoved { get; set; }
         public int? OriginalDarkTitleBar { get; set; }
         public bool BorderHidden { get; set; }
+        /// <summary>
+        /// Only in a record left by 1.1.2-beta.3, which disabled hidden originals (a disabled Chrome stops drawing
+        /// video, so that was taken out): recovery enables the window again.
+        /// </summary>
         public bool DisabledWhileHidden { get; set; }
-        [NotJournalled("A moment in time: it only delays disabling.")] public long UsedAt { get; set; }
     }
 
     private HashSet<string> _excluded = new(excludedProcesses, StringComparer.OrdinalIgnoreCase);
@@ -934,13 +937,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     }
 
     /// <summary>Hidden only so an effect (Dark mode, Glass) can draw it again on top: it is still there to use and move.</summary>
-    /// <summary>Whether WinScreen disabled the window while hiding it, so Windows' focus handling passes over it.</summary>
-    internal bool IsDisabledWhileHidden(nint window)
-    {
-        lock (_gate)
-            return _changed.TryGetValue(window, out ChangedWindow? state) && state.DisabledWhileHidden;
-    }
-
     public bool IsDrawnByEffect(nint window)
     {
         lock (_gate)
@@ -987,7 +983,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 throw;
             }
             LiftWhileHidden(window, state);
-            FollowEnabled(window, state);
         }
     }
 
@@ -1039,7 +1034,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             Reveal(window, state);
             state.Hidden = false;
             state.HiddenButUsable = false;
-            FollowEnabled(window, state);
             SaveJournal();
         }
     }
@@ -1369,55 +1363,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     }
 
     /// <summary>
-    /// A hidden original is disabled while nothing uses it (roadmap 12.3): see-through, click-through and lifted above
-    /// the others, it was otherwise the first window Windows gave the focus to when the one in use closed or was
-    /// minimized, which showed it and turned Keep hidden off. A disabled window is passed over, keeps drawing in both
-    /// capture kinds, still comes forward from its taskbar button, and WinScreen can still give it the keys. It is
-    /// enabled while a visit, a drop or enhanced hover needs it, when shown, and by recovery (journalled first, so a
-    /// crash can't leave it unusable). A window its app had disabled itself (a modal dialog open) is left to the app.
-    /// </summary>
-    private void FollowEnabled(nint window, ChangedWindow state)
-    {
-        bool passOver = state.Hidden && !state.HiddenButUsable && !state.ReachableWanted && !state.ShownForDrop && !state.HoverParking;
-        if (!passOver)
-        {
-            state.UsedAt = Environment.TickCount64;
-            if (state.DisabledWhileHidden) EnableAgain(window, state);
-            return;
-        }
-        if (state.DisabledWhileHidden) return;
-        // Not right after a use: a visit that ends and starts again (Enhanced hover switched on) would find it
-        // disabled. Not while it has the focus: Windows would move the focus on, which ends a visit. Later looks
-        // (FollowParkedPlace, PassOverWhenUnused) do it.
-        if (state.UsedAt != 0 && Environment.TickCount64 - state.UsedAt < UseSettleMilliseconds) return;
-        if (User32.GetForegroundWindow() == window) return;
-        if (!User32.IsWindowEnabled(window)) return; // The app's own: it enables it again when its dialog closes.
-        // Enabling and disabling send the window a message and wait: a hung app mustn't hold WinScreen up. Later looks
-        // try again.
-        if (!AnswersQuickly(window)) return;
-        state.DisabledWhileHidden = true;
-        try { SaveJournal(); }
-        catch (WindowOperationException caught)
-        {
-            state.DisabledWhileHidden = false; // Not recorded, so not done: recovery couldn't undo it.
-            Diagnostics.Log.Swallowed(caught);
-            return;
-        }
-        User32.EnableWindow(window, false);
-    }
-
-    private const long UseSettleMilliseconds = 1000;
-
-    /// <summary>A hidden window nothing uses any more, its focus given away: disabled now, if it is to be.</summary>
-    internal void PassOverWhenUnused(nint window)
-    {
-        lock (_gate)
-            if (_changed.TryGetValue(window, out ChangedWindow? state) && state.Identity.Matches()) FollowEnabled(window, state);
-    }
-
-    /// <summary>
-    /// Enabled again, unless the app has a dialog of its own up over it: the app disabled it for that and enables it
-    /// when the dialog closes.
+    /// A window 1.1.2-beta.3 disabled while hidden, enabled again by recovery, unless the app has a dialog of its own
+    /// up over it: the app disabled it for that and enables it when the dialog closes.
     /// </summary>
     private static void EnableAgain(nint window, ChangedWindow state)
     {
@@ -1428,16 +1375,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             EnsureResponsive(window); // A hung app: this step fails like the others and is tried again.
             User32.EnableWindow(window, true);
         }
-        // Only now: a visit's own thread reads this to tell WinScreen's disabling from a question the app has up, and
-        // must never find the window disabled with the flag already gone.
         state.DisabledWhileHidden = false;
-    }
-
-    /// <summary>The app enabled a window WinScreen keeps disabled (a dialog of its own closed): disabled again.</summary>
-    private void FollowEnabledDrift(nint window, ChangedWindow state)
-    {
-        if (state.DisabledWhileHidden && User32.IsWindowEnabled(window)) state.DisabledWhileHidden = false;
-        FollowEnabled(window, state);
     }
 
     private void Reveal(nint window, ChangedWindow state)

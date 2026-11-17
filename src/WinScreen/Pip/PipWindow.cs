@@ -1379,7 +1379,6 @@ public sealed partial class PipWindow : Form
     /// <summary>The pointer came onto the view. Everything that lets real input through exists from here until it leaves.</summary>
     private SourcePopups CreateSourcePopups() => new(_source)
     {
-        DisabledByWinScreen = () => _windows.IsDisabledWhileHidden(_source),
         RaisePopups = popups => BeginInvokeIfAlive(() =>
         {
             if (_cleaned || _live is null || !_origin.IsAvailable) return;

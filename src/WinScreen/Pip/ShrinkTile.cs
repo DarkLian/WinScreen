@@ -91,7 +91,6 @@ public sealed class ShrinkTile : Form
             _windows.HideOwned(_source, this);
             User32.SetForegroundWindow(Handle); // Keys mustn't go to a window that can't be seen.
             WinScreen.Windows.TopLayer.Raise(Handle);
-            _windows.PassOverWhenUnused(_source); // Its focus is the tile's now.
         }
         catch (WindowOperationException)
         {
