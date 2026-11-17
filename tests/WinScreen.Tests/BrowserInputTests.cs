@@ -912,6 +912,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 view.AllowInteractive = false;
                 Assert.Equal(PipStateProblem.None, view.StateProblem());
                 Assert.Equal(PipStateProblem.None, view.FirstStateProblem);
+                Assert.Equal(0, view.UnexpectedModes); // Every request came out where ViewState.Apply says.
                 view.Close();
             });
         }

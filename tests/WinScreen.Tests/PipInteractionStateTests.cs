@@ -79,6 +79,7 @@ public sealed class PipInteractionStateTests
             Assert.False(Item(view, "menu.view.interactive").Checked);
             Assert.False(windows.IsHidden(source.Handle));
             Assert.Equal(PipStateProblem.None, view.FirstStateProblem);
+            Assert.Equal(0, view.UnexpectedModes); // Every request came out where ViewState.Apply says.
             view.Close();
         });
     }

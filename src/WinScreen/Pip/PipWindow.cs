@@ -318,6 +318,7 @@ public sealed partial class PipWindow : Form
     internal void SuspendView()
     {
         if (_suspended || _cleaned) return;
+        ViewState.Modes before = CurrentModes();
         _usingOriginal = false; // A minimized view has no picture to hide the original behind; it stays shown.
         EndDrop();
         StepAside(false);
@@ -337,6 +338,7 @@ public sealed partial class PipWindow : Form
         if (_viewPreferences.MinimizeToTaskbar && _sourceIcon is not null)
             TaskbarProxy = new PipTaskbarProxy(_origin.Title, _sourceIcon, Bounds, TaskbarPreview, ResumeView, Close);
         CheckState();
+        CheckRequest(before, ViewState.Request.Minimize);
     }
 
     /// <summary>The taskbar button standing in for this view while it's minimized there.</summary>
@@ -391,6 +393,7 @@ public sealed partial class PipWindow : Form
         }
         if (!_retiringCapture.IsCompleted) { _resumeRequested = true; return; }
         _resumeRequested = false;
+        ViewState.Modes before = CurrentModes();
         try
         {
             _thumbnail = new PipBackendSelector(_origin, Handle, BackendPreferences());
@@ -411,6 +414,7 @@ public sealed partial class PipWindow : Form
             Problem?.Invoke(failure.Message);
         }
         CheckState();
+        CheckRequest(before, ViewState.Request.Restore);
     }
 
     private Icon LoadSourceIcon()
@@ -635,7 +639,9 @@ public sealed partial class PipWindow : Form
     public void SetOriginalHidden(bool hidden)
     {
         if (_interactiveItem.Checked && !hidden) return;
+        ViewState.Modes before = CurrentModes();
         ChangeInteractionMode(_interactiveItem.Checked, hidden);
+        CheckRequest(before, hidden ? ViewState.Request.KeepHiddenOn : ViewState.Request.KeepHiddenOff);
     }
 
     /// <summary>
@@ -1064,6 +1070,14 @@ public sealed partial class PipWindow : Form
     {
         if (on == _interactiveItem.Checked) return;
         if (on && !CanInteract) return;
+        ViewState.Modes before = CurrentModes();
+        bool hiddenBefore = _hiddenBeforeInteractive;
+        try { ChangeInteractive(on); }
+        finally { CheckRequest(before, on ? ViewState.Request.InteractiveOn : ViewState.Request.InteractiveOff, hiddenBefore); }
+    }
+
+    private void ChangeInteractive(bool on)
+    {
         if (on)
         {
             _hiddenBeforeInteractive = _hideItem.Checked;
@@ -1095,10 +1109,32 @@ public sealed partial class PipWindow : Form
     internal PipStateProblem StateProblem()
     {
         if (_cleaned) return PipStateProblem.None;
-        return ViewState.ProblemOf(new ViewState.Modes(Interactive: _interactiveItem.Checked, Hidden: _hideItem.Checked,
-            Visiting: _live is not null, Suspended: _suspended, InputPaused: _inputPaused, UsingOriginal: _usingOriginal,
-            MayInteract: CanInteract, ExperimentalSwitch: _allowInteractive,
-            VisitUsesExperimental: _live is { } visit && (visit.EnhancedHover || visit.MiddleClickScroll)));
+        return ViewState.ProblemOf(CurrentModes());
+    }
+
+    private ViewState.Modes CurrentModes() => new(Interactive: _interactiveItem.Checked, Hidden: _hideItem.Checked,
+        Visiting: _live is not null, Suspended: _suspended, InputPaused: _inputPaused, UsingOriginal: _usingOriginal,
+        MayInteract: CanInteract, ExperimentalSwitch: _allowInteractive,
+        VisitUsesExperimental: _live is { } visit && (visit.EnhancedHover || visit.MiddleClickScroll));
+
+    /// <summary>How often a request left the view somewhere other than <see cref="ViewState.Apply"/> says, for tests.</summary>
+    internal int UnexpectedModes { get; private set; }
+
+    /// <summary>
+    /// After a request: the view's modes are what the table says, or unchanged (the work failed or was refused, and
+    /// said so where it does). Anything else is logged, so a difference between the table and the view is found.
+    /// </summary>
+    private void CheckRequest(ViewState.Modes before, ViewState.Request request, bool hiddenBeforeInteractive = false)
+    {
+        if (_cleaned || IsDisposed) return;
+        ViewState.Modes now = CurrentModes(), expected = ViewState.Apply(before, request, hiddenBeforeInteractive);
+        // The settings and what the visit uses aren't the request's to change.
+        expected = expected with { MayInteract = now.MayInteract, ExperimentalSwitch = now.ExperimentalSwitch, VisitUsesExperimental = now.VisitUsesExperimental };
+        before = before with { MayInteract = now.MayInteract, ExperimentalSwitch = now.ExperimentalSwitch, VisitUsesExperimental = now.VisitUsesExperimental };
+        if (now == expected || now == before) return;
+        UnexpectedModes++;
+        Diagnostics.Log.Event("view.unexpectedMode", ("request", request), ("interactive", now.Interactive), ("hidden", now.Hidden),
+            ("visiting", now.Visiting), ("suspended", now.Suspended), ("using", now.UsingOriginal));
     }
 
     private void CheckState()
@@ -1119,7 +1155,8 @@ public sealed partial class PipWindow : Form
     /// </summary>
     internal void UseOriginal()
     {
-        if (!_origin.IsWindow || !_hideItem.Checked || _usingOriginal) return;
+        if (!_origin.IsWindow || !_hideItem.Checked || _usingOriginal || _suspended) return;
+        ViewState.Modes before = CurrentModes();
         bool interactive = _interactiveItem.Checked;
         GoToSource();
         if (IsDisposed || !_origin.IsAvailable || _windows.IsHidden(_source)) return;
@@ -1129,6 +1166,7 @@ public sealed partial class PipWindow : Form
         _originalLeftAt = 0;
         StepAside(true); // The original is in front now; the view would only cover part of it.
         CheckState();
+        CheckRequest(before, ViewState.Request.UseOriginal);
     }
 
     /// <summary>
@@ -2130,7 +2168,9 @@ public sealed partial class PipWindow : Form
             return;
         }
 
+        ViewState.Modes before = CurrentModes();
         ChangeInteractionMode(false, false);
+        CheckRequest(before, ViewState.Request.ShowOriginal);
         if (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source))
             return;
         if (User32.IsIconic(_source))

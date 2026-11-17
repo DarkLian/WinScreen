@@ -95,4 +95,53 @@ public sealed class ViewStateTests
         if (broken.Count == 0) Assert.Equal(PipStateProblem.None, found);
         else Assert.Contains(found, broken); // One of them, the first in the order checked.
     }
+
+    private static Modes ModesOf(int bits)
+    {
+        bool B(int i) => (bits & (1 << i)) != 0;
+        return new Modes(Interactive: B(0), Hidden: B(1), Visiting: B(2), Suspended: B(3), InputPaused: B(4),
+            UsingOriginal: B(5), MayInteract: B(6), ExperimentalSwitch: B(7), VisitUsesExperimental: B(8));
+    }
+
+    /// <summary>
+    /// Every allowed combination of modes, every request, Keep hidden before direct use either way: no request leads
+    /// to a combination that must never happen (512 × 10 × 2, the allowed ones only).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(EveryModeCombination))]
+    public void No_request_leads_from_an_allowed_state_to_a_forbidden_one(int bits)
+    {
+        Modes before = ModesOf(bits);
+        if (ProblemOf(before) != PipStateProblem.None) return;
+        foreach (Request request in Enum.GetValues<Request>())
+            foreach (bool hiddenBefore in new[] { false, true })
+            {
+                Modes after = Apply(before, request, hiddenBefore);
+                Assert.True(ProblemOf(after) == PipStateProblem.None, $"{before} + {request} → {after}: {ProblemOf(after)}");
+            }
+    }
+
+    [Fact]
+    public void The_requests_do_what_the_menu_and_chip_say()
+    {
+        var shownView = new Modes(Interactive: false, Hidden: false, Visiting: false, Suspended: false, InputPaused: false,
+            UsingOriginal: false, MayInteract: true, ExperimentalSwitch: false, VisitUsesExperimental: false);
+        Modes hidden = Apply(shownView, Request.KeepHiddenOn);
+        Assert.True(hidden.Hidden);
+        Modes used = Apply(hidden, Request.InteractiveOn);
+        Assert.True(used is { Interactive: true, Hidden: true });
+        Assert.Equal(used, Apply(used, Request.KeepHiddenOff)); // Direct use needs it hidden.
+        Modes visiting = Apply(used, Request.VisitStarts);
+        Assert.True(visiting.Visiting);
+        Assert.False(Apply(visiting, Request.Minimize).Visiting);
+        Assert.Equal(shownView, Apply(used, Request.InteractiveOff, hiddenBeforeInteractive: false));
+        Assert.True(Apply(used, Request.InteractiveOff, hiddenBeforeInteractive: true) is { Hidden: true, Interactive: false });
+        Assert.True(Apply(hidden, Request.UseOriginal) is { UsingOriginal: true, Hidden: false });
+        // From a minimized view the chip isn't there; asked anyway, nothing happens (it would be "using it while minimized").
+        Modes minimized = Apply(hidden, Request.Minimize);
+        Assert.Equal(minimized, Apply(minimized, Request.UseOriginal));
+        Assert.Equal(minimized, Apply(minimized, Request.VisitStarts));
+        // Not where the app may not be used directly.
+        Assert.Equal(hidden with { MayInteract = false }, Apply(hidden with { MayInteract = false }, Request.InteractiveOn));
+    }
 }

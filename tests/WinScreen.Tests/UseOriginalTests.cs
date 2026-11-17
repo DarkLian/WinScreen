@@ -79,6 +79,7 @@ public sealed class UseOriginalTests
             Assert.False(windows.IsHidden(source.Handle));
             Assert.Equal(home, Desktop.BoundsOf(source.Handle));
             Assert.Equal(PipStateProblem.None, view.FirstStateProblem);
+            Assert.Equal(0, view.UnexpectedModes); // Every request came out where ViewState.Apply says.
             view.Close();
         });
     }
@@ -130,6 +131,7 @@ public sealed class UseOriginalTests
             Assert.Equal([WindowInfo.ProgramOf(source.Handle)], listed);
             Assert.True(view.UsingOriginal);
             Assert.Equal(PipStateProblem.None, view.FirstStateProblem);
+            Assert.Equal(0, view.UnexpectedModes); // Every request came out where ViewState.Apply says.
             view.Close();
         });
     }

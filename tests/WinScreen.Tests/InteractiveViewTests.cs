@@ -103,10 +103,12 @@ public sealed class InteractiveViewTests
             }
 
             PipStateProblem stateProblem = view.FirstStateProblem; // Every change of mode on the way was checked.
+            int unexpected = view.UnexpectedModes; // And every request came out where ViewState.Apply says.
             if (!view.IsDisposed) view.Close();
             if (failure is not null)
                 throw new Xunit.Sdk.XunitException(failure.ToString());
             Assert.Equal(PipStateProblem.None, stateProblem);
+            Assert.Equal(0, unexpected);
         });
     }
 

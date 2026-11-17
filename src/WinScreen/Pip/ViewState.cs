@@ -65,4 +65,57 @@ internal static class ViewState
         if (m.Visiting && !m.ExperimentalSwitch && m.VisitUsesExperimental) return PipStateProblem.ExperimentalVisitWithoutSwitch;
         return PipStateProblem.None;
     }
+
+    /// <summary>What someone or something asks of a view.</summary>
+    internal enum Request
+    {
+        /// <summary>Keep hidden ticked.</summary>
+        KeepHiddenOn,
+        /// <summary>Keep hidden unticked (refused while used directly: that needs it hidden).</summary>
+        KeepHiddenOff,
+        /// <summary>Used directly, ticked (refused where the app may not be).</summary>
+        InteractiveOn,
+        /// <summary>Used directly, unticked: Keep hidden goes back to what it was before.</summary>
+        InteractiveOff,
+        /// <summary>The chip's "use it, then hide again": only for a hidden original, from a view on the screen.</summary>
+        UseOriginal,
+        /// <summary>Go to it, or the original brought forward by the person: shown, nothing else kept.</summary>
+        ShowOriginal,
+        /// <summary>The view minimized.</summary>
+        Minimize,
+        /// <summary>The view back from minimized.</summary>
+        Restore,
+        /// <summary>A press on the view starts a visit (refused unless used directly, on the screen and not paused).</summary>
+        VisitStarts,
+        /// <summary>The visit ends.</summary>
+        VisitEnds,
+    }
+
+    /// <summary>
+    /// The modes a view is in after a request, from the modes before (roadmap 12.2, third part). <c>PipWindow</c> does
+    /// the work and then checks that it came out here (<c>view.unexpectedMode</c> in the log when not, unless the work
+    /// failed and left everything as it was). A request that is refused leaves the modes unchanged.
+    /// </summary>
+    /// <param name="hiddenBeforeInteractive">Keep hidden as it was when direct use was turned on.</param>
+    internal static Modes Apply(Modes m, Request request, bool hiddenBeforeInteractive = false) => request switch
+    {
+        Request.KeepHiddenOn => m with { Hidden = true, UsingOriginal = false },
+        Request.KeepHiddenOff when m.Interactive => m,
+        Request.KeepHiddenOff => m with { Hidden = false, Visiting = false, UsingOriginal = false },
+        Request.InteractiveOn when m.Interactive || !m.MayInteract => m,
+        Request.InteractiveOn => m with { Interactive = true, Hidden = true, UsingOriginal = false },
+        Request.InteractiveOff when !m.Interactive => m,
+        Request.InteractiveOff => m with { Interactive = false, Hidden = hiddenBeforeInteractive, Visiting = false, UsingOriginal = false },
+        Request.UseOriginal when !m.Hidden || m.UsingOriginal || m.Suspended => m,
+        Request.UseOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = true },
+        Request.ShowOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = false },
+        Request.Minimize when m.Suspended => m,
+        Request.Minimize => m with { Suspended = true, Visiting = false, UsingOriginal = false },
+        Request.Restore => m with { Suspended = false },
+        Request.VisitStarts when !m.Interactive || !m.Hidden || m.Suspended || m.InputPaused || m.Visiting ||
+                                 m.VisitUsesExperimental && !m.ExperimentalSwitch => m,
+        Request.VisitStarts => m with { Visiting = true },
+        Request.VisitEnds => m with { Visiting = false },
+        _ => m,
+    };
 }
