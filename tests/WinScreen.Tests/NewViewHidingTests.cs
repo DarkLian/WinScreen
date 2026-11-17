@@ -176,8 +176,9 @@ public sealed class NewViewHidingTests
     /// <summary>
     /// Owner, 17 Nov: closing one Chrome window gave the hidden Chrome window the focus and showed it. An app can hand
     /// its own next window the focus a moment before the closing one is gone, so at the moment of arrival the window
-    /// before still looked in use. The view waits a moment: gone or minimized by then, it was a hand-off and the
-    /// original stays hidden; still there, the app or the person asked for it, and it is shown.
+    /// before still looked in use. Since 18 Nov the original stays hidden however the focus came to it, unless the
+    /// person picked it from the taskbar or switcher: the window before closing, staying, hiding or going out of
+    /// sight makes no difference.
     /// </summary>
     [Theory]
     [InlineData("closes")]
@@ -217,7 +218,7 @@ public sealed class NewViewHidingTests
                 TestDesktop.Pump(1200);
                 bool hidden = view.KeepsUpdating && windows.IsHidden(source.Handle);
                 if (closes) Assert.True(hidden, "The hand-off from a closing window showed the hidden original.");
-                else Assert.False(hidden, "Brought forward by a window that stayed, the original wasn't shown.");
+                else Assert.True(hidden, "Brought forward by a window that stayed, the original was shown: only the person picking it shows it.");
             }
             finally { windows.RestoreAll(); }
         });

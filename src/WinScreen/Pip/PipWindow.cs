@@ -1993,32 +1993,21 @@ public sealed partial class PipWindow : Form
         nint before = _foregroundBefore;
         if (!focused) _foregroundBefore = foreground;
         long now = Environment.TickCount64;
-        if (_arrivedAt != 0)
-        {
-            // Waiting to see whether the window before closes or minimizes: asked again with what is known now.
-            if (!focused) { _arrivedAt = 0; return; } // The focus moved on by itself.
-            before = _arrivedBefore;
-        }
-        else if (arrived) { _arrivedAt = now; _arrivedBefore = before; }
-        else return;
+        if (!arrived) return;
         var facts = new ViewState.Facts(Hidden: _hideItem.Checked, Away: _awayFrom != Guid.Empty, Visiting: _live is not null,
-            JustAfterVisit: _arrivedAt - _liveEndedAt < RevealGrace,
-            // The view never takes the focus, so when its own menu closes Windows hands the focus to the window used
-            // before, often the hidden original; the view's timer may not have seen the menu in between.
-            HandedOn: HandedOnByWindows(before) || _menuClosedAt != 0 && _arrivedAt - _menuClosedAt < RevealGrace,
-            JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && _arrivedAt - _desktopSwitchedAt < SwitchFocusGrace,
-            Settling: now - _arrivedAt < ArrivalSettle && before != 0 && before != Handle && User32.IsWindow(before));
-        ViewState.Arrival answer = ViewState.OriginalArrived(facts);
-        if (answer == ViewState.Arrival.Wait) return;
-        _arrivedAt = 0;
-        switch (answer)
+            JustAfterVisit: now - _liveEndedAt < RevealGrace,
+            Picked: PickedFromTaskbarOrSwitcher(before),
+            JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && now - _desktopSwitchedAt < SwitchFocusGrace);
+        switch (ViewState.OriginalArrived(facts))
         {
             case ViewState.Arrival.PassFocusOn:
-                // The window that had the focus was just minimized or closed (this view's own minimize too), so Windows
-                // passed the focus on, and a hidden original, lifted above the rest, was first in line.
+                // Not picked by the person: Windows passed the focus on (a window minimized or closed, a menu or panel
+                // gone, this view minimized) or an app brought itself forward, and a hidden original, lifted above the
+                // rest, was first in line. It stays hidden; the focus goes where it would have gone without it.
                 nint next = NextWindowForFocus();
                 User32.SetForegroundWindow(next != 0 ? next : User32.GetShellWindow());
-                Diagnostics.Log.Event("view.handOffKept", ("program", Diagnostics.LogValue.ProgramOf(_source)));
+                Diagnostics.Log.Event("view.handOffKept", ("program", Diagnostics.LogValue.ProgramOf(_source)),
+                    ("before", Diagnostics.LogValue.ClassOf(before)));
                 break;
             case ViewState.Arrival.ViewTakesFocus:
                 // A hidden original is on every desktop, so on switching to one with nothing else on it Windows hands it
@@ -2030,8 +2019,7 @@ public sealed partial class PipWindow : Form
                 LastReveal = now;
                 // What brought it forward: the window before it, and whether this view was minimized.
                 Diagnostics.Log.Event("view.revealed", ("program", Diagnostics.LogValue.ProgramOf(_source)),
-                    ("beforeIsView", before == Handle), ("before", Diagnostics.LogValue.ClassOf(before)),
-                    ("beforeThere", before != 0 && User32.IsWindow(before)), ("minimized", _suspended));
+                    ("before", Diagnostics.LogValue.ClassOf(before)), ("minimized", _suspended));
                 if (_suspended) ResumeView();
                 GoToSource();
                 break;
@@ -2041,33 +2029,27 @@ public sealed partial class PipWindow : Form
     /// <summary>The last window other than the original that had the focus, as the view last saw it.</summary>
     private nint _foregroundBefore;
 
-    /// <summary>When the original arrived and is still being decided about (<see cref="ViewState.Arrival.Wait"/>), and the window before then.</summary>
-    private long _arrivedAt;
-    private nint _arrivedBefore;
-
-    /// <summary>When the view's own menu last closed.</summary>
-    private long _menuClosedAt;
-    private const long ArrivalSettle = 300;
-
     /// <summary>
-    /// Whether the window that had the focus before the original is gone from use: minimized, closed, this view
-    /// minimized, or a passing surface gone out of sight: one of WinScreen's own (a view's title bar or menu as the
-    /// view minimizes: owner, 17 Nov, after using a view directly the title bar's button had the focus) or one of
-    /// Windows' (the taskbar's hidden-icons panel as WinScreen's tray menu opens Settings, the switcher, Start:
-    /// owner, 18 Nov, Chrome came out and its video froze behind Settings). Another app's window merely hidden
-    /// doesn't count, nor does any window still in sight (the taskbar itself, for a button of the original's).
+    /// Whether the person picked the original: a click on its taskbar button or thumbnail (the pointer is still on
+    /// the taskbar or its thumbnails), or the switcher (it had the focus before), and the original is still listed
+    /// there: a window off the taskbar is out of the switcher too, on Windows 10 and 11. Store apps keep the button
+    /// Windows owns, so choosing it shows them.
     /// </summary>
-    private bool HandedOnByWindows(nint before) =>
-        before != 0 && before != _source &&
-        (!User32.IsWindow(before) || User32.IsIconic(before) || before == Handle && _suspended || PassingSurfaceGone(before));
-
-    private static bool PassingSurfaceGone(nint window)
+    private bool PickedFromTaskbarOrSwitcher(nint before)
     {
-        bool cloaked = Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_CLOAKED, out int value, sizeof(int)) == 0 && value != 0;
-        if (User32.IsWindowVisible(window) && !cloaked && !WindowInfo.IsConcealed(window)) return false;
-        User32.GetWindowThreadProcessId(window, out uint process);
-        return process == (uint)Environment.ProcessId || WindowController.IsShell(window) || WindowController.IsShellProgram(process);
+        bool switcher = before != 0 && SwitcherClasses.Contains(WindowInfo.ClassName(before));
+        Point pointer = Cursor.Position;
+        nint under = User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = pointer.X, Y = pointer.Y }), User32.GA_ROOT);
+        bool taskbar = under != 0 && TaskbarClasses.Contains(WindowInfo.ClassName(under));
+        if (!switcher && !taskbar) return false;
+        return (User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE) & User32.WS_EX_TOOLWINDOW) == 0 && !_windows.IsOffTaskbar(_source);
     }
+
+    private static readonly HashSet<string> TaskbarClasses = new(StringComparer.Ordinal)
+        { "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "TaskListThumbnailWnd", "XamlExplorerHostIslandWindow" };
+
+    private static readonly HashSet<string> SwitcherClasses = new(StringComparer.Ordinal)
+        { "MultitaskingViewFrame", "XamlExplorerHostIslandWindow", "TaskSwitcherWnd" };
 
     /// <summary>
     /// The window Windows would have given the focus to without the hidden original: the highest one that is shown,
