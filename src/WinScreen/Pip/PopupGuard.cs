@@ -45,6 +45,12 @@ internal static class PopupGuard
         if (added) PostThreadMessageW(_thread, StartMessage, 0, 0);
     }
 
+    /// <summary>Stops holding <paramref name="popup"/> at once, so it can be put elsewhere.</summary>
+    internal static void Release(nint popup)
+    {
+        lock (_held) _held.Remove(popup);
+    }
+
     /// <summary>
     /// Calls <paramref name="opened"/> as soon as one of these menus appears in <paramref name="process"/>, so it is
     /// moved by the view at once instead of at the next sweep. Ends when the result is disposed.

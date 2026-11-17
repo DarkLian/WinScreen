@@ -378,6 +378,9 @@ internal sealed class PipInteraction : IDisposable
         _watcher = new Thread(FollowPopups) { IsBackground = true, Name = "WinScreen interaction popups" };
         _watcher.Start();
         _menuOpened = PopupGuard.Watch(_sourceProcess, () => _moved.Set());
+        if (InputMethodWindows.Wanted)
+            _inputMethod = new InputMethodWindows(_source, Geometry, () =>
+                Interlocked.Read(ref _lastPress) is var packed and not long.MinValue ? new Point((int)(packed >> 32), (int)packed) : null);
         Share(true);
         Interlocked.Increment(ref _active);
     }
@@ -511,6 +514,14 @@ internal sealed class PipInteraction : IDisposable
             Enqueue(new(EventKind.Record, point, Outcome: PressOutcome.Popup));
             return false;
         }
+        // A shell panel open over everything (the emoji panel, the volume or network panels) closes on a press
+        // anywhere else, through a see-through layer it lays over the screen: that press is the shell's, as it would be
+        // without the view.
+        if (!_outside && Windows.WindowInfo.ClassName(root) == LightDismissLayer)
+        {
+            Enqueue(new(EventKind.Record, point, Outcome: PressOutcome.Popup));
+            return false;
+        }
         if (_outside || !InView(point))
         {
             Enqueue(new(EventKind.Record, point, Outcome: PressOutcome.Outside));
@@ -518,6 +529,7 @@ internal sealed class PipInteraction : IDisposable
             return false; // It goes to whatever is really there.
         }
         // Everything inside the picture is kept from the desktop; the worker decides what it means.
+        Interlocked.Exchange(ref _lastPress, Pack(point));
         if (button == MouseButtons.Left) _pressHandedOver = _handedOverReleased = false;
         bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
         if (!alt)
@@ -541,6 +553,9 @@ internal sealed class PipInteraction : IDisposable
     private bool OnWheel(Point point, bool horizontal, uint mouseData)
     {
         if (_outside || !InView(point))
+            return false;
+        // The input method's list over the picture pages with the wheel itself.
+        if (_inputMethod?.Holds(RootAt(point)) == true)
             return false;
         Enqueue(new(EventKind.Wheel, point, Horizontal: horizontal, Data: mouseData));
         return true;
@@ -883,12 +898,24 @@ internal sealed class PipInteraction : IDisposable
     };
 
     /// <summary>
-    /// A window of the original's program, or one the original owns (a helper process's popup): the pointer is on
-    /// the app's own popup, so real input goes to it. Cheap enough for the hook: an owner walk of a few steps.
+    /// A window of the original's program, or one the original owns (a helper process's popup), or the input method's
+    /// list kept beside its caret: the pointer is on the app's own popup, so real input goes to it, and going there is
+    /// still part of the visit. Cheap enough for the hook: an owner walk of a few steps.
     /// </summary>
     private bool IsSourcePopup(nint root) =>
         root != 0 && root != _viewWindow && root != _source &&
-        (ProcessOf(root) == _sourceProcess || Windows.WindowInfo.IsOwnedBy(root, _source));
+        (ProcessOf(root) == _sourceProcess || Windows.WindowInfo.IsOwnedBy(root, _source) || _inputMethod?.Holds(root) == true);
+
+    private InputMethodWindows? _inputMethod;
+
+    /// <summary>The layer Windows lays over the screen while a shell panel is open, to close it on a press elsewhere.</summary>
+    internal const string LightDismissLayer = "Shell_LightDismissOverlay";
+
+    /// <summary>The latest press in the view, packed; <see cref="long.MinValue"/> before the first.</summary>
+    private long _lastPress = long.MinValue;
+
+    /// <summary>The input method's list during this visit, for tests.</summary>
+    internal InputMethodWindows? InputMethod => _inputMethod;
 
     private static nint RootAt(Point point) =>
         User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y }), User32.GA_ROOT);
@@ -907,6 +934,7 @@ internal sealed class PipInteraction : IDisposable
             return;
         _stopping = true;
         _menuOpened?.Dispose();
+        _inputMethod?.Dispose();
         _messages.Hover.Deactivate();
         Share(false);
         _rechecked.Set();

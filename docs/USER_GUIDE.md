@@ -90,6 +90,7 @@ turn on **Always show title bar** in **Size and options**, or for every new view
   Drag the view's title bar to move it, or hold Alt and drag the picture.
   Menus open near the pointer. If the app asks you something, the original comes back so you can answer.
   Keys return to your previous window when you leave.
+  On Windows 11, the input method's list of choices and the emoji panel open next to where you type in the view.
   Store apps, such as Calculator, work too. They keep their taskbar button, and choosing it shows the app.
   On some newer controls, in Store apps and parts of File Explorer, you can click, right-click and scroll,
   but not hover, drag or select.
