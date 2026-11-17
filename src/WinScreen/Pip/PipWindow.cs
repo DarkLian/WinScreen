@@ -340,6 +340,8 @@ public sealed partial class PipWindow : Form
             TaskbarProxy = new PipTaskbarProxy(_origin.Title, _sourceIcon, Bounds, TaskbarPreview, ResumeView, Close);
         CheckState();
         CheckRequest(before, ViewState.Request.Minimize);
+        Diagnostics.Log.Event("view.minimized", ("program", Diagnostics.LogValue.ProgramOf(_source)), ("hidden", _hideItem.Checked),
+            ("foreground", Diagnostics.LogValue.ProgramOf(User32.GetForegroundWindow())));
     }
 
     /// <summary>The taskbar button standing in for this view while it's minimized there.</summary>
@@ -1186,10 +1188,12 @@ public sealed partial class PipWindow : Form
         AskForDrop();
     }
 
+    private bool MayTakeDrop => _dropSince == 0 && _hideItem.Checked && !_usingOriginal && !_suspended && _thumbnail is not null &&
+        _origin.IsWindow && _windows.IsParked(_source) && !_lastShown.IsEmpty;
+
     private void AskForDrop()
     {
-        if (_dropAsked || _dropSince != 0 || !_hideItem.Checked || _usingOriginal || _suspended || _thumbnail is null ||
-            !_origin.IsWindow || !_windows.IsParked(_source) || _lastShown.IsEmpty) return;
+        if (_dropAsked || !MayTakeDrop) return;
         _dropAsked = true;
         // After this call returns: the drag is in the middle of asking this window.
         BeginInvoke(() =>
@@ -1200,6 +1204,84 @@ public sealed partial class PipWindow : Form
     }
 
     private bool _dropAsked;
+
+    /// <summary>
+    /// A drag coming in, seen by the pointer rather than by drag and drop. Windows doesn't let a drag from a window
+    /// that runs normally reach one that runs as administrator, so when WinScreen does, the view is never asked
+    /// (owner, 17 Nov: nothing came up for a file from the desktop or from File Explorer). A left button pressed
+    /// somewhere else and held while the pointer rests on the picture is taken as a drag arriving, unless a window is
+    /// being moved or sized or text is being selected (the text cursor). A drag the view is asked about goes first.
+    /// </summary>
+    private void FollowDragArriving()
+    {
+        long now = Environment.TickCount64;
+        if ((User32.GetAsyncKeyState(0x01) & 0x8000) == 0) { _heldSince = 0; _dragInSince = 0; return; }
+        Point pointer = Cursor.Position;
+        if (_heldSince == 0)
+        {
+            // Where the button went down, as near as the timer saw: on one of WinScreen's own windows (moving a view,
+            // its menu, a visit's press) it isn't a drag from elsewhere.
+            _heldSince = now;
+            nint under = User32.WindowFromPoint(new NativePoint { X = pointer.X, Y = pointer.Y });
+            User32.GetWindowThreadProcessId(under, out uint process);
+            _heldFromElsewhere = under != 0 && process != (uint)Environment.ProcessId && !Bounds.Contains(pointer);
+            return;
+        }
+        if (!_heldFromElsewhere || !MayTakeDrop || !RectangleToScreen(PictureArea).Contains(pointer) || MovingOrSizing() || TextCursor())
+        {
+            _dragInSince = 0;
+            return;
+        }
+        if (_dragInSince == 0) { _dragInSince = now; return; }
+        if (now - _dragInSince < DragInRests) return;
+        _dragInSince = 0;
+        _heldFromElsewhere = false; // Once per press.
+        HandOverDrop();
+    }
+
+    private long _heldSince, _dragInSince;
+    private bool _heldFromElsewhere;
+    private const long DragInRests = 150;
+
+    private static bool MovingOrSizing()
+    {
+        var info = new GuiThreadInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<GuiThreadInfo>() };
+        const int GUI_INMOVESIZE = 0x2;
+        return GetGUIThreadInfo(0, ref info) && (info.Flags & GUI_INMOVESIZE) != 0;
+    }
+
+    private static readonly nint TextCursorHandle = LoadCursor(0, 32513 /* IDC_IBEAM */);
+
+    private static bool TextCursor()
+    {
+        var info = new CursorInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<CursorInfo>() };
+        return GetCursorInfo(ref info) && info.Cursor == TextCursorHandle;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct GuiThreadInfo
+    {
+        public int Size, Flags;
+        public nint Active, Focus, Capture, MenuOwner, MoveSize, Caret;
+        public Rect CaretBounds;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct CursorInfo
+    {
+        public int Size, Flags;
+        public nint Cursor;
+        public NativePoint At;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetGUIThreadInfo(uint thread, ref GuiThreadInfo info);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetCursorInfo(ref CursorInfo info);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern nint LoadCursor(nint instance, nint name);
 
     private void HandOverDrop()
     {
@@ -1247,7 +1329,6 @@ public sealed partial class PipWindow : Form
         Point spot = SourceSpotAt(pressed);
         if (!User32.GetWindowRect(_source, out Rect bounds)) return;
         string item = live.PressedItem;
-        Rectangle picture = RectangleToScreen(PictureArea);
         nint before = _foregroundBeforeLive;
         EndLive(keepFocus: true); // The hook goes first: the press given below must reach the window.
         // The press was the hook's, so Windows doesn't know the button is down: let go meanwhile, there is nothing to hand on.
@@ -1258,11 +1339,12 @@ public sealed partial class PipWindow : Form
         long pickupStarted = Environment.TickCount64;
         try
         {
-            // At the view's own size and place, so it neither jumps nor fills the screen (a maximized original did):
-            // the window lays itself out again, so the pressed item is found anew, and the press goes where it is now.
-            if (item.Length > 0 && live.Identity is { } identity)
+            // At its own size as it is when not maximized, but never filling the screen (a maximized original did, and
+            // a smaller one, the view's, laid the window out differently): it may lay itself out again, so the pressed
+            // item is found anew, and the window moves to bring it under the pointer.
+            if (item.Length > 0 && live.Identity is { } identity && _windows.NormalSize(_source) is { } normal)
             {
-                Rectangle place = PickupPlace(picture, area);
+                Rectangle place = PickupPlace(normal, pointer, area);
                 _windows.ShowParkedForDrop(_source, place.Location, place.Size);
                 for (long until = Environment.TickCount64 + PickupFindFor; press is null && Environment.TickCount64 < until;)
                 {
@@ -1271,7 +1353,11 @@ public sealed partial class PipWindow : Form
                     if (PipControlInput.Shared.ItemBounds(identity, item, 150) is { } found &&
                         new Point(found.Left + Math.Min(28, found.Width / 2), found.Top + found.Height / 2) is var onName &&
                         place.Contains(onName))
-                        press = onName;
+                    {
+                        Rectangle moved = DropPlace(pointer, new Point(onName.X - place.Left, onName.Y - place.Top), place.Size, area);
+                        if (moved.Location != place.Location) _windows.ShowParkedForDrop(_source, moved.Location, place.Size);
+                        press = onName + new Size(moved.Left - place.Left, moved.Top - place.Top);
+                    }
                 }
             }
             if (press is null)
@@ -1288,7 +1374,7 @@ public sealed partial class PipWindow : Form
             Diagnostics.Log.Swallowed(failure);
             return;
         }
-        LastPickup = $"{(press == pointer ? "own size" : "view size")} after {Environment.TickCount64 - pickupStarted} ms";
+        LastPickup = $"{(press == pointer ? "item not found" : "item found")} after {Environment.TickCount64 - pickupStarted} ms";
         LastPickupPress = press.Value;
         // The pressed item is under the press now: the real window gets it, and the drag is its own from here. The pointer
         // goes to the item for the press and straight back, so the drag starts from the item and follows the hand.
@@ -1310,22 +1396,20 @@ public sealed partial class PipWindow : Form
     private const long PickupFindFor = 600;
     private static readonly Size SmallestPickup = new(420, 300);
 
-    private static Point Middle(Rectangle r) => new(r.Left + r.Width / 2, r.Top + r.Height / 2);
-
     /// <summary>
-    /// Where a picked-up original goes: the view's picture, at least big enough to use, kept centred on it and on its
-    /// screen.
+    /// Where a picked-up original goes first: its own size when not maximized, at most three quarters of its screen
+    /// each way so that there is room left to drag to, centred on the pointer and kept on the screen.
     /// </summary>
-    internal static Rectangle PickupPlace(Rectangle picture, Rectangle area)
+    internal static Rectangle PickupPlace(Size normal, Point pointer, Rectangle area)
     {
-        int width = Math.Min(Math.Max(picture.Width, SmallestPickup.Width), area.Width);
-        int height = Math.Min(Math.Max(picture.Height, SmallestPickup.Height), area.Height);
-        int x = Math.Clamp(picture.Left + (picture.Width - width) / 2, area.Left, area.Right - width);
-        int y = Math.Clamp(picture.Top + (picture.Height - height) / 2, area.Top, area.Bottom - height);
+        int width = Math.Min(Math.Max(Math.Min(normal.Width, area.Width * 3 / 4), SmallestPickup.Width), area.Width);
+        int height = Math.Min(Math.Max(Math.Min(normal.Height, area.Height * 3 / 4), SmallestPickup.Height), area.Height);
+        int x = Math.Clamp(pointer.X - width / 2, area.Left, area.Right - width);
+        int y = Math.Clamp(pointer.Y - height / 2, area.Top, area.Bottom - height);
         return new Rectangle(x, y, width, height);
     }
 
-    /// <summary>How the last drag was handed over (at the view's size or its own) and how long finding the item took, for tests.</summary>
+    /// <summary>Whether the pressed item was found again for the last drag handed over, and how long it took, for tests.</summary>
     internal string LastPickup { get; private set; } = "";
 
     /// <summary>Where the last handed-over press was given to the window, on the screen, for tests.</summary>
@@ -1949,6 +2033,10 @@ public sealed partial class PipWindow : Form
                 break;
             case ViewState.Arrival.Show:
                 LastReveal = now;
+                // What brought it forward: the window before it, and whether this view was minimized.
+                Diagnostics.Log.Event("view.revealed", ("program", Diagnostics.LogValue.ProgramOf(_source)),
+                    ("beforeIsView", before == Handle), ("before", Diagnostics.LogValue.ClassOf(before)),
+                    ("beforeThere", before != 0 && User32.IsWindow(before)), ("minimized", _suspended));
                 if (_suspended) ResumeView();
                 GoToSource();
                 break;
@@ -2066,6 +2154,7 @@ public sealed partial class PipWindow : Form
         FollowFocusAfterDrag();
         if (_dropSince == 0) RevealIfActivatedElsewhere();
         else _sourceWasFocused = User32.GetForegroundWindow() == _source; // A drop may focus it; that isn't asking for it.
+        FollowDragArriving();
         FollowDrop();
         FollowOriginalInUse();
         FinishGoingTo();

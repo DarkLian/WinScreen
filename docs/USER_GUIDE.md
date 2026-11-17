@@ -105,11 +105,10 @@ turn on **Always show title bar** in **Size and options**, or for every new view
   If a click on a view doesn't get through, the view says so. Click that note to use the original instead.
   If it keeps happening with an app, the note offers to turn on **Show original** for it.
 - **Drag something onto a view**, such as a file, a picture or some text, and the original window comes up under the
-  pointer so you can drop it there. It hides again when you let go. This doesn't work while WinScreen runs as
-  administrator.
+  pointer so you can drop it there. It hides again when you let go.
 - **Drag a file out of a File Explorer view** onto a folder in it, another window, the desktop or another view. When
-  you start dragging, the real window comes up in the view's place and size with your file under the pointer, and
-  hides again afterwards.
+  you start dragging, the real window comes up at its usual size with your file under the pointer, and hides again
+  afterwards. A maximized window comes up smaller, so there is room to drag to.
 
 Views pause direct use while a WinScreen menu or the tray overflow panel is open.
 

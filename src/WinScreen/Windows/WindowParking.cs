@@ -112,6 +112,22 @@ public sealed partial class WindowController
         }
     }
 
+    /// <summary>
+    /// The size a hidden window has when not maximized: for one that was maximized, the size it goes back to (its
+    /// parked size is the whole screen's); for any other, its size now. Null when it isn't hidden by WinScreen.
+    /// </summary>
+    internal Size? NormalSize(nint window)
+    {
+        lock (_gate)
+        {
+            if (!_changed.TryGetValue(window, out var state) || !User32.IsWindow(window)) return null;
+            if (state.PlacementBeforePeek is { ShowCommand: ShowMaximized } home)
+                return new Size(home.NormalPosition.Right - home.NormalPosition.Left, home.NormalPosition.Bottom - home.NormalPosition.Top);
+            if (state.SizeBeforeDrop is { } own) return own;
+            return User32.GetWindowRect(window, out Rect r) ? new Size(r.Right - r.Left, r.Bottom - r.Top) : null;
+        }
+    }
+
     internal bool IsShownForDrop(nint window)
     {
         lock (_gate) return _changed.TryGetValue(window, out var state) && state.ShownForDrop;

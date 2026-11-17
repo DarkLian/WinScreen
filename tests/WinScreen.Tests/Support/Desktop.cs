@@ -316,7 +316,8 @@ internal static partial class Desktop
     [DllImport("user32.dll")]
     private static extern void mouse_event(uint flags, uint x, uint y, uint data, nuint extra);
 
-    public static void MouseButton(bool down) => SendMouse(down ? MouseLeftDown : MouseLeftUp, 0);
+    public static void MouseButton(bool down, bool right = false) =>
+        SendMouse(right ? down ? MouseRightDown : MouseRightUp : down ? MouseLeftDown : MouseLeftUp, 0);
 
     private static void Click(Point point)
     {

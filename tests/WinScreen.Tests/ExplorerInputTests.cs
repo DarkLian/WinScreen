@@ -337,7 +337,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
         }
     }
 
-    // ── Used directly without experimental features (roadmap P1-3, 14 Nov 2026) ─────────────────────────────────────
+    // ?? Used directly without experimental features (roadmap P1-3, 14 Nov 2026) ?????????????????????????????????????
 
     /// <summary>The folder's Explorer window, opened by the test, or 0.</summary>
     private static nint OpenFolder(string root)
@@ -437,6 +437,55 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
     private static BrowserAccessibility.Control Item(nint window, string name) =>
         Assert.Single(BrowserAccessibility.Read(window), c => c.Type == 50007 && c.Name == name && c.Bounds.Width > 0);
 
+    /// <summary>
+    /// Owner, 17 Nov (beta 9): minimizing a view used directly showed its hidden original instead and the view came
+    /// back. After a click in it, by the view's own minimize button or its menu, it goes to the taskbar and the
+    /// original stays hidden.
+    /// </summary>
+    [Theory]
+    [InlineData("the view's button")]
+    [InlineData("the view's menu")]
+    public void Minimizing_a_view_used_directly_keeps_its_original_hidden(string button)
+    {
+        string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
+        File.WriteAllText(Path.Combine(root, "a-file"), "x");
+        var windows = new WindowController([]);
+        InView(root, (window, view, toView) =>
+        {
+            Desktop.SlideMouse(toView(Middle(Item(window, "a-file").Bounds)));
+            Thread.Sleep(150);
+            Desktop.MouseButton(true); Thread.Sleep(50); Desktop.MouseButton(false);
+            Thread.Sleep(600);
+            Point target;
+            Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + 10));
+            Assert.True(Desktop.WaitFor(() => (bool)view.Invoke(() => view.OwnedForms.OfType<PipTitleBar>().Any(b => b.Visible)), 3000),
+                "No title bar.");
+            if (button == "the view's button")
+                target = (Point)view.Invoke(() => Middle(view.OwnedForms.OfType<PipTitleBar>().First().MinimizeBounds));
+            else
+            {
+                Desktop.SlideMouse((Point)view.Invoke(() => Middle(view.OwnedForms.OfType<PipTitleBar>().First().TitleTextBounds)));
+                Thread.Sleep(150);
+                Desktop.MouseButton(true, right: true); Thread.Sleep(50); Desktop.MouseButton(false, right: true);
+                Assert.True(Desktop.WaitFor(() => (bool)view.Invoke(() => view.ContextMenuStrip!.Visible), 3000), "No menu.");
+                Thread.Sleep(300);
+                target = (Point)view.Invoke(() =>
+                {
+                    ToolStripItem item = view.ContextMenuStrip!.Items.Cast<ToolStripItem>().First(i => i.Text == WinScreen.Localization.UiText.T("pip.minimize"));
+                    return Middle(view.ContextMenuStrip.RectangleToScreen(item.Bounds));
+                });
+            }
+            Desktop.SlideMouse(target);
+            Thread.Sleep(200);
+            Desktop.MouseButton(true); Thread.Sleep(50); Desktop.MouseButton(false);
+            Thread.Sleep(1500);
+            Assert.True((bool)view.Invoke(() => view.IsSuspended), $"The view isn't minimized (by {button}); last reveal {view.LastReveal}; " +
+                $"hidden {windows.IsHidden(window)}, iconic {User32.IsIconic(window)}; presses {string.Join(",", view.PressOutcomes)}.");
+            Assert.True(windows.IsHidden(window), $"The original was shown (by {button}).");
+            Assert.NotEqual(window, User32.GetForegroundWindow());
+        }, windows);
+    }
+
     /// <summary>A click selects a file, F2 and typing rename it, through a view.</summary>
     [Fact]
     public void A_file_is_renamed_by_typing_through_a_view()
@@ -533,7 +582,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 Thread.Sleep(300);
                 if (where == "to a folder in the view")
                 {
-                    // The real window is up now at the view's size: aim at the folder where it is now, found as WinScreen
+                    // The real window is up now, moved to bring the file under the pointer: aim at the folder where it is now, found as WinScreen
                     // finds the pressed file (Explorer's own answer can still give the place from before the resize).
                     Rectangle? into = WinScreen.Pip.PipControlInput.Shared.ItemBounds(WindowIdentity.Capture(window), "into", 3000);
                     // Windows 10's Explorer may not answer during a drag: folders come first, so it is the row above.
@@ -542,9 +591,9 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 }
                 Rectangle picked = Desktop.BoundsOf(window);
                 log.Append($"picked {view.DragsPickedUp} ({view.LastPickup}) original at {picked} (view {view.Bounds}) end {end}; ");
-                // At the view's size and place (at least 420 by 300), not its own 900 by 640.
-                Assert.True(picked.Width <= Math.Max(view.Bounds.Width, 420) + 16 && picked.IntersectsWith(view.Bounds),
-                    "The window didn't come up at the view's size and place: " + log);
+                // At its own 900 by 640, so it lays itself out as it always does, with the file pressed where it is now.
+                Assert.True(Math.Abs(picked.Width - 900) <= 16 && Math.Abs(picked.Height - 640) <= 16 && picked.Contains(view.LastPickupPress),
+                    "The window didn't come up at its own size: " + log);
                 Point from = Desktop.CursorPosition();
                 for (int step = 1; step <= 30; step++)
                 {
