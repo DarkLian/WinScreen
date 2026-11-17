@@ -647,9 +647,15 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
         }
     }
 
-    /// <summary>A file dragged from an ordinary Explorer window onto an Explorer view lands in the view's window.</summary>
-    [Fact]
-    public void A_file_dragged_from_another_explorer_window_lands_in_an_explorer_view()
+    /// <summary>
+    /// A file dragged from an ordinary Explorer window onto an Explorer view lands in the view's window, also while
+    /// WinScreen runs as administrator, where the view only sees it from the pointer. A button merely held over the
+    /// view (here a selection box started in the other window) doesn't bring the original up (owner, 17 Nov).
+    /// </summary>
+    [Theory]
+    [InlineData("a file")]
+    [InlineData("a held button")]
+    public void A_file_dragged_from_another_explorer_window_lands_in_an_explorer_view(string what)
     {
         string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
         string other = Directory.CreateTempSubdirectory("WinScreenSource-").FullName;
@@ -663,7 +669,10 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
             InView(root, (window, view, toView) =>
             {
                 Rectangle item = Item(source, "come-in").Bounds;
-                Point start = Middle(item);
+                Rectangle sourceBounds = Desktop.BoundsOf(source);
+                // Empty space below the file, in the other window: a press there starts a selection box.
+                Point start = what == "a file" ? Middle(item) : new Point(item.Left + 40, Math.Min(item.Bottom + 120, sourceBounds.Bottom - 40));
+                bool everHanded = false;
                 Point end = new(view.Bounds.Left + view.Bounds.Width * 7 / 10, view.Bounds.Top + view.Bounds.Height * 7 / 10);
                 var log = new System.Text.StringBuilder($"start {start} end {end}; ");
                 Desktop.SlideMouse(start);
@@ -674,16 +683,18 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 {
                     Desktop.SlideMouse(new Point(start.X + (end.X - start.X) * step / 30, start.Y + (end.Y - start.Y) * step / 30));
                     Thread.Sleep(40);
+                    everHanded |= view.HandingOverDrop;
                     if (step % 10 == 0)
-                        log.Append($"[{step}: under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} handing={view.HandingOverDrop} live={view.LiveInteraction is not null} original={Desktop.BoundsOf(window)}] ");
+                        log.Append($"[{step}: under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} handing={view.HandingOverDrop} live={view.LiveInteraction is not null} original={Desktop.BoundsOf(window)} dnd={PipWindow.DragAndDropRunning(User32.GetWindowThreadProcessId(source, out _))} fg={WindowInfo.ClassName(User32.GetForegroundWindow())}] ");
                 }
-                for (int wait = 0; wait < 10; wait++) { Desktop.NudgeMouse(wait % 2 == 0 ? 2 : -2, 0); Thread.Sleep(80); }
+                for (int wait = 0; wait < 10; wait++) { Desktop.NudgeMouse(wait % 2 == 0 ? 2 : -2, 0); Thread.Sleep(80); everHanded |= view.HandingOverDrop; }
                 log.Append($"before release: handing={view.HandingOverDrop} under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} original={Desktop.BoundsOf(window)}; ");
                 Desktop.MouseButton(false);
                 Thread.Sleep(2500);
                 log.Append($"after: arrived {File.Exists(Path.Combine(root, "come-in"))}; hidden={view.KeepsUpdating}");
                 output.WriteLine(log.ToString());
-                Assert.True(File.Exists(Path.Combine(root, "come-in")), log.ToString());
+                if (what == "a file") Assert.True(File.Exists(Path.Combine(root, "come-in")), log.ToString());
+                else Assert.False(everHanded, "A held button brought the original up: " + log);
             });
         }
         finally

@@ -1208,9 +1208,13 @@ public sealed partial class PipWindow : Form
     /// <summary>
     /// A drag coming in, seen by the pointer rather than by drag and drop. Windows doesn't let a drag from a window
     /// that runs normally reach one that runs as administrator, so when WinScreen does, the view is never asked
-    /// (owner, 17 Nov: nothing came up for a file from the desktop or from File Explorer). A left button pressed
-    /// somewhere else and held while the pointer rests on the picture is taken as a drag arriving, unless a window is
-    /// being moved or sized or text is being selected (the text cursor). A drag the view is asked about goes first.
+    /// (owner, 17 Nov: nothing came up for a file from the desktop or from File Explorer). While Windows' drag and drop
+    /// runs, the thread it started on holds the mouse with the drop's own window (CLIPBRDWNDCLASS, measured: a held
+    /// button or a selection box holds it with the app's own window). It is the thread of the window pressed, which
+    /// needn't be the one in front: File Explorer doesn't come forward for a press on a file. A left button pressed
+    /// somewhere else, with that drop window holding the mouse, while the pointer rests on the picture, is a drag
+    /// arriving; a button merely held
+    /// over the view is not (owner, 17 Nov: it brought the original up). A drag the view is asked about goes first.
     /// </summary>
     private void FollowDragArriving()
     {
@@ -1225,9 +1229,10 @@ public sealed partial class PipWindow : Form
             nint under = User32.WindowFromPoint(new NativePoint { X = pointer.X, Y = pointer.Y });
             User32.GetWindowThreadProcessId(under, out uint process);
             _heldFromElsewhere = under != 0 && process != (uint)Environment.ProcessId && !Bounds.Contains(pointer);
+            _heldThread = under == 0 ? 0 : User32.GetWindowThreadProcessId(under, out _);
             return;
         }
-        if (!_heldFromElsewhere || !MayTakeDrop || !RectangleToScreen(PictureArea).Contains(pointer) || MovingOrSizing() || TextCursor())
+        if (!_heldFromElsewhere || !MayTakeDrop || !RectangleToScreen(PictureArea).Contains(pointer) || !DragAndDropRunning(_heldThread))
         {
             _dragInSince = 0;
             return;
@@ -1241,21 +1246,14 @@ public sealed partial class PipWindow : Form
 
     private long _heldSince, _dragInSince;
     private bool _heldFromElsewhere;
+    private uint _heldThread;
     private const long DragInRests = 150;
 
-    private static bool MovingOrSizing()
+    /// <summary>Whether Windows' drag and drop holds the mouse on a thread.</summary>
+    internal static bool DragAndDropRunning(uint thread)
     {
         var info = new GuiThreadInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<GuiThreadInfo>() };
-        const int GUI_INMOVESIZE = 0x2;
-        return GetGUIThreadInfo(0, ref info) && (info.Flags & GUI_INMOVESIZE) != 0;
-    }
-
-    private static readonly nint TextCursorHandle = LoadCursor(0, 32513 /* IDC_IBEAM */);
-
-    private static bool TextCursor()
-    {
-        var info = new CursorInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<CursorInfo>() };
-        return GetCursorInfo(ref info) && info.Cursor == TextCursorHandle;
+        return thread != 0 && GetGUIThreadInfo(thread, ref info) && info.Capture != 0 && WindowInfo.ClassName(info.Capture) == "CLIPBRDWNDCLASS";
     }
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
@@ -1266,22 +1264,8 @@ public sealed partial class PipWindow : Form
         public Rect CaretBounds;
     }
 
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct CursorInfo
-    {
-        public int Size, Flags;
-        public nint Cursor;
-        public NativePoint At;
-    }
-
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool GetGUIThreadInfo(uint thread, ref GuiThreadInfo info);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool GetCursorInfo(ref CursorInfo info);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern nint LoadCursor(nint instance, nint name);
 
     private void HandOverDrop()
     {
