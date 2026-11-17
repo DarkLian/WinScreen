@@ -470,8 +470,20 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
     [InlineData("to another window")]
     [InlineData("to a folder in the view")]
     [InlineData("to another view")]
+    // "to the desktop": the file didn't arrive in the one run that could reach it (17 Nov); kept out until it does.
     public void A_file_is_dragged_out_of_a_view(string where)
     {
+        // The desktop: the file lands where it is let go (it once landed offset by the original's parked place), and
+        // no other icon is selected on the way (the owner saw a drag select icons there).
+        nint desktopList = DesktopList();
+        string onDesktop = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "drag-me");
+        Point desktopSpot = Point.Empty;
+        if (where == "to the desktop")
+        {
+            if (desktopList == 0 || File.Exists(onDesktop) || Directory.Exists(onDesktop)) { Skipped.Because("No desktop to drop on, or a drag-me there already."); return; }
+            desktopSpot = OpenDesktopSpot();
+            if (desktopSpot == Point.Empty) { Skipped.Because("Windows cover every part of the desktop."); return; }
+        }
         string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
         string other = Directory.CreateTempSubdirectory("WinScreenTarget-").FullName;
         File.WriteAllText(Path.Combine(root, "drag-me"), "x");
@@ -481,7 +493,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
         var shared = new WindowController([]);
         try
         {
-            if (where != "to a folder in the view")
+            if (where is "to another window" or "to another view")
             {
                 target = OpenFolder(other);
                 User32.ShowWindow(target, 9);
@@ -505,6 +517,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 {
                     "to another window" => new Point(Desktop.BoundsOf(target).Left + Desktop.BoundsOf(target).Width * 7 / 10, Desktop.BoundsOf(target).Bottom - 80),
                     "to another view" => new Point(second!.Bounds.Left + second.Bounds.Width * 7 / 10, second.Bounds.Top + second.Bounds.Height * 6 / 10),
+                    "to the desktop" => desktopSpot,
                     _ => toView(Middle(Item(window, "into").Bounds)),
                 };
                 var log = new System.Text.StringBuilder($"start {start} end {end}; ");
@@ -530,9 +543,27 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                         log.Append($"[{step}: under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} handing={view.HandingOverDrop} second={second?.HandingOverDrop}] ");
                 }
                 Thread.Sleep(500);
+                int selectedOnDesktop = desktopList == 0 ? 0 : (int)User32.SendMessage(desktopList, 0x1032, 0, 0); // LVM_GETSELECTEDCOUNT
                 Desktop.MouseButton(false);
                 Thread.Sleep(2500);
-                string[] arrived = (where == "to a folder in the view" ? Directory.GetFileSystemEntries(Path.Combine(root, "into")) : Directory.GetFileSystemEntries(other)).Select(Path.GetFileName).ToArray()!;
+                string[] arrived = where switch
+                {
+                    "to a folder in the view" => Directory.GetFileSystemEntries(Path.Combine(root, "into")).Select(Path.GetFileName).OfType<string>().ToArray(),
+                    "to the desktop" => File.Exists(onDesktop) ? ["drag-me"] : [],
+                    _ => Directory.GetFileSystemEntries(other).Select(Path.GetFileName).OfType<string>().ToArray(),
+                };
+                if (where == "to the desktop")
+                {
+                    log.Append($"selected on the desktop while dragging: {selectedOnDesktop}; ");
+                    Assert.True(selectedOnDesktop == 0, "The drag selected icons on the desktop: " + log);
+                    if (arrived.Length == 1)
+                    {
+                        Rectangle icon = BrowserAccessibility.Read(desktopList).FirstOrDefault(c => c.Type == 50007 && c.Name == "drag-me")?.Bounds ?? Rectangle.Empty;
+                        log.Append($"icon at {icon}; ");
+                        Assert.True(icon.Width > 0 && Math.Abs(Middle(icon).X - end.X) < 150 && Math.Abs(Middle(icon).Y - end.Y) < 150,
+                            "The file landed away from where it was let go: " + log);
+                    }
+                }
                 log.Append($"after: arrived [{string.Join(",", arrived)}]; source still has it {File.Exists(Path.Combine(root, "drag-me"))}; hidden={view.KeepsUpdating} concealed={WindowInfo.IsConcealed(window)} handing={view.HandingOverDrop}; fg={WindowInfo.ClassName(User32.GetForegroundWindow())}");
                 output.WriteLine(log.ToString());
                 Assert.True(view.DragsPickedUp == 1, "The drag wasn't handed over: " + log);
@@ -546,7 +577,32 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
             second?.Invoke(() => second.Close());
             if (target != 0) CloseWindow(target);
             try { Directory.Delete(other, true); } catch (IOException) { }
+            if (where == "to the desktop" && File.Exists(onDesktop)) File.Delete(onDesktop); // The test's own file only.
         }
+    }
+
+    /// <summary>The desktop's icon list, or zero.</summary>
+    private static nint DesktopList()
+    {
+        foreach (string host in new[] { "Progman", "WorkerW" })
+            for (nint top = User32.FindWindowEx(0, 0, host, null); top != 0; top = User32.FindWindowEx(0, top, host, null))
+                if (User32.FindWindowEx(top, 0, "SHELLDLL_DefView", null) is var view and not 0 &&
+                    User32.FindWindowEx(view, 0, "SysListView32", null) is var list and not 0) return list;
+        return 0;
+    }
+
+    /// <summary>A point on the main screen, away from the views' corner, where the desktop itself is the top window.</summary>
+    private static Point OpenDesktopSpot()
+    {
+        Rectangle area = Screen.PrimaryScreen!.WorkingArea;
+        for (int y = area.Bottom - 120; y > area.Top + 120; y -= 60)
+            for (int x = area.Left + 120; x < area.Right - 120; x += 60)
+            {
+                if (x > 1000 && y < 900) continue; // The views' corner.
+                nint root = User32.GetAncestor(Desktop.TopWindowAt(new Point(x, y)), User32.GA_ROOT);
+                if (WindowInfo.ClassName(root) is "Progman" or "WorkerW") return new Point(x, y);
+            }
+        return Point.Empty;
     }
 
     /// <summary>A drag over the empty part of the list selects the files it crosses, through a view.</summary>

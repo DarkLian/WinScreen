@@ -1310,8 +1310,17 @@ public sealed partial class PipWindow : Form
         long now = Environment.TickCount64;
         if (DragButtonsDown())
         {
+            Point pointer = Cursor.Position;
             bool inside = User32.GetWindowRect(_source, out Rect r) &&
-                Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).Contains(Cursor.Position);
+                Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).Contains(pointer);
+            // Its own drag, carried over another view: the original, at its own size, may cover that view, which is
+            // where the drag is going (its view hands its own original over).
+            if (_dropFromView && inside && Application.OpenForms.OfType<PipWindow>().Any(other =>
+                    other != this && other.Visible && other.Bounds.Contains(pointer)))
+            {
+                EndDrop(keepFocus: true);
+                return;
+            }
             if (inside) _dropOutsideSince = 0;
             else if (_dropOutsideSince == 0) _dropOutsideSince = now;
             // Out of the way of where the drag is going. Its own drag goes on without it in sight (Windows carries it),
