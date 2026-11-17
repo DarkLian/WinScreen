@@ -220,6 +220,11 @@ public sealed partial class WindowController
                 else Step(window, "on screen; parked again");
                 Repark(window);
             }
+            if (Environment.TickCount64 - state.SiblingsCheckedAt >= SiblingsCheckMilliseconds)
+            {
+                state.SiblingsCheckedAt = Environment.TickCount64;
+                if (known) KeepSiblingsOffParking(window, state, now);
+            }
             bool reachable = state.ReachableWanted && OffScreen(window);
             if (reachable == ((style & User32.WS_EX_TRANSPARENT) == 0)) return;
             state.Identity.Require();
@@ -234,6 +239,76 @@ public sealed partial class WindowController
         if (!reachable) WriteExStyle(window, style | User32.WS_EX_TRANSPARENT); // Clicks go first, then the window fades.
         ApplyAlpha(window, state, reachable ? ReachableOpacity : HiddenOpacity);
         if (reachable) WriteExStyle(window, style & ~User32.WS_EX_TRANSPARENT);
+    }
+
+    private const int SiblingsCheckMilliseconds = 300;
+    private const int SW_SHOWMINNOACTIVE = 7;
+
+    /// <summary>
+    /// An app opens a new window where its last one was, so a second Chrome window took the parked original's place
+    /// as its own normal size, off the screen (owner, 17 Nov, beta 4: un-maximized, it went past the right edge).
+    /// The app's other windows that sit, or would sit when restored, mostly on the parked place are put where the
+    /// app would have put them without WinScreen: at the original's home, with the same offset.
+    /// </summary>
+    private void KeepSiblingsOffParking(nint window, ChangedWindow state, Rectangle parked)
+    {
+        if (state.PlacementBeforePeek is not { } home) return;
+        User32.GetWindowThreadProcessId(window, out uint process);
+        if (process == 0) return;
+        Rect h = home.NormalPosition;
+        Rectangle homeBounds = Rectangle.FromLTRB(h.Left, h.Top, h.Right, h.Bottom);
+        Rectangle[] areas = [.. Screen.AllScreens.Select(s => s.WorkingArea)];
+        Rectangle[] monitors = [.. Screen.AllScreens.Select(s => s.Bounds)];
+        const uint GW_CHILD = 5, GW_HWNDNEXT = 2, GW_OWNER = 4;
+        const long WS_CAPTION = 0x00C00000;
+        nint other = User32.GetWindow(User32.GetDesktopWindow(), GW_CHILD);
+        for (int seen = 0; other != 0 && seen < 4096; seen++, other = User32.GetWindow(other, GW_HWNDNEXT))
+        {
+            if (other == window || !User32.IsWindowVisible(other) || User32.GetWindow(other, GW_OWNER) != 0) continue;
+            if (User32.GetWindowThreadProcessId(other, out uint owner) == 0 || owner != process) continue;
+            if ((User32.GetWindowLongPtr(other, User32.GWL_STYLE) & WS_CAPTION) != WS_CAPTION) continue;
+            if (_changed.TryGetValue(other, out ChangedWindow? tracked) && (tracked.Parked || tracked.Hidden)) continue;
+            var placement = new WindowPlacement { Length = System.Runtime.InteropServices.Marshal.SizeOf<WindowPlacement>() };
+            if (!User32.GetWindowPlacement(other, ref placement)) continue;
+            Rect n = placement.NormalPosition;
+            Rectangle normal = Rectangle.FromLTRB(n.Left, n.Top, n.Right, n.Bottom);
+            if (SiblingHome(normal, parked, homeBounds, monitors, areas) is not { } moved) continue;
+            bool zoomed = User32.IsZoomed(other), minimized = User32.IsIconic(other);
+            // Writing a maximized placement shows it maximized, which activates it: only while it has the focus anyway.
+            if (zoomed && User32.GetForegroundWindow() != other) continue;
+            if (!AnswersQuickly(other)) continue;
+            Diagnostics.Log.Event("window.siblingOffParking", ("program", Diagnostics.LogValue.ProgramOf(other)));
+            if (!zoomed && !minimized)
+            {
+                User32.SetWindowPos(other, 0, moved.Left, moved.Top, moved.Width, moved.Height, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+                continue;
+            }
+            placement.NormalPosition = new Rect { Left = moved.Left, Top = moved.Top, Right = moved.Right, Bottom = moved.Bottom };
+            placement.ShowCommand = zoomed ? User32.SW_MAXIMIZE : SW_SHOWMINNOACTIVE;
+            // Not a window WinScreen changed: written directly, and a failure only leaves it where the app put it.
+            User32.SetWindowPlacement(other, ref placement);
+        }
+    }
+
+    /// <summary>
+    /// Where another window of the app belongs when its normal place is mostly on the parked original's place and
+    /// mostly off the screens: the original's home, moved by the same offset, kept on that home's work area. Null when
+    /// it is somewhere of its own.
+    /// </summary>
+    internal static Rectangle? SiblingHome(Rectangle normal, Rectangle parked, Rectangle home,
+        IReadOnlyList<Rectangle> monitors, IReadOnlyList<Rectangle> workAreas)
+    {
+        long Area(Rectangle r) => r.IsEmpty ? 0 : (long)r.Width * r.Height;
+        long size = Area(normal);
+        if (size == 0) return null;
+        if (Area(Rectangle.Intersect(normal, parked)) * 2 < size) return null;
+        long shown = monitors.Sum(m => Area(Rectangle.Intersect(normal, m)));
+        if (shown * 2 >= size) return null;
+        var moved = new Rectangle(home.Left + normal.Left - parked.Left, home.Top + normal.Top - parked.Top, normal.Width, normal.Height);
+        Rectangle area = workAreas.OrderByDescending(a => Area(Rectangle.Intersect(a, home))).FirstOrDefault(home);
+        int width = Math.Min(moved.Width, area.Width), height = Math.Min(moved.Height, area.Height);
+        int left = Math.Clamp(moved.Left, area.Left, area.Right - width), top = Math.Clamp(moved.Top, area.Top, area.Bottom - height);
+        return new Rectangle(left, top, width, height);
     }
 
     private static bool OffScreen(nint window) =>

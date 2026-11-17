@@ -24,6 +24,29 @@ public sealed class PipParkingGeometryTests
         Assert.False(WindowController.OutOfReach(new Rectangle(-8, -8, 1936, 1048), monitors));
     }
 
+    /// <summary>
+    /// Owner, 17 Nov: a second Chrome window, un-maximized, went to the hidden one's parked place (1890,10 next to
+    /// 1918,0), past the right edge. It belongs at the hidden one's home with the same offset; a window of its own
+    /// place is left alone.
+    /// </summary>
+    [Fact]
+    public void Another_window_of_the_app_on_the_parked_place_goes_to_the_originals_home()
+    {
+        Rectangle[] monitors = [new(0, 0, 1920, 1080)];
+        Rectangle[] areas = [new(0, 0, 1920, 1032)];
+        Rectangle parked = new(1918, 0, 900, 600), home = new(200, 150, 900, 600);
+
+        Assert.Equal(new Rectangle(172, 160, 900, 600),
+            WindowController.SiblingHome(new Rectangle(1890, 10, 900, 600), parked, home, monitors, areas));
+        // On the screen, or elsewhere off it: its own.
+        Assert.Null(WindowController.SiblingHome(new Rectangle(300, 200, 800, 500), parked, home, monitors, areas));
+        Assert.Null(WindowController.SiblingHome(new Rectangle(1300, 10, 900, 600), parked, home, monitors, areas));
+        Assert.Null(WindowController.SiblingHome(new Rectangle(-3000, 10, 900, 600), parked, home, monitors, areas));
+        // Kept on the work area: a home at the right edge, the window offset further right.
+        Assert.Equal(new Rectangle(1020, 432, 900, 600),
+            WindowController.SiblingHome(new Rectangle(1950, 40, 900, 600), parked, new Rectangle(1000, 400, 900, 600), monitors, areas));
+    }
+
     [Fact]
     public void Hover_parking_prefers_a_side_keeps_the_home_monitor_and_the_two_pixel_limit()
     {

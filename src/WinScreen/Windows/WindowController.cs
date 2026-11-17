@@ -105,6 +105,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public bool ShownForDrop { get; set; }
         [NotJournalled("Transient: covered a monitor (full screen) since it was parked.")]
         public bool CoveredAMonitor { get; set; }
+        [NotJournalled("Transient: when the app's other windows were last checked for the parked place.")]
+        public long SiblingsCheckedAt { get; set; }
         public long? SwitcherBits { get; set; }
         public bool TaskbarButtonRemoved { get; set; }
         public int? OriginalDarkTitleBar { get; set; }
