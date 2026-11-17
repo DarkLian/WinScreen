@@ -57,7 +57,9 @@ public sealed class PressWatchTests
     {
         using var target = new TargetProcess(new Rectangle(300, 220, 460, 320), "E8E8E8");
         target.UseFrame();
-        WindowMenuBuilderTests.OnUiThread(() =>
+        // Dark mode's own thread: the Magnification API keeps updating only on the first thread that used it in this
+        // process, so Dark mode on any other test thread stopped all of DarkModeTests that ran after it (TD-67).
+        DarkModeTests.OnUiThread(_ =>
         {
             Desktop.GainForegroundRights();
             Desktop.Activate(target.Handle);
