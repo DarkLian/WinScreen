@@ -713,6 +713,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     public static bool IsShell(nint window) => window == User32.GetShellWindow() || window == User32.GetDesktopWindow() ||
                                                ShellClasses.Contains(WindowInfo.ClassName(window));
 
+    /// <summary>True for a process that is part of Windows' own surfaces (Start, search, notifications).</summary>
+    public static bool IsShellProgram(uint processId) => ShellPrograms.Contains(WindowInfo.ProcessName(processId));
+
     /// <summary>Why WinScreen won't change this window, in words for the person, or null when it will.</summary>
     public string? Refusal(nint window)
     {

@@ -2051,18 +2051,22 @@ public sealed partial class PipWindow : Form
 
     /// <summary>
     /// Whether the window that had the focus before the original is gone from use: minimized, closed, this view
-    /// minimized, or one of WinScreen's own windows hidden (a view's title bar or menu as the view minimizes: owner,
-    /// 17 Nov, after using a view directly the title bar's button had the focus). Another app's window merely hidden
-    /// (the switcher) doesn't count, nor does one still there.
+    /// minimized, or a passing surface gone out of sight: one of WinScreen's own (a view's title bar or menu as the
+    /// view minimizes: owner, 17 Nov, after using a view directly the title bar's button had the focus) or one of
+    /// Windows' (the taskbar's hidden-icons panel as WinScreen's tray menu opens Settings, the switcher, Start:
+    /// owner, 18 Nov, Chrome came out and its video froze behind Settings). Another app's window merely hidden
+    /// doesn't count, nor does any window still in sight (the taskbar itself, for a button of the original's).
     /// </summary>
     private bool HandedOnByWindows(nint before) =>
         before != 0 && before != _source &&
-        (!User32.IsWindow(before) || User32.IsIconic(before) || before == Handle && _suspended || OwnHiddenWindow(before));
+        (!User32.IsWindow(before) || User32.IsIconic(before) || before == Handle && _suspended || PassingSurfaceGone(before));
 
-    private static bool OwnHiddenWindow(nint window)
+    private static bool PassingSurfaceGone(nint window)
     {
+        bool cloaked = Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_CLOAKED, out int value, sizeof(int)) == 0 && value != 0;
+        if (User32.IsWindowVisible(window) && !cloaked && !WindowInfo.IsConcealed(window)) return false;
         User32.GetWindowThreadProcessId(window, out uint process);
-        return process == (uint)Environment.ProcessId && !User32.IsWindowVisible(window);
+        return process == (uint)Environment.ProcessId || WindowController.IsShell(window) || WindowController.IsShellProgram(process);
     }
 
     /// <summary>

@@ -183,6 +183,7 @@ public sealed class NewViewHidingTests
     [InlineData("closes")]
     [InlineData("stays")]
     [InlineData("WinScreen's own hides")] // A view's title bar or menu as the view minimizes (owner, 17 Nov).
+    [InlineData("a surface is cloaked")] // The taskbar's hidden-icons panel closing as Settings opens (owner, 18 Nov).
     public void A_window_that_hands_the_original_the_focus_as_it_closes_leaves_it_hidden(string what)
     {
         using var source = new TargetProcess(Spot, "C81E1E", "Hidden source");
@@ -206,6 +207,12 @@ public sealed class NewViewHidingTests
                 User32.SetForegroundWindow(source.Handle); // The app hands its other window the focus first...
                 TestDesktop.Pump(120);
                 if (what == "closes") closing.Close(); // ...and closes this one a moment later.
+                else if (what == "a surface is cloaked")
+                {
+                    const int DWMWA_CLOAK = 13; // Windows' panels go out of sight this way rather than hiding.
+                    int on = 1;
+                    Dwmapi.DwmSetWindowAttribute(closing.Handle, DWMWA_CLOAK, in on, sizeof(int));
+                }
                 else if (closes) closing.Hide(); // The test runs in WinScreen's place: this form is one of its own.
                 TestDesktop.Pump(1200);
                 bool hidden = view.KeepsUpdating && windows.IsHidden(source.Handle);
