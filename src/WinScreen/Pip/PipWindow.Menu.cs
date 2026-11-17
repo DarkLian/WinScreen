@@ -92,7 +92,7 @@ public sealed partial class PipWindow
         foreach (ToolStripItem item in new ToolStripItem[] { _hideItem, _muteItem, _autoMoveItem, _interactiveItem, _viewOnlyItem, _middleScrollItem, _enhancedHoverItem })
             StayingOpen.Keep(item);
         StayingOpen.Follow(_menu, RefreshMenuItems);
-        _menu.Closed += (_, _) => { ReturnFocusAfterMenu(); PauseInput(TopLayer.InputBlocked); };
+        _menu.Closed += (_, _) => { _menuClosedAt = Environment.TickCount64; ReturnFocusAfterMenu(); PauseInput(TopLayer.InputBlocked); };
         ContextMenuStrip = _menu;
     }
 

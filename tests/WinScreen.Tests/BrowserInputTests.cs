@@ -269,7 +269,13 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 {
                     Desktop.SlideMouse(first); State("a");
                     string leaves = Leaves();
-                    for (int sample = 0; sample < 10; sample++) { Thread.Sleep(500); Assert.True(WindowInfo.Title(window).Contains("css=a dom=a preview=block visibility=visible"), WindowInfo.Title(window) + "; " + view.LiveInteraction?.HoverStatus); Assert.Equal(leaves, Leaves()); }
+                    for (int sample = 0; sample < 10; sample++)
+                    {
+                        Thread.Sleep(500);
+                        Assert.True(WindowInfo.Title(window).Contains("css=a dom=a preview=block visibility=visible"), WindowInfo.Title(window) + "; " + view.LiveInteraction?.HoverStatus);
+                        Assert.True(leaves == Leaves(), $"Left while resting ({leaves} → {Leaves()}), sample {sample}; pointer={Desktop.CursorPosition()}; " +
+                            $"{view.LiveInteraction?.HoverStatus}; {Surroundings(window)}");
+                    }
                     Assert.StartsWith("active", view.LiveInteraction!.HoverStatus);
                     l.AppendLine($"stationary {visit}: {WindowInfo.Title(window)}; {view.LiveInteraction.HoverStatus}");
                     Desktop.SlideMouse(second); State("b");
@@ -884,7 +890,11 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                         view.Invoke(() => Assert.True(Tray.MenuParts.IsExperimental(Item("menu.view.hover")) &&
                             Tray.MenuParts.IsExperimental(Item("menu.view.middleScroll")), "The options lost their Experimental tag."));
                         for (int i = 0; i < 6; i++) { Desktop.SlideMouse(middle + new Size(i * 5, i * 3)); Thread.Sleep(80); }
-                        Assert.True(Desktop.WaitFor(HelperIn, 3000), "With the switch on the helper never got in: " + view.LiveInteraction?.HoverStatus);
+                        // Keeps moving, as a hand on a mouse does: one slow answer from the browser marks it busy until
+                        // the next move asks again, and a pointer held still kept it busy for the whole wait (TD-67).
+                        int nudge = 1;
+                        Assert.True(Desktop.WaitFor(HelperIn, 3000, () => { Desktop.NudgeMouse(nudge, 0); nudge = -nudge; Thread.Sleep(40); }),
+                            "With the switch on the helper never got in: " + view.LiveInteraction?.HoverStatus);
                         log.AppendLine("switch on: " + view.LiveInteraction?.HoverStatus);
 
                         view.Invoke(() => view.AllowInteractive = false);
@@ -901,12 +911,16 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 driver.Start();
                 while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
                 // The switch going on and off while the view is minimized, and while the original is in use.
+                string steps = $"after the visits: {view.StateDescription}; revealed at {view.LastReveal}, now {Environment.TickCount64}";
                 view.SuspendView();
+                steps += $" | minimized: {view.KeepsUpdating}";
                 view.AllowInteractive = true;
+                steps += $" | switch on: {view.KeepsUpdating}";
                 view.AllowInteractive = false;
+                steps += $" | switch off: {view.KeepsUpdating}";
                 Assert.Equal(PipStateProblem.None, view.StateProblem());
                 view.ResumeView();
-                Assert.True(view.KeepsUpdating, "Not used directly after minimizing: " + view.StateDescription);
+                Assert.True(view.KeepsUpdating, $"Not used directly after minimizing ({Path.GetFileName(path)}): " + view.StateDescription + "; " + steps + "; " + log);
                 view.UseOriginal();
                 view.AllowInteractive = true;
                 view.AllowInteractive = false;

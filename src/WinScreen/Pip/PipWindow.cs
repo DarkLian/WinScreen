@@ -317,8 +317,9 @@ public sealed partial class PipWindow : Form
 
     internal void SuspendView()
     {
-        if (_suspended || _cleaned) return;
+        if (_cleaned) return;
         ViewState.Modes before = CurrentModes();
+        if (ViewState.Apply(before, ViewState.Request.Minimize) == before) return; // Minimized already.
         _usingOriginal = false; // A minimized view has no picture to hide the original behind; it stays shown.
         EndDrop();
         StepAside(false);
@@ -638,10 +639,12 @@ public sealed partial class PipWindow : Form
     /// <summary>Makes the original invisible, or brings it back. The view keeps updating either way.</summary>
     public void SetOriginalHidden(bool hidden)
     {
-        if (_interactiveItem.Checked && !hidden) return;
         ViewState.Modes before = CurrentModes();
-        ChangeInteractionMode(_interactiveItem.Checked, hidden);
-        CheckRequest(before, hidden ? ViewState.Request.KeepHiddenOn : ViewState.Request.KeepHiddenOff);
+        ViewState.Request request = hidden ? ViewState.Request.KeepHiddenOn : ViewState.Request.KeepHiddenOff;
+        ViewState.Modes target = ViewState.Apply(before, request);
+        if (target == before && before.Interactive) return; // Refused: direct use needs it hidden.
+        ChangeInteractionMode(target.Interactive, target.Hidden);
+        CheckRequest(before, request);
     }
 
     /// <summary>
@@ -1068,27 +1071,19 @@ public sealed partial class PipWindow : Form
     /// <summary>Interactive use requires concealment; turning it off restores the prior hiding preference.</summary>
     internal void SetInteractive(bool on)
     {
-        if (on == _interactiveItem.Checked) return;
-        if (on && !CanInteract) return;
         ViewState.Modes before = CurrentModes();
+        ViewState.Request request = on ? ViewState.Request.InteractiveOn : ViewState.Request.InteractiveOff;
         bool hiddenBefore = _hiddenBeforeInteractive;
-        try { ChangeInteractive(on); }
-        finally { CheckRequest(before, on ? ViewState.Request.InteractiveOn : ViewState.Request.InteractiveOff, hiddenBefore); }
-    }
-
-    private void ChangeInteractive(bool on)
-    {
-        if (on)
+        ViewState.Modes target = ViewState.Apply(before, request, hiddenBefore);
+        if (target == before) return; // Already so, or the app may not be used directly.
+        try
         {
-            _hiddenBeforeInteractive = _hideItem.Checked;
-            ChangeInteractionMode(true, true);
-            if (_interactiveItem.Checked && _overrides.ClickThrough)
+            if (on) _hiddenBeforeInteractive = before.Hidden;
+            ChangeInteractionMode(target.Interactive, target.Hidden);
+            if (on && _interactiveItem.Checked && _overrides.ClickThrough)
                 Overrides = _overrides with { ClickThrough = false };
         }
-        else
-        {
-            ChangeInteractionMode(false, _hiddenBeforeInteractive);
-        }
+        finally { CheckRequest(before, request, hiddenBefore); }
     }
 
     internal PipInteraction? LiveInteraction => _live;
@@ -1155,8 +1150,8 @@ public sealed partial class PipWindow : Form
     /// </summary>
     internal void UseOriginal()
     {
-        if (!_origin.IsWindow || !_hideItem.Checked || _usingOriginal || _suspended) return;
         ViewState.Modes before = CurrentModes();
+        if (!_origin.IsWindow || ViewState.Apply(before, ViewState.Request.UseOriginal) == before) return;
         bool interactive = _interactiveItem.Checked;
         GoToSource();
         if (IsDisposed || !_origin.IsAvailable || _windows.IsHidden(_source)) return;
@@ -1428,8 +1423,12 @@ public sealed partial class PipWindow : Form
 
     private void BeginLive(Point pointer)
     {
-        if (_live is not null || _thumbnail is null || _suspended || !_origin.IsAvailable || !_windows.IsHidden(_source) ||
-            _inputPaused || _menu.Visible || TopLayer.InputBlocked || ShowsOriginalOnly)
+        // The table first: used directly, hidden, on the screen, not paused, no visit already (and experimental help
+        // only with the switch). Then what only the view knows: a picture, the window there, no menu or block.
+        ViewState.Modes before = CurrentModes() with { VisitUsesExperimental = HoverOn || MiddleScrollOn };
+        if (ViewState.Apply(before, ViewState.Request.VisitStarts) == before) return;
+        if (_thumbnail is null || !_origin.IsAvailable || !_windows.IsHidden(_source) ||
+            _menu.Visible || TopLayer.InputBlocked || ShowsOriginalOnly)
             return;
         Rectangle area = PictureArea;
         if (!area.Contains(pointer))
@@ -1459,6 +1458,7 @@ public sealed partial class PipWindow : Form
             _windows.SetParkedReachable(_source, true);
             _cursorFromFrame = true; // Whatever shape the pointer arrived with goes back to the arrow once.
             CheckState();
+            CheckRequest(before, ViewState.Request.VisitStarts);
         }
         catch (WindowOperationException failure)
         {
@@ -1493,8 +1493,10 @@ public sealed partial class PipWindow : Form
         ClaimEscape(_selecting); // Scrolling must not keep a global Escape claim after a visit/suspension ends.
         if (_live is not { } live)
             return;
+        ViewState.Modes before = CurrentModes();
         _live = null;
         _liveEndedAt = Environment.TickCount64;
+        CheckRequest(before, ViewState.Request.VisitEnds);
         try { if (_origin.IsAvailable) { _windows.SetParkedReachable(_source, false); _windows.SetParkedHoverSurface(_source, HoverPlacementWanted); } }
         catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); }
         live.Dispose();
@@ -1777,7 +1779,10 @@ public sealed partial class PipWindow : Form
         else if (arrived) { _arrivedAt = now; _arrivedBefore = before; }
         else return;
         var facts = new ViewState.Facts(Hidden: _hideItem.Checked, Away: _awayFrom != Guid.Empty, Visiting: _live is not null,
-            JustAfterVisit: _arrivedAt - _liveEndedAt < RevealGrace, HandedOn: HandedOnByWindows(before),
+            JustAfterVisit: _arrivedAt - _liveEndedAt < RevealGrace,
+            // The view never takes the focus, so when its own menu closes Windows hands the focus to the window used
+            // before, often the hidden original; the view's timer may not have seen the menu in between.
+            HandedOn: HandedOnByWindows(before) || _menuClosedAt != 0 && _arrivedAt - _menuClosedAt < RevealGrace,
             JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && _arrivedAt - _desktopSwitchedAt < SwitchFocusGrace,
             Settling: now - _arrivedAt < ArrivalSettle && before != 0 && before != Handle && User32.IsWindow(before));
         ViewState.Arrival answer = ViewState.OriginalArrived(facts);
@@ -1812,6 +1817,9 @@ public sealed partial class PipWindow : Form
     /// <summary>When the original arrived and is still being decided about (<see cref="ViewState.Arrival.Wait"/>), and the window before then.</summary>
     private long _arrivedAt;
     private nint _arrivedBefore;
+
+    /// <summary>When the view's own menu last closed.</summary>
+    private long _menuClosedAt;
     private const long ArrivalSettle = 300;
 
     /// <summary>
