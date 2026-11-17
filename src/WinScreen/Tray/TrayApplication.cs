@@ -27,6 +27,7 @@ public sealed partial class TrayApplication : ApplicationContext
     private nint _hookForeground;
     private bool _hookForegroundExcluded;
     private Point _hookCursor;
+    private long _hookAwayAt; // When the person was last seen away (Stopwatch ticks), so coming back isn't a dropped hook.
     private bool _hookReported;
     private readonly AppSettings _settings;
     private readonly string _settingsPath;
@@ -905,19 +906,23 @@ public sealed partial class TrayApplication : ApplicationContext
         bool programExcluded = !_settings.Allows(program);
         bool menuExcluded = programExcluded ||
                             _settings.WindowMenuExclusions.Contains(program, StringComparer.OrdinalIgnoreCase);
+        bool away = FullScreen.IsAway();
+        if (away) _hookAwayAt = System.Diagnostics.Stopwatch.GetTimestamp();
         bool run = ModifierHookPolicy.ShouldRun(
             (_settings.ModifierDrag && !_hookForegroundExcluded) ||
             ((_settings.WindowMenu || fallbackMenu) && !menuExcluded) ||
             (_settings.OpacityWheel && !programExcluded),
-            FullScreenNow(), FillsLikeAGame(foreground), false, FullScreen.IsAway());
+            FullScreenNow(), FillsLikeAGame(foreground), false, away);
         if (!run && _windowMenu is { IsDisposed: false }) _windowMenu.Close();
         Point cursor = Cursor.Position;
         // Windows drops a slow hook without saying so. Input with no callback means it has, so put it back, ending
         // any drag it was in the middle of (its release will never be seen).
         // An ordinary copy's hook isn't told about input aimed at an administrator window, so silence there is expected.
-        bool silent = _modifierDrag.Active && cursor != _hookCursor &&
-            System.Diagnostics.Stopwatch.GetElapsedTime(_modifierDrag.LastCallback).TotalSeconds > HookSilenceSeconds &&
-            CanReach(User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = cursor.X, Y = cursor.Y }), User32.GA_ROOT));
+        bool silent = ModifierHookPolicy.LooksDropped(_modifierDrag.Active, cursor != _hookCursor,
+            System.Diagnostics.Stopwatch.GetElapsedTime(_modifierDrag.LastCallback), System.Diagnostics.Stopwatch.GetElapsedTime(_hookAwayAt),
+            _modifierDrag.Active && cursor != _hookCursor &&
+            CanReach(User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = cursor.X, Y = cursor.Y }), User32.GA_ROOT)),
+            TimeSpan.FromSeconds(HookSilenceSeconds));
         _hookCursor = cursor;
         try
         {

@@ -20,6 +20,17 @@ internal static class ModifierHookPolicy
     public static bool ShouldRun(bool turnedOn, FullScreenState fullScreen, bool foregroundFillsMonitor,
         bool foregroundExcluded, bool away) =>
         turnedOn && fullScreen == FullScreenState.None && !foregroundFillsMonitor && !foregroundExcluded && !away;
+
+    /// <summary>
+    /// Whether the hook looks dropped by Windows: the pointer moved, nothing reached the hook for longer than
+    /// <paramref name="silence"/>, and that wasn't because the person was away (locked, or on the sign-in screen, where
+    /// no hook hears anything) within that time either: coming back moves the pointer before the hook hears it again
+    /// (the owner's log, 17 and 18 Nov, administrator=yes: "lost" just after returning). Nor over an administrator
+    /// window that an ordinary copy can't hear (TD-60).
+    /// </summary>
+    public static bool LooksDropped(bool active, bool pointerMoved, TimeSpan sinceCallback, TimeSpan sinceAway, bool pointerOverReachable,
+        TimeSpan silence) =>
+        active && pointerMoved && sinceCallback > silence && sinceAway > silence && pointerOverReachable;
 }
 
 /// <summary>

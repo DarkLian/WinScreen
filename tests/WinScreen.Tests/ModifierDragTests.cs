@@ -22,6 +22,22 @@ public sealed class ModifierHookPolicyTests
     public void The_hook_exists_only_while_it_could_act(bool on, FullScreenState state, bool fills, bool excluded, bool away, bool expected) =>
         Assert.Equal(expected, ModifierHookPolicy.ShouldRun(on, state, fills, excluded, away));
 
+    /// <summary>
+    /// A hook is taken for dropped only when the pointer moved, nothing reached it for two seconds, the person wasn't
+    /// away (locked) within those two seconds, and the pointer is over a window the hook can hear. Coming back from the
+    /// lock screen moved the pointer before the hook heard anything, and the owner's log had "lost" each time (18 Nov).
+    /// </summary>
+    [Theory]
+    [InlineData(true, true, 5, 60, true, true)]
+    [InlineData(true, true, 5, 1, true, false)] // Just back from the lock screen.
+    [InlineData(true, false, 5, 60, true, false)] // The pointer didn't move.
+    [InlineData(true, true, 1, 60, true, false)] // It heard something a moment ago.
+    [InlineData(true, true, 5, 60, false, false)] // Over an administrator window an ordinary copy can't hear (TD-60).
+    [InlineData(false, true, 5, 60, true, false)] // No hook to lose.
+    public void A_hook_looks_dropped_only_after_real_silence(bool active, bool moved, int sinceCallback, int sinceAway, bool reachable, bool expected) =>
+        Assert.Equal(expected, ModifierHookPolicy.LooksDropped(active, moved, TimeSpan.FromSeconds(sinceCallback),
+            TimeSpan.FromSeconds(sinceAway), reachable, TimeSpan.FromSeconds(2)));
+
     private static readonly Rectangle Window = new(100, 100, 300, 300);
 
     [Theory]
