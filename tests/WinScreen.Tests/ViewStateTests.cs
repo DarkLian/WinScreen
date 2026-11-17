@@ -8,42 +8,44 @@ namespace WinScreen.Tests;
 /// What a view does when its hidden original comes to the front, for every combination of what it knows. The rule
 /// (also in ARCHITECTURE.md, INV-20):
 ///
-/// | Original hidden by the view (Keep hidden, or while away) | Visit on or just ended | Windows handed the focus on | Desktop just switched | Answer |
-/// |---|---|---|---|---|
-/// | no  | any | any | any | Nothing |
-/// | yes | yes | any | any | Nothing |
-/// | yes | no  | yes | any | PassFocusOn |
-/// | yes | no  | no  | yes | ViewTakesFocus |
-/// | yes | no  | no  | no  | Show |
+/// | Original hidden by the view (Keep hidden, or while away) | Visit on or just ended | Windows handed the focus on | Desktop just switched | Window before still there, a moment after | Answer |
+/// |---|---|---|---|---|---|
+/// | no  | any | any | any | any | Nothing |
+/// | yes | yes | any | any | any | Nothing |
+/// | yes | no  | yes | any | any | PassFocusOn |
+/// | yes | no  | no  | yes | any | ViewTakesFocus |
+/// | yes | no  | no  | no  | yes | Wait |
+/// | yes | no  | no  | no  | no  | Show |
 /// </summary>
 public sealed class ViewStateTests
 {
-    public static TheoryData<bool, bool, bool, bool, bool, bool> EveryCombination()
+    public static TheoryData<bool, bool, bool, bool, bool, bool, bool> EveryCombination()
     {
-        var all = new TheoryData<bool, bool, bool, bool, bool, bool>();
-        for (int bits = 0; bits < 64; bits++)
-            all.Add((bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0, (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0);
+        var all = new TheoryData<bool, bool, bool, bool, bool, bool, bool>();
+        for (int bits = 0; bits < 128; bits++)
+            all.Add((bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0, (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0, (bits & 64) != 0);
         return all;
     }
 
     /// <summary>The table above, read row by row.</summary>
-    private static Arrival Table(bool hiddenByView, bool visit, bool handedOn, bool switched) =>
-        (hiddenByView, visit, handedOn, switched) switch
+    private static Arrival Table(bool hiddenByView, bool visit, bool handedOn, bool switched, bool settling) =>
+        (hiddenByView, visit, handedOn, switched, settling) switch
         {
-            (false, _, _, _) => Arrival.Nothing,
-            (true, true, _, _) => Arrival.Nothing,
-            (true, false, true, _) => Arrival.PassFocusOn,
-            (true, false, false, true) => Arrival.ViewTakesFocus,
-            (true, false, false, false) => Arrival.Show,
+            (false, _, _, _, _) => Arrival.Nothing,
+            (true, true, _, _, _) => Arrival.Nothing,
+            (true, false, true, _, _) => Arrival.PassFocusOn,
+            (true, false, false, true, _) => Arrival.ViewTakesFocus,
+            (true, false, false, false, true) => Arrival.Wait,
+            (true, false, false, false, false) => Arrival.Show,
         };
 
     [Theory]
     [MemberData(nameof(EveryCombination))]
     public void An_arriving_original_gets_the_answer_in_the_table(bool hidden, bool away, bool visiting, bool justAfterVisit,
-        bool handedOn, bool switched)
+        bool handedOn, bool switched, bool settling)
     {
-        Arrival answer = OriginalArrived(new Facts(hidden, away, visiting, justAfterVisit, handedOn, switched));
-        Assert.Equal(Table(hidden || away, visiting || justAfterVisit, handedOn, switched), answer);
+        Arrival answer = OriginalArrived(new Facts(hidden, away, visiting, justAfterVisit, handedOn, switched, settling));
+        Assert.Equal(Table(hidden || away, visiting || justAfterVisit, handedOn, switched, settling), answer);
     }
 
     /// <summary>The cases each found as a bug, by name.</summary>

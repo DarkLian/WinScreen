@@ -173,6 +173,46 @@ public sealed class NewViewHidingTests
         });
     }
 
+    /// <summary>
+    /// Owner, 17 Nov: closing one Chrome window gave the hidden Chrome window the focus and showed it. An app can hand
+    /// its own next window the focus a moment before the closing one is gone, so at the moment of arrival the window
+    /// before still looked in use. The view waits a moment: gone or minimized by then, it was a hand-off and the
+    /// original stays hidden; still there, the app or the person asked for it, and it is shown.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_window_that_hands_the_original_the_focus_as_it_closes_leaves_it_hidden(bool closes)
+    {
+        using var source = new TargetProcess(Spot, "C81E1E", "Hidden source");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            var windows = new WindowController([]);
+            using var closing = new Form { Text = "Closing window", StartPosition = FormStartPosition.Manual, Bounds = new Rectangle(320, 260, 420, 300) };
+            try
+            {
+                Desktop.Activate(source.Handle);
+                using var view = OpenView(source.Handle, windows);
+                view.HideOriginalByDefault();
+                Assert.True(view.KeepsUpdating, "The view didn't hide its original.");
+                closing.Show();
+                Desktop.Activate(closing.Handle);
+                TestDesktop.Pump(800);
+                Assert.Equal(closing.Handle, User32.GetForegroundWindow());
+
+                User32.SetForegroundWindow(source.Handle); // The app hands its other window the focus first...
+                TestDesktop.Pump(120);
+                if (closes) closing.Close(); // ...and closes this one a moment later.
+                TestDesktop.Pump(1200);
+                bool hidden = view.KeepsUpdating && windows.IsHidden(source.Handle);
+                if (closes) Assert.True(hidden, "The hand-off from a closing window showed the hidden original.");
+                else Assert.False(hidden, "Brought forward by a window that stayed, the original wasn't shown.");
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
+
     public static TheoryData<string> ChangesMade() => new() { "pin", "opacity", "clickthrough", "crop", "rollup" };
 
     /// <summary>

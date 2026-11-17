@@ -19,6 +19,11 @@ internal static class ViewState
         ViewTakesFocus,
         /// <summary>Something else brought it forward (its taskbar button, Alt+Tab, the app): it is shown.</summary>
         Show,
+        /// <summary>
+        /// Not yet known: the window that had the focus is still there, and may be about to close or minimize (an app
+        /// hands its next window the focus first). Asked again a moment later.
+        /// </summary>
+        Wait,
     }
 
     /// <summary>What the view knows at the moment the original came to the front.</summary>
@@ -28,8 +33,9 @@ internal static class ViewState
     /// <param name="JustAfterVisit">A visit ended a moment ago and the focus is still going back.</param>
     /// <param name="HandedOn">The window that had the focus was just minimized or closed, or this view minimized.</param>
     /// <param name="JustAfterDesktopSwitch">The desktop in front changed a moment ago.</param>
+    /// <param name="Settling">It arrived a moment ago and the window that had the focus is still there.</param>
     internal readonly record struct Facts(bool Hidden, bool Away, bool Visiting, bool JustAfterVisit,
-        bool HandedOn, bool JustAfterDesktopSwitch);
+        bool HandedOn, bool JustAfterDesktopSwitch, bool Settling = false);
 
     internal static Arrival OriginalArrived(Facts facts)
     {
@@ -37,6 +43,7 @@ internal static class ViewState
         if (facts.Visiting || facts.JustAfterVisit) return Arrival.Nothing;
         if (facts.HandedOn) return Arrival.PassFocusOn;
         if (facts.JustAfterDesktopSwitch) return Arrival.ViewTakesFocus;
+        if (facts.Settling) return Arrival.Wait;
         return Arrival.Show;
     }
 

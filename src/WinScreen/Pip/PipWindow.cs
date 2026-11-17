@@ -1767,12 +1767,23 @@ public sealed partial class PipWindow : Form
         _sourceWasFocused = focused;
         nint before = _foregroundBefore;
         if (!focused) _foregroundBefore = foreground;
-        if (!arrived) return;
         long now = Environment.TickCount64;
+        if (_arrivedAt != 0)
+        {
+            // Waiting to see whether the window before closes or minimizes: asked again with what is known now.
+            if (!focused) { _arrivedAt = 0; return; } // The focus moved on by itself.
+            before = _arrivedBefore;
+        }
+        else if (arrived) { _arrivedAt = now; _arrivedBefore = before; }
+        else return;
         var facts = new ViewState.Facts(Hidden: _hideItem.Checked, Away: _awayFrom != Guid.Empty, Visiting: _live is not null,
-            JustAfterVisit: now - _liveEndedAt < RevealGrace, HandedOn: HandedOnByWindows(before),
-            JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && now - _desktopSwitchedAt < SwitchFocusGrace);
-        switch (ViewState.OriginalArrived(facts))
+            JustAfterVisit: _arrivedAt - _liveEndedAt < RevealGrace, HandedOn: HandedOnByWindows(before),
+            JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && _arrivedAt - _desktopSwitchedAt < SwitchFocusGrace,
+            Settling: now - _arrivedAt < ArrivalSettle && before != 0 && before != Handle && User32.IsWindow(before));
+        ViewState.Arrival answer = ViewState.OriginalArrived(facts);
+        if (answer == ViewState.Arrival.Wait) return;
+        _arrivedAt = 0;
+        switch (answer)
         {
             case ViewState.Arrival.PassFocusOn:
                 // The window that had the focus was just minimized or closed (this view's own minimize too), so Windows
@@ -1797,6 +1808,11 @@ public sealed partial class PipWindow : Form
 
     /// <summary>The last window other than the original that had the focus, as the view last saw it.</summary>
     private nint _foregroundBefore;
+
+    /// <summary>When the original arrived and is still being decided about (<see cref="ViewState.Arrival.Wait"/>), and the window before then.</summary>
+    private long _arrivedAt;
+    private nint _arrivedBefore;
+    private const long ArrivalSettle = 300;
 
     /// <summary>
     /// Whether the window that had the focus before the original is gone from use: minimized, closed, or this view
