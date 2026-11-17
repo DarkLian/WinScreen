@@ -156,7 +156,11 @@ internal sealed class PipInteraction : IDisposable
     /// <see cref="DragPickedUp"/> with where it was pressed, and from then on the press is the real window's: nothing
     /// more is posted for it, and its release goes through to whatever is under the pointer.
     /// </summary>
-    internal volatile bool HandsOverDrags;
+    internal volatile Compatibility.DragHandOver HandsOverDrags;
+    private int _itemQuery; // Each press's question, so a late answer to an earlier one is ignored.
+
+    /// <summary>What accessibility said was under the latest press that asked, and how soon; for tests.</summary>
+    internal string LastItemAnswer { get; private set; } = "";
 
     /// <summary>A press turned into a drag (see <see cref="HandsOverDrags"/>); the point is where it was pressed, on the screen.</summary>
     internal event Action<Point>? DragPickedUp;
@@ -192,7 +196,8 @@ internal sealed class PipInteraction : IDisposable
     private enum EventKind { Move, Press, Release, Wheel, Record, CancelScroll }
 
     private readonly record struct InputEvent(EventKind Kind, Point At, MouseButtons Button = MouseButtons.None,
-        bool Alt = false, bool Horizontal = false, uint Data = 0, PressOutcome Outcome = default, bool EndsScroll = false);
+        bool Alt = false, bool Horizontal = false, uint Data = 0, PressOutcome Outcome = default, bool EndsScroll = false,
+        bool OnLink = false);
 
     /// <summary>Whether visits share input state with the original, for tests.</summary>
     internal static bool ShareInput { get; set; } = true;
@@ -532,6 +537,8 @@ internal sealed class PipInteraction : IDisposable
         Interlocked.Exchange(ref _lastPress, Pack(point));
         if (button == MouseButtons.Left) _pressHandedOver = _handedOverReleased = false;
         bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        // Over a link the app shows a hand, and the pointer still has the app's shape here (sharing stops just below).
+        bool onLink = button == MouseButtons.Left && HandsOverDrags == Compatibility.DragHandOver.Links && PointerShape.IsHand();
         if (!alt)
         {
             // Both return at once. They must happen here, while the hook holds the press: from another thread
@@ -546,7 +553,7 @@ internal sealed class PipInteraction : IDisposable
         // Scrolling stops with the press itself, not when the worker reaches it: it may still be busy sending steps.
         bool endsScroll = _scrolling;
         if (endsScroll) _scrolling = false;
-        Enqueue(new(EventKind.Press, point, button, Alt: alt, EndsScroll: endsScroll));
+        Enqueue(new(EventKind.Press, point, button, Alt: alt, EndsScroll: endsScroll, OnLink: onLink));
         return true;
     }
 
@@ -626,7 +633,7 @@ internal sealed class PipInteraction : IDisposable
         {
             case EventKind.Record: Record(input.Outcome, input.At, 0); break;
             case EventKind.Move: MoveArrived(input.At); break;
-            case EventKind.Press: PressArrived(input.At, input.Button, input.Alt, input.EndsScroll); break;
+            case EventKind.Press: PressArrived(input.At, input.Button, input.Alt, input.EndsScroll, input.OnLink); break;
             case EventKind.Release: ReleaseArrived(input.At, input.Button); break;
             case EventKind.Wheel:
                 StopScroll();
@@ -693,7 +700,7 @@ internal sealed class PipInteraction : IDisposable
         }
     }
 
-    private void PressArrived(Point point, MouseButtons button, bool alt, bool endsScroll = false)
+    private void PressArrived(Point point, MouseButtons button, bool alt, bool endsScroll = false, bool onLink = false)
     {
         if (_scrolling || endsScroll)
         {
@@ -740,16 +747,32 @@ internal sealed class PipInteraction : IDisposable
             Record(PressOutcome.ScrollMode, point, hit);
             return;
         }
-        if (HandsOverDrags && button == MouseButtons.Left && !alt && hit == 1 &&
+        // In a page the same press and move mostly selects text, which works through the view as it is: only a press on a
+        // link, known by the hand the page shows there, waits to see whether it is a drag. Nothing is asked of the page.
+        if (HandsOverDrags == Compatibility.DragHandOver.Links && onLink && button == MouseButtons.Left && !alt && hit == 1 &&
+            _heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None)
+        {
+            Interlocked.Increment(ref _itemQuery);
+            PressedItem = "";
+            _pressOnItem = 1;
+            _pressAt = point; // Click or drag: the next moves or the release say which.
+            _leftWaitsForDrag = true;
+            return;
+        }
+        if (HandsOverDrags == Compatibility.DragHandOver.Items && button == MouseButtons.Left && !alt && hit == 1 &&
             _heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None)
         {
             _pressAt = point; // Click or drag: the next moves or the release say which.
             _leftWaitsForDrag = true;
             _pressOnItem = -1;
+            int query = Interlocked.Increment(ref _itemQuery);
+            long asked = Environment.TickCount64;
             Point mapped = _messages.MappedScreen(point, view, shown);
             if (!PipControlInput.Shared.Submit(_identity, _messages.TargetAt(mapped), mapped, PipControlInput.Request.IsItem,
                     result =>
                     {
+                        if (query != Volatile.Read(ref _itemQuery)) return;
+                        LastItemAnswer = $"{result.What} after {Environment.TickCount64 - asked} ms";
                         bool item = result.Done && result.What.StartsWith("item:", StringComparison.Ordinal);
                         PressedItem = item ? result.What["item:".Length..] : "";
                         _pressOnItem = item ? 1 : 0;

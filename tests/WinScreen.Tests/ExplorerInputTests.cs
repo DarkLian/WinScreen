@@ -655,24 +655,42 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
     [Theory]
     [InlineData("a file")]
     [InlineData("a held button")]
+    [InlineData("a file from the desktop")]
     public void A_file_dragged_from_another_explorer_window_lands_in_an_explorer_view(string what)
     {
+        // The desktop's own icons: only in the test VM, whose desktop is put back after every run (on the owner's PC a
+        // file there would move their icons).
+        bool fromDesktop = what == "a file from the desktop";
+        string desktopFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "come-in");
+        if (fromDesktop && (!DisplayScale.Allowed || DesktopList() == 0 || File.Exists(desktopFile)))
+        { Skipped.Because("A drag from the desktop runs only in the test VM, with a desktop of its own."); return; }
         string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
         string other = Directory.CreateTempSubdirectory("WinScreenSource-").FullName;
-        File.WriteAllText(Path.Combine(other, "come-in"), "x");
-        nint source = OpenFolder(other);
+        File.WriteAllText(fromDesktop ? desktopFile : Path.Combine(other, "come-in"), "x");
+        nint source = fromDesktop ? DesktopList() : OpenFolder(other);
         try
         {
-            User32.ShowWindow(source, 9);
-            User32.SetWindowPos(source, 0, 60, 560, 800, 420, 0x14);
+            if (fromDesktop)
+            {
+                // The icon appears a moment after the file does; it must be in sight to be dragged.
+                Assert.True(Desktop.WaitFor(() => BrowserAccessibility.Read(source).Any(c => c.Type == 50007 && c.Name == "come-in" && c.Bounds.Width > 0), 5000), "No icon on the desktop.");
+                Point icon = Middle(Item(source, "come-in").Bounds);
+                if (User32.GetAncestor(Desktop.TopWindowAt(icon), User32.GA_ROOT) != User32.GetAncestor(source, User32.GA_ROOT))
+                { Skipped.Because("A window covers the icon on the desktop."); return; }
+            }
+            else
+            {
+                User32.ShowWindow(source, 9);
+                User32.SetWindowPos(source, 0, 60, 560, 800, 420, 0x14);
+            }
             Thread.Sleep(1200);
             InView(root, (window, view, toView) =>
             {
                 Rectangle item = Item(source, "come-in").Bounds;
                 Rectangle sourceBounds = Desktop.BoundsOf(source);
                 // Empty space below the file, in the other window: a press there starts a selection box.
-                Point start = what == "a file" ? Middle(item) : new Point(item.Left + 40, Math.Min(item.Bottom + 120, sourceBounds.Bottom - 40));
-                bool everHanded = false;
+                Point start = what != "a held button" ? Middle(item) : new Point(item.Left + 40, Math.Min(item.Bottom + 120, sourceBounds.Bottom - 40));
+                bool everHanded = false, everDragged = false;
                 Point end = new(view.Bounds.Left + view.Bounds.Width * 7 / 10, view.Bounds.Top + view.Bounds.Height * 7 / 10);
                 var log = new System.Text.StringBuilder($"start {start} end {end}; ");
                 Desktop.SlideMouse(start);
@@ -684,8 +702,9 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                     Desktop.SlideMouse(new Point(start.X + (end.X - start.X) * step / 30, start.Y + (end.Y - start.Y) * step / 30));
                     Thread.Sleep(40);
                     everHanded |= view.HandingOverDrop;
+                    if (fromDesktop && step % 5 == 0) everDragged |= DragThreads(source) != "none";
                     if (step % 10 == 0)
-                        log.Append($"[{step}: under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} handing={view.HandingOverDrop} live={view.LiveInteraction is not null} original={Desktop.BoundsOf(window)} dnd={PipWindow.DragAndDropRunning(User32.GetWindowThreadProcessId(source, out _))} fg={WindowInfo.ClassName(User32.GetForegroundWindow())}] ");
+                        log.Append($"[{step}: under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} handing={view.HandingOverDrop} live={view.LiveInteraction is not null} original={Desktop.BoundsOf(window)} dnd={PipWindow.DragAndDropRunning(User32.GetWindowThreadProcessId(source, out _))} dndAny={DragThreads(source)} fg={WindowInfo.ClassName(User32.GetForegroundWindow())}] ");
                 }
                 for (int wait = 0; wait < 10; wait++) { Desktop.NudgeMouse(wait % 2 == 0 ? 2 : -2, 0); Thread.Sleep(80); everHanded |= view.HandingOverDrop; }
                 log.Append($"before release: handing={view.HandingOverDrop} under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} original={Desktop.BoundsOf(window)}; ");
@@ -693,15 +712,33 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 Thread.Sleep(2500);
                 log.Append($"after: arrived {File.Exists(Path.Combine(root, "come-in"))}; hidden={view.KeepsUpdating}");
                 output.WriteLine(log.ToString());
-                if (what == "a file") Assert.True(File.Exists(Path.Combine(root, "come-in")), log.ToString());
+                // In the test VM, Windows never starts a drag from a desktop icon for simulated input (18 Nov: no thread of
+                // Explorer's ran drag and drop): then there is nothing to test here, and it says so.
+                if (fromDesktop && !everDragged && !File.Exists(Path.Combine(root, "come-in")))
+                { Skipped.Because("Windows didn't start a drag from the desktop icon for simulated input."); return; }
+                if (what != "a held button") Assert.True(File.Exists(Path.Combine(root, "come-in")), log.ToString());
                 else Assert.False(everHanded, "A held button brought the original up: " + log);
             });
         }
         finally
         {
-            CloseWindow(source);
+            if (!fromDesktop) CloseWindow(source);
             try { Directory.Delete(other, true); } catch (IOException) { }
+            if (fromDesktop) try { File.Delete(desktopFile); } catch (IOException) { }
         }
+    }
+
+    /// <summary>Which threads of a window's program Windows' drag and drop holds the mouse on now, for the log.</summary>
+    private static string DragThreads(nint window)
+    {
+        User32.GetWindowThreadProcessId(window, out uint process);
+        try
+        {
+            using var p = System.Diagnostics.Process.GetProcessById((int)process);
+            var running = p.Threads.Cast<System.Diagnostics.ProcessThread>().Where(t => PipWindow.DragAndDropRunning((uint)t.Id)).Select(t => t.Id).ToList();
+            return running.Count == 0 ? "none" : string.Join("+", running) + $" (window's {User32.GetWindowThreadProcessId(window, out _)})";
+        }
+        catch (ArgumentException) { return "gone"; }
     }
 
     /// <summary>The desktop's icon list, or zero.</summary>

@@ -1237,11 +1237,26 @@ public sealed partial class PipWindow : Form
             User32.GetWindowThreadProcessId(under, out uint process);
             _heldFromElsewhere = under != 0 && process != (uint)Environment.ProcessId && !Bounds.Contains(pointer);
             _heldThread = under == 0 ? 0 : User32.GetWindowThreadProcessId(under, out _);
+            _heldProcess = process;
+            _heldClass = under == 0 ? "" : WindowInfo.ClassName(under);
+            _overPictureSince = 0;
+            _dragNotSeenLogged = false;
             return;
         }
-        if (!_heldFromElsewhere || !MayTakeDrop || !RectangleToScreen(PictureArea).Contains(pointer) || !DragAndDropRunning(_heldThread))
+        bool overPicture = _heldFromElsewhere && MayTakeDrop && RectangleToScreen(PictureArea).Contains(pointer);
+        if (!overPicture || !DragRunningFor(now))
         {
             _dragInSince = 0;
+            if (!overPicture) { _overPictureSince = 0; return; }
+            // Held from elsewhere and resting on the picture, but no drag and drop seen: said once per press, so a
+            // report of "nothing came up" shows where it stopped (the owner, 17 Nov: from the desktop).
+            if (_overPictureSince == 0) _overPictureSince = now;
+            else if (!_dragNotSeenLogged && now - _overPictureSince >= DragNotSeenAfter)
+            {
+                _dragNotSeenLogged = true;
+                Diagnostics.Log.Event("view.dragNotSeen", ("program", Diagnostics.LogValue.Program(ProcessInfo.PathOf(_heldProcess))),
+                    ("class", Diagnostics.LogValue.WindowClass(_heldClass)));
+            }
             return;
         }
         if (_dragInSince == 0) { _dragInSince = now; return; }
@@ -1251,10 +1266,41 @@ public sealed partial class PipWindow : Form
         HandOverDrop();
     }
 
-    private long _heldSince, _dragInSince;
-    private bool _heldFromElsewhere;
-    private uint _heldThread;
-    private const long DragInRests = 150;
+    private long _heldSince, _dragInSince, _overPictureSince, _processCheckedAt = -100_000;
+    private bool _heldFromElsewhere, _dragNotSeenLogged, _processDragRunning;
+    private uint _heldThread, _heldProcess;
+    private string _heldClass = "";
+    private const long DragInRests = 150, DragNotSeenAfter = 600, ProcessCheckEvery = 250;
+
+    /// <summary>
+    /// Whether Windows' drag and drop holds the mouse for the press: on the thread of the window pressed, or, looked at
+    /// every quarter second, on any thread of its program, in case that program runs its drag elsewhere.
+    /// </summary>
+    private bool DragRunningFor(long now)
+    {
+        if (DragAndDropRunning(_heldThread)) return true;
+        if (now - _processCheckedAt >= ProcessCheckEvery)
+        {
+            _processCheckedAt = now;
+            _processDragRunning = DragAndDropRunningInProcess(_heldProcess);
+        }
+        return _processDragRunning;
+    }
+
+    /// <summary>Whether Windows' drag and drop holds the mouse on any thread of a program.</summary>
+    internal static bool DragAndDropRunningInProcess(uint process)
+    {
+        if (process == 0) return false;
+        try
+        {
+            using var running = System.Diagnostics.Process.GetProcessById((int)process);
+            foreach (System.Diagnostics.ProcessThread thread in running.Threads)
+                using (thread)
+                    if (DragAndDropRunning((uint)thread.Id)) return true;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { Diagnostics.Log.Swallowed(e); }
+        return false;
+    }
 
     /// <summary>Whether Windows' drag and drop holds the mouse on a thread.</summary>
     internal static bool DragAndDropRunning(uint thread)
@@ -1306,11 +1352,12 @@ public sealed partial class PipWindow : Form
     }
 
     /// <summary>
-    /// Whether a drag that starts in the view is handed to the real window. File Explorer only for now: its files are
-    /// dragged with Windows' own drag and drop, which follows the real pointer and can't be passed on as messages. In a
-    /// browser the same press-and-move mostly selects text, which works through the view as it is.
+    /// What a drag that starts in the view hands to the real window (<see cref="Compatibility.AppProfile.Drags"/>):
+    /// File Explorer's files, a browser's links. These are dragged with Windows' own drag and drop, which
+    /// follows the real pointer and can't be passed on as messages. In a page the same press-and-move otherwise selects
+    /// text, which works through the view as it is.
     /// </summary>
-    private bool HandsOverDrags => _origin.IsWindow && WindowInfo.ClassName(_source) == "CabinetWClass";
+    private Compatibility.DragHandOver HandsOverDrags => _origin.IsWindow ? PipEnhancedHover.DragsOf(_source) : Compatibility.DragHandOver.None;
 
     /// <summary>
     /// A press in the view turned into a drag: the original comes up under the pointer at its own size, the pressed spot
@@ -1326,6 +1373,7 @@ public sealed partial class PipWindow : Form
         Point spot = SourceSpotAt(pressed);
         if (!User32.GetWindowRect(_source, out Rect bounds)) return;
         string item = live.PressedItem;
+        _pickedUpFromPage = live.HandsOverDrags == Compatibility.DragHandOver.Links;
         nint before = _foregroundBeforeLive;
         EndLive(keepFocus: true); // The hook goes first: the press given below must reach the window.
         // The press was the hook's, so Windows doesn't know the button is down: let go meanwhile, there is nothing to hand on.
@@ -1333,6 +1381,7 @@ public sealed partial class PipWindow : Form
         Point pointer = Cursor.Position;
         Rectangle area = Screen.FromPoint(pointer).WorkingArea;
         Point? press = null;
+        bool itemFound = false;
         long pickupStarted = Environment.TickCount64;
         try
         {
@@ -1357,13 +1406,16 @@ public sealed partial class PipWindow : Form
                     }
                 }
             }
+            itemFound = press is not null;
             if (press is null)
             {
-                // Not found (scrolled away at the smaller size, or no name): at its own size with the pressed spot under the
-                // pointer, as before.
+                // Not found (scrolled away at the smaller size, or no name), or a page's link: at its own size with the pressed
+                // spot under the pointer. A window as big as the screen (a maximized browser) can't be moved to put it there:
+                // the press goes where the spot really is, as the pointer goes there and back below (it went to the pointer
+                // until 18 Nov, so the press missed the link and no drag started).
                 Rectangle at = DropPlace(pointer, spot, new Size(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top), area);
                 _windows.ShowParkedForDrop(_source, at.Location);
-                press = pointer;
+                press = User32.GetWindowRect(_source, out Rect shownAt) ? new Point(shownAt.Left + spot.X, shownAt.Top + spot.Y) : pointer;
             }
         }
         catch (WindowOperationException failure)
@@ -1371,7 +1423,7 @@ public sealed partial class PipWindow : Form
             Diagnostics.Log.Swallowed(failure);
             return;
         }
-        LastPickup = $"{(press == pointer ? "item not found" : "item found")} after {Environment.TickCount64 - pickupStarted} ms";
+        LastPickup = item.Length == 0 ? "at its own size" : $"{(itemFound ? "item found" : "item not found")} after {Environment.TickCount64 - pickupStarted} ms";
         LastPickupPress = press.Value;
         // The pressed item is under the press now: the real window gets it, and the drag is its own from here. The pointer
         // goes to the item for the press and straight back, so the drag starts from the item and follows the hand.
@@ -1455,6 +1507,14 @@ public sealed partial class PipWindow : Form
         long now = Environment.TickCount64;
         if (DragButtonsDown())
         {
+            // A link taken from a page: once Windows carries the drag, the page goes back out of sight at
+            // once, at whatever size it is: it may cover where the drag is going. (So it can't be dropped back into the
+            // same page; the view, too, stays out of the way until the drag ends.)
+            if (_dropFromView && _pickedUpFromPage && DragAndDropRunning(User32.GetWindowThreadProcessId(_source, out _)))
+            {
+                EndDrop(keepFocus: true);
+                return;
+            }
             Point pointer = Cursor.Position;
             bool inside = User32.GetWindowRect(_source, out Rect r) &&
                 Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).Contains(pointer);
@@ -1520,7 +1580,7 @@ public sealed partial class PipWindow : Form
         (User32.GetAsyncKeyState(0x01) & 0x8000) != 0 || (User32.GetAsyncKeyState(0x02) & 0x8000) != 0;
 
     private long _dropSince, _dropReleasedAt, _dropOutsideSince;
-    private bool _dropTookFocus, _dropFromView, _focusBackAfterDrag, _backAfterRelease;
+    private bool _dropTookFocus, _dropFromView, _focusBackAfterDrag, _backAfterRelease, _pickedUpFromPage;
 
     /// <summary>The view back once a drag that went on past its original is let go.</summary>
     private void FollowReleaseAfterDrag()

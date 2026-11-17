@@ -45,6 +45,12 @@ internal sealed record AppProfile(string Name)
     public bool InteractiveWithoutSwitch { get; init; }
 
     public Verification[] VerifiedBy { get; init; } = [];
+    /// <summary>
+    /// What a press and move in its view hands to the real window, to be dragged with Windows' own drag and drop: its
+    /// files (File Explorer), or the links in its pages (browsers). Anything else goes as messages.
+    /// </summary>
+    public DragHandOver Drags { get; init; }
+
     /// <summary>Tests that end WinScreen during a visit to this kind of app and see the original come back.</summary>
     public Verification[] RecoveredBy { get; init; } = [];
 
@@ -61,6 +67,20 @@ internal sealed record AppProfile(string Name)
 
     internal bool Matches(string program, string windowClass, bool electronFiles) =>
         (Programs.Length == 0 || MatchesProgram(program)) && MatchesClass(windowClass) && (!ElectronFiles || electronFiles);
+}
+
+/// <summary>What a press and move in a view hands to the real window, to be dragged as the app drags it.</summary>
+internal enum DragHandOver
+{
+    None,
+    /// <summary>Files, folders and rows: a press on one waits to see whether it is a click or a drag.</summary>
+    Items,
+    /// <summary>
+    /// Links in a page, known by the hand the page shows over them (nothing is asked of the page: browsers don't report
+    /// a page's contents to accessibility unless something like a screen reader turned that on); text is still selected
+    /// through the view.
+    /// </summary>
+    Links,
 }
 
 /// <summary>A kind of window inside an app that takes input another way than the app's own windows.</summary>
@@ -84,7 +104,7 @@ internal static class AppProfiles
             // ran with Chrome only; the two share their engine and window classes.
             Programs = ["chrome", "msedge"],
             Hover = PipHoverApp.Browser, ChosenForMe = true, SideEdgeAlways = true, ScrollsWithHover = true,
-            InteractiveWithoutSwitch = true,
+            InteractiveWithoutSwitch = true, Drags = DragHandOver.Links,
             VerifiedBy =
             [
                 new("BrowserInputTests.A_browser_used_through_a_view_shows_its_own_pointer_and_takes_clicks_selection_and_keys", Both),
@@ -94,6 +114,7 @@ internal static class AppProfiles
                 new("BrowserInputTests.A_browser_view_is_used_directly_without_experimental_features_and_never_gets_the_helper", Both),
                 new("BrowserInputTests.Enhanced_hover_keeps_css_previews_and_dom_state_and_clears_on_leave_and_disable", Both),
                 new("BrowserInputTests.A_browsers_own_middle_click_scrolling_works_with_enhanced_hover", Both),
+                new("BrowserInputTests.A_link_is_dragged_out_of_a_view_into_another_window", Both),
             ],
             RecoveredBy =
             [
@@ -107,7 +128,7 @@ internal static class AppProfiles
             // input test with the switch off and the recovery test, on both versions (the portable copies in test-apps).
             Programs = ["brave", "vivaldi"],
             Hover = PipHoverApp.Browser, ChosenForMe = true, SideEdgeAlways = true, ScrollsWithHover = true,
-            InteractiveWithoutSwitch = true,
+            InteractiveWithoutSwitch = true, Drags = DragHandOver.Links,
             VerifiedBy =
             [
                 new("BrowserInputTests.A_browser_used_through_a_view_shows_its_own_pointer_and_takes_clicks_selection_and_keys", Both),
@@ -116,6 +137,7 @@ internal static class AppProfiles
                 new("PipMessageInputTests.A_browser_scrolls_under_the_wheel_in_a_view_used_directly", Both),
                 new("BrowserInputTests.A_browser_view_is_used_directly_without_experimental_features_and_never_gets_the_helper", Both),
                 new("BrowserInputTests.Enhanced_hover_keeps_css_previews_and_dom_state_and_clears_on_leave_and_disable", Both),
+                new("BrowserInputTests.A_link_is_dragged_out_of_a_view_into_another_window", Both),
             ],
             RecoveredBy =
             [
@@ -145,6 +167,7 @@ internal static class AppProfiles
             Programs = ["explorer"], WindowClass = "CabinetWClass",
             Hover = PipHoverApp.FileExplorer, // Not chosen for the person: its tab menus stop responding with the helper on.
             InteractiveWithoutSwitch = true, // Since 14 Nov 2026; every input test below runs with the switch off.
+            Drags = DragHandOver.Items,
             VerifiedBy =
             [
                 new("ExplorerHoverTests.A_hovered_row_stays_highlighted_in_the_view_only_with_enhanced_hover", Both),
@@ -153,6 +176,7 @@ internal static class AppProfiles
                 new("ExplorerInputTests.A_file_is_renamed_by_typing_through_a_view", Both),
                 new("ExplorerInputTests.A_drag_selects_files_through_a_view", Both),
                 new("ExplorerInputTests.The_wheel_scrolls_the_file_list_through_a_view", Both),
+                new("ExplorerInputTests.A_file_is_dragged_out_of_a_view", Both),
                 new("ExplorerInputTests.Explorer_tab_menus_remain_stationary_during_sustained_navigation", Windows11),
             ],
             RecoveredBy =
@@ -242,6 +266,10 @@ internal static class AppProfiles
             if (profile.ShowsOriginalOnClick && profile.MatchesClass(windowClass)) return true;
         return false;
     }
+
+    /// <summary>What a press and move in a view of this app hands to the real window.</summary>
+    internal static DragHandOver DragsOf(string program, string windowClass, bool electronFiles) =>
+        Find(program, windowClass, electronFiles)?.Drags ?? DragHandOver.None;
 
     /// <summary>True when views of this app can be used directly without the experimental switch.</summary>
     internal static bool InteractiveWithoutSwitch(string program, string windowClass, bool electronFiles) =>

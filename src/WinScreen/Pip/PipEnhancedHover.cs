@@ -76,6 +76,23 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
         }
     }
 
+    /// <summary>What a press and move in a view of this window hands to the real window (<see cref="Compatibility.AppProfile.Drags"/>).</summary>
+    internal static Compatibility.DragHandOver DragsOf(nint window)
+    {
+        User32.GetWindowThreadProcessId(window, out uint pid);
+        try
+        {
+            using var process = Process.GetProcessById((int)pid);
+            return Compatibility.AppProfiles.DragsOf(process.ProcessName,
+                WindowInfo.ClassName(User32.GetAncestor(window, User32.GA_ROOT)),
+                HasElectronLayout(Path.GetDirectoryName(process.MainModule!.FileName) ?? ""));
+        }
+        catch (Exception e) when (e is Win32Exception or ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            return Compatibility.DragHandOver.None; // A program that can't be looked at isn't known.
+        }
+    }
+
     /// <summary>Electron keeps an app's own files in a "resources" folder, as "app" or "app.asar": beside the
     /// program, or one folder down when the program keeps each version in a folder of its own.</summary>
     internal static bool HasElectronLayout(string folder)

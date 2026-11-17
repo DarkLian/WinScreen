@@ -1671,4 +1671,136 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
     }
     private delegate bool WindowVisitor(nint window, nint data);
     [DllImport("user32.dll")] private static extern bool EnumThreadWindows(uint thread, WindowVisitor visitor, nint data);
+
+    /// <summary>
+    /// A link dragged out of a page used through a view (10-3) lands in another window, as from the page itself: the page
+    /// comes up for the press, Windows carries the drag, and the page goes back out of sight at once. Text in the same
+    /// page is still selected through the view (the other tests here). A link is known by the hand the page shows over
+    /// it. Pictures are handed over only where the browser reports them to accessibility, which the tests' Chrome
+    /// doesn't (its page has no elements there), so there is no picture case.
+    /// </summary>
+    /// <summary>
+    /// A press on anything that shows the hand (a link, or a button styled with it) waits to see whether it becomes a
+    /// drag (10-3), so the page gets it with the release. It still arrives once as a click, and a double-click still
+    /// counts as one.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BrowserCases))]
+    public void A_click_and_a_double_click_on_a_hand_pointer_reach_the_page_once_through_a_view(string path)
+    {
+        string page = "<!doctype html><title>Hand d=0 c=0 dbl=0</title><body style='margin:0'>" +
+                      "<div id=b style='position:absolute;left:60px;top:60px;width:320px;height:200px;background:#cde;cursor:pointer;user-select:none'></div>" +
+                      "<script>let d=0,c=0,dbl=0;const r=()=>document.title=`Hand d=${d} c=${c} dbl=${dbl}`;" +
+                      "b.onmousedown=()=>{d++;r()};b.onclick=()=>{c++;r()};b.ondblclick=()=>{dbl++;r()};</script>";
+        var log = new StringBuilder();
+        var (browser, window, root) = Open(page, "Hand", app: true, path);
+        try
+        {
+            User32.PostMessage(window, 0x112, 0xF120, 0);
+            Thread.Sleep(400);
+            User32.SetWindowPos(window, 0, 160, 100, 900, 700, 0x14);
+            Thread.Sleep(600);
+            Rectangle document = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds;
+            Rectangle home = Desktop.BoundsOf(window);
+            Point offset = new(document.Left - home.Left + 200, document.Top - home.Top + 150);
+            VisitWithoutSwitch(window, (view, toView, l) =>
+            {
+                Point at = toView(offset);
+                Desktop.SlideMouse(at);
+                Thread.Sleep(80);
+                for (int i = 0; i < 4; i++) { Desktop.SlideMouse(at + new Size(i * 2, 1)); Thread.Sleep(60); }
+                Thread.Sleep(150);
+                l.AppendLine($"hand {WinScreen.Native.PointerShape.IsHand()}");
+                Desktop.MouseButton(true); Thread.Sleep(40); Desktop.MouseButton(false);
+                if (!Desktop.WaitFor(() => WindowInfo.Title(window).Contains("d=1 c=1 dbl=0"), 2000)) l.AppendLine("EXC click: " + WindowInfo.Title(window));
+                Thread.Sleep(700); // Past the double-click time.
+                Desktop.MouseButton(true); Thread.Sleep(30); Desktop.MouseButton(false); Thread.Sleep(40);
+                Desktop.MouseButton(true); Thread.Sleep(30); Desktop.MouseButton(false);
+                if (!Desktop.WaitFor(() => WindowInfo.Title(window).Contains("d=3 c=3 dbl=1"), 2000)) l.AppendLine("EXC double-click: " + WindowInfo.Title(window));
+                l.AppendLine("title " + WindowInfo.Title(window) + "; picked up " + view.DragsPickedUp);
+                if (view.DragsPickedUp != 0) l.AppendLine("EXC a click was taken for a drag");
+            }, log);
+        }
+        finally
+        {
+            Close(browser, root);
+            output.WriteLine(log.ToString());
+        }
+        Assert.DoesNotContain("EXC", log.ToString());
+    }
+
+    public static IEnumerable<object[]> LinkDragCases() =>
+        BrowserCases().SelectMany(c => new[] { new object[] { c[0], false }, new object[] { c[0], true } });
+
+    [Theory]
+    [MemberData(nameof(LinkDragCases))]
+    public void A_link_is_dragged_out_of_a_view_into_another_window(string path, bool maximized)
+    {
+        const string page = "<!doctype html><title>DragOut</title><body style='margin:0;font:40px sans-serif'>" +
+                            "<a id=l href='https://example.com/dragged' style='position:absolute;left:40px;top:40px'>Drag this link</a>";
+        using var target = new TargetProcess(new Rectangle(60, 620, 640, 360));
+        target.TakeDrops();
+        var log = new StringBuilder();
+        var (browser, window, root) = Open(page, "DragOut", app: true, path);
+        try
+        {
+            // Maximized, as most people keep a browser: it comes up covering the screen for the press, and goes at once.
+            User32.PostMessage(window, 0x112, maximized ? 0xF030 : 0xF120, 0);
+            Thread.Sleep(400);
+            if (!maximized) User32.SetWindowPos(window, 0, 160, 100, 900, 700, 0x14);
+            Thread.Sleep(600);
+            // The page's own corner: the tests' Chrome shows a bar of its own above it.
+            Rectangle document = BrowserAccessibility.Read(window).First(c => c.Type == 50030).Bounds;
+            Rectangle home = Desktop.BoundsOf(window);
+            Point inPage = new(120, 70); // On the link.
+            Point offset = new(document.Left - home.Left + inPage.X, document.Top - home.Top + inPage.Y);
+            VisitWithoutSwitch(window, (view, toView, l) =>
+            {
+                Point from = toView(offset);
+                Point to = target.Center;
+                Desktop.SlideMouse(from);
+                Thread.Sleep(80);
+                // On a little, as a hand rests: the page sets its pointer as it handles the moves.
+                for (int i = 0; i < 4; i++) { Desktop.SlideMouse(from + new Size(i * 3, 1)); Thread.Sleep(60); }
+                from += new Size(9, 1);
+                Thread.Sleep(150);
+                l.AppendLine($"hand before the press: {WinScreen.Native.PointerShape.IsHand()} drags {view.LiveInteraction?.HandsOverDrags}");
+                Desktop.MouseButton(true);
+                Thread.Sleep(120);
+                Desktop.SlideMouse(new Point(from.X + 8, from.Y + 3)); // Past the drag distance: handed over.
+                if (!Desktop.WaitFor(() => view.DragsPickedUp == 1, 2000))
+                {
+                    l.AppendLine($"EXC not picked up: answer '{view.LiveInteraction?.LastItemAnswer}', outcomes {string.Join(",", view.PressOutcomes)}, at {from}");
+                    return;
+                }
+                for (int i = 1; i <= 12; i++)
+                {
+                    Desktop.SlideMouse(new Point(from.X + (to.X - from.X) * i / 12, from.Y + (to.Y - from.Y) * i / 12));
+                    Thread.Sleep(40);
+                }
+                Thread.Sleep(300);
+                bool backWhileDragging = !view.HandingOverDrop;
+                Desktop.MouseButton(false);
+                string? report = target.NextReport(3000);
+                l.AppendLine($"report '{report}' back while dragging {backWhileDragging} ({view.LastPickup}) maximized {maximized}");
+                // Run as administrator, the test's drop window is elevated but the browser isn't (Chrome starts itself again
+                // as an ordinary program), and Windows keeps drags from an ordinary window out of an elevated one.
+                User32.GetWindowThreadProcessId(window, out uint browserProcess);
+                bool sameLevel = WinScreen.Native.ProcessInfo.IsElevated(browserProcess) == WinScreen.Native.ProcessInfo.IsElevated((uint)target.ProcessId);
+                if (!sameLevel) l.AppendLine("drop not checked: the browser runs as an ordinary program and the drop window as administrator");
+                else if (report is null || !report.StartsWith("drop ", StringComparison.Ordinal)) l.AppendLine("EXC nothing dropped");
+                if (!backWhileDragging) l.AppendLine("EXC the page stayed out during the drag");
+                if (!Desktop.WaitFor(() => view.Visible && !view.HandingOverDrop, 2000)) l.AppendLine("EXC the view didn't come back");
+                if ((Desktop.ExStyle(window) & User32.WS_EX_LAYERED) == 0) l.AppendLine("EXC the page isn't hidden again");
+            }, log);
+        }
+        finally
+        {
+            Close(browser, root);
+            output.WriteLine(log.ToString());
+        }
+        Assert.DoesNotContain("EXC", log.ToString());
+        if (!log.ToString().Contains("drop not checked", StringComparison.Ordinal))
+            Assert.Contains("drop https://example.com/dragged", log.ToString());
+    }
 }
