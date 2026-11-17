@@ -1987,6 +1987,7 @@ public sealed partial class PipWindow : Form
             _seenDesktop = desktop;
         }
         nint foreground = User32.GetForegroundWindow();
+        if ((User32.GetAsyncKeyState(0x12 /* Alt */) & 0x8000) != 0) _altSeenAt = Environment.TickCount64;
         bool focused = _origin.IsWindow && foreground == _source;
         bool arrived = focused && !_sourceWasFocused;
         _sourceWasFocused = focused;
@@ -1998,7 +1999,9 @@ public sealed partial class PipWindow : Form
             JustAfterVisit: now - _liveEndedAt < RevealGrace,
             Picked: PickedFromTaskbarOrSwitcher(before),
             JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && now - _desktopSwitchedAt < SwitchFocusGrace);
-        switch (ViewState.OriginalArrived(facts))
+        ViewState.Arrival answer = ViewState.OriginalArrived(facts);
+        LastArrival = $"{answer}: before {WindowInfo.ClassName(before)}, picked {facts.Picked}";
+        switch (answer)
         {
             case ViewState.Arrival.PassFocusOn:
                 // Not picked by the person: Windows passed the focus on (a window minimized or closed, a menu or panel
@@ -2026,6 +2029,9 @@ public sealed partial class PipWindow : Form
         }
     }
 
+    /// <summary>What the view made of the original's last arrival, and the window before it, for tests.</summary>
+    internal string LastArrival { get; private set; } = "";
+
     /// <summary>The last window other than the original that had the focus, as the view last saw it.</summary>
     private nint _foregroundBefore;
 
@@ -2037,13 +2043,18 @@ public sealed partial class PipWindow : Form
     /// </summary>
     private bool PickedFromTaskbarOrSwitcher(nint before)
     {
-        bool switcher = before != 0 && SwitcherClasses.Contains(WindowInfo.ClassName(before));
+        // A quick Alt+Tab switches before the switcher shows, so it is never in front: Alt held a moment ago counts.
+        bool switcher = before != 0 && SwitcherClasses.Contains(WindowInfo.ClassName(before)) ||
+                        Environment.TickCount64 - _altSeenAt < AltSwitchGrace;
         Point pointer = Cursor.Position;
         nint under = User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = pointer.X, Y = pointer.Y }), User32.GA_ROOT);
         bool taskbar = under != 0 && TaskbarClasses.Contains(WindowInfo.ClassName(under));
         if (!switcher && !taskbar) return false;
         return (User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE) & User32.WS_EX_TOOLWINDOW) == 0 && !_windows.IsOffTaskbar(_source);
     }
+
+    private long _altSeenAt = long.MinValue / 2;
+    private const long AltSwitchGrace = 400;
 
     private static readonly HashSet<string> TaskbarClasses = new(StringComparer.Ordinal)
         { "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "TaskListThumbnailWnd", "XamlExplorerHostIslandWindow" };

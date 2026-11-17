@@ -257,8 +257,16 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
         finally { output.WriteLine(log.ToString()); Close(window); }
     }
 
-    [Fact]
-    public void A_hidden_store_app_brought_forward_from_elsewhere_is_shown_and_its_taskbar_button_stays()
+    /// <summary>
+    /// Windows keeps a Store app's taskbar button and Alt+Tab entry, so a hidden one can be picked there; picked, it is
+    /// shown, so keys don't go to a window nobody sees (9 Nov). Real input: since 18 Nov only a pick shows it, and a
+    /// pick is told from the pointer on the taskbar or the switcher in front before it.
+    /// </summary>
+    [Theory]
+    [InlineData("its taskbar button")]
+    [InlineData("Alt+Tab")]
+    [InlineData("a quick Alt+Tab")]
+    public void A_hidden_store_app_picked_from_the_taskbar_or_switcher_is_shown_and_its_taskbar_button_stays(string how)
     {
         nint window = OpenCalculator();
         if (window == 0) { Skipped.Because("No Calculator of its own: none installed, or one already open."); return; }
@@ -274,10 +282,37 @@ public sealed class StoreAppInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 Assert.True(windows.IsHidden(window) && windows.IsParked(window));
                 Assert.False(windows.IsOutOfSwitcher(window)); // Windows keeps its button.
                 for (int i = 0; i < 20; i++) { Application.DoEvents(); Thread.Sleep(20); }
-                // As its taskbar button or Alt+Tab would.
                 Desktop.GainForegroundRights();
-                User32.SetForegroundWindow(window);
-                Assert.True(Desktop.WaitFor(() => !windows.IsHidden(window), 3000, Application.DoEvents), "It stayed hidden.");
+                Point home = Desktop.CursorPosition();
+                try
+                {
+                    if (how == "its taskbar button")
+                    {
+                        nint taskbar = User32.FindWindowEx(0, 0, "Shell_TrayWnd", null);
+                        BrowserAccessibility.Control? button = BrowserAccessibility.Read(taskbar)
+                            .FirstOrDefault(c => c.Name.StartsWith("Calculator", StringComparison.Ordinal) && c.Bounds.Width > 0);
+                        Assert.True(button is not null, "No Calculator button on the taskbar.");
+                        Desktop.MoveMouse(new Point(button.Bounds.Left + button.Bounds.Width / 2, button.Bounds.Top + button.Bounds.Height / 2));
+                        for (int i = 0; i < 10; i++) { Application.DoEvents(); Thread.Sleep(20); }
+                        Desktop.MouseButton(true);
+                        Thread.Sleep(60);
+                        Desktop.MouseButton(false);
+                    }
+                    else
+                    {
+                        // The calculator was in use last before the view hid it, so it is next in the switcher.
+                        Desktop.Key(Keys.Menu, true);
+                        Thread.Sleep(60);
+                        Desktop.Key(Keys.Tab, true); Desktop.Key(Keys.Tab, false);
+                        int held = how == "Alt+Tab" ? 30 : 4; // As a person holds Alt a moment, or taps it with Tab.
+                        for (int i = 0; i < held; i++) { Application.DoEvents(); Thread.Sleep(20); }
+                        Desktop.Key(Keys.Menu, false);
+                    }
+                    Assert.True(Desktop.WaitFor(() => !windows.IsHidden(window), 3000, Application.DoEvents),
+                        $"It stayed hidden ({how}): {view.LastArrival}; front {WindowInfo.ClassName(User32.GetForegroundWindow())}.");
+                    output.WriteLine($"{how}: {view.LastArrival}");
+                }
+                finally { Desktop.MouseButton(false); Desktop.Key(Keys.Menu, false); Desktop.MoveMouse(home); }
                 Assert.NotEqual(0, view.LastReveal);
                 Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(window) == before, 2000, Application.DoEvents));
                 Assert.False(WindowInfo.IsConcealed(window));
