@@ -8,12 +8,17 @@
   nobody may use the PC while they run.
 
   1. Checks first, and stops with the reason (exit code 3) if this PC isn't ready: the shell runs as
-     administrator; another WinScreen, or a test window from an earlier run, is open (it is named, never
+     administrator (or, with -AsAdministrator, doesn't); another WinScreen, or a test window from an earlier run, is open (it is named, never
      closed by this script); an app fills the screen in front; the hover helper is missing from the build.
   2. Builds (unless -SkipBuild), then says what it is about to run. Without -GoAhead it stops there (exit
      code 2): the person whose PC this is says yes first, then the same command runs again with -GoAhead.
   3. With -GoAhead: checks again, records the conditions in environment.json (Windows build, displays and
      scale, graphics, input languages, administrator or not, commit), runs, and lists what did not run.
+
+  -AsAdministrator runs the named tests from an elevated shell, as WinScreen runs for people who turn on Run as
+  administrator: Windows keeps drag and drop and some input from normal windows out of elevated ones. Run the
+  tests that move focus, drag or drop both ways before each beta. Such a run never counts for a release
+  (Confirm-Release.ps1 passes over it), so -All isn't allowed with it.
 
   Results go to TestResults\host\<time>: a .trx per suite, runner.log, environment.json, source.json (the commit
   the build came from, for Confirm-Release.ps1), not-run.txt (skipped tests and tests that returned early, see
@@ -24,6 +29,9 @@
 
 .EXAMPLE
   .\tools\Invoke-HostRun.ps1 -Filter "FullyQualifiedName~DarkModeTests" -SkipBuild -GoAhead
+
+.EXAMPLE
+  .\tools\Invoke-HostRun.ps1 -Filter "FullyQualifiedName~DropIntoViewTests" -AsAdministrator -GoAhead
 
 .EXAMPLE
   .\tools\Invoke-HostRun.ps1 -Suite Packaged -Filter "FullyQualifiedName~InstalledAppTests" -InstalledApps
@@ -41,6 +49,8 @@ param(
     # The person whose PC this is said yes, and is keeping off the mouse and keyboard.
     [switch]$GoAhead,
     [switch]$SkipBuild,
+    # From an elevated shell, as WinScreen runs with Run as administrator on. Never counts for a release.
+    [switch]$AsAdministrator,
     [string]$ResultsDirectory,
     [int]$HangMinutes = 3
 )
@@ -51,6 +61,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 
 if (-not $Filter -and -not $All) { throw 'Name the tests with -Filter (targeted runs by default), or pass -All.' }
 if ($Filter -and $All) { throw 'Pass -Filter or -All, not both.' }
+if ($AsAdministrator -and $All) { throw 'A run as administrator is for the named tests that need it; -All runs from a normal shell.' }
 
 Add-Type -TypeDefinition @'
 using System;
@@ -161,8 +172,12 @@ function Say([string]$text) { Write-Output "== $text" }
 function Get-Problems {
     $problems = @()
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    if (([Security.Principal.WindowsPrincipal]$identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        $problems += 'This shell runs as administrator. Desktop tests check what WinScreen does without it; start a normal shell.'
+    $elevated = ([Security.Principal.WindowsPrincipal]$identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if ($elevated -and -not $AsAdministrator) {
+        $problems += 'This shell runs as administrator. Desktop tests check what WinScreen does without it; start a normal shell, or pass -AsAdministrator to check it as administrator.'
+    }
+    if ($AsAdministrator -and -not $elevated) {
+        $problems += '-AsAdministrator needs a shell that runs as administrator.'
     }
     foreach ($process in @(Get-Process -Name 'WinScreen', 'WinScreen.TestTarget' -ErrorAction SilentlyContinue)) {
         $where = if ($process.Path) { $process.Path } else { 'its path is hidden, so it probably runs as administrator' }
@@ -250,6 +265,7 @@ $source, $commit = Get-Commit
 Say 'About to run on this desktop'
 foreach ($step in $steps) { Write-Output "- $($step.name): $($step.filter)" }
 if ($InstalledApps) { Write-Output '- Apps installed on this PC take part (WINSCREEN_TEST_INSTALLED_APPS=1).' }
+if ($AsAdministrator) { Write-Output '- As administrator, as WinScreen runs with Run as administrator on.' }
 Write-Output "- Code: $commit. Windows build $([Environment]::OSVersion.Version.Build)."
 Write-Output '- The tests open their own windows and move the mouse and type. Nobody may use the PC until they finish.'
 
@@ -276,7 +292,7 @@ $windows = if ([int]$os.CurrentBuildNumber -ge 22000) { '11' } else { '10' }
 $source, $commit = Get-Commit
 # What Confirm-Release.ps1 reads: the commit, and that it was every test.
 Save-RunRecord $ResultsDirectory $source @{ tool = 'host'; windows = $windows; all = [bool]$All; suite = $Suite; filter = $Filter
-    installedApps = [bool]$InstalledApps; administrator = $false }
+    installedApps = [bool]$InstalledApps; administrator = [bool]$AsAdministrator }
 [ordered]@{
     machine = 'host'
     # ProductName says "Windows 10" on Windows 11 too; the build number tells them apart.
@@ -288,7 +304,7 @@ Save-RunRecord $ResultsDirectory $source @{ tool = 'host'; windows = $windows; a
     gpus = @(Get-CimInstance Win32_VideoController | ForEach-Object { "$($_.Name) (driver $($_.DriverVersion))" })
     # foreach, not the pipeline: the list comes through a pipeline as one object.
     inputLanguages = @(foreach ($language in (Get-WinUserLanguageList)) { "$($language.LanguageTag): $($language.InputMethodTips -join ', ')" })
-    administrator = $false
+    administrator = [bool]$AsAdministrator
     commit = $commit
     steps = $steps
     installedApps = [bool]$InstalledApps
