@@ -374,6 +374,8 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
    with a real administrator app on Windows 11.
 7. Only when WinScreen runs as administrator too.
 
+**Apps that draw their own title bar.** The toolbar asks the window what is under the pointer, so an app that draws its whole top row and answers "content" there never gets it. A saved setup's **Toolbar where the title bar usually is** (under **Change**) shows it for that program's windows where a title bar usually is, without asking. It is a choice, since such an app may have its own controls up there; it can't be had with **No toolbar on these windows**. Checked on Windows 11 with a test window that answers "content" everywhere: the toolbar comes with the setup and not without it (`AppEndToEndTests.A_rule_brings_the_toolbar_to_an_app_that_draws_its_own_title_bar`).
+
 ## Combinations
 
 | Combination | Behavior |

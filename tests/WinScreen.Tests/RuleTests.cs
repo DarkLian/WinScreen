@@ -72,6 +72,7 @@ public sealed class RuleTests
         Assert.True(new ProgramSetup { Program = "a", Borderless = true }.ChangesAnything);
         Assert.True(new ProgramSetup { Program = "a", Anchor = true }.ChangesAnything);
         Assert.True(new ProgramSetup { Program = "a", NoToolbar = true }.ChangesAnything);
+        Assert.True(new ProgramSetup { Program = "a", ToolbarByPosition = true }.ChangesAnything);
         Assert.False(new ProgramSetup { Program = "a", TitleContains = "chat", EveryTime = true }.ChangesAnything);
     }
 
@@ -82,11 +83,11 @@ public sealed class RuleTests
         settings.SavedSetups.Add(new ProgramSetup
         {
             Program = "app", TitleContains = "chat", WindowClass = "AppWindow", Place = WinScreen.Windows.WindowAnchor.TopRight,
-            Display = @"\\.\DISPLAY2", Borderless = true, Anchor = true, NoToolbar = true, EveryTime = true, Off = true, Pinned = true,
+            Display = @"\\.\DISPLAY2", Borderless = true, Anchor = true, NoToolbar = true, ToolbarByPosition = true, EveryTime = true, Off = true, Pinned = true,
         });
         ProgramSetup loaded = Assert.Single(AppSettings.Parse(System.Text.Json.JsonSerializer.Serialize(settings)).SavedSetups);
         Assert.Equal(("chat", "AppWindow", WinScreen.Windows.WindowAnchor.TopRight, @"\\.\DISPLAY2"),
             (loaded.TitleContains, loaded.WindowClass, loaded.Place, loaded.Display));
-        Assert.True(loaded.Borderless && loaded.Anchor && loaded.NoToolbar && loaded.EveryTime && loaded.Off && loaded.Pinned);
+        Assert.True(loaded.Borderless && loaded.Anchor && loaded.NoToolbar && loaded.ToolbarByPosition && loaded.EveryTime && loaded.Off && loaded.Pinned);
     }
 }

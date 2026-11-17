@@ -371,6 +371,7 @@ rule.place 1FB4D574DA92F1C1
 rule.title F32C098C588BA4C5
 rule.titleContains 4FA6F7A136727D12
 rule.titleHint DD3AF8405D6292B1
+rule.toolbarByPosition EEA46EE454BAD7AA
 rule.windowClass 4A4EB6E7BCCBCE3C
 settings.admin 7A172DA75CD120BE
 settings.admin.declined EC58D1E4F9F74CC2
@@ -463,6 +464,7 @@ setups.placed 49726F09C8123A40
 setups.remember 4FCD95600B77B949
 setups.removed 8B51E85E948F88EC
 setups.saved 985C5A8CCDEDF46A
+setups.toolbarByPosition 56D177182516C7AB
 setups.view B19D766EFA9CBFBF
 shrink.controls F0A6BA75CFCC98E1
 shrink.titlePrefix D994E22F6276F500

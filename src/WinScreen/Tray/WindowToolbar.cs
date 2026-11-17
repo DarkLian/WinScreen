@@ -115,6 +115,13 @@ public sealed class WindowToolbar : Form
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Action<AppCommand, nint, Point>? OpenMenu { get; init; }
 
+    /// <summary>
+    /// Windows a rule says to show the toolbar for where a title bar usually is, without asking the window: apps that
+    /// draw their own top row answer "content" there (10-4).
+    /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<nint, bool> ByPosition { get; init; } = _ => false;
+
     /// <summary>The commands that have a button on the bar now, so a menu from it can leave them out.</summary>
     internal IReadOnlySet<AppCommand> ShownButtons =>
         _buttons.Keys.Where(command => _preferences.Buttons.Contains(command) && _isAvailable(command)).ToHashSet();
@@ -276,7 +283,8 @@ public sealed class WindowToolbar : Form
             return;
 
         _hoverTime = 0;
-        if (!MatchesTrigger(foreground, cursor, minimizeTrigger ? ToolbarTrigger.MinimizeButton : ToolbarTrigger.TitleBar))
+        // An app that draws its own top row answers "content" there: a rule can say to go by position alone.
+        if (!ByPosition(foreground) && !MatchesTrigger(foreground, cursor, minimizeTrigger ? ToolbarTrigger.MinimizeButton : ToolbarTrigger.TitleBar))
             return;
 
         try

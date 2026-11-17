@@ -14,7 +14,7 @@ internal sealed class RuleDialog : ThemedDialog
     private readonly TextBox _title = new() { Width = 260 }, _class = new() { Width = 260 };
     private readonly CheckBox _pinned = Check(CommandCatalog.Name(AppCommand.TogglePin)), _dark = Check(CommandCatalog.Name(AppCommand.ToggleDark)),
         _borderless = Check(CommandCatalog.Name(AppCommand.ToggleBorderless)), _anchor = Check(CommandCatalog.Name(AppCommand.ToggleAnchor)),
-        _noToolbar = Check(T("rule.noToolbar")), _everyTime = Check(T("rule.everyTime")), _off = Check(T("rule.off"));
+        _noToolbar = Check(T("rule.noToolbar")), _byPosition = Check(T("rule.toolbarByPosition")), _everyTime = Check(T("rule.everyTime")), _off = Check(T("rule.off"));
     private readonly NumericUpDown _opacity = new() { Minimum = AppSettings.LowestOpacityPercent, Maximum = 100, Width = 90 };
     private readonly ComboBox _place = Choice(), _display = Choice();
     private readonly Label _matches = new SoftLabel { AutoSize = true, UseMnemonic = false };
@@ -50,6 +50,8 @@ internal sealed class RuleDialog : ThemedDialog
         _borderless.Checked = rule.Borderless;
         _anchor.Checked = rule.Anchor;
         _noToolbar.Checked = rule.NoToolbar;
+        _byPosition.Checked = rule.ToolbarByPosition && !rule.NoToolbar;
+        _byPosition.Enabled = !_noToolbar.Checked;
         _everyTime.Checked = rule.EveryTime;
         _off.Checked = rule.Off;
 
@@ -65,10 +67,13 @@ internal sealed class RuleDialog : ThemedDialog
         Whole(_borderless);
         Whole(_anchor);
         Whole(_noToolbar);
+        Whole(_byPosition);
         Whole(_everyTime);
         Whole(_off);
         Buttons(T("common.apply"), T("common.cancel"));
 
+        // No toolbar and a toolbar by position can't both be had.
+        _noToolbar.CheckedChanged += (_, _) => { _byPosition.Enabled = !_noToolbar.Checked; if (_noToolbar.Checked) _byPosition.Checked = false; };
         _title.TextChanged += (_, _) => CountMatches();
         _class.TextChanged += (_, _) => CountMatches();
         CountMatches();
@@ -91,6 +96,7 @@ internal sealed class RuleDialog : ThemedDialog
         _rule.Borderless = _borderless.Checked;
         _rule.Anchor = _anchor.Checked;
         _rule.NoToolbar = _noToolbar.Checked;
+        _rule.ToolbarByPosition = _byPosition.Checked && !_noToolbar.Checked;
         _rule.EveryTime = _everyTime.Checked;
         _rule.Off = _off.Checked;
         return _rule;

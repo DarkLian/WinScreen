@@ -83,6 +83,12 @@ public sealed class ProgramSetup
     public bool Anchor { get; set; }
     /// <summary>The toolbar never offers itself on these windows.</summary>
     public bool NoToolbar { get; set; }
+    /// <summary>
+    /// The toolbar offers itself where a title bar usually is, without asking the window: for apps that draw their own
+    /// top row and answer "content" everywhere (10-4). The person chooses it, since such an app may have its own
+    /// controls there.
+    /// </summary>
+    public bool ToolbarByPosition { get; set; }
     /// <summary>Applied each time the window comes forward again, not only the first time.</summary>
     public bool EveryTime { get; set; }
     /// <summary>Kept, but not applied.</summary>
@@ -90,7 +96,7 @@ public sealed class ProgramSetup
 
     /// <summary>False when the setup leaves a window exactly as it opens, so it isn't worth keeping.</summary>
     public bool ChangesAnything => Pinned || Alpha < 255 || Dark || View is not null || Place is not null ||
-                                   !string.IsNullOrEmpty(Display) || Borderless || Anchor || NoToolbar;
+                                   !string.IsNullOrEmpty(Display) || Borderless || Anchor || NoToolbar || ToolbarByPosition;
 
     /// <summary>True when the rule looks at more than the program: some of its windows only.</summary>
     internal bool Narrowed => !string.IsNullOrEmpty(TitleContains) || !string.IsNullOrEmpty(WindowClass);
@@ -151,6 +157,8 @@ public sealed class ProgramSetup
             parts.Add(T("setups.anchor"));
         if (NoToolbar)
             parts.Add(T("setups.noToolbar"));
+        if (ToolbarByPosition)
+            parts.Add(T("setups.toolbarByPosition"));
         if (EveryTime)
             parts.Add(T("setups.everyTime"));
         if (Off)

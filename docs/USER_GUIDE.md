@@ -189,7 +189,8 @@ Set a window up the way you like it: pinned, see-through, dark, with a view open
 Press it again on a plain window to forget the setup, or remove it in **Settings → Saved setups**.
 
 Choose **Change** there to keep a setup to windows whose title contains some text, to put the window in a place or on
-a display, to make it borderless, give it an Anchor or keep the toolbar off it. A setup can also apply every time the
+a display, to make it borderless, give it an Anchor or keep the toolbar off it. For an app that draws its own title
+bar, where the toolbar never shows, choose **Toolbar where the title bar usually is**. A setup can also apply every time the
 window comes forward, or be turned off for now.
 
 ## Commands from scripts

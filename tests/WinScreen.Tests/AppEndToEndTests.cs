@@ -798,6 +798,36 @@ public sealed class AppEndToEndTests : IDisposable
     }
 
     /// <summary>
+    /// An app that draws its own top row answers "content" all over it, so the toolbar never comes (10-4, TD-51: the
+    /// owner's ExitLag). A rule's Toolbar where the title bar usually is brings it there anyway; without the rule, the
+    /// same window gets none. The plain test window is such an app: it answers "content" everywhere.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_rule_brings_the_toolbar_to_an_app_that_draws_its_own_title_bar(bool rule)
+    {
+        var settings = new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.TogglePin], Placement = ToolbarPlacement.Left } };
+        if (rule) settings.SavedSetups.Add(new ProgramSetup { Program = "WinScreen.TestTarget", ToolbarByPosition = true });
+        RestartWith(settings);
+        using var target = new TargetProcess(Spot);
+        Focus(target);
+        Thread.Sleep(800); // Rules are applied as the window comes forward, on WinScreen's quarter-second watch.
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        var rest = new Point(bounds.Left + WinScreen.Native.Dpi.Scale(34, WinScreen.Native.Dpi.Of(target.Handle)) + 12, bounds.Top + 12);
+        Assert.False(WinScreen.Tray.WindowToolbar.MatchesTrigger(target.Handle, rest, ToolbarTrigger.TitleBar), "The window says it has a title bar.");
+        Desktop.MoveMouse(new Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2));
+        Thread.Sleep(300);
+        Desktop.RequireWindowAt(rest, target.Handle);
+        Desktop.MoveMouse(new Point(rest.X + 30, rest.Y));
+        Desktop.MoveMouse(rest);
+        bool shown = Desktop.WaitFor(() =>
+            Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar") is var toolbar and not 0 && Desktop.IsWindowVisible(toolbar),
+            rule ? 4000 : 2500);
+        Assert.Equal(rule, shown);
+    }
+
+    /// <summary>
     /// The toolbar on a program that isn't a test window, by either trigger: Notepad++ answers "minimize button"
     /// over its own, yet the owner never saw the bar open there (F9).
     /// </summary>

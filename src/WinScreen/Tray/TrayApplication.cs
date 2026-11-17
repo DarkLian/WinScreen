@@ -89,7 +89,7 @@ public sealed partial class TrayApplication : ApplicationContext
             if (_settings.ShowNotifications)
                 Balloon(T("updates.title"), message, ToolTipIcon.None);
         }, TellAboutVersion);
-        _toolbar = new WindowToolbar(CanUseToolbar, IsOn, IsAvailable, Run) { OpenMenu = ShowToolbarMenu };
+        _toolbar = new WindowToolbar(CanUseToolbar, IsOn, IsAvailable, Run) { OpenMenu = ShowToolbarMenu, ByPosition = ToolbarByPosition };
         _ = _toolbar.Handle;
         _modifierDrag.MenuEligible = CanOpenWindowMenu;
         // A hook lost in the middle of a drag is put back at once, not at the watch's next look two seconds later.
@@ -822,6 +822,11 @@ public sealed partial class TrayApplication : ApplicationContext
                !(_ruleOf.TryGetValue(window, out var rule) && rule.NoToolbar && _setupDone.GetValueOrDefault(window)?.Matches() == true);
     }
 
+    /// <summary>A rule says the toolbar comes where its title bar usually is, without asking the window (10-4).</summary>
+    private bool ToolbarByPosition(nint window) =>
+        _ruleOf.TryGetValue(window, out var rule) && rule.ToolbarByPosition && !rule.NoToolbar &&
+        _setupDone.GetValueOrDefault(window)?.Matches() == true;
+
     private bool IsAvailable(AppCommand command) =>
         _settings.ExperimentalFeatures || !CommandCatalog.IsExperimental(command);
 
@@ -1135,8 +1140,8 @@ public sealed partial class TrayApplication : ApplicationContext
              (string.IsNullOrEmpty(saved.ExecutablePath) && string.Equals(saved.Program, program, StringComparison.OrdinalIgnoreCase)));
         if (_settings.SavedSetups.FirstOrDefault(Replaced) is { } old)
         {
-            (setup.Place, setup.Display, setup.Borderless, setup.Anchor, setup.NoToolbar, setup.EveryTime, setup.Off) =
-                (old.Place, old.Display, old.Borderless, old.Anchor, old.NoToolbar, old.EveryTime, old.Off);
+            (setup.Place, setup.Display, setup.Borderless, setup.Anchor, setup.NoToolbar, setup.ToolbarByPosition, setup.EveryTime, setup.Off) =
+                (old.Place, old.Display, old.Borderless, old.Anchor, old.NoToolbar, old.ToolbarByPosition, old.EveryTime, old.Off);
         }
         bool hadSetup = _settings.SavedSetups.RemoveAll(Replaced) > 0;
         if (!setup.ChangesAnything && !hadSetup)
