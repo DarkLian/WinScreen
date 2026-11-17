@@ -526,14 +526,25 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 Desktop.MouseButton(true);
                 Thread.Sleep(150);
                 Desktop.SlideMouse(new Point(start.X + 8, start.Y + 3)); // Past the drag distance: picked up.
-                Thread.Sleep(400);
+                Assert.True(Desktop.WaitFor(() => view.DragsPickedUp == 1, 2000), "Not picked up.");
+                // On a little, as a hand goes on: Explorer starts its drag (until then it answers nothing).
+                Point onward = Desktop.CursorPosition();
+                Desktop.SlideMouse(new Point(onward.X + 6, onward.Y + 4));
+                Thread.Sleep(300);
                 if (where == "to a folder in the view")
                 {
-                    // The real window is up now at its own size: aim at the folder there.
-                    Rectangle into = Item(window, "into").Bounds;
-                    end = Middle(into);
+                    // The real window is up now at the view's size: aim at the folder where it is now, found as WinScreen
+                    // finds the pressed file (Explorer's own answer can still give the place from before the resize).
+                    Rectangle? into = WinScreen.Pip.PipControlInput.Shared.ItemBounds(WindowIdentity.Capture(window), "into", 3000);
+                    // Windows 10's Explorer may not answer during a drag: folders come first, so it is the row above.
+                    end = into is { } found ? Middle(found) : new Point(view.LastPickupPress.X, view.LastPickupPress.Y - file.Height);
+                    Assert.True(Desktop.BoundsOf(window).Contains(end), $"The folder isn't in the window: {end} in {Desktop.BoundsOf(window)}"); // Never aim elsewhere.
                 }
-                log.Append($"picked {view.DragsPickedUp} original at {Desktop.BoundsOf(window)} end {end}; ");
+                Rectangle picked = Desktop.BoundsOf(window);
+                log.Append($"picked {view.DragsPickedUp} ({view.LastPickup}) original at {picked} (view {view.Bounds}) end {end}; ");
+                // At the view's size and place (at least 420 by 300), not its own 900 by 640.
+                Assert.True(picked.Width <= Math.Max(view.Bounds.Width, 420) + 16 && picked.IntersectsWith(view.Bounds),
+                    "The window didn't come up at the view's size and place: " + log);
                 Point from = Desktop.CursorPosition();
                 for (int step = 1; step <= 30; step++)
                 {
@@ -578,6 +589,52 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
             if (target != 0) CloseWindow(target);
             try { Directory.Delete(other, true); } catch (IOException) { }
             if (where == "to the desktop" && File.Exists(onDesktop)) File.Delete(onDesktop); // The test's own file only.
+        }
+    }
+
+    /// <summary>A file dragged from an ordinary Explorer window onto an Explorer view lands in the view's window.</summary>
+    [Fact]
+    public void A_file_dragged_from_another_explorer_window_lands_in_an_explorer_view()
+    {
+        string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
+        string other = Directory.CreateTempSubdirectory("WinScreenSource-").FullName;
+        File.WriteAllText(Path.Combine(other, "come-in"), "x");
+        nint source = OpenFolder(other);
+        try
+        {
+            User32.ShowWindow(source, 9);
+            User32.SetWindowPos(source, 0, 60, 560, 800, 420, 0x14);
+            Thread.Sleep(1200);
+            InView(root, (window, view, toView) =>
+            {
+                Rectangle item = Item(source, "come-in").Bounds;
+                Point start = Middle(item);
+                Point end = new(view.Bounds.Left + view.Bounds.Width * 7 / 10, view.Bounds.Top + view.Bounds.Height * 7 / 10);
+                var log = new System.Text.StringBuilder($"start {start} end {end}; ");
+                Desktop.SlideMouse(start);
+                Thread.Sleep(250);
+                Desktop.MouseButton(true);
+                Thread.Sleep(150);
+                for (int step = 1; step <= 30; step++)
+                {
+                    Desktop.SlideMouse(new Point(start.X + (end.X - start.X) * step / 30, start.Y + (end.Y - start.Y) * step / 30));
+                    Thread.Sleep(40);
+                    if (step % 10 == 0)
+                        log.Append($"[{step}: under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} handing={view.HandingOverDrop} live={view.LiveInteraction is not null} original={Desktop.BoundsOf(window)}] ");
+                }
+                for (int wait = 0; wait < 10; wait++) { Desktop.NudgeMouse(wait % 2 == 0 ? 2 : -2, 0); Thread.Sleep(80); }
+                log.Append($"before release: handing={view.HandingOverDrop} under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} original={Desktop.BoundsOf(window)}; ");
+                Desktop.MouseButton(false);
+                Thread.Sleep(2500);
+                log.Append($"after: arrived {File.Exists(Path.Combine(root, "come-in"))}; hidden={view.KeepsUpdating}");
+                output.WriteLine(log.ToString());
+                Assert.True(File.Exists(Path.Combine(root, "come-in")), log.ToString());
+            });
+        }
+        finally
+        {
+            CloseWindow(source);
+            try { Directory.Delete(other, true); } catch (IOException) { }
         }
     }
 

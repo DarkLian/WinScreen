@@ -29,8 +29,10 @@ internal sealed class PipControlInput
         ContextMenu,
         /// <summary>Scroll what scrolls under the point by lines, as the wheel would; negative is up or left.</summary>
         Scroll,
-        /// <summary>Nothing is done: whether an item (a file, a folder, a row) is under the point. "item" or "none".</summary>
+        /// <summary>Nothing is done: whether an item (a file, a folder, a row) is under the point: "item:" and its name, or "none".</summary>
         IsItem,
+        /// <summary>Nothing is done: where the item of a name is in the window, "left,top,width,height", or not done.</summary>
+        FindItem,
     }
 
     /// <summary>
@@ -39,7 +41,7 @@ internal sealed class PipControlInput
     /// </summary>
     internal readonly record struct Result(bool Done, string What, bool Unsupported = false);
 
-    private readonly BlockingCollection<(WindowIdentity Identity, nint Host, Point At, Request Kind, int Lines, bool Horizontal, Action<Result> Done)> _requests = new(16);
+    private readonly BlockingCollection<(WindowIdentity Identity, nint Host, Point At, Request Kind, int Lines, bool Horizontal, Action<Result> Done, string Name)> _requests = new(16);
     private readonly Lazy<Thread> _thread;
     private nint _automation;
 
@@ -56,14 +58,34 @@ internal sealed class PipControlInput
     internal bool Submit(WindowIdentity identity, nint host, Point at, Request kind, Action<Result> done)
     {
         _ = _thread.Value;
-        return _requests.TryAdd((identity, host, at, kind, 0, false, done));
+        return _requests.TryAdd((identity, host, at, kind, 0, false, done, ""));
+    }
+
+    /// <summary>
+    /// Where an item (a file, a folder) of this name is in the window now, on the screen, waiting at most a moment for
+    /// the answer. Null when it isn't there, can't be seen, or the answer is late.
+    /// </summary>
+    internal Rectangle? ItemBounds(WindowIdentity identity, string name, int waitMilliseconds)
+    {
+        _ = _thread.Value;
+        using var answered = new ManualResetEventSlim();
+        Rectangle? found = null;
+        if (!_requests.TryAdd((identity, identity.Window, Point.Empty, Request.FindItem, 0, false, result =>
+            {
+                string[] parts = result.What.Split(',');
+                if (result.Done && parts.Length == 4 && parts.All(p => int.TryParse(p, out _)))
+                    found = new Rectangle(int.Parse(parts[0]), int.Parse(parts[1]), int.Parse(parts[2]), int.Parse(parts[3]));
+                try { answered.Set(); }
+                catch (ObjectDisposedException late) { Diagnostics.Log.Swallowed(late); } // Answered after the wait gave up.
+            }, name))) return null;
+        return answered.Wait(waitMilliseconds) ? found : null;
     }
 
     /// <summary>Queues a scroll by whole lines at a screen point.</summary>
     internal bool Scroll(WindowIdentity identity, nint host, Point at, int lines, bool horizontal, Action<Result> done)
     {
         _ = _thread.Value;
-        return _requests.TryAdd((identity, host, at, Request.Scroll, lines, horizontal, done));
+        return _requests.TryAdd((identity, host, at, Request.Scroll, lines, horizontal, done, ""));
     }
 
     private void Run()
@@ -73,9 +95,12 @@ internal sealed class PipControlInput
             Result result;
             try
             {
-                result = request.Kind == Request.Scroll
-                    ? ScrollAt(request.Identity, request.Host, request.At, request.Lines, request.Horizontal)
-                    : Activate(request.Identity, request.Host, request.At, request.Kind);
+                result = request.Kind switch
+                {
+                    Request.Scroll => ScrollAt(request.Identity, request.Host, request.At, request.Lines, request.Horizontal),
+                    Request.FindItem => FindItem(request.Identity, request.Name),
+                    _ => Activate(request.Identity, request.Host, request.At, request.Kind),
+                };
             }
             catch (COMException e)
             {
@@ -164,7 +189,7 @@ internal sealed class PipControlInput
                 {
                     int type = 0;
                     ((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(path[i], 21))(path[i], &type);
-                    if (type is ListItem or TreeItem or DataItem) return new(true, "item");
+                    if (type is ListItem or TreeItem or DataItem) return new(true, "item:" + NameOf(path[i]));
                 }
                 return new(true, "none");
             }
@@ -219,7 +244,81 @@ internal sealed class PipControlInput
         }
     }
 
-    private const int ListItem = 50007, TreeItem = 50024, DataItem = 50029;
+    private const int ListItem = 50007, TreeItem = 50024, DataItem = 50029, Tree = 50023, ToolBar = 50021, MenuBar = 50010,
+        TitleBar = 50037;
+
+    private static unsafe string NameOf(nint element)
+    {
+        nint text = 0;
+        if (((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(element, 23))(element, &text) < 0 || text == 0) return ""; // get_CurrentName
+        try { return Marshal.PtrToStringBSTR(text); }
+        finally { Marshal.FreeBSTR(text); }
+    }
+
+    /// <summary>
+    /// The first item of the name in the window, by a walk of what is in sight (subtrees outside the window are left
+    /// out, and the walk is bounded): its visible bounds as "left,top,width,height".
+    /// </summary>
+    private unsafe Result FindItem(WindowIdentity identity, string name)
+    {
+        if (name.Length == 0 || !Valid(identity, identity.Window, out _)) return new(false, "window gone");
+        if (!User32.GetWindowRect(identity.Window, out Rect w)) return new(false, "window gone");
+        Rectangle window = Rectangle.FromLTRB(w.Left, w.Top, w.Right, w.Bottom);
+        nint automation = Automation(), walker = 0, root = 0;
+        if (automation == 0) return new(false, "no UI Automation");
+        var pending = new Stack<nint>();
+        try
+        {
+            if (((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(automation, 14))(automation, &walker) < 0 || walker == 0)
+                return new(false, "no tree walker");
+            if (((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(automation, 6))(automation, identity.Window, &root) < 0 || root == 0)
+                return new(false, "no element");
+            pending.Push(root);
+            root = 0;
+            int seen = 0;
+            while (pending.Count > 0 && seen++ < 3000)
+            {
+                nint element = pending.Pop();
+                try
+                {
+                    Rect b = default;
+                    ((delegate* unmanaged[Stdcall]<nint, Rect*, int>)Slot(element, 43))(element, &b);
+                    Rectangle bounds = Rectangle.FromLTRB(b.Left, b.Top, b.Right, b.Bottom);
+                    if (seen > 1 && !bounds.IntersectsWith(window)) continue;
+                    int type = 0;
+                    ((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(element, 21))(element, &type);
+                    // Never inside a tree (the navigation pane), a toolbar, a menu bar or a title bar: those are left out, as
+                    // they are most of what a slow walk would read.
+                    if (seen > 1 && type is Tree or ToolBar or MenuBar or TitleBar) continue;
+                    if (type is ListItem or TreeItem or DataItem && bounds.Width > 0 && NameOf(element) == name)
+                    {
+                        Rectangle shown = Rectangle.Intersect(bounds, window);
+                        return new(true, $"{shown.Left},{shown.Top},{shown.Width},{shown.Height}");
+                    }
+                    nint child = 0;
+                    if (((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(walker, 4))(walker, element, &child) < 0) continue;
+                    var children = new List<nint>();
+                    while (child != 0 && children.Count < 500)
+                    {
+                        children.Add(child);
+                        nint next = 0;
+                        ((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(walker, 6))(walker, child, &next);
+                        child = next;
+                    }
+                    if (child != 0) Marshal.Release(child);
+                    for (int i = children.Count - 1; i >= 0; i--) pending.Push(children[i]); // First child first.
+                }
+                finally { Marshal.Release(element); }
+            }
+            return new(false, "not found");
+        }
+        finally
+        {
+            while (pending.Count > 0) Marshal.Release(pending.Pop());
+            if (root != 0) Marshal.Release(root);
+            if (walker != 0) Marshal.Release(walker);
+        }
+    }
 
     /// <summary>Scrolls the innermost element under the point that scrolls that way, by small steps (lines).</summary>
     private unsafe Result ScrollAt(WindowIdentity identity, nint host, Point at, int lines, bool horizontal)

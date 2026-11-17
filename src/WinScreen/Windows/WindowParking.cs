@@ -92,16 +92,21 @@ public sealed partial class WindowController
     /// can only go to the real window under the pointer. Its home and its record stay as they were, so recovery and
     /// closing the view put it back where it was. <see cref="ReturnToParking"/> hides and parks it again.
     /// </summary>
-    internal void ShowParkedForDrop(nint window, Point topLeft)
+    /// <param name="size">A size to show it at (a view's), its own put back when parked again; null for its own.</param>
+    internal void ShowParkedForDrop(nint window, Point topLeft, Size? size = null)
     {
         lock (_gate)
         {
             if (!_changed.TryGetValue(window, out var state) || !state.Parked || !User32.IsWindow(window)) return;
             state.Identity.Require();
+            if (size is not null && state.SizeBeforeDrop is null && User32.GetWindowRect(window, out Rect own))
+                state.SizeBeforeDrop = new Size(own.Right - own.Left, own.Bottom - own.Top);
+            Size wanted = size ?? state.SizeBeforeDrop ?? Size.Empty;
+            if (size is null) state.SizeBeforeDrop = null;
             state.ShownForDrop = true;
             state.LooseSince = 0;
-            if (!User32.SetWindowPos(window, User32.HWND_TOPMOST, topLeft.X, topLeft.Y, 0, 0,
-                    User32.SWP_NOSIZE | User32.SWP_NOACTIVATE)) throw Failure(T("actions.move"), window);
+            if (!User32.SetWindowPos(window, User32.HWND_TOPMOST, topLeft.X, topLeft.Y, wanted.Width, wanted.Height,
+                    (wanted.IsEmpty ? User32.SWP_NOSIZE : 0) | User32.SWP_NOACTIVATE)) throw Failure(T("actions.move"), window);
             ApplyAlpha(window, state, state.AlphaBeforeHiding);
             WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
         }
@@ -121,6 +126,11 @@ public sealed partial class WindowController
             state.ShownForDrop = false;
             if (!User32.IsWindow(window) || !state.Parked) return;
             state.Identity.Require();
+            if (state.SizeBeforeDrop is { } own)
+            {
+                state.SizeBeforeDrop = null;
+                User32.SetWindowPos(window, 0, 0, 0, own.Width, own.Height, User32.SWP_NOMOVE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+            }
             Conceal(window, state);
             Repark(window);
             if (state.HoverParking) SetParkedHoverSurface(window, true);

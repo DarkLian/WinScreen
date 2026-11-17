@@ -1246,21 +1246,56 @@ public sealed partial class PipWindow : Form
         if (IsDisposed || _live is not { } live || _dropSince != 0 || !_origin.IsAvailable || !_windows.IsParked(_source)) return;
         Point spot = SourceSpotAt(pressed);
         if (!User32.GetWindowRect(_source, out Rect bounds)) return;
+        string item = live.PressedItem;
+        Rectangle picture = RectangleToScreen(PictureArea);
         nint before = _foregroundBeforeLive;
         EndLive(keepFocus: true); // The hook goes first: the press given below must reach the window.
         // The press was the hook's, so Windows doesn't know the button is down: let go meanwhile, there is nothing to hand on.
         if (live.HandedOverReleased) return;
         Point pointer = Cursor.Position;
-        Rectangle at = DropPlace(pointer, spot, new Size(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top),
-            Screen.FromPoint(pointer).WorkingArea);
-        try { _windows.ShowParkedForDrop(_source, at.Location); }
+        Rectangle area = Screen.FromPoint(pointer).WorkingArea;
+        Point? press = null;
+        long pickupStarted = Environment.TickCount64;
+        try
+        {
+            // At the view's own size and place, so it neither jumps nor fills the screen (a maximized original did):
+            // the window lays itself out again, so the pressed item is found anew, and the press goes where it is now.
+            if (item.Length > 0 && live.Identity is { } identity)
+            {
+                Rectangle place = PickupPlace(picture, area);
+                _windows.ShowParkedForDrop(_source, place.Location, place.Size);
+                for (long until = Environment.TickCount64 + PickupFindFor; press is null && Environment.TickCount64 < until;)
+                {
+                    Application.DoEvents();
+                    // On its name, near the start of the row: elsewhere in a row Windows 10 starts a selection box instead.
+                    if (PipControlInput.Shared.ItemBounds(identity, item, 150) is { } found &&
+                        new Point(found.Left + Math.Min(28, found.Width / 2), found.Top + found.Height / 2) is var onName &&
+                        place.Contains(onName))
+                        press = onName;
+                }
+            }
+            if (press is null)
+            {
+                // Not found (scrolled away at the smaller size, or no name): at its own size with the pressed spot under the
+                // pointer, as before.
+                Rectangle at = DropPlace(pointer, spot, new Size(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top), area);
+                _windows.ShowParkedForDrop(_source, at.Location);
+                press = pointer;
+            }
+        }
         catch (WindowOperationException failure)
         {
             Diagnostics.Log.Swallowed(failure);
             return;
         }
-        // The pressed spot is under the pointer now: the real window gets the press, and the drag is its own from here.
+        LastPickup = $"{(press == pointer ? "own size" : "view size")} after {Environment.TickCount64 - pickupStarted} ms";
+        LastPickupPress = press.Value;
+        // The pressed item is under the press now: the real window gets it, and the drag is its own from here. The pointer
+        // goes to the item for the press and straight back, so the drag starts from the item and follows the hand.
+        Point hand = Cursor.Position;
+        if (press != hand) SetCursorPos(press.Value.X, press.Value.Y);
         mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+        if (press != hand) SetCursorPos(hand.X, hand.Y);
         _dropSince = Environment.TickCount64;
         _dropReleasedAt = 0;
         _dropOutsideSince = 0;
@@ -1272,6 +1307,30 @@ public sealed partial class PipWindow : Form
         Diagnostics.Log.Event("view.dragPickedUp", ("program", Diagnostics.LogValue.ProgramOf(_source)));
     }
 
+    private const long PickupFindFor = 600;
+    private static readonly Size SmallestPickup = new(420, 300);
+
+    private static Point Middle(Rectangle r) => new(r.Left + r.Width / 2, r.Top + r.Height / 2);
+
+    /// <summary>
+    /// Where a picked-up original goes: the view's picture, at least big enough to use, kept centred on it and on its
+    /// screen.
+    /// </summary>
+    internal static Rectangle PickupPlace(Rectangle picture, Rectangle area)
+    {
+        int width = Math.Min(Math.Max(picture.Width, SmallestPickup.Width), area.Width);
+        int height = Math.Min(Math.Max(picture.Height, SmallestPickup.Height), area.Height);
+        int x = Math.Clamp(picture.Left + (picture.Width - width) / 2, area.Left, area.Right - width);
+        int y = Math.Clamp(picture.Top + (picture.Height - height) / 2, area.Top, area.Bottom - height);
+        return new Rectangle(x, y, width, height);
+    }
+
+    /// <summary>How the last drag was handed over (at the view's size or its own) and how long finding the item took, for tests.</summary>
+    internal string LastPickup { get; private set; } = "";
+
+    /// <summary>Where the last handed-over press was given to the window, on the screen, for tests.</summary>
+    internal Point LastPickupPress { get; private set; }
+
     /// <summary>How many drags the view has handed to the original, for tests.</summary>
     internal int DragsPickedUp { get; private set; }
 
@@ -1279,6 +1338,9 @@ public sealed partial class PipWindow : Form
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern void mouse_event(uint flags, int dx, int dy, uint data, nuint extra);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
 
     /// <summary>The spot in the original, from its top-left corner, that the view shows at a point on the screen.</summary>
     internal Point SourceSpotAt(Point screen) => PipGeometry.PointToSource(PointToClient(screen), PictureArea, _lastShown);

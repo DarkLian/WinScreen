@@ -105,6 +105,7 @@ internal sealed class PipInteraction : IDisposable
 
     private readonly nint _source;
     private readonly Windows.WindowIdentity _identity;
+    internal Windows.WindowIdentity Identity => _identity;
     private readonly uint _sourceProcess;
     private readonly HookProc _hook;
     private readonly AutoResetEvent _moved = new(false);
@@ -162,6 +163,9 @@ internal sealed class PipInteraction : IDisposable
 
     private Point _pressAt;
     private bool _leftWaitsForDrag;
+
+    /// <summary>The name of the item the waiting press is on, as UI Automation gives it, or empty.</summary>
+    internal volatile string PressedItem = "";
 
     /// <summary>Whether the waiting press is on an item: 1 yes, 0 no, -1 not known yet (asked of UI Automation at the press).</summary>
     private volatile int _pressOnItem = -1;
@@ -729,7 +733,12 @@ internal sealed class PipInteraction : IDisposable
             _pressOnItem = -1;
             Point mapped = _messages.MappedScreen(point, view, shown);
             if (!PipControlInput.Shared.Submit(_identity, _messages.TargetAt(mapped), mapped, PipControlInput.Request.IsItem,
-                    result => _pressOnItem = result.Done && result.What == "item" ? 1 : 0))
+                    result =>
+                    {
+                        bool item = result.Done && result.What.StartsWith("item:", StringComparison.Ordinal);
+                        PressedItem = item ? result.What["item:".Length..] : "";
+                        _pressOnItem = item ? 1 : 0;
+                    }))
                 _pressOnItem = 0;
             return;
         }
