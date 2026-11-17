@@ -1501,7 +1501,10 @@ public sealed partial class PipWindow : Form
         if (keepFocus) _focusBackAfterDrag = true;
         if (!_usingOriginal)
         {
-            StepAside(false);
+            // Still dragging (the original went back as the drag went on elsewhere): the view stays out of the way of
+            // where it is going until the drag is dropped or given up (owner, 17 Nov).
+            if (DragButtonsDown()) _backAfterRelease = true;
+            else StepAside(false);
             if (!keepFocus && User32.GetForegroundWindow() == _source)
             {
                 nint back = _foregroundBeforeDrop != 0 && _foregroundBeforeDrop != _source && User32.IsWindow(_foregroundBeforeDrop) &&
@@ -1516,7 +1519,15 @@ public sealed partial class PipWindow : Form
         (User32.GetAsyncKeyState(0x01) & 0x8000) != 0 || (User32.GetAsyncKeyState(0x02) & 0x8000) != 0;
 
     private long _dropSince, _dropReleasedAt, _dropOutsideSince;
-    private bool _dropTookFocus, _dropFromView, _focusBackAfterDrag;
+    private bool _dropTookFocus, _dropFromView, _focusBackAfterDrag, _backAfterRelease;
+
+    /// <summary>The view back once a drag that went on past its original is let go.</summary>
+    private void FollowReleaseAfterDrag()
+    {
+        if (!_backAfterRelease || DragButtonsDown() || _dropSince != 0) return;
+        _backAfterRelease = false;
+        if (!_usingOriginal && !_suspended) StepAside(false);
+    }
 
     /// <summary>
     /// After its own drag went out of the original: once it is let go, keys mustn't stay with a window that can't be
@@ -2159,6 +2170,7 @@ public sealed partial class PipWindow : Form
 
         string title = T("pip.titlePrefix") + _origin.Title;
         if (Text != title) Text = title;
+        FollowReleaseAfterDrag();
         FollowFocusAfterDrag();
         if (_dropSince == 0) RevealIfActivatedElsewhere();
         else _sourceWasFocused = User32.GetForegroundWindow() == _source; // A drop may focus it; that isn't asking for it.

@@ -513,7 +513,8 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
     /// A file dragged out of a view: Windows' drag and drop follows the real pointer and can't be passed on as
     /// messages, so the press waits, and once it moves past the drag distance the real window comes up under the
     /// pointer with the pressed file there, and the drag is its own (owner, 17 Nov). Onto a folder in the view, to
-    /// another window, and onto another view, which hands its own window over. Both originals stay hidden after.
+    /// another window, and onto another view, which hands its own window over. Both originals stay hidden after, and
+    /// the view stays out of the way until the drag is let go.
     /// </summary>
     [Theory]
     [InlineData("to another window")]
@@ -604,8 +605,13 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 }
                 Thread.Sleep(500);
                 int selectedOnDesktop = desktopList == 0 ? 0 : (int)User32.SendMessage(desktopList, 0x1032, 0, 0); // LVM_GETSELECTEDCOUNT
+                // Out of the way until the drag is let go, even once the original has gone back (owner, 17 Nov).
+                bool asideWhileHeld = view.SteppedAside;
                 Desktop.MouseButton(false);
                 Thread.Sleep(2500);
+                log.Append($"aside while held {asideWhileHeld}, after {view.SteppedAside}; ");
+                Assert.True(asideWhileHeld, "The view came back before the drag was let go: " + log);
+                Assert.False(view.SteppedAside, "The view didn't come back after the drag: " + log);
                 string[] arrived = where switch
                 {
                     "to a folder in the view" => Directory.GetFileSystemEntries(Path.Combine(root, "into")).Select(Path.GetFileName).OfType<string>().ToArray(),
