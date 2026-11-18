@@ -38,6 +38,7 @@ internal static class ContentShaders
     public const string Composite = """
         Texture2D<float4> source : register(t0);
         Texture2D<float> mask : register(t1);
+        Texture2D<float4> stats : register(t2);
         RWTexture2D<float4> output : register(u0);
         cbuffer Options : register(b0) { float4 levels; float4 mode; float4 page; };
         [numthreads(16,16,1)]
@@ -51,9 +52,17 @@ internal static class ContentShaders
             bool inside = m > 0.75;
             bool panel = m > 0.1 && m < 0.3;
             bool dark = m > 0.03 && m < 0.08;
-            bool near = m > 0.3, edge = false, nextToLight = false, nextToDark = false;
+            bool near = m > 0.3, edge = false, nextToLight = false, nextToDark = false, background = false;
             for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-                float n = mask.Load(int3(clamp(tile + int2(x,y), 0, int2(tw,th) - 1),0));
+                int2 around = clamp(tile + int2(x,y), 0, int2(tw,th) - 1);
+                float n = mask.Load(int3(around,0));
+                // A picture's edge tile is partly whatever surrounds it, often a panel a shade off the page: those
+                // pixels match the panel next door, not the page, and were drawn solid, a frame that moved with the
+                // tile grid while scrolling.
+                if (!(n > 0.75)) {
+                    float3 e = abs(c - stats.Load(int3(around,0)).rgb);
+                    if (max(e.r, max(e.g, e.b)) < 4.0 / 255) background = true;
+                }
                 // Near any picture; but inside one only among its own tiles, not among tiles that decide by pixel.
                 if (n > 0.3) near = true;
                 if (!(n > 0.75)) edge = true;
@@ -62,7 +71,7 @@ internal static class ContentShaders
             }
             float3 d3 = abs(c - page.rgb);
             bool differs = max(d3.r, max(d3.g, d3.b)) > 2.5 / 255;
-            bool picture = (inside && !edge) || (near && !panel && differs);
+            bool picture = (inside && !edge) || (near && !panel && differs && !background);
             float away = length(c - page.rgb);
             float4 result;
             if (mode.x == 2) {

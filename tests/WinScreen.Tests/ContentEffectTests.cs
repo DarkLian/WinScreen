@@ -107,6 +107,31 @@ public sealed class PictureFinderTests
         Assert.Equal(Rectangle.Empty, Found(finder.Find(Page(Rectangle.Empty, Faded), Columns, Rows)));
     }
 
+    // A forum's banner and the small picture in the sidebar beside it were joined by the thin frame between them, and
+    // the sidebar's icons ran on below: one block whose box took in the dark panel under the banner, drawn solid black,
+    // its height changing with the tile grid as the page scrolled (the owner, 18 Nov, on a forum's dark theme).
+    [Fact]
+    public void A_picture_joined_to_a_sidebar_by_a_frame_keeps_its_own_size()
+    {
+        var banner = new Rectangle(5, 6, 12, 8);
+        var frame = new TileStats(0.3f, 0.25f, 0.2f, 0.2f, false);
+        // Text on a panel a shade off the page: not flat, so no plain bar to trim, and not page, so taken in solid.
+        var panel = new TileStats(0.95f, 0.95f, 0.95f, 0.7f, false);
+        TileStats Busy(int x, int y) => new((x * 37 % 100) / 100f, (y * 53 % 100) / 100f, ((x + y) * 29 % 100) / 100f, 0.05f, true);
+        TileStats? Parts(int x, int y) =>
+            x == 17 && y >= 6 && y < 19 ? frame :                                   // The frame between them.
+            x >= 18 && x < 22 && y >= 6 && y < 10 ? Busy(x, y) :                    // The sidebar's picture.
+            x >= 18 && x < 22 && y >= 10 && y < 19 ? Busy(x, y) :                   // Its icons, running on down.
+            x >= 3 && x < 17 && y >= 14 && y < 24 ? panel :                         // The posts under the banner.
+            null;
+        float[] mask = new PictureFinder().Find(Page(banner, Parts), Columns, Rows);
+        Rectangle found = Found(mask);
+        Assert.True(found.Contains(banner), $"The banner wasn't found whole: {found}.");
+        for (int y = banner.Bottom; y < Rows; y++)
+            for (int x = 3; x < 17; x++)
+                Assert.True(mask[y * Columns + x] < 0.75f, $"The panel under the banner was taken in at {x},{y}.");
+    }
+
     // On a dark page the fade can't be told from the page by colour, so it is held by time alone; a hold only ends
     // early when the page around it moves.
     [Fact]

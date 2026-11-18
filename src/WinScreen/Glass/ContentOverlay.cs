@@ -286,7 +286,7 @@ internal sealed unsafe class ContentOverlay : Form
     {
         var size = Size.Empty;
         ID3D11Texture2D? cache = null, tiles = null, mask = null, output = null;
-        ID3D11ShaderResourceView? cacheView = null, maskView = null;
+        ID3D11ShaderResourceView? cacheView = null, maskView = null, statsView = null;
         ID3D11UnorderedAccessView? tilesView = null, outputView = null;
         var staging = new ID3D11Texture2D?[2];
         long frame = 0;
@@ -311,12 +311,13 @@ internal sealed unsafe class ContentOverlay : Form
                     if (content != size)
                     {
                         size = content;
-                        DisposeAll(cache, tiles, mask, output, cacheView, maskView, tilesView, outputView, staging[0], staging[1]);
+                        DisposeAll(cache, tiles, mask, output, cacheView, maskView, statsView, tilesView, outputView, staging[0], staging[1]);
                         int columns = size.Width / PictureFinder.Tile, rows = size.Height / PictureFinder.Tile;
                         cache = _device!.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 1, BindFlags.ShaderResource));
                         cacheView = _device.CreateShaderResourceView(cache);
-                        tiles = _device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.UnorderedAccess));
+                        tiles = _device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.UnorderedAccess | BindFlags.ShaderResource));
                         tilesView = _device.CreateUnorderedAccessView(tiles);
+                        statsView = _device.CreateShaderResourceView(tiles);
                         for (int i = 0; i < 2; i++)
                             staging[i] = _device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read));
                         mask = _device.CreateTexture2D(new Texture2DDescription(Format.R32_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.ShaderResource));
@@ -333,7 +334,7 @@ internal sealed unsafe class ContentOverlay : Form
 
                     using (var texture = WgcInterop.Texture(next.Surface))
                         _context!.CopySubresourceRegion(cache, 0, 0, 0, 0, texture, 0, new Vortice.Mathematics.Box(0, 0, 0, size.Width, size.Height, 1));
-                    Process(size, cacheView!, tilesView!, tiles!, staging, mask!, maskView!, outputView!, output!, frame++);
+                    Process(size, cacheView!, tilesView!, tiles!, statsView!, staging, mask!, maskView!, outputView!, output!, frame++);
                     Frames++;
                 }
             }
@@ -345,12 +346,12 @@ internal sealed unsafe class ContentOverlay : Form
         }
         finally
         {
-            DisposeAll(cache, tiles, mask, output, cacheView, maskView, tilesView, outputView, staging[0], staging[1]);
+            DisposeAll(cache, tiles, mask, output, cacheView, maskView, statsView, tilesView, outputView, staging[0], staging[1]);
         }
     }
 
     private void Process(Size size, ID3D11ShaderResourceView cacheView, ID3D11UnorderedAccessView tilesView, ID3D11Texture2D tiles,
-        ID3D11Texture2D?[] staging, ID3D11Texture2D mask, ID3D11ShaderResourceView maskView, ID3D11UnorderedAccessView outputView,
+        ID3D11ShaderResourceView statsView, ID3D11Texture2D?[] staging, ID3D11Texture2D mask, ID3D11ShaderResourceView maskView, ID3D11UnorderedAccessView outputView,
         ID3D11Texture2D output, long frame)
     {
         var context = _context!;
@@ -380,11 +381,13 @@ internal sealed unsafe class ContentOverlay : Form
         context.CSSetConstantBuffer(0, _options);
         context.CSSetShaderResource(0, cacheView);
         context.CSSetShaderResource(1, maskView);
+        context.CSSetShaderResource(2, statsView);
         context.CSSetUnorderedAccessView(0, outputView);
         context.Dispatch((uint)(size.Width + 15) / 16, (uint)(size.Height + 15) / 16, 1);
         context.CSSetUnorderedAccessView(0, null);
         context.CSSetShaderResource(0, null);
         context.CSSetShaderResource(1, null);
+        context.CSSetShaderResource(2, null);
         using (var back = _chain!.GetBuffer<ID3D11Texture2D>(0))
             context.CopyResource(back, output);
         _chain.Present(0, PresentFlags.None);

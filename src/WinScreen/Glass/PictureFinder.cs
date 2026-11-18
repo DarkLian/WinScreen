@@ -67,10 +67,12 @@ internal sealed class PictureFinder(Func<long>? clock = null)
 
         var current = new List<Rectangle>();
         var label = new bool[tiles.Length];
+        var owner = new int[tiles.Length];
         var stack = new Stack<int>();
         for (int start = 0; start < tiles.Length; start++)
         {
             if (!other[start] || label[start]) continue;
+            int id = start + 1;
             int x0 = columns, x1 = 0, y0 = rows, y1 = 0, cells = 0, busy = 0;
             var colours = new HashSet<int>();
             label[start] = true;
@@ -78,6 +80,7 @@ internal sealed class PictureFinder(Func<long>? clock = null)
             while (stack.Count > 0)
             {
                 int c = stack.Pop(), cx = c % columns, cy = c / columns;
+                owner[c] = id;
                 cells++;
                 if (tiles[c].Busy) busy++;
                 colours.Add((int)(tiles[c].R * 15) << 8 | (int)(tiles[c].G * 15) << 4 | (int)(tiles[c].B * 15));
@@ -95,6 +98,26 @@ internal sealed class PictureFinder(Func<long>? clock = null)
             int width = x1 - x0 + 1, height = y1 - y0 + 1;
             if (width < 4 || height < 4 || cells < width * height * 0.6 || (colours.Count < 8 && busy < cells * 0.15))
                 continue;
+
+            // Pictures side by side, joined by a thin frame, are one block whose box also took in the panel beside and
+            // under the smaller one: a solid black area that came and went with the tile grid while scrolling. Rows
+            // and columns at the box's edge that are mostly not the block's own are let go.
+            float Own(int ax, int ay, int aw, int ah)
+            {
+                int own = 0;
+                for (int y = ay; y < ay + ah; y++)
+                    for (int x = ax; x < ax + aw; x++)
+                        if (owner[y * columns + x] == id) own++;
+                return own / (float)(aw * ah);
+            }
+            for (bool any = true; any;)
+            {
+                any = false;
+                if (y1 > y0 + 3 && Own(x0, y1, x1 - x0 + 1, 1) < 0.5f) { y1--; any = true; }
+                if (y1 > y0 + 3 && Own(x0, y0, x1 - x0 + 1, 1) < 0.5f) { y0++; any = true; }
+                if (x1 > x0 + 3 && Own(x1, y0, 1, y1 - y0 + 1) < 0.5f) { x1--; any = true; }
+                if (x1 > x0 + 3 && Own(x0, y0, 1, y1 - y0 + 1) < 0.5f) { x0++; any = true; }
+            }
 
             Rectangle Row(int y) => new(x0, y, x1 - x0 + 1, 1);
             Rectangle Column(int x) => new(x, y0, 1, y1 - y0 + 1);
