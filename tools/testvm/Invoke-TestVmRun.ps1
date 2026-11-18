@@ -44,7 +44,10 @@ param(
     [string]$ResultsDirectory,
     [int]$TimeoutMinutes = 60,
     # Leave the VM running after the run, to look around. The next run still restores the checkpoint.
-    [switch]$KeepRunning
+    [switch]$KeepRunning,
+    # Runs the tests as administrator in the VM (the task runs at the highest level for this run only), for what
+    # happens when WinScreen is elevated and the rest of the desktop isn't.
+    [switch]$Elevated
 )
 
 $ErrorActionPreference = 'Stop'
@@ -161,7 +164,7 @@ try {
     }
     $source = Get-RunSource $repo $outputs
     Save-RunRecord $ResultsDirectory $source @{ tool = 'vm'; vm = $Name; checkpoint = $CheckpointName; suite = $Suite
-        filter = $Filter; packagedFilter = $PackagedFilter }
+        filter = $Filter; packagedFilter = $PackagedFilter; elevated = [bool]$Elevated }
     if (-not $source.commit -or -not $source.clean) { Write-Output "Not a release run: $($source.note)" }
 
     Step "Restoring '$Name' to '$CheckpointName'"
@@ -180,7 +183,7 @@ try {
         } -ArgumentList $guestRoot
         Copy-Item -LiteralPath $bundle -Destination "$guestRoot\run\bundle.zip" -ToSession $session
         Invoke-Command -Session $session -ScriptBlock {
-            param($root, $task)
+            param($root, $task, $elevated)
             $ErrorActionPreference = 'Stop'
             $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
             if (-not (Test-Path $tar)) { throw "VM: $tar is missing." }
@@ -193,8 +196,14 @@ try {
             if (-not (Get-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue)) {
                 throw "VM: the scheduled task '$task' doesn't exist. Rebuild the VM with New-TestVm.ps1 -Force."
             }
+            if ($elevated) {
+                # This run only: the checkpoint is restored afterwards, with the task back at its usual level.
+                $existing = Get-ScheduledTask -TaskName $task
+                $principal = New-ScheduledTaskPrincipal -UserId $existing.Principal.UserId -LogonType Interactive -RunLevel Highest
+                Set-ScheduledTask -TaskName $task -Principal $principal | Out-Null
+            }
             Start-ScheduledTask -TaskName $task
-        } -ArgumentList $guestRoot, $script:GuestTaskName
+        } -ArgumentList $guestRoot, $script:GuestTaskName, [bool]$Elevated
 
         Step "Running tests in the VM (up to $TimeoutMinutes minutes)"
         Wait-Until -What 'the tests to finish' -TimeoutSeconds ($TimeoutMinutes * 60) -PollSeconds 15 -Condition {

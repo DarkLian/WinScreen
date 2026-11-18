@@ -44,6 +44,9 @@ try {
         architecture = $env:PROCESSOR_ARCHITECTURE
         screens = @([Windows.Forms.Screen]::AllScreens | ForEach-Object { "$($_.Bounds.Width)x$($_.Bounds.Height)" })
         gpus = @(Get-CimInstance Win32_VideoController | ForEach-Object Name)
+        # True only for a run as administrator (Invoke-TestVmRun.ps1 -Elevated): a held-back token isn't in the role.
+        elevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+            [Security.Principal.WindowsBuiltInRole]::Administrator)
         started = (Get-Date).ToString('o')
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $out 'environment.json') -Encoding UTF8
 
