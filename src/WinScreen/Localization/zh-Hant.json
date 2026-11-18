@@ -394,7 +394,6 @@
   "settings.backgrounds.none": "無",
   "settings.backgrounds.pictures": "圖片",
   "settings.backgrounds.preview": "預覽",
-  "settings.backgrounds.removeApp": "從清單中移除",
   "settings.backgrounds.sound": "聲音（%）",
   "settings.backgrounds.soundHelp": "僅適用於影片。只有你最後使用的視窗會播放聲音；視窗最小化或位於其他桌面時不會播放。",
   "settings.backgrounds.stretch": "延展",

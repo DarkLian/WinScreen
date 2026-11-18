@@ -394,7 +394,6 @@
   "settings.backgrounds.none": "None",
   "settings.backgrounds.pictures": "Pictures",
   "settings.backgrounds.preview": "Preview",
-  "settings.backgrounds.removeApp": "Remove from list",
   "settings.backgrounds.sound": "Sound (%)",
   "settings.backgrounds.soundHelp": "For videos. Only the window you used last plays sound, and none plays while it is minimized or on another desktop.",
   "settings.backgrounds.stretch": "Stretch",

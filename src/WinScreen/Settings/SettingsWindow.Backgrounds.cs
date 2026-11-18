@@ -12,7 +12,7 @@ public sealed partial class SettingsWindow
     private readonly BackdropPreview _backgroundPreview = new() { AccessibleName = T("settings.backgrounds.preview") };
     private readonly PlainButton _backgroundChoose = new() { Text = T("settings.backgrounds.choose"), AutoSize = true };
     private readonly PlainButton _backgroundClear = new() { Text = T("settings.backgrounds.clear"), AutoSize = true };
-    private readonly PlainButton _backgroundRemoveApp = new() { Text = T("settings.backgrounds.removeApp"), AutoSize = true };
+    private readonly PlainButton _backgroundRemoveApp = new() { Text = T("common.remove"), Enabled = false };
     private readonly ComboBox _backgroundFit = new ThemedCombo { Width = 200 };
     private readonly NumericUpDown _backgroundVolume = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private SettingsCard? _backgroundEditor;
@@ -49,11 +49,13 @@ public sealed partial class SettingsWindow
             AddBackgroundApp();
         };
         _newBackgroundApp.Margin = new Padding(0, 0, 8, 0);
-        add.Margin = Padding.Empty;
-        _newBackgroundApp.Anchor = add.Anchor = AnchorStyles.Left;
+        add.Margin = new Padding(0, 0, 8, 0);
+        _backgroundRemoveApp.Margin = Padding.Empty;
+        _newBackgroundApp.Anchor = add.Anchor = _backgroundRemoveApp.Anchor = AnchorStyles.Left;
         var adding = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(4, 8, 3, 6), BackColor = SettingsStyle.Card };
         adding.Controls.Add(_newBackgroundApp);
         adding.Controls.Add(add);
+        adding.Controls.Add(_backgroundRemoveApp);
 
         _backgroundChoose.Click += (_, _) => ChooseBackground();
         _backgroundPreview.ChooseAsked += ChooseBackground;
@@ -69,10 +71,9 @@ public sealed partial class SettingsWindow
         buttons.Controls.Add(_backgroundChoose);
         buttons.Controls.Add(_backgroundClear);
         _backgroundFileRow = (SettingRowPanel)SettingRow(T("settings.backgrounds.file"), buttons);
-        _backgroundRemoveApp.Margin = new Padding(4, 8, 3, 8);
         _backgroundEditor = Card(T("settings.backgrounds.everyApp"), false, _backgroundPreview, _backgroundFileRow,
             SettingRow(T("settings.backgrounds.fit"), _backgroundFit), SettingRow(T("settings.backgrounds.sound"), _backgroundVolume),
-            Note(T("settings.backgrounds.soundHelp")), _backgroundRemoveApp);
+            Note(T("settings.backgrounds.soundHelp")));
 
         FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Card(T("settings.backgrounds.title"), true, Note(T("settings.backgrounds.help")), _backgroundFrame, adding));
@@ -142,7 +143,7 @@ public sealed partial class SettingsWindow
                 _backgroundVolume.Value = choice.Volume;
             }
             finally { _showingBackground = false; }
-            _backgroundRemoveApp.Visible = app is not null;
+            _backgroundRemoveApp.Enabled = app is not null; // Every app stays.
         }
         bool chosen = choice.File.Length > 0;
         _backgroundClear.Enabled = chosen;
@@ -198,13 +199,14 @@ public sealed partial class SettingsWindow
     {
         if (ShownApp is not { } app) return;
         int at = _backgroundList.SelectedIndex;
+        bool hadKeyboard = _backgroundRemoveApp.Focused;
         _backgroundEdit = _backgroundEdit with
         {
             Apps = _backgroundEdit.Apps.Where(entry => !string.Equals(entry.Program, app, StringComparison.OrdinalIgnoreCase)).ToList(),
         };
         string? next = at - 1 >= 1 ? _backgroundEdit.Apps[at - 2].Program : null;
         ListBackgrounds(next);
-        _backgroundList.Focus(); // The button that had the keyboard is gone with the app.
+        if (hadKeyboard && !_backgroundRemoveApp.Enabled) _backgroundList.Focus(); // Back at Every app, which stays.
         QueueApplyRefresh();
     }
 }

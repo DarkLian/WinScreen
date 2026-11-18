@@ -396,7 +396,6 @@ settings.backgrounds.list F4B669C55756180E
 settings.backgrounds.none 484D55613910EB8C
 settings.backgrounds.pictures D24C10D37DB0FEEA
 settings.backgrounds.preview 13D61FEA9F174905
-settings.backgrounds.removeApp 3BE8372272976768
 settings.backgrounds.sound DB2C51409D7A65A5
 settings.backgrounds.soundHelp 71EBBE229AF288D6
 settings.backgrounds.stretch 5D7D4DACA250EAC9
