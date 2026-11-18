@@ -120,6 +120,13 @@ internal static partial class Desktop
 
     public static nint TopWindowAt(Point point) => WindowFromPoint(new NativePoint { X = point.X, Y = point.Y });
 
+    public static bool IsAbove(nint upper, nint lower)
+    {
+        for (nint window = User32.GetWindow(upper, 2); window != 0; window = User32.GetWindow(window, 2))
+            if (window == lower) return true;
+        return false;
+    }
+
     public static Rectangle BoundsOf(nint window)
     {
         GetWindowRect(window, out NativeRect r);

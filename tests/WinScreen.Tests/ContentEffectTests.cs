@@ -107,6 +107,50 @@ public sealed class PictureFinderTests
         Assert.Equal(Rectangle.Empty, Found(finder.Find(Page(Rectangle.Empty, Faded), Columns, Rows)));
     }
 
+    // On a dark page the fade can't be told from the page by colour, so it is held by time alone; a hold only ends
+    // early when the page around it moves.
+    [Fact]
+    public void A_picture_that_fades_to_black_on_a_dark_page_is_held_while_the_page_stays()
+    {
+        long now = 0;
+        var finder = new PictureFinder(() => now);
+        var picture = new Rectangle(5, 4, 12, 8);
+        var dark = new TileStats(0.06f, 0.06f, 0.06f, 1, false);
+        TileStats? Text(int x, int y) => y == 20 && x < 30 ? new TileStats(0.06f, 0.06f, 0.06f, 0.6f, false) : null;
+        TileStats? Page(int x, int y) => Text(x, y) ?? dark;
+        finder.Find(PageWith(picture, Page), Columns, Rows);
+        now = 2000;
+        float[] mask = finder.Find(PageWith(Rectangle.Empty, Page), Columns, Rows);
+        for (int y = picture.Top; y < picture.Bottom; y++)
+            for (int x = picture.Left; x < picture.Right; x++)
+                Assert.True(mask[y * Columns + x] >= PictureFinder.PerPixel, $"Tile {x},{y} let go of the faded picture.");
+    }
+
+    // Scrolling took a picture past the window's edge, and the place it was last seen stayed a solid block for five
+    // seconds: under Glass on a dark page, a black box over whatever had scrolled in (the owner, 18 Nov).
+    [Fact]
+    public void A_picture_scrolled_away_leaves_nothing_behind()
+    {
+        long now = 0;
+        var finder = new PictureFinder(() => now);
+        var dark = new TileStats(0.06f, 0.06f, 0.06f, 1, false);
+        // Lines of dense light text every third row, moving up with the page: too much ink to count as plain page.
+        TileStats? Page(int scroll, int x, int y) =>
+            (y + scroll) % 3 == 0 && x < 30 ? new TileStats(0.06f, 0.06f, 0.06f, 0.4f, false) : dark;
+        for (int scroll = 0; scroll <= 12; scroll += 2)
+        {
+            int s = scroll;
+            var picture = Rectangle.Intersect(new Rectangle(5, 6 - s, 12, 8), new Rectangle(0, 0, Columns, Rows));
+            finder.Find(PageWith(picture.Height >= 4 ? picture : Rectangle.Empty, (x, y) => Page(s, x, y)), Columns, Rows);
+            now += 16;
+        }
+
+        Assert.Equal(Rectangle.Empty, Found(finder.Find(PageWith(Rectangle.Empty, (x, y) => Page(12, x, y)), Columns, Rows)));
+    }
+
+    private static TileStats[] PageWith(Rectangle picture, Func<int, int, TileStats?> page) =>
+        Page(picture, (x, y) => picture.Contains(x, y) ? null : page(x, y));
+
     [Fact]
     public void Settings_that_never_chose_get_picture_keeping_dark_and_glass_and_a_choice_stays()
     {
@@ -245,6 +289,39 @@ public sealed class ContentEffectTests
             }
 
             Assert.False(WindowInfo.IsConcealed(target.Handle));
+        });
+    }
+
+    // A browser's tooltips, menus and full-screen notice are popups it owns, which Windows keeps right above it. The
+    // overlay kept trying to get between them and was told of each of its own tries: 1.2.0-beta.1 logged about 240
+    // tries a second for a minute, and the gesture hook was dropped for the stalled thread.
+    [GraphicsCardFact]
+    public void Glass_settles_above_a_window_that_shows_a_popup_of_its_own()
+    {
+        using var target = new TargetProcess(Spot);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            try
+            {
+                Assert.True(effects.Toggle(target.Handle, ContentLook.Glass));
+                Pump(() => false, 500);
+                int before = effects.RestacksOf(target.Handle);
+                nint popup = target.ShowPopup(new Point(Spot.Left + 60, Spot.Top + 60));
+                Pump(() => false, 1500);
+                int restacks = effects.RestacksOf(target.Handle) - before;
+                Assert.True(restacks <= 3, $"The effect moved {restacks} times in a second and a half.");
+                Assert.True(effects.Has(target.Handle, ContentLook.Glass));
+                nint overlay = effects.OverlayOf(target.Handle);
+                Assert.True(Desktop.IsAbove(popup, overlay), "The popup went under the effect.");
+                Assert.True(Desktop.IsAbove(overlay, target.Handle), "The effect went under its window.");
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
         });
     }
 

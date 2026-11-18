@@ -11,6 +11,7 @@ internal sealed class PictureFinder(Func<long>? clock = null)
 
     private readonly Func<long> _clock = clock ?? (() => Environment.TickCount64);
     private readonly List<(Rectangle Tiles, long Until)> _held = [];
+    private TileStats[]? _last;
 
     public (float R, float G, float B) Page { get; private set; }
 
@@ -130,6 +131,9 @@ internal sealed class PictureFinder(Func<long>? clock = null)
                 }
         }
 
+        if (PageMoved(tiles, current, columns))
+            _held.Clear();
+        _last = tiles;
         Hold(mask, current, columns, rows, k => IsPage(k));
         for (int k = 0; k < mask.Length; k++)
             if (mask[k] == None && tiles[k].Exact > 0.9f)
@@ -138,7 +142,24 @@ internal sealed class PictureFinder(Func<long>? clock = null)
     }
 
     // Video fades to black and shows title cards, so a picture seen recently is held a few seconds; video black often
-    // matches a dark page, so only time ends a hold.
+    // matches a dark page, so its colour can't end a hold. The page moving around it can: a fade happens in place, a
+    // scroll moves the rest too, and a hold left after a scroll is a solid block over whatever came in.
+    private bool PageMoved(TileStats[] tiles, List<Rectangle> current, int columns)
+    {
+        if (_last is null || _last.Length != tiles.Length) return false;
+        int changed = 0, needed = Math.Max(4, tiles.Length / 100);
+        for (int k = 0; k < tiles.Length && changed < needed; k++)
+        {
+            TileStats a = _last[k], b = tiles[k];
+            if (Math.Abs(a.R - b.R) + Math.Abs(a.G - b.G) + Math.Abs(a.B - b.B) < 0.05f && Math.Abs(a.Exact - b.Exact) < 0.1f && a.Busy == b.Busy)
+                continue;
+            var at = new Point(k % columns, k / columns);
+            if (!current.Any(block => block.Contains(at)) && !_held.Any(held => held.Tiles.Contains(at))) changed++;
+        }
+
+        return changed >= needed;
+    }
+
     private void Hold(float[] mask, List<Rectangle> current, int columns, int rows, Func<int, bool> isPage)
     {
         long now = _clock();
@@ -196,7 +217,11 @@ internal sealed class PictureFinder(Func<long>? clock = null)
             }
     }
 
-    public void Reset() => _held.Clear();
+    public void Reset()
+    {
+        _held.Clear();
+        _last = null;
+    }
 
     private static float Distance(float r, float g, float b) => r * r + g * g + b * b;
 

@@ -28,6 +28,8 @@ internal sealed class ContentEffects : IDisposable
     public int Count => _overlays.Count;
     internal IEnumerable<nint> Sources => _overlays.Keys;
 
+    internal int RestacksOf(nint window) => _overlays.TryGetValue(window, out ContentOverlay? overlay) ? overlay.Restacks : 0;
+
     internal nint OverlayOf(nint window) =>
         _overlays.TryGetValue(window, out ContentOverlay? overlay) && overlay.IsHandleCreated ? overlay.Handle : 0;
 

@@ -131,9 +131,9 @@ public sealed class TopLayerTests
                 TopLayer.Raise(view.Handle); // What the menu guard and every view does over and over.
                 TopLayer.KeepAbove();
                 Pump(50);
-                Assert.True(IsAbove(tipWindow, menu.Handle), "The tip went under its menu.");
-                Assert.True(IsAbove(menu.Handle, taskbar), "The menu went under the taskbar.");
-                Assert.True(IsAbove(taskbar, view.Handle), "The view went over the taskbar: " + TopOrder(view.Handle, menu.Handle, tipWindow, taskbar));
+                Assert.True(Desktop.IsAbove(tipWindow, menu.Handle), "The tip went under its menu.");
+                Assert.True(Desktop.IsAbove(menu.Handle, taskbar), "The menu went under the taskbar.");
+                Assert.True(Desktop.IsAbove(taskbar, view.Handle), "The view went over the taskbar: " + TopOrder(view.Handle, menu.Handle, tipWindow, taskbar));
             }
             finally
             {
@@ -184,9 +184,9 @@ public sealed class TopLayerTests
                 TopLayer.Raise(view.Handle);
                 TopLayer.KeepAbove();
                 Pump(50);
-                Assert.True(IsAbove(overlay.Handle, menu.Handle), "The menu went over Windows' own surface.");
-                Assert.True(IsAbove(overlay.Handle, view.Handle), "The view went over Windows' own surface.");
-                Assert.True(IsAbove(menu.Handle, view.Handle), "The menu went under the view.");
+                Assert.True(Desktop.IsAbove(overlay.Handle, menu.Handle), "The menu went over Windows' own surface.");
+                Assert.True(Desktop.IsAbove(overlay.Handle, view.Handle), "The view went over Windows' own surface.");
+                Assert.True(Desktop.IsAbove(menu.Handle, view.Handle), "The menu went under the view.");
 
                 // Settled: the guard ticking over and over moves nothing.
                 long lifts = TopLayer.LiftCount;
@@ -277,13 +277,6 @@ public sealed class TopLayerTests
                 cover.Close(); child.Close(); parent.Close(); active.Close();
             }
         });
-    }
-
-    private static bool IsAbove(nint upper, nint lower)
-    {
-        for (nint window = User32.GetWindow(upper, 2); window != 0; window = User32.GetWindow(window, 2))
-            if (window == lower) return true;
-        return false;
     }
 
     private static nint RootAt(Point point) => User32.GetAncestor(Desktop.TopWindowAt(point), User32.GA_ROOT);

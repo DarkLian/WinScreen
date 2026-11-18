@@ -33,7 +33,10 @@ internal sealed unsafe class ContentOverlay : Form
     private readonly List<nint> _hooks = [];
     private const uint NextBelow = 2; // GW_HWNDNEXT
     private const uint PreviousAbove = 3; // GW_HWNDPREV
+    private const int RetryMilliseconds = 500;
     private volatile bool _stopping;
+    private long _retryAfter;
+    private System.Windows.Forms.Timer? _retry;
     private ContentLevels _levels;
     private Thread? _renderer;
 
@@ -66,6 +69,8 @@ internal sealed unsafe class ContentOverlay : Form
     public ContentLook Look => _look;
 
     internal long Frames { get; private set; }
+
+    internal int Restacks { get; private set; }
 
     protected override bool ShowWithoutActivation => true;
 
@@ -144,6 +149,19 @@ internal sealed unsafe class ContentOverlay : Form
         // Hidden windows in between don't count: Windows keeps an input method's window right under ours.
         if (topmost == raised && NextShown(Handle) == _source)
             return;
+        // Each try is reported back as a change of order, so a try that can't succeed came straight back, hundreds of
+        // times a second, and Windows dropped the gesture hook for the stalled thread.
+        if (Environment.TickCount64 < _retryAfter)
+        {
+            if (_retry is null)
+            {
+                _retry = new System.Windows.Forms.Timer { Interval = RetryMilliseconds };
+                _retry.Tick += RetryFollow;
+            }
+            _retry.Start();
+            return;
+        }
+        Restacks++;
         // The overlay goes to the window, never the window to the overlay: moving the window under the overlay sent it
         // down the stack, below other windows.
         if (topmost != raised)
@@ -163,7 +181,22 @@ internal sealed unsafe class ContentOverlay : Form
         // one place, past its own overlay, and nothing else changes.
         User32.SetWindowPos(Handle, _source, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
         User32.SetWindowPos(_source, Handle, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
-        Diagnostics.Log.Event("effect.raisedPastWindow", ("ok", NextShown(Handle) == _source));
+        nint between = NextShown(Handle);
+        if (between == _source)
+        {
+            Diagnostics.Log.Event("effect.raisedPastWindow", ("ok", true));
+            return;
+        }
+
+        _retryAfter = Environment.TickCount64 + RetryMilliseconds;
+        Diagnostics.Log.Event("effect.raisedPastWindow", ("ok", false), ("between", Diagnostics.LogValue.ClassOf(between)),
+            ("program", Diagnostics.LogValue.ProgramOf(between)));
+    }
+
+    private void RetryFollow(object? sender, EventArgs e)
+    {
+        _retry?.Stop();
+        Follow();
     }
 
     private nint PreviousShown(nint window)
@@ -404,6 +437,7 @@ internal sealed unsafe class ContentOverlay : Form
         if (_stopping)
             return;
         _stopping = true;
+        _retry?.Dispose();
         foreach (nint hook in _hooks)
             if (hook != 0)
                 User32.UnhookWinEvent(hook);
