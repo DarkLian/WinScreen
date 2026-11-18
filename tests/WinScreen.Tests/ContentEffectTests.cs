@@ -173,6 +173,22 @@ public sealed class PictureFinderTests
         Assert.Equal(Rectangle.Empty, Found(finder.Find(PageWith(Rectangle.Empty, (x, y) => Page(12, x, y)), Columns, Rows)));
     }
 
+    // A smooth scroll ends in steps of a pixel or two, which change text tiles only a little; holds from those last
+    // steps stayed, solid blocks where a picture had just been, until the page changed again (the owner, 18 Nov).
+    [Fact]
+    public void The_last_small_steps_of_a_scroll_end_a_hold_too()
+    {
+        long now = 0;
+        var finder = new PictureFinder(() => now);
+        var picture = new Rectangle(5, 4, 12, 8);
+        TileStats? Text(float exact, int x, int y) =>
+            y % 2 == 0 ? new TileStats(0.95f, 0.95f, 0.95f, exact, false) : null; // Text on a panel a shade off the page.
+        finder.Find(PageWith(picture, (x, y) => Text(0.6f, x, y)), Columns, Rows);
+        now = 16;
+        float[] mask = finder.Find(PageWith(Rectangle.Empty, (x, y) => Text(0.62f, x, y)), Columns, Rows);
+        Assert.Equal(Rectangle.Empty, Found(mask));
+    }
+
     private static TileStats[] PageWith(Rectangle picture, Func<int, int, TileStats?> page) =>
         Page(picture, (x, y) => picture.Contains(x, y) ? null : page(x, y));
 

@@ -292,8 +292,23 @@ internal sealed unsafe class ContentOverlay : Form
         long frame = 0;
         try
         {
-            while (WaitHandle.WaitAny([_arrived, _stop]) == 0)
+            while (true)
             {
+                // Windows sends a frame only when the window changes, so a still page kept a hold's solid block on
+                // screen after the hold ended: the last frame is drawn again when one ends.
+                int wait = _finder.NextRelease is long until
+                    ? (int)Math.Clamp(until - Environment.TickCount64 + 1, 0, int.MaxValue)
+                    : Timeout.Infinite;
+                int woke = WaitHandle.WaitAny([_arrived, _stop], wait);
+                if (woke == 1)
+                    break;
+                if (woke == WaitHandle.WaitTimeout)
+                {
+                    if (cache is not null)
+                        Process(size, cacheView!, tilesView!, tiles!, statsView!, staging, mask!, maskView!, outputView!, output!, frame++);
+                    continue;
+                }
+
                 Direct3D11CaptureFrame? next = null;
                 while (_pool!.TryGetNextFrame() is { } newer)
                 {

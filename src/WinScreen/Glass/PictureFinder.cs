@@ -15,6 +15,8 @@ internal sealed class PictureFinder(Func<long>? clock = null)
 
     public (float R, float G, float B) Page { get; private set; }
 
+    public long? NextRelease => _held.Count == 0 ? null : _held.Min(held => held.Until);
+
     public float[] Find(TileStats[] tiles, int columns, int rows)
     {
         var mask = new float[tiles.Length];
@@ -174,7 +176,9 @@ internal sealed class PictureFinder(Func<long>? clock = null)
         for (int k = 0; k < tiles.Length && changed < needed; k++)
         {
             TileStats a = _last[k], b = tiles[k];
-            if (Math.Abs(a.R - b.R) + Math.Abs(a.G - b.G) + Math.Abs(a.B - b.B) < 0.05f && Math.Abs(a.Exact - b.Exact) < 0.1f && a.Busy == b.Busy)
+            // A still page gives the same statistics frame after frame, so any change counts: the last steps of a
+            // smooth scroll move a pixel or two and change text tiles only a little.
+            if (Math.Abs(a.R - b.R) + Math.Abs(a.G - b.G) + Math.Abs(a.B - b.B) < 0.01f && Math.Abs(a.Exact - b.Exact) < 0.01f && a.Busy == b.Busy)
                 continue;
             var at = new Point(k % columns, k / columns);
             if (!current.Any(block => block.Contains(at)) && !_held.Any(held => held.Tiles.Contains(at))) changed++;
