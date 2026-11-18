@@ -23,6 +23,7 @@ public sealed class SettingsWindow : Form
     private readonly PlainButton _backdropChoose = new() { Text = T("settings.effects.backdrop.choose"), AutoSize = true };
     private readonly PlainButton _backdropRemove = new() { Text = T("settings.effects.backdrop.remove"), AutoSize = true };
     private SettingRowPanel? _backdropRow;
+    private readonly BackdropPreview _backdropPreview = new();
     private string _backdropFile = "";
     private readonly CheckBox _detectDark = new SwitchBox { Text = T("settings.dark.detect"), AutoSize = true };
     private readonly TextBox _borderColor = new() { Width = 90 };
@@ -1522,7 +1523,7 @@ private readonly ErrorProvider _errors = new();
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             Note(T("settings.effects.help"))));
         page.Controls.Add(Card(T("settings.effects.backdrop.title"), true, BackdropRow(),
-            SettingRow(T("settings.effects.backdrop.fit"), _backdropFit), Note(T("settings.effects.backdrop.help"))));
+            SettingRow(T("settings.effects.backdrop.fit"), _backdropFit), Note(T("settings.effects.backdrop.help")), _backdropPreview));
         return page;
     }
 
@@ -1530,6 +1531,7 @@ private readonly ErrorProvider _errors = new();
     {
         _backdropFit.Items.AddRange([T("settings.effects.backdrop.fill"), T("settings.effects.backdrop.fitWhole"),
             T("settings.effects.backdrop.stretch"), T("settings.effects.backdrop.tile"), T("settings.effects.backdrop.center")]);
+        _backdropFit.SelectedIndexChanged += (_, _) => ShowBackdrop();
         _backdropChoose.Click += (_, _) =>
         {
             string pictures = string.Join(";", Glass.BackdropChoice.Pictures.Concat(Glass.BackdropChoice.Animations).Select(kind => "*" + kind));
@@ -1550,7 +1552,7 @@ private readonly ErrorProvider _errors = new();
         };
         _backdropChoose.Margin = new Padding(0, 0, 8, 0);
         _backdropRemove.Margin = Padding.Empty;
-        var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty, BackColor = SettingsStyle.Card };
+        var buttons = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty, BackColor = SettingsStyle.Card };
         buttons.Controls.Add(_backdropChoose);
         buttons.Controls.Add(_backdropRemove);
         _backdropRow = (SettingRowPanel)SettingRow(T("settings.effects.backdrop.file"), buttons);
@@ -1560,6 +1562,7 @@ private readonly ErrorProvider _errors = new();
     private void ShowBackdrop()
     {
         _backdropRemove.Enabled = _backdropFile.Length > 0;
+        _backdropPreview.Show(_backdropFile, (Glass.BackdropFit)Math.Max(0, _backdropFit.SelectedIndex));
         if (_backdropRow is not null)
             _backdropRow.Description = _backdropFile.Length > 0 ? Path.GetFileName(_backdropFile) : T("settings.effects.backdrop.none");
     }
