@@ -333,6 +333,7 @@ public sealed partial class PipWindow : Form
         EndLive();
         CacheTaskbarPicture();
         _suspended = true;
+        _suspendedAt = Environment.TickCount64;
         _resumeRequested = false;
         DropHoverPreview();
         _titleBar?.Dismiss();
@@ -2073,7 +2074,9 @@ public sealed partial class PipWindow : Form
         long now = Environment.TickCount64;
         if (!arrived) return;
         var facts = new ViewState.Facts(Hidden: _hideItem.Checked, Away: _awayFrom != Guid.Empty, Visiting: _live is not null,
-            JustAfterVisit: now - _liveEndedAt < RevealGrace,
+            // The focus coming back from a visit, not the hand-off of this view being minimized since (the test of
+            // minimizing by the view's button reached it within half a second of the visit ending, Windows 10 VM, 18 Nov).
+            JustAfterVisit: now - _liveEndedAt < RevealGrace && !(_suspended && _suspendedAt >= _liveEndedAt),
             Picked: PickedFromTaskbarOrSwitcher(before),
             JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && now - _desktopSwitchedAt < SwitchFocusGrace);
         ViewState.Arrival answer = ViewState.OriginalArrived(facts);
@@ -2213,7 +2216,7 @@ public sealed partial class PipWindow : Form
     }
 
     private bool _sourceWasFocused;
-    private long _liveEndedAt;
+    private long _liveEndedAt, _suspendedAt;
     private const long RevealGrace = 500;
 
     /// <summary>When a hidden original was last shown because something else activated it, for tests.</summary>
