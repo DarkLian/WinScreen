@@ -179,8 +179,10 @@ A window has Dark mode or Glass, not both: turning one on turns the other off.
 
 Dark mode leaves pictures and video as they are, and parts that are dark already stay dark. Glass fades only the
 background and keeps text and pictures. On a PC without a graphics card, Dark mode turns everything dark, pictures too,
-and Glass makes one color see-through, where clicks go through to what's behind. In **Settings → Appearance** you can
-turn either off and choose how solid the background, text and pictures stay. Windows shows a colored border around a
+and Glass makes one color see-through, where clicks go through to what's behind. Dark mode's setting is in
+**Settings → Appearance**. Glass's settings, including how solid the background and text stay, are in **Settings →
+Backgrounds**.
+Windows shows a colored border around a
 window while these two are working. If a window under Dark mode or Glass ever stops taking clicks, WinScreen turns
 the effect off and tells you.
 
@@ -188,8 +190,8 @@ the effect off and tells you.
 
 In **Settings → Backgrounds**, choose a picture, GIF or video to show behind the text of windows with Glass.
 **Every app** sets one for all of them. Add an app to give it its own, or to show none in it. The preview shows
-how it will fit, and you can drop a file onto it. To see more of the picture, lower Glass's background in
-**Settings → Appearance**.
+how it will fit, and you can drop a file onto it. To see more of the picture, lower **Background** at the top of
+the same page.
 
 Videos play without sound until you turn **Sound** up. Only the window you used last plays sound, and a video
 pauses while its window is minimized or on another desktop.
@@ -222,8 +224,8 @@ Changes take effect as soon as you make them. The mouse wheel only scrolls; clic
 | Mouse gestures | Move and resize with a key, and the mouse menu |
 | Toolbar | Where the toolbar appears, how quickly, and which buttons it shows |
 | Anchors | Automatic Anchors and how Anchors look |
-| Appearance | Opacity, pin border and effects |
-| Backgrounds | A picture or video behind Glass, for every app or for each app |
+| Appearance | Opacity, pin border and Dark mode |
+| Backgrounds | How Glass looks, and a picture or video behind it, for every app or for each app |
 | Picture-in-Picture | How views look and behave |
 | Programs | Programs WinScreen should leave alone, or the only ones it should work on |
 | Saved setups | Program setups you've remembered |

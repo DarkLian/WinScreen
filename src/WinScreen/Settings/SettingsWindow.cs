@@ -1514,9 +1514,7 @@ private readonly ErrorProvider _errors = new();
         _borderColor.TextChanged += (_, _) => color.Invalidate();
         page.Controls.Add(Section(T("settings.pin.border"), _pausePin, _highlightPinned, SettingRow(T("settings.pin.color"), color),
             SettingRow(T("settings.pin.opacity"), _borderOpacity), SettingRow(T("settings.pin.thickness"), _borderThickness)));
-        page.Controls.Add(Card(T("settings.effects.title"), true, _detectDark, _layeredGlass,
-            SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
-            Note(T("settings.effects.help"))));
+        page.Controls.Add(Card(T("settings.dark.title"), true, _detectDark, Note(T("settings.effects.help"))));
         return page;
     }
 

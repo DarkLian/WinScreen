@@ -76,6 +76,10 @@ public sealed partial class SettingsWindow
             Note(T("settings.backgrounds.soundHelp")));
 
         FlowLayoutPanel page = ScrollingPage();
+        // Glass's own settings decide how much of the background shows, so they come first.
+        page.Controls.Add(Card(T("settings.glass.title"), true, _layeredGlass,
+            SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
+            Note(T("settings.effects.help"))));
         page.Controls.Add(Card(T("settings.backgrounds.title"), true, Note(T("settings.backgrounds.help")), _backgroundFrame, adding));
         page.Controls.Add(_backgroundEditor);
         ListBackgrounds(null);
