@@ -6,7 +6,7 @@ using Vortice.MediaFoundation;
 
 namespace WinScreen.Glass;
 
-public enum BackdropFit { Fill, Fit, Stretch, Tile, Center }
+public enum BackdropFit { Fill = 0, Fit = 1, Stretch = 2, Tile = 3, Center = 4 }
 
 internal sealed record BackdropChoice(string File, BackdropFit Fit)
 {
@@ -228,7 +228,7 @@ internal sealed class VideoBackdrop(string file) : Backdrop
         using IMFAttributes attributes = MediaFactory.MFCreateAttributes(3);
         attributes.Set(MediaEngineAttributeKeys.DxgiManager.Guid, _manager);
         attributes.Set(MediaEngineAttributeKeys.VideoOutputFormat.Guid, (uint)Format.B8G8R8A8_UNorm);
-        using var factory = new IMFMediaEngineClassFactory(CreateFactory());
+        using var factory = new IMFMediaEngineClassFactory(Native.MediaEngineFactory.Create());
         _engine = factory.CreateInstance(MediaEngineCreateFlags.None, attributes);
         _engine!.PlaybackEvent += (kind, _, _) =>
         {
@@ -239,16 +239,6 @@ internal sealed class VideoBackdrop(string file) : Backdrop
         _engine.SetSource(file);
         _engine.Play();
     }
-
-    private static nint CreateFactory()
-    {
-        Guid unknown = new("00000000-0000-0000-C000-000000000046");
-        Marshal.ThrowExceptionForHR(CoCreateInstance(new Guid("B44392DA-499B-446B-A4CB-005FEAD0E6D5"), 0, 1, unknown, out nint factory));
-        return factory;
-    }
-
-    [DllImport("ole32.dll")]
-    private static extern int CoCreateInstance(in Guid clsid, nint outer, uint context, in Guid iid, out nint created);
 
     public override void Dispose()
     {

@@ -134,6 +134,7 @@ public class InvariantTests
     /// </summary>
     private static readonly Dictionary<string, string> FrozenEnums = new()
     {
+        ["WinScreen.Glass.BackdropFit"] = "Fill=0 Fit=1 Stretch=2 Tile=3 Center=4",
         ["WinScreen.Settings.AppCommand"] =
             "TogglePin=1 OpacityUp=2 OpacityDown=3 ToggleClickThrough=4 OpenPip=5 RestoreAll=6 ToggleDark=7 " +
             "ToggleGlass=8 ToggleAnchor=9 ToggleDefaultOpacity=10 SaveWindowSetup=11 ToggleShrink=12 ToggleCrop=13 " +
