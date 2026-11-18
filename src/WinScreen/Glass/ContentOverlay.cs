@@ -39,24 +39,28 @@ internal sealed unsafe class ContentOverlay : Form
     private System.Windows.Forms.Timer? _retry;
     private ContentLevels _levels;
     private readonly bool _leaveAlreadyDark;
+    private volatile BackdropChoice? _backdrop;
+    private volatile bool _hidden;
     private Thread? _renderer;
 
     private ID3D11Device? _device;
     private ID3D11DeviceContext? _context;
-    private ID3D11ComputeShader? _stats, _composite;
-    private ID3D11Buffer? _options;
+    private ID3D11ComputeShader? _stats, _composite, _backdropShader;
+    private ID3D11Buffer? _options, _place;
+    private ID3D11SamplerState? _edge, _repeat;
     private IDXGISwapChain1? _chain;
     private nint _composition, _target, _visual;
     private Direct3D11CaptureFramePool? _pool;
     private GraphicsCaptureSession? _session;
     private global::Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice? _captureDevice;
 
-    public ContentOverlay(nint source, ContentLook look, ContentLevels levels, bool leaveAlreadyDark = true)
+    public ContentOverlay(nint source, ContentLook look, ContentLevels levels, bool leaveAlreadyDark = true, BackdropChoice? backdrop = null)
     {
         _source = source;
         _look = look;
         _levels = levels;
         _leaveAlreadyDark = leaveAlreadyDark;
+        _backdrop = backdrop;
         _eventProc = OnWindowEvent;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -65,6 +69,8 @@ internal sealed unsafe class ContentOverlay : Form
     }
 
     public event Action<string>? Failed;
+
+    public event Action<string>? BackdropFailed;
 
     public nint Source => _source;
 
@@ -89,6 +95,12 @@ internal sealed unsafe class ContentOverlay : Form
     }
 
     public void SetLevels(ContentLevels levels) => _levels = levels;
+
+    public void SetBackdrop(BackdropChoice? backdrop)
+    {
+        _backdrop = backdrop;
+        if (!_stopping) _arrived.Set();
+    }
 
     public void SetOpacity(byte alpha)
     {
@@ -138,8 +150,10 @@ internal sealed unsafe class ContentOverlay : Form
         if (!User32.IsWindow(_source) || User32.IsIconic(_source) || !User32.IsWindowVisible(_source))
         {
             Hide();
+            Hidden(true);
             return;
         }
+        Hidden(false);
 
         if (WindowInfo.TryGetFrameBounds(_source, out Rectangle frame, out _) && frame.Location != Location)
             Location = frame.Location;
@@ -196,6 +210,14 @@ internal sealed unsafe class ContentOverlay : Form
             ("program", Diagnostics.LogValue.ProgramOf(between)));
     }
 
+    // A video behind a minimised window stops playing.
+    private void Hidden(bool hidden)
+    {
+        if (_hidden == hidden) return;
+        _hidden = hidden;
+        if (!_stopping) _arrived.Set();
+    }
+
     private void RetryFollow(object? sender, EventArgs e)
     {
         _retry?.Stop();
@@ -235,8 +257,11 @@ internal sealed unsafe class ContentOverlay : Form
 
     private void CreateDevice(Size size)
     {
-        D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.BgraSupport, [FeatureLevel.Level_11_0],
-            out _device, out _, out _context).CheckError();
+        // Video support lets a video play behind Glass; without it Glass still works.
+        if (D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport,
+                [FeatureLevel.Level_11_0], out _device, out _, out _context).Failure)
+            D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.BgraSupport, [FeatureLevel.Level_11_0],
+                out _device, out _, out _context).CheckError();
         // Without a graphics card, Windows offers its software renderer as hardware. The effect starts on it but
         // shows nothing, so refuse instead.
         using (IDXGIDevice graphics = _device!.QueryInterface<IDXGIDevice>())
@@ -245,7 +270,11 @@ internal sealed unsafe class ContentOverlay : Form
                 throw new NotSupportedException();
         _stats = _device!.CreateComputeShader(Compiler.Compile(ContentShaders.Stats, "Stats", "stats", "cs_5_0").Span);
         _composite = _device.CreateComputeShader(Compiler.Compile(ContentShaders.Composite, "Composite", "composite", "cs_5_0").Span);
+        _backdropShader = _device.CreateComputeShader(Compiler.Compile(ContentShaders.Backdrop, "Backdrop", "backdrop", "cs_5_0").Span);
         _options = _device.CreateBuffer(new BufferDescription(48, BindFlags.ConstantBuffer, ResourceUsage.Default));
+        _place = _device.CreateBuffer(new BufferDescription(48, BindFlags.ConstantBuffer, ResourceUsage.Default));
+        _edge = _device.CreateSamplerState(new SamplerDescription(Filter.MinMagMipLinear, TextureAddressMode.Clamp));
+        _repeat = _device.CreateSamplerState(new SamplerDescription(Filter.MinMagMipLinear, TextureAddressMode.Wrap));
 
         using var factory = CreateDXGIFactory1<IDXGIFactory2>();
         _chain = factory.CreateSwapChainForComposition(_device, new SwapChainDescription1
@@ -288,13 +317,47 @@ internal sealed unsafe class ContentOverlay : Form
     private void Render()
     {
         var size = Size.Empty;
-        ID3D11Texture2D? cache = null, tiles = null, output = null, staging = null;
-        ID3D11ShaderResourceView? cacheView = null;
-        ID3D11UnorderedAccessView? tilesView = null, outputView = null;
+        ID3D11Texture2D? cache = null, tiles = null, output = null, staging = null, final = null;
+        ID3D11ShaderResourceView? cacheView = null, outputRead = null;
+        ID3D11UnorderedAccessView? tilesView = null, outputView = null, finalView = null;
+        Backdrop? backdrop = null;
+        BackdropChoice? shown = null;
+        bool drawn = false;
         try
         {
-            while (WaitHandle.WaitAny([_arrived, _stop]) == 0)
+            while (true)
             {
+                int wait = backdrop?.Wait ?? Timeout.Infinite;
+                if (WaitHandle.WaitAny([_arrived, _stop], wait) == 1)
+                    break;
+
+                bool redraw = false;
+                if (_backdrop != shown)
+                {
+                    shown = _backdrop;
+                    backdrop?.Dispose();
+                    backdrop = OpenBackdrop(shown);
+                    redraw = true;
+                }
+                if (backdrop is not null)
+                {
+                    try
+                    {
+                        backdrop.Pause(_hidden);
+                        redraw |= backdrop.Update(_device!, _context!);
+                        if (backdrop is VideoBackdrop { Failed: true }) throw new NotSupportedException();
+                    }
+                    catch (Exception failure) when (failure is SharpGen.Runtime.SharpGenException or COMException or NotSupportedException
+                                                        or InvalidOperationException or ArgumentException)
+                    {
+                        Diagnostics.Log.Error("effect.backdropFailed", failure);
+                        backdrop.Dispose();
+                        backdrop = null;
+                        redraw = true;
+                        BeginInvoke(() => BackdropFailed?.Invoke(Localization.UiText.T("errors.glass.backdrop")));
+                    }
+                }
+
                 Direct3D11CaptureFrame? next = null;
                 while (_pool!.TryGetNextFrame() is { } newer)
                 {
@@ -302,37 +365,45 @@ internal sealed unsafe class ContentOverlay : Form
                     next = newer;
                 }
 
-                if (next is null)
-                    continue;
-                using (next)
-                {
-                    var content = new Size(next.ContentSize.Width, next.ContentSize.Height);
-                    if (content.Width < 16 || content.Height < 16)
-                        continue;
-                    if (content != size)
+                if (next is not null)
+                    using (next)
                     {
-                        size = content;
-                        DisposeAll(cache, tiles, output, staging, cacheView, tilesView, outputView);
-                        int columns = size.Width / PageReader.Tile, rows = size.Height / PageReader.Tile;
-                        cache = _device!.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 1, BindFlags.ShaderResource));
-                        cacheView = _device.CreateShaderResourceView(cache);
-                        tiles = _device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.UnorderedAccess));
-                        tilesView = _device.CreateUnorderedAccessView(tiles);
-                        staging = _device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read));
-                        output = _device.CreateTexture2D(new Texture2DDescription(Format.R8G8B8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 1, BindFlags.UnorderedAccess));
-                        outputView = _device.CreateUnorderedAccessView(output);
-                        _chain!.ResizeBuffers(2, (uint)size.Width, (uint)size.Height, Format.R8G8B8A8_UNorm, SwapChainFlags.None);
-                        _pool.Recreate(_captureDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, next.ContentSize);
-                        _page.Reset();
-                        Size newSize = size;
-                        BeginInvoke(() => { if (!IsDisposed) ClientSize = newSize; });
+                        var content = new Size(next.ContentSize.Width, next.ContentSize.Height);
+                        if (content.Width >= 16 && content.Height >= 16)
+                        {
+                            if (content != size)
+                            {
+                                size = content;
+                                DisposeAll(cache, tiles, output, staging, final, cacheView, outputRead, tilesView, outputView, finalView);
+                                int columns = size.Width / PageReader.Tile, rows = size.Height / PageReader.Tile;
+                                cache = _device!.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 1, BindFlags.ShaderResource));
+                                cacheView = _device.CreateShaderResourceView(cache);
+                                tiles = _device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.UnorderedAccess));
+                                tilesView = _device.CreateUnorderedAccessView(tiles);
+                                staging = _device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read));
+                                output = _device.CreateTexture2D(new Texture2DDescription(Format.R8G8B8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 1, BindFlags.UnorderedAccess | BindFlags.ShaderResource));
+                                outputView = _device.CreateUnorderedAccessView(output);
+                                outputRead = _device.CreateShaderResourceView(output);
+                                final = _device.CreateTexture2D(new Texture2DDescription(Format.R8G8B8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 1, BindFlags.UnorderedAccess));
+                                finalView = _device.CreateUnorderedAccessView(final);
+                                _chain!.ResizeBuffers(2, (uint)size.Width, (uint)size.Height, Format.R8G8B8A8_UNorm, SwapChainFlags.None);
+                                _pool.Recreate(_captureDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, next.ContentSize);
+                                _page.Reset();
+                                Size newSize = size;
+                                BeginInvoke(() => { if (!IsDisposed) ClientSize = newSize; });
+                            }
+
+                            using (var texture = WgcInterop.Texture(next.Surface))
+                                _context!.CopySubresourceRegion(cache, 0, 0, 0, 0, texture, 0, new Vortice.Mathematics.Box(0, 0, 0, size.Width, size.Height, 1));
+                            Process(size, cacheView!, tilesView!, tiles!, staging!, outputView!);
+                            Frames++;
+                            drawn = true;
+                            redraw = true;
+                        }
                     }
 
-                    using (var texture = WgcInterop.Texture(next.Surface))
-                        _context!.CopySubresourceRegion(cache, 0, 0, 0, 0, texture, 0, new Vortice.Mathematics.Box(0, 0, 0, size.Width, size.Height, 1));
-                    Process(size, cacheView!, tilesView!, tiles!, staging!, outputView!, output!);
-                    Frames++;
-                }
+                if (drawn && redraw)
+                    Present(size, output!, outputRead!, final!, finalView!, backdrop);
             }
         }
         catch (Exception failure) when (failure is SharpGen.Runtime.SharpGenException or COMException or ObjectDisposedException or InvalidOperationException)
@@ -342,12 +413,65 @@ internal sealed unsafe class ContentOverlay : Form
         }
         finally
         {
-            DisposeAll(cache, tiles, output, staging, cacheView, tilesView, outputView);
+            backdrop?.Dispose();
+            DisposeAll(cache, tiles, output, staging, final, cacheView, outputRead, tilesView, outputView, finalView);
         }
     }
 
+    private Backdrop? OpenBackdrop(BackdropChoice? choice)
+    {
+        if (_look != ContentLook.Glass || choice is not { IsSet: true } chosen)
+            return null;
+        try
+        {
+            return Backdrop.Open(chosen.File);
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or ArgumentException or OutOfMemoryException
+                                            or NotSupportedException or ExternalException)
+        {
+            Diagnostics.Log.Error("effect.backdropFailed", failure);
+            BeginInvoke(() => BackdropFailed?.Invoke(Localization.UiText.T("errors.glass.backdrop")));
+            return null;
+        }
+    }
+
+    private void Present(Size size, ID3D11Texture2D output, ID3D11ShaderResourceView outputRead, ID3D11Texture2D final,
+        ID3D11UnorderedAccessView finalView, Backdrop? backdrop)
+    {
+        var context = _context!;
+        ID3D11Texture2D shown = output;
+        if (backdrop?.View is { } picture && _backdrop is { } choice)
+        {
+            RectangleF place = BackdropChoice.Place(choice.Fit, backdrop.Size, size);
+            float detail = choice.Fit == BackdropFit.Tile ? 0
+                : MathF.Max(0, MathF.Log2(MathF.Max(backdrop.Size.Width / place.Width, backdrop.Size.Height / place.Height)));
+            (float pr, float pg, float pb) = _page.Page;
+            var where = new Place
+            {
+                X = place.X, Y = place.Y, Width = place.Width, Height = place.Height,
+                Tile = choice.Fit == BackdropFit.Tile ? 1 : 0, Detail = detail, PageR = pr, PageG = pg, PageB = pb,
+            };
+            context.UpdateSubresource(in where, _place!);
+            context.CSSetShader(_backdropShader);
+            context.CSSetConstantBuffer(0, _place);
+            context.CSSetShaderResource(0, outputRead);
+            context.CSSetShaderResource(1, picture);
+            context.CSSetSampler(0, _edge);
+            context.CSSetSampler(1, _repeat);
+            context.CSSetUnorderedAccessView(0, finalView);
+            context.Dispatch((uint)(size.Width + 15) / 16, (uint)(size.Height + 15) / 16, 1);
+            context.CSSetUnorderedAccessView(0, null);
+            context.CSSetShaderResource(0, null);
+            context.CSSetShaderResource(1, null);
+            shown = final;
+        }
+        using (var back = _chain!.GetBuffer<ID3D11Texture2D>(0))
+            context.CopyResource(back, shown);
+        _chain.Present(0, PresentFlags.None);
+    }
+
     private void Process(Size size, ID3D11ShaderResourceView cacheView, ID3D11UnorderedAccessView tilesView, ID3D11Texture2D tiles,
-        ID3D11Texture2D staging, ID3D11UnorderedAccessView outputView, ID3D11Texture2D output)
+        ID3D11Texture2D staging, ID3D11UnorderedAccessView outputView)
     {
         var context = _context!;
         int columns = size.Width / PageReader.Tile, rows = size.Height / PageReader.Tile;
@@ -378,9 +502,6 @@ internal sealed unsafe class ContentOverlay : Form
         context.Dispatch((uint)(size.Width + 15) / 16, (uint)(size.Height + 15) / 16, 1);
         context.CSSetUnorderedAccessView(0, null);
         context.CSSetShaderResource(0, null);
-        using (var back = _chain!.GetBuffer<ID3D11Texture2D>(0))
-            context.CopyResource(back, output);
-        _chain.Present(0, PresentFlags.None);
     }
 
     private void ReadPage(ID3D11Texture2D staging, int columns, int rows)
@@ -406,6 +527,14 @@ internal sealed unsafe class ContentOverlay : Form
         }
 
         _page.Read(stats);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Place
+    {
+        public float X, Y, Width, Height;
+        public float Tile, Detail, Unused1, Unused2;
+        public float PageR, PageG, PageB, Unused3;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -451,6 +580,10 @@ internal sealed unsafe class ContentOverlay : Form
         _visual = _target = _composition = 0;
         _chain?.Dispose();
         _options?.Dispose();
+        _place?.Dispose();
+        _edge?.Dispose();
+        _repeat?.Dispose();
+        _backdropShader?.Dispose();
         _stats?.Dispose();
         _composite?.Dispose();
         _context?.ClearState();

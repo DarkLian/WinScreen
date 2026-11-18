@@ -16,6 +16,8 @@ internal sealed class ContentEffects : IDisposable
         };
     }
     private ContentLevels _levels = new(0.15f, 1);
+    private BackdropChoice? _backdrop;
+    private bool _backdropReported;
 
     public bool LeaveAlreadyDark { get; set; } = true;
 
@@ -42,6 +44,15 @@ internal sealed class ContentEffects : IDisposable
             overlay.SetLevels(levels);
     }
 
+    public void SetBackdrop(BackdropChoice? backdrop)
+    {
+        if (_backdrop == backdrop) return;
+        _backdrop = backdrop;
+        _backdropReported = false;
+        foreach (ContentOverlay overlay in _overlays.Values)
+            overlay.SetBackdrop(backdrop);
+    }
+
     public bool Toggle(nint window, ContentLook look)
     {
         if (_overlays.TryGetValue(window, out ContentOverlay? existing))
@@ -51,7 +62,7 @@ internal sealed class ContentEffects : IDisposable
                 return false;
         }
 
-        var overlay = new ContentOverlay(window, look, _levels, LeaveAlreadyDark);
+        var overlay = new ContentOverlay(window, look, _levels, LeaveAlreadyDark, _backdrop);
         try
         {
             byte opacity = windows.OpacityOf(window);
@@ -78,6 +89,12 @@ internal sealed class ContentEffects : IDisposable
         overlay.Failed += message =>
         {
             TurnOff(window);
+            Problem?.Invoke(message);
+        };
+        overlay.BackdropFailed += message =>
+        {
+            if (_backdropReported) return;
+            _backdropReported = true;
             Problem?.Invoke(message);
         };
         Created?.Invoke(overlay.Handle);

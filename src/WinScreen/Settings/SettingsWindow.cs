@@ -19,6 +19,11 @@ public sealed class SettingsWindow : Form
     private readonly CheckBox _layeredGlass = new SwitchBox { Text = T("settings.effects.layeredGlass"), AutoSize = true };
     private readonly NumericUpDown _glassBackground = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _glassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
+    private readonly ComboBox _backdropFit = new ThemedCombo { Width = 200 };
+    private readonly PlainButton _backdropChoose = new() { Text = T("settings.effects.backdrop.choose"), AutoSize = true };
+    private readonly PlainButton _backdropRemove = new() { Text = T("settings.effects.backdrop.remove"), AutoSize = true };
+    private SettingRowPanel? _backdropRow;
+    private string _backdropFile = "";
     private readonly CheckBox _detectDark = new SwitchBox { Text = T("settings.dark.detect"), AutoSize = true };
     private readonly TextBox _borderColor = new() { Width = 90 };
     private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
@@ -333,7 +338,7 @@ private readonly ErrorProvider _errors = new();
             [_defaultOpacity] = '\uE706', [_opacityStep] = '\uE9E9', [_opacityWheel] = '\uE962', [_opaqueOnHover] = '\uE890',
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
-            [_glassText] = '\uE8D2',
+            [_glassText] = '\uE8D2', [_backdropChoose] = '\uE91B', [_backdropFit] = '\uE9A6',
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
             [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
             [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',
@@ -821,6 +826,7 @@ private readonly ErrorProvider _errors = new();
         {
             LayeredGlass = _layeredGlass.Checked,
             BackgroundPercent = Number(_glassBackground), TextPercent = Number(_glassText),
+            BackdropFile = _backdropFile, BackdropFit = (Glass.BackdropFit)Math.Max(0, _backdropFit.SelectedIndex),
         }.Validated();
         draft.PinBorder = new PinBorderPreferences
         {
@@ -1264,6 +1270,9 @@ private readonly ErrorProvider _errors = new();
         _layeredGlass.Checked = effects.LayeredGlass;
         _glassBackground.Value = effects.BackgroundPercent;
         _glassText.Value = effects.TextPercent;
+        _backdropFile = effects.BackdropFile;
+        _backdropFit.SelectedIndex = (int)effects.BackdropFit;
+        ShowBackdrop();
         PinBorderPreferences border = values.PinBorder.Validated();
         _borderColor.Text = border.ColorHex;
         _borderOpacity.Value = border.OpacityPercent;
@@ -1512,7 +1521,47 @@ private readonly ErrorProvider _errors = new();
         page.Controls.Add(Card(T("settings.effects.title"), true, _detectDark, _layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             Note(T("settings.effects.help"))));
+        page.Controls.Add(Card(T("settings.effects.backdrop.title"), true, BackdropRow(),
+            SettingRow(T("settings.effects.backdrop.fit"), _backdropFit), Note(T("settings.effects.backdrop.help"))));
         return page;
+    }
+
+    private Control BackdropRow()
+    {
+        _backdropFit.Items.AddRange([T("settings.effects.backdrop.fill"), T("settings.effects.backdrop.fitWhole"),
+            T("settings.effects.backdrop.stretch"), T("settings.effects.backdrop.tile"), T("settings.effects.backdrop.center")]);
+        _backdropChoose.Click += (_, _) =>
+        {
+            string pictures = string.Join(";", Glass.BackdropChoice.Pictures.Concat(Glass.BackdropChoice.Animations).Select(kind => "*" + kind));
+            string videos = string.Join(";", Glass.BackdropChoice.Videos.Select(kind => "*" + kind));
+            using var dialog = new OpenFileDialog
+            {
+                Filter = $"{T("settings.effects.backdrop.files")}|{pictures};{videos}|{T("settings.effects.backdrop.pictures")}|{pictures}|{T("settings.effects.backdrop.videos")}|{videos}",
+            };
+            if (_backdropFile.Length > 0 && Path.GetDirectoryName(_backdropFile) is { } folder && Directory.Exists(folder)) dialog.InitialDirectory = folder;
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            _backdropFile = dialog.FileName;
+            ShowBackdrop();
+        };
+        _backdropRemove.Click += (_, _) =>
+        {
+            _backdropFile = "";
+            ShowBackdrop();
+        };
+        _backdropChoose.Margin = new Padding(0, 0, 8, 0);
+        _backdropRemove.Margin = Padding.Empty;
+        var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty, BackColor = SettingsStyle.Card };
+        buttons.Controls.Add(_backdropChoose);
+        buttons.Controls.Add(_backdropRemove);
+        _backdropRow = (SettingRowPanel)SettingRow(T("settings.effects.backdrop.file"), buttons);
+        return _backdropRow;
+    }
+
+    private void ShowBackdrop()
+    {
+        _backdropRemove.Enabled = _backdropFile.Length > 0;
+        if (_backdropRow is not null)
+            _backdropRow.Description = _backdropFile.Length > 0 ? Path.GetFileName(_backdropFile) : T("settings.effects.backdrop.none");
     }
 
     private static Color? HexColor(string text) =>

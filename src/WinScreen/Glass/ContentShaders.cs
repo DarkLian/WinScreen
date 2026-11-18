@@ -35,6 +35,27 @@ internal static class ContentShaders
         }
         """;
 
+    // The window as Glass draws it, over a picture or video frame. Outside the picture, the page colour.
+    public const string Backdrop = """
+        Texture2D<float4> layer : register(t0);
+        Texture2D<float4> picture : register(t1);
+        SamplerState edge : register(s0);
+        SamplerState repeat : register(s1);
+        RWTexture2D<float4> output : register(u0);
+        cbuffer Place : register(b0) { float4 place; float4 how; float4 page; };
+        [numthreads(16,16,1)]
+        void Backdrop(uint3 id : SV_DispatchThreadID) {
+            uint ow, oh; output.GetDimensions(ow, oh);
+            if (id.x >= ow || id.y >= oh) return;
+            float4 l = layer.Load(int3(id.xy,0));
+            float2 uv = (float2(id.xy) + 0.5 - place.xy) / place.zw;
+            float3 p = page.rgb;
+            if (how.x > 0.5) p = picture.SampleLevel(repeat, uv, 0).rgb;
+            else if (all(uv >= 0) && all(uv <= 1)) p = picture.SampleLevel(edge, uv, how.y).rgb;
+            output[id.xy] = float4(l.rgb + p * (1 - l.a), 1);
+        }
+        """;
+
     public const string Composite = """
         Texture2D<float4> source : register(t0);
         RWTexture2D<float4> output : register(u0);

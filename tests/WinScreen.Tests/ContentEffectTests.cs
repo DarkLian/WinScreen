@@ -7,6 +7,48 @@ using Xunit;
 
 namespace WinScreen.Tests;
 
+public sealed class BackdropTests
+{
+    private static readonly Size Picture = new(1600, 900), Window = new(800, 600);
+
+    [Theory]
+    [InlineData(BackdropFit.Fill, -133.33f, 0, 1066.67f, 600)]
+    [InlineData(BackdropFit.Fit, 0, 75, 800, 450)]
+    [InlineData(BackdropFit.Stretch, 0, 0, 800, 600)]
+    [InlineData(BackdropFit.Center, -400, -150, 1600, 900)]
+    [InlineData(BackdropFit.Tile, 0, 0, 1600, 900)]
+    public void Each_fit_places_the_picture_as_Windows_does_for_the_desktop(BackdropFit fit, float x, float y, float width, float height)
+    {
+        RectangleF place = BackdropChoice.Place(fit, Picture, Window);
+        Assert.Equal(x, place.X, 0.01f);
+        Assert.Equal(y, place.Y, 0.01f);
+        Assert.Equal(width, place.Width, 0.01f);
+        Assert.Equal(height, place.Height, 0.01f);
+    }
+
+    [Fact]
+    public void Fill_always_covers_the_window_and_fit_always_shows_the_whole_picture()
+    {
+        foreach (Size window in new Size[] { new(300, 900), new(1920, 200), new(1600, 900) })
+        {
+            RectangleF fill = BackdropChoice.Place(BackdropFit.Fill, Picture, window);
+            Assert.True(fill.Left <= 0.01f && fill.Top <= 0.01f && fill.Right >= window.Width - 0.01f && fill.Bottom >= window.Height - 0.01f);
+            RectangleF fit = BackdropChoice.Place(BackdropFit.Fit, Picture, window);
+            Assert.True(fit.Left >= -0.01f && fit.Top >= -0.01f && fit.Right <= window.Width + 0.01f && fit.Bottom <= window.Height + 0.01f);
+            Assert.Equal(16 / 9f, fit.Width / fit.Height, 0.01f);
+        }
+    }
+
+    [Fact]
+    public void The_picture_and_its_fit_are_kept_in_settings()
+    {
+        Assert.Null(AppSettings.Parse("{}").Effects.Backdrop);
+        EffectPreferences chosen = AppSettings.Parse("""{"Effects":{"BackdropFile":"C:\\Pictures\\sea.mp4","BackdropFit":3}}""").Effects;
+        Assert.Equal(new BackdropChoice(@"C:\Pictures\sea.mp4", BackdropFit.Tile), chosen.Backdrop);
+        Assert.Equal(BackdropFit.Fill, AppSettings.Parse("""{"Effects":{"BackdropFit":42}}""").Effects.Validated().BackdropFit);
+    }
+}
+
 public sealed class PageReaderTests
 {
     private static TileStats[] Tiles(int dark, int light) =>

@@ -677,7 +677,11 @@ public sealed partial class TrayApplication : ApplicationContext
             _anchors.Configure(_settings.Anchors);
             _automaticAnchors.Configure(_settings.Anchors.Automatic, _settings.Anchors.AvoidContent);
         });
-        if (Changed(settings => settings.Effects)) Part(() => _content.SetLevels(_settings.Effects.Levels));
+        if (Changed(settings => settings.Effects)) Part(() =>
+        {
+            _content.SetLevels(_settings.Effects.Levels);
+            _content.SetBackdrop(_settings.Effects.Backdrop);
+        });
         if (Changed(settings => settings.HideCaptureBorder)) Part(() =>
         {
             if (_settings.HideCaptureBorder && !Pip.CaptureBorder.Wanted) Pip.CaptureBorder.Forget(); // Ask again: the Windows setting may have changed.
