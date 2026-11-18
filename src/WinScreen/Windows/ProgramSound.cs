@@ -3,43 +3,28 @@ using WinScreen.Native;
 
 namespace WinScreen.Windows;
 
-/// <summary>One program's sound session that WinScreen muted, as saved on disk until it is unmuted.</summary>
-/// <param name="Device">The output device the session plays on.</param>
-/// <param name="Identifier">Stays the same when the program restarts; Windows keeps the mute under it.</param>
-/// <param name="Instance">The session itself, while it lasts.</param>
-/// <param name="Program">The program's full path, which views of its windows are matched by.</param>
+// Identifier stays the same when the program restarts (Windows keeps the mute under it); Program is the full path views
+// are matched by.
 public sealed record MutedSession(string Device, string Identifier, string Instance, string Program);
 
-/// <summary>
-/// Mute from a view's menu (roadmap step 8.3). It silences the program of the view's window, every one of its
-/// processes, and nothing else. Windows remembers a program's mute across restarts, so each session is written down
-/// before it is muted, and every way out unmutes it: turning it off, Put back, the view closing, exit, the recovery
-/// watcher and the next start. A session that was muted already is never touched, so it stays muted.
-/// </summary>
+// Windows remembers a program's mute across restarts, so each session is written down before it is muted, and every way
+// out unmutes it. A session that was muted already is never touched.
 internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Func<uint, string>? pathOf = null)
 {
-    /// <summary>A process's program path. Tests give their own, for sessions that aren't real.</summary>
     private readonly Func<uint, string> _pathOf = pathOf ?? ProcessInfo.PathOf;
 
     private const int ReapplyMilliseconds = 1000;
 
-    /// <summary>Each view's window whose program the person muted, with that program's path.</summary>
     private readonly Dictionary<nint, string> _mutedWindows = [];
     private readonly List<MutedSession> _sessions = [];
-    /// <summary>Muted sessions on a device that went away before they could be unmuted: the next start unmutes them.</summary>
-    /// <remarks>Read at start, after <see cref="Recover"/> has unmuted what it could, so saving never drops them.</remarks>
+    // Read at start, after Recover has unmuted what it could, so saving never drops them.
     private readonly List<MutedSession> _elsewhere = journalPath is null ? [] : [.. Load(journalPath)];
     private long _reapplyAt;
 
-    /// <summary>True while anything WinScreen muted is still muted: a recovery watcher is then needed.</summary>
     public bool AnyMuted => _mutedWindows.Count > 0 || _sessions.Count > 0;
 
     public bool Has(nint window) => _mutedWindows.ContainsKey(window);
 
-    /// <summary>
-    /// Null when the window's program has no sound session, so there is nothing to offer; otherwise whether WinScreen
-    /// has it muted for this window.
-    /// </summary>
     public bool? State(nint window)
     {
         if (_mutedWindows.ContainsKey(window)) return true;
@@ -47,7 +32,6 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
         return program.Length > 0 && SessionsOf(program, audio.List()).Any() ? false : null;
     }
 
-    /// <summary>Mutes the window's program. False when it couldn't be written down first, and nothing changed.</summary>
     public bool Mute(nint window)
     {
         string program = ProgramOf(window);
@@ -58,7 +42,6 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
         return false;
     }
 
-    /// <summary>Takes the window's mute away; the program is unmuted once no other view keeps it muted. False when that failed.</summary>
     public bool Unmute(nint window)
     {
         if (!_mutedWindows.Remove(window, out string? program)) return true;
@@ -66,7 +49,6 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
         return UnmuteProgram(program);
     }
 
-    /// <summary>Unmutes everything WinScreen muted. How many programs couldn't be unmuted.</summary>
     public int UnmuteAll()
     {
         _mutedWindows.Clear();
@@ -76,10 +58,8 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
         return failed;
     }
 
-    /// <summary>
-    /// While a program is muted, sessions it starts later are muted too: a browser starts its sound process only when a
-    /// page plays, and starts it again. A session the person unmuted in Windows' mixer is left as they set it.
-    /// </summary>
+    // A browser starts its sound process only when a page plays, so sessions started later are muted too. One the
+    // person unmuted in Windows' mixer is left as they set it.
     public void Reapply()
     {
         if (_mutedWindows.Count == 0 || Environment.TickCount64 < _reapplyAt) return;
@@ -128,10 +108,7 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
         return saved;
     }
 
-    /// <summary>
-    /// The session itself while it lasts; after the program restarted, its new sessions under the same identifier, which
-    /// Windows started muted because it remembered.
-    /// </summary>
+    // After a restart, Windows starts the program's new sessions muted under the same identifier.
     private static void Unmute(IAudioSessions audio, AudioSession[] now, MutedSession session)
     {
         bool stillThere = now.Any(candidate => candidate.Device == session.Device && candidate.Instance == session.Instance);
@@ -190,7 +167,6 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
         File.Move(temporary, path, overwrite: true);
     }
 
-    /// <summary>What the file holds. A file that can't be read as a list of sessions is moved aside and counts as empty.</summary>
     internal static MutedSession[] Load(string path)
     {
         if (!File.Exists(path)) return [];
@@ -217,11 +193,6 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
         }
     }
 
-    /// <summary>
-    /// Unmutes what a copy of WinScreen that ended without warning left muted: at the next start, from the recovery
-    /// watcher, and from exit and crash handlers. A session on a device that isn't there now stays written down for the
-    /// next time. How many sessions are left.
-    /// </summary>
     public static int Recover(IAudioSessions audio, string path)
     {
         MutedSession[] left = Load(path);

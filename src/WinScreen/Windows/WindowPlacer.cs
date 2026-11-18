@@ -5,11 +5,8 @@ using WinScreen.Native;
 
 namespace WinScreen.Windows;
 
-/// <summary>
-/// Puts windows where the person asks. These are the person's own choices, so unlike
-/// <see cref="WindowController"/>'s effects they aren't journaled and Restore all leaves them alone. A
-/// short memory, gone at exit, backs Restore prior geometry.
-/// </summary>
+// The person's own choices, so unlike WindowController's effects they aren't journalled and Restore all leaves them
+// alone. A short memory, gone at exit, backs Restore prior geometry.
 public sealed class WindowPlacer(WindowController windows)
 {
     private const int HistoryDepth = 5;
@@ -29,7 +26,6 @@ public sealed class WindowPlacer(WindowController windows)
         Place(window, new Rectangle(PlacementGeometry.Align(frame.Size, screen.WorkingArea, anchor), frame.Size), screen, unmaximize: true);
     }
 
-    /// <summary>Sets the visible frame exactly, in screen pixels. A maximized window comes back to its usual size for it.</summary>
     public void SetFrame(nint window, Rectangle frame)
     {
         Check(window);
@@ -37,7 +33,6 @@ public sealed class WindowPlacer(WindowController windows)
         Place(window, frame, Screen.FromRectangle(frame), unmaximize: true);
     }
 
-    /// <exception cref="WindowOperationException">There's only one display, or the window refused.</exception>
     public void MoveToNextDisplay(nint window)
     {
         Check(window);
@@ -90,7 +85,6 @@ public sealed class WindowPlacer(WindowController windows)
         Place(window, PlacementGeometry.FrameOnDisplay(original, from.WorkingArea, current.WorkingArea, moved.Size), current);
     }
 
-    /// <summary>Puts a window back where it was before the last placement. False when there's nothing to go back to.</summary>
     public bool RestorePrior(nint window)
     {
         Check(window);
@@ -114,7 +108,6 @@ public sealed class WindowPlacer(WindowController windows)
         return true;
     }
 
-    /// <summary>Notes where a window is, so the move about to happen can be undone.</summary>
     internal void Remember(nint window)
     {
         var placement = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() };
@@ -143,7 +136,6 @@ public sealed class WindowPlacer(WindowController windows)
 
     private static bool IsPlainlyOnScreen(nint window) => !User32.IsIconic(window) && !User32.IsZoomed(window);
 
-    /// <summary>The visible frame, or for a minimized or maximized window where it would go back to.</summary>
     private static Rectangle FrameOf(nint window, Screen screen)
     {
         if (IsPlainlyOnScreen(window))
@@ -161,11 +153,6 @@ public sealed class WindowPlacer(WindowController windows)
             normal.Right + area.Left - all.Left, normal.Bottom + area.Top - all.Top);
     }
 
-    /// <summary>
-    /// Puts the visible frame at <paramref name="target"/>. A minimized window stays minimized and comes back there.
-    /// A maximized one, which fills its display whatever its place, is made its usual size first with
-    /// <paramref name="unmaximize"/>, so the place chosen can be seen; otherwise it too comes back there.
-    /// </summary>
     private void Place(nint window, Rectangle target, Screen screen, bool unmaximize = false)
     {
         if (unmaximize && User32.IsZoomed(window) && !User32.IsIconic(window))
@@ -198,7 +185,6 @@ public sealed class WindowPlacer(WindowController windows)
             throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
     }
 
-    /// <summary>A minimized or maximized window stays that way, and is given a new place to come back to.</summary>
     private static void PlaceHidden(nint window, Rectangle target, Screen screen, int? show = null)
     {
         var placement = new WindowPlacement { Length = Marshal.SizeOf<WindowPlacement>() };
@@ -212,7 +198,6 @@ public sealed class WindowPlacer(WindowController windows)
             throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
     }
 
-    /// <summary>Waits briefly for an app to finish reacting to a move, in case it resizes itself.</summary>
     private static void Settle(nint window)
     {
         Rectangle last = default;

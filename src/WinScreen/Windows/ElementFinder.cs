@@ -3,12 +3,8 @@ using WinScreen.Native;
 
 namespace WinScreen.Windows;
 
-/// <summary>
-/// Finds the control under the pointer during a crop or region selection, by asking the app through UI
-/// Automation for rectangles only: no pixels, text recognition or models. A slow or silent app can't hold
-/// anything up, because the asking happens on its own thread and the newest question replaces any waiting one.
-/// It exists only for the length of a selection.
-/// </summary>
+// Rectangles only, through UI Automation. Asked on its own thread, the newest question replacing any waiting one, so a
+// slow app can't hold anything up.
 internal sealed unsafe class ElementFinder : IDisposable
 {
     private const int DeepestLevel = 24;
@@ -26,7 +22,6 @@ internal sealed unsafe class ElementFinder : IDisposable
     private long _question = long.MinValue;
     private volatile bool _stopping;
 
-    /// <param name="overlay">The selection window, which is skipped when looking for what's under the pointer.</param>
     public ElementFinder(nint overlay)
     {
         _overlay = overlay;
@@ -35,7 +30,7 @@ internal sealed unsafe class ElementFinder : IDisposable
         thread.Start();
     }
 
-    /// <summary>Raised off the UI thread with the control under the pointer, or null when there's no answer.</summary>
+    // Raised off the UI thread.
     public event Action<FoundElement?>? Found;
 
     public void Ask(Point screen)
@@ -78,10 +73,8 @@ internal sealed unsafe class ElementFinder : IDisposable
         }
     }
 
-    /// <summary>The smallest control at a screen point in this window, or the window's own rectangle if it has none.</summary>
     internal static Rectangle? Find(nint window, Point point) => FindElement(window, point)?.Bounds;
 
-    /// <summary>The smallest control at a screen point in this window, with the way to find it again.</summary>
     internal static FoundElement? FindElement(nint window, Point point)
     {
         var path = new List<int>();
@@ -101,10 +94,6 @@ internal sealed unsafe class ElementFinder : IDisposable
         });
     }
 
-    /// <summary>
-    /// Where a control found earlier is now, by the same way down the window's controls and of the same kind; null
-    /// when the window's controls have changed so that it isn't there any more (roadmap P2-11, step 8.1).
-    /// </summary>
     internal static Rectangle? Locate(FoundElement earlier)
     {
         return Walk<Rectangle?>(earlier.Window, (walker, element) =>
@@ -121,10 +110,7 @@ internal sealed unsafe class ElementFinder : IDisposable
         });
     }
 
-    /// <summary>
-    /// Runs a look at a window's controls from its own element down, on the calling thread. The step is given the
-    /// window's element and hands back whichever element it holds at the end, which is released here.
-    /// </summary>
+    // The step's held element is released here.
     private static T? Walk<T>(nint window, Func<nint, nint, (nint Held, T? Result)> step)
     {
         nint automation = 0, walker = 0, element = 0;
@@ -152,7 +138,7 @@ internal sealed unsafe class ElementFinder : IDisposable
         }
     }
 
-    /// <summary>The child at this place among <paramref name="element"/>'s children, which the caller releases, or 0.</summary>
+    // The caller releases the result.
     private static nint ChildNumber(nint walker, nint element, int index)
     {
         nint child = 0;
@@ -174,7 +160,7 @@ internal sealed unsafe class ElementFinder : IDisposable
         return ((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(element, ControlType))(element, &type) == 0 ? type : 0;
     }
 
-    /// <summary>The child of <paramref name="element"/> containing the point, which the caller releases, or 0.</summary>
+    // The caller releases the result.
     private static nint ChildAt(nint walker, nint element, Point point, out int index)
     {
         index = -1;
@@ -209,7 +195,6 @@ internal sealed unsafe class ElementFinder : IDisposable
 
     private static nint Slot(nint com, int index) => (*(nint**)com)[index];
 
-    /// <summary>The first real window under a point, going down the stack from the selection window.</summary>
     private static nint WindowBelow(nint overlay, Point point)
     {
         for (nint window = GetWindow(overlay, GW_HWNDNEXT); window != 0; window = GetWindow(window, GW_HWNDNEXT))
@@ -230,8 +215,4 @@ internal sealed unsafe class ElementFinder : IDisposable
     private static extern int CoCreateInstance(in Guid implementation, nint outer, uint context, in Guid wanted, out nint instance);
 }
 
-/// <summary>
-/// A control found in a window: where it was on screen, and the way to it among the window's controls (the place of
-/// each among its parent's children) with its kind, to find it again after the window changes.
-/// </summary>
 internal sealed record FoundElement(Rectangle Bounds, nint Window, int[] Path, int ControlType);

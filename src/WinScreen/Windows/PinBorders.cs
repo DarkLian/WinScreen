@@ -3,7 +3,6 @@ using WinScreen.Settings;
 
 namespace WinScreen.Windows;
 
-/// <summary>A red frame around every pinned window, keeping up with them as they move.</summary>
 public sealed class PinBorders : IDisposable
 {
     private readonly Dictionary<nint, PinBorder> _borders = [];
@@ -21,7 +20,6 @@ public sealed class PinBorders : IDisposable
         _timer.Tick += (_, _) => FollowAll();
     }
 
-    /// <summary>Makes these windows, and no others, the ones with a frame.</summary>
     public void Show(IReadOnlyCollection<nint> windows)
     {
         foreach ((nint window, PinBorder border) in _borders.ToArray())
@@ -59,7 +57,6 @@ public sealed class PinBorders : IDisposable
     }
 }
 
-/// <summary>Click-through and never active, so to everything but the eye it isn't there.</summary>
 internal sealed class PinBorder : Form
 {
     private PinBorderPreferences _preferences = new();
@@ -143,7 +140,7 @@ internal sealed class PinBorder : Form
         CutOutTheMiddle(Size);
     }
 
-    /// <summary>Just above rather than above everything, so a pinned window under another one doesn't show through.</summary>
+    // Just above rather than above everything, so a pinned window under another one doesn't show through.
     private void StayJustAboveTarget()
     {
         nint above = User32.GetWindow(_target, User32.GW_HWNDPREV);

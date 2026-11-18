@@ -2,20 +2,13 @@ using WinScreen.Native;
 
 namespace WinScreen.Windows;
 
-/// <summary>
-/// The watchdog for looks (11.1): no look may make a window take fewer clicks than it did (INV-18). Four times a
-/// second each window with a look is asked where a press at its middle would go. One that keeps sending presses
-/// elsewhere for a second has its look turned off, and the person is told.
-/// </summary>
+// No look may make a window take fewer clicks than it did (INV-18).
 internal sealed class PressWatch
 {
     internal const long FailingFor = 1000;
     private readonly Dictionary<nint, long> _failingSince = [];
 
-    /// <summary>
-    /// Takes this check's answers (true: presses arrive; false: they go elsewhere; null: can't be told now, such as
-    /// when something of the person's is above the window there) and returns the windows whose look should go.
-    /// </summary>
+    // null: can't be told now, such as when something of the person's is above the window there.
     public List<nint> Check(IEnumerable<(nint Window, bool? TakesPresses)> answers, long now)
     {
         var turnOff = new List<nint>();
@@ -43,12 +36,8 @@ internal sealed class PressWatch
         return turnOff;
     }
 
-    /// <summary>
-    /// Where a press at the middle of the window would go. The look's own overlay catching it, or a window below
-    /// getting it, means the window doesn't take presses; a window above it there is the person's own arrangement.
-    /// A window the person made click-through sends its presses below by their choice, so it can't be told; a cropped
-    /// one is asked at the middle of the part it keeps.
-    /// </summary>
+    // A window above it there is the person's own arrangement. One the person made click-through sends presses below by
+    // choice, so it can't be told; a cropped one is asked at the middle of the part it keeps.
     public static bool? TakesPresses(nint window, nint overlay, WindowController? windows = null)
     {
         if (!User32.IsWindow(window) || !User32.IsWindowVisible(window) || User32.IsIconic(window)) return null;
@@ -73,7 +62,6 @@ internal sealed class PressWatch
         return IsAbove(root, window) ? null : false;
     }
 
-    /// <summary>Whether <paramref name="other"/> is above <paramref name="window"/> in Windows' order.</summary>
     private static bool IsAbove(nint other, nint window)
     {
         nint above = window;

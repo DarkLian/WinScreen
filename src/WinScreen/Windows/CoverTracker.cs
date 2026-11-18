@@ -1,12 +1,9 @@
 namespace WinScreen.Windows;
 
-/// <summary>One window in the stack. <paramref name="Covers"/> is false for anything you can see through.</summary>
 internal readonly record struct StackedWindow(nint Handle, Rectangle Bounds, bool Covers, bool CanBeCovered);
 
-/// <summary>Works out which windows are out of sight. Pure, so it can be tested with plain rectangles.</summary>
 internal static class CoverTracker
 {
-    /// <summary>The windows entirely hidden by those above them, topmost first. Several windows can share the job.</summary>
     public static List<nint> FullyCovered(IReadOnlyList<StackedWindow> topFirst)
     {
         var covered = new List<nint>();

@@ -4,10 +4,6 @@ using WinScreen.Pip;
 
 namespace WinScreen.Windows;
 
-/// <summary>
-/// Covers a window for a moment so the part to keep can be dragged out. Escape, a right-click or
-/// clicking elsewhere cancels. <see cref="Chosen"/> gives the part in window coordinates.
-/// </summary>
 public sealed class CropOverlay : Form
 {
     private const int SmallestSide = 20;
@@ -41,7 +37,6 @@ public sealed class CropOverlay : Form
 
     public event Action<Rectangle>? Chosen;
 
-    /// <summary>The control taken with a click, when the part is one; null for a part dragged out by hand.</summary>
     internal FoundElement? ChosenElement { get; private set; }
 
     public void ShowOnTop()
@@ -54,7 +49,6 @@ public sealed class CropOverlay : Form
         _finder.Found += ShowHint;
     }
 
-    /// <summary>Marks the control under the pointer, so a click can take it without any dragging.</summary>
     private void ShowHint(FoundElement? found)
     {
         if (IsDisposed || !IsHandleCreated)
@@ -74,7 +68,7 @@ public sealed class CropOverlay : Form
         });
     }
 
-    /// <summary>Moving onto a monitor with other scaling must not change what's covered.</summary>
+    // Moving onto a monitor with other scaling must not change what's covered.
     protected override void OnDpiChanged(DpiChangedEventArgs e)
     {
         base.OnDpiChanged(e);
@@ -178,8 +172,8 @@ public sealed class CropOverlay : Form
         Close();
     }
 
-    /// <summary>The instructions, solid on a dark box in a window of their own over the dimmed one, so app text
-    /// under the dimming can't show through them. Clicks and the pointer pass through to the overlay.</summary>
+    // A window of its own over the dimmed one, so app text under the dimming can't show through. Clicks pass through to
+    // the overlay.
     internal sealed class Instructions : Form
     {
         private const int WM_NCHITTEST = 0x0084;
@@ -202,7 +196,6 @@ public sealed class CropOverlay : Form
             ForeColor = SystemInformation.HighContrast ? SystemColors.WindowText : Color.White;
         }
 
-        /// <summary>Shows the words in the middle of an area of the screen, wrapped to fit it.</summary>
         public void ShowOver(Rectangle area)
         {
             Place(area);

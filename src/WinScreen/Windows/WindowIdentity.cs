@@ -5,15 +5,13 @@ using WinScreen.Native;
 
 namespace WinScreen.Windows;
 
-/// <summary>A per-window native property disappears when HWND is destroyed, even if its PID/thread reuse the handle.</summary>
+// A per-window native property disappears when the window is destroyed, even if its process and thread ids are reused.
 internal sealed record WindowIdentity(nint Window, uint ProcessId, uint ThreadId, long ProcessStartTicks, long Token)
 {
     internal const string PropertyName = "WinScreen.WindowIdentity.v1";
 
-    /// <summary>
-    /// Notes which window this is without touching it. Enough to follow the window in use; anything that
-    /// is about to change a window uses <see cref="Capture"/>, so windows WinScreen never acts on stay untouched.
-    /// </summary>
+    // Without touching the window: anything about to change a window uses Capture, so windows WinScreen never acts on
+    // stay untouched.
     internal static WindowIdentity Observe(nint window)
     {
         uint thread = User32.GetWindowThreadProcessId(window, out uint pid);
@@ -54,7 +52,6 @@ internal sealed record WindowIdentity(nint Window, uint ProcessId, uint ThreadId
         }
     }
 
-    /// <summary>True while the window and its process are the ones noted by <see cref="Observe"/>.</summary>
     internal bool IsSameWindow()
     {
         uint thread = User32.GetWindowThreadProcessId(Window, out uint pid);
@@ -86,11 +83,8 @@ internal sealed record WindowIdentity(nint Window, uint ProcessId, uint ThreadId
         }
     }
 
-    /// <summary>
-    /// The quick form of <see cref="Matches"/> for a mouse hook, which Windows drops if it answers slowly. The
-    /// marker WinScreen put on the window goes when the window does, so it tells a reused handle apart without
-    /// opening the process.
-    /// </summary>
+    // For a mouse hook, which Windows drops if it answers slowly: the marker tells a reused handle apart without
+    // opening the process.
     internal bool StillThere()
     {
         uint thread = User32.GetWindowThreadProcessId(Window, out uint pid);

@@ -3,7 +3,6 @@ using WinScreen.Native;
 
 namespace WinScreen.Windows;
 
-/// <summary>Reads the desktop's windows from the top down, for <see cref="CoverTracker"/>.</summary>
 internal static class WindowStack
 {
     private delegate bool EnumCallback(nint window, nint state);
@@ -42,7 +41,6 @@ internal static class WindowStack
     private static bool IsCloaked(nint window) =>
         Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0;
 
-    /// <summary>Concealed, translucent and click-through windows leave what's behind them in view.</summary>
     private static bool IsSolid(nint window)
     {
         long style = User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE);

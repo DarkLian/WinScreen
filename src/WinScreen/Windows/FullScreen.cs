@@ -5,10 +5,8 @@ namespace WinScreen.Windows;
 
 public enum FullScreenState { None, Busy, Exclusive, Presentation }
 
-/// <summary>What a command should do while a full-screen app is running.</summary>
 public enum FullScreenAction { Run, CloseLatestView, Refuse, ExplainExclusive }
 
-/// <summary>Tells when a game or other full-screen app is running.</summary>
 public static partial class FullScreen
 {
     private const int NotPresent = 1;
@@ -34,30 +32,21 @@ public static partial class FullScreen
 
     public static bool IsActive() => Current() != FullScreenState.None;
 
-    /// <summary>True while the PC is locked, on a screen saver, or switched to another user.</summary>
     public static bool IsAway() => SHQueryUserNotificationState(out int state) == 0 && state == NotPresent;
 }
 
-/// <summary>
-/// Which commands go ahead during a full-screen app. Pausing stops new changes, but anything that only
-/// removes one of WinScreen's own views always works, so a view can never be left stuck over a game.
-/// </summary>
+// Anything that only removes one of WinScreen's own views always works, so a view can never be left stuck over a game.
 public static class FullScreenPolicy
 {
-    /// <summary>
-    /// What WinScreen treats as full screen. Windows calls any foreground window that covers its display a
-    /// full-screen app, and Fill display makes one; a window WinScreen filled itself is not a game to step back for.
-    /// A game's own exclusive mode and a presentation still count.
-    /// </summary>
+    // Windows calls any foreground window that covers its display full screen, and Fill display makes one; a window
+    // WinScreen filled itself is not a game to step back for. A game's exclusive mode and a presentation still count.
     public static FullScreenState Seen(FullScreenState reported, nint foreground, Func<nint, bool> filledByWinScreen) =>
         reported == FullScreenState.Busy && foreground != 0 && filledByWinScreen(foreground) ? FullScreenState.None : reported;
 
-    /// <param name="targetHasView">The command would take away a view of the window it was aimed at.</param>
-    /// <param name="anyViewOpen">A view is open somewhere. A hotkey pressed in a game is aimed at the game, not at the view.</param>
+    // anyViewOpen: a hotkey pressed in a game is aimed at the game, not at the view.
     public static FullScreenAction Decide(AppCommand command, FullScreenState state, bool pause, bool allowPip,
         bool targetHasView, bool anyViewOpen, bool targetIsBorderless = false)
     {
-        // Taking something away always works, so nothing WinScreen added can be left stuck over a game.
         if (command is AppCommand.RestoreAll or AppCommand.RestoreWindow || Settings.CommandCatalog.Everywhere.Contains(command) ||
             (targetIsBorderless && command is AppCommand.ToggleBorderless or AppCommand.ToggleBorderlessFill))
             return FullScreenAction.Run;

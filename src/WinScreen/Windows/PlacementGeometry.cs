@@ -7,7 +7,6 @@ public enum ResizeEdges { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 }
 
 public enum SnapZone { None, Maximize, Left, Right, TopLeft, TopRight, BottomLeft, BottomRight }
 
-/// <summary>The arithmetic of placing a window, kept apart from Windows so it can be tested directly.</summary>
 public static class PlacementGeometry
 {
     internal static Rectangle FrameOnDisplay(Rectangle original, Rectangle from, Rectangle to, Size destinationSize)
@@ -19,10 +18,6 @@ public static class PlacementGeometry
             to.Top + (int)Math.Round(top * (to.Height - size.Height)), size.Width, size.Height);
     }
 
-    /// <summary>
-    /// A frame given a new size: its top-left corner stays, unless that would put part of it off the work area, in
-    /// which case it moves back in; a size bigger than the work area is cut to it.
-    /// </summary>
     public static Rectangle Resized(Rectangle frame, Size size, Rectangle area)
     {
         var fitted = new Size(Math.Min(size.Width, area.Width), Math.Min(size.Height, area.Height));
@@ -31,7 +26,6 @@ public static class PlacementGeometry
         return new Rectangle(left, top, fitted.Width, fitted.Height);
     }
 
-    /// <summary>Where a frame of this size sits at this anchor of the work area. A frame too big for it starts at the corner.</summary>
     public static Point Align(Size frame, Rectangle area, WindowAnchor anchor)
     {
         int column = (int)anchor % 3, row = (int)anchor / 3;
@@ -40,16 +34,11 @@ public static class PlacementGeometry
             area.Top + Math.Max(0, area.Height - frame.Height) * row / 2);
     }
 
-    /// <summary>
-    /// The rectangle to hand to Windows so the visible frame lands on <paramref name="target"/>. A window's
-    /// real rectangle includes invisible resize margins, which is the gap between <paramref name="outer"/>
-    /// and <paramref name="frame"/>.
-    /// </summary>
+    // A window's real rectangle includes invisible resize margins: the gap between outer and frame.
     public static Rectangle OuterFor(Rectangle target, Rectangle frame, Rectangle outer) => Rectangle.FromLTRB(
         target.Left - (frame.Left - outer.Left), target.Top - (frame.Top - outer.Top),
         target.Right + (outer.Right - frame.Right), target.Bottom + (outer.Bottom - frame.Bottom));
 
-    /// <summary>The same place on another screen, as shares of the free space, kept on that screen.</summary>
     public static Point SamePlaceOn(Rectangle frame, Rectangle from, Rectangle to)
     {
         double left = from.Width > frame.Width ? Math.Clamp((frame.Left - from.Left) / (double)(from.Width - frame.Width), 0, 1) : 0;
@@ -58,7 +47,6 @@ public static class PlacementGeometry
             to.Top + (int)Math.Round(top * Math.Max(0, to.Height - frame.Height)));
     }
 
-    /// <summary>Which edges a resize grabs for a press at this point: the third of the window it's in, each way.</summary>
     public static ResizeEdges EdgesAt(Point point, Rectangle window)
     {
         ResizeEdges edges = ResizeEdges.None;
@@ -69,7 +57,6 @@ public static class PlacementGeometry
         return edges == ResizeEdges.None ? ResizeEdges.Right | ResizeEdges.Bottom : edges;
     }
 
-    /// <summary>The window after dragging these edges by this much, never smaller than <paramref name="smallest"/>.</summary>
     public static Rectangle Resized(Rectangle window, ResizeEdges edges, Size moved, Size smallest)
     {
         int left = window.Left, top = window.Top, right = window.Right, bottom = window.Bottom;
@@ -80,11 +67,8 @@ public static class PlacementGeometry
         return Rectangle.FromLTRB(left, top, right, bottom);
     }
 
-    /// <summary>
-    /// Which snap a dragged window gets with the pointer here. Only an edge with no other display past it
-    /// counts, so the pointer can still cross to a neighbouring display. Near a side edge's ends it's a corner;
-    /// the bottom edge doesn't snap, as in Windows.
-    /// </summary>
+    // Only an edge with no other display past it counts, so the pointer can still cross to a neighbouring display. The
+    // bottom edge doesn't snap, as in Windows.
     public static SnapZone SnapZoneAt(Point pointer, Rectangle display, bool leftOpen, bool topOpen, bool rightOpen)
     {
         const int Reach = 1;
@@ -99,7 +83,6 @@ public static class PlacementGeometry
         return SnapZone.None;
     }
 
-    /// <summary>The visible frame a snap gives, inside a display's work area. Maximize fills it.</summary>
     public static Rectangle SnapFrame(SnapZone zone, Rectangle area)
     {
         int halfWidth = area.Width / 2, halfHeight = area.Height / 2;
@@ -115,10 +98,6 @@ public static class PlacementGeometry
         };
     }
 
-    /// <summary>
-    /// Where a window that's coming out of maximized or snapped goes, so the point that was grabbed stays
-    /// under the pointer: the same share across and down the smaller window as it was of the bigger one.
-    /// </summary>
     public static Rectangle RestoredUnder(Point pointer, Point grabbed, Rectangle before, Size restored)
     {
         double across = before.Width > 0 ? Math.Clamp((grabbed.X - before.Left) / (double)before.Width, 0, 1) : 0.5;
@@ -127,6 +106,5 @@ public static class PlacementGeometry
             pointer.Y - (int)Math.Round(down * restored.Height), restored.Width, restored.Height);
     }
 
-    /// <summary>The display after <paramref name="current"/>, wrapping round, or -1 when there's only one.</summary>
     public static int NextDisplay(int current, int count) => count < 2 ? -1 : (Math.Max(0, current) + 1) % count;
 }

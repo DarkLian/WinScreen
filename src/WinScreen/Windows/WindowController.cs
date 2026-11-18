@@ -6,13 +6,8 @@ using WinScreen.Native;
 
 namespace WinScreen.Windows;
 
-/// <summary>A Windows call refused a change, for example because the target runs as administrator.</summary>
 public sealed class WindowOperationException(string message) : Exception(message);
 
-/// <summary>
-/// Changes other programs' windows (pin, opacity, click-through) and remembers how each one
-/// looked first, so every change can be undone.
-/// </summary>
 public sealed partial class WindowController(IEnumerable<string> excludedProcesses, ChangeJournal? journal = null)
 {
     public const byte OpacityStep = 26;
@@ -36,7 +31,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     private const int CaptionMetric = 4, FrameMetric = 33, PaddingMetric = 92;
     private const int RollUpSlack = 24;
 
-    /// <summary>Parts of Windows itself that can hold the focus but aren't windows a person would change.</summary>
     private static readonly HashSet<string> ShellClasses = new(StringComparer.Ordinal)
     {
         "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "TopLevelWindowForOverflowXamlIsland",
@@ -115,10 +109,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public bool TaskbarButtonRemoved { get; set; }
         public int? OriginalDarkTitleBar { get; set; }
         public bool BorderHidden { get; set; }
-        /// <summary>
-        /// Only in a record left by 1.1.2-beta.3, which disabled hidden originals (a disabled Chrome stops drawing
-        /// video, so that was taken out): recovery enables the window again.
-        /// </summary>
+        // Only in a record left by 1.1.2-beta.3, which disabled hidden originals (a disabled Chrome stops drawing
+        // video): recovery enables the window again.
         public bool DisabledWhileHidden { get; set; }
     }
 
@@ -129,12 +121,10 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     private bool _recoveryBlocked;
     public string? RecoveryWarning { get; private set; }
 
-    /// <summary>True while recovery data can't be read, so new changes must wait.</summary>
     public bool RecoveryBlocked => _recoveryBlocked;
 
     public IReadOnlyList<string> RestoreFailures { get; private set; } = [];
 
-    /// <summary>The level the default see-through command and click-through use.</summary>
     public byte DefaultOpacity { get; set; } = ClickThroughOpacity;
 
     internal Action<string, nint>? Checkpoint { get; set; }
@@ -189,7 +179,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             _excluded = new HashSet<string>(programs, StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>Limits WinScreen to these programs. An empty list means every program.</summary>
     public void SetIncluded(IEnumerable<string> programs)
     {
         lock (_gate)
@@ -209,11 +198,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                    state.GlassColor is not null;
     }
 
-    /// <summary>
-    /// Makes a window's background see-through and click-through by removing its most common colour,
-    /// or puts the background back. Works where a program draws that colour exactly.
-    /// Returns the new state.
-    /// </summary>
+    // Works only where a program draws its most common colour exactly.
     public bool ToggleGlass(nint window)
     {
         lock (_gate)
@@ -268,10 +253,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             return _changed.TryGetValue(window, out ChangedWindow? state) && state.Identity.Matches() && state.Cropped;
     }
 
-    /// <summary>
-    /// Keeps only this part of a window, given in window coordinates: the rest disappears and clicks
-    /// there go to whatever is behind. The program isn't resized, so it keeps working as before.
-    /// </summary>
+    // The program isn't resized, so it keeps working as before.
     public void Crop(nint window, Rectangle part)
     {
         lock (_gate)
@@ -317,7 +299,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>Shows the whole window again.</summary>
     public void RemoveCrop(nint window)
     {
         lock (_gate)
@@ -340,11 +321,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         RestoreFrameLook(window, state);
     }
 
-    /// <summary>
-    /// Windows 11 still draws a window's backdrop (Mica, which Chrome's and other apps' windows use), border and rounded
-    /// corners over its whole size when only part is kept, so the rest showed as a dark panel covering what's behind
-    /// (the owner, 15 Nov). They are off while cropped and back when the crop ends.
-    /// </summary>
+    // Windows 11 still draws a window's backdrop (Mica), border and rounded corners over its whole size when only part
+    // is kept, so the rest showed as a dark panel. They are off while cropped.
     private static void HideFrameLook(nint window, ChangedWindow state)
     {
         int backdrop = Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_SYSTEMBACKDROP_TYPE, out int b, sizeof(int)) == 0 ? b : 0;
@@ -371,11 +349,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                    state.PlacementBeforeRollUp is not null && StillRolledUp(window, state);
     }
 
-    /// <summary>
-    /// Whether a rolled-up window still is. Maximized or made taller since, by the person or the app, the roll-up is
-    /// over: a maximized one gets its height back for when it's restored, and a size the person chose is kept. So the
-    /// menu's tick and the next Roll up follow the window rather than a size from before. Minimized still counts.
-    /// </summary>
+    // Maximized or made taller since, the roll-up is over: a maximized one gets its height back for when it's restored,
+    // and a size the person chose is kept. Minimized still counts.
     private bool StillRolledUp(nint window, ChangedWindow state)
     {
         if (state.PlacementBeforeRollUp is null) return false;
@@ -402,11 +377,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                2 * (User32.GetSystemMetricsForDpi(FrameMetric, dpi) + User32.GetSystemMetricsForDpi(PaddingMetric, dpi));
     }
 
-    /// <summary>
-    /// Shrinks a window to its title bar, or brings its height back. Returns the new state. It's journaled
-    /// because a crash would otherwise leave the window that small. Windows that draw their own title bar or
-    /// enforce a minimum height can refuse, which is read back and reported rather than left half done.
-    /// </summary>
+    // Journalled, or a crash would leave the window that small. Windows that draw their own title bar or enforce a
+    // minimum height can refuse, which is read back and reported.
     public bool ToggleRollUp(nint window)
     {
         lock (_gate)
@@ -463,7 +435,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>Gives a window its height back and nothing else, so wherever it was moved since is kept.</summary>
+    // Height only, so wherever it was moved since is kept.
     private void RollDown(nint window, ChangedWindow state)
     {
         if (state.PlacementBeforeRollUp is not { } before)
@@ -487,10 +459,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
 
     private const int ShowMinimized = 2, ShowMaximized = 3, RestoreToMaximized = 2;
 
-    /// <summary>
-    /// Brings a minimized or maximized window back to its usual size and place, as its own Restore would. Returns
-    /// whether it was maximized (or minimized from maximized), so a change can put that back later.
-    /// </summary>
+    // Returns whether it was maximized (or minimized from maximized), so that can be put back later.
     private bool BringBackToNormal(nint window)
     {
         bool maximized = User32.IsZoomed(window) ||
@@ -505,7 +474,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         return maximized;
     }
 
-    /// <summary>The windows that are pinned right now and can be seen, for the highlight.</summary>
     public nint[] VisiblePinnedWindows()
     {
         lock (_gate)
@@ -519,7 +487,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>Applies the options that depend on where the mouse is and what the windows are doing.</summary>
     public void Refresh(Point cursor, bool opaqueOnHover, bool pausePinWhenMaximized)
     {
         var undone = new List<(nint Window, string Text)>();
@@ -527,10 +494,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         foreach ((nint window, string text) in undone) ChangeUndone?.Invoke(window, text);
     }
 
-    /// <summary>
-    /// Something the person or the app did undid one of WinScreen's changes, and WinScreen let go of it: the window,
-    /// and what to tell the person.
-    /// </summary>
     public event Action<nint, string>? ChangeUndone;
 
     private void RefreshRecords(Point cursor, bool opaqueOnHover, bool pausePinWhenMaximized, List<(nint Window, string Text)> undone)
@@ -571,12 +534,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     private const int PinTakingsAllowed = 3;
     private const long PinTakingSpan = 10_000;
 
-    /// <summary>
-    /// Another program took "always on top" away from a pinned window: it is put back, unless the window now covers
-    /// its display as the app's own full screen, which is left alone. Covering it because WinScreen filled it is not
-    /// that, so the pin goes back there too. A program that keeps taking it wins after a few tries rather than the two
-    /// fighting forever: Pin is let go of, and the person is told.
-    /// </summary>
+    // Put back unless the window now covers its display as the app's own full screen (WinScreen's own fill doesn't
+    // count). A program that keeps taking it wins after a few tries rather than the two fighting forever, and the
+    // person is told.
     private string? StillPinned(nint window, ChangedWindow state)
     {
         if (!state.Pinned || state.PinPaused || User32.IsIconic(window) || IsTopmost(window)) return null;
@@ -607,11 +567,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         User32.GetWindowRect(window, out Rect r) &&
         Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).Contains(Screen.FromHandle(window).Bounds);
 
-    /// <summary>
-    /// The app rewrote its own transparency or click-through: WinScreen lets go of its opacity, Glass and click-through
-    /// on that window rather than fight the app or later put back something the app now owns. It has to be seen on two
-    /// checks in a row, so a moment in passing doesn't count.
-    /// </summary>
+    // The app rewrote its own transparency or click-through: WinScreen lets go rather than fight it or later put back
+    // something the app now owns. Seen on two checks in a row, so a moment in passing doesn't count.
     private string? StillLayered(nint window, ChangedWindow state)
     {
         if (!state.Layered && !state.ClickThrough || state.HiddenButUsable) return null;
@@ -658,10 +615,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         return string.Format(T("errors.layered.rewritten"), WindowInfo.Title(window));
     }
 
-    /// <summary>
-    /// An app that took its crop off itself is no longer cropped, so the menu stops showing it. A crop keeps its
-    /// rectangle through a resize (8.1: one made from a control follows the control instead).
-    /// </summary>
+    // A crop keeps its rectangle through a resize (one made from a control follows the control instead).
     private static void StillCropped(nint window, ChangedWindow state)
     {
         if (!state.Cropped || User32.IsIconic(window) || WindowInfo.ShapeOf(window) is not null) return;
@@ -705,17 +659,11 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>
-    /// True when WinScreen may change this window: not the desktop, the taskbar, itself or an excluded
-    /// program, and one of the included programs when any are listed.
-    /// </summary>
     public bool CanControl(nint window) => Refusal(window) is null;
 
-    /// <summary>True for the desktop, taskbar and other parts of Windows, which fill screens without being apps.</summary>
     public static bool IsShell(nint window) => window == User32.GetShellWindow() || window == User32.GetDesktopWindow() ||
                                                ShellClasses.Contains(WindowInfo.ClassName(window));
 
-    /// <summary>Why WinScreen won't change this window, in words for the person, or null when it will.</summary>
     public string? Refusal(nint window)
     {
         if (window == 0 || !User32.IsWindow(window))
@@ -740,14 +688,12 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         return null;
     }
 
-    /// <summary>True when WinScreen is holding any change it could undo for this window.</summary>
     public bool HasChanges(nint window)
     {
         lock (_gate)
             return _changed.TryGetValue(window, out ChangedWindow? state) && state.Identity.Matches();
     }
 
-    /// <summary>Pins the window on top, or unpins it. Returns the new state.</summary>
     public bool TogglePin(nint window)
     {
         lock (_gate)
@@ -765,7 +711,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>Raises or lowers opacity by <paramref name="delta"/>, staying between the minimum and fully opaque.</summary>
     public byte ChangeOpacity(nint window, int delta)
     {
         lock (_gate)
@@ -776,20 +721,16 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>Sets an exact opacity, staying between the minimum and fully opaque.</summary>
     public byte SetOpacity(nint window, byte alpha)
     {
         lock (_gate)
             return Opacity(window, Track(window), Math.Max(alpha, MinimumOpacity));
     }
 
-    /// <summary>Raised when a window's opacity changes, with the opacity it has when shown.</summary>
     public event Action<nint, byte>? OpacityChanged;
 
-    /// <summary>
-    /// A hidden window keeps the opacity for when it's shown: given now, it showed the window through whatever hid it,
-    /// and under Dark mode or Glass, which draw it again, the window lost its see-through (the owner, 16 Nov).
-    /// </summary>
+    // A hidden window keeps the opacity for when it's shown: given now, it showed the window through whatever hid it,
+    // and under Dark or Glass the window lost its see-through.
     private byte Opacity(nint window, ChangedWindow state, byte alpha)
     {
         if (state.Hidden)
@@ -804,7 +745,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         return alpha;
     }
 
-    /// <summary>The opacity WinScreen has given this window; 255 for a window it hasn't changed.</summary>
     public byte OpacityOf(nint window)
     {
         lock (_gate)
@@ -813,10 +753,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 : (byte)255;
     }
 
-    /// <summary>
-    /// Puts a window behind all others. A window kept on top can't be at the bottom, so it stops being kept on top:
-    /// WinScreen's pin comes off, and a window that keeps itself on top loses that until it's put back.
-    /// </summary>
+    // A window kept on top can't be at the bottom, so it stops being kept on top until it's put back.
     public void SendToBottom(nint window)
     {
         if (Refusal(window) is { } refusal)
@@ -843,13 +780,11 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>Makes a solid window as see-through as the default level, or a see-through one solid.</summary>
     public byte ToggleDefaultOpacity(nint window)
     {
         return SetOpacity(window, OpacityOf(window) == 255 ? DefaultOpacity : (byte)255);
     }
 
-    /// <summary>Lets clicks pass through the window, or stops doing so. Returns the new state.</summary>
     public bool ToggleClickThrough(nint window)
     {
         lock (_gate)
@@ -879,13 +814,12 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>How many open windows WinScreen has made click-through.</summary>
     public int ClickThroughCount
     {
         get { lock (_gate) return _changed.Values.Count(state => state.ClickThrough && state.Identity.Matches()); }
     }
 
-    /// <summary>How many open windows WinScreen pinned. A window that was already on top by itself isn't counted.</summary>
+    // A window already on top by itself isn't counted.
     public int PinnedCount
     {
         get { lock (_gate) return _changed.Values.Count(state => PinnedHere(state) && state.Identity.Matches()); }
@@ -893,10 +827,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
 
     private static bool PinnedHere(ChangedWindow state) => state.Pinned && (state.OriginalExStyle & User32.WS_EX_TOPMOST) == 0;
 
-    /// <summary>
-    /// Lets clicks reach every window again. Opacity and everything else stay as they are, except the
-    /// see-through level click-through added by itself. Returns how many windows refused.
-    /// </summary>
     public int TurnOffClickThroughEverywhere() =>
         Everywhere(state => state.ClickThrough, (window, state) =>
         {
@@ -911,7 +841,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             state.ClickThrough = false;
         });
 
-    /// <summary>Unpins every window WinScreen pinned. Windows that keep themselves on top stay so. Returns how many refused.</summary>
     public int UnpinEverywhere() =>
         Everywhere(PinnedHere, (window, state) =>
         {
@@ -942,7 +871,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             return _changed.TryGetValue(window, out ChangedWindow? state) && state.Identity.Matches() && state.Hidden;
     }
 
-    /// <summary>Hidden only so an effect (Dark mode, Glass) can draw it again on top: it is still there to use and move.</summary>
     public bool IsDrawnByEffect(nint window)
     {
         lock (_gate)
@@ -956,10 +884,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                    state.PlacementBeforePeek is not null;
     }
 
-    /// <summary>
-    /// Makes a window invisible and lets clicks pass through it while it stays where it is. Windows
-    /// stops repainting minimized and fully off-screen windows, which would freeze a live view of it.
-    /// </summary>
+    // Windows stops repainting minimized and fully off-screen windows, which would freeze a live view of it.
     public void Hide(nint window)
     {
         lock (_gate)
@@ -992,10 +917,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>
-    /// Makes a window invisible but leaves it clickable and in its place in the stack, for an effect that
-    /// draws it again on top. Recovery treats it like any hidden window.
-    /// </summary>
+    // Left clickable and in its place in the stack, for an effect that draws it again on top. Recovery treats it like
+    // any hidden window.
     public void ConcealSolid(nint window)
     {
         lock (_gate)
@@ -1014,7 +937,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>Makes a hidden window visible and clickable again.</summary>
     public void Show(nint window)
     {
         lock (_gate)
@@ -1044,8 +966,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>Puts every changed window back. Safe to call at any time, including during a crash.</summary>
-    /// <returns>How many windows could not be restored.</returns>
+    // Safe to call at any time, including during a crash.
     public int RestoreAll()
     {
         lock (_gate)
@@ -1097,7 +1018,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>Puts back windows left changed by a copy of WinScreen that was killed or crashed.</summary>
     public void RecoverFromJournal()
     {
         if (journal is null)
@@ -1192,7 +1112,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
 
     private bool _anythingConcealed;
 
-    /// <summary>Raised when the first window is concealed and again when the last is revealed.</summary>
     public event Action<bool>? ConcealmentChanged;
 
     private void SaveJournal()
@@ -1220,7 +1139,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>For cleanup after a failure that is already being reported.</summary>
     private void TrySaveJournal()
     {
         try
@@ -1334,10 +1252,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    /// <summary>
-    /// Fully see-through, or, for a window an effect draws again and that must still take every press, the faintest
-    /// level above it: Windows passes presses through a window at level 0, page, title bar and buttons alike.
-    /// </summary>
+    // Windows passes presses through a window at level 0, page, title bar and buttons alike, so one an effect draws
+    // again gets the faintest level above it.
     private void Conceal(nint window, ChangedWindow state)
     {
         ApplyAlpha(window, state, state.HiddenButUsable ? UsableHiddenOpacity : HiddenOpacity);
@@ -1348,11 +1264,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         HideBorder(window, state);
     }
 
-    /// <summary>
-    /// Windows 11 draws a thin border round each window that doesn't fade with the window, so a hidden one
-    /// would still show its outline. It's taken off while hidden. Windows can't say what color an app chose
-    /// for it, so it goes back to the default afterwards.
-    /// </summary>
+    // Windows 11's thin window border doesn't fade with the window, so it's taken off while hidden. Windows can't say
+    // what colour an app chose for it, so it goes back to the default.
     private static void HideBorder(nint window, ChangedWindow state)
     {
         if (state.BorderHidden || !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return;
@@ -1368,10 +1281,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         state.BorderHidden = false;
     }
 
-    /// <summary>
-    /// A window 1.1.2-beta.3 disabled while hidden, enabled again by recovery, unless the app has a dialog of its own
-    /// up over it: the app disabled it for that and enables it when the dialog closes.
-    /// </summary>
+    // Not while the app has a dialog of its own up over it: the app disabled it for that and enables it when the dialog
+    // closes.
     private static void EnableAgain(nint window, ChangedWindow state)
     {
         nint popup = User32.GetLastActivePopup(window);
@@ -1396,22 +1307,17 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             TrySetTopmost(window, false, state.Identity);
     }
 
-    /// <summary>
-    /// Chromium and Electron apps stop drawing once other windows cover them, which would freeze their
-    /// live view. A hidden window can be neither seen nor clicked, so keeping it above the others costs
-    /// nothing and keeps it drawing. It stays out of <see cref="ChangedWindow.Pinned"/> because the person
-    /// didn't pin it, and only liveness depends on it, so a refusal isn't worth stopping for.
-    /// </summary>
+    // Chromium and Electron apps stop drawing once covered, which would freeze their view. A hidden window can't be
+    // seen or clicked, so keeping it above others costs nothing. Not Pinned: the person didn't pin it, and a refusal
+    // isn't worth stopping for.
     private static void LiftWhileHidden(nint window, ChangedWindow state)
     {
         if (!state.Pinned)
             TrySetTopmost(window, true, state.Identity);
     }
 
-    /// <summary>
-    /// Changes the topmost state of a window that isn't in use. Windows can ignore that for a background
-    /// window, so it's brought forward for a moment if needed and the focus goes back where it was.
-    /// </summary>
+    // Windows can ignore topmost for a background window, so it's brought forward for a moment if needed and the focus
+    // goes back.
     private static void TrySetTopmost(nint window, bool topmost, WindowIdentity identity)
     {
         try
@@ -1708,10 +1614,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             throw Failure(T("actions.changeOpacity"), window);
     }
 
-    /// <summary>
-    /// Windows can report success for HWND_TOPMOST on a background window and ignore it (seen on
-    /// Windows 11 26H2), so the window is brought forward first and the result is read back.
-    /// </summary>
+    // Windows can report success for HWND_TOPMOST on a background window and ignore it (Windows 11 26H2), so the window
+    // is brought forward first and the result read back.
     public static void Pin(nint window)
     {
         Pin(window, WindowIdentity.Capture(window));
@@ -1785,13 +1689,10 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             WindowInfo.Title(window), reason));
     }
 
-    /// <summary>
-    /// Whether the window answers within a tenth of a second. The checks that follow a window from a query or the
-    /// periodic refresh ask this before changing it, so a hung app never holds WinScreen up; they try again later.
-    /// </summary>
+    // Asked before changing a window from a query or the periodic refresh, so a hung app never holds WinScreen up; they
+    // try again later.
     private static bool AnswersQuickly(nint window) => AnswersWithin(window, 100);
 
-    /// <summary>Whether the window's program answers a message within this many milliseconds.</summary>
     internal static bool AnswersWithin(nint window, uint milliseconds) =>
         User32.SendMessageTimeout(window, 0, 0, 0, 0x3, milliseconds, out _) != 0;
 
@@ -1802,17 +1703,12 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     }
 }
 
-/// <summary>Read-only facts about a window.</summary>
 public static class WindowInfo
 {
-    /// <summary>The caption buttons Windows reports, in its order: minimize, maximize, close.</summary>
     public enum CaptionButton { Minimize = 2, Maximize = 3, Close = 5 }
 
-    /// <summary>
-    /// Where Windows draws one of a window's caption buttons, in screen pixels, or null when it reports none. This is
-    /// where a person sees the button. An app's own answer to "what is here" can follow an older, narrower layout and
-    /// say "minimize" over the drawn maximize button (Notepad++, PrismLauncher: the owner, 15 Nov).
-    /// </summary>
+    // Where Windows draws the button, which is where a person sees it: an app's own hit-test can follow an older,
+    // narrower layout and say "minimize" over the drawn maximize button.
     public static Rectangle? CaptionButtonBounds(nint window, CaptionButton button)
     {
         const int size = 4 + 16 + 6 * 4 + 6 * 16; // TITLEBARINFOEX: size, title bar, six states, six rectangles
@@ -1844,7 +1740,6 @@ public static class WindowInfo
         }
     }
 
-    /// <summary>The facts about a window, as label and value, for the person to read or copy.</summary>
     public static (string Label, string Value)[] Facts(nint window)
     {
         uint thread = User32.GetWindowThreadProcessId(window, out uint processId);
@@ -1869,10 +1764,7 @@ public static class WindowInfo
         ];
     }
 
-    /// <summary>
-    /// True for a borderless window covering its whole monitor, which is how most games run today. A maximized
-    /// window has a title bar and leaves the taskbar alone, so it doesn't count.
-    /// </summary>
+    // How most games run today. A maximized window has a title bar and leaves the taskbar alone, so it doesn't count.
     public static bool FillsMonitor(nint window)
     {
         if (window == 0 || WindowController.IsShell(window) || User32.IsIconic(window) ||
@@ -1909,7 +1801,6 @@ public static class WindowInfo
         return ProcessName(processId);
     }
 
-    /// <summary>True for a window a person thinks of as the program, rather than a dialog or a popup.</summary>
     public static bool IsMainWindow(nint window)
     {
         return User32.IsWindowVisible(window)
@@ -1918,8 +1809,6 @@ public static class WindowInfo
                && Title(window).Length > 0;
     }
 
-    /// <summary>True while a window is kept invisible, as a hidden or shrunk original is.</summary>
-    /// <summary>Whether <paramref name="window"/> belongs to <paramref name="owner"/>, directly or through other owned windows.</summary>
     public static bool IsOwnedBy(nint window, nint owner)
     {
         for (int depth = 0; depth < 8 && window != 0; depth++)
@@ -1938,7 +1827,6 @@ public static class WindowInfo
                && alpha <= 1;
     }
 
-    /// <summary>The part a region keeps of a window, in window coordinates, or null when there is no region.</summary>
     public static Rectangle? ShapeOf(nint window)
     {
         return User32.GetWindowRgnBox(window, out Rect box) == 0
@@ -1946,7 +1834,7 @@ public static class WindowInfo
             : Rectangle.FromLTRB(box.Left, box.Top, box.Right, box.Bottom);
     }
 
-    /// <summary>Where a window's frame is on screen, without the invisible resize margins GetWindowRect counts.</summary>
+    // Without the invisible resize margins GetWindowRect counts.
     public static bool TryGetFrameBounds(nint window, out Rectangle bounds, out Rectangle whole)
     {
         bounds = whole = Rectangle.Empty;
@@ -1961,12 +1849,8 @@ public static class WindowInfo
         return true;
     }
 
-    /// <summary>
-    /// The part of a live preview's source that shows the window, leaving out its invisible resize
-    /// margins. Preview coordinates start at the GetWindowRect corner, but the size Windows reports for
-    /// them is only the frame's, so this deliberately reaches past <paramref name="sourceSize"/>: clipping
-    /// to it would lose the window's right and bottom edges. A minimized window has no frame to measure.
-    /// </summary>
+    // Preview coordinates start at the GetWindowRect corner, but the size Windows reports for them is only the frame's,
+    // so this deliberately reaches past sourceSize: clipping to it would lose the right and bottom edges.
     public static Rectangle VisiblePart(nint window, Size sourceSize)
     {
         var all = new Rectangle(Point.Empty, sourceSize);
@@ -1977,10 +1861,7 @@ public static class WindowInfo
         return frame.Width > 0 && frame.Height > 0 ? frame : all;
     }
 
-    /// <summary>
-    /// Where a window can really be seen on screen. GetWindowRect also counts the invisible resize
-    /// margins of a normal window, and knows nothing of a crop.
-    /// </summary>
+    // GetWindowRect also counts a normal window's invisible resize margins, and knows nothing of a crop.
     public static bool TryGetVisibleBounds(nint window, out Rectangle bounds)
     {
         if (!TryGetFrameBounds(window, out bounds, out Rectangle whole))

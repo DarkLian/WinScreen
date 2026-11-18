@@ -20,10 +20,7 @@ public sealed partial class WindowController
     internal bool GestureBlocked(nint window) => _gestureState.Any(state =>
         state.Window == window && (state.Hidden || state.Peeking));
 
-    /// <summary>
-    /// The window covers its display because WinScreen filled it. Lock-free, from the last saved state, so the mouse
-    /// hook and the full-screen checks can ask.
-    /// </summary>
+    // Lock-free, from the last saved state, so the mouse hook and the full-screen checks can ask.
     internal bool FilledByWinScreen(nint window) => _gestureState.Any(state => state.Window == window && state.Filled);
 
     internal bool IsBorderlessFilled(nint window)
@@ -38,12 +35,9 @@ public sealed partial class WindowController
                             state.PlacementBeforeBorderless is not null && StillFilled(window, state);
     }
 
-    /// <summary>
-    /// Whether a window WinScreen filled still fills a display. Once the app maximizes it with its own button, or it
-    /// stops covering a display, Fill display is over: its frame comes back and the app is left as it chose, maximized
-    /// or not, with its size from before Fill display as the one its restore goes back to. Minimized still counts, and
-    /// so does the app's own full screen, which covers the display too. True for anything that isn't Fill display.
-    /// </summary>
+    // Once the app maximizes it with its own button, or it stops covering a display, Fill display is over: its frame
+    // comes back and the app is left as it chose, with its pre-fill size as its restore size. Minimized still counts,
+    // and so does the app's own full screen.
     private bool StillFilled(nint window, ChangedWindow state)
     {
         if (!state.BorderlessFilled || state.PlacementBeforeBorderless is not { } before) return true;
@@ -263,10 +257,8 @@ public sealed partial class WindowController
         if (Marshal.GetLastPInvokeError() != 0) throw Failure(T("actions.changeFrame"), window);
     }
 
-    /// <summary>
-    /// Store apps' frames: Windows keeps their taskbar button and Alt+Tab entry itself, so they can't leave the
-    /// switcher, but they can still be hidden.
-    /// </summary>
+    // Windows keeps Store apps' taskbar button and Alt+Tab entry itself, so they can't leave the switcher, but they can
+    // still be hidden.
     internal static bool TaskbarButtonOwnedByWindows(nint window) =>
         Compatibility.AppProfiles.WindowsOwnsTaskbarButton(WindowInfo.ClassName(window));
 
@@ -298,10 +290,8 @@ public sealed partial class WindowController
         }
     }
 
-    /// <summary>
-    /// Takes a hidden window off the shell's task list and changes nothing about the window, so it keeps its own
-    /// caption buttons. The taskbar drops its button, and Windows 11 leaves it out of Alt+Tab as well.
-    /// </summary>
+    // Through the shell's task list, changing nothing about the window, so it keeps its own caption buttons. Windows 11
+    // also leaves it out of Alt+Tab.
     public void RemoveTaskbarButton(nint window)
     {
         lock (_gate)
@@ -323,10 +313,6 @@ public sealed partial class WindowController
         }
     }
 
-    /// <summary>
-    /// Takes a window's button off the taskbar while it stays as it is, for a window reached from its Anchor. It is
-    /// recorded first, so the button comes back after a crash too.
-    /// </summary>
     public void TakeOffTaskbar(nint window)
     {
         lock (_gate)
@@ -347,7 +333,7 @@ public sealed partial class WindowController
         }
     }
 
-    /// <summary>Puts a window's taskbar button back, unless a view is keeping the window hidden: the view does it then.</summary>
+    // Unless a view keeps the window hidden: the view does it then.
     public void PutBackOnTaskbar(nint window)
     {
         lock (_gate)

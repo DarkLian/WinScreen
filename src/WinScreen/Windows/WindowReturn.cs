@@ -9,19 +9,14 @@ public sealed partial class WindowController
     private readonly Dictionary<nint, (WindowPlacement Home, nint[] Hooks)> _returning = [];
     private User32.WinEventProc? _returnEvent;
 
-    /// <summary>True while a window put back in full screen is watched, for tests.</summary>
     internal bool IsWatchingReturn(nint window)
     {
         lock (_gate) return _returning.ContainsKey(window);
     }
 
-    /// <summary>
-    /// An app that goes full screen remembers where it was, to go back there afterwards. One that went full screen
-    /// while parked remembers the parked spot past the edge of the screen, and goes there when it leaves full screen,
-    /// long after its view closed. So a window put back while it is full screen is watched, by itself, until it
-    /// leaves full screen: if it lands out of reach it goes where it was before the view; anywhere else, it is left
-    /// there. Nothing is polled; the watch ends with the window.
-    /// </summary>
+    // An app that went full screen while parked remembers the parked spot and goes there when it leaves full screen,
+    // long after its view closed. So a window put back in full screen is watched until it leaves: out of reach, it goes
+    // where it was before the view. Nothing is polled; the watch ends with the window.
     private void WatchForReturn(nint window, WindowPlacement home)
     {
         StopWatchingReturn(window);
@@ -68,7 +63,6 @@ public sealed partial class WindowController
         }
     }
 
-    /// <summary>Covers a whole monitor, as an app in full screen does (allowing a pixel or two short).</summary>
     internal static bool FillsAMonitor(Rectangle window, IReadOnlyList<Rectangle> monitors) =>
         monitors.Any(monitor =>
         {
@@ -76,7 +70,6 @@ public sealed partial class WindowController
             return overlap.Width >= monitor.Width - 2 && overlap.Height >= monitor.Height - 2;
         });
 
-    /// <summary>No part of it big enough to take hold of is on any monitor: at most a parked strip.</summary>
     internal static bool OutOfReach(Rectangle window, IReadOnlyList<Rectangle> monitors) =>
         monitors.All(monitor =>
         {

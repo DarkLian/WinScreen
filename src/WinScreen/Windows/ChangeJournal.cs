@@ -2,7 +2,6 @@
 
 namespace WinScreen.Windows;
 
-/// <summary>How one window looked before WinScreen changed it, as saved on disk.</summary>
 public sealed record WindowRecord(
     long Window,
     uint ProcessId,
@@ -24,36 +23,27 @@ public sealed record WindowRecord(
     // Nullable: zero is a valid original value and still needs restoring.
     public long? SwitcherBits { get; init; }
 
-    /// <summary>The window's taskbar button was taken off while it was hidden; it goes back.</summary>
     public bool TaskbarButtonRemoved { get; init; }
     public int[]? BorderlessPlacement { get; init; }
     public int[]? BorderlessOrigin { get; init; }
     public bool BorderlessFilled { get; init; }
     public int? OriginalDarkTitleBar { get; init; }
 
-    /// <summary>Windows 11's thin border was taken off while the window was hidden; it goes back to the default.</summary>
     public bool BorderHidden { get; init; }
 
-    /// <summary>WinScreen disabled the window while it was hidden, so Windows passes over it; it is enabled again.</summary>
     public bool DisabledWhileHidden { get; init; }
 
-    /// <summary>Where a rolled-up window came from. Only its height is used, so moves made since are kept.</summary>
+    // Only its height is used, so moves made since are kept.
     public int[]? RollUpPlacement { get; init; }
 }
 
-/// <summary>
-/// Keeps the list of changed windows on disk. A forced kill skips every exit handler, so the next
-/// start reads this file and puts back any window that was left moved or see-through.
-/// </summary>
+// A forced kill skips every exit handler, so the next start reads this file and puts back any window left changed.
 public sealed class ChangeJournal(string path, string recoveryMutex = RecoveryWatcher.RecoveryMutex)
 {
-    /// <summary>The lock taken while recovering from this journal (one per journal, 10-2).</summary>
     public string RecoveryMutex => recoveryMutex;
 
-    /// <summary>The file could not be read, or kept safe, so writing over it could lose recovery data.</summary>
     public bool ReadFailed { get; private set; }
 
-    /// <summary>Where the last load kept a damaged file, or null when it found no damage.</summary>
     public string? DamagedBackup { get; private set; }
 
     public string FilePath => path;
@@ -152,7 +142,7 @@ public sealed class ChangeJournal(string path, string recoveryMutex = RecoveryWa
 
     private string NewBackupPath() => path + ".invalid-" + Guid.NewGuid().ToString("N");
 
-    /// <summary>Nothing in the file can be used, so it moves aside and work can carry on.</summary>
+    // Nothing in the file can be used, so it moves aside and work can carry on.
     private void MoveDamaged()
     {
         string backup = NewBackupPath();
@@ -168,7 +158,7 @@ public sealed class ChangeJournal(string path, string recoveryMutex = RecoveryWa
         }
     }
 
-    /// <summary>Part of the file is usable, so it stays for recovery and a copy is kept for diagnosis.</summary>
+    // Part of the file is usable, so it stays for recovery and a copy is kept for diagnosis.
     private bool CopyDamaged()
     {
         string backup = NewBackupPath();

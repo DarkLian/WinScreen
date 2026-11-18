@@ -2,7 +2,6 @@ using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Windows;
 
-/// <summary>Asks for a window's exact position and size, in screen pixels of its visible frame.</summary>
 internal sealed class PlacementDialog : Settings.ThemedDialog
 {
     private readonly NumericUpDown _left = Number(-32768), _top = Number(-32768), _width = Number(1), _height = Number(1);

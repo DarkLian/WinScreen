@@ -50,11 +50,8 @@ public sealed partial class WindowController
         }
     }
 
-    /// <summary>
-    /// After the displays change: a monitor that went away takes its edge with it, and Windows moves windows from it
-    /// onto the screens that are left, where a parked original would sit invisible but in the way. Put it past an
-    /// outer edge of the new layout. Its recorded placement is unchanged.
-    /// </summary>
+    // Windows moves windows from a monitor that went away onto the screens left, where a parked original would sit
+    // invisible but in the way. Its recorded placement is unchanged.
     internal void Repark(nint window)
     {
         lock (_gate)
@@ -87,17 +84,10 @@ public sealed partial class WindowController
         }
     }
 
-    /// <summary>
-    /// Brings a parked original onto the screen with its top-left corner at a point, at its own size, in plain sight
-    /// and taking the pointer, above everything, without activating it: a drag over its view ends in it, since a drop
-    /// can only go to the real window under the pointer. Its home and its record stay as they were, so recovery and
-    /// closing the view put it back where it was. <see cref="ReturnToParking"/> hides and parks it again.
-    /// </summary>
-    /// <param name="size">A size to show it at (a view's), its own put back when parked again; null for its own.</param>
-    /// <param name="holdReveal">
-    /// Kept nearly see-through (still taking the pointer) until <see cref="RevealShownForDrop"/>, while a picture grows
-    /// from the view into its place. Once held, later calls keep it so until then.
-    /// </param>
+    // Above everything and taking the pointer, without activating it: a drop can only go to the real window under the
+    // pointer. Its home and record stay, so recovery and closing the view put it back.
+    // holdReveal: kept nearly see-through (still taking the pointer) until RevealShownForDrop; once held, later calls
+    // keep it so until then.
     internal void ShowParkedForDrop(nint window, Point topLeft, Size? size = null, bool holdReveal = false)
     {
         lock (_gate)
@@ -118,7 +108,6 @@ public sealed partial class WindowController
         }
     }
 
-    /// <summary>After <see cref="ShowParkedForDrop"/> held back: in plain sight now. Nothing once it went back.</summary>
     internal void RevealShownForDrop(nint window)
     {
         lock (_gate)
@@ -131,16 +120,12 @@ public sealed partial class WindowController
         }
     }
 
-    /// <summary>Whether a window out for a drag is still kept nearly see-through, for tests.</summary>
     internal bool RevealIsHeld(nint window)
     {
         lock (_gate) return _changed.TryGetValue(window, out var state) && state.ShownForDrop && state.RevealHeld;
     }
 
-    /// <summary>
-    /// The size a hidden window has when not maximized: for one that was maximized, the size it goes back to (its
-    /// parked size is the whole screen's); for any other, its size now. Null when it isn't hidden by WinScreen.
-    /// </summary>
+    // For one that was maximized, the size it goes back to (its parked size is the whole screen's).
     internal Size? NormalSize(nint window)
     {
         lock (_gate)
@@ -158,7 +143,6 @@ public sealed partial class WindowController
         lock (_gate) return _changed.TryGetValue(window, out var state) && state.ShownForDrop;
     }
 
-    /// <summary>After <see cref="ShowParkedForDrop"/>: hidden as before, and off the screen again.</summary>
     internal void ReturnToParking(nint window)
     {
         lock (_gate)
@@ -179,17 +163,10 @@ public sealed partial class WindowController
         }
     }
 
-    /// <summary>
-    /// While a view is used directly, the parked original is at opacity 1 and can be hit, so apps that check what
-    /// is at a point, as browsers do before they scroll, find themselves there. Only its two-pixel strip is on
-    /// screen. Recovery puts back the journaled style and opacity as for any hidden window.
-    /// </summary>
-    /// <remarks>
-    /// An app can bring itself back over the screen while parked: a browser showing a page in full screen covers its
-    /// monitor and moves straight back there when moved. At opacity 1 it would show as a faint layer over everything
-    /// while the pointer is on the view, so it stays fully see-through until it is off the screen again
-    /// (<see cref="FollowParkedPlace"/>). Clicks and keys are sent to it all the same.
-    /// </remarks>
+    // While a view is used directly the parked original is at opacity 1 and can be hit, so apps that check what is at a
+    // point (browsers, before they scroll) find themselves there.
+    // A browser in full screen moves straight back over its monitor while parked; at opacity 1 it would show as a faint
+    // layer, so it stays fully see-through until it is off the screen again.
     internal void SetParkedReachable(nint window, bool reachable)
     {
         lock (_gate)
@@ -202,10 +179,6 @@ public sealed partial class WindowController
         }
     }
 
-    /// <summary>
-    /// For tests: given a queue, <see cref="FollowParkedPlace"/> records each step it takes there, with the bounds and
-    /// extended style at the time. Left empty, nothing is recorded.
-    /// </summary>
     internal System.Collections.Concurrent.ConcurrentQueue<string>? ParkedPlaceSteps { get; set; }
 
     private void Step(nint window, string what)
@@ -215,13 +188,9 @@ public sealed partial class WindowController
         ParkedPlaceSteps.Enqueue($"{Environment.TickCount64 % 100000} {what} at {b.Left},{b.Top},{b.Right - b.Left}x{b.Bottom - b.Top} ex 0x{ReadExStyle(window):X}");
     }
 
-    /// <summary>
-    /// Checked often while a view shows a parked original. A browser leaving full screen goes back to where it was
-    /// before and puts back the styles it had then, which can leave it on the screen and fully visible behind the view.
-    /// So: a dropped see-through style is put back, a window back on the screen without covering a monitor is parked
-    /// again (one in full screen would only move straight back), and it is reachable only while off the screen.
-    /// Nothing is written unless something changed.
-    /// </summary>
+    // A browser leaving full screen goes back where it was and restores its old styles, which can leave it on the
+    // screen and visible behind the view. One in full screen would only move straight back, so only a window not
+    // covering a monitor is parked again. Nothing is written unless something changed.
     internal void FollowParkedPlace(nint window)
     {
         lock (_gate)
@@ -296,12 +265,9 @@ public sealed partial class WindowController
     private const int SiblingsCheckMilliseconds = 300;
     private const int SW_SHOWMINNOACTIVE = 7;
 
-    /// <summary>
-    /// An app opens a new window where its last one was, so a second Chrome window took the parked original's place
-    /// as its own normal size, off the screen (owner, 17 Nov, beta 4: un-maximized, it went past the right edge).
-    /// The app's other windows that sit, or would sit when restored, mostly on the parked place are put where the
-    /// app would have put them without WinScreen: at the original's home, with the same offset.
-    /// </summary>
+    // An app opens a new window where its last one was, so a second Chrome window took the parked original's place, off
+    // the screen. The app's other windows mostly on the parked place go where the app would have put them without
+    // WinScreen: at the original's home, with the same offset.
     private void KeepSiblingsOffParking(nint window, ChangedWindow state, Rectangle parked)
     {
         if (state.PlacementBeforePeek is not { } home) return;
@@ -342,11 +308,6 @@ public sealed partial class WindowController
         }
     }
 
-    /// <summary>
-    /// Where another window of the app belongs when its normal place is mostly on the parked original's place and
-    /// mostly off the screens: the original's home, moved by the same offset, kept on that home's work area. Null when
-    /// it is somewhere of its own.
-    /// </summary>
     internal static Rectangle? SiblingHome(Rectangle normal, Rectangle parked, Rectangle home,
         IReadOnlyList<Rectangle> monitors, IReadOnlyList<Rectangle> workAreas)
     {
@@ -373,9 +334,8 @@ public sealed partial class WindowController
     private const byte ReachableOpacity = 1;
     private const int LooseSettleMilliseconds = 400;
 
-    /// <summary>For native hover, keep the two-pixel strip clear of the usual bottom taskbar. A browser that finds
-    /// its strip covered marks the page hidden and discards moves even while its leave messages are filtered, and
-    /// stays that way until it is activated. Asked again while already there, it only brings the strip forward.</summary>
+    // A browser that finds its strip covered by the taskbar marks the page hidden and discards moves, even with its
+    // leave messages filtered, until it is activated.
     internal void SetParkedHoverSurface(nint window, bool enabled)
     {
         lock (_gate)
@@ -418,10 +378,8 @@ public sealed partial class WindowController
         throw new WindowOperationException(T("errors.pip.noSurface"));
     }
 
-    /// <param name="home">
-    /// The monitor the window is on. Its own outer edges come first: on another monitor with a different scale the app
-    /// would be told its DPI changed and lay itself out again, twice, while hidden.
-    /// </param>
+    // The home monitor's outer edges come first: on a monitor at another scale the app would be told its DPI changed
+    // and lay itself out again, twice, while hidden.
     internal static Rectangle ParkingPlace(Size size, IReadOnlyList<Rectangle> monitors, Rectangle? home = null)
     {
         // Try each external edge in preference order. Every visible intersection stays within its two-pixel strip.
@@ -445,7 +403,6 @@ public sealed partial class WindowController
         throw new WindowOperationException(T("errors.pip.noSurface"));
     }
 
-    /// <summary>Bottom, right, left, top: the home monitor's edges first, then every monitor's, as before.</summary>
     private static IEnumerable<(int Edge, Rectangle Monitor)> Candidates(IReadOnlyList<Rectangle> monitors, Rectangle? home)
     {
         bool hasHome = home is { } own && monitors.Contains(own);

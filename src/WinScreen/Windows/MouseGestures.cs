@@ -7,10 +7,8 @@ using WinScreen.Settings;
 
 namespace WinScreen.Windows;
 
-/// <summary>
-/// When the mouse hook may exist. It's only there while the feature could act, so a game, a full-screen app,
-/// an excluded program or a locked PC never has it running behind them.
-/// </summary>
+// Only while the feature could act, so a game, a full-screen app, an excluded program or a locked PC never has it
+// running behind them.
 internal static class ModifierHookPolicy
 {
     public static bool ShouldRun(bool moveOn, bool menuOn, FullScreenState state, bool fills,
@@ -21,25 +19,16 @@ internal static class ModifierHookPolicy
         bool foregroundExcluded, bool away) =>
         turnedOn && fullScreen == FullScreenState.None && !foregroundFillsMonitor && !foregroundExcluded && !away;
 
-    /// <summary>
-    /// Whether the hook looks dropped by Windows: the pointer moved, nothing reached the hook for longer than
-    /// <paramref name="silence"/>, and that wasn't because the person was away (locked, or on the sign-in screen, where
-    /// no hook hears anything) within that time either: coming back moves the pointer before the hook hears it again
-    /// (the owner's log, 17 and 18 Nov, administrator=yes: "lost" just after returning). Nor over an administrator
-    /// window that an ordinary copy can't hear (TD-60).
-    /// </summary>
+    // Coming back from being away (locked, or the sign-in screen, where no hook hears anything) moves the pointer
+    // before the hook hears it again, so that isn't a drop. Nor is silence over an administrator window an ordinary
+    // copy can't hear.
     public static bool LooksDropped(bool active, bool pointerMoved, TimeSpan sinceCallback, TimeSpan sinceAway, bool pointerOverReachable,
         TimeSpan silence) =>
         active && pointerMoved && sinceCallback > silence && sinceAway > silence && pointerOverReachable;
 }
 
-/// <summary>
-/// Hold a modifier and drag anywhere in a window: left button moves it, right button resizes it from the
-/// nearest edge or corner. A maximized window comes out of maximized once the drag gets going, and a moved
-/// window can snap to a display's edges the way a title-bar drag does. Raw input can see a click but can't stop it reaching the app, so this needs a
-/// low-level mouse hook. That hook and its threads exist only while <see cref="Active"/> is on, and there is
-/// no keyboard hook: the modifier is only read at the moment a mouse button goes down.
-/// </summary>
+// Raw input can see a click but can't stop it reaching the app, so this needs a low-level mouse hook, which exists only
+// while Active. No keyboard hook: the modifier is read only when a button goes down.
 internal sealed class MouseGestures : IDisposable
 {
     private const int WH_MOUSE_LL = 14;
@@ -61,7 +50,7 @@ internal sealed class MouseGestures : IDisposable
     private const int SW_SHOWMAXIMIZED = 3;
     private static readonly Size Smallest = new(120, 60);
 
-    /// <summary>What the mover knows about the drag in hand. Only the mover thread touches it.</summary>
+    // Only the mover thread touches it.
     private sealed class Drag(Gesture gesture)
     {
         public Gesture Gesture { get; } = gesture;
@@ -109,16 +98,15 @@ internal sealed class MouseGestures : IDisposable
     private int _wheelRemainder;
     public bool MenuVisible { get => _menuVisible; set => _menuVisible = value; }
 
-    /// <summary>Whether a moved window snaps at a display's edges. Windows' own Snap switch has to be on too.</summary>
+    // Windows' own Snap switch has to be on too.
     public bool SnapEnabled { get; set; } = true;
 
-    /// <summary>Told, off the UI thread, where a snap would put the window, or null when there's none.</summary>
+    // Told off the UI thread.
     public Action<Rectangle?>? SnapPreview { get; set; }
     private long _lastCallback;
     private long _longestCallbackTicks;
 
-    /// <param name="eligible">Whether a window may be moved. Called inside the hook, so it must be quick.</param>
-    /// <param name="began">Told once when a gesture starts, off the hook, so the move can be undone.</param>
+    // eligible is called inside the hook, so it must be quick. began is told once per gesture, off the hook.
     public MouseGestures(Func<nint, bool> eligible, Action<nint> began)
     {
         _eligible = eligible;
@@ -126,26 +114,21 @@ internal sealed class MouseGestures : IDisposable
         _proc = Callback;
     }
 
-    /// <summary>The key to hold. Read each time a button goes down, so a change applies straight away.</summary>
+    // Read each time a button goes down, so a change applies straight away.
     public ModifierKey Key { get; set; }
 
     public bool Active { get; private set; }
 
     private const int SilenceCheckMilliseconds = 150;
 
-    /// <summary>
-    /// Told, from the mover's thread, when the hook has gone silent in the middle of a drag although the pointer
-    /// moved: Windows has removed it. Whoever owns this puts it back with <see cref="Reinstall"/> on its own thread.
-    /// </summary>
+    // Told from the mover's thread; the owner calls Reinstall on its own thread.
     public Action? HookSilent { get; set; }
 
-    /// <summary>When the hook last saw any mouse input, for noticing that Windows has quietly removed it.</summary>
     public long LastCallback => Interlocked.Read(ref _lastCallback);
 
-    /// <summary>The slowest the hook has taken to answer, which must stay far under Windows' limit.</summary>
+    // Must stay far under Windows' limit.
     public TimeSpan LongestCallback => TimeSpan.FromTicks(Interlocked.Read(ref _longestCallbackTicks));
 
-    /// <exception cref="Win32Exception">Windows wouldn't install the hook.</exception>
     public void SetActive(bool on)
     {
         _accepting = on;
@@ -159,11 +142,8 @@ internal sealed class MouseGestures : IDisposable
         else Stop();
     }
 
-    /// <summary>
-    /// Puts the hook back after Windows has removed it without saying so (it does that to a hook it finds slow).
-    /// A drag or menu press in hand will never see its release, so it ends here: a dragged window stays where it
-    /// was last moved, as if let go there. Without this, the claimed press would keep the dead hook in place for good.
-    /// </summary>
+    // Windows removes a hook it finds slow without saying so. A drag or menu press in hand will never see its release,
+    // so it ends here, as if let go; otherwise the claimed press would keep the dead hook for good.
     public void Reinstall()
     {
         if (!Active) return;
@@ -180,7 +160,6 @@ internal sealed class MouseGestures : IDisposable
         if (_accepting) Start();
     }
 
-    /// <summary>For tests: removes the hook the way Windows does, leaving everything else as it was.</summary>
     internal void LoseHookForTest()
     {
         if (Active) PostThreadMessage(_hookThreadId, DropHook, 0, 0);
@@ -399,7 +378,7 @@ internal sealed class MouseGestures : IDisposable
         return steps;
     }
 
-    /// <summary>The press went to WinScreen, so its release must too, or the app sees a release it never pressed.</summary>
+    // The press went to WinScreen, so its release must too, or the app sees a release it never pressed.
     private bool End(int message)
     {
         if (!_swallowRelease || message != _pendingRelease)
@@ -418,10 +397,8 @@ internal sealed class MouseGestures : IDisposable
         return true;
     }
 
-    /// <summary>
-    /// Esc puts the window back, maximized again if it was. The button is still down, so its release is still
-    /// WinScreen's to swallow. The mover does the putting back: this thread must never wait on another app.
-    /// </summary>
+    // The button is still down, so its release is still WinScreen's to swallow. The mover puts the window back: this
+    // thread must never wait on another app.
     private void Cancel()
     {
         Gesture? gesture = _gesture;
@@ -440,20 +417,16 @@ internal sealed class MouseGestures : IDisposable
         keybd_event(MaskKey, 0, KeyUp, 0);
     }
 
-    /// <summary>
-    /// Follows the pointer off the hook's thread. Each move is asynchronous, so a hung app can't stall the mouse,
-    /// and the next one waits until the app has caught up with the last: sending every pointer position would
-    /// pile up in a slow app's queue and play back long after the pointer stopped.
-    /// </summary>
+    // Each move is asynchronous, so a hung app can't stall the mouse, and the next waits until the app caught up: every
+    // position sent would pile up in a slow app's queue and play back long after the pointer stopped.
     private void MoveWindows()
     {
         Drag? drag = null;
         bool silenceReported = false;
         while (!_stopping && !_moveStopping)
         {
-            // While a drag is in hand, wake now and then to notice a hook Windows has removed (roadmap P2-10): the
-            // real pointer has moved, but the hook has heard nothing. Told at once, the app puts the hook back,
-            // which ends the drag where the window was last moved.
+            // While a drag is in hand, wake now and then to notice a hook Windows has removed: the real pointer moved
+            // but the hook heard nothing.
             bool woken = _moved.WaitOne(_gesture is null ? Timeout.Infinite : SilenceCheckMilliseconds);
             if (_moveStopping) break;
             if (!woken && _gesture is not null && !silenceReported && Cursor.Position != Pointer() &&
@@ -531,7 +504,6 @@ internal sealed class MouseGestures : IDisposable
         Send(gesture.Window, r, gesture.Resizing ? 0 : User32.SWP_NOSIZE, drag);
     }
 
-    /// <summary>Takes a window out of maximized or snapped, under the pointer. False when the app is hung.</summary>
     private bool Restore(Drag drag, Point pointer)
     {
         nint window = drag.Gesture.Window;
@@ -572,7 +544,7 @@ internal sealed class MouseGestures : IDisposable
         return true;
     }
 
-    /// <summary>Asks for a new place without waiting on the app, then gives it a moment to get there.</summary>
+    // Without waiting on the app.
     private static void Send(nint window, Rectangle r, uint extra, Drag drag)
     {
         if (drag.Sent == r) return;
@@ -661,7 +633,6 @@ internal sealed class MouseGestures : IDisposable
             _snapped[window] = (Rectangle.FromLTRB(now.Left, now.Top, now.Right, now.Bottom), dropped.Size);
     }
 
-    /// <summary>Windows' own "Snap windows" switch.</summary>
     private static bool WindowsSnaps() => !SystemParametersInfo(SPI_GETWINARRANGING, 0, out int on, 0) || on != 0;
 
     private static long Pack(int x, int y) => ((long)x << 32) | (uint)y;

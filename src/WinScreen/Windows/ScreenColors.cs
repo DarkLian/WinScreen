@@ -2,7 +2,6 @@ using WinScreen.Localization;
 
 namespace WinScreen.Windows;
 
-/// <summary>Finds a window's background colour from what is on screen.</summary>
 public static class ScreenColors
 {
     private const int Step = 8;

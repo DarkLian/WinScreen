@@ -3,11 +3,7 @@ using WinScreen.Hotkeys;
 
 namespace WinScreen.Windows;
 
-/// <summary>
-/// While a window is concealed, a second small copy of WinScreen waits for this one to die, so a killed
-/// app doesn't leave that window invisible until the next start. It holds nothing, polls nothing and
-/// goes away as soon as nothing is concealed.
-/// </summary>
+// Holds nothing, polls nothing, and goes away as soon as nothing is concealed.
 internal sealed class RecoveryWatcher : IDisposable
 {
     private const string Flag = "--watch";
@@ -24,14 +20,12 @@ internal sealed class RecoveryWatcher : IDisposable
     {
     }
 
-    /// <summary>A watcher started with <paramref name="arguments"/> after the parent's id: the administrator helper's role.</summary>
     public RecoveryWatcher(IReadOnlyList<string> arguments) : this(parent => StartCopy(parent, arguments))
     {
     }
 
     internal RecoveryWatcher(Func<int, Process?> start) => _start = start;
 
-    /// <summary>True when a watcher is running, for tests.</summary>
     internal bool IsRunning
     {
         get { lock (_gate) return _watcher is { HasExited: false }; }
@@ -39,7 +33,7 @@ internal sealed class RecoveryWatcher : IDisposable
 
     private static string StopName(int parent) => @"Local\WinScreen.Watch." + parent;
 
-    /// <summary>Makes a watcher exist exactly while one is needed. Failing to start is never a reason to stop the app.</summary>
+    // Failing to start is never a reason to stop the app.
     public void Follow(bool needed)
     {
         lock (_gate)
@@ -70,12 +64,9 @@ internal sealed class RecoveryWatcher : IDisposable
         }
     }
 
-    /// <summary>
-    /// Tells the watcher to go, and ends it if it is still there. A watcher still starting opens the stop signal only
-    /// after this copy has closed it; the signal is then gone, and if this copy exits next, the watcher would take a
-    /// normal close for a death and run a recovery (reading the settings and writing a log beside a closed app). It
-    /// recovers only after this copy has died, so while this copy is alive, ending it loses nothing.
-    /// </summary>
+    // A watcher still starting opens the stop signal only after this copy closed it, and would then take a normal exit
+    // for a death and run a recovery. It recovers only after this copy died, so ending it while this copy lives loses
+    // nothing.
     private void Stop()
     {
         _stop?.Set();
@@ -84,7 +75,7 @@ internal sealed class RecoveryWatcher : IDisposable
             try { watcher.Kill(); }
             catch (Exception gone) when (gone is InvalidOperationException or System.ComponentModel.Win32Exception)
             {
-                Diagnostics.Log.Swallowed(gone); // Already gone, or exiting on its own.
+                Diagnostics.Log.Swallowed(gone);
             }
         }
         _stop?.Dispose();
@@ -98,7 +89,7 @@ internal sealed class RecoveryWatcher : IDisposable
         lock (_gate) Stop();
     }
 
-    /// <summary>Starts another copy of this program, but only from the real app: never from a test host.</summary>
+    // Only from the real app: never from a test host.
     private static Process? StartCopy(int parent) => StartCopy(parent, []);
 
     private static Process? StartCopy(int parent, IReadOnlyList<string> arguments)
@@ -113,24 +104,16 @@ internal sealed class RecoveryWatcher : IDisposable
         return Process.Start(start);
     }
 
-    /// <summary>The parent's id when this copy was started to watch, or null for a normal start.</summary>
     public static int? ParentFrom(string[] arguments) =>
         (arguments.Length == 2 || arguments.Length == 3 && arguments[2] == HelperRole) && arguments[0] == Flag &&
         int.TryParse(arguments[1], out int parent) && parent > 0 ? parent : null;
 
-    /// <summary>After the parent's id: the parent is the administrator helper, with its own journal (10-2).</summary>
     internal const string HelperRole = "--administrator-helper";
 
-    /// <summary>
-    /// Waits for the parent to die or to say it no longer needs this. Runs in the watcher, and asks
-    /// for recovery only after a real death with no new copy of WinScreen already in charge.
-    /// </summary>
-    /// <param name="runningInstance">The lock a running WinScreen holds. Tests pass their own, so a copy of
-    /// WinScreen running on the same PC doesn't change the result.</param>
+    // Recovers only after a real death with no new copy of WinScreen already in charge.
     public static void Watch(int parent, Action recover, string runningInstance = RunningInstance.MutexName)
         => WatchUntilRecovered(parent, () => { recover(); return true; }, runningInstance);
 
-    /// <param name="recoveryMutex">The lock for the journal it recovers from (<see cref="ForRecovery"/>).</param>
     public static void WatchUntilRecovered(int parent, Func<bool> recover, string runningInstance = RunningInstance.MutexName,
         string recoveryMutex = RecoveryMutex)
     {
@@ -158,11 +141,8 @@ internal sealed class RecoveryWatcher : IDisposable
         }
     }
 
-    /// <summary>
-    /// Waits for the parent to end. False when it said it no longer needs a watcher. A parent that is already gone, or
-    /// is dying at this very moment, counts as ended: it can die between being found and being opened, right after it
-    /// started this watcher, and that must lead to recovery, never to the watcher failing.
-    /// </summary>
+    // A parent already gone, or dying right now, counts as ended: it can die between being found and opened, right
+    // after starting this watcher, and that must lead to recovery.
     internal static bool WaitForParent(int parent, WaitHandle stop)
     {
         Process? process = null;
@@ -180,8 +160,7 @@ internal sealed class RecoveryWatcher : IDisposable
         finally { process?.Dispose(); }
     }
 
-    /// <summary>Only one copy recovers at a time, so a restart and a watcher can't both act on the journal.</summary>
-    /// <param name="name">One per journal: the administrator helper's has its own.</param>
+    // Only one copy recovers at a time, so a restart and a watcher can't both act on the journal.
     public static Mutex ForRecovery(out bool held, string name = RecoveryMutex)
     {
         var mutex = new Mutex(false, name);

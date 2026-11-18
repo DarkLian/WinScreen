@@ -2,27 +2,17 @@ using WinScreen.Native;
 
 namespace WinScreen.Windows;
 
-/// <summary>
-/// The order of everything kept on top, highest first:
-/// <list type="number">
-/// <item>Windows' own passing surfaces: the screen snip, Start, search, the taskbar's flyouts, task switching and
-/// notifications. WinScreen never lifts anything over these, or the two would take turns on top and flicker;</item>
-/// <item>WinScreen's own hover tips;</item>
-/// <item>WinScreen's open menus and Settings;</item>
-/// <item>the Windows taskbar, so its icons, WinScreen's included, can always be reached;</item>
-/// <item>always-on-top windows: views and their parts, toolbars, pin frames, pinned windows.</item>
-/// </list>
-/// Anything WinScreen lifts to the top goes through here.
-/// </summary>
+// Highest first: Windows' own passing surfaces (snip, Start, search, taskbar flyouts, task switching, notifications),
+// which nothing is lifted over or the two flicker taking turns; WinScreen's hover tips; its open menus and Settings;
+// the taskbar; then always-on-top windows.
+// Anything WinScreen lifts to the top goes through here.
 internal static class TopLayer
 {
     private const uint Flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
     private const uint GW_HWNDNEXT = 2;
 
-    /// <summary>The menus and windows that belong above the taskbar, lowest first; empty when none is open.</summary>
     internal static Func<IEnumerable<nint>>? Above { get; set; }
 
-    /// <summary>Whether one of WinScreen's own windows is a hover tip; a seam for tests.</summary>
     internal static Func<nint, bool> IsTip { get; set; } = window => WindowInfo.ClassName(window) == "tooltips_class32";
 
     private sealed record LayerState(List<nint> Order, List<nint> Taskbars, List<nint> Tips,
@@ -30,15 +20,11 @@ internal static class TopLayer
     {
         internal bool Blocked => OverflowOpen || Menus.Count != 0;
 
-        /// <summary>
-        /// Where a lifted window goes: just under the lowest of Windows' own surfaces that is open, or at the top when
-        /// none is. Whatever is above that point is left where it is, since passing it would mean passing the surface.
-        /// The windows being lifted never count, even when they are Windows' own (an Explorer view's menus).
-        /// </summary>
+        // Just under the lowest of Windows' own open surfaces, or at the top when none is: passing what is above would
+        // mean passing the surface. The windows being lifted never count, even Windows' own (an Explorer view's menus).
         internal nint InsertAfter(ICollection<nint> lifting) =>
             Order.LastOrDefault(window => System.Contains(window) && !lifting.Contains(window)) is var lowest and not 0 ? lowest : User32.HWND_TOPMOST;
 
-        /// <summary>The windows above the point where a lifted window goes; none of them counts as covering it.</summary>
         internal IEnumerable<nint> OutOfReach(ICollection<nint> lifting)
         {
             nint lowest = InsertAfter(lifting);
@@ -46,7 +32,6 @@ internal static class TopLayer
         }
     }
 
-    /// <summary>Whether a window is one of Windows' own passing surfaces; a seam for tests.</summary>
     internal static Func<nint, bool> IsSystemSurface { get; set; } = SystemSurface;
 
     private static readonly string[] SystemClasses =
@@ -89,17 +74,12 @@ internal static class TopLayer
 
     internal static bool InputBlocked => Survey().Blocked;
 
-    /// <summary>Whether the taskbar's overflow panel is open, when views let the pointer through to it.</summary>
     internal static bool OverflowOpen => Survey().OverflowOpen;
 
-    /// <summary>Raises only when another ordinary window is ahead, then repairs the higher layers.</summary>
     internal static void Raise(nint window) => RaiseGroup([window]);
 
-    /// <summary>
-    /// Raises windows that belong together, such as a menu and its submenus, lowest first, so each stays above the
-    /// ones before it. Nothing moves when no other ordinary window is ahead of them and their order is already
-    /// right; members never count as covering each other. Then repairs the higher layers.
-    /// </summary>
+    // Nothing moves when no other ordinary window is ahead and their order is already right; members never count as
+    // covering each other.
     internal static void RaiseGroup(IReadOnlyList<nint> lowestFirst)
     {
         nint[] group = lowestFirst.Where(window => window != 0).Distinct().ToArray();
@@ -134,7 +114,7 @@ internal static class TopLayer
         RepairProtected(above, state);
     }
 
-    /// <summary>Open menus and tips stay ahead without resetting an already correct z-order.</summary>
+    // Without resetting an already correct z-order.
     internal static void KeepAbove()
     {
         var state = Survey();
@@ -173,7 +153,6 @@ internal static class TopLayer
         return true;
     }
 
-    /// <summary>Puts a window just under <paramref name="after"/> in the always-on-top band and returns it.</summary>
     private static nint Lift(nint window, nint after)
     {
         if (after == window) return window;
@@ -231,7 +210,6 @@ internal static class TopLayer
         return new LayerState(order, taskbars, tips, menus, system, overflowOpen);
     }
 
-    /// <summary>A menu's own window and every submenu open under it, outermost first.</summary>
     internal static IEnumerable<nint> OpenDropDowns(ToolStripDropDown? menu)
     {
         if (menu is not { Visible: true, IsHandleCreated: true, IsDisposed: false })

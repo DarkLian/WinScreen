@@ -3,11 +3,8 @@ using WinScreen.Native;
 
 namespace WinScreen.Windows;
 
-/// <summary>
-/// Says when whole windows may have changed, without polling. It exists only while something needs it,
-/// and Windows calls back on the thread that created it. Bursts collapse into one <see cref="Changed"/>,
-/// which waits while a mouse button is down, so dragging a window doesn't make everything flicker.
-/// </summary>
+// Windows calls back on the thread that created it. Bursts collapse into one Changed, which waits while a mouse button
+// is down, so dragging a window doesn't make everything flicker.
 internal sealed class WindowEvents : IDisposable
 {
     private const int SettleMilliseconds = 100;
@@ -27,10 +24,8 @@ internal sealed class WindowEvents : IDisposable
     private readonly System.Windows.Forms.Timer _settle = new() { Interval = SettleMilliseconds };
     private readonly System.Windows.Forms.Timer _safety = new() { Interval = SafetyMilliseconds };
 
-    /// <summary>How many of these exist now, so tests can prove there are none while a feature is off.</summary>
     internal static int Active { get; private set; }
 
-    /// <summary>Window events seen, for measuring the rate.</summary>
     internal long Received { get; private set; }
 
     public event Action? Changed;
