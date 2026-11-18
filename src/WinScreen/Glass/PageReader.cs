@@ -1,0 +1,45 @@
+namespace WinScreen.Glass;
+
+internal readonly record struct TileStats(float R, float G, float B, float Exact, bool Busy);
+
+internal sealed class PageReader
+{
+    public const int Tile = 16;
+    private int _key = -1;
+
+    public (float R, float G, float B) Page { get; private set; }
+
+    public bool AlreadyDark { get; private set; }
+
+    public void Read(TileStats[] tiles)
+    {
+        if (tiles.Length == 0)
+            return;
+        var count = new Dictionary<int, int>();
+        foreach (TileStats t in tiles)
+            count[Key(t)] = count.GetValueOrDefault(Key(t)) + 1;
+        KeyValuePair<int, int> top = count.MaxBy(pair => pair.Value);
+        // Two colours sharing a page about equally made the page colour swap from frame to frame, and every pixel's
+        // see-through amount with it: the page colour changes only when another clearly takes over.
+        if (_key < 0 || count.GetValueOrDefault(_key) < top.Value * 0.75f)
+            _key = top.Key;
+
+        float r = 0, g = 0, b = 0;
+        int n = 0;
+        foreach (TileStats t in tiles)
+            if (!t.Busy && Key(t) == _key) { r += t.R; g += t.G; b += t.B; n++; }
+        Page = n == 0 ? ((_key >> 10 & 31) / 31f, (_key >> 5 & 31) / 31f, (_key & 31) / 31f) : (r / n, g / n, b / n);
+
+        // The margin keeps a mid-grey page from switching between left alone and flipped.
+        float light = 0.3f * Page.R + 0.59f * Page.G + 0.11f * Page.B;
+        AlreadyDark = AlreadyDark ? light < 0.3f : light < 0.2f;
+    }
+
+    public void Reset()
+    {
+        _key = -1;
+        AlreadyDark = false;
+    }
+
+    private static int Key(TileStats t) => (int)(t.R * 31) << 10 | (int)(t.G * 31) << 5 | (int)(t.B * 31);
+}

@@ -23,18 +23,13 @@ public sealed class EffectExclusivityTests
     private static void Settle() { for (int i = 0; i < 10; i++) { Application.DoEvents(); Thread.Sleep(20); } }
 
     [Fact]
-    public void Dark_and_Glass_are_never_on_together() => Check(pictureSafeDark: false, layeredGlass: false);
+    public void Dark_and_Glass_are_never_on_together() => Check(layeredGlass: false);
 
-    /// <summary>The same with the kinds that redraw the window's picture, which need a graphics card.</summary>
+    // Dark's kind follows the PC: the redrawn one with a graphics card, the filter without (the test VMs).
     [GraphicsCardFact]
-    public void Picture_keeping_Dark_and_layered_Glass_are_never_on_together_either()
-    {
-        Check(pictureSafeDark: true, layeredGlass: false);
-        Check(pictureSafeDark: false, layeredGlass: true);
-        Check(pictureSafeDark: true, layeredGlass: true);
-    }
+    public void Dark_and_layered_Glass_are_never_on_together_either() => Check(layeredGlass: true);
 
-    private static void Check(bool pictureSafeDark, bool layeredGlass)
+    private static void Check(bool layeredGlass)
     {
         using var target = new TargetProcess(new Rectangle(240, 200, 420, 300), "F0F0F0");
         string folder = Directory.CreateTempSubdirectory("winscreen-looks-").FullName;
@@ -44,7 +39,7 @@ public sealed class EffectExclusivityTests
             DarkModeTests.OnUiThread(_ =>
             {
                 var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false, ExperimentalFeatures = true,
-                    DetectAlreadyDark = false, Effects = new EffectPreferences { PictureSafeDark = pictureSafeDark, LayeredGlass = layeredGlass },
+                    DetectAlreadyDark = false, Effects = new EffectPreferences { LayeredGlass = layeredGlass },
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"));
                 nint window = target.Handle;
@@ -53,7 +48,7 @@ public sealed class EffectExclusivityTests
                     void Expect(bool dark, bool glass, string when)
                     {
                         Settle();
-                        string kinds = $"picture-keeping Dark {pictureSafeDark}, layered Glass {layeredGlass}";
+                        string kinds = $"layered Glass {layeredGlass}";
                         Assert.True(IsOn(app, AppCommand.ToggleDark, window) == dark, $"{when} ({kinds}): Dark should be {(dark ? "on" : "off")}.");
                         Assert.True(IsOn(app, AppCommand.ToggleGlass, window) == glass, $"{when} ({kinds}): Glass should be {(glass ? "on" : "off")}.");
                     }

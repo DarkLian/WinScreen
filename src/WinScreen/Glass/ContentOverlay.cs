@@ -15,7 +15,7 @@ namespace WinScreen.Glass;
 
 internal enum ContentLook { Glass, Dark }
 
-internal readonly record struct ContentLevels(float Background, float Text, float Picture);
+internal readonly record struct ContentLevels(float Background, float Text);
 
 internal sealed unsafe class ContentOverlay : Form
 {
@@ -26,7 +26,7 @@ internal sealed unsafe class ContentOverlay : Form
 
     private readonly nint _source;
     private readonly ContentLook _look;
-    private readonly PictureFinder _finder = new();
+    private readonly PageReader _page = new();
     private readonly AutoResetEvent _arrived = new(false);
     private readonly ManualResetEvent _stop = new(false);
     private readonly User32.WinEventProc _eventProc;
@@ -38,6 +38,7 @@ internal sealed unsafe class ContentOverlay : Form
     private long _retryAfter;
     private System.Windows.Forms.Timer? _retry;
     private ContentLevels _levels;
+    private readonly bool _leaveAlreadyDark;
     private Thread? _renderer;
 
     private ID3D11Device? _device;
@@ -50,11 +51,12 @@ internal sealed unsafe class ContentOverlay : Form
     private GraphicsCaptureSession? _session;
     private global::Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice? _captureDevice;
 
-    public ContentOverlay(nint source, ContentLook look, ContentLevels levels)
+    public ContentOverlay(nint source, ContentLook look, ContentLevels levels, bool leaveAlreadyDark = true)
     {
         _source = source;
         _look = look;
         _levels = levels;
+        _leaveAlreadyDark = leaveAlreadyDark;
         _eventProc = OnWindowEvent;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -71,6 +73,7 @@ internal sealed unsafe class ContentOverlay : Form
     internal long Frames { get; private set; }
 
     internal int Restacks { get; private set; }
+
 
     protected override bool ShowWithoutActivation => true;
 
@@ -285,30 +288,13 @@ internal sealed unsafe class ContentOverlay : Form
     private void Render()
     {
         var size = Size.Empty;
-        ID3D11Texture2D? cache = null, tiles = null, mask = null, output = null;
-        ID3D11ShaderResourceView? cacheView = null, maskView = null, statsView = null;
+        ID3D11Texture2D? cache = null, tiles = null, output = null, staging = null;
+        ID3D11ShaderResourceView? cacheView = null;
         ID3D11UnorderedAccessView? tilesView = null, outputView = null;
-        var staging = new ID3D11Texture2D?[2];
-        long frame = 0;
         try
         {
-            while (true)
+            while (WaitHandle.WaitAny([_arrived, _stop]) == 0)
             {
-                // Windows sends a frame only when the window changes, so a still page kept a hold's solid block on
-                // screen after the hold ended: the last frame is drawn again when one ends.
-                int wait = _finder.NextRelease is long until
-                    ? (int)Math.Clamp(until - Environment.TickCount64 + 1, 0, int.MaxValue)
-                    : Timeout.Infinite;
-                int woke = WaitHandle.WaitAny([_arrived, _stop], wait);
-                if (woke == 1)
-                    break;
-                if (woke == WaitHandle.WaitTimeout)
-                {
-                    if (cache is not null)
-                        Process(size, cacheView!, tilesView!, tiles!, statsView!, staging, mask!, maskView!, outputView!, output!, frame++);
-                    continue;
-                }
-
                 Direct3D11CaptureFrame? next = null;
                 while (_pool!.TryGetNextFrame() is { } newer)
                 {
@@ -326,30 +312,25 @@ internal sealed unsafe class ContentOverlay : Form
                     if (content != size)
                     {
                         size = content;
-                        DisposeAll(cache, tiles, mask, output, cacheView, maskView, statsView, tilesView, outputView, staging[0], staging[1]);
-                        int columns = size.Width / PictureFinder.Tile, rows = size.Height / PictureFinder.Tile;
+                        DisposeAll(cache, tiles, output, staging, cacheView, tilesView, outputView);
+                        int columns = size.Width / PageReader.Tile, rows = size.Height / PageReader.Tile;
                         cache = _device!.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 1, BindFlags.ShaderResource));
                         cacheView = _device.CreateShaderResourceView(cache);
-                        tiles = _device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.UnorderedAccess | BindFlags.ShaderResource));
+                        tiles = _device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.UnorderedAccess));
                         tilesView = _device.CreateUnorderedAccessView(tiles);
-                        statsView = _device.CreateShaderResourceView(tiles);
-                        for (int i = 0; i < 2; i++)
-                            staging[i] = _device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read));
-                        mask = _device.CreateTexture2D(new Texture2DDescription(Format.R32_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.ShaderResource));
-                        maskView = _device.CreateShaderResourceView(mask);
+                        staging = _device.CreateTexture2D(new Texture2DDescription(Format.R16G16B16A16_Float, (uint)columns, (uint)rows, 1, 1, BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read));
                         output = _device.CreateTexture2D(new Texture2DDescription(Format.R8G8B8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 1, BindFlags.UnorderedAccess));
                         outputView = _device.CreateUnorderedAccessView(output);
                         _chain!.ResizeBuffers(2, (uint)size.Width, (uint)size.Height, Format.R8G8B8A8_UNorm, SwapChainFlags.None);
                         _pool.Recreate(_captureDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, next.ContentSize);
-                        _finder.Reset();
-                        frame = 0;
+                        _page.Reset();
                         Size newSize = size;
                         BeginInvoke(() => { if (!IsDisposed) ClientSize = newSize; });
                     }
 
                     using (var texture = WgcInterop.Texture(next.Surface))
                         _context!.CopySubresourceRegion(cache, 0, 0, 0, 0, texture, 0, new Vortice.Mathematics.Box(0, 0, 0, size.Width, size.Height, 1));
-                    Process(size, cacheView!, tilesView!, tiles!, statsView!, staging, mask!, maskView!, outputView!, output!, frame++);
+                    Process(size, cacheView!, tilesView!, tiles!, staging!, outputView!, output!);
                     Frames++;
                 }
             }
@@ -361,54 +342,48 @@ internal sealed unsafe class ContentOverlay : Form
         }
         finally
         {
-            DisposeAll(cache, tiles, mask, output, cacheView, maskView, statsView, tilesView, outputView, staging[0], staging[1]);
+            DisposeAll(cache, tiles, output, staging, cacheView, tilesView, outputView);
         }
     }
 
     private void Process(Size size, ID3D11ShaderResourceView cacheView, ID3D11UnorderedAccessView tilesView, ID3D11Texture2D tiles,
-        ID3D11ShaderResourceView statsView, ID3D11Texture2D?[] staging, ID3D11Texture2D mask, ID3D11ShaderResourceView maskView, ID3D11UnorderedAccessView outputView,
-        ID3D11Texture2D output, long frame)
+        ID3D11Texture2D staging, ID3D11UnorderedAccessView outputView, ID3D11Texture2D output)
     {
         var context = _context!;
-        int columns = size.Width / PictureFinder.Tile, rows = size.Height / PictureFinder.Tile;
+        int columns = size.Width / PageReader.Tile, rows = size.Height / PageReader.Tile;
         context.CSSetShader(_stats);
         context.CSSetShaderResource(0, cacheView);
         context.CSSetUnorderedAccessView(0, tilesView);
         context.Dispatch((uint)(columns + 7) / 8, (uint)(rows + 7) / 8, 1);
         context.CSSetUnorderedAccessView(0, null);
         context.CSSetShaderResource(0, null);
-        // This frame's own statistics. A still window sends a single frame, so the mask can't lag behind it.
-        // The statistics are small and take well under a millisecond, so waiting for them is cheap.
-        context.CopyResource(staging[0], tiles);
-        float[] found = Classify(staging[0]!, columns, rows);
-        fixed (float* data = found)
-            context.UpdateSubresource(mask, 0, null, (nint)data, (uint)(columns * sizeof(float)), 0);
+        // This frame's own page colour. A still window sends a single frame, so it can't lag behind. The statistics
+        // are small and take well under a millisecond, so waiting for them is cheap.
+        context.CopyResource(staging, tiles);
+        ReadPage(staging, columns, rows);
 
-        (float pr, float pg, float pb) = _finder.Page;
+        (float pr, float pg, float pb) = _page.Page;
         ContentLevels levels = _levels;
         var options = new Options
         {
-            Background = levels.Background, Text = levels.Text, Picture = levels.Picture,
-            Mode = _look == ContentLook.Dark ? 2 : 0, PageR = pr, PageG = pg, PageB = pb,
+            Background = levels.Background, Text = levels.Text,
+            Mode = _look == ContentLook.Dark ? 2 : 0, AlreadyDark = _leaveAlreadyDark && _page.AlreadyDark ? 1 : 0,
+            PageR = pr, PageG = pg, PageB = pb,
         };
         context.UpdateSubresource(in options, _options!);
         context.CSSetShader(_composite);
         context.CSSetConstantBuffer(0, _options);
         context.CSSetShaderResource(0, cacheView);
-        context.CSSetShaderResource(1, maskView);
-        context.CSSetShaderResource(2, statsView);
         context.CSSetUnorderedAccessView(0, outputView);
         context.Dispatch((uint)(size.Width + 15) / 16, (uint)(size.Height + 15) / 16, 1);
         context.CSSetUnorderedAccessView(0, null);
         context.CSSetShaderResource(0, null);
-        context.CSSetShaderResource(1, null);
-        context.CSSetShaderResource(2, null);
         using (var back = _chain!.GetBuffer<ID3D11Texture2D>(0))
             context.CopyResource(back, output);
         _chain.Present(0, PresentFlags.None);
     }
 
-    private float[] Classify(ID3D11Texture2D staging, int columns, int rows)
+    private void ReadPage(ID3D11Texture2D staging, int columns, int rows)
     {
         MappedSubresource map = _context!.Map(staging, 0, MapMode.Read);
         var stats = new TileStats[columns * rows];
@@ -430,16 +405,14 @@ internal sealed unsafe class ContentOverlay : Form
             _context.Unmap(staging, 0);
         }
 
-        float[] mask = _finder.Find(stats, columns, rows);
-        if (_look == ContentLook.Dark) PictureFinder.MarkAlreadyDark(mask, stats, columns, rows);
-        return mask;
+        _page.Read(stats);
     }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Options
     {
-        public float Background, Text, Picture, Unused1;
-        public float Mode, Unused2, Unused3, Unused4;
+        public float Background, Text, Unused1, Unused2;
+        public float Mode, AlreadyDark, Unused3, Unused4;
         public float PageR, PageG, PageB, Unused5;
     }
 

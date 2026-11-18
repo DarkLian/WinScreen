@@ -249,16 +249,12 @@ public sealed class AppEndToEndTests : IDisposable
     /// <summary>
     /// A shrunk window can't keep Dark mode while it's a tile; when the person brings it back, Dark mode comes back
     /// with it. It seemed to vanish before (the owner, 15 Nov). Both ways back: Shrink again on the tile, and choosing
-    /// the window itself, as from the taskbar, which counted as something else closing the tile until 17 Nov. Both
-    /// kinds of Dark: the filter is what a PC without a graphics card gets.
+    /// the window itself, as from the taskbar, which counted as something else closing the tile until 17 Nov. Dark's
+    /// kind follows the PC: the filter is what a PC without a graphics card gets, as the test VMs.
     /// </summary>
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Dark_mode_comes_back_with_a_window_brought_back_from_its_tile(bool pictureKeeping)
+    [Fact]
+    public void Dark_mode_comes_back_with_a_window_brought_back_from_its_tile()
     {
-        if (!pictureKeeping)
-            RestartWith(new AppSettings { WelcomeShown = true, Effects = new EffectPreferences { PictureSafeDark = false } });
         using var target = new TargetProcess(Spot, "FFFFFF");
         Focus(target);
         var sample = new Rectangle(target.Center.X - 20, target.Center.Y - 20, 40, 40);
@@ -532,7 +528,7 @@ public sealed class AppEndToEndTests : IDisposable
     [InlineData(false)]
     public void Glass_and_Dark_keep_the_window_where_it_was_among_the_others(bool dark)
     {
-        var settings = new AppSettings { WelcomeShown = true, Effects = new EffectPreferences { LayeredGlass = true, PictureSafeDark = true } };
+        var settings = new AppSettings { WelcomeShown = true, Effects = new EffectPreferences { LayeredGlass = true } };
         settings.Hotkeys[dark ? AppCommand.ToggleDark : AppCommand.ToggleGlass] = "Ctrl+Alt+F20";
         RestartWith(settings);
         using var below = new TargetProcess(new Rectangle(Spot.Left + 200, Spot.Top + 100, 500, 400), "1E64C8", "Window below");

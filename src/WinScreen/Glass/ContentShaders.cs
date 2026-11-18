@@ -37,8 +37,6 @@ internal static class ContentShaders
 
     public const string Composite = """
         Texture2D<float4> source : register(t0);
-        Texture2D<float> mask : register(t1);
-        Texture2D<float4> stats : register(t2);
         RWTexture2D<float4> output : register(u0);
         cbuffer Options : register(b0) { float4 levels; float4 mode; float4 page; };
         [numthreads(16,16,1)]
@@ -46,77 +44,30 @@ internal static class ContentShaders
             uint ow, oh; output.GetDimensions(ow, oh);
             if (id.x >= ow || id.y >= oh) return;
             float3 c = source.Load(int3(id.xy,0)).rgb;
-            int2 tile = int2(id.xy) / 16;
-            uint tw, th; mask.GetDimensions(tw, th);
-            float m = mask.Load(int3(min(tile, int2(tw,th) - 1),0));
-            bool inside = m > 0.75;
-            bool panel = m > 0.1 && m < 0.3;
-            bool dark = m > 0.03 && m < 0.08;
-            bool near = m > 0.3, edge = false, nextToLight = false, nextToDark = false, background = false;
-            for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-                int2 around = clamp(tile + int2(x,y), 0, int2(tw,th) - 1);
-                float n = mask.Load(int3(around,0));
-                // A picture's edge tile is partly whatever surrounds it, often a panel a shade off the page: those
-                // pixels match the panel next door, not the page, and were drawn solid, a frame that moved with the
-                // tile grid while scrolling.
-                if (!(n > 0.75)) {
-                    float3 e = abs(c - stats.Load(int3(around,0)).rgb);
-                    if (max(e.r, max(e.g, e.b)) < 4.0 / 255) background = true;
-                }
-                // Near any picture; but inside one only among its own tiles, not among tiles that decide by pixel.
-                if (n > 0.3) near = true;
-                if (!(n > 0.75)) edge = true;
-                if (!(n > 0.03 && n < 0.08)) nextToLight = true;
-                if (n > 0.03 && n < 0.08) nextToDark = true;
-            }
-            float3 d3 = abs(c - page.rgb);
-            bool differs = max(d3.r, max(d3.g, d3.b)) > 2.5 / 255;
-            bool picture = (inside && !edge) || (near && !panel && differs && !background);
-            float away = length(c - page.rgb);
             float4 result;
-            if (mode.x == 2) {
+            // Each pixel by itself, never by a guess at what is a picture: guesses changed from frame to frame as a
+            // page scrolled, and parts of a picture flipped or went solid black.
+            if (mode.x == 2 && mode.y == 1) {
+                result = float4(c, 1);
+            } else if (mode.x == 2) {
                 // Each channel flips, which turns ClearType's coloured fringes into the right ones for light text on
                 // dark. Then the colour of the few pixels across is put back: grey text's fringes cancel there, so it
-                // stays crisp; red text is red there, so it stays red.
+                // stays crisp; coloured parts flip their brightness and keep their colour.
                 float3 across = 0;
                 for (int k = -2; k <= 2; k++) across += source.Load(int3(clamp(int2(id.x + k, id.y), int2(0,0), int2(ow - 1, oh - 1)), 0)).rgb;
                 across /= 5;
                 float3 hue = across - dot(across, float3(0.3,0.59,0.11));
                 float light = dot(c, float3(0.3,0.59,0.11));
-                // Coloured text flips its brightness and keeps its colour, as before; grey text flips by channel.
                 float coloured = smoothstep(0.04, 0.12, length(hue));
                 float3 flipped = saturate(lerp(1 - c + 2 * hue, c + (1 - 2 * light), coloured));
-                // A part that is dark already keeps its colours; page colour spilling into it from next door still flips.
-                bool keep = picture || (dark && (differs || !nextToLight));
-                // Light at a dark part's edge next to light parts may be a light panel under a bar, not the bar's: it decides below.
-                if (keep && !picture && nextToLight && light > 0.6) keep = false;
-                // A tile that is only partly in a dark part, such as a title bar's lower edge with the page under it,
-                // and white in a dark part next to the page, which may be the page spilling in or the bar's own white
-                // title (an active title lost its lower half): each pixel goes by what is around it,
-                // so the bar's text keeps its colour and the page flips.
-                // Text in a bar has the bar above and below it; the page next to a bar has it on one side only. The bar's
-                // own last row, dark, has it on one side and stays.
-                if (!keep && (dark || nextToDark)) {
-                    uint above = 0, below = 0;
-                    for (int ny = 1; ny <= 3; ny++) for (int nx = -3; nx <= 3; nx++) {
-                        int2 up = clamp(int2(id.xy) + int2(nx, -ny), int2(0,0), int2(ow - 1, oh - 1));
-                        int2 down = clamp(int2(id.xy) + int2(nx, ny), int2(0,0), int2(ow - 1, oh - 1));
-                        if (dot(source.Load(int3(up, 0)).rgb, float3(0.3,0.59,0.11)) < 0.3) above++;
-                        if (dot(source.Load(int3(down, 0)).rgb, float3(0.3,0.59,0.11)) < 0.3) below++;
-                    }
-                    keep = min(above, below) >= 7 || (light < 0.3 && max(above, below) >= 14);
-                }
                 // A white page becomes #191919 rather than black, as the filter kind does; the rest is lifted in step.
-                flipped = 25.0 / 255 + flipped * (1 - 25.0 / 255);
-                result = float4(keep ? c : flipped, 1);
-            } else if (picture) {
-                result = float4(c * levels.z, levels.z);
+                result = float4(25.0 / 255 + flipped * (1 - 25.0 / 255), 1);
             } else {
+                float away = length(c - page.rgb);
                 float d = smoothstep(0.03, 0.30, away);
                 float3 ink = d > 0.001 ? saturate((c - (1 - d) * page.rgb) / d) : c;
                 // Text keeps a thin halo of the page colour, a few pixels wide: dark text on a light page sat right on
-                // whatever was behind, often dark, and couldn't be read. The rest of the background
-                // fades as chosen.
+                // whatever was behind, often dark, and couldn't be read.
                 float halo = 0;
                 // Only strong contrast, as text has, makes a halo: a panel's faint border doesn't.
                 for (int py = -3; py <= 3; py++) for (int px = -3; px <= 3; px++) {

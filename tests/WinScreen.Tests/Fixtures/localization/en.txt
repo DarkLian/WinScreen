@@ -383,8 +383,6 @@ settings.dark.detect 90E68B56C64F3AB8
 settings.effects.background A2769F209594C64E
 settings.effects.help 4FFDAB63790AC4AC
 settings.effects.layeredGlass 36CBC77725A9ABBE
-settings.effects.pictureSafeDark 56D29151C5EF56DA
-settings.effects.pictures 00E406C651C23107
 settings.effects.text A4BB83DC0EE964E8
 settings.effects.title 586126300AF63122
 settings.experimental 3DC9F569422DCFDA

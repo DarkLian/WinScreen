@@ -1,4 +1,4 @@
-﻿using static WinScreen.Localization.UiText;
+using static WinScreen.Localization.UiText;
 using System.Diagnostics;
 using WinScreen.Tray;
 using WinScreen.Updates;
@@ -17,10 +17,8 @@ public sealed class SettingsWindow : Form
     private readonly NumericUpDown _opacityStep = new() { Minimum = 1, Maximum = 25, Width = 70 };
     private readonly CheckBox _opacityWheel = new SwitchBox { Text = T("settings.opacity.wheel"), AutoSize = true };
     private readonly CheckBox _layeredGlass = new SwitchBox { Text = T("settings.effects.layeredGlass"), AutoSize = true };
-    private readonly CheckBox _pictureSafeDark = new SwitchBox { Text = T("settings.effects.pictureSafeDark"), AutoSize = true };
     private readonly NumericUpDown _glassBackground = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _glassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
-    private readonly NumericUpDown _glassPictures = new() { Minimum = 20, Maximum = 100, Width = 70 };
     private readonly CheckBox _detectDark = new SwitchBox { Text = T("settings.dark.detect"), AutoSize = true };
     private readonly TextBox _borderColor = new() { Width = 90 };
     private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
@@ -335,7 +333,7 @@ private readonly ErrorProvider _errors = new();
             [_defaultOpacity] = '\uE706', [_opacityStep] = '\uE9E9', [_opacityWheel] = '\uE962', [_opaqueOnHover] = '\uE890',
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
-            [_glassText] = '\uE8D2', [_glassPictures] = '\uEB9F', [_pictureSafeDark] = '\uE708',
+            [_glassText] = '\uE8D2',
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
             [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
             [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',
@@ -821,8 +819,8 @@ private readonly ErrorProvider _errors = new();
         draft.OpacityStepPercent = Number(_opacityStep);
         draft.Effects = new EffectPreferences
         {
-            LayeredGlass = _layeredGlass.Checked, PictureSafeDark = _pictureSafeDark.Checked,
-            BackgroundPercent = Number(_glassBackground), TextPercent = Number(_glassText), PicturePercent = Number(_glassPictures),
+            LayeredGlass = _layeredGlass.Checked,
+            BackgroundPercent = Number(_glassBackground), TextPercent = Number(_glassText),
         }.Validated();
         draft.PinBorder = new PinBorderPreferences
         {
@@ -1264,10 +1262,8 @@ private readonly ErrorProvider _errors = new();
         _opacityStep.Value = Math.Clamp(values.OpacityStepPercent, 1, 25);
         EffectPreferences effects = values.Effects.Validated();
         _layeredGlass.Checked = effects.LayeredGlass;
-        _pictureSafeDark.Checked = effects.PictureSafeDark;
         _glassBackground.Value = effects.BackgroundPercent;
         _glassText.Value = effects.TextPercent;
-        _glassPictures.Value = effects.PicturePercent;
         PinBorderPreferences border = values.PinBorder.Validated();
         _borderColor.Text = border.ColorHex;
         _borderOpacity.Value = border.OpacityPercent;
@@ -1515,7 +1511,7 @@ private readonly ErrorProvider _errors = new();
             SettingRow(T("settings.pin.opacity"), _borderOpacity), SettingRow(T("settings.pin.thickness"), _borderThickness)));
         page.Controls.Add(Card(T("settings.effects.title"), true, _detectDark, _layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
-            SettingRow(T("settings.effects.pictures"), _glassPictures), _pictureSafeDark, Note(T("settings.effects.help"))));
+            Note(T("settings.effects.help"))));
         return page;
     }
 

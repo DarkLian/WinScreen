@@ -667,6 +667,7 @@ public sealed partial class TrayApplication : ApplicationContext
             _windows.SetIncluded(_settings.IncludedPrograms);
             _windows.DefaultOpacity = _settings.DefaultAlpha;
             _dark.DetectAlreadyDark = _settings.DetectAlreadyDark;
+        _content.LeaveAlreadyDark = _settings.DetectAlreadyDark;
         });
         if (Changed(settings => settings.PinBorder)) Part(() => _borders.Configure(_settings.PinBorder));
         Part(() => _toolbar.Enable(_settings.ShowToolbar && !_toolbarHidden));
@@ -1791,17 +1792,17 @@ public sealed partial class TrayApplication : ApplicationContext
     private static bool IsExpected(Exception failure) => failure is WindowOperationException or IOException
         or UnauthorizedAccessException or System.Security.SecurityException or ExternalException;
 
-    private enum Look { None, FilterDark, PictureDark, ColorGlass, LayeredGlass }
+    private enum Look { None, FilterDark, ContentDark, ColorGlass, LayeredGlass }
 
     private Look DarkLook(nint window) =>
-        _dark.IsDark(window) ? Look.FilterDark : _content.Has(window, Glass.ContentLook.Dark) ? Look.PictureDark : Look.None;
+        _dark.IsDark(window) ? Look.FilterDark : _content.Has(window, Glass.ContentLook.Dark) ? Look.ContentDark : Look.None;
 
     private Look GlassLook(nint window) =>
         _windows.IsGlass(window) ? Look.ColorGlass : _content.Has(window, Glass.ContentLook.Glass) ? Look.LayeredGlass : Look.None;
 
     // Glass goes first: the two can't share a window.
     private void ToggleDark(nint window) => SwitchLook(window, DarkLook(window), GlassLook(window),
-        _settings.Effects.PictureSafeDark && Glass.ContentOverlay.GraphicsCardPresent ? Look.PictureDark : Look.FilterDark);
+        Glass.ContentOverlay.GraphicsCardPresent ? Look.ContentDark : Look.FilterDark);
 
     private void ToggleGlass(nint window) => SwitchLook(window, GlassLook(window), DarkLook(window),
         _settings.Effects.LayeredGlass && Glass.ContentOverlay.GraphicsCardPresent ? Look.LayeredGlass : Look.ColorGlass);
@@ -1835,7 +1836,7 @@ public sealed partial class TrayApplication : ApplicationContext
         }
         if (other != Look.None) PutBack(null); // Refused without an error, as Dark is for a window that is dark already.
 
-        bool Has(Look look) => look is Look.FilterDark or Look.PictureDark ? DarkLook(window) == look : GlassLook(window) == look;
+        bool Has(Look look) => look is Look.FilterDark or Look.ContentDark ? DarkLook(window) == look : GlassLook(window) == look;
 
         void PutBack(string? problem)
         {
@@ -1854,7 +1855,7 @@ public sealed partial class TrayApplication : ApplicationContext
             case Look.FilterDark:
                 if (_dark.IsDark(window) != on) _dark.Toggle(window);
                 break;
-            case Look.PictureDark:
+            case Look.ContentDark:
                 if (on && !_content.Has(window, Glass.ContentLook.Dark) && _dark.RefusesAsAlreadyDark(window)) break;
                 if (on != _content.Has(window, Glass.ContentLook.Dark)) _content.Toggle(window, Glass.ContentLook.Dark);
                 break;

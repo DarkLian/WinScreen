@@ -1,4 +1,4 @@
-﻿using WinScreen.Windows;
+using WinScreen.Windows;
 
 namespace WinScreen.Glass;
 
@@ -15,7 +15,9 @@ internal sealed class ContentEffects : IDisposable
             if (_overlays.TryGetValue(window, out ContentOverlay? overlay) && !overlay.IsDisposed) overlay.SetOpacity(alpha);
         };
     }
-    private ContentLevels _levels = new(0.15f, 1, 0.9f);
+    private ContentLevels _levels = new(0.15f, 1);
+
+    public bool LeaveAlreadyDark { get; set; } = true;
 
     public event Action<string>? Problem;
 
@@ -49,7 +51,7 @@ internal sealed class ContentEffects : IDisposable
                 return false;
         }
 
-        var overlay = new ContentOverlay(window, look, _levels);
+        var overlay = new ContentOverlay(window, look, _levels, LeaveAlreadyDark);
         try
         {
             byte opacity = windows.OpacityOf(window);

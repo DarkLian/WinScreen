@@ -381,8 +381,6 @@
   "settings.effects.background": "Background (%)",
   "settings.effects.help": "These use your graphics card while the window changes. Windows shows a colored border around a window while it's being redrawn.",
   "settings.effects.layeredGlass": "Glass: fade only the background, and keep text and pictures",
-  "settings.effects.pictureSafeDark": "Dark: leave pictures and video as they are",
-  "settings.effects.pictures": "Pictures and video (%)",
   "settings.effects.text": "Text (%)",
   "settings.effects.title": "How Glass and Dark look",
   "settings.experimental": "Experimental",
