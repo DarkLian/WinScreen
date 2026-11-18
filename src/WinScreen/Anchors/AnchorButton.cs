@@ -5,11 +5,6 @@ using WinScreen.Windows;
 
 namespace WinScreen.Anchors;
 
-/// <summary>
-/// A small floating button for one window. Left-click brings it forward, right-click opens its menu,
-/// middle-click closes the window, and dragging a file over it brings the window forward so the file can
-/// be dropped there. The button itself can be dragged anywhere.
-/// </summary>
 internal sealed class AnchorButton : Form
 {
     public const int ButtonSize = 48;
@@ -51,7 +46,7 @@ internal sealed class AnchorButton : Form
         AllowDrop = true;
         DoubleBuffered = true;
         Text = T("anchor.titlePrefix") + WindowInfo.Title(target);
-        AccessibleDescription = T("anchor.controls"); // Said by a screen reader; nothing pops up on hover.
+        AccessibleDescription = T("anchor.controls");
         _menu.Items.Add(T("window.show"), null, (_, _) => BringForward());
         _menu.Items.Add(T("window.minimize"), null, (_, _) =>
         {
@@ -67,29 +62,22 @@ internal sealed class AnchorButton : Form
         _previewTimer.Tick += (_, _) => FollowPreview();
     }
 
-    /// <summary>The program the window belongs to, which decides its icon. Null when it couldn't be read.</summary>
     public string? Program { get; }
 
-    /// <summary>How long the pointer rests before the window's live picture shows; 0 for never.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal int PreviewDelay { get; set; }
 
-    /// <summary>The short title shown beside the icon, for an Anchor whose icon others share. Null shows the icon alone.</summary>
     internal string? Title => _title;
 
-    /// <summary>True while the window's live picture shows beside the Anchor.</summary>
     internal bool Previewing => _preview is not null;
 
     public nint Target => _target;
 
-    /// <summary>True for one the app added for a covered window, which it may also take away.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public bool Automatic { get; set; }
 
-    /// <summary>True once the person has dragged it. It stays where they put it.</summary>
     public bool Placed { get; private set; }
 
-    /// <summary>Sets how it looks now. Skips anything unchanged, because this runs after every window change.</summary>
     internal void Apply(int size, double opacity, AnchorLook look, bool marksView, bool excludeFromCapture, string? title = null)
     {
         bool plain = look == AnchorLook.NoBackground, light = look == AnchorLook.Light;
@@ -97,7 +85,6 @@ internal sealed class AnchorButton : Form
         int width = title is null ? size : size * 3;
         if (ClientSize.Width != width || ClientSize.Height != size || _size != size)
         {
-            // An Anchor that grows for its title keeps the edge nearest its side of the screen where it was.
             Rectangle area = Screen.FromRectangle(Bounds).WorkingArea;
             bool keepRight = Left + Width / 2 > area.Left + area.Width / 2;
             int right = Right;
@@ -144,23 +131,19 @@ internal sealed class AnchorButton : Form
     private double _plainOpacity = 1;
     private string _drawnPlain = "";
 
-    /// <summary>True while it shows its icon with nothing behind it.</summary>
     internal bool Plain => _plain;
 
-    /// <summary>
-    /// Moves between a button with a background, which paints itself, and the icon alone, which is a picture with
-    /// see-through parts handed to Windows whole. A window can't be both, so its layered style is taken off and put back
-    /// fresh each time.
-    /// </summary>
+    // A window can't both paint itself and hand Windows a whole picture, so the layered style is taken off and put back
+    // fresh on each change.
     private void ChangeKind(bool plain)
     {
-        if (plain) Opacity = 1; // The picture carries the opacity instead.
+        if (plain) Opacity = 1;
         _plain = plain;
         _drawnPlain = "";
         if (!IsHandleCreated) return;
         long style = User32.GetWindowLongPtr(Handle, User32.GWL_EXSTYLE);
         User32.SetWindowLongPtr(Handle, User32.GWL_EXSTYLE, (nint)(style & ~User32.WS_EX_LAYERED));
-        UpdateStyles(); // Puts the layered style back for the picture, or leaves it to Opacity for a button.
+        UpdateStyles();
         if (!plain) Invalidate();
     }
 
@@ -182,10 +165,8 @@ internal sealed class AnchorButton : Form
         if (_plain) DrawPlain();
     }
 
-    /// <summary>
-    /// The icon alone, with the title and the view notch outlined so they read on any background. Everything else is
-    /// almost but not quite see-through, so the whole square still takes clicks, drags and dropped files.
-    /// </summary>
+    // Fully see-through pixels don't take clicks, drags or dropped files, so everything but the icon is almost
+    // see-through.
     private void DrawPlain()
     {
         if (!_plain || !IsHandleCreated || IsDisposed) return;
@@ -238,7 +219,7 @@ internal sealed class AnchorButton : Form
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        if (_plain) return; // Drawn whole in DrawPlain.
+        if (_plain) return;
         e.Graphics.DrawIcon(_icon ?? SystemIcons.Application, _iconBounds);
         if (_title is not null)
         {
@@ -251,7 +232,6 @@ internal sealed class AnchorButton : Form
         }
         if (_marksView)
         {
-            // A notch in the corner, so a window with a view reads differently without relying on colour.
             int notch = Math.Max(6, _size / 4);
             int right = ClientSize.Width, bottom = ClientSize.Height;
             using var brush = new SolidBrush(BackColor.GetBrightness() > 0.5 ? Color.Black : Color.White);
@@ -278,10 +258,6 @@ internal sealed class AnchorButton : Form
         if (!Visible) DropPreview();
     }
 
-    /// <summary>
-    /// Shows the window's live picture beside the Anchor once the pointer has rested on it. A minimized window has
-    /// no picture to show, so the title in its tooltip is all there is.
-    /// </summary>
     private void FollowPreview()
     {
         bool resting = !IsDisposed && Visible && ClientRectangle.Contains(PointToClient(Cursor.Position)) && !_pressed &&
@@ -306,7 +282,7 @@ internal sealed class AnchorButton : Form
         }
         catch (WindowOperationException)
         {
-            DropPreview(); // A window that refuses a picture keeps its Anchor working as before.
+            DropPreview();
         }
     }
 
@@ -359,7 +335,6 @@ internal sealed class AnchorButton : Form
                 BringForward();
                 break;
             case MouseButtons.Right:
-                // ContextMenuStrip provides ordinary right-click and keyboard (Shift+F10) access.
                 break;
             case MouseButtons.Middle:
                 CloseTarget();
@@ -369,8 +344,8 @@ internal sealed class AnchorButton : Form
 
     private void CloseTarget()
     {
-        // Close requests are asynchronous and apps may hide or cancel closing. Dismiss our shortcut
-        // independently; never force the app to quit or discard an unsaved-work prompt.
+        // A close is only a request the app may cancel (unsaved work): never force it, and dismiss the Anchor on its
+        // own.
         if (_identity.Matches())
             User32.PostMessage(_target, User32.WM_CLOSE, 0, 0);
         Close();

@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Native;
 
-/// <summary>The graphics adapters Windows has displays on, by name, without WMI.</summary>
 internal static class DisplayAdapters
 {
     private const uint AttachedToDesktop = 0x1;
@@ -21,7 +20,6 @@ internal static class DisplayAdapters
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "EnumDisplayDevicesW")]
     private static extern bool EnumDisplayDevices(string? device, uint index, ref DisplayDevice info, uint flags);
 
-    /// <summary>Each adapter's name once, those driving a display first.</summary>
     public static IReadOnlyList<(string Name, bool Active)> All()
     {
         var adapters = new List<(string Name, bool Active)>();

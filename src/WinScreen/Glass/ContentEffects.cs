@@ -2,11 +2,6 @@
 
 namespace WinScreen.Glass;
 
-/// <summary>
-/// The processed effects on windows: layered Glass and picture-safe Dark. Each keeps its window invisible
-/// but clickable under an overlay, and puts it back exactly when turned off, on exit, or after a crash
-/// through the same recovery as hidden windows.
-/// </summary>
 internal sealed class ContentEffects : IDisposable
 {
     private readonly WindowController windows;
@@ -15,7 +10,6 @@ internal sealed class ContentEffects : IDisposable
     public ContentEffects(WindowController windows)
     {
         this.windows = windows;
-        // The effect draws the window, so it shows the window as see-through as the person made it.
         windows.OpacityChanged += (window, alpha) =>
         {
             if (_overlays.TryGetValue(window, out ContentOverlay? overlay) && !overlay.IsDisposed) overlay.SetOpacity(alpha);
@@ -23,10 +17,8 @@ internal sealed class ContentEffects : IDisposable
     }
     private ContentLevels _levels = new(0.15f, 1, 0.9f);
 
-    /// <summary>Raised when an effect had to stop, with a message for the person.</summary>
     public event Action<string>? Problem;
 
-    /// <summary>Raised with each new overlay, so other effects can leave it alone.</summary>
     public event Action<nint>? Created;
 
     public bool Has(nint window, ContentLook look) => _overlays.TryGetValue(window, out ContentOverlay? overlay) && overlay.Look == look;
@@ -36,7 +28,6 @@ internal sealed class ContentEffects : IDisposable
     public int Count => _overlays.Count;
     internal IEnumerable<nint> Sources => _overlays.Keys;
 
-    /// <summary>The look's own window over a source, or 0.</summary>
     internal nint OverlayOf(nint window) =>
         _overlays.TryGetValue(window, out ContentOverlay? overlay) && overlay.IsHandleCreated ? overlay.Handle : 0;
 
@@ -47,7 +38,6 @@ internal sealed class ContentEffects : IDisposable
             overlay.SetLevels(levels);
     }
 
-    /// <summary>Turns this look on for a window, or off when it already has it. Returns the new state.</summary>
     public bool Toggle(nint window, ContentLook look)
     {
         if (_overlays.TryGetValue(window, out ContentOverlay? existing))
@@ -114,7 +104,6 @@ internal sealed class ContentEffects : IDisposable
             TurnOff(window);
     }
 
-    /// <summary>Drops effects whose window has closed.</summary>
     public void DropClosed()
     {
         foreach (nint window in _overlays.Keys.Where(window => !Native.User32.IsWindow(window)).ToArray())

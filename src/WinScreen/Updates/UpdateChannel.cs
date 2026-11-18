@@ -2,10 +2,8 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Updates;
 
-/// <summary>
-/// Each architecture updates from its own feed, so an installed copy can never take the other's build. Only the x64
-/// feed ("win") is published now; an ARM64 copy keeps asking for "win-arm64" and so finds no update.
-/// </summary>
+// Each architecture has its own feed, so an installed copy can never take the other's build. Only "win" (x64) is
+// published; an ARM64 copy asks for "win-arm64" and finds no update.
 internal static class UpdateChannel
 {
     public static string Current => For(RuntimeInformation.ProcessArchitecture);

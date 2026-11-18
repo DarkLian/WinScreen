@@ -6,10 +6,8 @@ using System.Text;
 
 namespace WinScreen.Diagnostics;
 
-/// <summary>
-/// One value in a log line. Only kinds that can't carry a person's text exist: numbers, yes/no, named states, a
-/// program's file name and a window class. Window titles, typed keys, the clipboard and full paths have no way in.
-/// </summary>
+// Only kinds that can't carry a person's text exist: window titles, typed keys, the clipboard and full paths have no
+// way in.
 public readonly struct LogValue
 {
     private readonly object? _value;
@@ -28,10 +26,9 @@ public readonly struct LogValue
     public static implicit operator LogValue(bool value) => new(value);
     public static implicit operator LogValue(Enum? value) => new(value);
 
-    /// <summary>A program, by its file name only: a full path names the person's folders.</summary>
+    // File name only: a full path names the person's folders.
     public static LogValue Program(string? pathOrName) => new(string.IsNullOrEmpty(pathOrName) ? "" : Path.GetFileName(pathOrName));
 
-    /// <summary>A window class name. Classes are set by programs, not people; capped and stripped of anything path-like.</summary>
     public static LogValue WindowClass(string? name)
     {
         string value = name ?? "";
@@ -40,16 +37,13 @@ public readonly struct LogValue
         return new(value.Length > 80 ? value[..80] : value);
     }
 
-    /// <summary>The program a window belongs to, by file name.</summary>
     public static LogValue ProgramOf(nint window) => Program(Windows.WindowInfo.ProgramOf(window));
 
-    /// <summary>A window's class.</summary>
     public static LogValue ClassOf(nint window) => WindowClass(Windows.WindowInfo.ClassName(window));
 
-    /// <summary>An error code, written as hex.</summary>
     public static LogValue Code(int code) => new(code, hex: true);
 
-    /// <summary>Text WinScreen itself fixes, such as its version. Only for this folder; a test keeps it here.</summary>
+    // Only text WinScreen fixes itself; a test keeps it to this folder.
     internal static LogValue Known(string text) => new(text);
 
     internal string Text => _value switch
@@ -69,19 +63,13 @@ public readonly struct LogValue
     }
 }
 
-/// <summary>
-/// WinScreen's own short log, kept in its data folder to help fix problems. It never leaves the PC: a person can
-/// save it with Save diagnostics and attach it to a report themselves. Callers only queue an entry, so this is safe
-/// from hooks and any thread; one background thread writes. Nothing is written until <see cref="Start"/>.
-/// </summary>
+// Callers only queue, so this is safe from hooks and any thread; one background thread writes.
 public static class Log
 {
     private static DiagnosticLog? s_current;
 
     internal static DiagnosticLog? Current => s_current;
 
-    /// <summary>Starts writing to <c>winscreen.log</c> in the data folder. Once per process.</summary>
-    /// <param name="file">The file's name: the administrator helper writes its own (one writer per file).</param>
     public static void Start(string folder, string role, string file = DiagnosticLog.FileName)
     {
         if (s_current is not null) return;
@@ -90,22 +78,20 @@ public static class Log
             ("process", Environment.ProcessId));
     }
 
-    /// <summary>Something that happened. <paramref name="name"/> is fixed text, such as "command" or "capture.fallback".</summary>
+    // name is fixed text, never anything a person wrote.
     public static void Event(string name, params (string Key, LogValue Value)[] fields) =>
         s_current?.Enqueue(new LogEntry(name, fields, null, null));
 
-    /// <summary>An exception: its type, code and the methods it passed through. Never its message, which can hold titles and paths.</summary>
+    // Never the message: it can hold titles and paths.
     public static void Error(string name, Exception error, [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) =>
         s_current?.Enqueue(new LogEntry(name, [], error, Site(file, line)));
 
-    /// <summary>An exception that is expected and handled where it is caught, kept so a pattern of them can be seen.</summary>
     public static void Swallowed(Exception error, [CallerFilePath] string file = "", [CallerLineNumber] int line = 0) =>
         s_current?.Enqueue(new LogEntry("swallowed", [], error, Site(file, line)));
 
-    /// <summary>Waits up to <paramref name="timeout"/> for everything queued so far to reach the file. Never from a hook.</summary>
+    // Never from a hook: it waits.
     public static bool Flush(TimeSpan timeout) => s_current?.Flush(timeout) ?? true;
 
-    /// <summary>The log files, newest last, for Save diagnostics.</summary>
     internal static IReadOnlyList<string> Files => s_current?.Files ?? [];
 
     private static string Site(string file, int line) => $"{Path.GetFileName(file)}:{line}";
@@ -113,17 +99,15 @@ public static class Log
 
 internal sealed record LogEntry(string Name, (string Key, LogValue Value)[] Fields, Exception? Error, string? Site)
 {
-    /// <summary>UTC, the cheapest clock to read on a hook thread; shown in local time when written.</summary>
+    // UTC: the cheapest clock to read on a hook thread.
     public long Ticks { get; } = DateTime.UtcNow.Ticks;
     internal ManualResetEventSlim? Flushed { get; init; }
 }
 
-/// <summary>The writer behind <see cref="Log"/>: a bounded queue, one thread, two files that take turns.</summary>
 internal sealed class DiagnosticLog : IDisposable
 {
     internal const string FileName = "winscreen.log";
     internal const string OlderFileName = "winscreen.1.log";
-    /// <summary>The administrator helper's log (10-2): its own file, one writer per file.</summary>
     internal const string HelperFileName = "winscreen-administrator.log";
     private const int LongestLine = 2000;
     private const int GiveUpAfterFailures = 5;
@@ -136,7 +120,6 @@ internal sealed class DiagnosticLog : IDisposable
     private readonly ConcurrentQueue<LogEntry> _queue = new();
     private readonly AutoResetEvent _wake = new(false);
     private readonly Thread _writer;
-    // The last line written, and how often it has come again since, straight after itself.
     private (string Body, long Since, long Last, int Repeats)? _run;
     private int _queued;
     private int _dropped;
@@ -144,7 +127,6 @@ internal sealed class DiagnosticLog : IDisposable
     private volatile bool _stopping;
     private volatile bool _off;
 
-    /// <summary>For tests: runs on the writer thread before each batch, so a test can hold the writer still.</summary>
     internal Action? BeforeWrite { get; init; }
 
     public DiagnosticLog(string folder, long maxBytes = 512 * 1024, int capacity = 2048, TimeSpan? mergeFor = null, string file = FileName)
@@ -155,19 +137,17 @@ internal sealed class DiagnosticLog : IDisposable
         _maxBytes = maxBytes;
         _capacity = capacity;
         _mergeFor = mergeFor ?? TimeSpan.FromMinutes(1);
-        // Waits for work without a timeout: no polling, no timer.
         _writer = new Thread(Write) { IsBackground = true, Name = "WinScreen log", Priority = ThreadPriority.BelowNormal };
         _writer.Start();
     }
 
     internal IReadOnlyList<string> Files => new[] { _older, _current }.Where(File.Exists).ToArray();
 
-    /// <summary>The file a log moves to when full: winscreen.log to winscreen.1.log.</summary>
     internal static string OlderOf(string file) => Path.GetFileNameWithoutExtension(file) + ".1" + Path.GetExtension(file);
 
     internal int Dropped => Volatile.Read(ref _dropped);
 
-    /// <summary>Queues an entry, or counts it as dropped when the queue is full. Never blocks and never throws.</summary>
+    // Never blocks and never throws: hooks call it.
     public void Enqueue(LogEntry entry)
     {
         if (_off || _stopping) return;
@@ -216,7 +196,7 @@ internal sealed class DiagnosticLog : IDisposable
             if (_stopping || _off)
             {
                 try { if (!_off) Drain(); }
-                catch (Exception) { _off = true; } // Closing anyway; the lines are lost, the app is not.
+                catch (Exception) { _off = true; }
                 ReleaseFlushes();
                 return;
             }
@@ -246,11 +226,6 @@ internal sealed class DiagnosticLog : IDisposable
         foreach (ManualResetEventSlim flushed in flushes) flushed.Set();
     }
 
-    /// <summary>
-    /// The first of a run of identical lines is written; the rest are counted and summed up where the run ends,
-    /// before the next different line, so the order of events holds. A run longer than the merge time is summed up
-    /// then and starts again.
-    /// </summary>
     private void Add(StringBuilder lines, LogEntry entry)
     {
         string body = Body(entry);
@@ -287,7 +262,7 @@ internal sealed class DiagnosticLog : IDisposable
         {
             body.Append(" at=").Append(entry.Site);
             body.Append(" error=").Append(Chain(error));
-            // Which refusal it was, by the name of the message the person saw, never its text.
+            // By the name of the message the person saw, never its text.
             if (error is Windows.WindowOperationException refusal)
                 body.Append(" reason=").Append(Localization.UiText.KeyOf(refusal.Message) ?? "unknown");
             body.Append(" code=").Append(LogValue.Code(error.HResult).Text);
@@ -296,7 +271,7 @@ internal sealed class DiagnosticLog : IDisposable
         return body.Length > LongestLine ? body.ToString(0, LongestLine) : body.ToString();
     }
 
-    /// <summary>Exception types, outermost first. Messages are left out: they can hold titles and paths.</summary>
+    // Messages are left out: they can hold titles and paths.
     private static string Chain(Exception error)
     {
         var types = new List<string>();
@@ -304,7 +279,6 @@ internal sealed class DiagnosticLog : IDisposable
         return string.Join('>', types);
     }
 
-    /// <summary>The methods the exception passed through, innermost first. File names and lines are left out.</summary>
     private static string Frames(Exception error)
     {
         var methods = new List<string>();
@@ -317,7 +291,6 @@ internal sealed class DiagnosticLog : IDisposable
         return methods.Count == 0 ? "-" : string.Join('<', methods);
     }
 
-    /// <summary>Appends line by line, switching files whenever the next line wouldn't fit, however big the batch.</summary>
     private void Append(string text)
     {
         FileStream? file = null;

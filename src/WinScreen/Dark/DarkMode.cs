@@ -1,6 +1,5 @@
 namespace WinScreen.Dark;
 
-/// <summary>Keeps one overlay per darkened window, and keeps them over their windows.</summary>
 public sealed class DarkMode : IDisposable
 {
     private readonly Dictionary<nint, DarkOverlay> _overlays = [];
@@ -20,11 +19,9 @@ public sealed class DarkMode : IDisposable
 
     internal IEnumerable<nint> Targets => _overlays.Keys;
 
-    /// <summary>The filter's own window over a window, or 0.</summary>
     internal nint OverlayOf(nint window) =>
         _overlays.TryGetValue(window, out DarkOverlay? overlay) && overlay.IsHandleCreated ? overlay.Handle : 0;
 
-    /// <summary>Turns dark mode on or off for a window. Returns the new state.</summary>
     public bool Toggle(nint window)
     {
         if (_overlays.Remove(window, out DarkOverlay? existing))
@@ -42,10 +39,6 @@ public sealed class DarkMode : IDisposable
         return true;
     }
 
-    /// <summary>
-    /// True, and says so, when Settings leaves already-dark windows unchanged and this one is dark already. Both kinds
-    /// of Dark ask it.
-    /// </summary>
     public bool RefusesAsAlreadyDark(nint window)
     {
         if (!LooksDark(window))
@@ -54,7 +47,6 @@ public sealed class DarkMode : IDisposable
         return true;
     }
 
-    /// <summary>Whether Settings leaves already-dark windows unchanged and this one looks dark now. Says nothing.</summary>
     public bool LooksDark(nint window) =>
         DetectAlreadyDark && Windows.WindowInfo.TryGetVisibleBounds(window, out Rectangle bounds) &&
         Windows.ScreenColors.Brightness(Windows.ScreenColors.MostCommon(bounds)) < .35;
@@ -68,7 +60,6 @@ public sealed class DarkMode : IDisposable
         return overlay;
     }
 
-    /// <summary>Keeps a WinScreen window such as the toolbar out of the filtered picture.</summary>
     public void Ignore(nint window)
     {
         _ignored.Add(window);
@@ -113,7 +104,7 @@ public sealed class DarkMode : IDisposable
                 }
                 catch (Windows.WindowOperationException)
                 {
-                    UpdateFilters(); // The window went away mid-swap, so there is nothing left to cover.
+                    UpdateFilters();
                     continue;
                 }
             }

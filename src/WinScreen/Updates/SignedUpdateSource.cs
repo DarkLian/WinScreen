@@ -6,7 +6,7 @@ using Velopack.Sources;
 
 namespace WinScreen.Updates;
 
-/// <summary>Only a signed stable Windows feed and full packages from the built-in repository are accepted.</summary>
+// Only a signed stable Windows feed and full packages from the built-in repository are accepted.
 internal sealed class SignedUpdateSource(
     string repository,
     string publicKey,

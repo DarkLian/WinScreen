@@ -4,10 +4,8 @@ using WinScreen.Native;
 
 namespace WinScreen.Diagnostics;
 
-/// <summary>What a report needs to know about the PC: Windows, displays and scale, graphics, rights. Nothing personal.</summary>
 internal static class StartupFacts
 {
-    /// <summary>Writes the facts to the log from a worker thread, so start-up doesn't wait for them.</summary>
     public static void LogInBackground() => ThreadPool.QueueUserWorkItem(_ => LogNow());
 
     internal static void LogNow()

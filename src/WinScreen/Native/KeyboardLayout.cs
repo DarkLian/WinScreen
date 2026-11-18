@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Native;
 
-/// <summary>Asks the active keyboard layout what a key produces.</summary>
 internal static partial class KeyboardLayout
 {
     private const int VkShift = 0x10;
@@ -23,10 +22,8 @@ internal static partial class KeyboardLayout
     private static unsafe partial int ToUnicodeEx(uint virtualKey, uint scanCode, byte* state, char* buffer, int size,
         uint flags, nint layout);
 
-    /// <summary>
-    /// The text this key types with AltGr, which Windows reports as Ctrl+Alt, or null when it types nothing.
-    /// A global Ctrl+Alt hotkey on such a key would stop people typing that character.
-    /// </summary>
+    // Windows reports AltGr as Ctrl+Alt: a global Ctrl+Alt hotkey on a key that types something with AltGr would stop
+    // people typing it.
     public static unsafe string? TextWithAltGr(Keys key, bool shift)
     {
         nint layout = GetKeyboardLayout(0);

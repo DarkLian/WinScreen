@@ -3,7 +3,7 @@ using System.Net.Http;
 
 namespace WinScreen.Updates;
 
-/// <summary>No automatic redirects: every hop must remain HTTPS on an allowed GitHub host.</summary>
+// No automatic redirects: every hop must remain HTTPS on an allowed GitHub host.
 internal sealed class UpdateTransport : IDisposable
 {
     private readonly HttpClient _client;

@@ -2,30 +2,21 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Native;
 
-/// <summary>One program's sound on one output device, as Windows' volume mixer has it.</summary>
-/// <param name="Device">The output device's id.</param>
-/// <param name="Identifier">The same for the program after it restarts: Windows remembers the mute under it.</param>
-/// <param name="Instance">This session only, while it lasts.</param>
+// Identifier stays the same when the program restarts (Windows remembers the mute under it); Instance lasts one
+// session.
 internal sealed record AudioSession(string Device, string Identifier, string Instance, uint ProcessId, bool Muted);
 
-/// <summary>What WinScreen asks of Windows' audio sessions: reading them, and muting one. Tests give their own.</summary>
 internal interface IAudioSessions
 {
-    /// <summary>Every program's session on every active output device; empty when Windows can't say.</summary>
     AudioSession[] List();
 
-    /// <summary>Mutes or unmutes the sessions on a device that <paramref name="matches"/> picks. How many were set.</summary>
     int SetMuted(string device, Func<AudioSession, bool> matches, bool muted);
 
-    /// <summary>The ids of the output devices there now.</summary>
     string[] Devices();
 }
 
-/// <summary>
-/// Windows' audio sessions through their COM tables, called the way <see cref="Windows.ElementFinder"/> calls UI
-/// Automation. Each call runs on its own short-lived thread with a time limit, so an audio service that doesn't answer
-/// holds nothing up, and so a crash handler on any thread can use it.
-/// </summary>
+// Each call runs on its own short-lived thread with a time limit, so an audio service that doesn't answer holds nothing
+// up, and a crash handler on any thread can use it.
 internal sealed unsafe partial class AudioSessions : IAudioSessions
 {
     private const int Render = 0, Active = 1, AllContexts = 0x17, InProcess = 1, TimeLimitMilliseconds = 3000;
@@ -83,7 +74,6 @@ internal sealed unsafe partial class AudioSessions : IAudioSessions
         return thread.Join(TimeLimitMilliseconds) && done;
     }
 
-    /// <summary>Calls <paramref name="each"/> with every session and its volume, on one device or on all.</summary>
     private static void Visit(string? onlyDevice, Action<AudioSession, nint>? each, Action<string>? eachDevice = null)
     {
         nint enumerator = 0, devices = 0;
@@ -162,7 +152,6 @@ internal sealed unsafe partial class AudioSessions : IAudioSessions
     private static int Ask(nint unknown, Guid* wanted, nint* result) =>
         ((delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)Slot(unknown, QueryInterface))(unknown, wanted, result);
 
-    /// <summary>A string the object hands over, which is then freed.</summary>
     private static string TakeString(delegate* unmanaged[Stdcall]<nint, char**, int> get, nint self)
     {
         char* text = null;

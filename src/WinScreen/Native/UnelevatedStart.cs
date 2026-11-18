@@ -2,12 +2,9 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Native;
 
-/// <summary>
-/// Starts a program as the person rather than as administrator, from an elevated copy (10-2): through the shell's own
-/// ShellExecute, asked of the desktop's folder view, so the program starts from Explorer, which isn't elevated. This is
-/// Windows' documented COM path for it. False when the desktop can't be reached (still signing in, Explorer
-/// restarting). Called on a thread with COM set up (the UI thread).
-/// </summary>
+// From an elevated copy: the desktop folder view's ShellExecute starts the program from Explorer, which isn't elevated
+// (Windows' documented COM route). False when the desktop can't be reached (signing in, Explorer restarting). Needs a
+// thread with COM set up.
 internal static unsafe partial class UnelevatedStart
 {
     private static readonly Guid ShellWindowsClass = new("9BA05972-F6A8-11CF-A442-00A0C90A8F39");
@@ -28,7 +25,7 @@ internal static unsafe partial class UnelevatedStart
     // Places in each COM table (IUnknown 0-2, IDispatch 3-6, IOleWindow 3-4).
     private const int FindWindowSW = 15, QueryService = 3, QueryActiveShellView = 15, GetItemObject = 15, Application = 7, ShellExecute = 31;
 
-    /// <summary>A VARIANT as Windows lays it out on 64-bit: a type, padding, and 16 bytes of value.</summary>
+    // A VARIANT as Windows lays it out on 64-bit: a type, padding, and 16 bytes of value.
     [StructLayout(LayoutKind.Sequential)]
     private struct Variant
     {
@@ -54,7 +51,6 @@ internal static unsafe partial class UnelevatedStart
         if (table != 0) ((delegate* unmanaged[Stdcall]<nint, uint>)Slot(table, 2))(table);
     }
 
-    /// <summary>Starts <paramref name="program"/> with <paramref name="arguments"/>, not elevated. True once the shell took it.</summary>
     internal static bool Run(string program, string arguments = "")
     {
         nint windows = 0, desktop = 0, provider = 0, browser = 0, view = 0, background = 0, folderView = 0, application = 0, shell = 0;

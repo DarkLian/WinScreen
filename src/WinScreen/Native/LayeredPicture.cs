@@ -2,10 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Native;
 
-/// <summary>
-/// Shows a picture with see-through parts as a whole window, for a window that has nothing behind what it draws. The
-/// window must have the layered style and must not have been given a single opacity: Windows takes one or the other.
-/// </summary>
+// The window must have the layered style and must not have been given a single opacity: Windows takes one or the other.
 internal static partial class LayeredPicture
 {
     private const int ULW_ALPHA = 2;
@@ -47,13 +44,8 @@ internal static partial class LayeredPicture
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool DeleteObject(nint item);
 
-    /// <summary>Puts the picture on the window where it is, at <paramref name="opacity"/> overall. False if Windows refused.</summary>
     internal static bool Show(nint window, Bitmap picture, byte opacity) => Show(window, picture, opacity, null);
 
-    /// <summary>
-    /// Puts the picture on the window with its top-left corner at <paramref name="at"/> on the screen, the window taking
-    /// the picture's size, in one step. False if Windows refused.
-    /// </summary>
     internal static bool Show(nint window, Bitmap picture, byte opacity, Point? at)
     {
         nint screen = GetDC(0);

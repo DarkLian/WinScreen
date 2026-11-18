@@ -3,11 +3,6 @@ using Microsoft.Win32;
 
 namespace WinScreen.Native;
 
-/// <summary>
-/// Windows' "Transparency effects": with it on, Windows 11's own menus show a blurred, tinted glimpse of what is
-/// behind them. WinScreen's menus follow the same setting, through the blur Windows offers any window behind its
-/// see-through parts.
-/// </summary>
 internal static class Translucency
 {
     private const int WCA_ACCENT_POLICY = 19, ACCENT_DISABLED = 0, ACCENT_ENABLE_ACRYLICBLURBEHIND = 4, DRAW_ALL_BORDERS = 0x2;
@@ -29,13 +24,8 @@ internal static class Translucency
     [DllImport("dwmapi.dll")]
     private static extern int DwmExtendFrameIntoClientArea(nint window, in Margins margins);
 
-    /// <summary>Whether WinScreen's menus may be see-through at all: Settings can keep them solid.</summary>
     internal static bool Allowed { get; set; } = true;
 
-    /// <summary>
-    /// Whether menus get the blurred background: allowed, and Transparency effects on in Windows 11, read again at most every
-    /// couple of seconds.
-    /// </summary>
     internal static bool On => Allowed && WindowsOn;
 
     private static bool WindowsOn
@@ -54,7 +44,6 @@ internal static class Translucency
         }
     }
 
-    /// <summary>Blurs what is behind <paramref name="window"/>'s see-through parts, tinted <paramref name="tint"/>; or stops.</summary>
     internal static void Apply(nint window, Color? tint)
     {
         var accent = new AccentPolicy

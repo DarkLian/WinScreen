@@ -4,10 +4,7 @@ using WinScreen.Native;
 
 namespace WinScreen.Hotkeys;
 
-/// <summary>
-/// A hidden top-level window that receives global hotkeys. It also answers WM_CLOSE, so an
-/// ordinary close request (for example <c>taskkill /im WinScreen.exe</c>) shuts WinScreen down cleanly.
-/// </summary>
+// Answers WM_CLOSE, so an ordinary close request (taskkill /im WinScreen.exe) shuts WinScreen down cleanly.
 public sealed class HotkeyHost : NativeWindow, IDisposable
 {
     public const string WindowTitle = "WinScreen.HotkeyHost";
@@ -17,7 +14,7 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
     private readonly Dictionary<int, int> _dispatch = [];
     private int _nextId = 0x4000;
 
-    /// <param name="title">The window's title: the administrator helper's differs, so the command line finds the ordinary copy.</param>
+    // The administrator helper's title differs, so the command line finds the ordinary copy.
     public HotkeyHost(string title = WindowTitle)
     {
         CreateHandle(new CreateParams { Caption = title });
@@ -26,12 +23,10 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
     public event Action<int>? Pressed;
     public event Action? CloseRequested;
 
-    /// <summary>Answers a WM_COPYDATA (its lParam), such as a command from the command line; null leaves it unanswered.</summary>
     internal Func<nint, nint?>? CopyDataReceived { get; set; }
 
     internal bool IsRegistered(int command) => _dispatch.ContainsValue(command);
 
-    /// <summary>Claims a global hotkey. Returns false with a reason when another program holds it.</summary>
     public bool TryRegister(int id, uint modifiers, Keys key, out string? failure)
     {
         if (User32.RegisterHotKey(Handle, id, modifiers | User32.MOD_NOREPEAT, (uint)key))
@@ -56,10 +51,6 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
         _dispatch.Clear();
     }
 
-    /// <summary>
-    /// Claims every combination that is free and returns the commands whose combination isn't, so one
-    /// hotkey held by another app can't take the rest down with it. For startup, when nothing is bound yet.
-    /// </summary>
     internal IReadOnlyList<int> RegisterAvailable(IReadOnlyDictionary<int, (uint Modifiers, Keys Key)> desired)
     {
         UnregisterAll();
@@ -82,7 +73,8 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
         return conflicts;
     }
 
-    /// <summary>Reserve new combinations while every old binding stays active. Commit preferences before releasing obsolete bindings.</summary>
+    // New combinations are reserved while every old binding stays active; preferences are committed before obsolete
+    // bindings are released.
     internal bool TryReplaceBindings(IReadOnlyDictionary<int, (uint Modifiers, Keys Key)> desired, Action persist,
         out IReadOnlyList<int> conflicts)
     {

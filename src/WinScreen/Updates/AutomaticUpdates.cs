@@ -6,10 +6,8 @@ using WinScreen.Settings;
 
 namespace WinScreen.Updates;
 
-/// <summary>Facts about this copy of WinScreen.</summary>
 internal static class AppInfo
 {
-    /// <summary>The version people see, without the build details added after a "+".</summary>
     internal static string Version
     {
         get
@@ -23,17 +21,12 @@ internal static class AppInfo
 
 internal interface IUpdateSession : IDisposable
 {
-    /// <summary>A newer version the signed feed offers, without downloading it, or null.</summary>
     Task<string?> NewerVersion(CancellationToken cancellation);
     Task<bool> Download(CancellationToken cancellation);
-    /// <param name="restart">Start WinScreen again once the update is in (Restart to update).</param>
     Task ApplyOnExit(CancellationToken cancellation, bool restart);
 }
 
-/// <summary>
-/// One check at a time. Automatic updates check on a timer; a check the person asks for works either way.
-/// Turning automatic updates off cancels a check in progress and discards a downloaded update.
-/// </summary>
+// One check at a time. Turning automatic updates off cancels a check in progress and discards a downloaded update.
 internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> createSession, Action<string> status,
     Action<string>? available = null) : IDisposable
 {
@@ -43,7 +36,6 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
     private string? _told;
     private IUpdateSession? _pending;
     private bool _busy;
-    /// <summary>Done when the check or look under way ends.</summary>
     private TaskCompletionSource? _idle;
     private bool _disposed;
     private bool _lastCheckFailed;
@@ -80,20 +72,16 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         _pending = null;
     }
 
-    /// <summary>
-    /// "Tell me": the timer's check only looks whether a newer version is out and says so, once per version. Also what
-    /// a copy that can't install (a portable one) does with "Install for me".
-    /// </summary>
+    // Also what a copy that can't install (a portable one) does with Install for me.
     internal void SetTelling(bool telling)
     {
         if (_disposed) return;
         _telling = telling;
     }
 
-    /// <summary>The newest version told about, or null.</summary>
     internal string? Available => _told;
 
-    /// <summary>The timer's check: installs, tells, or does nothing at all (no network) when updates are off.</summary>
+    // No network at all when updates are off.
     internal Task Check() => _automatic ? Run(quiet: false) : _telling ? Tell() : Task.CompletedTask;
 
     private async Task Tell()
@@ -164,11 +152,8 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         }
     }
 
-    /// <summary>
-    /// At the person's request, for a copy that can't install: whether a newer version is out, and whether the look
-    /// failed. Works whatever the setting, since the person asked. A check already under way (the timer's) is waited
-    /// for first, so the person gets the answer to their own look rather than none.
-    /// </summary>
+    // Works whatever the setting, since the person asked. A check already under way is waited for first, so the person
+    // gets the answer to their own look.
     internal async Task<(string? Version, bool Failed)> LookNow()
     {
         while (_busy && !_disposed && _idle is { } running)
@@ -196,7 +181,6 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         }
     }
 
-    /// <summary>Checks at the person's request, whether or not automatic updates are on, and says how it went.</summary>
     internal async Task<string> CheckNow()
     {
         if (_busy)
@@ -209,7 +193,6 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
             : UiText.T("updates.upToDate");
     }
 
-    /// <summary>An update is downloaded, checked, and waits for WinScreen to close.</summary>
     internal bool Ready => !_disposed && _generation is not null && _pending is not null;
 
     internal async Task ApplyOnExit(bool restart = false)
@@ -245,7 +228,6 @@ internal sealed class VelopackUpdateSession : IUpdateSession
                                          typeof(VelopackUpdateSession).Assembly.GetManifestResourceNames()
                                              .Contains("WinScreen.UpdatePublicKey");
 
-    /// <summary>True for a copy put in place by the installer, the only kind that can update itself.</summary>
     internal static bool IsInstalled
     {
         get
@@ -291,7 +273,6 @@ internal sealed class VelopackUpdateSession : IUpdateSession
         return version;
     }
 
-    /// <summary>The built-in repository, or null for a copy built without one.</summary>
     internal static string? Repository => typeof(VelopackUpdateSession).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
         .FirstOrDefault(metadata => metadata.Key == "UpdateRepository")?.Value is { Length: > 0 } repository ? repository : null;
 

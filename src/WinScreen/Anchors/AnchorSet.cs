@@ -4,10 +4,7 @@ using WinScreen.Settings;
 
 namespace WinScreen.Anchors;
 
-/// <summary>
-/// The anchors on screen, stacked in columns from the chosen edge until someone moves them. They start
-/// below the top of the screen, which is where a maximized window keeps its close button.
-/// </summary>
+// Columns start below the top of the screen, where a maximized window keeps its close button.
 public sealed class AnchorSet : IDisposable
 {
     private const int Margin = 16;
@@ -18,7 +15,7 @@ public sealed class AnchorSet : IDisposable
     private readonly Dictionary<nint, AnchorButton> _anchors = [];
     private readonly HashSet<nint> _dismissed = [];
     private readonly HashSet<nint> _offTaskbar = [];
-    private readonly HashSet<nint> _keepsTaskbar = []; // Refused once, so not asked again every half second.
+    private readonly HashSet<nint> _keepsTaskbar = [];  // Refused to give up their taskbar button once; not asked again.
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 500 };
     private AnchorPreferences _preferences = new();
 
@@ -32,21 +29,15 @@ public sealed class AnchorSet : IDisposable
         };
     }
 
-    /// <summary>True for an Anchor someone added themselves, which is what commands report and toggle.</summary>
     public bool Has(nint window) => _anchors.TryGetValue(window, out AnchorButton? anchor) && !anchor.Automatic;
 
     internal IReadOnlyCollection<nint> Automatic => _anchors.Where(pair => pair.Value.Automatic).Select(pair => pair.Key).ToArray();
 
-    /// <summary>Tells which windows have a view, so their Anchors can say so.</summary>
     internal Func<nint, bool>? HasView { get; set; }
 
     public event Action<nint>? Created;
     public event Action<nint>? ShowRequested;
 
-    /// <summary>
-    /// True while every Anchor is put out of sight for a moment. They are still kept, and new ones are added out of
-    /// sight too, so all of them come back as they were.
-    /// </summary>
     public bool Hidden
     {
         get => _hidden;
@@ -56,20 +47,15 @@ public sealed class AnchorSet : IDisposable
             _hidden = value;
             foreach ((nint window, AnchorButton anchor) in _anchors.Where(pair => !pair.Value.IsDisposed))
                 anchor.Visible = ShowsNow(window);
-            SyncTaskbar(); // A window with no taskbar button and no Anchor in sight would be hard to find.
+            SyncTaskbar();  // No taskbar button and no Anchor in sight would leave the window hard to find.
         }
     }
 
-    /// <summary>Takes a window's taskbar button away (true) or puts it back (false); set by whoever owns the windows.</summary>
     internal Action<nint, bool>? SetOffTaskbar { get; set; }
 
-    /// <summary>Whether a window's taskbar button is away now: something else, such as a view closing, may have put it back.</summary>
+    // Asked each time: a view closing, for one, may have put the button back.
     internal Func<nint, bool>? IsOffTaskbar { get; set; }
 
-    /// <summary>
-    /// Keeps taskbar buttons away for windows with an Anchor the person added, while that's chosen and the Anchors
-    /// show, and puts each back as soon as that stops being so.
-    /// </summary>
     private void SyncTaskbar()
     {
         if (SetOffTaskbar is not { } set) return;
@@ -80,7 +66,7 @@ public sealed class AnchorSet : IDisposable
         {
             _offTaskbar.Remove(window);
             try { set(window, false); }
-            catch (Windows.WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); } // Closed meanwhile, or recovery puts it back.
+            catch (Windows.WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
         }
         if (IsOffTaskbar is { } isOff) _offTaskbar.RemoveWhere(window => wanted.Contains(window) && !isOff(window));
         _keepsTaskbar.IntersectWith(wanted);
@@ -91,7 +77,7 @@ public sealed class AnchorSet : IDisposable
                 set(window, true);
                 _offTaskbar.Add(window);
             }
-            catch (Windows.WindowOperationException) { _keepsTaskbar.Add(window); } // Some keep their button; the Anchor still works.
+            catch (Windows.WindowOperationException) { _keepsTaskbar.Add(window); }
         }
     }
 
@@ -104,14 +90,13 @@ public sealed class AnchorSet : IDisposable
         SyncTaskbar();
     }
 
-    /// <summary>Adds an anchor for a window, or removes the one it has. Returns the new state.</summary>
     public bool Toggle(nint window)
     {
         if (_anchors.TryGetValue(window, out AnchorButton? existing))
         {
             if (existing.Automatic)
             {
-                existing.Automatic = false; // Asking for one keeps it, so uncovering won't remove it.
+                existing.Automatic = false;
                 Restyle();
                 SyncTaskbar();
                 return true;
@@ -120,7 +105,7 @@ public sealed class AnchorSet : IDisposable
             _anchors.Remove(window);
             existing.Dispose();
             _watch.Enabled = _anchors.Count > 0;
-            Restyle(); // One left alone shows its icon only again.
+            Restyle();
             SyncTaskbar();
             return false;
         }
@@ -131,10 +116,6 @@ public sealed class AnchorSet : IDisposable
         return true;
     }
 
-    /// <summary>
-    /// Makes the automatic Anchors match the covered windows, topmost first. One the person removed
-    /// stays away until its window has been uncovered.
-    /// </summary>
     internal void SyncAutomatic(IReadOnlyList<nint> covered)
     {
         _dismissed.IntersectWith(covered);
@@ -152,7 +133,7 @@ public sealed class AnchorSet : IDisposable
         foreach (nint window in wanted.Where(window => !_anchors.ContainsKey(window)))
         {
             try { Add(window, automatic: true); }
-            catch (Windows.WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); } // It closed during the pass.
+            catch (Windows.WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
         }
 
         _recency = wanted;
@@ -194,11 +175,9 @@ public sealed class AnchorSet : IDisposable
         _watch.Enabled = true;
     }
 
-    /// <summary>Whether an Anchor is in sight now: not while all are hidden, and only on its window's desktop when Settings says so.</summary>
     private bool ShowsNow(nint window) =>
         !_hidden && (_preferences.EveryDesktop || Native.VirtualDesktops.OnCurrentDesktop(window));
 
-    /// <summary>After a switch of virtual desktop, each Anchor shows or hides as its window's desktop is shown or not.</summary>
     private void FollowDesktops()
     {
         if (_hidden || _preferences.EveryDesktop) return;
@@ -216,10 +195,6 @@ public sealed class AnchorSet : IDisposable
             Style(anchor);
     }
 
-    /// <summary>
-    /// The words an Anchor shows beside its icon: its window's title when another Anchor shows the same icon, since
-    /// two browser windows look alike otherwise. Null for an icon of its own.
-    /// </summary>
     private string? TitleOf(AnchorButton anchor)
     {
         if (anchor.Program is not { } program || !_anchors.Values.Any(other => !ReferenceEquals(other, anchor) &&
@@ -231,7 +206,6 @@ public sealed class AnchorSet : IDisposable
 
     private readonly Dictionary<string, string> _descriptions = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The name a program gives itself, such as "Microsoft Edge" for msedge.exe.</summary>
     private string Describe(string program)
     {
         if (_descriptions.TryGetValue(program, out string? known)) return known;
@@ -253,11 +227,7 @@ public sealed class AnchorSet : IDisposable
             HasView?.Invoke(anchor.Target) == true, _preferences.AvoidContent, TitleOf(anchor));
     }
 
-    /// <summary>
-    /// Moves automatic Anchors off text and images when a clearly calmer spot exists. Anchors the person
-    /// placed, or added themselves, stay put. Each is left out of screen capture while this is on, so the
-    /// check sees what's under them.
-    /// </summary>
+    // Anchors are left out of screen capture while this is on, so the check sees what's under them.
     internal void AvoidContent(Func<Rectangle, bool[,]> busyCells)
     {
         foreach (AnchorButton anchor in _anchors.Values.Where(anchor => anchor.Automatic && !anchor.Placed).ToArray())
@@ -296,7 +266,6 @@ public sealed class AnchorSet : IDisposable
         return FreePosition(area, dpi);
     }
 
-    /// <summary>Just outside the window's right edge, or inside it when the screen ends first.</summary>
     private Point? NearWindow(nint window, Rectangle area, int dpi)
     {
         if (!User32.GetWindowRect(window, out Rect bounds))
@@ -343,13 +312,8 @@ public sealed class AnchorSet : IDisposable
     }
 }
 
-/// <summary>Shortens a window title for an Anchor, kept apart so it can be tested directly.</summary>
 internal static class AnchorTitles
 {
-    /// <summary>
-    /// Drops the program's own name from the end, where browsers and editors put it ("Inbox - Mail - Google Chrome"
-    /// becomes "Inbox - Mail"), since the icon already says which program it is.
-    /// </summary>
     public static string Short(string title, params string[] program)
     {
         foreach (string separator in new[] { " - ", " \u2014 ", " \u2013 ", " | " })
@@ -369,7 +333,6 @@ internal static class AnchorTitles
     }
 }
 
-/// <summary>Where Anchors go and how they show their age, kept apart so it can be tested directly.</summary>
 internal static class AnchorGeometry
 {
     public static Point? NearWindow(Rectangle window, int size, int gap, Rectangle area, Func<Rectangle, bool> isFree)
@@ -388,10 +351,6 @@ internal static class AnchorGeometry
     }
 }
 
-/// <summary>
-/// The most recent covered window has the largest, most solid Anchor. Size and opacity carry this, so it
-/// doesn't rest on colour.
-/// </summary>
 internal static class AnchorEmphasis
 {
     private const double SmallestSize = 0.7;

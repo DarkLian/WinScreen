@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Native;
 
-/// <summary>The Magnification API, used to show part of the screen through a colour filter.</summary>
 internal static unsafe partial class Magnification
 {
     public const string ControlClass = "Magnifier";

@@ -8,7 +8,7 @@ internal struct Size32
     public int Width, Height;
 }
 
-/// <summary>Matches DWM_THUMBNAIL_PROPERTIES, which dwmapi.h declares with one-byte packing.</summary>
+// DWM_THUMBNAIL_PROPERTIES: dwmapi.h declares it with one-byte packing.
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal struct DwmThumbnailProperties
 {

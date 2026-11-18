@@ -34,7 +34,6 @@ internal struct WindowPlacement
     public Rect NormalPosition;
 }
 
-/// <summary>What WM_COPYDATA carries: a number saying what the data is, and the data.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct CopyData
 {
@@ -43,7 +42,6 @@ internal struct CopyData
     public nint Data;
 }
 
-/// <summary>The user32.dll calls WinScreen needs. Window handles are plain <see cref="nint"/>.</summary>
 internal static partial class User32
 {
     public const int WM_COPYDATA = 0x004A;
@@ -263,7 +261,6 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool InvalidateRect(nint hWnd, nint rect, [MarshalAs(UnmanagedType.Bool)] bool erase);
 
-    /// <summary>Marks a window as painted, so Windows stops asking it to paint; with no rectangle, all of it.</summary>
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool ValidateRect(nint hWnd, nint rect);
@@ -276,11 +273,10 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool ShowCaret(nint window);
 
-    /// <summary>The bounding box of a window's region in window coordinates; 0 when it has no region.</summary>
     [LibraryImport("user32.dll")]
     public static partial int GetWindowRgnBox(nint hWnd, out Rect box);
 
-    /// <summary>Windows owns the region after a successful call. Passing 0 removes the window's region.</summary>
+    // Windows owns the region after a successful call. Passing 0 removes the window's region.
     [LibraryImport("user32.dll", SetLastError = true)]
     public static partial int SetWindowRgn(nint hWnd, nint region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
 
@@ -310,7 +306,7 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsWindowEnabled(nint hWnd);
 
-    /// <summary>Returns whether the window was disabled before, not whether the call worked.</summary>
+    // Returns whether the window was disabled before, not whether the call worked.
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool EnableWindow(nint hWnd, [MarshalAs(UnmanagedType.Bool)] bool enable);

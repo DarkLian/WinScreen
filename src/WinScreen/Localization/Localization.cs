@@ -4,7 +4,6 @@ using System.Text.Json;
 
 namespace WinScreen.Localization;
 
-/// <summary>Embedded translations addressed by stable keys. Program names and hotkeys stay outside the catalogs.</summary>
 public static class UiText
 {
     private static readonly FrozenDictionary<string, FrozenDictionary<string, string>> Catalogs = LoadCatalogs();
@@ -14,7 +13,7 @@ public static class UiText
 
     public static void Initialize(string? language, string? systemLanguage = null)
     {
-        _ = Catalogs; // Parse all three embedded catalogs once, at startup, before any UI is constructed.
+        _ = Catalogs;  // Parses the catalogs once, before any UI is built.
         string culture = string.IsNullOrEmpty(language) || language == "system"
             ? systemLanguage ?? CultureInfo.CurrentUICulture.Name
             : language;
@@ -36,11 +35,7 @@ public static class UiText
 
     internal static IReadOnlyDictionary<string, string> GetCatalog(string language) => Catalogs[language];
 
-    /// <summary>
-    /// The key of the message a person was shown, so the log can name it without its text: the first line is
-    /// matched against each message in the current language, with "{0}" and the like standing for anything.
-    /// Null when nothing matches. Only for failures, since it reads the whole catalog.
-    /// </summary>
+    // Only for failures: it reads the whole catalog.
     internal static string? KeyOf(string message, string prefix = "errors.")
     {
         string first = message.Split('\n')[0].TrimEnd('\r');

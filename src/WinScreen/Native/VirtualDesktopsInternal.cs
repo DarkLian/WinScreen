@@ -2,23 +2,17 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Native;
 
-/// <summary>
-/// Putting another program's window on a given virtual desktop. Windows' documented call does this only for a
-/// program's own windows (it refuses others with "access denied"), so this uses Explorer's undocumented interface,
-/// as the owner decided (15 Nov). Only an improvement over the documented behaviour, never the only way (INV-19): an
-/// interface version not in the table below, or any failure, leaves the window where Windows put it, and nothing
-/// throws. Each move is checked: the desktop found must report the id asked for, and afterwards the documented
-/// question must say the window is there. Recheck after each Windows feature update; a new version gets a new line.
-/// </summary>
+// Windows' documented call moves only a program's own windows (others get "access denied"), so this uses Explorer's
+// undocumented interface.
+// Only an improvement, never the only way (INV-19): an unknown interface version or any failure leaves the window where
+// it is, and nothing throws.
+// Each move is checked: the desktop found must report the id asked for, and the documented question must then say the
+// window is there.
+// Recheck after each Windows feature update; a new version gets a new line in Known.
 internal static unsafe partial class VirtualDesktopsInternal
 {
-    /// <summary>
-    /// The versions of the manager interface, newest first. Windows changes the id whenever the layout changes, so an id
-    /// that answers says which slots to call. Asking for an id Windows doesn't have is simply refused. Only a version
-    /// someone has called on a real Windows is used: a wrong slot is a call into the shell with the wrong arguments,
-    /// which nothing can catch. The others are kept for when they are measured (roadmap 12.5, TD-61); until then those
-    /// Windows versions get the documented behaviour (INV-19).
-    /// </summary>
+    // Newest first. The id changes whenever the layout does, so the id that answers says which slots to call.
+    // Only Measured versions are used: a wrong slot is an uncatchable call into the shell with the wrong arguments.
     internal static readonly (Guid Manager, int FindDesktop, string Windows, bool Measured)[] Known =
     [
         (new("53F5CA0B-158F-4124-900C-057158060B27"), 14, "Windows 11 24H2 and later (measured on 26300)", true),
@@ -39,7 +33,6 @@ internal static unsafe partial class VirtualDesktopsInternal
     private static int _findSlot;
     private static bool _tried;
 
-    /// <summary>Whether this Windows has a version in the table, asked once.</summary>
     internal static bool Supported => Prepare();
 
     private static bool Prepare()
@@ -85,10 +78,6 @@ internal static unsafe partial class VirtualDesktopsInternal
         return false;
     }
 
-    /// <summary>
-    /// Puts the window on the desktop, and says whether it is there now (by Windows' documented answer). A window
-    /// already there is left alone.
-    /// </summary>
     internal static bool MoveTo(nint window, Guid desktop)
     {
         if (window == 0 || desktop == Guid.Empty) return false;
@@ -118,7 +107,7 @@ internal static unsafe partial class VirtualDesktopsInternal
         }
     }
 
-    /// <summary>The interface answered but its desktop reported another id: its layout isn't the one expected. Not used again.</summary>
+    // The interface answered with another desktop's id: its layout isn't the expected one, so it isn't used again.
     private static bool Mismatch()
     {
         Diagnostics.Log.Event("desktops.unsupported", ("build", Environment.OSVersion.Version.Build), ("noShell", false));

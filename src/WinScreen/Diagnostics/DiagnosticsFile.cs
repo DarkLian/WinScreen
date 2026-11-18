@@ -5,29 +5,19 @@ using WinScreen.Settings;
 
 namespace WinScreen.Diagnostics;
 
-/// <summary>
-/// Save diagnostics: one zip a person can look inside and attach to a report themselves. It holds the log, which names
-/// programs only by file name and never holds titles, paths or anything typed, and the settings with every list cut
-/// to a count.
-/// </summary>
 internal static class DiagnosticsFile
 {
     internal const string FolderName = "diagnostics";
     internal const string FileName = "WinScreen-diagnostics.zip";
 
-    /// <summary>Text kept as it is: choices from a fixed set, not anything a person typed or picked from their PC.</summary>
+    // Only choices from a fixed set: never text a person typed or picked from their PC.
     private static readonly HashSet<string> KeptText = [nameof(AppSettings.Language), nameof(AppSettings.Theme)];
 
-    /// <summary>
-    /// Writes the zip in a folder of its own inside the data folder, so nothing else is beside it to attach by
-    /// mistake, and returns its path. Replaces the one saved before.
-    /// </summary>
     public static string Save(string dataFolder, AppSettings settings, IReadOnlyList<string>? logFiles = null)
     {
         Log.Event("diagnostics.saved");
         StartupFacts.LogNow(); // The facts again, in case the start of this session has rolled out of the log.
         Log.Flush(TimeSpan.FromSeconds(2));
-        // The administrator helper's log beside this copy's (10-2): it writes its own file.
         logFiles ??= [.. Log.Files, .. new[] { DiagnosticLog.OlderOf(DiagnosticLog.HelperFileName), DiagnosticLog.HelperFileName }
             .Select(name => Path.Combine(dataFolder, name)).Where(file => File.Exists(file) && !Log.Files.Contains(file, StringComparer.OrdinalIgnoreCase))];
 
@@ -50,7 +40,6 @@ internal static class DiagnosticsFile
         return path;
     }
 
-    /// <summary>The settings with lists as counts and only fixed-set text kept: safe for anyone to read.</summary>
     internal static string Shrunk(AppSettings settings) =>
         Shrink(JsonSerializer.SerializeToNode(settings), null, inHotkeys: false)!.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
 

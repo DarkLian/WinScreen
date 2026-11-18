@@ -2,17 +2,11 @@ using WinScreen.Pip;
 
 namespace WinScreen.Compatibility;
 
-/// <summary>The Windows versions a test was seen passing on. None for a logic test, which needs no window.</summary>
 [Flags]
 internal enum WindowsVersions { None = 0, Windows10 = 1, Windows11 = 2, Both = Windows10 | Windows11 }
 
-/// <summary>A test that showed a fact holds, as "Class.Method", and where it passed.</summary>
 internal readonly record struct Verification(string Test, WindowsVersions On);
 
-/// <summary>
-/// What WinScreen knows about one kind of app. A row is recognised by every matcher it gives: program names (ignoring
-/// case), the top-level window's class or the start of it (exactly), and Electron's files beside the program.
-/// </summary>
 internal sealed record AppProfile(string Name)
 {
     public string[] Programs { get; init; } = [];
@@ -20,38 +14,19 @@ internal sealed record AppProfile(string Name)
     public string? ClassPrefix { get; init; }
     public bool ElectronFiles { get; init; }
 
-    /// <summary>The kind Enhanced hover knows it as, or None.</summary>
     public PipHoverApp Hover { get; init; }
-    /// <summary>A program name in Settings' list is ignored for this app: it is never given the helper by name.</summary>
     public bool NeverByName { get; init; }
-    /// <summary>Choose for me turns Enhanced hover on for it.</summary>
     public bool ChosenForMe { get; init; }
-    /// <summary>Its hidden original keeps its strip at a side edge even with Enhanced hover off.</summary>
     public bool SideEdgeAlways { get; init; }
-    /// <summary>With Enhanced hover on, its own middle-click scrolling works, so the view's option stands aside.</summary>
     public bool ScrollsWithHover { get; init; }
-    /// <summary>Nothing is sent to it: a click on its view shows the original.</summary>
     public bool ShowsOriginalOnClick { get; init; }
-    /// <summary>Windows of many apps, or of many kinds, share this program, so it is never offered for a list by itself.</summary>
     public bool SharedHost { get; init; }
-    /// <summary>Windows owns its taskbar button, so hiding it leaves the button.</summary>
     public bool WindowsOwnsTaskbarButton { get; init; }
-    /// <summary>
-    /// Its views can be used directly with experimental features off (roadmap P1-3): clicks, double-clicks, drag
-    /// selection, typing, the wheel and the context menu were seen working on Windows 10 and 11, and the original
-    /// came back when WinScreen was killed during a visit (<see cref="RecoveredBy"/>). Enhanced hover and middle-click
-    /// scrolling stay experimental for it.
-    /// </summary>
     public bool InteractiveWithoutSwitch { get; init; }
 
     public Verification[] VerifiedBy { get; init; } = [];
-    /// <summary>
-    /// What a press and move in its view hands to the real window, to be dragged with Windows' own drag and drop: its
-    /// files (File Explorer), or the links in its pages (browsers). Anything else goes as messages.
-    /// </summary>
     public DragHandOver Drags { get; init; }
 
-    /// <summary>Tests that end WinScreen during a visit to this kind of app and see the original come back.</summary>
     public Verification[] RecoveredBy { get; init; } = [];
 
     internal bool MatchesProgram(string program)
@@ -69,39 +44,28 @@ internal sealed record AppProfile(string Name)
         (Programs.Length == 0 || MatchesProgram(program)) && MatchesClass(windowClass) && (!ElectronFiles || electronFiles);
 }
 
-/// <summary>What a press and move in a view hands to the real window, to be dragged as the app drags it.</summary>
 internal enum DragHandOver
 {
     None,
-    /// <summary>Files, folders and rows: a press on one waits to see whether it is a click or a drag.</summary>
     Items,
-    /// <summary>
-    /// Links in a page, known by the hand the page shows over them (nothing is asked of the page: browsers don't report
-    /// a page's contents to accessibility unless something like a screen reader turned that on); text is still selected
-    /// through the view.
-    /// </summary>
+    // Known by the hand pointer: browsers don't expose page contents to accessibility unless a screen reader turned
+    // that on.
     Links,
 }
 
-/// <summary>A kind of window inside an app that takes input another way than the app's own windows.</summary>
 internal sealed record InputSurface(string WindowClass, string Name, InputRoute Route, Verification[] VerifiedBy);
 
-/// <summary>
-/// Everything WinScreen knows about kinds of app, in one place. The classes that act on it read from here; the table
-/// in FEATURE_COMPATIBILITY.md is made from it, and a test fails when the two disagree.
-/// </summary>
+// FEATURE_COMPATIBILITY.md's table is made from this; a test fails when the two disagree.
 internal static class AppProfiles
 {
     private const WindowsVersions Both = WindowsVersions.Both, Windows10 = WindowsVersions.Windows10,
         Windows11 = WindowsVersions.Windows11, Logic = WindowsVersions.None;
 
-    /// <summary>In order: the first row that matches is the one that counts.</summary>
+    // The first row that matches is the one that counts.
     internal static readonly AppProfile[] All =
     [
         new("Chrome and Edge")
         {
-            // Both browsers run every test below in the Windows 10 VM. The Windows 11 PC has no Edge, so there these tests
-            // ran with Chrome only; the two share their engine and window classes.
             Programs = ["chrome", "msedge"],
             Hover = PipHoverApp.Browser, ChosenForMe = true, SideEdgeAlways = true, ScrollsWithHover = true,
             InteractiveWithoutSwitch = true, Drags = DragHandOver.Links,
@@ -124,8 +88,6 @@ internal static class AppProfiles
         },
         new("Brave and Vivaldi")
         {
-            // The same engine as Chrome and Edge, treated the same, and since 14 Nov 2026 run through every browser
-            // input test with the switch off and the recovery test, on both versions (the portable copies in test-apps).
             Programs = ["brave", "vivaldi"],
             Hover = PipHoverApp.Browser, ChosenForMe = true, SideEdgeAlways = true, ScrollsWithHover = true,
             InteractiveWithoutSwitch = true, Drags = DragHandOver.Links,
@@ -148,7 +110,7 @@ internal static class AppProfiles
         {
             Programs = ["firefox"],
             Hover = PipHoverApp.Firefox, ChosenForMe = true, SideEdgeAlways = true, ScrollsWithHover = true,
-            InteractiveWithoutSwitch = true, // Since 14 Nov 2026; every input test below runs with the switch off.
+            InteractiveWithoutSwitch = true,
             VerifiedBy =
             [
                 new("AppCompatibilityTests.Firefox_takes_clicks_and_a_double_click_through_a_view", Both),
@@ -165,8 +127,8 @@ internal static class AppProfiles
         new("File Explorer")
         {
             Programs = ["explorer"], WindowClass = "CabinetWClass",
-            Hover = PipHoverApp.FileExplorer, // Not chosen for the person: its tab menus stop responding with the helper on.
-            InteractiveWithoutSwitch = true, // Since 14 Nov 2026; every input test below runs with the switch off.
+            Hover = PipHoverApp.FileExplorer,  // Not ChosenForMe: its tab menus stop responding with the helper on.
+            InteractiveWithoutSwitch = true,
             Drags = DragHandOver.Items,
             VerifiedBy =
             [
@@ -186,14 +148,14 @@ internal static class AppProfiles
         },
         new("The Windows shell: desktop and taskbar")
         {
-            Programs = ["explorer"], NeverByName = true, SharedHost = true, // Every folder window too.
+            Programs = ["explorer"], NeverByName = true, SharedHost = true,  // Every folder window too.
             VerifiedBy = [new("PipHoverAppsTests.A_program_is_one_of_the_known_kinds_or_listed_or_left_alone", Logic)],
         },
         new("Electron apps, such as VS Code and Discord")
         {
             WindowClass = "Chrome_WidgetWin_1", ElectronFiles = true,
             Hover = PipHoverApp.Electron, ChosenForMe = true, SideEdgeAlways = true, ScrollsWithHover = true,
-            InteractiveWithoutSwitch = true, // Since 14 Nov 2026; the four input tests on the plain app run with the switch off.
+            InteractiveWithoutSwitch = true,
             VerifiedBy =
             [
                 new("FrameworkHoverTests.An_electron_app_keeps_css_hover_when_chosen_in_settings", Both),
@@ -226,7 +188,6 @@ internal static class AppProfiles
         },
     ];
 
-    /// <summary>Windows that take clicks through accessibility, whatever program they belong to.</summary>
     internal static readonly InputSurface[] Surfaces =
     [
         new("Microsoft.UI.Content.DesktopChildSiteBridge", "WinUI 3 content in a desktop window, such as File Explorer's command bar",
@@ -239,7 +200,6 @@ internal static class AppProfiles
 
     private static readonly Dictionary<string, InputRoute> SurfaceRoutes = Surfaces.ToDictionary(s => s.WindowClass, s => s.Route, StringComparer.Ordinal);
 
-    /// <summary>The first row that matches, or null for an app WinScreen knows nothing about.</summary>
     internal static AppProfile? Find(string program, string windowClass, bool electronFiles)
     {
         foreach (AppProfile profile in All)
@@ -247,7 +207,6 @@ internal static class AppProfiles
         return null;
     }
 
-    /// <summary>The row Enhanced hover knows as this kind, or null.</summary>
     internal static AppProfile? OfKind(PipHoverApp kind)
     {
         if (kind == PipHoverApp.None) return null;
@@ -256,7 +215,6 @@ internal static class AppProfiles
         return null;
     }
 
-    /// <summary>The route a surface takes, when it is one of <see cref="Surfaces"/>.</summary>
     internal static InputRoute? SurfaceRoute(string windowClass) =>
         SurfaceRoutes.TryGetValue(windowClass, out InputRoute route) ? route : null;
 
@@ -267,11 +225,9 @@ internal static class AppProfiles
         return false;
     }
 
-    /// <summary>What a press and move in a view of this app hands to the real window.</summary>
     internal static DragHandOver DragsOf(string program, string windowClass, bool electronFiles) =>
         Find(program, windowClass, electronFiles)?.Drags ?? DragHandOver.None;
 
-    /// <summary>True when views of this app can be used directly without the experimental switch.</summary>
     internal static bool InteractiveWithoutSwitch(string program, string windowClass, bool electronFiles) =>
         Find(program, windowClass, electronFiles)?.InteractiveWithoutSwitch == true;
 

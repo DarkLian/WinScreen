@@ -3,20 +3,13 @@ using WinScreen.Native;
 
 namespace WinScreen.Dark;
 
-/// <summary>
-/// A click-through window sitting exactly over one target window, showing what is underneath with
-/// light and dark swapped and colours kept. The target itself isn't changed in any way.
-/// </summary>
 internal sealed class DarkOverlay : Form
 {
     private const int WS_CHILD = 0x40000000;
     private const int WS_VISIBLE = 0x10000000;
 
-    /// <summary>Swaps light and dark without shifting hues.</summary>
-    /// <summary>
-    /// What a white page becomes in Dark mode, both kinds: #191919, the owner's choice (14 Nov 2026), rather than black.
-    /// Everything darkened is lifted in step, so black text still becomes white.
-    /// </summary>
+    // A white page becomes #191919 by choice, not black; everything darkened is lifted in step, so black text still
+    // becomes white.
     internal const float Background = 25f / 255;
 
     private const float Range = 1 - Background;
@@ -39,11 +32,8 @@ internal sealed class DarkOverlay : Form
     private nint _magnifier;
     private Rectangle? _shape;
 
-    /// <param name="target">The window to cover.</param>
-    /// <param name="pinned">
-    /// Whether to join the always-on-top windows. Windows only honours this for an overlay when it is
-    /// created, so a target that gets pinned or unpinned needs a new overlay.
-    /// </param>
+    // Windows honours topmost for an overlay only when it is created: a target pinned or unpinned later needs a new
+    // overlay.
     public DarkOverlay(nint target, bool pinned)
     {
         _target = target;
@@ -56,7 +46,6 @@ internal sealed class DarkOverlay : Form
         Text = T("dark.title");
     }
 
-    /// <summary>False once the target has been pinned or unpinned and this overlay is in the wrong group.</summary>
     public bool MatchesTarget => IsPinned(_target) == _pinned;
 
     public bool TargetAlive => _identity.Matches();
@@ -101,14 +90,12 @@ internal sealed class DarkOverlay : Form
         }
     }
 
-    /// <summary>Leaves these windows out of what is filtered, including every overlay.</summary>
     public unsafe void SetIgnoredWindows(nint[] windows)
     {
         fixed (nint* list = windows)
             Magnification.MagSetWindowFilterList(_magnifier, Magnification.MW_FILTERMODE_EXCLUDE, windows.Length, list);
     }
 
-    /// <summary>Follows the target and redraws. Returns false once the target has closed.</summary>
     public bool Follow()
     {
         if (!_identity.Matches())
@@ -139,7 +126,6 @@ internal sealed class DarkOverlay : Form
         return true;
     }
 
-    /// <summary>A cropped window shows nothing outside the crop, so neither does its overlay.</summary>
     private void FollowShape(int offsetX, int offsetY)
     {
         Rectangle? shape = Windows.WindowInfo.ShapeOf(_target);

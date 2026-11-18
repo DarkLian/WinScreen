@@ -1,12 +1,7 @@
 namespace WinScreen.Glass;
 
-/// <summary>The two compute passes. Statistics run on each new frame; the composite uses the picture mask.</summary>
 internal static class ContentShaders
 {
-    /// <summary>
-    /// One tile: its most common colour, how much of it is exactly that colour (CSS backgrounds and panels
-    /// are; photos never are), and whether it has the spread of a picture.
-    /// </summary>
     public const string Stats = """
         Texture2D<float4> source : register(t0);
         RWTexture2D<float4> tiles : register(u0);
@@ -40,10 +35,6 @@ internal static class ContentShaders
         }
         """;
 
-    /// <summary>
-    /// Glass: the page colour fades to the chosen opacity and is taken out of text, so text keeps clean
-    /// edges. Pictures keep their own opacity. Dark: light and dark swap everywhere except pictures.
-    /// </summary>
     public const string Composite = """
         Texture2D<float4> source : register(t0);
         Texture2D<float> mask : register(t1);
@@ -92,7 +83,7 @@ internal static class ContentShaders
                 if (keep && !picture && nextToLight && light > 0.6) keep = false;
                 // A tile that is only partly in a dark part, such as a title bar's lower edge with the page under it,
                 // and white in a dark part next to the page, which may be the page spilling in or the bar's own white
-                // title (the owner, 15 Nov: an active title lost its lower half): each pixel goes by what is around it,
+                // title (an active title lost its lower half): each pixel goes by what is around it,
                 // so the bar's text keeps its colour and the page flips.
                 // Text in a bar has the bar above and below it; the page next to a bar has it on one side only. The bar's
                 // own last row, dark, has it on one side and stays.
@@ -115,7 +106,7 @@ internal static class ContentShaders
                 float d = smoothstep(0.03, 0.30, away);
                 float3 ink = d > 0.001 ? saturate((c - (1 - d) * page.rgb) / d) : c;
                 // Text keeps a thin halo of the page colour, a few pixels wide: dark text on a light page sat right on
-                // whatever was behind, often dark, and couldn't be read (the owner, 15 Nov). The rest of the background
+                // whatever was behind, often dark, and couldn't be read. The rest of the background
                 // fades as chosen.
                 float halo = 0;
                 // Only strong contrast, as text has, makes a halo: a panel's faint border doesn't.

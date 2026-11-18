@@ -3,17 +3,13 @@ using WinScreen.Native;
 
 namespace WinScreen.Hotkeys;
 
-/// <summary>Keeps WinScreen to one copy per sign-in, and asks a running copy to close cleanly.</summary>
 internal static class RunningInstance
 {
     public const string MutexName = @"Local\WinScreen.SingleInstance";
 
     private const int CloseTimeoutMilliseconds = 8000;
 
-    /// <summary>
-    /// Asks a running copy to close so it can put windows back first, then waits for it. Killing it
-    /// would skip that, so the installer calls this before an update or uninstall.
-    /// </summary>
+    // The installer calls this before an update or uninstall: killing the copy would skip putting windows back.
     public static void Close()
     {
         nint window = User32.FindWindow(null, HotkeyHost.WindowTitle);
@@ -42,11 +38,8 @@ internal static class RunningInstance
         WaitForHelper();
     }
 
-    /// <summary>
-    /// The administrator helper (10-2) goes when the ordinary copy does, putting its windows back first; an update must
-    /// wait for that too, or the helper still holds the files. Its window can't be sent anything from here (it is
-    /// elevated), so this only waits.
-    /// </summary>
+    // An update must wait for the elevated helper too, or it still holds the files. Nothing can be sent to its window
+    // from here (it is elevated), so this only waits.
     private static void WaitForHelper()
     {
         nint helper = User32.FindWindow(null, Tray.AppRoles.HelperHostTitle);
@@ -61,7 +54,7 @@ internal static class RunningInstance
         }
         catch (Exception gone) when (gone is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            Diagnostics.Log.Swallowed(gone); // Already gone.
+            Diagnostics.Log.Swallowed(gone);
         }
     }
 }

@@ -2,11 +2,8 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Native;
 
-/// <summary>
-/// Where another program's text caret is, as accessibility reports it: Windows' own caret for classic text boxes,
-/// and the one browsers and Electron apps report for screen magnifiers. Each call can wait on that program, so it
-/// is only ever made from a thread of WinScreen's own that nothing else waits on, never from a hook.
-/// </summary>
+// Each call can wait on the other program: only from a thread of WinScreen's own that nothing waits on, never from a
+// hook.
 internal static partial class TextCaret
 {
     private const int ObjectCaret = -8;
@@ -29,7 +26,6 @@ internal static partial class TextCaret
     private static extern int AccessibleObjectFromWindow(nint window, int item, in Guid id,
         [MarshalAs(UnmanagedType.Interface)] out Accessibility.IAccessible? accessible);
 
-    /// <summary>The window with the keyboard focus in a thread, or 0.</summary>
     internal static nint FocusOf(uint thread)
     {
         var info = new GuiThreadInfo { Size = Marshal.SizeOf<GuiThreadInfo>() };
@@ -38,7 +34,6 @@ internal static partial class TextCaret
 
     internal static bool IsHung(nint window) => IsHungAppWindow(window);
 
-    /// <summary>The caret a caret event is about, on the screen; null when it can't be told or is empty.</summary>
     internal static Rectangle? FromEvent(nint window, int item, int child)
     {
         if (item != ObjectCaret || window == 0 || IsHungAppWindow(window)) return null;
@@ -54,7 +49,6 @@ internal static partial class TextCaret
         }
     }
 
-    /// <summary>The caret in <paramref name="window"/> (the focused window of the program), on the screen, or null.</summary>
     internal static Rectangle? In(nint window)
     {
         if (window == 0 || IsHungAppWindow(window)) return null;
@@ -88,17 +82,14 @@ internal static partial class TextCaret
     [StructLayout(LayoutKind.Sequential)]
     private struct Msg { public nint Window; public uint Message; public nint W, L; public uint Time; public int X, Y; }
 
-    /// <summary>The calling thread, with a message queue made for it, so a later quit can't be lost.</summary>
+    // Makes the thread's message queue now, so a later quit can't be lost.
     internal static uint PrepareThread()
     {
         PeekMessageW(out _, 0, 0, 0, 0);
         return GetCurrentThreadId();
     }
 
-    /// <summary>
-    /// Pumps this thread's messages (WinEvent callbacks arrive through them) until <see cref="Quit"/>, calling
-    /// <paramref name="tick"/> at least every <paramref name="milliseconds"/>.
-    /// </summary>
+    // WinEvent callbacks arrive through this thread's messages.
     internal static void Pump(int milliseconds, Action tick)
     {
         while (true)

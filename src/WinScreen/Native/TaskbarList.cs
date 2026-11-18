@@ -2,10 +2,8 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Native;
 
-/// <summary>
-/// The taskbar's own list of buttons. Takes a window's button off, or puts it back, without changing the window
-/// itself, so its title bar and caption buttons stay as its app draws them.
-/// </summary>
+// Through the taskbar's own list rather than window styles, so the window's title bar and caption buttons stay as its
+// app draws them.
 internal static unsafe class TaskbarList
 {
     private static readonly Guid Class = new("56FDF344-FD6D-11d0-958A-006097C9A090");
@@ -17,9 +15,7 @@ internal static unsafe class TaskbarList
 
     internal static bool Add(nint window) => Call(window, AddTab);
 
-    /// <summary>
-    /// On a thread of its own, set up for COM whatever thread asks, and never waiting long on a busy taskbar.
-    /// </summary>
+    // On a thread of its own, set up for COM whatever thread asks, and never waiting long on a busy taskbar.
     private static bool Call(nint window, int slot)
     {
         bool done = false;

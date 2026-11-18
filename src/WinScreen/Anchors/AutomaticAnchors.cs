@@ -3,10 +3,6 @@ using WinScreen.Windows;
 
 namespace WinScreen.Anchors;
 
-/// <summary>
-/// Keeps an Anchor on windows that are out of sight. While the option is off, none of this exists: no
-/// event hook, timer or pass. Anchors someone added themselves are never touched.
-/// </summary>
 internal sealed class AutomaticAnchors(AnchorSet anchors, Func<nint, bool> canAnchor, Func<bool> paused) : IDisposable
 {
     private const int ContentCheckMilliseconds = 3000;
@@ -15,7 +11,6 @@ internal sealed class AutomaticAnchors(AnchorSet anchors, Func<nint, bool> canAn
     private bool _avoidContent;
     private long _nextContentCheck;
 
-    /// <summary>The event source, while there is one, for measuring its rate.</summary>
     internal WindowEvents? Events => _events;
 
     public void Configure(bool on, bool avoidContent = false)
@@ -41,12 +36,10 @@ internal sealed class AutomaticAnchors(AnchorSet anchors, Func<nint, bool> canAn
         }
     }
 
-    /// <summary>Compares what is covered with the Anchors on screen. Nothing shows behind a game or full-screen app.</summary>
     internal void Pass()
     {
         bool stopped = paused();
         anchors.SyncAutomatic(stopped ? [] : CoverTracker.FullyCovered(WindowStack.Read()).Where(canAnchor).ToList());
-        // Looking at the screen is the costly part, so it follows window changes and never runs often.
         if (stopped || !_avoidContent || Environment.TickCount64 < _nextContentCheck || anchors.Automatic.Count == 0)
             return;
         _nextContentCheck = Environment.TickCount64 + ContentCheckMilliseconds;

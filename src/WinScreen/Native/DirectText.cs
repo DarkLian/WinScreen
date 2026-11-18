@@ -2,12 +2,6 @@
 
 namespace WinScreen.Native;
 
-/// <summary>
-/// Text drawn and measured with DirectWrite, the way Windows 11's own Settings draws it: fuller letters spaced as
-/// the font designs them, smoothed in grey. It takes the same arguments as <see cref="TextRenderer"/> and draws on
-/// the same surfaces, through a Direct2D render target bound to the surface's device context. Where Direct2D isn't
-/// there, the text goes through <see cref="TextRenderer"/> instead.
-/// </summary>
 internal static unsafe class DirectText
 {
     private static readonly Guid FactoryId = new("06152247-6f50-465a-9245-118bfd3b6007"); // ID2D1Factory
@@ -63,7 +57,6 @@ internal static unsafe class DirectText
         public int Compression, SizeImage, XPelsPerMeter, YPelsPerMeter, ClrUsed, ClrImportant;
     }
 
-    /// <summary>A surface at least this big, its pixels see-through.</summary>
     private static bool Surface(int width, int height)
     {
         if (width > _surfaceWidth || height > _surfaceHeight)
@@ -85,7 +78,6 @@ internal static unsafe class DirectText
     private static readonly Dictionary<(string, float, int, int), nint> Formats = [];
     private static readonly Dictionary<nint, nint> Ellipses = [];
 
-    /// <summary>Whether text goes through DirectWrite; it does wherever Windows has it.</summary>
     internal static bool Available { get; }
 
     static DirectText()
@@ -113,7 +105,7 @@ internal static unsafe class DirectText
         if (com != 0) ((delegate* unmanaged[Stdcall]<nint, uint>)Slot(com, 2))(com);
     }
 
-    /// <summary>The family and weight DirectWrite knows a font by: Windows lists each weight of a font as a family of its own.</summary>
+    // Windows lists each weight of a font as a family of its own.
     private static (string Family, int Weight) Face(Font font)
     {
         string name = font.FontFamily.Name;
@@ -123,10 +115,7 @@ internal static unsafe class DirectText
         return (name, weight);
     }
 
-    /// <summary>
-    /// Pixels per inch for type, as Windows' own text drawing uses it: the screen's, so a font is just as big drawn
-    /// either way, at any display scaling.
-    /// </summary>
+    // The screen's, as Windows' own text drawing uses it, so text is the same size drawn either way.
     internal static readonly float TypeDpi = ReadTypeDpi();
 
     private static float ReadTypeDpi()
@@ -137,7 +126,7 @@ internal static unsafe class DirectText
 
     private static float PixelSize(Font font) => font.Unit == GraphicsUnit.Pixel ? font.Size : font.SizeInPoints * TypeDpi / 72f;
 
-    /// <summary>One drawing at a time: the surface and the cached layouts are shared, and Direct2D's here is for one thread.</summary>
+    // The surface and the cached layouts are shared, and this Direct2D factory is single-threaded.
     private static readonly Lock Gate = new();
 
     private static nint Format(Font font, TextFormatFlags flags)
@@ -162,7 +151,6 @@ internal static unsafe class DirectText
     private static string Shown(string text, TextFormatFlags flags) =>
         (flags & TextFormatFlags.NoPrefix) != 0 ? text : text.Replace("&&", "\u0001").Replace("&", "").Replace("\u0001", "&");
 
-    /// <summary>The words laid out in a box, with the alignment and shortening the flags ask for.</summary>
     private static nint Layout(string text, Font font, float width, float height, TextFormatFlags flags)
     {
         nint format = Format(font, flags);
@@ -191,8 +179,6 @@ internal static unsafe class DirectText
 
     private static int Padding(Font font, TextFormatFlags flags) =>
         (flags & TextFormatFlags.NoPadding) != 0 ? 0 : (int)Math.Round(PixelSize(font) / 6f);
-
-    // ---- Measuring ----
 
     internal static Size MeasureText(string? text, Font font) => MeasureText(text, font, Size.Empty, TextFormatFlags.Default);
 
@@ -230,8 +216,6 @@ internal static unsafe class DirectText
         finally { Release(layout); }
     }
 
-    // ---- Drawing ----
-
     internal static void DrawText(IDeviceContext dc, string? text, Font font, Point at, Color color, TextFormatFlags flags = TextFormatFlags.Default)
     {
         Size size = MeasureText(text, font, Size.Empty, flags | TextFormatFlags.SingleLine);
@@ -247,10 +231,8 @@ internal static unsafe class DirectText
     internal static void DrawText(IDeviceContext dc, string? text, Font font, Rectangle bounds, Color color) =>
         DrawText(dc, text, font, bounds, color, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
-    /// <summary>
-    /// With a background colour, the box is painted in it first, as Windows' own text drawing does: drawn again and
-    /// again over itself, as text in a box Windows paints is, the words would otherwise grow darker each time.
-    /// </summary>
+    // The box is painted first, as Windows' own text drawing does: text drawn again over itself would otherwise grow
+    // darker each time.
     internal static void DrawText(IDeviceContext dc, string? text, Font font, Rectangle bounds, Color color, Color back, TextFormatFlags flags)
     {
         if (back.A > 0 && dc is Graphics graphics && Available)
@@ -268,10 +250,8 @@ internal static unsafe class DirectText
         lock (Gate) Draw(graphics, text, font, bounds, color, flags);
     }
 
-    /// <summary>
-    /// Words drawn before, kept as pictures: Direct2D takes over a millisecond to draw each piece of text, so a page
-    /// redrawn as it scrolls or the pointer moves would lag. The most recently used are kept, up to a set size.
-    /// </summary>
+    // Direct2D takes over a millisecond per piece of text, so drawn words are kept as pictures, most recently used
+    // first.
     private sealed record Drawn(Bitmap? Image, int X, int Y, long Bytes);
 
     private readonly record struct DrawnKey(string Text, string Family, float Size, int Style, int Color, int Width, int Height, TextFormatFlags Flags);
@@ -331,7 +311,6 @@ internal static unsafe class DirectText
         finally { Release(layout); }
     }
 
-    /// <summary>The words just drawn on the surface, cut to the pixels they cover and copied out.</summary>
     private static Drawn Keep(int width, int height)
     {
         int left = width, top = height, right = -1, bottom = -1;
@@ -361,7 +340,6 @@ internal static unsafe class DirectText
         return new Drawn(image, left, top, (long)w * h * 4 + 64);
     }
 
-    /// <summary>Laid over what is there, following the graphics' own clip and shift.</summary>
     private static void Lay(Graphics graphics, Drawn drawn, Rectangle inner)
     {
         if (drawn.Image is null) return;

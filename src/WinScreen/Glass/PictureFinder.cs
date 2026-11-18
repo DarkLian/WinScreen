@@ -1,19 +1,11 @@
 namespace WinScreen.Glass;
 
-/// <summary>What the GPU measured for one 16-pixel tile.</summary>
 internal readonly record struct TileStats(float R, float G, float B, float Exact, bool Busy);
 
-/// <summary>
-/// Finds the pictures in a window from its tile statistics, so effects can treat pictures, text and the
-/// page differently. A picture is a large, rich block that isn't page colour. Flat panels and bars don't
-/// count, unless they're black and part of the picture's edge, as a letterbox is.
-/// </summary>
 internal sealed class PictureFinder(Func<long>? clock = null)
 {
     public const int Tile = 16;
-    /// <summary>The mask's values: picture, decide each pixel, a plain panel, or nothing.</summary>
     public const float Picture = 1, PerPixel = 0.5f, Panel = 0.2f, None = 0;
-    /// <summary>For Dark: a part that is dark already, such as a dark title bar or panel, which stays as it is.</summary>
     public const float AlreadyDark = 0.05f;
     private const int HoldMilliseconds = 5000;
 
@@ -40,7 +32,7 @@ internal sealed class PictureFinder(Func<long>? clock = null)
         for (int k = 0; k < tiles.Length; k++)
         {
             TileStats t = tiles[k];
-            bool flat = t.Exact > 0.9f; // A flat panel or background, whatever its colour.
+            bool flat = t.Exact > 0.9f;
             other[k] = !flat && (t.Busy || Distance(t.R - pr, t.G - pg, t.B - pb) > 0.0144f || t.Exact < 0.5f);
         }
 
@@ -67,7 +59,7 @@ internal sealed class PictureFinder(Func<long>? clock = null)
         {
             float dr = Mean(strip, t => t.R) - Mean(edge, t => t.R), dg = Mean(strip, t => t.G) - Mean(edge, t => t.G),
                 db = Mean(strip, t => t.B) - Mean(edge, t => t.B);
-            if (Flat(strip) > 0.8f && Black(strip)) return true; // Letterbox and photo borders.
+            if (Flat(strip) > 0.8f && Black(strip)) return true;
             if (Flat(strip) > 0.8f && (Flat(edge) < 0.5f || Distance(dr, dg, db) > 0.0004f)) return false;
             return Distance(dr, dg, db) < 0.03f;
         }
@@ -145,10 +137,8 @@ internal sealed class PictureFinder(Func<long>? clock = null)
         return mask;
     }
 
-    /// <summary>
-    /// Video fades to black and shows title cards. A picture seen recently stays a picture for a few
-    /// seconds, so effects don't flicker. Video black often matches a dark page, so only time ends a hold.
-    /// </summary>
+    // Video fades to black and shows title cards, so a picture seen recently is held a few seconds; video black often
+    // matches a dark page, so only time ends a hold.
     private void Hold(float[] mask, List<Rectangle> current, int columns, int rows, Func<int, bool> isPage)
     {
         long now = _clock();
@@ -171,14 +161,8 @@ internal sealed class PictureFinder(Func<long>? clock = null)
         }
     }
 
-    /// <summary>
-    /// For Dark: marks the parts that are dark already, a tile whose own colour is dark and that isn't a picture, so a
-    /// dark title bar, toolbar or panel stays dark instead of turning light.
-    /// </summary>
-    /// <remarks>
-    /// A dark part is bigger than one tile: at least two by two of them, or four in a row, as a bar is. One tile that
-    /// is mostly the ink of a big bold letter isn't, or the letter stayed dark on the darkened page (the owner, 15 Nov).
-    /// </remarks>
+    // A dark part is at least two by two tiles, or four in a row as a bar is: a tile that is mostly a big bold letter's
+    // ink isn't, or the letter stays dark on the darkened page.
     public static void MarkAlreadyDark(float[] mask, TileStats[] tiles, int columns, int rows)
     {
         int count = Math.Min(mask.Length, tiles.Length);
@@ -212,12 +196,10 @@ internal sealed class PictureFinder(Func<long>? clock = null)
             }
     }
 
-    /// <summary>Forgets held pictures, for when the window was resized or scrolled a long way.</summary>
     public void Reset() => _held.Clear();
 
     private static float Distance(float r, float g, float b) => r * r + g * g + b * b;
 
-    /// <summary>The most common tile colour, averaged over its tiles, so a flat page compares exactly.</summary>
     private static (float, float, float) PageColour(TileStats[] tiles)
     {
         var count = new Dictionary<int, int>();

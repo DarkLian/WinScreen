@@ -3,11 +3,7 @@ using Microsoft.Win32;
 
 namespace WinScreen.Native;
 
-/// <summary>
-/// Windows' documented virtual desktop question: is this window on the desktop being shown now? Asked through its
-/// COM table, made once on the thread that first asks (the UI thread). When Windows can't say, the answer is yes, so
-/// nothing is hidden by mistake.
-/// </summary>
+// When Windows can't say, the answer is yes, so nothing is hidden by mistake.
 internal static unsafe partial class VirtualDesktops
 {
     private const int IsWindowOnCurrentVirtualDesktop = 3;
@@ -37,7 +33,6 @@ internal static unsafe partial class VirtualDesktops
         return result != 0 || on != 0;
     }
 
-    /// <summary>The desktop a window is on (documented), or null when Windows can't say or it shows on every desktop.</summary>
     public static Guid? DesktopOf(nint window)
     {
         if (Manager() == 0 || window == 0) return null;
@@ -46,12 +41,8 @@ internal static unsafe partial class VirtualDesktops
         return result == 0 && desktop != Guid.Empty ? desktop : null;
     }
 
-    /// <summary>
-    /// The desktop being shown now, or null when it can't be read. Windows documents no way to ask, so this reads
-    /// where Explorer keeps it: undocumented, read-only, and only ever an improvement over a documented fallback
-    /// (INV-19). Callers check it against the documented answer before trusting it. Recheck after each Windows
-    /// feature update.
-    /// </summary>
+    // Undocumented: read where Explorer keeps it, read-only, and only an improvement over a documented fallback
+    // (INV-19). Callers check it against the documented answer. Recheck after each Windows feature update.
     public static Guid? CurrentDesktop()
     {
         try
@@ -69,10 +60,7 @@ internal static unsafe partial class VirtualDesktops
         }
     }
 
-    /// <summary>
-    /// Whether a desktop still exists, or null when the list can't be read. Read from the same undocumented place
-    /// as <see cref="CurrentDesktop"/>.
-    /// </summary>
+    // Undocumented, read where CurrentDesktop reads.
     public static bool? Exists(Guid desktop)
     {
         try

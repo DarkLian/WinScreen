@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Native;
 
-/// <summary>The shape the pointer has on the screen now. Asks only Windows, never another program, so hooks may use it.</summary>
+// Asks only Windows, never another program, so hooks may use it.
 internal static class PointerShape
 {
     [StructLayout(LayoutKind.Sequential)]
@@ -18,7 +18,6 @@ internal static class PointerShape
 
     private static readonly nint Hand = LoadCursor(0, 32649); // IDC_HAND, Windows' own, shared by every program.
 
-    /// <summary>Whether the pointer is the hand apps show over a link.</summary>
     internal static bool IsHand()
     {
         var info = new CursorInfo { Size = Marshal.SizeOf<CursorInfo>() };

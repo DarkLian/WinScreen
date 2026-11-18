@@ -15,7 +15,6 @@ internal static class Program
         Environment.GetEnvironmentVariable(AppRoles.DataFolderVariable)
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WinScreen");
 
-    /// <summary>What a copy in this role muted, until it is unmuted (<see cref="ProgramSound"/>).</summary>
     private static string SoundJournal(AppRole role) => Path.Combine(DataFolder, AppRoles.SoundJournalFile(role));
 
     private static ChangeJournal Journal(AppRole role) =>
@@ -24,7 +23,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] arguments)
     {
-        // A helper started for a copy whose data is elsewhere (10-2); its own watcher inherits this.
+        // A helper started for a copy whose data is elsewhere; its own watcher inherits this.
         if (AppRoles.DataFolderFrom(arguments) is { } dataFolder) Environment.SetEnvironmentVariable(AppRoles.DataFolderVariable, dataFolder);
         if (RecoveryWatcher.ParentFrom(arguments) is { } parent)
         {
@@ -55,7 +54,6 @@ internal static class Program
         MenuStyle.UseTheme(settings.Theme);
         Native.Translucency.Allowed = settings.MenuTransparency;
 
-        // A command for the running copy (or the list of commands): answered here, and nothing else starts.
         CommandLineRequest request = CommandLine.Parse(arguments);
         if (request is not CommandLineRequest.None)
         {
@@ -69,7 +67,6 @@ internal static class Program
             return;
         }
 
-        // What this copy is (10-2): as the person, the one elevated copy of before, or the administrator helper.
         AppRole role = AppRoles.Choose(Native.ProcessInfo.SelfElevated, Native.ProcessInfo.SplitToken, settings.RunAsAdministrator,
             settings.AdministratorHelper, arguments.Contains(AppRoles.SingleArgument));
         using var singleInstance = new Mutex(true, AppRoles.MutexName(role), out bool isFirstCopy);
@@ -126,7 +123,6 @@ internal static class Program
         Application.Run(new TrayApplication(windows, settings, settingsPath, sound, Elevation.SettingsPage(arguments), role));
     }
 
-    /// <summary>What the watcher does after the app was killed: the same recovery as the next start, for that copy's role.</summary>
     private static bool RecoverLeftWindows(AppRole role)
     {
         AppSettings settings = AppSettings.Load(Path.Combine(DataFolder, "settings.json"));

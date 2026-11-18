@@ -15,14 +15,8 @@ namespace WinScreen.Glass;
 
 internal enum ContentLook { Glass, Dark }
 
-/// <summary>How opaque each kind of content stays under Glass, from 0 to 1.</summary>
 internal readonly record struct ContentLevels(float Background, float Text, float Picture);
 
-/// <summary>
-/// Draws one window again, processed: Glass fades the page and keeps text and pictures, Dark swaps light
-/// and dark but leaves pictures alone. The window itself stays where it is, invisible and clickable,
-/// under this see-through, click-through overlay. Work happens only when the window draws a new frame.
-/// </summary>
 internal sealed unsafe class ContentOverlay : Form
 {
     private const long NoRedirectionBitmap = 0x200000;
@@ -65,14 +59,12 @@ internal sealed unsafe class ContentOverlay : Form
         Text = "WinScreen effect";
     }
 
-    /// <summary>Raised on the UI thread when the effect can't go on, with a message for the person.</summary>
     public event Action<string>? Failed;
 
     public nint Source => _source;
 
     public ContentLook Look => _look;
 
-    /// <summary>Frames processed, for tests and diagnostics.</summary>
     internal long Frames { get; private set; }
 
     protected override bool ShowWithoutActivation => true;
@@ -90,13 +82,11 @@ internal sealed unsafe class ContentOverlay : Form
 
     public void SetLevels(ContentLevels levels) => _levels = levels;
 
-    /// <summary>How see-through the whole effect is: the window's own opacity, which it can't show while hidden.</summary>
     public void SetOpacity(byte alpha)
     {
         if (IsHandleCreated) User32.SetLayeredWindowAttributes(Handle, 0, alpha, User32.LWA_ALPHA);
     }
 
-    /// <summary>Sets everything up on this thread, then processes frames on its own. Throws if the window can't be captured.</summary>
     public void Start()
     {
         if (!WindowInfo.TryGetFrameBounds(_source, out Rectangle frame, out _))
@@ -133,7 +123,6 @@ internal sealed unsafe class ContentOverlay : Form
             Follow();
     }
 
-    /// <summary>Stays exactly over the window and just above it, and out of sight while it's minimized.</summary>
     private void Follow()
     {
         if (_stopping || IsDisposed)
@@ -155,14 +144,13 @@ internal sealed unsafe class ContentOverlay : Form
         // Hidden windows in between don't count: Windows keeps an input method's window right under ours.
         if (topmost == raised && NextShown(Handle) == _source)
             return;
-        // The overlay goes to the window, never the window to the overlay: it is put straight above the window, which
-        // stays where it is among the others. Moving the window under the overlay sent it down the stack wherever
-        // Windows had first placed the overlay, below other windows (the owner's report, 15 Nov).
+        // The overlay goes to the window, never the window to the overlay: moving the window under the overlay sent it
+        // down the stack, below other windows.
         if (topmost != raised)
             User32.SetWindowPos(Handle, topmost ? User32.HWND_TOPMOST : User32.HWND_NOTOPMOST, 0, 0, 0, 0,
                 User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
         nint above = PreviousShown(_source);
-        if (above == Handle) return; // Already right, with only hidden windows between.
+        if (above == Handle) return;
         // Nothing above in its own band (the window is the band's first): the top of that band. Placing it after a
         // window of the other band would move it into that band.
         bool sameBand = above != 0 && ((User32.GetWindowLongPtr(above, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0) == topmost;
@@ -178,7 +166,6 @@ internal sealed unsafe class ContentOverlay : Form
         Diagnostics.Log.Event("effect.raisedPastWindow", ("ok", NextShown(Handle) == _source));
     }
 
-    /// <summary>The first window above <paramref name="window"/> that is showing, other than this overlay's own band.</summary>
     private nint PreviousShown(nint window)
     {
         nint above = User32.GetWindow(window, PreviousAbove);
@@ -186,7 +173,6 @@ internal sealed unsafe class ContentOverlay : Form
         return above;
     }
 
-    /// <summary>The first window under <paramref name="window"/> that is showing.</summary>
     private static nint NextShown(nint window)
     {
         nint below = User32.GetWindow(window, NextBelow);
@@ -194,7 +180,6 @@ internal sealed unsafe class ContentOverlay : Form
         return below;
     }
 
-    /// <summary>True when the PC has a graphics card the effects can use, rather than Windows' software renderer. Asked once.</summary>
     internal static bool GraphicsCardPresent => GraphicsCard.Value;
 
     private static readonly Lazy<bool> GraphicsCard = new(() =>
@@ -234,7 +219,6 @@ internal sealed unsafe class ContentOverlay : Form
             SwapEffect = SwapEffect.FlipSequential, Scaling = Scaling.Stretch, AlphaMode = AlphaMode.Premultiplied,
         });
 
-        // DirectComposition through its COM interface: no package needed.
         using var dxgi = _device.QueryInterface<IDXGIDevice>();
         Guid iid = new("C37EA93A-E7AA-450D-B16F-9746CB0407F3");
         Marshal.ThrowExceptionForHR(DCompositionCreateDevice(dxgi.NativePointer, in iid, out _composition));
@@ -265,7 +249,6 @@ internal sealed unsafe class ContentOverlay : Form
     [DllImport("dcomp.dll")]
     private static extern int DCompositionCreateDevice(nint dxgiDevice, in Guid iid, out nint device);
 
-    /// <summary>The frame loop. Nothing runs between frames: it waits for the window to draw.</summary>
     private void Render()
     {
         var size = Size.Empty;
@@ -415,7 +398,7 @@ internal sealed unsafe class ContentOverlay : Form
             item?.Dispose();
     }
 
-    /// <summary>Stops processing and takes the overlay away. The caller reveals the window.</summary>
+    // The caller reveals the window.
     public void Stop()
     {
         if (_stopping)
