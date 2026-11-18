@@ -103,6 +103,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public long LooseSince { get; set; }
         [NotJournalled("Transient: on the screen for a drag to end in it; the journal keeps its home and how it was hidden.")]
         public bool ShownForDrop { get; set; }
+        [NotJournalled("Transient: shown for a drag but kept nearly see-through until a picture has grown into its place.")]
+        public bool RevealHeld { get; set; }
         [NotJournalled("Transient: its own size while shown at a view's size for a drag; recovery puts back the home placement.")]
         public Size? SizeBeforeDrop { get; set; }
         [NotJournalled("Transient: covered a monitor (full screen) since it was parked.")]

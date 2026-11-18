@@ -1061,6 +1061,7 @@ public sealed partial class PipWindow : Form
         _autoMove.Dispose();
         ClaimEscape(false);
         EndLive();
+        _growing?.Dispose();
         // Teardown must never submit another draw: the source or destination HWND may already be gone.
         _selecting = false;
         _thumbnail?.Dispose();
@@ -1334,10 +1335,12 @@ public sealed partial class PipWindow : Form
         if (!User32.GetWindowRect(_source, out Rect bounds)) return;
         Rectangle at = DropPlace(pointer, spot, new Size(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top),
             Screen.FromPoint(pointer).WorkingArea);
-        try { _windows.ShowParkedForDrop(_source, at.Location); }
+        StartGrowing();
+        try { _windows.ShowParkedForDrop(_source, at.Location, holdReveal: _growing is not null); }
         catch (WindowOperationException failure)
         {
             Diagnostics.Log.Swallowed(failure);
+            StopGrowing();
             return;
         }
         _dropSince = Environment.TickCount64;
@@ -1376,9 +1379,11 @@ public sealed partial class PipWindow : Form
         string item = live.PressedItem;
         _pickedUpFromPage = live.HandsOverDrags == Compatibility.DragHandOver.Links;
         nint before = _foregroundBeforeLive;
+        StartGrowing(); // The picture as the visit shows it.
         EndLive(keepFocus: true); // The hook goes first: the press given below must reach the window.
         // The press was the hook's, so Windows doesn't know the button is down: let go meanwhile, there is nothing to hand on.
-        if (live.HandedOverReleased) return;
+        if (live.HandedOverReleased) { StopGrowing(); return; }
+        bool hold = _growing is not null;
         Point pointer = Cursor.Position;
         Rectangle area = Screen.FromPoint(pointer).WorkingArea;
         Point? press = null;
@@ -1392,7 +1397,7 @@ public sealed partial class PipWindow : Form
             if (item.Length > 0 && live.Identity is { } identity && _windows.NormalSize(_source) is { } normal)
             {
                 Rectangle place = PickupPlace(normal, pointer, area);
-                _windows.ShowParkedForDrop(_source, place.Location, place.Size);
+                _windows.ShowParkedForDrop(_source, place.Location, place.Size, hold);
                 for (long until = Environment.TickCount64 + PickupFindFor; press is null && Environment.TickCount64 < until;)
                 {
                     Application.DoEvents();
@@ -1402,7 +1407,7 @@ public sealed partial class PipWindow : Form
                         place.Contains(onName))
                     {
                         Rectangle moved = DropPlace(pointer, new Point(onName.X - place.Left, onName.Y - place.Top), place.Size, area);
-                        if (moved.Location != place.Location) _windows.ShowParkedForDrop(_source, moved.Location, place.Size);
+                        if (moved.Location != place.Location) _windows.ShowParkedForDrop(_source, moved.Location, place.Size, hold);
                         press = onName + new Size(moved.Left - place.Left, moved.Top - place.Top);
                     }
                 }
@@ -1415,13 +1420,14 @@ public sealed partial class PipWindow : Form
                 // the press goes where the spot really is, as the pointer goes there and back below (it went to the pointer
                 // until 18 Nov, so the press missed the link and no drag started).
                 Rectangle at = DropPlace(pointer, spot, new Size(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top), area);
-                _windows.ShowParkedForDrop(_source, at.Location);
+                _windows.ShowParkedForDrop(_source, at.Location, holdReveal: hold);
                 press = User32.GetWindowRect(_source, out Rect shownAt) ? new Point(shownAt.Left + spot.X, shownAt.Top + spot.Y) : pointer;
             }
         }
         catch (WindowOperationException failure)
         {
             Diagnostics.Log.Swallowed(failure);
+            StopGrowing();
             return;
         }
         LastPickup = item.Length == 0 ? "at its own size" : $"{(itemFound ? "item found" : "item not found")} after {Environment.TickCount64 - pickupStarted} ms";
@@ -1444,6 +1450,44 @@ public sealed partial class PipWindow : Form
         DragsPickedUp++;
         Diagnostics.Log.Event("view.dragPickedUp", ("program", Diagnostics.LogValue.ProgramOf(_source)));
     }
+
+    /// <summary>
+    /// The view's picture grows into the original's place as it comes up for a drag, so it doesn't jump from the view's
+    /// size to its own (<see cref="GrowingPicture"/>); the original is kept nearly see-through until then.
+    /// </summary>
+    private void StartGrowing()
+    {
+        StopGrowing();
+        // Only a softening: whatever goes wrong taking the picture, the window comes up as before, at once.
+        try { _growing = GrowingPicture.Start(RectangleToScreen(PictureArea), ShownForDropBounds, RevealForDrop); }
+        catch (Exception failure) when (failure is ArgumentException or OutOfMemoryException or System.Runtime.InteropServices.ExternalException or ThreadStateException)
+        {
+            Diagnostics.Log.Swallowed(failure);
+            _growing = null;
+        }
+        if (_growing is not null) GrowsStarted++;
+    }
+
+    private void StopGrowing()
+    {
+        _growing?.Dispose();
+        _growing = null;
+    }
+
+    /// <summary>Asked on the picture's thread: where the original is while out for a drag, else null.</summary>
+    private Rectangle? ShownForDropBounds() =>
+        _windows.IsShownForDrop(_source) && User32.GetWindowRect(_source, out Rect r) ? Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom) : null;
+
+    private void RevealForDrop()
+    {
+        try { _windows.RevealShownForDrop(_source); }
+        catch (WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
+    }
+
+    private GrowingPicture? _growing;
+
+    /// <summary>How many times a picture grew into the original's place for a drag, for tests.</summary>
+    internal int GrowsStarted { get; private set; }
 
     private const long PickupFindFor = 600;
     private static readonly Size SmallestPickup = new(420, 300);
@@ -1557,6 +1601,7 @@ public sealed partial class PipWindow : Form
         if (_dropSince == 0) return;
         ViewState.Modes before = CurrentModes();
         _dropSince = 0;
+        StopGrowing();
         try { _windows.ReturnToParking(_source); }
         catch (WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
         if (keepFocus) _focusBackAfterDrag = true;

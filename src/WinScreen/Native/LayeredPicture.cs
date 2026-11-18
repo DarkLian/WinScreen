@@ -22,6 +22,11 @@ internal static partial class LayeredPicture
     private static partial bool UpdateLayeredWindow(nint window, nint screen, nint place, ref NativeSize size, nint source,
         ref NativePoint from, int key, ref Blend blend, int flags);
 
+    [LibraryImport("user32.dll", EntryPoint = "UpdateLayeredWindow", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool UpdateLayeredWindowAt(nint window, nint screen, ref NativePoint place, ref NativeSize size,
+        nint source, ref NativePoint from, int key, ref Blend blend, int flags);
+
     [LibraryImport("user32.dll")]
     private static partial nint GetDC(nint window);
 
@@ -43,7 +48,13 @@ internal static partial class LayeredPicture
     private static partial bool DeleteObject(nint item);
 
     /// <summary>Puts the picture on the window where it is, at <paramref name="opacity"/> overall. False if Windows refused.</summary>
-    internal static bool Show(nint window, Bitmap picture, byte opacity)
+    internal static bool Show(nint window, Bitmap picture, byte opacity) => Show(window, picture, opacity, null);
+
+    /// <summary>
+    /// Puts the picture on the window with its top-left corner at <paramref name="at"/> on the screen, the window taking
+    /// the picture's size, in one step. False if Windows refused.
+    /// </summary>
+    internal static bool Show(nint window, Bitmap picture, byte opacity, Point? at)
     {
         nint screen = GetDC(0);
         nint memory = CreateCompatibleDC(screen);
@@ -54,7 +65,9 @@ internal static partial class LayeredPicture
             var size = new NativeSize { Width = picture.Width, Height = picture.Height };
             var from = new NativePoint();
             var blend = new Blend { Opacity = opacity, Format = AC_SRC_ALPHA };
-            return UpdateLayeredWindow(window, screen, 0, ref size, memory, ref from, 0, ref blend, ULW_ALPHA);
+            if (at is not { } place) return UpdateLayeredWindow(window, screen, 0, ref size, memory, ref from, 0, ref blend, ULW_ALPHA);
+            var to = new NativePoint { X = place.X, Y = place.Y };
+            return UpdateLayeredWindowAt(window, screen, ref to, ref size, memory, ref from, 0, ref blend, ULW_ALPHA);
         }
         finally
         {

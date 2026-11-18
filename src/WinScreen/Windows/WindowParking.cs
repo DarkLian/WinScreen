@@ -1,4 +1,4 @@
-using WinScreen.Native;
+﻿using WinScreen.Native;
 using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Windows;
@@ -80,6 +80,7 @@ public sealed partial class WindowController
             if (!_changed.TryGetValue(window, out var state) || !state.Parked) return;
             state.Identity.Require();
             state.ShownForDrop = false;
+            state.RevealHeld = false;
             Conceal(window, state);
             FinishPeek(window, state);
             SaveJournal();
@@ -93,7 +94,11 @@ public sealed partial class WindowController
     /// closing the view put it back where it was. <see cref="ReturnToParking"/> hides and parks it again.
     /// </summary>
     /// <param name="size">A size to show it at (a view's), its own put back when parked again; null for its own.</param>
-    internal void ShowParkedForDrop(nint window, Point topLeft, Size? size = null)
+    /// <param name="holdReveal">
+    /// Kept nearly see-through (still taking the pointer) until <see cref="RevealShownForDrop"/>, while a picture grows
+    /// from the view into its place. Once held, later calls keep it so until then.
+    /// </param>
+    internal void ShowParkedForDrop(nint window, Point topLeft, Size? size = null, bool holdReveal = false)
     {
         lock (_gate)
         {
@@ -107,9 +112,29 @@ public sealed partial class WindowController
             state.LooseSince = 0;
             if (!User32.SetWindowPos(window, User32.HWND_TOPMOST, topLeft.X, topLeft.Y, wanted.Width, wanted.Height,
                     (wanted.IsEmpty ? User32.SWP_NOSIZE : 0) | User32.SWP_NOACTIVATE)) throw Failure(T("actions.move"), window);
-            ApplyAlpha(window, state, state.AlphaBeforeHiding);
+            state.RevealHeld |= holdReveal;
+            ApplyAlpha(window, state, state.RevealHeld ? ReachableOpacity : state.AlphaBeforeHiding);
             WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
         }
+    }
+
+    /// <summary>After <see cref="ShowParkedForDrop"/> held back: in plain sight now. Nothing once it went back.</summary>
+    internal void RevealShownForDrop(nint window)
+    {
+        lock (_gate)
+        {
+            if (!_changed.TryGetValue(window, out var state) || !state.ShownForDrop || !state.RevealHeld) return;
+            state.RevealHeld = false;
+            if (!state.Parked || !User32.IsWindow(window)) return;
+            state.Identity.Require();
+            ApplyAlpha(window, state, state.AlphaBeforeHiding);
+        }
+    }
+
+    /// <summary>Whether a window out for a drag is still kept nearly see-through, for tests.</summary>
+    internal bool RevealIsHeld(nint window)
+    {
+        lock (_gate) return _changed.TryGetValue(window, out var state) && state.ShownForDrop && state.RevealHeld;
     }
 
     /// <summary>
@@ -140,6 +165,7 @@ public sealed partial class WindowController
         {
             if (!_changed.TryGetValue(window, out var state) || !state.ShownForDrop) return;
             state.ShownForDrop = false;
+            state.RevealHeld = false;
             if (!User32.IsWindow(window) || !state.Parked) return;
             state.Identity.Require();
             if (state.SizeBeforeDrop is { } own)

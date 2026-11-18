@@ -89,7 +89,8 @@ public sealed class DropIntoViewTests
                 Assert.False(User32.IsWindowVisible(view.Handle), "The view still covers the original.");
                 Rectangle out_ = Desktop.BoundsOf(source.Handle);
                 Assert.True(out_.Contains(aim), $"The original isn't under the pointer: {out_}, pointer {aim}.");
-                Assert.False(WindowInfo.IsConcealed(source.Handle), "The original is out but can't be seen.");
+                // Shown once the view's picture has grown into its place (a sixth of a second; at once with animations off).
+                Assert.True(Desktop.WaitFor(() => !WindowInfo.IsConcealed(source.Handle), 1000, () => Pump(20)), "The original is out but can't be seen.");
                 Glide(aim, new Point(aim.X + 2, aim.Y + 2), 3);
                 Glide(new Point(aim.X + 2, aim.Y + 2), aim, 3);
                 // Long enough for the view's title bar or note to come up if they followed the pointer: they would

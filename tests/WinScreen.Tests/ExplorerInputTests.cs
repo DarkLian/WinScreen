@@ -595,6 +595,10 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 // At its own 900 by 640, so it lays itself out as it always does, with the file pressed where it is now.
                 Assert.True(Math.Abs(picked.Width - 900) <= 16 && Math.Abs(picked.Height - 640) <= 16 && picked.Contains(view.LastPickupPress),
                     "The window didn't come up at its own size: " + log);
+                // A picture of the view grew into its place first, and by now the window is in plain sight (12.6).
+                log.Append($"grew {view.GrowsStarted}, held {shared.RevealIsHeld(window)}; ");
+                Assert.True(view.GrowsStarted == (WindowsAnimations.On ? 1 : 0), "No picture grew into the window's place: " + log);
+                Assert.True(Desktop.WaitFor(() => !shared.RevealIsHeld(window), 1000), "The window stayed see-through: " + log);
                 Point from = Desktop.CursorPosition();
                 for (int step = 1; step <= 30; step++)
                 {
@@ -636,6 +640,8 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 Assert.True(arrived.SequenceEqual(["drag-me"]), "The file didn't arrive: " + log);
                 Assert.True(view.KeepsUpdating && WindowInfo.IsConcealed(window), "The original didn't hide again: " + log);
                 Assert.True(second?.KeepsUpdating != false, "The other view's original didn't hide again: " + log);
+                Assert.True(second is null || second.GrowsStarted == (WindowsAnimations.On ? 1 : 0), "No picture grew into the other original's place: " + log);
+                Assert.Equal(0, User32.FindWindow(null, "WinScreen.GrowingPicture")); // Gone once it has grown.
             }, shared);
         }
         finally
