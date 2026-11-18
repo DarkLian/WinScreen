@@ -110,6 +110,7 @@ trazer a janela real de volta, e ela se esconde de novo quando você muda para o
 **Efeitos** *(experimental)*
 - Modo escuro que mantém imagens e vídeos como estão, ou um filtro simples
 - Vidro que esmaece só o fundo
+- Uma imagem ou um vídeo atrás do Vidro, para todos os apps ou para cada um, com som se quiser
 - Cortar uma janela, ou encolhê-la para um bloco ao vivo
 
 **No dia a dia**

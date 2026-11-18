@@ -111,6 +111,7 @@ vraie fenêtre, qui se cache à nouveau quand vous passez à autre chose.
 **Effets** *(expérimental)*
 - Un mode sombre qui laisse les images et les vidéos telles quelles, ou un simple filtre
 - Un effet verre qui n'atténue que l'arrière-plan
+- Une image ou une vidéo derrière l'effet verre, pour toutes les applications ou chacune à part, avec le son si vous voulez
 - Rogner une fenêtre, ou la réduire en vignette en direct
 
 **Au quotidien**

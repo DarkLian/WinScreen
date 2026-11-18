@@ -1029,24 +1029,26 @@ internal class ThemedList : ListBox
     {
         if (e.Index < 0 || e.Index >= Items.Count) return;
         ListRows.DrawBuffered(e, (g, bounds) =>
+            DrawRow(g, ListRows.Background(g, this, bounds, (e.State & DrawItemState.Selected) != 0, e.Index == _hot), e.Index));
+    }
+
+    protected virtual void DrawRow(Graphics g, Rectangle row, int index)
+    {
+        int left = row.Left + SettingsStyle.Unit(this, 12);
+        if (IconOf is not null)
         {
-            Rectangle row = ListRows.Background(g, this, bounds, (e.State & DrawItemState.Selected) != 0, e.Index == _hot);
-            int left = row.Left + SettingsStyle.Unit(this, 12);
-            if (IconOf is not null)
+            int size = SettingsStyle.Unit(this, 16);
+            if (IconOf(Items[index], size) is { } icon)
             {
-                int size = SettingsStyle.Unit(this, 16);
-                if (IconOf(Items[e.Index], size) is { } icon)
-                {
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    g.DrawImage(icon, new Rectangle(left, row.Top + (row.Height - size) / 2, size, size));
-                }
-                left += size + SettingsStyle.Unit(this, 10); // The words line up whether or not a picture was found.
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(icon, new Rectangle(left, row.Top + (row.Height - size) / 2, size, size));
             }
-            Native.DirectText.DrawText(g, GetItemText(Items[e.Index]), Font,
-                new Rectangle(left, row.Top, row.Right - left - SettingsStyle.Unit(this, 4), row.Height),
-                Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
-        });
+            left += size + SettingsStyle.Unit(this, 10); // The words line up whether or not a picture was found.
+        }
+        Native.DirectText.DrawText(g, GetItemText(Items[index]), Font,
+            new Rectangle(left, row.Top, row.Right - left - SettingsStyle.Unit(this, 4), row.Height),
+            Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
     }
 
     protected override void WndProc(ref Message m)

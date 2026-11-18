@@ -184,6 +184,16 @@ turn either off and choose how solid the background, text and pictures stay. Win
 window while these two are working. If a window under Dark mode or Glass ever stops taking clicks, WinScreen turns
 the effect off and tells you.
 
+### A picture or video behind Glass
+
+In **Settings → Backgrounds**, choose a picture, GIF or video to show behind the text of windows with Glass.
+**Every app** sets one for all of them. Add an app to give it its own, or to show none in it. The preview shows
+how it will fit, and you can drop a file onto it. To see more of the picture, lower Glass's background in
+**Settings → Appearance**.
+
+Videos play without sound until you turn **Sound** up. Only the window you used last plays sound, and a video
+pauses while its window is minimized or on another desktop.
+
 ## Remember a program's setup
 
 Set a window up the way you like it: pinned, see-through, dark, with a view open if you want one. Then press
@@ -213,6 +223,7 @@ Changes take effect as soon as you make them. The mouse wheel only scrolls; clic
 | Toolbar | Where the toolbar appears, how quickly, and which buttons it shows |
 | Anchors | Automatic Anchors and how Anchors look |
 | Appearance | Opacity, pin border and effects |
+| Backgrounds | A picture or video behind Glass, for every app or for each app |
 | Picture-in-Picture | How views look and behave |
 | Programs | Programs WinScreen should leave alone, or the only ones it should work on |
 | Saved setups | Program setups you've remembered |

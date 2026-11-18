@@ -106,6 +106,7 @@ again when you switch away. [What works where](docs/FEATURE_COMPATIBILITY.md) li
 **Effects** *(experimental)*
 - Dark mode that keeps pictures and video as they are, or a simple filter
 - Glass that fades only the background
+- A picture or video behind Glass, for every app or one app at a time, with sound if you like
 - Crop a window, or shrink it to a live tile
 
 **Everyday use**

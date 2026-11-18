@@ -40,12 +40,52 @@ public sealed class BackdropTests
     }
 
     [Fact]
-    public void The_picture_and_its_fit_are_kept_in_settings()
+    public void Every_app_has_no_background_and_no_sound_until_one_is_chosen()
     {
-        Assert.Null(AppSettings.Parse("{}").Effects.Backdrop);
-        EffectPreferences chosen = AppSettings.Parse("""{"Effects":{"BackdropFile":"C:\\Pictures\\sea.mp4","BackdropFit":3}}""").Effects;
-        Assert.Equal(new BackdropChoice(@"C:\Pictures\sea.mp4", BackdropFit.Tile), chosen.Backdrop);
-        Assert.Equal(BackdropFit.Fill, AppSettings.Parse("""{"Effects":{"BackdropFit":42}}""").Effects.Validated().BackdropFit);
+        BackgroundPreferences none = AppSettings.Parse("{}").Backgrounds;
+        Assert.Null(none.For("chrome"));
+        Assert.Empty(none.Apps);
+        Assert.Equal(0, none.Everywhere.Volume);
+    }
+
+    [Fact]
+    public void An_app_with_its_own_background_uses_it_and_every_other_app_uses_every_apps()
+    {
+        BackgroundPreferences chosen = AppSettings.Parse("""
+            {"Backgrounds":{"Everywhere":{"File":"C:\\Pictures\\sea.mp4","Fit":3,"Volume":40},
+             "Apps":[{"Program":"Code.exe","Background":{"File":"C:\\Pictures\\code.png","Fit":1}},
+                     {"Program":"notepad","Background":{"File":""}}]}}
+            """).Backgrounds;
+        Assert.Equal(new BackdropChoice(@"C:\Pictures\sea.mp4", BackdropFit.Tile, 40), chosen.For("chrome"));
+        // Names are matched as Windows reports a process: no ".exe", any case.
+        Assert.Equal(new BackdropChoice(@"C:\Pictures\code.png", BackdropFit.Fit), chosen.For("code"));
+        Assert.Equal("Code", chosen.Apps[0].Program);
+        // Listed with no file: none, whatever every app has.
+        Assert.Null(chosen.For("Notepad"));
+    }
+
+    [Fact]
+    public void Settings_from_elsewhere_are_tidied_without_losing_the_rest()
+    {
+        BackgroundPreferences tidied = AppSettings.Parse("""
+            {"Backgrounds":{"Everywhere":{"File":"  C:\\a.jpg ","Fit":42,"Volume":250},
+             "Apps":[null,{"Program":" "},{"Program":"code","Background":{"File":"C:\\b.png","Fit":77,"Volume":-5}},
+                     {"Program":"CODE.EXE","Background":{"File":"C:\\c.png"}},{"Program":"edge"}]}}
+            """).Backgrounds;
+        Assert.Equal(new BackdropChoice(@"C:\a.jpg", BackdropFit.Fill, 100), tidied.Everywhere.Backdrop);
+        Assert.Equal(["code", "edge"], tidied.Apps.Select(app => app.Program));
+        Assert.Equal(new BackdropChoice(@"C:\b.png", BackdropFit.Fill, 0), tidied.For("code"));
+        Assert.Null(tidied.For("edge"));
+    }
+
+    [Fact]
+    public void A_new_fit_or_volume_is_the_same_file_and_doesnt_start_a_video_over()
+    {
+        var playing = new BackdropChoice(@"C:\v\sea.mp4", BackdropFit.Fill, 0);
+        Assert.True((playing with { Fit = BackdropFit.Tile, Volume = 60 }).SameFile(playing));
+        Assert.True(new BackdropChoice(@"c:\V\SEA.mp4", BackdropFit.Fill).SameFile(playing));
+        Assert.False(new BackdropChoice(@"C:\v\lake.mp4", BackdropFit.Fill).SameFile(playing));
+        Assert.False(playing.SameFile(null));
     }
 }
 

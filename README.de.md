@@ -110,6 +110,7 @@ echte Fenster zurückholen, und es versteckt sich wieder, sobald du wegwechselst
 **Effekte** *(experimentell)*
 - Dunkelmodus, der Bilder und Videos lässt, wie sie sind, oder ein einfacher Filter
 - Glas, das nur den Hintergrund ausblendet
+- Ein Bild oder Video hinter Glas, für alle Apps oder für jede App einzeln, auf Wunsch mit Ton
 - Ein Fenster zuschneiden oder zu einer Live-Kachel verkleinern
 
 **Im Alltag**

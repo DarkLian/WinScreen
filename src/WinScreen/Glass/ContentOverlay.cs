@@ -22,7 +22,7 @@ internal sealed unsafe class ContentOverlay : Form
     private const long NoRedirectionBitmap = 0x200000;
     internal const uint SoftwareRendererVendor = 0x1414; // Microsoft: the Basic Render Driver.
     private const uint OutOfContext = 0, LocationChange = 0x800B, Foreground = 0x0003, Reorder = 0x8004;
-    private const uint MinimizeStart = 0x0016, MinimizeEnd = 0x0017;
+    private const uint MinimizeStart = 0x0016, MinimizeEnd = 0x0017, Cloaked = 0x8017, Uncloaked = 0x8018;
 
     private readonly nint _source;
     private readonly ContentLook _look;
@@ -41,6 +41,7 @@ internal sealed unsafe class ContentOverlay : Form
     private readonly bool _leaveAlreadyDark;
     private volatile BackdropChoice? _backdrop;
     private volatile bool _hidden;
+    private volatile bool _audible;
     private Thread? _renderer;
 
     private ID3D11Device? _device;
@@ -72,6 +73,10 @@ internal sealed unsafe class ContentOverlay : Form
 
     public event Action<string>? BackdropFailed;
 
+    public event Action? CameForward;
+
+    public BackdropChoice? Background => _backdrop;
+
     public nint Source => _source;
 
     public ContentLook Look => _look;
@@ -99,6 +104,13 @@ internal sealed unsafe class ContentOverlay : Form
     public void SetBackdrop(BackdropChoice? backdrop)
     {
         _backdrop = backdrop;
+        if (!_stopping) _arrived.Set();
+    }
+
+    public void SetAudible(bool audible)
+    {
+        if (_audible == audible) return;
+        _audible = audible;
         if (!_stopping) _arrived.Set();
     }
 
@@ -131,6 +143,7 @@ internal sealed unsafe class ContentOverlay : Form
         nint callback = Marshal.GetFunctionPointerForDelegate(_eventProc);
         _hooks.Add(User32.SetWinEventHook(LocationChange, LocationChange, 0, callback, process, 0, OutOfContext));
         _hooks.Add(User32.SetWinEventHook(MinimizeStart, MinimizeEnd, 0, callback, process, 0, OutOfContext));
+        _hooks.Add(User32.SetWinEventHook(Cloaked, Uncloaked, 0, callback, process, 0, OutOfContext));
         _hooks.Add(User32.SetWinEventHook(Foreground, Foreground, 0, callback, 0, 0, OutOfContext));
         _hooks.Add(User32.SetWinEventHook(Reorder, Reorder, 0, callback, 0, 0, OutOfContext));
         _renderer = new Thread(Render) { IsBackground = true, Name = "WinScreen effect" };
@@ -141,6 +154,8 @@ internal sealed unsafe class ContentOverlay : Form
     {
         if (kind == Reorder || kind == Foreground || window == _source)
             Follow();
+        if (kind == Foreground && window == _source && !_stopping)
+            CameForward?.Invoke();
     }
 
     private void Follow()
@@ -153,7 +168,8 @@ internal sealed unsafe class ContentOverlay : Form
             Hidden(true);
             return;
         }
-        Hidden(false);
+        // On another virtual desktop the window is still visible to Windows, only cloaked; its video and sound stop.
+        Hidden(Dwmapi.DwmGetWindowAttribute(_source, Dwmapi.DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0);
 
         if (WindowInfo.TryGetFrameBounds(_source, out Rectangle frame, out _) && frame.Location != Location)
             Location = frame.Location;
@@ -210,7 +226,7 @@ internal sealed unsafe class ContentOverlay : Form
             ("program", Diagnostics.LogValue.ProgramOf(between)));
     }
 
-    // A video behind a minimised window stops playing.
+    // A video behind a minimised window, or one on another desktop, stops playing.
     private void Hidden(bool hidden)
     {
         if (_hidden == hidden) return;
@@ -332,11 +348,16 @@ internal sealed unsafe class ContentOverlay : Form
                     break;
 
                 bool redraw = false;
-                if (_backdrop != shown)
+                BackdropChoice? chosen = _backdrop;
+                // A new fit or volume is taken as it is: opening the file again would start a video over.
+                if (chosen != shown)
                 {
-                    shown = _backdrop;
-                    backdrop?.Dispose();
-                    backdrop = OpenBackdrop(shown);
+                    if (!(chosen?.SameFile(shown) ?? shown is null))
+                    {
+                        backdrop?.Dispose();
+                        backdrop = OpenBackdrop(chosen);
+                    }
+                    shown = chosen;
                     redraw = true;
                 }
                 if (backdrop is not null)
@@ -344,6 +365,7 @@ internal sealed unsafe class ContentOverlay : Form
                     try
                     {
                         backdrop.Pause(_hidden);
+                        backdrop.Sound(_audible && !_hidden ? shown?.Volume ?? 0 : 0);
                         redraw |= backdrop.Update(_device!, _context!);
                         if (backdrop is VideoBackdrop { Failed: true }) throw new NotSupportedException();
                     }

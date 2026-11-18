@@ -15,7 +15,7 @@ internal static class MenuParts
         FullScreen = '', Undo = '', Copy = '', Folder = '', Save = '', More = '',
         Settings = '', Sync = '', Info = '', Power = '', View = '', Crop = '',
         Star = '', Help = '', Minimize = '', Close = '', Warning = '', Page = '',
-        Monitor = '', Home = '', Keyboard = '', Mouse = '', Bar = '', Palette = '', Apps = '', Search = '', Sliders = '', Brightness = '', Repair = '', History = '', Delete = '';
+        Monitor = '', Home = '', Keyboard = '', Mouse = '', Bar = '', Palette = '', Apps = '', Search = '', Sliders = '', Brightness = '', Repair = '', History = '', Delete = '', Picture = '';
 
     internal static int SystemDpi
     {
@@ -49,7 +49,7 @@ internal static class MenuParts
         Color purple = dark ? Color.FromArgb(195, 166, 255) : Color.FromArgb(135, 100, 184);
         return glyph switch
         {
-            Pin or NewWindow or Copy or Save or Info or Help or Monitor or Home or Apps or Keyboard or Page => blue,
+            Pin or NewWindow or Copy or Save or Info or Help or Monitor or Home or Apps or Keyboard or Page or Picture => blue,
             Pointer or FullScreen or View or Bar or Mouse => teal,
             Undo or Sync or History => green,
             Moon or Star or Folder or Brightness or Warning => amber,

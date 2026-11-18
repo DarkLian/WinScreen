@@ -337,6 +337,13 @@ internal static class ColorIcons
             p.Dot(Rgb(0x2FB36A), 11.4f, 6.4f, 2.4f);
             p.Dot(Rgb(0xF2B01E), 5.2f, 10.2f, 2.4f);
         },
+        [MenuParts.Picture] = p =>
+        {
+            p.Box(1, 2.5f, 14, 11, 1.8f, Grey);
+            p.Box(2.2f, 3.7f, 11.6f, 8.6f, 0.8f, Blue);
+            p.Circle(9.6f, 4.8f, 2.8f, Yellow);
+            p.Shape(Green, 2.2f, 12.3f, 2.2f, 10.6f, 5.6f, 7.4f, 8.4f, 10, 10.2f, 8.6f, 13.8f, 11.4f, 13.8f, 12.3f);
+        },
         [MenuParts.Apps] = p =>
         {
             p.Box(1.5f, 1.5f, 5.8f, 5.8f, 1.2f, Blue);

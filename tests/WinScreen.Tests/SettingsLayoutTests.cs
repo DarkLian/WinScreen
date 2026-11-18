@@ -441,7 +441,8 @@ public sealed class SettingsLayoutTests
             NumberSlider[] sliders = Descendants(window).OfType<NumberSlider>().ToArray();
             Assert.NotEmpty(sliders);
             Assert.DoesNotContain(Descendants(window).OfType<NumericUpDown>(), number => number.Visible);
-            foreach (NumberSlider slider in sliders)
+            // A slider that is off until something else is chosen (Sound, for a video) stays as it is.
+            foreach (NumberSlider slider in sliders.Where(slider => slider.Number.Enabled))
             {
                 NumericUpDown number = slider.Number;
                 decimal step = Math.Max(1, number.Increment);

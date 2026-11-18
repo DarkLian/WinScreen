@@ -1,151 +1,117 @@
 using System.Drawing.Drawing2D;
 using WinScreen.Glass;
+using WinScreen.Tray;
 
 namespace WinScreen.Settings;
 
-// A small window drawn the way Glass would show it: lines of text over the chosen picture, placed by the chosen fit.
+// A window drawn the way Glass would show it: lines of text over the chosen picture, placed by the chosen fit. With no
+// picture it asks for one; a click chooses one and a file dropped on it is taken.
 internal sealed class BackdropPreview : Control
 {
-    private const int Wide = 320, Tall = 200, Radius = 6;
+    private const int Radius = 8;
     private const int Window = 1280; // The window the preview stands for, for fits that keep the picture's own size.
-    private const int Largest = 1280;
-    private readonly object _gate = new();
+    private readonly BackgroundPictures _pictures;
     private string _file = "";
     private BackdropFit _fit;
-    private int _ticket;
-    private (int Ticket, Bitmap? Picture, Size Real)? _arrived;
-    private Bitmap? _picture;
-    private Size _real;
+    private string _empty = "";
 
     public BackdropPreview()
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        _pictures = new BackgroundPictures(1280, () =>
+        {
+            if (IsHandleCreated && !IsDisposed) BeginInvoke(Invalidate);
+        });
         BackColor = SettingsStyle.Card;
-        Margin = new Padding(7, 6, 3, 6);
-        Size = new Size(Wide, Tall);
-        Visible = false;
+        Margin = new Padding(3, 6, 3, 10);
+        Size = new Size(SwitchBox.RowWidth, SwitchBox.RowWidth * 9 / 16);
         AccessibleRole = AccessibleRole.Graphic;
         TabStop = false;
+        Cursor = Cursors.Hand;
+        AllowDrop = true;
     }
 
-    public void Show(string file, BackdropFit fit)
+    public event Action? ChooseAsked;
+
+    public event Action<string>? Dropped;
+
+    public void Show(string file, BackdropFit fit, string empty)
     {
+        _file = file;
         _fit = fit;
-        if (file != _file)
-        {
-            _file = file;
-            _picture?.Dispose();
-            _picture = null;
-            Visible = file.Length > 0;
-            if (file.Length > 0) Load(file);
-        }
+        _empty = empty;
+        AccessibleDescription = file.Length > 0 ? Path.GetFileName(file) : empty;
         Invalidate();
     }
 
-    protected override void OnHandleCreated(EventArgs e)
+    public static bool Takes(string file)
     {
-        base.OnHandleCreated(e);
-        Size = new Size(SettingsStyle.Unit(this, Wide), SettingsStyle.Unit(this, Tall));
+        string kind = Path.GetExtension(file).ToLowerInvariant();
+        return BackdropChoice.Pictures.Contains(kind) || BackdropChoice.Animations.Contains(kind) || BackdropChoice.Videos.Contains(kind);
     }
 
-    protected override void OnDpiChangedAfterParent(EventArgs e)
+    protected override void OnClick(EventArgs e)
     {
-        base.OnDpiChangedAfterParent(e);
-        Size = new Size(SettingsStyle.Unit(this, Wide), SettingsStyle.Unit(this, Tall));
+        base.OnClick(e);
+        ChooseAsked?.Invoke();
     }
 
-    private void Load(string file)
+    private static string? DroppedFile(DragEventArgs e) =>
+        e.Data?.GetData(DataFormats.FileDrop) is string[] { Length: 1 } files && Takes(files[0]) ? files[0] : null;
+
+    protected override void OnDragEnter(DragEventArgs e)
     {
-        int ticket = ++_ticket;
-        var worker = new Thread(() =>
-        {
-            (Bitmap? picture, Size real) = Read(file);
-            lock (_gate)
-            {
-                if (_arrived?.Picture is { } unused) unused.Dispose();
-                _arrived = (ticket, picture, real);
-            }
-            try
-            {
-                if (IsHandleCreated && !IsDisposed) BeginInvoke(Invalidate);
-            }
-            catch (InvalidOperationException closed)
-            {
-                Diagnostics.Log.Swallowed(closed); // Closed meanwhile; what arrived is let go with the control.
-            }
-        }) { IsBackground = true, Name = "WinScreen preview" };
-        worker.SetApartmentState(ApartmentState.STA); // The file's thumbnail comes from Windows' shell.
-        worker.Start();
+        base.OnDragEnter(e);
+        e.Effect = DroppedFile(e) is null ? DragDropEffects.None : DragDropEffects.Copy;
     }
 
-    private static (Bitmap?, Size) Read(string file)
+    protected override void OnDragDrop(DragEventArgs e)
     {
-        if (!BackdropChoice.Videos.Contains(Path.GetExtension(file).ToLowerInvariant()))
-        {
-            try
-            {
-                using Image image = Image.FromFile(file);
-                return (Smaller(image), image.Size);
-            }
-            catch (Exception failure) when (failure is IOException or OutOfMemoryException or ArgumentException or UnauthorizedAccessException)
-            {
-                Diagnostics.Log.Swallowed(failure);
-                return (null, Size.Empty);
-            }
-        }
-        Bitmap? frame = Native.ShellThumbnail.Of(file, 640);
-        // A video's own size isn't known here; a common one in its shape stands in.
-        return (frame, frame is null ? Size.Empty : new Size(1920, Math.Max(1, 1920 * frame.Height / frame.Width)));
-    }
-
-    private static Bitmap Smaller(Image image)
-    {
-        float scale = Math.Min(1, Largest / (float)Math.Max(image.Width, image.Height));
-        var copy = new Bitmap(Math.Max(1, (int)(image.Width * scale)), Math.Max(1, (int)(image.Height * scale)));
-        using Graphics g = Graphics.FromImage(copy);
-        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        g.DrawImage(image, 0, 0, copy.Width, copy.Height);
-        return copy;
+        base.OnDragDrop(e);
+        if (DroppedFile(e) is { } file) Dropped?.Invoke(file);
     }
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        lock (_gate)
-        {
-            if (_arrived is { } arrived)
-            {
-                _arrived = null;
-                if (arrived.Ticket == _ticket)
-                {
-                    _picture?.Dispose();
-                    _picture = arrived.Picture;
-                    _real = arrived.Real;
-                }
-                else arrived.Picture?.Dispose();
-            }
-        }
-
         Graphics g = e.Graphics;
         g.Clear(BackColor);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        var box = new Rectangle(0, 0, Width - 1, Height - 1);
-        using GraphicsPath outline = Rounded(box, Unit(Radius));
+        // As tall as it was made; a wider page centres it rather than pushing the settings under it out of sight.
+        int wide = Math.Min(Width - 1, (Height - 1) * 16 / 9);
+        var box = new Rectangle((Width - 1 - wide) / 2, 0, wide, Height - 1);
+        using GraphicsPath outline = SettingsStyle.Rounded(box, Unit(Radius));
         Color page = SettingsStyle.Page;
         using (var fill = new SolidBrush(page)) g.FillPath(fill, outline);
+        if (_file.Length == 0)
+        {
+            DrawEmpty(g, box, outline);
+            return;
+        }
         g.SetClip(outline);
-        if (_picture is { } picture) DrawPicture(g, picture, box);
+        if (_pictures.Read(_file) is { Picture: { } picture, Real: var real }) DrawPicture(g, picture, real, box);
         DrawWindow(g, box, page);
         g.ResetClip();
         using var pen = new Pen(SettingsStyle.CardStroke);
         g.DrawPath(pen, outline);
     }
 
-    private void DrawPicture(Graphics g, Bitmap picture, Rectangle box)
+    private void DrawEmpty(Graphics g, Rectangle box, GraphicsPath outline)
+    {
+        using (var pen = new Pen(SettingsStyle.StrokeOn(SettingsStyle.Page)) { DashStyle = DashStyle.Dash }) g.DrawPath(pen, outline);
+        int icon = Unit(32);
+        if (ColorIcons.Of(MenuParts.Picture, icon) is { } picture)
+            g.DrawImage(picture, new Rectangle(box.X + (box.Width - icon) / 2, box.Y + box.Height / 2 - icon - Unit(6), icon, icon));
+        Native.DirectText.DrawText(g, _empty, SettingsStyle.BodyFont,
+            new Rectangle(box.X + Unit(24), box.Y + box.Height / 2 + Unit(4), box.Width - Unit(48), Unit(48)), SettingsStyle.Secondary,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+    }
+
+    private void DrawPicture(Graphics g, Bitmap picture, Size real, Rectangle box)
     {
         float scale = box.Width / (float)Window;
         var window = new Size(Window, (int)(box.Height / scale));
-        RectangleF place = BackdropChoice.Place(_fit, _real, window);
+        RectangleF place = BackdropChoice.Place(_fit, real, window);
         var shown = new RectangleF(box.X + place.X * scale, box.Y + place.Y * scale, place.Width * scale, place.Height * scale);
         if (_fit != BackdropFit.Tile)
         {
@@ -162,43 +128,27 @@ internal sealed class BackdropPreview : Control
     // text so it can be read on a busy picture.
     private void DrawWindow(Graphics g, Rectangle box, Color page)
     {
-        using (var bar = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(bar, box.X, box.Y, box.Width, Unit(22));
+        using (var bar = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(bar, box.X, box.Y, box.Width, Unit(26));
         using (var dot = new SolidBrush(SettingsStyle.Tertiary))
             for (int i = 0; i < 3; i++)
-                g.FillEllipse(dot, box.Right - Unit(16 + i * 14), box.Y + Unit(8), Unit(6), Unit(6));
-        float[] lines = [0.45f, 0.78f, 0.7f, 0.56f];
+                g.FillEllipse(dot, box.Right - Unit(18 + i * 16), box.Y + Unit(10), Unit(7), Unit(7));
+        float[] lines = [0.42f, 0.74f, 0.66f, 0.7f, 0.52f];
         using var halo = new SolidBrush(Color.FromArgb(220, page));
         using var ink = new SolidBrush(SettingsStyle.Text);
         for (int i = 0; i < lines.Length; i++)
         {
-            int height = Unit(i == 0 ? 9 : 6);
-            var line = new Rectangle(box.X + Unit(16), box.Y + Unit(38 + i * 18), (int)(box.Width * lines[i]), height);
-            using (GraphicsPath edge = Rounded(Rectangle.Inflate(line, Unit(3), Unit(3)), Unit(5))) g.FillPath(halo, edge);
-            using (GraphicsPath text = Rounded(line, height / 2)) g.FillPath(ink, text);
+            int height = Unit(i == 0 ? 11 : 7);
+            var line = new Rectangle(box.X + Unit(22), box.Y + Unit(48 + i * 22), (int)(box.Width * lines[i]), height);
+            using (GraphicsPath edge = SettingsStyle.Rounded(Rectangle.Inflate(line, Unit(3), Unit(3)), Unit(5))) g.FillPath(halo, edge);
+            using (GraphicsPath text = SettingsStyle.Rounded(line, height / 2)) g.FillPath(ink, text);
         }
     }
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
 
-    private static GraphicsPath Rounded(Rectangle box, int radius)
-    {
-        var path = new GraphicsPath();
-        int d = Math.Max(1, radius * 2);
-        path.AddArc(box.X, box.Y, d, d, 180, 90);
-        path.AddArc(box.Right - d, box.Y, d, d, 270, 90);
-        path.AddArc(box.Right - d, box.Bottom - d, d, d, 0, 90);
-        path.AddArc(box.X, box.Bottom - d, d, d, 90, 90);
-        path.CloseFigure();
-        return path;
-    }
-
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-        {
-            _picture?.Dispose();
-            lock (_gate) _arrived?.Picture?.Dispose();
-        }
+        if (disposing) _pictures.Dispose();
         base.Dispose(disposing);
     }
 }

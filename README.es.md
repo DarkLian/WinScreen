@@ -110,6 +110,7 @@ puede traer de vuelta la ventana real, que se vuelve a ocultar cuando cambias a 
 **Efectos** *(experimental)*
 - Modo oscuro que deja las imágenes y los vídeos como están, o un filtro sencillo
 - Cristal que difumina solo el fondo
+- Una imagen o un vídeo detrás de Cristal, para todas las aplicaciones o para cada una, con sonido si quieres
 - Recortar una ventana, o reducirla a un mosaico en vivo
 
 **Uso diario**

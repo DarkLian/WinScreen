@@ -8,8 +8,11 @@ namespace WinScreen.Glass;
 
 public enum BackdropFit { Fill = 0, Fit = 1, Stretch = 2, Tile = 3, Center = 4 }
 
-internal sealed record BackdropChoice(string File, BackdropFit Fit)
+// Volume is a percent, heard only from the one window ContentEffects lets play sound.
+internal sealed record BackdropChoice(string File, BackdropFit Fit, int Volume = 0)
 {
+    public bool SameFile(BackdropChoice? other) => other is not null && string.Equals(File, other.File, StringComparison.OrdinalIgnoreCase);
+
     public static readonly string[] Pictures = [".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"];
     public static readonly string[] Animations = [".gif"];
     public static readonly string[] Videos = [".mp4", ".m4v", ".mov", ".wmv", ".avi", ".mkv", ".webm"];
@@ -49,6 +52,12 @@ internal abstract class Backdrop : IDisposable
     public abstract bool Update(ID3D11Device device, ID3D11DeviceContext context);
 
     public virtual void Pause(bool paused)
+    {
+    }
+
+    public virtual bool HasSound => false;
+
+    public virtual void Sound(int percent)
     {
     }
 
@@ -179,6 +188,7 @@ internal sealed class VideoBackdrop(string file) : Backdrop
     private ID3D11Texture2D? _frame;
     private volatile bool _failed;
     private bool _paused;
+    private int _percent = -1;
 
     public bool Failed => _failed;
 
@@ -190,6 +200,16 @@ internal sealed class VideoBackdrop(string file) : Backdrop
         _paused = paused;
         if (paused) _engine.Pause();
         else _engine.Play();
+    }
+
+    public override bool HasSound => true;
+
+    public override void Sound(int percent)
+    {
+        if (_engine is null || percent == _percent) return;
+        _percent = percent;
+        _engine.Volume = percent / 100.0;
+        _engine.Muted = percent <= 0;
     }
 
     public override bool Update(ID3D11Device device, ID3D11DeviceContext context)
@@ -234,7 +254,9 @@ internal sealed class VideoBackdrop(string file) : Backdrop
         {
             if (kind == MediaEngineEvent.Error) _failed = true;
         };
+        _engine.Volume = 0;
         _engine.Muted = true;
+        _percent = 0;
         _engine.Loop = true;
         _engine.SetSource(file);
         _engine.Play();

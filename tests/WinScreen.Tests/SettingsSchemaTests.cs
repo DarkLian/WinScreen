@@ -178,12 +178,27 @@ public sealed class SettingsSchemaTests : IDisposable
     /// The settings documents a newer version starts from: the newest published version's fixture, and this
     /// version's own defaults, so a setting added since the last release is covered too.
     /// </summary>
-    public static TheoryData<string> Documents() => new("fixture", "defaults");
+    public static TheoryData<string> Documents() => new("fixture", "defaults", "backgrounds");
 
-    private static string Document(string name) => name == "fixture"
-        ? SettingsFixtureTests.Fixture(SettingsFixtureTests.VersionNames()
-            .MaxBy(version => Version.Parse(version.Split('-')[0]))!)
-        : JsonSerializer.Serialize(new AppSettings());
+    private static string Document(string name) => name switch
+    {
+        "fixture" => SettingsFixtureTests.Fixture(SettingsFixtureTests.VersionNames()
+            .MaxBy(version => Version.Parse(version.Split('-')[0]))!),
+        // Lists of objects aren't in the defaults: one entry's newer value must cost that entry at most.
+        "backgrounds" => JsonSerializer.Serialize(new AppSettings
+        {
+            Backgrounds = new BackgroundPreferences
+            {
+                Everywhere = new BackgroundChoice { File = "a.mp4", Fit = WinScreen.Glass.BackdropFit.Tile, Volume = 30 },
+                Apps =
+                [
+                    new AppBackground { Program = "code", Background = new BackgroundChoice { File = "b.png", Fit = WinScreen.Glass.BackdropFit.Fit } },
+                    new AppBackground { Program = "edge" },
+                ],
+            },
+        }),
+        _ => JsonSerializer.Serialize(new AppSettings()),
+    };
 
     /// <summary>One change a newer version could make to a saved file, and the part of the file it may cost.</summary>
     public sealed record NewerChange(string Description, string File, string MayCost);
