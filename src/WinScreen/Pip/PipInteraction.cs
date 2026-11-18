@@ -4,65 +4,40 @@ using WinScreen.Native;
 
 namespace WinScreen.Pip;
 
-/// <summary>What became of one press while a view was interactive. Every press gets exactly one.</summary>
+// Every press gets exactly one.
 public enum PressOutcome
 {
-    /// <summary>It reached the content of the hidden window, at the mapped point.</summary>
     Delivered,
-    /// <summary>It reached a menu or popup the program opened.</summary>
     Popup,
-    /// <summary>It reached WinScreen's own controls on the view.</summary>
     ViewControl,
-    /// <summary>It mapped to the hidden window's title bar or frame, so it moves the view instead.</summary>
     MovedView,
-    /// <summary>It fell outside the view before the session ended.</summary>
     Outside,
-    /// <summary>
-    /// It was tried and didn't arrive, or can't be confirmed: the app is busy or not responding, the control
-    /// refused, or the visit ended first.
-    /// </summary>
     Unconfirmed,
-    /// <summary>It mapped to the hidden window's close, minimize or maximize button, or its icon, which act on the view.</summary>
     CaptionButton,
-    /// <summary>
-    /// The window under it has no way to take this kind of press through a view (see <see cref="PipInputRoutes"/>),
-    /// such as a drag or a middle click on a control reached through UI Automation. Nothing was sent.
-    /// </summary>
     Unsupported,
-    /// <summary>A press started or cancelled the view's explicitly enabled middle-click scrolling mode.</summary>
     ScrollMode,
 }
 
-/// <summary>What a press on the hidden window's caption buttons or icon does, by the standard for views used directly.</summary>
 public enum CaptionAction
 {
-    /// <summary>Close: the original is asked to close, and the view goes with it.</summary>
     Close,
-    /// <summary>Minimize: the view minimizes; the original never does, or its picture would stop.</summary>
+    // The original never minimizes, or its picture would stop.
     Minimize,
-    /// <summary>Maximize or restore: go to the original.</summary>
     GoToOriginal,
-    /// <summary>The window icon, or a right-click on the title bar: the view's own menu.</summary>
     Menu,
 }
 
-/// <summary>What each hit-test answer means for a press that would land in a hidden window.</summary>
 internal static class PressRules
 {
     private const int Client = 1, Menu = 5, VerticalScroll = 6, HorizontalScroll = 7;
 
-    /// <summary>
-    /// Content only. The title bar, frame and caption buttons of an invisible window must never take a
-    /// press: a double-click would maximize it and a drag would start a system move nobody can see.
-    /// </summary>
+    // Content only: a double-click on an invisible window's title bar would maximize it, and a drag would start a
+    // system move nobody can see.
     public static bool ReachesContent(nint hit) => (int)hit is Client or Menu or VerticalScroll or HorizontalScroll;
 
     private const int Caption = 2, SystemMenu = 3, MinButton = 8, MaxButton = 9, Left = 10, BottomRight = 17, Border = 18, Close = 20;
 
-    /// <summary>
-    /// The standard for the original's own caption controls in a view used directly. Null means none: a title
-    /// bar moves the view, and a border does nothing (resizing the original would reflow what the view shows).
-    /// </summary>
+    // A title bar moves the view; a border does nothing, since resizing the original would reflow what the view shows.
     public static CaptionAction? CaptionActionFor(nint hit, MouseButtons button) => ((int)hit, button) switch
     {
         (Close, MouseButtons.Left) => CaptionAction.Close,
@@ -72,24 +47,15 @@ internal static class PressRules
         _ => null,
     };
 
-    /// <summary>Borders and corners: nothing happens, and nothing is dragged.</summary>
     public static bool IsBorder(nint hit) => (int)hit is >= Left and <= BottomRight or Border;
 }
 
 
-/// <summary>
-/// One pointer visit to a view used directly. The original stays parked and invisible; the pointer's moves,
-/// presses and wheel turns reach it as messages at the matching point. The hook and its threads exist only
-/// for this visit.
-/// </summary>
-/// <remarks>
-/// Every pointer move on the desktop waits for a low-level hook, and Windows drops one that answers slowly. So
-/// the hook itself only decides, from WinScreen's own state, whether to let each event through, and hands the
-/// rest to an input worker, in order. Only the worker talks to the other app, which may be slow or busy.
-/// </remarks>
+// Windows drops a low-level hook that answers slowly, so the hook only decides from WinScreen's own state and hands the
+// rest, in order, to the input worker. Only the worker talks to the other app.
 internal sealed class PipInteraction : IDisposable
 {
-    // Opt-in, per-visit and bounded. Contains geometry and window classes only, never UI text or keys.
+    // Opt-in, per visit and bounded: geometry and window classes only, never UI text or keys.
     internal static bool DiagnoseInput { get; set; } = Environment.GetEnvironmentVariable("WINSCREEN_PIP_INPUT_DIAGNOSTICS") == "1";
     private readonly Queue<string> _diagnostics = new();
     internal string[] InputDiagnostics { get { lock (_diagnostics) return _diagnostics.ToArray(); } }
@@ -144,38 +110,24 @@ internal sealed class PipInteraction : IDisposable
     internal bool MiddleClickScroll { get => _middleClickScroll; set => _middleClickScroll = value; }
     internal volatile bool EnhancedHover;
 
-    /// <summary>
-    /// The app has middle-click scrolling of its own that works while Enhanced hover holds the pointer in it
-    /// (browsers and Electron apps). The view's own scrolling then stands aside and the app gets the click.
-    /// </summary>
     internal volatile bool AppScrollsWithHover;
 
-    /// <summary>
-    /// The app's drags are handed to the real window (File Explorer). A left press on its content waits: let go
-    /// without moving far, it is delivered as a click then; moved past Windows' drag distance, it raises
-    /// <see cref="DragPickedUp"/> with where it was pressed, and from then on the press is the real window's: nothing
-    /// more is posted for it, and its release goes through to whatever is under the pointer.
-    /// </summary>
     internal volatile Compatibility.DragHandOver HandsOverDrags;
     private int _itemQuery; // Each press's question, so a late answer to an earlier one is ignored.
 
-    /// <summary>What accessibility said was under the latest press that asked, and how soon; for tests.</summary>
     internal string LastItemAnswer { get; private set; } = "";
 
-    /// <summary>A press turned into a drag (see <see cref="HandsOverDrags"/>); the point is where it was pressed, on the screen.</summary>
     internal event Action<Point>? DragPickedUp;
 
     private Point _pressAt;
     private bool _leftWaitsForDrag;
 
-    /// <summary>The name of the item the waiting press is on, as UI Automation gives it, or empty.</summary>
     internal volatile string PressedItem = "";
 
-    /// <summary>Whether the waiting press is on an item: 1 yes, 0 no, -1 not known yet (asked of UI Automation at the press).</summary>
+    // 1 yes, 0 no, -1 not known yet.
     private volatile int _pressOnItem = -1;
     private volatile bool _pressHandedOver, _handedOverReleased;
 
-    /// <summary>The handed-over press was let go before the view could hand it on.</summary>
     internal bool HandedOverReleased => _handedOverReleased;
     internal string HoverStatus => $"{(EnhancedHover && _messages.MoveRoute != InputRoute.Messages ? "unavailable: " + _messages.MoveRoute + " route" : _messages.Hover.Status)}; target=0x{_messages.MoveTarget:X}; busy={_appBusy}; outside={_outside}; popup={_inPopup}; enabled={EnhancedHover}; install={_messages.Hover.InstallMilliseconds:F3}ms uninstall={_messages.Hover.UninstallMilliseconds:F3}ms";
     private volatile bool _scrolling;
@@ -199,13 +151,10 @@ internal sealed class PipInteraction : IDisposable
         bool Alt = false, bool Horizontal = false, uint Data = 0, PressOutcome Outcome = default, bool EndsScroll = false,
         bool OnLink = false);
 
-    /// <summary>Whether visits share input state with the original, for tests.</summary>
     internal static bool ShareInput { get; set; } = true;
 
-    /// <summary>Whether the view's thread shares input state with the original's right now.</summary>
     internal bool SharesInput => Volatile.Read(ref _sharing) == 1;
 
-    /// <param name="viewWindow">The view itself, which stays under the pointer for the whole visit.</param>
     public PipInteraction(nint source, Rectangle view, Rectangle shown, nint viewWindow = 0, SourcePopups? popups = null)
     {
         _source = source;
@@ -220,13 +169,8 @@ internal sealed class PipInteraction : IDisposable
         _viewThread = viewWindow == 0 ? 0 : User32.GetWindowThreadProcessId(viewWindow, out _);
     }
 
-    /// <summary>
-    /// While the pointer is on the view, the view's thread and the original's share input state. The pointer's
-    /// shape then follows what the app sets as it handles the moves it is sent: a text cursor over text, a hand
-    /// over links. While a button is held it stops, or the app's hold on the mouse would take the real pointer's
-    /// moves, at the wrong place, as well as the ones sent to it.
-    /// </summary>
-    /// <returns>When stopping: whether it was sharing until now.</returns>
+    // While a button is held sharing stops, or the app's hold on the mouse would take the real pointer's moves, at the
+    // wrong place.
     private bool Share(bool on)
     {
         if (on)
@@ -249,14 +193,10 @@ internal sealed class PipInteraction : IDisposable
         return true;
     }
 
-    /// <summary>
-    /// Stopping input sharing for a press makes Windows check the real pointer again a moment later and tell the app
-    /// where it is: elsewhere. Arriving after the press, the app takes that as the pointer leaving while held
-    /// (Chromium then counts clicks from one again, so a double-click became two single clicks); arriving before it,
-    /// it does no harm. The same check sends the view, which is really under the pointer, a move: the press waits for
-    /// that move, up to this long. Measured 9 Nov: it comes within 5 ms on Windows 11 and later in the Windows 10 VM,
-    /// where it took 31 to 57 ms (a fixed 10 ms wait failed every double-click there).
-    /// </summary>
+    // Stopping input sharing makes Windows recheck the real pointer a moment later and tell the app it is elsewhere.
+    // Arriving after the press, the app takes that as leaving while held (Chromium then restarts its click count).
+    // The same recheck sends the view a move, so the press waits for it, up to this long: it came within 5 ms on
+    // Windows 11 and in 31 to 57 ms in a Windows 10 VM.
     private const int MaxRecheckWait = 100;
     private const int ItemAnswerWait = 200;
 
@@ -264,10 +204,8 @@ internal sealed class PipInteraction : IDisposable
     private readonly ManualResetEventSlim _rechecked = new(true);
     private int _unsharedAt; // Environment.TickCount when sharing stopped, comparable with message times.
 
-    /// <summary>How long the latest press waited for the check, in ms; for tests.</summary>
     internal double LastRecheckWait { get; private set; }
 
-    /// <summary>Called on the view's thread with the time of each pointer move the view itself is sent.</summary>
     internal void ViewPointerMoved(int messageTime)
     {
         if (!_rechecked.IsSet && messageTime - Volatile.Read(ref _unsharedAt) >= 0) _rechecked.Set();
@@ -277,32 +215,26 @@ internal sealed class PipInteraction : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool AttachThreadInput(uint attach, uint attachTo, [MarshalAs(UnmanagedType.Bool)] bool on);
 
-    /// <summary>Raised on the input worker for a press on the original's caption buttons or icon.</summary>
+    // Raised on the input worker.
     public event Action<CaptionAction>? CaptionPressed;
 
-    /// <summary>Raised on the watcher thread when the original asks something: a dialog, or it was disabled.</summary>
+    // Raised on the watcher thread.
     public event Action? QuestionShown;
 
-    /// <summary>How many sessions exist now, so tests can prove there is no hook once the pointer leaves.</summary>
     internal static int Active => Volatile.Read(ref _active);
     private static int _active;
 
-    /// <summary>Raised on the hook thread or the input worker when the pointer has left the view.</summary>
+    // Raised on the hook thread or the input worker.
     public event Action? Left;
 
-    /// <summary>Raised on the input worker with how far to move the view.</summary>
+    // Raised on the input worker.
     public event Action<Size>? ViewDragged;
 
-    /// <summary>
-    /// Called with each press's outcome, so a lost press shows up in tests rather than in use. A click on a
-    /// pointer-only surface reports once the control was activated, which can be after the visit ended.
-    /// </summary>
+    // A click on a pointer-only surface reports once the control was activated, which can be after the visit ended.
     public event Action<PressOutcome>? Pressed;
 
-    /// <summary>
-    /// Like <see cref="Pressed"/>, but only for presses that tell the person something about the app: not one that
-    /// never went to it, such as on the hidden window's frame, nor one cut short because the visit ended.
-    /// </summary>
+    // Only presses that tell the person something about the app: not ones on the hidden window's frame, nor ones cut
+    // short by the visit ending.
     public event Action<PressOutcome>? Answered;
 
     internal IReadOnlyList<(PressOutcome Outcome, Point At, nint Hit)> Log
@@ -315,10 +247,8 @@ internal sealed class PipInteraction : IDisposable
     internal bool ObservedPointer(Point point) => Interlocked.Read(ref _observedPointer) == Pack(point);
     private static long Pack(Point point) => ((long)point.X << 32) | (uint)point.Y;
 
-    /// <summary>How long each hook callback took during this visit.</summary>
     internal PipHookTiming Timing { get; } = new();
 
-    /// <summary>Follows the view when it moves or the source changes shape.</summary>
     public void Update(Rectangle view, Rectangle shown)
     {
         lock (_moved)
@@ -396,7 +326,6 @@ internal sealed class PipInteraction : IDisposable
         _moved.Set();
     }
 
-    /// <summary>Keeps the original's menus next to the pointer and its display-only popups out of sight.</summary>
     private void FollowPopups()
     {
         try
@@ -747,8 +676,10 @@ internal sealed class PipInteraction : IDisposable
             Record(PressOutcome.ScrollMode, point, hit);
             return;
         }
-        // In a page the same press and move mostly selects text, which works through the view as it is: only a press on a
-        // link, known by the hand the page shows there, waits to see whether it is a drag. Nothing is asked of the page.
+        // In a page the same press and move mostly selects text, which works through the view as it is: only a press on
+        // a
+        // link, known by the hand the page shows there, waits to see whether it is a drag. Nothing is asked of the
+        // page.
         if (HandsOverDrags == Compatibility.DragHandOver.Links && onLink && button == MouseButtons.Left && !alt && hit == 1 &&
             _heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None)
         {
@@ -920,24 +851,19 @@ internal sealed class PipInteraction : IDisposable
         18 => "HTBORDER", 19 => "HTOBJECT", 20 => "HTCLOSE", 21 => "HTHELP", _ => "unknown",
     };
 
-    /// <summary>
-    /// A window of the original's program, or one the original owns (a helper process's popup), or the input method's
-    /// list kept beside its caret: the pointer is on the app's own popup, so real input goes to it, and going there is
-    /// still part of the visit. Cheap enough for the hook: an owner walk of a few steps.
-    /// </summary>
+    // Cheap enough for the hook: an owner walk of a few steps.
     private bool IsSourcePopup(nint root) =>
         root != 0 && root != _viewWindow && root != _source &&
         (ProcessOf(root) == _sourceProcess || Windows.WindowInfo.IsOwnedBy(root, _source) || _inputMethod?.Holds(root) == true);
 
     private InputMethodWindows? _inputMethod;
 
-    /// <summary>The layer Windows lays over the screen while a shell panel is open, to close it on a press elsewhere.</summary>
+    // The layer Windows lays over the screen while a shell panel is open, to close it on a press elsewhere.
     internal const string LightDismissLayer = "Shell_LightDismissOverlay";
 
-    /// <summary>The latest press in the view, packed; <see cref="long.MinValue"/> before the first.</summary>
+    // long.MinValue before the first press.
     private long _lastPress = long.MinValue;
 
-    /// <summary>The input method's list during this visit, for tests.</summary>
     internal InputMethodWindows? InputMethod => _inputMethod;
 
     private static nint RootAt(Point point) =>

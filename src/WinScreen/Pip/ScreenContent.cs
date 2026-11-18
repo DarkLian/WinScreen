@@ -2,7 +2,6 @@ using System.Drawing.Imaging;
 
 namespace WinScreen.Pip;
 
-/// <summary>Tells which parts of the screen hold text or images and which are plain background.</summary>
 internal static class ScreenContent
 {
     private const int Contrast = 48;
@@ -23,10 +22,8 @@ internal static class ScreenContent
         return cells;
     }
 
-    /// <summary>
-    /// A cell is busy when light and dark meet in it. Plain backgrounds and soft gradients don't count,
-    /// so wallpaper colours and empty pages stay calm while text and photos don't.
-    /// </summary>
+    // Light and dark meeting makes a cell busy; plain backgrounds and soft gradients don't, so wallpaper and empty
+    // pages stay calm.
     public static unsafe bool[,] BusyCells(Bitmap bitmap)
     {
         int cell = PipGeometry.ContentCell;

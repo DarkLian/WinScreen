@@ -3,7 +3,6 @@ using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Pip;
 
-/// <summary>Independent compositor path. No D3D device, frame timer or custom scaling.</summary>
 internal sealed class DwmThumbnailBackend : IPipRenderBackend
 {
     private readonly nint _source;

@@ -9,7 +9,7 @@ using WinScreen.Windows;
 
 namespace WinScreen.Pip;
 
-/// <summary>Free-threaded capture publishes only the newest owned frame. One worker owns all GPU operations.</summary>
+// Free-threaded capture publishes only the newest owned frame. One worker owns all GPU operations.
 internal sealed class WgcCaptureSession : IPipCaptureBackend
 {
     private sealed class Frame(Direct3D11CaptureFrame value, int generation) : IDisposable
@@ -160,7 +160,6 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
             session = pool.CreateCaptureSession(item);
             if (ApiInformation.IsPropertyPresent("Windows.Graphics.Capture.GraphicsCaptureSession", "IsCursorCaptureEnabled"))
                 session.IsCursorCaptureEnabled = _source.ShowsCursor;
-            // Windows' yellow capture border goes only if the person wants that and Windows allows it.
             Diagnostics.CaptureBorderHidden = CaptureBorder.TryHide(session);
             if (_preferences.RequireHiddenBorder && !Diagnostics.CaptureBorderHidden)
                 throw new InvalidOperationException("A concealed source requires borderless capture.");

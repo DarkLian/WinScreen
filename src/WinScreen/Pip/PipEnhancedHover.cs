@@ -6,7 +6,7 @@ using WinScreen.Windows;
 
 namespace WinScreen.Pip;
 
-/// <summary>Optional Messages extension. After visit startup, the input worker owns the native session.</summary>
+// After visit startup, the input worker owns the native session.
 internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposable
 {
     // A native thread has one activation slot. Refuse competing views rather than replacing their target.
@@ -27,19 +27,16 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
     internal long Filtered { get; private set; }
     internal string Status { get; private set; } = "inactive";
 
-    /// <summary>True while the helper is installed and filtering for a target.</summary>
     internal bool Installed => _hook != 0 && !_disarmed && !_disabled;
     internal double InstallMilliseconds { get; private set; }
     internal double UninstallMilliseconds { get; private set; }
 
     private static string HelperPath => Path.Combine(AppContext.BaseDirectory, "WinScreen.Hover.dll");
 
-    /// <summary>True where the helper runs at all: Windows 10 or 11 on native x64, with the helper installed.</summary>
     internal static bool Supported =>
         RuntimeInformation.OSArchitecture == Architecture.X64 &&
         RuntimeInformation.ProcessArchitecture == Architecture.X64 && File.Exists(HelperPath);
 
-    /// <summary>The kind of program a window belongs to, and whether that program is a native 64-bit one.</summary>
     internal static (PipHoverApp App, bool Native) Describe(nint window)
     {
         User32.GetWindowThreadProcessId(window, out uint pid);
@@ -56,10 +53,6 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
         }
     }
 
-    /// <summary>
-    /// True when a view of this window can be used directly with experimental features off: its kind of app was
-    /// verified for it (<see cref="Compatibility.AppProfile.InteractiveWithoutSwitch"/>).
-    /// </summary>
     internal static bool InteractiveWithoutSwitch(nint window)
     {
         User32.GetWindowThreadProcessId(window, out uint pid);
@@ -72,11 +65,10 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
         }
         catch (Exception e) when (e is Win32Exception or ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
-            return false; // A program that can't be looked at (an administrator one, one that has ended) isn't known.
+            return false;
         }
     }
 
-    /// <summary>What a press and move in a view of this window hands to the real window (<see cref="Compatibility.AppProfile.Drags"/>).</summary>
     internal static Compatibility.DragHandOver DragsOf(nint window)
     {
         User32.GetWindowThreadProcessId(window, out uint pid);
@@ -89,12 +81,12 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
         }
         catch (Exception e) when (e is Win32Exception or ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
-            return Compatibility.DragHandOver.None; // A program that can't be looked at isn't known.
+            return Compatibility.DragHandOver.None;
         }
     }
 
-    /// <summary>Electron keeps an app's own files in a "resources" folder, as "app" or "app.asar": beside the
-    /// program, or one folder down when the program keeps each version in a folder of its own.</summary>
+    // Electron keeps an app's files in "resources" as "app" or "app.asar": beside the program, or one folder down when
+    // each version has a folder of its own.
     internal static bool HasElectronLayout(string folder)
     {
         static bool Has(string place) =>
@@ -103,11 +95,9 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
         return Has(folder) || Directory.EnumerateDirectories(folder).Take(64).Any(Has);
     }
 
-    /// <summary>True when the helper may be used with this window's program. Never true for a program that is
-    /// neither a known kind nor listed in Settings, so games and arbitrary apps are left alone.</summary>
+    // Never for a program that is neither a known kind nor listed in Settings: games and arbitrary apps are left alone.
     internal static bool CanAttempt(nint window) => Supported && Describe(window) is (not PipHoverApp.None, true);
 
-    /// <summary>True when a new view of this window starts with Enhanced hover on, as chosen in Settings.</summary>
     internal static bool StartsOn(nint window)
     {
         if (window == 0 || !Supported) return false;
@@ -127,7 +117,6 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
         uint thread = User32.GetWindowThreadProcessId(target, out _);
         try
         {
-            // Only the kinds of program chosen for this, or ones listed in Settings. Never arbitrary apps or games.
             var (app, native) = Describe(target);
             if (app == PipHoverApp.None) { Status = "unavailable: application not enabled"; return; }
             if (!native) { Status = "unavailable: target architecture"; return; }
@@ -194,7 +183,7 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
         Status = $"active; filtered={Filtered} moves={_inspect(_hook, 0)} point={(short)point},{(short)(point >> 16)} native({timing}) activation={activation:F3}ms";
     }
 
-    /// <summary>UI teardown can disarm without racing the worker's native context/module lifetime.</summary>
+    // UI teardown can disarm without racing the worker's native context and module lifetime.
     internal void Deactivate()
     {
         _disabled = true;

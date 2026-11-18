@@ -19,7 +19,7 @@ internal static class PipPreviewGeometry
     }
 }
 
-/// <summary>A compositor thumbnail only: no capture, hook, timer, or input forwarding.</summary>
+// A compositor thumbnail only: no capture, hook, timer or input forwarding.
 internal sealed class PipHoverPreview : Form
 {
     private readonly DwmThumbnail _thumbnail;

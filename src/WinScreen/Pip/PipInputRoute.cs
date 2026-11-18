@@ -2,33 +2,20 @@ using WinScreen.Native;
 
 namespace WinScreen.Pip;
 
-/// <summary>How input reaches a window inside a hidden original.</summary>
 public enum InputRoute
 {
-    /// <summary>Posted mouse messages at the mapped point: ordinary windows of the original's own program.</summary>
     Messages,
-    /// <summary>
-    /// UI Automation: surfaces that read the pointer from the system and ignore posted mouse messages, such as
-    /// WinUI islands and Store app content, which may belong to another process inside the original's frame.
-    /// </summary>
+    // Surfaces that read the pointer from the system and ignore posted mouse messages, such as WinUI islands and Store
+    // app content, which may be another process inside the original's frame.
     Automation,
-    /// <summary>Nothing is sent: a window of another program that isn't one of the surfaces above.</summary>
     Refused,
 }
 
-/// <summary>What the pointer did, as far as the route is concerned.</summary>
 public enum InputOperation { Move, Click, DoubleClick, ContextClick, OtherButton, Drag, Wheel }
 
-/// <summary>
-/// The one place that decides how input reaches a window, and which operations that way supports. Surfaces are
-/// recognised by their UI framework's window class, never by the app.
-/// </summary>
+// Surfaces are recognised by their UI framework's window class, never by the app.
 internal static class PipInputRoutes
 {
-    /// <param name="className">The target window's class.</param>
-    /// <param name="sameProcess">The target belongs to the original's process.</param>
-    /// <param name="insideOriginal">The target is the original or one of its child windows.</param>
-    /// <remarks>The surfaces with a route of their own are in <see cref="Compatibility.AppProfiles.Surfaces"/>.</remarks>
     internal static InputRoute RouteFor(string className, bool sameProcess, bool insideOriginal) =>
         !insideOriginal ? InputRoute.Refused
         : Compatibility.AppProfiles.SurfaceRoute(className) is { } route ? route
@@ -43,11 +30,7 @@ internal static class PipInputRoutes
         return RouteFor(Windows.WindowInfo.ClassName(target), process == originalProcess, inside);
     }
 
-    /// <summary>
-    /// Whether the route can carry the operation at all. Automation has no pointer: it can act on a control (a click,
-    /// a context menu, and a double-click only where that means two clicks) and scroll what scrolls, but not hover,
-    /// drag or other buttons.
-    /// </summary>
+    // Automation has no pointer: it can act on a control and scroll, but not hover, drag or take other buttons.
     internal static bool Supports(InputRoute route, InputOperation operation) => route switch
     {
         InputRoute.Messages => true,

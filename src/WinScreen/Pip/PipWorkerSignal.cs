@@ -3,7 +3,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace WinScreen.Pip;
 
-/// <summary>Event-driven capture, with a private high-resolution deadline timer for a pending final frame.</summary>
+// Event-driven capture, with a private high-resolution deadline timer for a pending final frame.
 internal sealed partial class PipWorkerSignal : IDisposable
 {
     private readonly AutoResetEvent _changed = new(false);

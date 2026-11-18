@@ -5,12 +5,7 @@ namespace WinScreen.Pip;
 
 internal enum PipChipState { None, SourceMinimized, NoNewPicture, Starting, Fallback, Unavailable, OriginalOffered, AlwaysOriginalOffered }
 
-/// <summary>
-/// A small note on a view saying its picture may be out of date, or that a press didn't get through. Like the
-/// title bar it's a window of its own, because nothing can be painted over the picture. A minimized source is a
-/// fact, so it's always shown. No new frames can just mean the source is idle, so that waits until the pointer is
-/// on the view. A press that didn't get through is said for a few seconds, with the original offered instead.
-/// </summary>
+// A window of its own, like the title bar, because nothing can be painted over the picture.
 internal sealed class PipStateChip : Form
 {
     private const int WM_MOUSEACTIVATE = 0x0021;
@@ -30,7 +25,6 @@ internal sealed class PipStateChip : Form
         Cursor = Cursors.Hand;
     }
 
-    /// <summary>Raised with the chip's state when a chip that offers an action is clicked.</summary>
     public event Action<PipChipState>? Chosen;
 
     internal static bool OffersAction(PipChipState state) =>
@@ -80,7 +74,6 @@ internal sealed class PipStateChip : Form
         WinScreen.Windows.TopLayer.Raise(Handle);
     }
 
-    /// <summary>Sizes the chip around its words at its display's scale. True when the size changed.</summary>
     private bool Fit()
     {
         Size text = TextRenderer.MeasureText(Text, Font);
@@ -123,7 +116,6 @@ internal sealed class PipStateChip : Form
             Chosen?.Invoke(_state);
     }
 
-    /// <summary>What the chip says now, or None while it's hidden.</summary>
     internal PipChipState Saying => Visible ? _state : PipChipState.None;
 
     protected override void WndProc(ref Message m)

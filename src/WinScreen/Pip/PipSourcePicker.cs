@@ -5,10 +5,6 @@ using WinScreen.Settings;
 
 namespace WinScreen.Pip;
 
-/// <summary>
-/// Lets a person choose what a view shows without switching to it. It only exists while open. It is drawn as Settings
-/// is: the same colours, boxes, list rows and buttons.
-/// </summary>
 internal sealed class PipSourcePicker : Form
 {
     private readonly ThemedCombo _kind = new() { Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = Padding.Empty };
@@ -30,7 +26,6 @@ internal sealed class PipSourcePicker : Form
     internal Func<IReadOnlyList<PipSourceBookmark>>? Bookmarks { get; init; }
     private readonly PlainButton _open = new() { Text = T("common.open"), Primary = true, Enabled = false };
     private readonly ImageList _icons = new() { ColorDepth = ColorDepth.Depth32Bit, ImageSize = new Size(16, 16) };
-    /// <summary>Sets how tall the rows are; the icons are drawn from <see cref="_icons"/>.</summary>
     private readonly ImageList _rowHeight = new();
     private List<PipChoice> _windows;
     private List<PipChoice> _screens = PipSourceList.Screens();
@@ -57,7 +52,6 @@ internal sealed class PipSourcePicker : Form
         Padding = new Padding(14, 12, 14, 12);
         _allowed = allowed;
         _windows = PipSourceList.Windows(allowed);
-        // Choosing part of a display is one more kind of thing to show, not a button of its own.
         _kind.Items.AddRange([T("pip.sources.window"), T("pip.sources.displays"), T("pip.sources.region"), T("pip.bookmarks.title")]);
         _kind.AccessibleName = T("pip.sources.kind");
         _kind.SelectedIndex = 0;
@@ -83,7 +77,6 @@ internal sealed class PipSourcePicker : Form
         _list.ItemActivate += (_, _) => Choose();
         _list.Resize += (_, _) => FitColumn();
         _list.ClientSizeChanged += (_, _) => FitColumn();
-        // A saved source is forgotten from its own row: the button on it, or Delete.
         _list.MouseClick += (_, e) =>
         {
             if (_list.GetItemAt(e.X, e.Y) is { Tag: PipSourceBookmark bookmark } row && RemoveSpot(Drawn(row)).Contains(e.Location)) Forget(bookmark);
@@ -104,7 +97,6 @@ internal sealed class PipSourcePicker : Form
             _list.Items[0].Selected = true;
         };
 
-        // Reading the list again belongs with the search box; F5 does it too.
         var refresh = new PlainButton { Glyph = MenuParts.Sync, AccessibleName = T("pip.sources.refresh"), Margin = new Padding(8, 0, 0, 0) };
         refresh.Click += (_, _) => RefreshSources();
         _tips.SetToolTip(refresh, T("pip.sources.refresh"));
@@ -116,7 +108,6 @@ internal sealed class PipSourcePicker : Form
         AcceptButton = _open;
         CancelButton = cancel;
 
-        // How many there are on the left; on the right what to do with the one chosen, the main action last.
         var actions = new FlowLayoutPanel
         {
             AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.RightToLeft, WrapContents = false,
@@ -142,7 +133,6 @@ internal sealed class PipSourcePicker : Form
         searchRow.Controls.Add(new InputFrame(_search) { Glyph = MenuParts.Search, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = Padding.Empty }, 0, 0);
         searchRow.Controls.Add(refresh, 1, 0);
 
-        // The kind of thing, the search box and the list, one under another, with the actions below.
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, BackColor = SettingsStyle.Page };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -166,10 +156,6 @@ internal sealed class PipSourcePicker : Form
 
     private bool ChoosingRegion => _kind.SelectedIndex == 2;
 
-    /// <summary>
-    /// What the buttons offer for this kind of thing. Part of a display is dragged out on it, or typed in as exact
-    /// numbers; anything else opens as it is, after a look at it if wanted.
-    /// </summary>
     private void ShowActions()
     {
         _open.Text = ChoosingRegion ? T("pip.sources.selectRegion") : T("common.open");
@@ -179,7 +165,6 @@ internal sealed class PipSourcePicker : Form
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
 
-    /// <summary>The title bar in the window's own colours, as Settings has it.</summary>
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
@@ -191,11 +176,8 @@ internal sealed class PipSourcePicker : Form
         Native.Dwmapi.DwmSetWindowAttribute(Handle, Native.Dwmapi.DWMWA_TEXT_COLOR, in text, sizeof(int));
     }
 
-    /// <summary>
-    /// Rows are drawn as wide as what shows, short of the thin scroll bar; Windows' own scroll bar is hidden past the
-    /// list's edge. The one column itself reaches the list's far edge: Windows draws a line at a column's end down the
-    /// empty space under the last row, which then lies out of sight.
-    /// </summary>
+    // Windows' own scroll bar is hidden past the list's edge. The one column reaches the list's far edge: Windows draws
+    // a line at a column's end down the empty space under the last row, which then lies out of sight.
     private void FitColumn()
     {
         if (_list.Columns.Count == 0 || _list.Parent is not { } shown) return;
@@ -206,14 +188,12 @@ internal sealed class PipSourcePicker : Form
 
     private int _rowWidth = 420;
 
-    /// <summary>Where a row is drawn: its own bounds, as wide as what shows.</summary>
     private Rectangle Drawn(ListViewItem item)
     {
         Rectangle row = item.Bounds;
         return row with { Width = Math.Min(row.Width, _rowWidth) };
     }
 
-    /// <summary>The button on a saved source's row that forgets it.</summary>
     private Rectangle RemoveSpot(Rectangle row)
     {
         int size = Unit(28);
@@ -226,7 +206,6 @@ internal sealed class PipSourcePicker : Form
         Fill();
     }
 
-    /// <summary>The line under a row's name: the program, the display, or where a saved source was.</summary>
     private static string Detail(object? tag) => tag switch
     {
         PipChoice { Device: null } window => window.Minimized ? window.Program + " " + T("pip.sources.minimized") : window.Program,
@@ -235,10 +214,6 @@ internal sealed class PipSourcePicker : Form
         _ => "",
     };
 
-    /// <summary>
-    /// Rows as Settings draws them: a wash under the pointer, the accent wash and bar when chosen; the program's icon,
-    /// the name, and under it in smaller words what it is. A row is drawn whole whenever any part of it is asked for.
-    /// </summary>
     private void DrawRows()
     {
         _list.OwnerDraw = true;
@@ -316,7 +291,6 @@ internal sealed class PipSourcePicker : Form
     public event Action<PipSourceBookmark>? BookmarkPreviewRequested;
     public event Action<string>? BookmarkRemoved;
 
-    /// <summary>The person wants to drag out a region of this display.</summary>
     public event Action<string>? RegionWanted;
 
     private PipChoice? Selected => _list.SelectedItems.Count == 0 ? null : _list.SelectedItems[0].Tag as PipChoice;
@@ -349,7 +323,7 @@ internal sealed class PipSourcePicker : Form
         }
     }
 
-    /// <summary>Opens the selection before closing, while WinScreen still has the focus Windows wants to see.</summary>
+    // Before closing, while WinScreen still has the focus Windows wants to see.
     internal void AskForRegion()
     {
         RegionWanted?.Invoke(Selected?.Device ?? Screen.FromPoint(Cursor.Position).DeviceName);
@@ -371,7 +345,6 @@ internal sealed class PipSourcePicker : Form
         _list.EndUpdate();
         _open.Enabled = _exact.Enabled = false;
         int count = _list.Items.Count;
-        // With one display there is nothing to choose between.
         if (count == 1 && _kind.SelectedIndex is 1 or 2) _list.Items[0].Selected = true;
         _count.Text = _kind.SelectedIndex switch
         {
@@ -401,7 +374,6 @@ internal sealed class PipSourcePicker : Form
         catch (Exception e) when (e is ArgumentException or IOException or UnauthorizedAccessException or
                                       System.Runtime.InteropServices.ExternalException)
         {
-            // A row without an icon is still a row.
             Diagnostics.Log.Swallowed(e);
         }
 
@@ -483,7 +455,6 @@ internal sealed class PipSourcePicker : Form
         if (Selected is not { } choice || !Validate(choice)) return;
         if (choice.Device is { } device)
         {
-            // Part of a display is dragged out on the display itself.
             if (ChoosingRegion) { AskForRegion(); return; }
             Close();
             ScreenChosen?.Invoke(device);
@@ -496,7 +467,6 @@ internal sealed class PipSourcePicker : Form
         }
     }
 
-    /// <summary>Part of the chosen display, typed in as numbers instead of dragged out.</summary>
     private void ChooseExactArea()
     {
         if (Selected is not { Device: { } device } choice || !Validate(choice)) return;

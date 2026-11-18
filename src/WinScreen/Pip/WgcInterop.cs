@@ -6,7 +6,7 @@ using Vortice.DXGI;
 
 namespace WinScreen.Pip;
 
-/// <summary>The three documented Win32/WinRT bridges. Each returned COM reference has exactly one owner.</summary>
+// Each returned COM reference has exactly one owner.
 internal static unsafe partial class WgcInterop
 {
     [LibraryImport("combase.dll", StringMarshalling = StringMarshalling.Utf16)]

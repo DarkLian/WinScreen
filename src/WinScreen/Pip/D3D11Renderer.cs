@@ -13,7 +13,7 @@ using static Vortice.DXGI.DXGI;
 
 namespace WinScreen.Pip;
 
-/// <summary>Single worker owns the immediate context, cached full-size texture and bounded swapchain resources.</summary>
+// One worker owns the immediate context, the cached full-size texture and the bounded swapchain resources.
 internal sealed class D3D11Renderer : IDisposable
 {
     internal ID3D11Device Device { get; private set; } = null!;
@@ -38,7 +38,7 @@ internal sealed class D3D11Renderer : IDisposable
     private readonly PipDiagnostics _diagnostics;
     private bool _disposed;
     private long _lastResize;
-    /// <summary>Windows' software renderer: Auto enlarges with the linear blend, which costs the processor less.</summary>
+    // Windows' software renderer: Auto enlarges with the linear blend, which costs the processor less.
     private readonly bool _software;
     internal PipCapabilities Capabilities { get; private set; } = null!;
     internal bool HasFrame => _cache is not null;
@@ -285,7 +285,8 @@ internal sealed class D3D11Renderer : IDisposable
         _renderTarget?.Dispose(); _swapChain?.Dispose();
         _constants?.Dispose(); _sampler?.Dispose(); _compute?.Dispose(); _pixel?.Dispose(); _vertex?.Dispose();
         _fence?.Dispose();
-        // DXGI permits only one flip-model chain per HWND. Flush deferred destruction before a recovery creates another.
+        // DXGI permits only one flip-model chain per HWND. Flush deferred destruction before a recovery creates
+        // another.
         _context?.Flush();
         _context?.Dispose(); Device?.Dispose();
     }

@@ -5,40 +5,26 @@ using WinScreen.Windows;
 
 namespace WinScreen.Pip;
 
-/// <summary>
-/// Acts on controls of surfaces that ignore posted mouse messages (the <see cref="InputRoute.Automation"/> route),
-/// through UI Automation. One background thread serves every view for the life of the app, so a click made just
-/// before the pointer leaves a view still happens, and the automation object is made once rather than per click.
-/// Each request reports what became of it.
-/// </summary>
+// One background thread serves every view for the app's life, so a click made just before the pointer leaves a view
+// still happens, and the automation object is made once.
 internal sealed class PipControlInput
 {
     internal static PipControlInput Shared { get; } = new();
 
     internal enum Request
     {
-        /// <summary>Invoke, select, toggle or expand the control under the point, or focus an edit box.</summary>
         Click,
-        /// <summary>
-        /// The second click of a double-click. Automation has no double-click, so it acts only where a double-click
-        /// means two clicks (buttons, check boxes, links, menu items); on items whose double-click opens something
-        /// it is unsupported.
-        /// </summary>
+        // Automation has no double-click: it acts only where a double-click means two clicks, and is unsupported
+        // elsewhere.
         DoubleClick,
-        /// <summary>Open the control's own context menu, as a right-click would.</summary>
         ContextMenu,
-        /// <summary>Scroll what scrolls under the point by lines, as the wheel would; negative is up or left.</summary>
         Scroll,
-        /// <summary>Nothing is done: whether an item (a file, a folder, a row) is under the point: "item:" and its name, or "none".</summary>
+        // Nothing is done: "item:" and its name, or "none".
         IsItem,
-        /// <summary>Nothing is done: where the item of a name is in the window, "left,top,width,height", or not done.</summary>
+        // Nothing is done: the named item's "left,top,width,height", or not done.
         FindItem,
     }
 
-    /// <summary>
-    /// What a request did: a pattern name ("invoke", "select", "toggle", "expand", "focus", "menu") or why nothing
-    /// happened. <paramref name="Unsupported"/> means the control can't take this kind of input at all.
-    /// </summary>
     internal readonly record struct Result(bool Done, string What, bool Unsupported = false);
 
     private readonly BlockingCollection<(WindowIdentity Identity, nint Host, Point At, Request Kind, int Lines, bool Horizontal, Action<Result> Done, string Name)> _requests = new(16);
@@ -53,18 +39,13 @@ internal sealed class PipControlInput
         return thread;
     });
 
-    /// <summary>Queues a request at a screen point on an automation surface inside the identified window.</summary>
-    /// <returns>False when the queue is full; <paramref name="done"/> is then not called.</returns>
+    // False when the queue is full, and done is then never called.
     internal bool Submit(WindowIdentity identity, nint host, Point at, Request kind, Action<Result> done)
     {
         _ = _thread.Value;
         return _requests.TryAdd((identity, host, at, kind, 0, false, done, ""));
     }
 
-    /// <summary>
-    /// Where an item (a file, a folder) of this name is in the window now, on the screen, waiting at most a moment for
-    /// the answer. Null when it isn't there, can't be seen, or the answer is late.
-    /// </summary>
     internal Rectangle? ItemBounds(WindowIdentity identity, string name, int waitMilliseconds)
     {
         _ = _thread.Value;
@@ -76,12 +57,11 @@ internal sealed class PipControlInput
                 if (result.Done && parts.Length == 4 && parts.All(p => int.TryParse(p, out _)))
                     found = new Rectangle(int.Parse(parts[0]), int.Parse(parts[1]), int.Parse(parts[2]), int.Parse(parts[3]));
                 try { answered.Set(); }
-                catch (ObjectDisposedException late) { Diagnostics.Log.Swallowed(late); } // Answered after the wait gave up.
+                catch (ObjectDisposedException late) { Diagnostics.Log.Swallowed(late); }
             }, name))) return null;
         return answered.Wait(waitMilliseconds) ? found : null;
     }
 
-    /// <summary>Queues a scroll by whole lines at a screen point.</summary>
     internal bool Scroll(WindowIdentity identity, nint host, Point at, int lines, bool horizontal, Action<Result> done)
     {
         _ = _thread.Value;
@@ -117,7 +97,7 @@ internal sealed class PipControlInput
         }
     }
 
-    /// <summary>The surface is still inside the original; its process is the only one whose controls may be touched.</summary>
+    // Only the surface's own process's controls may be touched.
     private static bool Valid(WindowIdentity identity, nint host, out uint process)
     {
         User32.GetWindowThreadProcessId(host, out process);
@@ -149,7 +129,6 @@ internal sealed class PipControlInput
         return _automation;
     }
 
-    /// <summary>Elements under the point, outermost first, from the surface's own element.</summary>
     private unsafe List<nint> PathAt(nint automation, nint walker, nint window, Point at)
     {
         var path = new List<nint>();
@@ -213,8 +192,8 @@ internal sealed class PipControlInput
                     if (shown >= 0) return new(true, "menu");
                     continue; // Text inside a control has no menu of its own; its control may.
                 }
-                // In text a double-click selects a word: done through the text's own pattern where it offers one
-                // (roadmap P2-12), and said to be impossible where it doesn't.
+                // In text a double-click selects a word: through the text's own pattern where it offers one, and
+                // impossible where it doesn't.
                 if (type is 50004 or 50030 && kind == Request.DoubleClick)
                     return SelectWordAt(element, at) ? new(true, "select word") : new(false, "a double-click in a text box", true);
                 if (type == 50004) // Edit controls need keyboard focus, without changing their value.
@@ -255,10 +234,6 @@ internal sealed class PipControlInput
         finally { Marshal.FreeBSTR(text); }
     }
 
-    /// <summary>
-    /// The first item of the name in the window, by a walk of what is in sight (subtrees outside the window are left
-    /// out, and the walk is bounded): its visible bounds as "left,top,width,height".
-    /// </summary>
     private unsafe Result FindItem(WindowIdentity identity, string name)
     {
         if (name.Length == 0 || !Valid(identity, identity.Window, out _)) return new(false, "window gone");
@@ -287,7 +262,8 @@ internal sealed class PipControlInput
                     if (seen > 1 && !bounds.IntersectsWith(window)) continue;
                     int type = 0;
                     ((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(element, 21))(element, &type);
-                    // Never inside a tree (the navigation pane), a toolbar, a menu bar or a title bar: those are left out, as
+                    // Never inside a tree (the navigation pane), a toolbar, a menu bar or a title bar: those are left
+                    // out, as
                     // they are most of what a slow walk would read.
                     if (seen > 1 && type is Tree or ToolBar or MenuBar or TitleBar) continue;
                     if (type is ListItem or TreeItem or DataItem && bounds.Width > 0 && NameOf(element) == name)
@@ -320,7 +296,6 @@ internal sealed class PipControlInput
         }
     }
 
-    /// <summary>Scrolls the innermost element under the point that scrolls that way, by small steps (lines).</summary>
     private unsafe Result ScrollAt(WindowIdentity identity, nint host, Point at, int lines, bool horizontal)
     {
         if (!Valid(identity, host, out uint hostProcess)) return new(false, "window gone");
@@ -348,7 +323,8 @@ internal sealed class PipControlInput
                 try
                 {
                     int scrollable = 0;
-                    // IUIAutomationScrollPattern: get_CurrentHorizontallyScrollable 9, get_CurrentVerticallyScrollable 10.
+                    // IUIAutomationScrollPattern: get_CurrentHorizontallyScrollable 9, get_CurrentVerticallyScrollable
+                    // 10.
                     ((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(pattern, horizontal ? 9 : 10))(pattern, &scrollable);
                     if (scrollable == 0) continue;
                     const int NoAmount = 2, SmallDecrement = 1, SmallIncrement = 4;
@@ -373,7 +349,7 @@ internal sealed class PipControlInput
         }
     }
 
-    /// <summary>A child window of the original belongs to the process (Store app content lives in its own process).</summary>
+    // Store app content lives in its own process, in a child window of the original.
     private static bool OwnsChildOf(nint original, uint process)
     {
         for (nint child = User32.GetWindow(original, 5 /* GW_CHILD */); child != 0; child = User32.GetWindow(child, 2 /* GW_HWNDNEXT */))
@@ -384,18 +360,15 @@ internal sealed class PipControlInput
         return false;
     }
 
-    // Controls whose double-click is just two clicks: button, check box, hyperlink, menu item, radio button, split button.
+    // Controls whose double-click is just two clicks: button, check box, hyperlink, menu item, radio button, split
+    // button.
     private static readonly HashSet<int> ClickOnly = [50000, 50002, 50005, 50011, 50013, 50031];
 
     private static readonly (int Id, string Name)[] Patterns = [(10000, "invoke"), (10010, "select"), (10015, "toggle"), (10005, "expand")];
 
     private const int NoContextMenuInterface = int.MinValue;
 
-    /// <summary>
-    /// Selects the word at a screen point through the element's text pattern: IUIAutomationTextPattern::RangeFromPoint,
-    /// then the range's ExpandToEnclosingUnit(word) and Select. False when the element offers no text pattern or any
-    /// step is refused.
-    /// </summary>
+    // IUIAutomationTextPattern::RangeFromPoint, then the range's ExpandToEnclosingUnit(word) and Select.
     private static unsafe bool SelectWordAt(nint element, Point at)
     {
         const int TextPatternId = 10014, TextUnitWord = 2;
@@ -417,7 +390,7 @@ internal sealed class PipControlInput
         }
     }
 
-    /// <summary>IUIAutomationElement3::ShowContextMenu (Windows 10 1703 and later).</summary>
+    // IUIAutomationElement3::ShowContextMenu (Windows 10 1703 and later).
     private static unsafe int ShowContextMenu(nint element)
     {
         Guid third = new("8471DF34-AEE0-4A01-A7DE-7DB9AF12C296");

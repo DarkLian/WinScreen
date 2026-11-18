@@ -3,19 +3,14 @@ using WinScreen.Native;
 
 namespace WinScreen.Pip;
 
-/// <summary>
-/// Puts a moved menu back the moment its app moves it again, while a view is using it. Windows 11's
-/// newer menus (File Explorer's tab menus) put themselves back at the place their app worked out a few times while
-/// they open, and now and then while they are in use; the regular sweep only notices that up to a frame or two later.
-/// Windows reports each move as it happens, so the menu goes straight back instead. A menu is held while the view's
-/// sweeps keep seeing it, and let go a short while after they stop.
-/// </summary>
+// Windows 11's newer menus (File Explorer's tab menus) put themselves back where their app worked out a few times while
+// they open, and now and then in use; the sweep sees that a frame or two late, so each reported move is undone at once.
+// A menu is held while the view's sweeps keep seeing it, and let go a short while after they stop.
 internal static class PopupGuard
 {
     private const uint Shown = 0x8002, LocationChange = 0x800B, OutOfContext = 0x0000, SkipOwnProcess = 0x0002;
     private const uint Move = User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_ASYNCWINDOWPOS;
     private const int QuitMessage = 0x0012, StartMessage = 0x0400;
-    /// <summary>How long a menu stays held after the last sweep that saw it.</summary>
     internal const int HoldMilliseconds = 800;
 
     private sealed record Held(Point Place, long Until, uint Process);
@@ -26,10 +21,6 @@ internal static class PopupGuard
     private static uint _thread;
     private static readonly unsafe nint Callback = (nint)(delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void>)&OnEvent;
 
-    /// <summary>
-    /// Keeps <paramref name="popup"/> at <paramref name="place"/> for a short while; called again while the popup is
-    /// in use, it keeps it there for longer.
-    /// </summary>
     internal static void Hold(nint popup, Point place)
     {
         bool added;
@@ -45,16 +36,11 @@ internal static class PopupGuard
         if (added) PostThreadMessageW(_thread, StartMessage, 0, 0);
     }
 
-    /// <summary>Stops holding <paramref name="popup"/> at once, so it can be put elsewhere.</summary>
     internal static void Release(nint popup)
     {
         lock (_held) _held.Remove(popup);
     }
 
-    /// <summary>
-    /// Calls <paramref name="opened"/> as soon as one of these menus appears in <paramref name="process"/>, so it is
-    /// moved by the view at once instead of at the next sweep. Ends when the result is disposed.
-    /// </summary>
     internal static IDisposable Watch(uint process, Action opened)
     {
         var entry = (process, opened);
@@ -100,7 +86,7 @@ internal static class PopupGuard
         }
     }
 
-    /// <summary>Hooks each process with a held menu and unhooks the rest. Runs on the guard's own thread.</summary>
+    // Runs on the guard's own thread.
     private static void Tidy()
     {
         long now = Environment.TickCount64;

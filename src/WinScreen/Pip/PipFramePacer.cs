@@ -1,6 +1,6 @@
 namespace WinScreen.Pip;
 
-/// <summary>Fractional monotonic deadlines. Late sources never build a catch-up queue.</summary>
+// Fractional monotonic deadlines. Late sources never build a catch-up queue.
 internal sealed class PipFramePacer(long frequency, double framesPerSecond)
 {
     private double _interval = frequency / Math.Clamp(framesPerSecond, 1, 480);

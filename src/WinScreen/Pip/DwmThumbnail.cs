@@ -4,18 +4,12 @@ using WinScreen.Native;
 
 namespace WinScreen.Pip;
 
-/// <summary>
-/// A live view of one window drawn into another by the Desktop Window Manager. DWM composites it
-/// on the GPU from the source window's own surface, so WinScreen copies no pixels and the view keeps
-/// updating while the source is covered by other windows.
-/// </summary>
 internal sealed class DwmThumbnail : IDisposable
 {
     private nint _handle;
 
     private DwmThumbnail(nint handle) => _handle = handle;
 
-    /// <summary>Returns null when Windows refuses, for example for a window that was just closed.</summary>
     public static DwmThumbnail? TryCreate(nint destination, nint source)
     {
         return Dwmapi.DwmRegisterThumbnail(destination, source, out nint handle) == 0 ? new DwmThumbnail(handle) : null;

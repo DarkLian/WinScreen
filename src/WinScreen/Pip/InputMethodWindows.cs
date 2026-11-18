@@ -4,27 +4,17 @@ using WinScreen.Native;
 
 namespace WinScreen.Pip;
 
-/// <summary>
-/// Keeps the input method's list beside the caret in the view while someone types into a hidden original through
-/// it. Windows places that list (the candidates of a Chinese or Japanese input method, and the emoji panel) under the
-/// caret of the window that has the keys: the hidden original's, at the edge of the screen. One of these lives for
-/// one visit, on a thread of its own.
-/// <para>
-/// Only Windows 11's own list is moved: shown by <c>TextInputHost</c>, in a frame window of Explorer's, and only when
-/// it is beside the original's caret (the touch keyboard, docked elsewhere, never is). Other input methods' windows
-/// aren't known and are left alone (INV-13). Nothing is journalled: the input method places the list again each time
-/// it opens, and it closes once the original loses the keys.
-/// </para>
-/// </summary>
+// Windows puts the input method's list under the caret of the window with the keys: the hidden original's, at the
+// screen's edge.
+// Only Windows 11's own list (TextInputHost, in an Explorer frame, and only beside the original's caret) is moved;
+// other input methods' windows are left alone (INV-13).
+// Nothing is journalled: the input method places the list again each time it opens.
 internal sealed class InputMethodWindows : IDisposable
 {
-    /// <summary>The program that shows Windows 11's input method lists and emoji panel.</summary>
     internal const string ListHost = "TextInputHost";
     private const uint Shown = 0x8002, LocationChange = 0x800B, Uncloaked = 0x8018, OutOfContext = 0x0000, SkipOwnProcess = 0x0002;
     private const uint Move = User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_ASYNCWINDOWPOS;
-    /// <summary>How near the caret (both kept on the screen, as Windows keeps the list) the list must be to be the original's.</summary>
     internal const int Near = 64;
-    /// <summary>Space between the caret line and the list.</summary>
     private const int Gap = 2;
 
     private readonly nint _source;
@@ -35,7 +25,7 @@ internal sealed class InputMethodWindows : IDisposable
     private readonly Thread _thread;
     private uint _threadId;
     private volatile bool _stopping;
-    private nint _held; // The list's frame while it is kept beside the caret.
+    private nint _held;
     private Point _heldFrom, _heldAt;
     private Rectangle? _caret; // On the screen, where the original really is.
     private uint _host;
@@ -45,8 +35,7 @@ internal sealed class InputMethodWindows : IDisposable
     [ThreadStatic] private static InputMethodWindows? _current;
     private static readonly unsafe nint Callback = (nint)(delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void>)&OnEvent;
 
-    /// <param name="geometry">Where the view shows the original: the picture on the screen, and the part of the original it shows.</param>
-    /// <param name="lastPress">Where the latest press in the view was, used for the caret when the app doesn't report one.</param>
+    // lastPress stands in for the caret when the app reports none.
     public InputMethodWindows(nint source, Func<(Rectangle View, Rectangle Shown)> geometry, Func<Point?> lastPress)
     {
         _source = source;
@@ -80,22 +69,19 @@ internal sealed class InputMethodWindows : IDisposable
                 if (hostHook != 0) User32.UnhookWinEvent(hostHook);
             }
         }) { IsBackground = true, Name = "WinScreen input method" };
-        // Accessibility objects of other programs are reached through COM, which wants a single-threaded apartment here.
+        // Accessibility objects of other programs are reached through COM, which wants a single-threaded apartment
+        // here.
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
         ready.Wait();
     }
 
-    /// <summary>Whether there is such a list to keep: Windows 11's (Windows 10's input methods aren't known).</summary>
     internal static bool Wanted => Environment.OSVersion.Version.Build >= 22000;
 
-    /// <summary>Whether <paramref name="root"/> is the list, kept beside the caret: the pointer going there is still the visit.</summary>
     internal bool Holds(nint root) => root != 0 && root == Volatile.Read(ref _held);
 
-    /// <summary>The list's frame while it is kept beside the caret, or 0; for tests.</summary>
     internal nint HeldWindow => Volatile.Read(ref _held);
 
-    /// <summary>How often the list was put beside the caret during this visit, for tests.</summary>
     internal int Moves => Volatile.Read(ref _moves);
 
     [UnmanagedCallersOnly]
@@ -140,9 +126,8 @@ internal sealed class InputMethodWindows : IDisposable
         Consider(root, fromHost);
     }
 
-    private (nint Window, int Child)? _caretEvent; // The latest caret the app reported, asked about when needed.
+    private (nint Window, int Child)? _caretEvent;
 
-    /// <summary>Where the caret the app last reported is now.</summary>
     private void ReadCaret()
     {
         (nint Window, int Child)? latest;
@@ -156,10 +141,8 @@ internal sealed class InputMethodWindows : IDisposable
     private readonly HashSet<nint> _hostFrames = [];
     private long _shownAt = -100_000;
 
-    /// <summary>Why the last window of the list's program that came up wasn't kept beside the caret; for tests and diagnostics.</summary>
     internal string LastRefusal { get; private set; } = "";
 
-    /// <summary>A window of the list's program came up: kept beside the caret if it is the list the original's keys opened.</summary>
     private void Consider(nint root, bool fromHost)
     {
         LastRefusal = root == 0 ? "no window" : !User32.IsWindowVisible(root) ? "not visible" : Cloaked(root) ? "cloaked"
@@ -182,7 +165,6 @@ internal sealed class InputMethodWindows : IDisposable
         Follow();
     }
 
-    /// <summary>The list that came up a moment ago but wasn't ready yet, looked at again.</summary>
     private void ConsiderShown()
     {
         nint root;
@@ -197,10 +179,7 @@ internal sealed class InputMethodWindows : IDisposable
         Consider(root, fromHost);
     }
 
-    /// <summary>
-    /// Whether the list is the one opened for this caret. Windows keeps the list on the screen, so the caret is too
-    /// (pulled onto the display it is nearest), before measuring.
-    /// </summary>
+    // Windows keeps the list on the screen, so the caret is pulled onto the nearest display too before measuring.
     internal static bool BesideCaret(Rectangle list, Rectangle caret)
     {
         Rectangle display = Screen.FromRectangle(caret).Bounds;
@@ -210,7 +189,6 @@ internal sealed class InputMethodWindows : IDisposable
         return around.IntersectsWith(list);
     }
 
-    /// <summary>Puts the list where it belongs now, and keeps it there; or lets it go once it is closed or the keys went elsewhere.</summary>
     private void Follow()
     {
         nint held;
@@ -243,7 +221,6 @@ internal sealed class InputMethodWindows : IDisposable
         }
     }
 
-    /// <summary>Where the list goes: under the caret as the view shows it, or over it where there is no room below.</summary>
     private Point? Place(Size list, Rectangle? caret)
     {
         var (view, shown) = _geometry();
@@ -257,7 +234,6 @@ internal sealed class InputMethodWindows : IDisposable
         return Below(line, list, Screen.FromPoint(line.Location).WorkingArea);
     }
 
-    /// <summary>A rectangle of the original (from its window's corner) as the view shows it, kept inside the picture.</summary>
     internal static Rectangle Mapped(Rectangle inOriginal, Rectangle view, Rectangle shown)
     {
         double sx = view.Width / (double)shown.Width, sy = view.Height / (double)shown.Height;
@@ -267,7 +243,6 @@ internal sealed class InputMethodWindows : IDisposable
         return Rectangle.FromLTRB(left, top, left + 1, bottom);
     }
 
-    /// <summary>Under <paramref name="line"/>, or over it when the list wouldn't fit below; inside <paramref name="area"/>.</summary>
     internal static Point Below(Rectangle line, Size list, Rectangle area)
     {
         int y = line.Bottom + Gap;
@@ -277,13 +252,8 @@ internal sealed class InputMethodWindows : IDisposable
 
     private bool KeysWithOriginal() => User32.GetForegroundWindow() == _source;
 
-    /// <summary>The frame Explorer puts round the list's windows.</summary>
     internal const string Frame = "ApplicationFrameWindow";
 
-    /// <summary>
-    /// Whether a window is the list's program's own, or Explorer's frame holding one of its windows (Windows 11's
-    /// input method lists and emoji panel are).
-    /// </summary>
     private bool ShowsHost(nint root)
     {
         if (root == 0 || _host == 0) return false;
@@ -295,7 +265,6 @@ internal sealed class InputMethodWindows : IDisposable
     private static bool Cloaked(nint window) =>
         Dwmapi.DwmGetWindowAttribute(window, 14 /* DWMWA_CLOAKED */, out int cloaked, sizeof(int)) == 0 && cloaked != 0;
 
-    /// <summary>The list's program in this session, looked up at most every two seconds while it isn't known.</summary>
     private uint HostProcess()
     {
         if (_host != 0) return _host;
@@ -310,7 +279,6 @@ internal sealed class InputMethodWindows : IDisposable
         return _host;
     }
 
-    /// <summary>Stops keeping the list; if it is still where it was put, it goes back where its input method had it.</summary>
     private void Release()
     {
         nint held;

@@ -4,11 +4,8 @@ using Windows.Security.Authorization.AppCapabilityAccess;
 
 namespace WinScreen.Pip;
 
-/// <summary>
-/// Windows draws a yellow border around a window while it's being captured. Newer Windows lets an app ask
-/// to leave it off, and the person can refuse in Settings → Privacy &amp; security → Screenshot borders. WinScreen
-/// asks once, off the UI thread, and keeps the border whenever the answer isn't a plain yes.
-/// </summary>
+// Newer Windows lets an app ask to leave off the yellow capture border, and the person can refuse in Windows Settings.
+// Asked once, off the UI thread; the border stays whenever the answer isn't a plain yes.
 internal static class CaptureBorder
 {
     private const string SessionType = "Windows.Graphics.Capture.GraphicsCaptureSession";
@@ -17,21 +14,14 @@ internal static class CaptureBorder
     private static readonly object Gate = new();
     private static Task<bool>? _answer;
 
-    /// <summary>Whether the person wants the border left off. Set from Settings.</summary>
     internal static bool Wanted { get; set; } = true;
 
-    /// <summary>Asks Windows for permission. Replaced in tests.</summary>
     internal static Func<Task<bool>> Ask { get; set; } = AskWindows;
 
-    /// <summary>Whether this Windows can leave the border off at all.</summary>
     internal static Func<bool> Supported { get; set; } = () =>
         ApiInformation.IsPropertyPresent(SessionType, "IsBorderRequired") && ApiInformation.IsTypePresent(AccessType);
 
-    /// <summary>
-    /// Leaves the border off this session if the person wants that and Windows allows it. Call before
-    /// StartCapture, off the UI thread. Returns whether the border is off; any doubt keeps it on.
-    /// </summary>
-    /// <param name="wait">How long to wait for Windows' answer if it hasn't come yet. Zero on the UI thread.</param>
+    // Call before StartCapture, off the UI thread (wait 0 on it). Any doubt keeps the border.
     internal static bool TryHide(GraphicsCaptureSession session, int wait = AnswerWaitMilliseconds) =>
         TryHide(value => session.IsBorderRequired = value, wait);
 
@@ -52,13 +42,11 @@ internal static class CaptureBorder
         }
     }
 
-    /// <summary>Asks Windows now, without waiting, so the answer is ready by the time a capture starts.</summary>
     internal static Task<bool> Prepare()
     {
         lock (Gate) return _answer ??= Task.Run(Ask);
     }
 
-    /// <summary>Forgets the answer, for tests and for after the person changes the Windows setting.</summary>
     internal static void Forget()
     {
         lock (Gate) _answer = null;

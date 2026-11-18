@@ -5,23 +5,16 @@ using WinScreen.Windows;
 
 namespace WinScreen.Pip;
 
-/// <summary>What became of a press or release handed to the hidden window.</summary>
 internal enum Delivery
 {
-    /// <summary>Nothing reached the window: it is gone, busy, or the surface can't take this input.</summary>
     Failed,
-    /// <summary>Posted to a responsive window of the source's process at the mapped point.</summary>
     Posted,
-    /// <summary>Waiting for the release: the outcome is reported when the control has been activated.</summary>
     Deferred,
-    /// <summary>The window's way of taking input has no such operation (see <see cref="PipInputRoutes.Supports"/>).</summary>
     Unsupported,
 }
 
-/// <summary>
-/// Mouse messages for a stationary parked source. Coordinates are always taken from the current view and source.
-/// Used from one thread at a time: the visit's input worker, then its teardown.
-/// </summary>
+// Coordinates always come from the current view and source. One thread at a time: the visit's input worker, then its
+// teardown.
 internal sealed class PipMessageInput(nint source, WindowIdentity identity)
 {
     private MouseButtons _held;
@@ -30,9 +23,9 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     internal InputRoute MoveRoute { get; private set; }
     internal nint PressTarget { get; private set; }
     internal string PressTransport { get; private set; } = "messages";
-    /// <summary>How the last press went, for the log; null when it opened a standard menu bar.</summary>
+    // Null when it opened a standard menu bar.
     internal InputRoute? PressRoute { get; private set; } = InputRoute.Messages;
-    /// <summary>The window the last move went to, which is also where the pointer's shape comes from.</summary>
+    // Also where the pointer's shape comes from.
     internal nint MoveTarget { get; private set; }
     private nint _dragTarget;
     private Point _lastPointer;
@@ -40,7 +33,6 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     private bool _menuPress;
     private PipControlInput.Request _controlRequest;
     private int _wheelRemainder;
-    /// <summary>Why the last press or release couldn't be delivered, for the press log.</summary>
     internal string Why { get; private set; } = "";
     // Windows' double-click bookkeeping: a second click within the time and rectangle is a double-click message.
     private readonly Dictionary<MouseButtons, (long Time, Point At, nint Target)> _clicks = [];
@@ -128,10 +120,8 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         return keys;
     }
 
-    /// <param name="evenIfBusy">
-    /// For a release that pairs a press already sent: the app must not be left with a button held down when it
-    /// catches up. Anything else isn't sent to a window that isn't responding, or it would act much later.
-    /// </param>
+    // evenIfBusy: for a release pairing a press already sent, so the app isn't left with a button held down when it
+    // catches up. Anything else isn't sent to a window that isn't responding, or it would act much later.
     private bool Post(nint target, int message, nint keys, Point mapped, bool screenCoordinates = false, bool evenIfBusy = false)
     {
         if (target == 0 || !identity.StillThere() || !User32.IsWindow(target)) return false;
@@ -144,12 +134,10 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         return PostClient(target, message, keys, new Point(point.X, point.Y));
     }
 
-    /// <summary>
-    /// Posts a client point (in pixels) to the window in its own coordinates. For an app that isn't per-monitor aware,
-    /// Windows rescales a point posted from WinScreen's context on delivery, and gets it wrong for a window parked off
-    /// every display beside a display at another scale (about 250 points too high at 150%). Posted from a thread in
-    /// the app's own context, the point arrives as sent, so it is scaled here by the window's own two sizes.
-    /// </summary>
+    // Windows rescales a point posted to an app that isn't per-monitor aware, and gets it wrong for a window parked off
+    // every display beside a display at another scale (about 250 points too high at 150%).
+    // Posted from a thread in the app's own context the point arrives as sent, so it is scaled here by the window's own
+    // two sizes.
     private static bool PostClient(nint target, int message, nint keys, Point client)
     {
         nint context = GetWindowDpiAwarenessContext(target);
@@ -172,7 +160,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         finally { SetThreadDpiAwarenessContext(previous); }
     }
 
-    /// <summary>The access key of the menu bar item at a point: its marked letter, or else its first, as Windows matches.</summary>
+    // Its marked letter, or else its first, as Windows matches.
     private nint? MenuKeyAt(Point mapped)
     {
         nint bar = GetMenu(source);
@@ -205,7 +193,6 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         return MoveRoute == InputRoute.Messages && Post(target, 0x200, Keys(_held), mapped);
     }
 
-    /// <summary>The pointer is still where the button was last pressed, within the double-click time (and, given a target, on it).</summary>
     private bool AtLastPress(MouseButtons button, Point pointer, nint target, out Point mapped)
     {
         mapped = default;
@@ -218,8 +205,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     private static bool WithinDoubleClick(Point a, Point b) =>
         Math.Abs(a.X - b.X) <= SystemInformation.DoubleClickSize.Width / 2 && Math.Abs(a.Y - b.Y) <= SystemInformation.DoubleClickSize.Height / 2;
 
-    /// <summary>Asks the window under the pointer to set its cursor, as Windows would if the pointer were really there.</summary>
-    /// <returns>False when it didn't answer within 20 ms: it is busy, or not responding.</returns>
+    // False when it didn't answer within 20 ms: busy, or not responding.
     internal bool AskForCursor()
     {
         nint target = MoveTarget;
@@ -303,11 +289,8 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         return Delivery.Posted;
     }
 
-    /// <param name="activated">For a deferred press: called, from another thread, with what activation did.</param>
-    /// <returns>
-    /// Posted for a release that pairs a posted press; Deferred once a control activation is queued; Failed when
-    /// a deferred press can't become a click (it was a drag, or the queue was full), with <paramref name="why"/>.
-    /// </returns>
+    // activated is called from another thread. Failed when a deferred press can't become a click (it was a drag, or the
+    // queue was full).
     internal Delivery Release(Point pointer, MouseButtons button, Rectangle view, Rectangle shown,
         Action<PipControlInput.Result>? activated, out string why)
     {
@@ -366,7 +349,6 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     internal bool CanScroll(Point pointer, Rectangle view, Rectangle shown) =>
         PipInputRoutes.Supports(RouteOf(TargetAt(MappedScreen(pointer, view, shown))), InputOperation.Wheel);
 
-    /// <summary>Releases every button still held, so none stays down in the app. Returns the buttons whose press was a pending click.</summary>
     internal MouseButtons ReleaseAll(Rectangle view, Rectangle shown)
     {
         MouseButtons cancelled = MouseButtons.None;

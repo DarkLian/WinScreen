@@ -1,38 +1,18 @@
 namespace WinScreen.Pip;
 
-/// <summary>
-/// What a view does when its hidden original comes to the front, decided in one place from what the view knows
-/// (roadmap step 12.2, first part). It stays hidden unless the person picked it: from its taskbar button or
-/// thumbnail, or in the switcher, where it is still listed. Until 18 Nov it was the other way round, shown unless the
-/// view recognised Windows passing the focus on, and every way of passing it on the view didn't know (a window
-/// minimized or closed, a desktop switch, the view's own title bar or menu, the taskbar's hidden-icons panel) showed
-/// it and turned Keep hidden off (owner, 16 to 18 Nov). The table in <c>ViewStateTests</c> is the written rule.
-/// </summary>
+// A hidden original that comes to the front stays hidden unless the person picked it (taskbar button or thumbnail, or
+// the switcher where it is still listed): every way Windows passes the focus on must not show it and turn Keep hidden
+// off. The table in ViewStateTests is the written rule.
 internal static class ViewState
 {
-    /// <summary>What to do about the original having come to the front.</summary>
     internal enum Arrival
     {
-        /// <summary>Nothing: it isn't hidden by this view, or a visit gave it the focus. (A drop is handled before.)</summary>
         Nothing,
-        /// <summary>Not asked for: it stays hidden and the focus goes where it would have gone without it.</summary>
         PassFocusOn,
-        /// <summary>A desktop switch handed it the focus; it stays hidden and the view takes the focus.</summary>
         ViewTakesFocus,
-        /// <summary>The person picked it from the taskbar or the switcher: it is shown.</summary>
         Show,
     }
 
-    /// <summary>What the view knows at the moment the original came to the front.</summary>
-    /// <param name="Hidden">Keep hidden is on.</param>
-    /// <param name="Away">Hidden only because the person is on another desktop.</param>
-    /// <param name="Visiting">A visit (Interactive) is under way: its own press gives the original the focus.</param>
-    /// <param name="JustAfterVisit">A visit ended a moment ago and the focus is still going back.</param>
-    /// <param name="Picked">
-    /// The person picked it: from the taskbar (a button or thumbnail under the pointer) or the switcher (it had the
-    /// focus before), and the original is still listed there.
-    /// </param>
-    /// <param name="JustAfterDesktopSwitch">The desktop in front changed a moment ago.</param>
     internal readonly record struct Facts(bool Hidden, bool Away, bool Visiting, bool JustAfterVisit,
         bool Picked, bool JustAfterDesktopSwitch);
 
@@ -45,23 +25,10 @@ internal static class ViewState
         return Arrival.PassFocusOn;
     }
 
-    /// <summary>The view's modes at one moment, as the checks below see them.</summary>
-    /// <param name="Interactive">Used directly (the menu's tick).</param>
-    /// <param name="Hidden">Keep hidden (the menu's tick).</param>
-    /// <param name="Visiting">A visit is under way.</param>
-    /// <param name="Suspended">The view is minimized.</param>
-    /// <param name="InputPaused">Its input is paused (a menu open, the screen blocked).</param>
-    /// <param name="UsingOriginal">"Use it, then hide again" is going on.</param>
-    /// <param name="MayInteract">Its kind of app, or the experimental switch, allows direct use.</param>
-    /// <param name="ExperimentalSwitch">Experimental features are on.</param>
-    /// <param name="VisitUsesExperimental">The visit has Enhanced hover or middle-click scrolling.</param>
-    /// <param name="TakingDrop">The original is out for something dragged onto the view, or for a drag started in it (10-5).</param>
-    /// <param name="Away">The original is hidden for now because the person is on another desktop (Keep hidden is off).</param>
     internal readonly record struct Modes(bool Interactive, bool Hidden, bool Visiting, bool Suspended, bool InputPaused,
         bool UsingOriginal, bool MayInteract, bool ExperimentalSwitch, bool VisitUsesExperimental, bool TakingDrop = false,
         bool Away = false);
 
-    /// <summary>The first combination of modes that must never happen, or none (checked on every change of mode).</summary>
     internal static PipStateProblem ProblemOf(Modes m)
     {
         if (m.Interactive && !m.Hidden) return PipStateProblem.InteractiveWithOriginalShown;
@@ -77,50 +44,26 @@ internal static class ViewState
         return PipStateProblem.None;
     }
 
-    /// <summary>What someone or something asks of a view.</summary>
     internal enum Request
     {
-        /// <summary>Keep hidden ticked.</summary>
         KeepHiddenOn,
-        /// <summary>Keep hidden unticked (refused while used directly: that needs it hidden).</summary>
         KeepHiddenOff,
-        /// <summary>Used directly, ticked (refused where the app may not be).</summary>
         InteractiveOn,
-        /// <summary>Used directly, unticked: Keep hidden goes back to what it was before.</summary>
         InteractiveOff,
-        /// <summary>The chip's "use it, then hide again": only for a hidden original, from a view on the screen.</summary>
         UseOriginal,
-        /// <summary>Go to it, or the original brought forward by the person: shown, nothing else kept.</summary>
         ShowOriginal,
-        /// <summary>The view minimized.</summary>
         Minimize,
-        /// <summary>The view back from minimized.</summary>
         Restore,
-        /// <summary>A press on the view starts a visit (refused unless used directly, on the screen and not paused).</summary>
         VisitStarts,
-        /// <summary>The visit ends.</summary>
         VisitEnds,
-        /// <summary>
-        /// Something dragged onto the view, or a drag started in it: the original comes out for it (refused unless it is
-        /// hidden by the person and the view is on the screen and not using it otherwise). A visit ends first.
-        /// </summary>
         DropStarts,
-        /// <summary>The drop or drag is over: the original is back in hiding.</summary>
         DropEnds,
-        /// <summary>The person went to another desktop: an original that isn't hidden or in use is hidden for now.</summary>
         LeftDesktop,
-        /// <summary>Back on the original's desktop, or the desktop is gone: it is shown again.</summary>
         BackToDesktop,
     }
 
-    /// <summary>
-    /// The modes a view is in after a request, from the modes before (roadmap 12.2, third part). <c>PipWindow</c> does
-    /// the work and then checks that it came out here (<c>view.unexpectedMode</c> in the log when not, unless the work
-    /// failed and left everything as it was). A request that is refused leaves the modes unchanged.
-    /// </summary>
-    /// <param name="hiddenBeforeInteractive">Keep hidden as it was when direct use was turned on.</param>
-    /// Every choice about the original (Keep hidden, used directly, use it, show it) ends a drop and "hidden while away";
-    /// minimizing ends a drop.
+    // Every choice about the original (Keep hidden, used directly, use it, show it) ends a drop and "hidden while
+    // away"; minimizing ends a drop.
     internal static Modes Apply(Modes m, Request request, bool hiddenBeforeInteractive = false) => request switch
     {
         Request.KeepHiddenOn => m with { Hidden = true, UsingOriginal = false, TakingDrop = false, Away = false },

@@ -8,38 +8,22 @@ using WinScreen.Windows;
 
 namespace WinScreen.Pip;
 
-/// <summary>A combination of a view's modes that must never happen (see <see cref="PipWindow.StateProblem"/>).</summary>
 internal enum PipStateProblem
 {
     None,
-    /// <summary>Used directly while the original is on show.</summary>
     InteractiveWithOriginalShown,
-    /// <summary>A visit going on while the view isn't used directly.</summary>
     VisitWithoutInteractive,
-    /// <summary>A visit going on while the view is minimized or its input paused.</summary>
     VisitWhilePaused,
-    /// <summary>"Use it, then hide again" while the original is hidden or visited.</summary>
     UsingHiddenOriginal,
-    /// <summary>"Use it, then hide again" while the view is minimized.</summary>
     UsingOriginalWhileMinimized,
-    /// <summary>Used directly although neither the experimental switch nor its kind of app allows it.</summary>
     InteractiveNotAllowed,
-    /// <summary>A visit with Enhanced hover or middle-click scrolling while experimental features are off.</summary>
     ExperimentalVisitWithoutSwitch,
-    /// <summary>The original out for a drop or a drag during a visit (a drag ends the visit first).</summary>
     DropDuringVisit,
-    /// <summary>The original out for a drop or a drag while Keep hidden is off, or while the view is minimized.</summary>
     DropWithoutHiding,
-    /// <summary>Hidden while on another desktop although Keep hidden is on, or while the original is in use.</summary>
     AwayWhileHiddenOrInUse,
 }
 
-/// <summary>
-/// A borderless, always-on-top live view of another window. Drag to move, mouse wheel to resize,
-/// Ctrl+drag to crop, Ctrl+double-click to remove the crop. Clicking activates the original by
-/// default; using the view directly needs experimental features, except for the kinds of app verified for it. Using the view never
-/// takes the focus from the app in use.
-/// </summary>
+// Never takes the focus from the app in use.
 public sealed partial class PipWindow : Form
 {
     private const int WheelStep = 40;
@@ -73,7 +57,6 @@ public sealed partial class PipWindow : Form
     private readonly string _program;
     private readonly bool _javaSource;
 
-    /// <summary>Nothing is sent to the original: a click shows it instead (Settings, or a Java app).</summary>
     private bool ShowsOriginalOnly => _javaSource || PipOriginalApps.Includes(_program);
     private bool _usingOriginal, _usingFromInteractive, _originalTookFocus;
     private long _originalLeftAt;
@@ -139,14 +122,9 @@ public sealed partial class PipWindow : Form
     private bool _liveStartedZoomed;
     private System.Windows.Forms.Timer? _closeCheck;
 
-    /// <summary>Whether this view offers to move itself, which is an experimental effect.</summary>
     [System.ComponentModel.DefaultValue(false)]
     public bool AllowAutoMove { get; set; }
 
-    /// <summary>
-    /// The experimental switch: any kind of app can be used through the view, with Enhanced hover and middle-click
-    /// scrolling. Without it only the kinds verified for it can (<see cref="CanInteract"/>), and with neither of those.
-    /// </summary>
     [System.ComponentModel.DefaultValue(false)]
     public bool AllowInteractive
     {
@@ -163,13 +141,10 @@ public sealed partial class PipWindow : Form
     }
     private bool _allowInteractive;
 
-    /// <summary>Its kind of app may be used through a view with experimental features off (roadmap P1-3).</summary>
     private readonly bool _interactiveWithoutSwitch;
 
-    /// <summary>True when the view may be used directly now.</summary>
     internal bool CanInteract => (_allowInteractive || _interactiveWithoutSwitch) && _origin.IsWindow;
 
-    /// <summary>Whether a visit uses the helper in the app: chosen, and experimental features on.</summary>
     private bool HoverOn => _enhancedHoverItem.Checked && _allowInteractive;
 
     private bool MiddleScrollOn => _middleScrollItem.Checked && _allowInteractive;
@@ -203,21 +178,18 @@ public sealed partial class PipWindow : Form
 
         _watch.Tick += (_, _) => FollowSource();
         _autoMove.Tick += (_, _) => MoveAwayFromContent();
-        // A drag over the view goes to its original: see OnDragEnter. Windows takes drops only on a thread set up for them,
+        // A drag over the view goes to its original: see OnDragEnter. Windows takes drops only on a thread set up for
+        // them,
         // as WinScreen's own is; anywhere else the view would fail to open.
         AllowDrop = Thread.CurrentThread.GetApartmentState() == ApartmentState.STA;
     }
 
-    /// <summary>Raised when Windows refuses something, with a message for the person.</summary>
     public event Action<string>? Problem;
 
-    /// <summary>Raised for something the person should know that isn't a failure.</summary>
     public event Action<string>? Notice;
 
-    /// <summary>Raised with a program the person chose to always use through its original, from the view's chip.</summary>
     public event Action<string>? AlwaysShowOriginal;
 
-    /// <summary>The part of the source window being shown; empty means all of it.</summary>
     public Rectangle Crop => _crop;
 
     protected override bool ShowWithoutActivation => true;
@@ -232,11 +204,8 @@ public sealed partial class PipWindow : Form
         }
     }
 
-    /// <summary>
-    /// Opens the view with its picture already in place. It's created on top rather than pinned
-    /// afterwards, because pinning a window needs the focus, which Windows can refuse and which belongs
-    /// to the app in use.
-    /// </summary>
+    // Created on top rather than pinned afterwards: pinning needs the focus, which Windows can refuse and which belongs
+    // to the app in use.
     public void ShowOnTop()
     {
         _origin.Require();
@@ -271,7 +240,6 @@ public sealed partial class PipWindow : Form
         }
     }
 
-    /// <summary>Takes new values from Settings. What this view was told to do differently stays.</summary>
     public void ApplyPipPreferences(PipPreferences preferences)
     {
         _global = preferences.Validated();
@@ -284,7 +252,6 @@ public sealed partial class PipWindow : Form
         _titleBar?.Dispose();
         _titleBar = null;
         DropHoverPreview();
-        // A view follows Settings for Enhanced hover until it is changed from its own menu.
         if (!_hoverChosen && PipEnhancedHover.StartsOn(_source) is var hover && hover != _enhancedHoverItem.Checked)
             SetEnhancedHover(hover);
     }
@@ -296,7 +263,6 @@ public sealed partial class PipWindow : Form
     internal string InputDescription => _overrides.ClickThrough ? T("pip.state.clickThrough") :
         !_origin.IsWindow ? T("pip.input.viewOnly") :
         _interactiveItem.Checked ? T("pip.interactive") : T("pip.input.viewOnly");
-    /// <summary>The first line of the view's menu: what it shows, and how it stands.</summary>
     internal string MenuTitle
     {
         get
@@ -325,8 +291,8 @@ public sealed partial class PipWindow : Form
     {
         if (_cleaned) return;
         ViewState.Modes before = CurrentModes();
-        if (ViewState.Apply(before, ViewState.Request.Minimize) == before) return; // Minimized already.
-        _usingOriginal = false; // A minimized view has no picture to hide the original behind; it stays shown.
+        if (ViewState.Apply(before, ViewState.Request.Minimize) == before) return;
+        _usingOriginal = false;
         EndDrop();
         StepAside(false);
         CancelPress();
@@ -351,7 +317,6 @@ public sealed partial class PipWindow : Form
             ("foreground", Diagnostics.LogValue.ProgramOf(User32.GetForegroundWindow())));
     }
 
-    /// <summary>The taskbar button standing in for this view while it's minimized there.</summary>
     internal PipTaskbarProxy? TaskbarProxy { get; private set; }
 
     private void DropTaskbarProxy()
@@ -360,10 +325,6 @@ public sealed partial class PipWindow : Form
         TaskbarProxy = null;
     }
 
-    /// <summary>
-    /// A still picture of what the view shows, made only when Windows asks. Views of a display or
-    /// region have no window to ask, so they show their icon.
-    /// </summary>
     private void CacheTaskbarPicture()
     {
         if (!Visible || Width <= 0 || Height <= 0) return;
@@ -451,15 +412,12 @@ public sealed partial class PipWindow : Form
 
     internal PipPreferences EffectivePreferences => _preferences;
 
-    /// <summary>The saved presets to offer, and where a new or removed one goes. Set by the owner of the settings.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<IReadOnlyList<PipPreset>>? Presets { get; set; }
 
-    /// <summary>Null when the original's program has no sound to mute; otherwise whether it is muted from this view.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<bool?>? SoundState { get; set; }
 
-    /// <summary>Mutes or unmutes the original's program. False when that couldn't be done.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<bool, bool>? SetSound { get; set; }
     public event Action<PipPreset>? PresetSaved;
@@ -498,7 +456,7 @@ public sealed partial class PipWindow : Form
             Notice?.Invoke(T("pip.capture.hiddenStandard"));
     }
 
-    /// <summary>Click-through needs the layered style too, or Windows still gives this window the clicks.</summary>
+    // Click-through needs the layered style too, or Windows still gives this window the clicks.
     private void ApplyClickThrough()
     {
         if (!IsHandleCreated)
@@ -519,7 +477,6 @@ public sealed partial class PipWindow : Form
         Attempt(() => FitToSource());
     }
 
-    /// <summary>One view pixel for each source pixel, as far as the screen allows.</summary>
     private void FitToSourceSize()
     {
         if (_thumbnail is null) return;
@@ -541,10 +498,8 @@ public sealed partial class PipWindow : Form
         };
     }
 
-    /// <summary>The size a crop is measured against, or empty before the view has a picture.</summary>
     private Size WholeSize() => _thumbnail is null ? Size.Empty : _origin.Whole(_thumbnail.SourceSize).Size;
 
-    /// <summary>Whether the original is hidden while this view keeps showing it.</summary>
     internal bool KeepsUpdating => _hideItem.Checked;
 
     internal void ApplyPreset(PipPreset preset)
@@ -586,7 +541,6 @@ public sealed partial class PipWindow : Form
     internal PipSessionState BackendState => _thumbnail?.State ?? PipSessionState.Stopped;
     internal string DiagnosticSnapshot => (_thumbnail?.Snapshot() ?? "Stopped") + $"\nEnhanced hover: {_live?.HoverStatus ?? (HoverOn ? "inactive" : "off")}";
 
-    /// <summary>Opens the view's diagnostics in front, leaving the view usable while they are open.</summary>
     private void ShowDiagnostics()
     {
         string text = DiagnosticSnapshot;
@@ -597,10 +551,8 @@ public sealed partial class PipWindow : Form
         }, true)).ShowInFront();
     }
 
-    /// <summary>
-    /// A view of the screen would otherwise show itself, and then show that, without end. Windows only
-    /// honours this from version 2004; before that the view would appear as a black box instead.
-    /// </summary>
+    // A view of the screen would otherwise show itself without end. Windows honours this from version 2004; before that
+    // the view would be a black box.
     private void KeepOutOfScreenCapture()
     {
         if (_origin.IsWindow)
@@ -616,8 +568,7 @@ public sealed partial class PipWindow : Form
             throw new WindowOperationException(T("errors.pip.screenUnsupported"));
     }
 
-    /// <summary>Crops the view to a part of the source window, or shows all of it when empty.</summary>
-    /// <param name="crop">The part to show, measured from the window's visible top-left corner.</param>
+    // crop is measured from the window's visible top-left corner; empty shows all of it.
     public void SetCrop(Rectangle crop)
     {
         if (crop != _crop)
@@ -626,11 +577,8 @@ public sealed partial class PipWindow : Form
         Attempt(() => FitToSource());
     }
 
-    /// <summary>
-    /// Turns moving away from text and images on or off. Telling what is under the view needs a look
-    /// at the screen without the view on it, so while this is on the view is left out of anything that
-    /// captures the screen, screenshots and screen sharing included.
-    /// </summary>
+    // Telling what is under the view needs the screen without the view on it, so while this is on the view is left out
+    // of all screen capture, screenshots and sharing included.
     public void SetAutoMove(bool on)
     {
         if (!User32.SetWindowDisplayAffinity(Handle, on || !_origin.IsWindow ? User32.WDA_EXCLUDEFROMCAPTURE : User32.WDA_NONE))
@@ -645,7 +593,6 @@ public sealed partial class PipWindow : Form
             User32.SetWindowDisplayAffinity(part.Handle, on || !_origin.IsWindow ? User32.WDA_EXCLUDEFROMCAPTURE : User32.WDA_NONE);
     }
 
-    /// <summary>Makes the original invisible, or brings it back. The view keeps updating either way.</summary>
     public void SetOriginalHidden(bool hidden)
     {
         ViewState.Modes before = CurrentModes();
@@ -656,11 +603,8 @@ public sealed partial class PipWindow : Form
         CheckRequest(before, request);
     }
 
-    /// <summary>
-    /// A new view starts with Keep hidden, so it keeps changing when something covers the original: many apps,
-    /// browsers first, stop drawing while covered. Nobody asked for it, so a window that can't be hidden (one
-    /// filled with Fill display, one that refuses to be see-through, an administrator's) just stays as it is, unsaid.
-    /// </summary>
+    // Many apps, browsers first, stop drawing while covered, so a new view hides its original. Nobody asked for it, so
+    // a window that can't be hidden just stays as it is, unsaid.
     internal void HideOriginalByDefault()
     {
         if (!_origin.IsWindow || _hideItem.Checked) return;
@@ -754,13 +698,10 @@ public sealed partial class PipWindow : Form
         }
     }
 
-    /// <summary>The desktop the original was on when hidden, or null.</summary>
     private Guid? _ownDesktop;
 
-    /// <summary>
-    /// Shown again while another desktop is in front, Windows puts the original there; it goes back to its own instead
-    /// (undocumented, INV-19: where that can't be done it stays where Windows put it, as before).
-    /// </summary>
+    // Shown again while another desktop is in front, Windows puts the original there; it goes back to its own instead
+    // (undocumented, INV-19: where that fails it stays where Windows put it).
     private void ReturnToOwnDesktop()
     {
         Guid? own = _ownDesktop;
@@ -769,10 +710,7 @@ public sealed partial class PipWindow : Form
         VirtualDesktopsInternal.MoveTo(_source, desktop);
     }
 
-    /// <summary>
-    /// Windows 10 can't capture a window once it is out of Alt+Tab and the taskbar, so a view that may use
-    /// smooth capture would stop updating. Windows 11 can.
-    /// </summary>
+    // Windows 10 can't capture a window once it is out of Alt+Tab and the taskbar; Windows 11 can.
     private bool SwitcherHidingStopsView =>
         Environment.OSVersion.Version.Build < FirstBuildCapturingSwitcherHiddenWindows && _preferences.Backend != PipBackendPreference.Dwm;
 
@@ -815,7 +753,8 @@ public sealed partial class PipWindow : Form
             m.Result = 1;
             return;
         }
-        // A pointer move to the view itself: Windows has checked where the real pointer is (PipInteraction.MaxRecheckWait).
+        // A pointer move to the view itself: Windows has checked where the real pointer is
+        // (PipInteraction.MaxRecheckWait).
         if (m.Msg == 0x0200) _live?.ViewPointerMoved(GetMessageTime());
         // Keep the modifiers carried by the press. This inactive view may process it after Ctrl is released.
         if (m.Msg is 0x0201 or 0x0203)
@@ -857,10 +796,6 @@ public sealed partial class PipWindow : Form
         base.WndProc(ref m);
     }
 
-    /// <summary>
-    /// The displays changed (a monitor came or went, or a resolution changed): the hidden original goes past an outer
-    /// edge of the new layout, and the view stays on a screen it can be reached on.
-    /// </summary>
     internal void FollowDisplays()
     {
         if (_cleaned || IsDisposed) return;
@@ -978,7 +913,6 @@ public sealed partial class PipWindow : Form
             return;
 
         _pressed = false;
-        // A program listed in Settings as not working through a view: a plain click shows its original instead.
         if (!_selecting && !_dragged && !_controlAtPress && _live is null && OpensOriginalOnClick && PictureArea.Contains(e.Location))
         {
             UseOriginal();
@@ -1010,14 +944,12 @@ public sealed partial class PipWindow : Form
             SetCrop(Rectangle.Empty);
     }
 
-    /// <param name="spot">The point to hold still, as a share of the view.</param>
     internal void ZoomAt(PointF spot, double factor)
     {
         _zoom = PipGeometry.ZoomAround(_zoom, spot, factor);
         Attempt(() => FitToSource());
     }
 
-    /// <returns>False when the view wasn't zoomed.</returns>
     internal bool ResetZoom()
     {
         if (_zoom == PipGeometry.WholeView)
@@ -1078,14 +1010,14 @@ public sealed partial class PipWindow : Form
         _menu.Dispose();
     }
 
-    /// <summary>Interactive use requires concealment; turning it off restores the prior hiding preference.</summary>
+    // Interactive use requires concealment; turning it off restores the prior hiding preference.
     internal void SetInteractive(bool on)
     {
         ViewState.Modes before = CurrentModes();
         ViewState.Request request = on ? ViewState.Request.InteractiveOn : ViewState.Request.InteractiveOff;
         bool hiddenBefore = _hiddenBeforeInteractive;
         ViewState.Modes target = ViewState.Apply(before, request, hiddenBefore);
-        if (target == before) return; // Already so, or the app may not be used directly.
+        if (target == before) return;
         try
         {
             if (on) _hiddenBeforeInteractive = before.Hidden;
@@ -1098,19 +1030,13 @@ public sealed partial class PipWindow : Form
 
     internal PipInteraction? LiveInteraction => _live;
 
-    /// <summary>True for a hidden original whose program is listed in Settings as one to use directly.</summary>
     internal bool OpensOriginalOnClick => _origin.IsWindow && _hideItem.Checked && ShowsOriginalOnly;
 
-    /// <summary>True while the original is on show to be used, and will be hidden again afterwards.</summary>
     internal bool UsingOriginal => _usingOriginal;
 
-    /// <summary>
-    /// The first combination of the view's modes that must never happen, if one ever did. Each change of mode is
-    /// checked, in every build, so tests can see it; a debug build stops at it.
-    /// </summary>
+    // Each change of mode is checked in every build, so tests can see it; a debug build stops at it.
     internal PipStateProblem FirstStateProblem { get; private set; }
 
-    /// <summary>Which combination of interactive, hidden, suspended, paused and using the original is wrong now.</summary>
     internal PipStateProblem StateProblem()
     {
         if (_cleaned) return PipStateProblem.None;
@@ -1123,13 +1049,10 @@ public sealed partial class PipWindow : Form
         VisitUsesExperimental: _live is { } visit && (visit.EnhancedHover || visit.MiddleClickScroll),
         TakingDrop: _dropSince != 0, Away: _awayFrom != Guid.Empty);
 
-    /// <summary>How often a request left the view somewhere other than <see cref="ViewState.Apply"/> says, for tests.</summary>
     internal int UnexpectedModes { get; private set; }
 
-    /// <summary>
-    /// After a request: the view's modes are what the table says, or unchanged (the work failed or was refused, and
-    /// said so where it does). Anything else is logged, so a difference between the table and the view is found.
-    /// </summary>
+    // The modes after a request are what the table says, or unchanged (refused or failed, and said so). Anything else
+    // is logged.
     private void CheckRequest(ViewState.Modes before, ViewState.Request request, bool hiddenBeforeInteractive = false)
     {
         if (_cleaned || IsDisposed) return;
@@ -1155,10 +1078,6 @@ public sealed partial class PipWindow : Form
         System.Diagnostics.Debug.Fail("The view's modes don't fit together: " + problem);
     }
 
-    /// <summary>
-    /// The answer for an app that doesn't work through a view: its hidden original comes back where it was, to be
-    /// used as it is, and goes away again once another window is in use. Nothing is sent to the app.
-    /// </summary>
     internal void UseOriginal()
     {
         ViewState.Modes before = CurrentModes();
@@ -1175,13 +1094,9 @@ public sealed partial class PipWindow : Form
         CheckRequest(before, ViewState.Request.UseOriginal);
     }
 
-    /// <summary>
-    /// Something dragged onto the view (a file, a picture, some text) goes to the original: a drop can only land in the
-    /// real window under the pointer, and WinScreen can't hand the data on. So the hidden original comes up under the
-    /// pointer at its own size, placed so that the spot the pointer was on in the view is under it, and the view steps
-    /// aside. Windows then offers the drag to the original as to any window. Once the buttons are up it hides again.
-    /// The view itself never takes the drop.
-    /// </summary>
+    // A drop can only land in the real window under the pointer, and WinScreen can't hand the data on, so the hidden
+    // original comes up with the pointed-at spot under the pointer and Windows offers it the drag. The view never takes
+    // the drop.
     protected override void OnDragEnter(DragEventArgs e)
     {
         base.OnDragEnter(e);
@@ -1189,7 +1104,7 @@ public sealed partial class PipWindow : Form
         AskForDrop();
     }
 
-    /// <summary>Again on each move over the view: a drag that came in over the border reaches the picture later.</summary>
+    // A drag that came in over the border reaches the picture later.
     protected override void OnDragOver(DragEventArgs e)
     {
         base.OnDragOver(e);
@@ -1214,17 +1129,13 @@ public sealed partial class PipWindow : Form
 
     private bool _dropAsked;
 
-    /// <summary>
-    /// A drag coming in, seen by the pointer rather than by drag and drop. Windows doesn't let a drag from a window
-    /// that runs normally reach one that runs as administrator, so when WinScreen does, the view is never asked
-    /// (owner, 17 Nov: nothing came up for a file from the desktop or from File Explorer). While Windows' drag and drop
-    /// runs, the thread it started on holds the mouse with the drop's own window (CLIPBRDWNDCLASS, measured: a held
-    /// button or a selection box holds it with the app's own window). It is the thread of the window pressed, which
-    /// needn't be the one in front: File Explorer doesn't come forward for a press on a file. A left button pressed
-    /// somewhere else, with that drop window holding the mouse, while the pointer rests on the picture, is a drag
-    /// arriving; a button merely held
-    /// over the view is not (owner, 17 Nov: it brought the original up). A drag the view is asked about goes first.
-    /// </summary>
+    // Seen by the pointer rather than by drag and drop: Windows doesn't let a drag from a normal window reach an
+    // elevated one, so an elevated WinScreen is never asked.
+    // While Windows' drag and drop runs, the thread it started on holds the mouse with the drop's own window
+    // (CLIPBRDWNDCLASS); a held button or a selection box holds it with the app's own window. That thread is the
+    // pressed window's, which needn't be the one in front (File Explorer doesn't come forward for a press on a file).
+    // A left button pressed elsewhere, with that drop window holding the mouse, while the pointer rests on the picture,
+    // is a drag arriving; a button merely held over the view is not. A drag the view is asked about goes first.
     private void FollowDragArriving()
     {
         long now = Environment.TickCount64;
@@ -1250,8 +1161,8 @@ public sealed partial class PipWindow : Form
         {
             _dragInSince = 0;
             if (!overPicture) { _overPictureSince = 0; return; }
-            // Held from elsewhere and resting on the picture, but no drag and drop seen: said once per press, so a
-            // report of "nothing came up" shows where it stopped (the owner, 17 Nov: from the desktop).
+            // Held from elsewhere and resting on the picture, but no drag and drop seen: logged once per press, so a
+            // report of "nothing came up" shows where it stopped.
             if (_overPictureSince == 0) _overPictureSince = now;
             else if (!_dragNotSeenLogged && now - _overPictureSince >= DragNotSeenAfter)
             {
@@ -1274,10 +1185,8 @@ public sealed partial class PipWindow : Form
     private string _heldClass = "";
     private const long DragInRests = 150, DragNotSeenAfter = 600, ProcessCheckEvery = 250;
 
-    /// <summary>
-    /// Whether Windows' drag and drop holds the mouse for the press: on the thread of the window pressed, or, looked at
-    /// every quarter second, on any thread of its program, in case that program runs its drag elsewhere.
-    /// </summary>
+    // On the pressed window's thread, or, every quarter second, on any thread of its program, in case it runs its drag
+    // elsewhere.
     private bool DragRunningFor(long now)
     {
         if (DragAndDropRunning(_heldThread)) return true;
@@ -1289,7 +1198,6 @@ public sealed partial class PipWindow : Form
         return _processDragRunning;
     }
 
-    /// <summary>Whether Windows' drag and drop holds the mouse on any thread of a program.</summary>
     internal static bool DragAndDropRunningInProcess(uint process)
     {
         if (process == 0) return false;
@@ -1304,7 +1212,6 @@ public sealed partial class PipWindow : Form
         return false;
     }
 
-    /// <summary>Whether Windows' drag and drop holds the mouse on a thread.</summary>
     internal static bool DragAndDropRunning(uint thread)
     {
         var info = new GuiThreadInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<GuiThreadInfo>() };
@@ -1355,20 +1262,10 @@ public sealed partial class PipWindow : Form
         Diagnostics.Log.Event("view.dropHandedOver", ("program", Diagnostics.LogValue.ProgramOf(_source)));
     }
 
-    /// <summary>
-    /// What a drag that starts in the view hands to the real window (<see cref="Compatibility.AppProfile.Drags"/>):
-    /// File Explorer's files, a browser's links. These are dragged with Windows' own drag and drop, which
-    /// follows the real pointer and can't be passed on as messages. In a page the same press-and-move otherwise selects
-    /// text, which works through the view as it is.
-    /// </summary>
+    // Windows' own drag and drop follows the real pointer and can't be passed on as messages. In a page the same
+    // press-and-move otherwise selects text, which works through the view as it is.
     private Compatibility.DragHandOver HandsOverDrags => _origin.IsWindow ? PipEnhancedHover.DragsOf(_source) : Compatibility.DragHandOver.None;
 
-    /// <summary>
-    /// A press in the view turned into a drag: the original comes up under the pointer at its own size, the pressed spot
-    /// where it was pressed, as for a drop (<see cref="HandOverDrop"/>), and the press goes on there with the real
-    /// pointer. The app's own drag then starts from the right place: inside it (managing files), out to another window
-    /// or the desktop, or over another view, which hands its own original over. It hides again as a drop does.
-    /// </summary>
     private void PickUpDrag(Point pressed)
     {
         if (IsDisposed || _live is not { } live || _dropSince != 0 || !_origin.IsAvailable || !_windows.IsParked(_source)) return;
@@ -1381,7 +1278,8 @@ public sealed partial class PipWindow : Form
         nint before = _foregroundBeforeLive;
         StartGrowing(); // The picture as the visit shows it.
         EndLive(keepFocus: true); // The hook goes first: the press given below must reach the window.
-        // The press was the hook's, so Windows doesn't know the button is down: let go meanwhile, there is nothing to hand on.
+        // The press was the hook's, so Windows doesn't know the button is down: let go meanwhile, there is nothing to
+        // hand on.
         if (live.HandedOverReleased) { StopGrowing(); return; }
         bool hold = _growing is not null;
         Point pointer = Cursor.Position;
@@ -1391,9 +1289,8 @@ public sealed partial class PipWindow : Form
         long pickupStarted = Environment.TickCount64;
         try
         {
-            // At its own size as it is when not maximized, but never filling the screen (a maximized original did, and
-            // a smaller one, the view's, laid the window out differently): it may lay itself out again, so the pressed
-            // item is found anew, and the window moves to bring it under the pointer.
+            // Never filling the screen: a maximized original, or one at the view's smaller size, lays itself out
+            // differently, so the pressed item is found anew and the window moves to bring it under the pointer.
             if (item.Length > 0 && live.Identity is { } identity && _windows.NormalSize(_source) is { } normal)
             {
                 Rectangle place = PickupPlace(normal, pointer, area);
@@ -1401,7 +1298,8 @@ public sealed partial class PipWindow : Form
                 for (long until = Environment.TickCount64 + PickupFindFor; press is null && Environment.TickCount64 < until;)
                 {
                     Application.DoEvents();
-                    // On its name, near the start of the row: elsewhere in a row Windows 10 starts a selection box instead.
+                    // On its name, near the start of the row: elsewhere in a row Windows 10 starts a selection box
+                    // instead.
                     if (PipControlInput.Shared.ItemBounds(identity, item, 150) is { } found &&
                         new Point(found.Left + Math.Min(28, found.Width / 2), found.Top + found.Height / 2) is var onName &&
                         place.Contains(onName))
@@ -1415,10 +1313,10 @@ public sealed partial class PipWindow : Form
             itemFound = press is not null;
             if (press is null)
             {
-                // Not found (scrolled away at the smaller size, or no name), or a page's link: at its own size with the pressed
-                // spot under the pointer. A window as big as the screen (a maximized browser) can't be moved to put it there:
-                // the press goes where the spot really is, as the pointer goes there and back below (it went to the pointer
-                // until 18 Nov, so the press missed the link and no drag started).
+                // Not found (scrolled away at the smaller size, or no name), or a page's link: at its own size with the
+                // pressed spot under the pointer.
+                // A window as big as the screen can't be moved to put it there: the press goes where the spot really
+                // is, the pointer going there and back below, or the press misses the link.
                 Rectangle at = DropPlace(pointer, spot, new Size(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top), area);
                 _windows.ShowParkedForDrop(_source, at.Location, holdReveal: hold);
                 press = User32.GetWindowRect(_source, out Rect shownAt) ? new Point(shownAt.Left + spot.X, shownAt.Top + spot.Y) : pointer;
@@ -1432,7 +1330,8 @@ public sealed partial class PipWindow : Form
         }
         LastPickup = item.Length == 0 ? "at its own size" : $"{(itemFound ? "item found" : "item not found")} after {Environment.TickCount64 - pickupStarted} ms";
         LastPickupPress = press.Value;
-        // The pressed item is under the press now: the real window gets it, and the drag is its own from here. The pointer
+        // The pressed item is under the press now: the real window gets it, and the drag is its own from here. The
+        // pointer
         // goes to the item for the press and straight back, so the drag starts from the item and follows the hand.
         Point hand = Cursor.Position;
         if (press != hand) SetCursorPos(press.Value.X, press.Value.Y);
@@ -1451,10 +1350,6 @@ public sealed partial class PipWindow : Form
         Diagnostics.Log.Event("view.dragPickedUp", ("program", Diagnostics.LogValue.ProgramOf(_source)));
     }
 
-    /// <summary>
-    /// The view's picture grows into the original's place as it comes up for a drag, so it doesn't jump from the view's
-    /// size to its own (<see cref="GrowingPicture"/>); the original is kept nearly see-through until then.
-    /// </summary>
     private void StartGrowing()
     {
         StopGrowing();
@@ -1474,7 +1369,7 @@ public sealed partial class PipWindow : Form
         _growing = null;
     }
 
-    /// <summary>Asked on the picture's thread: where the original is while out for a drag, else null.</summary>
+    // Asked on the picture's thread.
     private Rectangle? ShownForDropBounds() =>
         _windows.IsShownForDrop(_source) && User32.GetWindowRect(_source, out Rect r) ? Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom) : null;
 
@@ -1486,16 +1381,12 @@ public sealed partial class PipWindow : Form
 
     private GrowingPicture? _growing;
 
-    /// <summary>How many times a picture grew into the original's place for a drag, for tests.</summary>
     internal int GrowsStarted { get; private set; }
 
     private const long PickupFindFor = 600;
     private static readonly Size SmallestPickup = new(420, 300);
 
-    /// <summary>
-    /// Where a picked-up original goes first: its own size when not maximized, at most three quarters of its screen
-    /// each way so that there is room left to drag to, centred on the pointer and kept on the screen.
-    /// </summary>
+    // At most three quarters of its screen each way, so there is room left to drag to.
     internal static Rectangle PickupPlace(Size normal, Point pointer, Rectangle area)
     {
         int width = Math.Min(Math.Max(Math.Min(normal.Width, area.Width * 3 / 4), SmallestPickup.Width), area.Width);
@@ -1505,13 +1396,10 @@ public sealed partial class PipWindow : Form
         return new Rectangle(x, y, width, height);
     }
 
-    /// <summary>Whether the pressed item was found again for the last drag handed over, and how long it took, for tests.</summary>
     internal string LastPickup { get; private set; } = "";
 
-    /// <summary>Where the last handed-over press was given to the window, on the screen, for tests.</summary>
     internal Point LastPickupPress { get; private set; }
 
-    /// <summary>How many drags the view has handed to the original, for tests.</summary>
     internal int DragsPickedUp { get; private set; }
 
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
@@ -1522,13 +1410,8 @@ public sealed partial class PipWindow : Form
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
 
-    /// <summary>The spot in the original, from its top-left corner, that the view shows at a point on the screen.</summary>
     internal Point SourceSpotAt(Point screen) => PipGeometry.PointToSource(PointToClient(screen), PictureArea, _lastShown);
 
-    /// <summary>
-    /// Where the original goes for a drop: the spot it shows under the pointer, kept on the pointer's monitor. If it
-    /// has to move to fit, the aim shifts, but the window is in plain sight.
-    /// </summary>
     internal static Rectangle DropPlace(Point pointer, Point spot, Size size, Rectangle area)
     {
         int x = pointer.X - spot.X, y = pointer.Y - spot.Y;
@@ -1537,14 +1420,11 @@ public sealed partial class PipWindow : Form
         return new Rectangle(new Point(x, y), size);
     }
 
-    /// <summary>
-    /// While the original is out for a drop. The drag is over once both buttons are up (Escape with a button still held
-    /// ends it too, and the release follows). Then it hides, unless the drop opened something of its own (a "Replace or
-    /// skip?" dialog, a menu): then it waits, as Use it does, for the focus to go elsewhere. The original itself taking
-    /// the focus doesn't keep it out: a browser comes forward for any drop, and the person let go to be done. A drag
-    /// that only passes over, leaving the original with a button still down, hides it at once, so it isn't left in the
-    /// way of where the drag is going.
-    /// </summary>
+    // The drag is over once both buttons are up. A drop that opened something of its own (a "Replace or skip?" dialog,
+    // a menu) keeps it out until the focus goes elsewhere; the original itself taking the focus doesn't (a browser
+    // comes forward for any drop).
+    // A drag that only passes over, leaving the original with a button still down, hides it at once, so it isn't in the
+    // way of where the drag is going.
     private void FollowDrop()
     {
         if (_dropSince == 0) return;
@@ -1591,11 +1471,8 @@ public sealed partial class PipWindow : Form
         EndDrop();
     }
 
-    /// <summary>
-    /// The original back in its hiding place and the view back as it was. Safe to call at any time. If the original
-    /// had the focus, it goes back to the window that had it before the drag (or to the view): keys mustn't go to a
-    /// window that can't be seen.
-    /// </summary>
+    // Safe to call at any time. Focus the original had goes back to the window before the drag (or the view): keys
+    // mustn't go to a window that can't be seen.
     private void EndDrop(bool keepFocus = false)
     {
         if (_dropSince == 0) return;
@@ -1607,8 +1484,8 @@ public sealed partial class PipWindow : Form
         if (keepFocus) _focusBackAfterDrag = true;
         if (!_usingOriginal)
         {
-            // Still dragging (the original went back as the drag went on elsewhere): the view stays out of the way of
-            // where it is going until the drag is dropped or given up (owner, 17 Nov).
+            // Still dragging (the original went back as the drag went on elsewhere): the view stays out of the way
+            // until the drag is dropped or given up.
             if (DragButtonsDown()) _backAfterRelease = true;
             else StepAside(false);
             if (!keepFocus && User32.GetForegroundWindow() == _source)
@@ -1628,7 +1505,6 @@ public sealed partial class PipWindow : Form
     private long _dropSince, _dropReleasedAt, _dropOutsideSince;
     private bool _dropTookFocus, _dropFromView, _focusBackAfterDrag, _backAfterRelease, _pickedUpFromPage;
 
-    /// <summary>The view back once a drag that went on past its original is let go.</summary>
     private void FollowReleaseAfterDrag()
     {
         if (!_backAfterRelease || DragButtonsDown() || _dropSince != 0) return;
@@ -1636,10 +1512,7 @@ public sealed partial class PipWindow : Form
         if (!_usingOriginal && !_suspended) StepAside(false);
     }
 
-    /// <summary>
-    /// After its own drag went out of the original: once it is let go, keys mustn't stay with a window that can't be
-    /// seen, so the focus goes back to the window used before (or the view), as after a drop.
-    /// </summary>
+    // Keys mustn't stay with a window that can't be seen once the drag is let go.
     private void FollowFocusAfterDrag()
     {
         if (!_focusBackAfterDrag || DragButtonsDown()) return;
@@ -1652,16 +1525,10 @@ public sealed partial class PipWindow : Form
     private nint _foregroundBeforeDrop;
     private const long DropSettles = 500, DropPassedBy = 300;
 
-    /// <summary>True while the original is out for something dragged onto the view, for tests.</summary>
     internal bool HandingOverDrop => _dropSince != 0;
 
-    /// <summary>The view and the parts of it that were showing, put out of sight while the original is in use.</summary>
     private nint[] _steppedAside = [];
 
-    /// <summary>
-    /// Hides the view while its original is in use (Use it, then hide again), and brings back exactly what was showing
-    /// once that ends, whichever way it ends.
-    /// </summary>
     private void StepAside(bool aside)
     {
         if (aside)
@@ -1679,13 +1546,9 @@ public sealed partial class PipWindow : Form
         StayOnTop();
     }
 
-    /// <summary>True while the view is out of sight for its original in use, for tests.</summary>
     internal bool SteppedAside => _steppedAside.Length > 0;
 
-    /// <summary>
-    /// Hides the original again once the focus has been with it and has left for another window. Its own dialogs
-    /// and menus count as still using it; a moment with no window in front is only passing.
-    /// </summary>
+    // Its own dialogs and menus count as still using it; a moment with no window in front is only passing.
     private void FollowOriginalInUse()
     {
         if (!_usingOriginal) return;
@@ -1718,12 +1581,9 @@ public sealed partial class PipWindow : Form
         else PlaceForHover();
     }
 
-    /// <summary>
-    /// A hidden browser or Electron app keeps its strip at a side edge the whole time, whether or not Enhanced hover
-    /// is on yet. Under the taskbar it finds itself covered, stops drawing and taking pointer moves, and doesn't look
-    /// again until it is clicked; moving it once the option is turned on, or at the start of a visit, is too late.
-    /// Other programs the helper can be used with go there only while the option is on.
-    /// </summary>
+    // Under the taskbar a browser or Electron app finds itself covered, stops drawing and taking pointer moves, and
+    // doesn't look again until clicked; moving it once Enhanced hover is turned on, or at the start of a visit, is too
+    // late.
     private bool HoverPlacementWanted => PipEnhancedHover.Supported && PipEnhancedHover.Describe(_source) is var (app, native) && native &&
         (PipHoverApps.SideEdgeAlways(app) || (app != PipHoverApp.None && HoverOn));
 
@@ -1743,16 +1603,12 @@ public sealed partial class PipWindow : Form
         if (_live is { } live) { live.MiddleClickScroll = MiddleScrollOn; if (!MiddleScrollOn) live.CancelScroll(); }
     }
 
-    /// <summary>Why the last visit ended, for tests and diagnostics.</summary>
     internal string LastVisitEnd { get; private set; } = "";
 
-    /// <summary>Where the title bar is while it shows, for tests.</summary>
     internal Rectangle? TitleBarBounds => _titleBar is { Visible: true } bar ? bar.Bounds : null;
 
-    /// <summary>Every press's outcome over this view's life, so none can pass unnoticed in tests.</summary>
     internal IReadOnlyCollection<PressOutcome> PressOutcomes => _pressOutcomes;
 
-    /// <summary>The pointer came onto the view. Everything that lets real input through exists from here until it leaves.</summary>
     private SourcePopups CreateSourcePopups() => new(_source)
     {
         RaisePopups = popups => BeginInvokeIfAlive(() =>
@@ -1832,8 +1688,8 @@ public sealed partial class PipWindow : Form
             _live.Update(RectangleToScreen(PictureArea), ShownPart(_thumbnail.SourceSize));
     }
 
-    /// <summary>In this order: the source stops taking clicks, goes home, the hook goes, the view takes input, keys come back.</summary>
-    /// <param name="keepFocus">A drag handed to the original: it keeps the focus it has, or the drag would be cancelled.</param>
+    // In this order: the source stops taking clicks, goes home, the hook goes, the view takes input, keys come back.
+    // keepFocus: a drag handed to the original keeps the focus it has, or the drag would be cancelled.
     private void EndLive(bool keepFocus = false)
     {
         ClaimEscape(_selecting); // Scrolling must not keep a global Escape claim after a visit/suspension ends.
@@ -1850,8 +1706,8 @@ public sealed partial class PipWindow : Form
         SetInputPassesThrough(false);
         if (!keepFocus && User32.GetForegroundWindow() == _source)
         {
-            // Not to a window WinScreen keeps hidden, such as another view's original: put in front, it counted as the person
-            // going to it, and came back out of its view (the owner, 15 Nov: a full-screen video covered the screen).
+            // Not to a window WinScreen keeps hidden, such as another view's original: put in front, that counts as the
+            // person going to it, and it comes out of its view.
             nint back = _foregroundBeforeLive != 0 && _foregroundBeforeLive != _source && User32.IsWindow(_foregroundBeforeLive) &&
                         !_windows.IsHidden(_foregroundBeforeLive) ? _foregroundBeforeLive : Handle;
             User32.SetForegroundWindow(back); // Keys mustn't go to a window that can't be seen.
@@ -1876,10 +1732,6 @@ public sealed partial class PipWindow : Form
         User32.SetLayeredWindowAttributes(Handle, 0, _preferences.Alpha, User32.LWA_ALPHA);
     }
 
-    /// <summary>
-    /// Dims the picture while keeping the selected region bright. DWM uses a second thumbnail;
-    /// native capture renders the corresponding mask over its cached source texture.
-    /// </summary>
     private void BeginSelection(IPipRenderBackend view)
     {
         _selecting = true;
@@ -1896,7 +1748,6 @@ public sealed partial class PipWindow : Form
         Attempt(() => _thumbnail?.SetSelection(null));
     }
 
-    /// <summary>Drops a press whose release never arrived, or that Esc called off, and undoes its effects.</summary>
     private void CancelPress()
     {
         _pressed = false;
@@ -1908,10 +1759,8 @@ public sealed partial class PipWindow : Form
         Attempt(() => FitToSource());
     }
 
-    /// <summary>
-    /// The view doesn't take the focus, so Esc can't reach it the usual way. It's claimed only during a
-    /// crop drag or optional scrolling: a pointer merely resting here mustn't take Esc from another app.
-    /// </summary>
+    // The view doesn't take the focus, so Esc can't reach it the usual way. Claimed only during a crop drag or optional
+    // scrolling: a pointer merely resting here mustn't take Esc from another app.
     private void ClaimEscape(bool claim)
     {
         if (claim == _escapeClaimed || !IsHandleCreated)
@@ -1923,7 +1772,7 @@ public sealed partial class PipWindow : Form
             User32.UnregisterHotKey(Handle, EscapeHotkey);
     }
 
-    /// <summary>Puts this above other topmost windows, which a hidden original just went above too.</summary>
+    // A hidden original just went above other topmost windows too.
     private void StayOnTop()
     {
         if (!_inputPaused && !_menu.Visible && !TopLayer.InputBlocked) TopLayer.Raise(Handle);
@@ -1945,17 +1794,15 @@ public sealed partial class PipWindow : Form
         CheckState();
     }
 
-    /// <summary>Windows lifts an activated always-on-top window over the taskbar; this puts it back under.</summary>
+    // Windows lifts an activated always-on-top window over the taskbar; this puts it back under.
     protected override void OnActivated(EventArgs e)
     {
         base.OnActivated(e);
         if (IsHandleCreated) StayOnTop();
     }
 
-    /// <summary>Ends an Interactive PiP visit, making the parked original unreachable again.</summary>
     internal void EndVisit() => EndLive();
 
-    /// <summary>The original's own close, minimize and maximize buttons, and its icon, clicked in the view.</summary>
     private void OnCaption(CaptionAction action)
     {
         switch (action)
@@ -1987,7 +1834,7 @@ public sealed partial class PipWindow : Form
         }
     }
 
-    /// <summary>The original asks something: a question nobody can see mustn't wait, so show the original.</summary>
+    // A question nobody can see mustn't wait, so the original is shown.
     private void OnQuestion()
     {
         LastVisitEnd = "the original asked something";
@@ -1995,10 +1842,7 @@ public sealed partial class PipWindow : Form
         if (_origin.IsAvailable) GoToSource();
     }
 
-    /// <summary>
-    /// What the original does by itself while used directly, from a button it draws as content: minimizing
-    /// minimizes the view instead (a minimized window has no picture), and maximizing goes to the original.
-    /// </summary>
+    // Minimizing minimizes the view instead (a minimized window has no picture), and maximizing goes to the original.
     private void FollowOriginalState()
     {
         if (!_interactiveItem.Checked || _suspended || !_origin.IsAvailable)
@@ -2025,7 +1869,6 @@ public sealed partial class PipWindow : Form
         User32.GetWindowRect(window, out Rect r) &&
         WindowController.FillsAMonitor(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom), [.. Screen.AllScreens.Select(s => s.Bounds)]);
 
-    /// <summary>A view that couldn't update says so and stays open; the next change can put it right.</summary>
     private void Attempt(Action action)
     {
         try
@@ -2038,14 +1881,10 @@ public sealed partial class PipWindow : Form
         }
     }
 
-    /// <summary>
-    /// The part of the source on show, in preview coordinates. A minimized window has nothing to measure,
-    /// so it keeps its last shape. The crop itself is left alone, so it comes back whole when a source
-    /// that shrank past it grows again.
-    /// </summary>
+    // A minimized window has nothing to measure, so it keeps its last shape. The crop itself is left alone, so it comes
+    // back whole when a source that shrank past it grows again.
     private Rectangle ShownPart(Size sourceSize) => PipGeometry.ZoomedPart(CroppedPart(sourceSize), _zoom);
 
-    /// <summary>The part the view stands for before any zoom, which is what sets the view's shape.</summary>
     private Rectangle CroppedPart(Size sourceSize)
     {
         if (_whole.IsEmpty || !_origin.IsMinimized)
@@ -2076,7 +1915,6 @@ public sealed partial class PipWindow : Form
         view.SetViewport(PictureArea, shown);
     }
 
-    /// <param name="pointer">Keeps this screen point on the same spot of the view; otherwise it holds its corner.</param>
     private void FitToSource(Point? pointer = null)
     {
         if (_thumbnail is null)
@@ -2096,11 +1934,9 @@ public sealed partial class PipWindow : Form
         _thumbnail.SetViewport(PictureArea, shown);
     }
 
-    /// <summary>
-    /// A hidden original that something else brings to the front (its taskbar button, Alt+Tab, a notification, the
-    /// app itself) is shown, so nobody types into a window they can't see. A visit's own press doesn't count: it
-    /// happens while the visit is on, and the moment after it ends is left alone while the focus goes back.
-    /// </summary>
+    // A hidden original brought to the front by something else (taskbar, Alt+Tab, a notification, the app itself) is
+    // shown, so nobody types into a window they can't see. A visit's own press doesn't count, nor the moment after a
+    // visit ends while the focus goes back.
     private void RevealIfActivatedElsewhere()
     {
         Guid? desktop = VirtualDesktops.CurrentDesktop();
@@ -2119,8 +1955,8 @@ public sealed partial class PipWindow : Form
         long now = Environment.TickCount64;
         if (!arrived) return;
         var facts = new ViewState.Facts(Hidden: _hideItem.Checked, Away: _awayFrom != Guid.Empty, Visiting: _live is not null,
-            // The focus coming back from a visit, not the hand-off of this view being minimized since (the test of
-            // minimizing by the view's button reached it within half a second of the visit ending, Windows 10 VM, 18 Nov).
+            // The focus coming back from a visit, not the hand-off of this view being minimized since (that came within
+            // half a second of the visit ending in a Windows 10 VM).
             JustAfterVisit: now - _liveEndedAt < RevealGrace && !(_suspended && _suspendedAt >= _liveEndedAt),
             Picked: PickedFromTaskbarOrSwitcher(before),
             JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && now - _desktopSwitchedAt < SwitchFocusGrace);
@@ -2138,7 +1974,8 @@ public sealed partial class PipWindow : Form
                     ("before", Diagnostics.LogValue.ClassOf(before)));
                 break;
             case ViewState.Arrival.ViewTakesFocus:
-                // A hidden original is on every desktop, so on switching to one with nothing else on it Windows hands it
+                // A hidden original is on every desktop, so on switching to one with nothing else on it Windows hands
+                // it
                 // the focus. Keep hidden, Interactive and "hidden while away" stay as they were.
                 User32.SetForegroundWindow(Handle);
                 Diagnostics.Log.Event("view.switchFocusKept", ("program", Diagnostics.LogValue.ProgramOf(_source)));
@@ -2154,18 +1991,12 @@ public sealed partial class PipWindow : Form
         }
     }
 
-    /// <summary>What the view made of the original's last arrival, and the window before it, for tests.</summary>
     internal string LastArrival { get; private set; } = "";
 
-    /// <summary>The last window other than the original that had the focus, as the view last saw it.</summary>
     private nint _foregroundBefore;
 
-    /// <summary>
-    /// Whether the person picked the original: a click on its taskbar button or thumbnail (the pointer is still on
-    /// the taskbar or its thumbnails), or the switcher (it had the focus before), and the original is still listed
-    /// there: a window off the taskbar is out of the switcher too, on Windows 10 and 11. Store apps keep the button
-    /// Windows owns, so choosing it shows them.
-    /// </summary>
+    // A window off the taskbar is out of the switcher too, on Windows 10 and 11. Store apps keep the button Windows
+    // owns, so choosing it shows them.
     private bool PickedFromTaskbarOrSwitcher(nint before)
     {
         // A quick Alt+Tab switches before the switcher shows, so it is never in front: Alt held a moment ago counts.
@@ -2187,10 +2018,7 @@ public sealed partial class PipWindow : Form
     private static readonly HashSet<string> SwitcherClasses = new(StringComparer.Ordinal)
         { "MultitaskingViewFrame", "XamlExplorerHostIslandWindow", "TaskSwitcherWnd" };
 
-    /// <summary>
-    /// The window Windows would have given the focus to without the hidden original: the highest one that is shown,
-    /// can be used, and isn't hidden by WinScreen. Zero when there is none (the desktop takes it).
-    /// </summary>
+    // The highest window that is shown, can be used and isn't hidden by WinScreen; 0 when none (the desktop takes it).
     private nint NextWindowForFocus()
     {
         const uint GW_CHILD = 5, GW_HWNDNEXT = 2;
@@ -2211,22 +2039,17 @@ public sealed partial class PipWindow : Form
         return 0;
     }
 
-    /// <summary>The original's desktop while it is hidden because the person is on another one, or empty.</summary>
     private Guid _awayFrom;
     private int _desktopTick;
 
-    /// <summary>The desktop in front when the view last looked, to tell a desktop switch from the person's own doing.</summary>
     private Guid? _seenDesktop;
     private long _desktopSwitchedAt;
     private const long SwitchFocusGrace = 1000;
 
-    /// <summary>Whether the original is hidden for now because the person is on another desktop, for tests.</summary>
     internal bool HiddenWhileAway => _awayFrom != Guid.Empty;
 
-    /// <summary>
-    /// Many apps stop drawing while their desktop isn't shown, which freezes the view. While the person is on another
-    /// desktop the original is hidden for now, which keeps it drawing; it comes back once they return to its desktop.
-    /// </summary>
+    // Many apps stop drawing while their desktop isn't shown, which freezes the view: while the person is elsewhere the
+    // original is hidden for now, and comes back on its desktop.
     private void FollowDesktops()
     {
         bool away = _awayFrom != Guid.Empty;
@@ -2264,7 +2087,6 @@ public sealed partial class PipWindow : Form
     private long _liveEndedAt, _suspendedAt;
     private const long RevealGrace = 500;
 
-    /// <summary>When a hidden original was last shown because something else activated it, for tests.</summary>
     internal long LastReveal { get; private set; }
 
     private void FollowSource()
@@ -2401,7 +2223,6 @@ public sealed partial class PipWindow : Form
         else DropHoverPreview();
     }
 
-    /// <summary>The title bar stays up for this view: its own choice, or else the one in Settings.</summary>
     internal bool TitleBarAlways => _overrides.TitleBarAlways ?? _viewPreferences.AlwaysShowTitleBar;
 
     private Rectangle PictureArea => PipGeometry.FitPicture(PipGeometry.ViewArea(ClientSize), _lastShown);
@@ -2484,7 +2305,7 @@ public sealed partial class PipWindow : Form
         }
     }
 
-    /// <summary>Says when the picture may be out of date, without claiming more than WinScreen can tell.</summary>
+    // Without claiming more than WinScreen can tell.
     private void ShowState()
     {
         if (_offer != PressOffer.None && (Environment.TickCount64 >= _offerUntil || !CanOffer)) _offer = PressOffer.None;
@@ -2506,16 +2327,12 @@ public sealed partial class PipWindow : Form
         _chip.Show(state, new Point(Left + PipGeometry.Border, Bottom - PipGeometry.Border));
     }
 
-    /// <summary>What the view's chip says now, for tests.</summary>
     internal PipChipState ChipShown => _chip?.Saying ?? PipChipState.None;
 
-    /// <summary>Where the chip is while it shows, for tests.</summary>
     internal Rectangle? ChipBounds => _chip is { Visible: true } chip ? chip.Bounds : null;
 
-    /// <summary>
-    /// The person's way out of a minimized source: conceal it first so it never flashes up, then bring it
-    /// back without taking the focus. Only a click on the chip does this, never WinScreen by itself.
-    /// </summary>
+    // Concealed first so it never flashes up, then brought back without taking the focus. Only a click on the chip does
+    // this, never WinScreen by itself.
     internal void KeepUpdating()
     {
         SetOriginalHidden(true);
@@ -2524,7 +2341,6 @@ public sealed partial class PipWindow : Form
         StayOnTop();
     }
 
-    /// <summary>Leaves the view alone while it's being used; the mouse over it means it's wanted there.</summary>
     private void MoveAwayFromContent()
     {
         if (_pressed || _selecting || _overrides.PositionLocked || MouseButtons != MouseButtons.None ||
@@ -2577,7 +2393,6 @@ public sealed partial class PipWindow : Form
     private long _goingToUntil;
     private const long GoingToFor = 5000;
 
-    /// <summary>After Go to it from another desktop: once the window's desktop is in front, the window has the focus.</summary>
     private void FinishGoingTo()
     {
         if (_goingToUntil == 0) return;
@@ -2609,7 +2424,6 @@ public sealed partial class PipWindow : Form
     private long _goingToSettledSince;
     private const long GoingToSettled = 1500;
 
-    /// <summary>How often Go to it took the focus back from this view, for tests.</summary>
     internal int GoingToTakes { get; private set; }
 
     internal bool GoingTo => _goingToUntil != 0;

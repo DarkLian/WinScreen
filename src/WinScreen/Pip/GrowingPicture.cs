@@ -6,13 +6,9 @@ using WinScreen.Native;
 
 namespace WinScreen.Pip;
 
-/// <summary>
-/// Softens the jump when a hidden original comes up for a drag (12.6, the owner, 18 Nov): a picture of what the view
-/// showed grows from the view to where the window now is, and only then does the window show. The window takes the
-/// press at once, nearly see-through, so nothing waits on this, and the pressed spot stays under the pointer all the
-/// way (both ends have it there). The picture runs on its own thread: the view's work meanwhile, finding the pressed
-/// file again, can't stall it. Skipped when Windows' animation effects are off.
-/// </summary>
+// The window takes the press at once, nearly see-through, so nothing waits on this; the pressed spot stays under the
+// pointer at both ends.
+// Its own thread, so the view's work meanwhile can't stall it.
 internal sealed class GrowingPicture : IDisposable
 {
     internal const int Milliseconds = 160;
@@ -33,12 +29,8 @@ internal sealed class GrowingPicture : IDisposable
         _reveal = reveal;
     }
 
-    /// <summary>
-    /// Takes the picture at <paramref name="from"/> on the screen and starts growing it towards
-    /// <paramref name="target"/> (null while the window isn't out yet; once it was, null stops it). At the end
-    /// <paramref name="reveal"/> runs on the picture's thread, then the picture goes. Null, with
-    /// <paramref name="reveal"/> run at once, when animations are off or the picture can't be taken.
-    /// </summary>
+    // target is null while the window isn't out yet; null after it was out stops the picture. reveal runs on the
+    // picture's thread at the end, or at once when this returns null.
     internal static GrowingPicture? Start(Rectangle from, Func<Rectangle?> target, Action reveal)
     {
         if (!WindowsAnimations.On || from.Width < 8 || from.Height < 8)
@@ -50,8 +42,8 @@ internal sealed class GrowingPicture : IDisposable
         try
         {
             using var graphics = Graphics.FromImage(picture);
-            // Plain SourceCopy: .NET refuses SourceCopy | CaptureBlt as an undefined value (the owner's crash, 18 Nov), and
-            // with desktop composition the screen's picture already holds see-through windows.
+            // Plain SourceCopy: .NET refuses SourceCopy | CaptureBlt as undefined, and with desktop composition the
+            // screen's picture already holds see-through windows.
             graphics.CopyFromScreen(from.Location, Point.Empty, from.Size, CopyPixelOperation.SourceCopy);
         }
         catch (Exception failure) when (failure is System.ComponentModel.Win32Exception or ArgumentException or ExternalException)
@@ -70,7 +62,6 @@ internal sealed class GrowingPicture : IDisposable
         return growing;
     }
 
-    /// <summary>Where the picture is at <paramref name="progress"/> (0 to 1) of the way: quick at first, settling at the end.</summary>
     internal static Rectangle Frame(Rectangle from, Rectangle to, double progress)
     {
         double t = Math.Clamp(progress, 0, 1);
@@ -79,7 +70,7 @@ internal sealed class GrowingPicture : IDisposable
         return Rectangle.FromLTRB(Lerp(from.Left, to.Left), Lerp(from.Top, to.Top), Lerp(from.Right, to.Right), Lerp(from.Bottom, to.Bottom));
     }
 
-    /// <summary>Stops it where it is, without revealing anything: the window went back. Doesn't wait.</summary>
+    // Stops without revealing anything (the window went back), and doesn't wait.
     public void Dispose() => _stopped = true;
 
     private void Run()
@@ -152,7 +143,6 @@ internal sealed class GrowingPicture : IDisposable
 
     private const int SW_SHOWNOACTIVATE = 4;
 
-    /// <summary>A see-through, click-through window above everything, never taking the focus or the taskbar.</summary>
     private sealed class StandIn : NativeWindow
     {
         internal void Create(Rectangle bounds) => CreateHandle(new CreateParams

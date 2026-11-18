@@ -2,10 +2,7 @@ using WinScreen.Native;
 
 namespace WinScreen.Pip;
 
-/// <summary>
-/// Stands in for a minimized view on the taskbar, because a view is a tool window with no button of its
-/// own. Nothing runs while it waits: Windows asks for a picture only when someone hovers the button.
-/// </summary>
+// Nothing runs while it waits: Windows asks for a picture only when someone hovers the button.
 internal sealed class PipTaskbarProxy : Form
 {
     private const int WM_SYSCOMMAND = 0x0112;
@@ -40,12 +37,10 @@ internal sealed class PipTaskbarProxy : Form
         User32.ShowWindow(Handle, SW_SHOWMINNOACTIVE); // Minimizing a view must not take the focus from the app in use.
     }
 
-    /// <summary>The outcome of the last picture given to Windows, for tests and diagnostics. Zero is success.</summary>
     internal int LastPreviewResult { get; private set; } = -1;
 
     protected override bool ShowWithoutActivation => true;
 
-    /// <summary>Removes the button after the view has come back, without closing the view.</summary>
     public void Dismiss()
     {
         _dismissed = true;
@@ -86,7 +81,7 @@ internal sealed class PipTaskbarProxy : Form
         finally { User32.DeleteObject(handle); }
     }
 
-    /// <summary>The desktop compositor takes only a top-down, 32-bit, premultiplied bitmap.</summary>
+    // The desktop compositor takes only a top-down, 32-bit, premultiplied bitmap.
     private static unsafe nint ToDesktopBitmap(Bitmap picture)
     {
         var header = new User32.BitmapInfoHeader

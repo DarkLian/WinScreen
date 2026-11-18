@@ -3,25 +3,18 @@ using WinScreen.Native;
 
 namespace WinScreen.Pip;
 
-/// <summary>
-/// The hidden original's own popups. They appear where the original really is, not where its view is, so:
-/// <list type="bullet">
-/// <item>display-only ones (click-through: link text, tooltips, loading bubbles) are moved off the screen while
-/// the original is hidden;</item>
-/// <item>message input relocates menus and lists to the view pointer; compatible input keeps those already
-/// by the pointer and conceals ones wholly away from the view;</item>
-/// <item>dialogs are never moved; one showing, or the original being disabled, is reported, so the visit can
-/// end and the question be seen.</item>
-/// </list>
-/// Everything moved is put back where it was. Safe to use from any thread.
-/// </summary>
+// The original's popups appear where it really is, not where its view is. Display-only ones (click-through) go off the
+// screen while it is hidden; message input moves menus and lists to the view's pointer; compatible input keeps those
+// already by the pointer and conceals ones wholly away.
+// Dialogs are never moved: one showing, or the original disabled, is reported so the visit ends and the question is
+// seen. Everything moved is put back. Safe from any thread.
 internal sealed class SourcePopups
 {
     private const uint Move = User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE | User32.SWP_ASYNCWINDOWPOS;
     private const long WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x80;
-    /// <summary>How near a new popup must be to an open one to belong to it, as a submenu does.</summary>
+    // How near a new popup must be to an open one to belong to it, as a submenu does.
     private const int Adjacent = 8;
-    /// <summary>Windows 11's newer menus, which move themselves back a few times while they open.</summary>
+    // Windows 11's newer menus, which move themselves back a few times while they open.
     internal const string WinUiPopup = "Microsoft.UI.Content.PopupWindowSiteBridge";
     private readonly nint _source;
     private readonly Dictionary<nint, Placement> _placed = [];
@@ -29,23 +22,16 @@ internal sealed class SourcePopups
     private long _opened;
     public SourcePopups(nint source) => _source = source;
 
-    /// <summary>Lifts the menus in use, oldest first, so the newest (a submenu) ends on top of its parent.</summary>
+    // Oldest first, so the newest (a submenu) ends on top of its parent.
     internal Action<IReadOnlyList<nint>> RaisePopups { get; init; } = popups => Windows.TopLayer.RaiseGroup(popups);
 
-    /// <param name="Original">Where its app first put it, to go back to.</param>
-    /// <param name="Placed">Where it stays for this opening.</param>
-    /// <param name="Order">When it opened: a later popup of the same chain is above an earlier one.</param>
     private sealed record Placement(Point Original, Point Placed, Size Size, long Order)
     {
         internal Rectangle PlacedBounds => new(Placed, Size);
         internal Rectangle OriginalBounds => new(Original, Size);
     }
 
-    /// <summary>
-    /// Moves popups off the screen or back. <paramref name="view"/> is where the pointer works with the original;
-    /// null at rest, when only display-only popups are moved.
-    /// </summary>
-    /// <returns>True if the original is asking something.</returns>
+    // view is null at rest, when only display-only popups are moved. True if the original is asking something.
     public bool Sweep(Rectangle? view) => SweepCore(view, null, null);
 
     internal bool SweepMapped(Rectangle view, Point pointer, Point mapped, nint viewWindow) => SweepCore(view, pointer, mapped, viewWindow);
@@ -116,12 +102,9 @@ internal sealed class SourcePopups
         }
     }
 
-    /// <summary>
-    /// Where a popup that just opened goes. One beside a popup already placed for this opening is its submenu:
-    /// left where its app put it when that is already beside the moved parent (Windows lays a menu's submenu out
-    /// from where the parent really is), or else moved with the parent, as one laid out from the parent's first
-    /// place would be. Any other goes next to the pointer.
-    /// </summary>
+    // A submenu is one beside a popup already placed for this opening: Windows lays it out from where the parent really
+    // is, so it is left where its app put it when that is already beside the moved parent, or else moved with the
+    // parent.
     private Point PlaceNew(Rectangle native, Point at, Point sourcePoint)
     {
         Rectangle area = Screen.FromPoint(at).WorkingArea;
@@ -144,10 +127,6 @@ internal sealed class SourcePopups
         return popup.IntersectsWith(near);
     }
 
-    /// <summary>
-    /// Whether the placed popups need lifting: one is behind the view, or a later one (a submenu) is under an
-    /// earlier one. An order that is already right is left alone.
-    /// </summary>
     private bool OutOfOrder(Dictionary<nint, int> depths, int viewDepth)
     {
         int below = int.MaxValue;
@@ -160,7 +139,6 @@ internal sealed class SourcePopups
         return false;
     }
 
-    /// <summary>Puts every popup moved away back where it was.</summary>
     public void ShowAll()
     {
         lock (_hidden)
@@ -173,10 +151,7 @@ internal sealed class SourcePopups
         }
     }
 
-    /// <summary>
-    /// The original's popup: owned by it, by any of its program's threads or a helper process, or one of its program's
-    /// own menus, which Windows doesn't give an owner.
-    /// </summary>
+    // Also one of its program's own menus, which Windows gives no owner.
     internal static bool IsPopupOf(nint window, nint source, uint sourceProcess)
     {
         if (Windows.WindowInfo.IsOwnedBy(window, source)) return true;
@@ -187,7 +162,7 @@ internal sealed class SourcePopups
 
     internal enum Kind { DisplayOnly, Interactive, Dialog }
 
-    /// <summary>Click-through windows can't be used, so they only show something; a captioned, activatable one asks something.</summary>
+    // Click-through windows can't be used, so they only show something; a captioned, activatable one asks something.
     internal static Kind KindOf(nint popup)
     {
         long ex = User32.GetWindowLongPtr(popup, User32.GWL_EXSTYLE);

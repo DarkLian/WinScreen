@@ -2,17 +2,15 @@ using System.Drawing;
 
 namespace WinScreen.Pip;
 
-/// <summary>The arithmetic behind a PiP window, kept apart from the window so it can be tested directly.</summary>
 public static class PipGeometry
 {
     internal static bool NeedsWholePreview(int pictureWidth, int shownWidth) =>
         pictureWidth > 0 && shownWidth > 0 && pictureWidth / (double)shownWidth < 0.5;
 
-    /// <summary>Resize bands, in DIPs. A view used directly keeps thin edges, so the app's own controls near
-    /// them (a browser's tabs, for one) can still be clicked; its corners stay easy to grab.</summary>
+    // A view used directly keeps thin edges, so the app's own controls near them (a browser's tabs) can still be
+    // clicked.
     internal const int EdgeBand = 6, DirectEdgeBand = 2, DirectCornerBand = 8;
 
-    /// <param name="corner">How far a corner reaches along each side; never less than <paramref name="band"/>.</param>
     internal static int SizingHit(Point point, Rectangle bounds, int band, int corner = 0)
     {
         if (!bounds.Contains(point)) return 0;
@@ -59,7 +57,6 @@ public static class PipGeometry
     public const int MinimumWidth = 160;
     public const int MinimumHeight = 60;
 
-    /// <summary>The size in pixels of the squares the screen is judged in.</summary>
     public const int ContentCell = 16;
 
     private const double MaximumZoom = 8;
@@ -68,7 +65,6 @@ public static class PipGeometry
     private const double ClearGain = 0.08;
     private const double DistanceCost = 0.0001;
 
-    /// <summary>The window height that shows <paramref name="source"/> undistorted at this window width.</summary>
     public static int FitHeight(int windowWidth, Rectangle source)
     {
         int inner = windowWidth - 2 * Border;
@@ -76,16 +72,11 @@ public static class PipGeometry
         return Math.Max(MinimumHeight, height + 2 * Border);
     }
 
-    /// <summary>The part of the window the view is drawn in, inside the border.</summary>
     public static Rectangle ViewArea(Size clientSize)
     {
         return new Rectangle(Border, Border, clientSize.Width - 2 * Border, clientSize.Height - 2 * Border);
     }
 
-    /// <summary>
-    /// Turns a rectangle dragged in the window into the matching part of the source window,
-    /// given the part of the source currently shown. The result never leaves that part.
-    /// </summary>
     public static Rectangle SelectionToSource(Rectangle selection, Rectangle viewArea, Rectangle shown)
     {
         double scaleX = (double)shown.Width / viewArea.Width;
@@ -100,7 +91,6 @@ public static class PipGeometry
         return Rectangle.Intersect(mapped, shown);
     }
 
-    /// <summary>The spot in the source window that a point in the view is showing.</summary>
     public static Point PointToSource(Point point, Rectangle viewArea, Rectangle shown)
     {
         if (viewArea.Width <= 0 || viewArea.Height <= 0 || shown.Width <= 0 || shown.Height <= 0)
@@ -123,11 +113,7 @@ public static class PipGeometry
             Math.Max(1, (int)Math.Floor(source.Height * scale)) + 2 * Border);
     }
 
-    /// <summary>
-    /// The window size that shows <paramref name="source"/> undistorted with its longer side at
-    /// <paramref name="longSide"/>, so tall and wide windows both come out a sensible size. The result
-    /// depends only on its inputs, so fitting again never makes the view creep smaller.
-    /// </summary>
+    // Depends only on its inputs, so fitting again never makes the view creep smaller.
     public static Size FitLongSide(int longSide, Rectangle source, Size available)
     {
         if (source.Width <= 0 || source.Height <= 0)
@@ -144,10 +130,6 @@ public static class PipGeometry
         Math.Clamp(bounds.Left, area.Left, Math.Max(area.Left, area.Right - bounds.Width)),
         Math.Clamp(bounds.Top, area.Top, Math.Max(area.Top, area.Bottom - bounds.Height)));
 
-    /// <summary>
-    /// Where a resized view goes so the corner nearest the edge of the screen stays put, keeping a view
-    /// parked in a corner there instead of drifting away from it.
-    /// </summary>
     public static Point KeepCorner(Rectangle old, Size size, Rectangle area)
     {
         bool right = old.Left + old.Width / 2 > area.Left + area.Width / 2;
@@ -155,15 +137,10 @@ public static class PipGeometry
         return new Point(right ? old.Right - size.Width : old.Left, bottom ? old.Bottom - size.Height : old.Top);
     }
 
-    /// <summary>Where a resized view goes so that the same spot of it stays under the pointer.</summary>
     public static Point KeepUnderPointer(Rectangle old, Size size, Point pointer) => new(
         pointer.X - (int)Math.Round((pointer.X - old.Left) * (double)size.Width / old.Width),
         pointer.Y - (int)Math.Round((pointer.Y - old.Top) * (double)size.Height / old.Height));
 
-    /// <summary>
-    /// The first spot clear of <paramref name="taken"/>, going up the screen from
-    /// <paramref name="wanted"/> and then a column to the left. A full screen falls back to the first.
-    /// </summary>
     public static Point FreeSpot(Rectangle wanted, IEnumerable<Rectangle> taken, Rectangle area, int gap)
     {
         Rectangle[] others = taken.ToArray();
@@ -180,7 +157,6 @@ public static class PipGeometry
         return wanted.Location;
     }
 
-    /// <summary>The largest size of this shape that fits inside a limit, never empty.</summary>
     public static Size FitInside(Size shape, Size limit)
     {
         if (shape.Width <= 0 || shape.Height <= 0 || limit.Width <= 0 || limit.Height <= 0)
@@ -190,12 +166,6 @@ public static class PipGeometry
             Math.Clamp((int)Math.Round(shape.Height * scale), 1, limit.Height));
     }
 
-    /// <summary>
-    /// Where a view should go to get off the text and images under it, or null when it's fine where it
-    /// is or nowhere is clearly better. <paramref name="busy"/> marks the cells of
-    /// <paramref name="area"/> holding content, by row then column. Of equally calm spots the nearest
-    /// wins, so the view doesn't cross the screen for nothing.
-    /// </summary>
     public static Point? CalmerSpot(bool[,] busy, Rectangle area, Rectangle view)
     {
         int rows = busy.GetLength(0), columns = busy.GetLength(1);
@@ -247,13 +217,8 @@ public static class PipGeometry
             Math.Min(area.Top + best.Row * ContentCell, area.Bottom - view.Height));
     }
 
-    /// <summary>All of a view's picture, as a share of its width and height.</summary>
     public static readonly RectangleF WholeView = new(0, 0, 1, 1);
 
-    /// <summary>
-    /// A closer or wider look, keeping <paramref name="spot"/>, a share of the visible part, where it is.
-    /// Zoom never goes past 8x, and never shows more than the whole picture or anything outside it.
-    /// </summary>
     public static RectangleF ZoomAround(RectangleF view, PointF spot, double factor)
     {
         float side = (float)Math.Clamp(view.Width / factor, 1.0 / MaximumZoom, 1);
@@ -262,11 +227,9 @@ public static class PipGeometry
         return KeepInPicture(new RectangleF(x, y, side, side));
     }
 
-    /// <summary>Slides a zoomed view by this share of the picture, stopping at its edges.</summary>
     public static RectangleF Pan(RectangleF view, float across, float down) =>
         KeepInPicture(new RectangleF(view.X + across, view.Y + down, view.Width, view.Height));
 
-    /// <summary>The pixels of <paramref name="part"/> that <paramref name="view"/> covers.</summary>
     public static Rectangle ZoomedPart(Rectangle part, RectangleF view)
     {
         if (view == WholeView)
@@ -282,17 +245,14 @@ public static class PipGeometry
     private static RectangleF KeepInPicture(RectangleF view) => new(
         Math.Clamp(view.X, 0, 1 - view.Width), Math.Clamp(view.Y, 0, 1 - view.Height), view.Width, view.Height);
 
-    /// <summary>Where a window of this size goes for a position saved as shares of the free space.</summary>
     public static Point FromShares(double left, double top, Size size, Rectangle area) => new(
         area.Left + (int)Math.Round(left * Math.Max(0, area.Width - size.Width)),
         area.Top + (int)Math.Round(top * Math.Max(0, area.Height - size.Height)));
 
-    /// <summary>A position as shares of the free space, so it survives a change of screen size.</summary>
     public static (double Left, double Top) ToShares(Rectangle bounds, Rectangle area) => (
         area.Width > bounds.Width ? Math.Clamp((bounds.Left - area.Left) / (double)(area.Width - bounds.Width), 0, 1) : 0,
         area.Height > bounds.Height ? Math.Clamp((bounds.Top - area.Top) / (double)(area.Height - bounds.Height), 0, 1) : 0);
 
-    /// <summary>The rectangle between two points, whichever way the mouse was dragged.</summary>
     public static Rectangle Between(Point a, Point b)
     {
         return Rectangle.FromLTRB(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Max(a.X, b.X), Math.Max(a.Y, b.Y));

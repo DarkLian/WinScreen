@@ -3,7 +3,6 @@ using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Pip;
 
-/// <summary>Confirms a bookmark against today's display layout, before capture starts.</summary>
 internal sealed class PipBookmarkPreview : Form
 {
     private readonly PipSourceBookmark _bookmark;

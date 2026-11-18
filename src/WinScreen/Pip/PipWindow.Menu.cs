@@ -7,10 +7,8 @@ using WinScreen.Windows;
 
 namespace WinScreen.Pip;
 
-/// <summary>The view's own menu: how it is built, what it offers as the view changes, and its submenus.</summary>
 public sealed partial class PipWindow
 {
-    /// <summary>Builds the view's menu, once, from the constructor.</summary>
     [MemberNotNull(nameof(_hideItem), nameof(_awayItem), nameof(_goToItem), nameof(_muteItem), nameof(_useOriginalItem), nameof(_autoMoveItem), nameof(_removeCropItem), nameof(_viewOnlyItem),
         nameof(_helpItem), nameof(_useHeader), nameof(_originalHeader), nameof(_interactiveItem), nameof(_middleScrollItem),
         nameof(_enhancedHoverItem))]
@@ -33,7 +31,6 @@ public sealed partial class PipWindow
             { ToolTipText = T("pip.enhancedHover.description"), Checked = PipEnhancedHover.StartsOn(_source) };
         if (_interactiveWithoutSwitch) { _middleScrollItem.Experimental(); _enhancedHoverItem.Experimental(); }
         _viewOnlyItem = new ToolStripMenuItem(T("menu.view.watch"), null, (_, _) => SetInteractive(false)) { Name = "viewOnly" }.OneOf();
-        // The two options that only mean something while the picture is being used sit under Interactive PiP, set in.
         _middleScrollItem.Margin = _enhancedHoverItem.Margin = new Padding(MenuParts.Scale(16), 0, 0, 0);
         var options = new ToolStripMenuItem(T("menu.picture.options")).WithIcon(MenuParts.Sliders);
         options.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
@@ -52,7 +49,6 @@ public sealed partial class PipWindow
         _menu.Items.Add(_autoMoveItem);
 
         _menu.Items.Add(_originalHeader = MenuParts.Header(T("menu.group.original")));
-        // Hidden for now while the person is on another desktop: said, so a hidden window never looks shown.
         _awayItem = new ToolStripMenuItem(T("menu.original.awayHidden"), MenuParts.Icon(MenuParts.View)) { Enabled = false };
         _menu.Items.Add(_awayItem);
         _hideItem.Image = MenuParts.Icon(MenuParts.View);
@@ -88,7 +84,6 @@ public sealed partial class PipWindow
             User32.SetForegroundWindow(Handle);
         };
         MenuRenderer.Apply(_menu);
-        // Turning the view's options on and off leaves the menu open for the next one.
         foreach (ToolStripItem item in new ToolStripItem[] { _hideItem, _muteItem, _autoMoveItem, _interactiveItem, _viewOnlyItem, _middleScrollItem, _enhancedHoverItem })
             StayingOpen.Keep(item);
         StayingOpen.Follow(_menu, RefreshMenuItems);
@@ -96,7 +91,6 @@ public sealed partial class PipWindow
         ContextMenuStrip = _menu;
     }
 
-    /// <summary>What the menu offers and ticks, for the view as it is now: when it opens, and after a choice that keeps it open.</summary>
     private void RefreshMenuItems()
     {
         _menu.Items["inputStatus"]!.Text = MenuTitle;
@@ -131,14 +125,12 @@ public sealed partial class PipWindow
         _removeCropItem.Enabled = !_crop.IsEmpty || _zoom != PipGeometry.WholeView;
     }
 
-    /// <summary>Mutes or unmutes the original's program, and says so when that couldn't be done.</summary>
     private void ChooseMute(bool on)
     {
         if (SetSound?.Invoke(on) == false) Problem?.Invoke(T("errors.sound.failed"));
         _muteItem.Checked = SoundState?.Invoke() == true;
     }
 
-    /// <summary>One quiet line for each way to handle the picture, for how the view is being used now.</summary>
     private void FillHelp()
     {
         foreach (NoteRow old in _helpItem.DropDownItems.OfType<NoteRow>().ToArray())
@@ -263,7 +255,6 @@ public sealed partial class PipWindow
         return changes.Count == 0 ? T("pip.presets.noChanges") : string.Join("; ", changes);
     }
 
-    /// <summary>A choice of several that leaves the menu open, ticked where it is now.</summary>
     private static ToolStripMenuItem Choices<T1>(string title, T1 current, (string Label, T1 Value)[] choices, Action<T1> choose)
     {
         var menu = new ToolStripMenuItem(title);
@@ -276,7 +267,6 @@ public sealed partial class PipWindow
         return menu;
     }
 
-    /// <summary>An option turned on and off from the menu, which stays open for the next one.</summary>
     private static ToolStripMenuItem Toggle(string text, bool on, Action flip) =>
         StayingOpen.Keep(new ToolStripMenuItem(text, null, (sender, _) =>
         {

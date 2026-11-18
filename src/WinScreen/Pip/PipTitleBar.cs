@@ -5,7 +5,7 @@ using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Pip;
 
-/// <summary>A separate surface, because DWM thumbnails cover controls painted in the view itself.</summary>
+// A separate surface, because DWM thumbnails cover controls painted in the view itself.
 internal sealed class PipTitleBar : Form
 {
     private readonly Form _view;
@@ -154,7 +154,6 @@ internal sealed class PipTitleBar : Form
     private const int ButtonWidth = 40, TitlePadding = 12, MinimumTitle = 48;
     private const float GlyphPoints = 10f;
 
-    /// <summary>Windows' own caption glyphs, which are larger and crisper than text dashes and crosses.</summary>
     private static readonly FontFamily? GlyphFont = FindGlyphFont();
 
     private static FontFamily? FindGlyphFont()
@@ -165,10 +164,6 @@ internal sealed class PipTitleBar : Form
         return null;
     }
 
-    /// <summary>
-    /// As wide as the icon, the title and the two buttons need, so the buttons sit right after the title. It is
-    /// never wider than the view; a longer title then ends in an ellipsis.
-    /// </summary>
     internal int FittedWidth(int viewWidth)
     {
         int dpi = _view.DeviceDpi;
@@ -177,7 +172,6 @@ internal sealed class PipTitleBar : Form
         return Math.Min(viewWidth, fixedPart + text);
     }
 
-    /// <summary>Where the buttons are on screen, for tests.</summary>
     internal Rectangle MinimizeBounds => _minimize.RectangleToScreen(_minimize.ClientRectangle);
     internal Rectangle CloseBounds => _close.RectangleToScreen(_close.ClientRectangle);
     internal Rectangle TitleTextBounds => _title.RectangleToScreen(_title.ClientRectangle);

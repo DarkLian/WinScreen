@@ -1,10 +1,10 @@
 namespace WinScreen.Pip;
 
 internal enum PipBackendKind { DwmThumbnail, WgcHardware, WgcSoftware }
-/// <summary><see cref="Compositor"/> means Windows owns the picture, so WinScreen can't say whether it's current.</summary>
+// Compositor: Windows owns the picture, so WinScreen can't say whether it's current.
 internal enum PipSessionState { Starting, Live, SourcePaused, Recovering, Fallback, Stopped, Failed, Compositor }
 
-/// <summary>Owns rendering only. Source identity, journal, input and HWND ownership stay in PipWindow.</summary>
+// Rendering only: source identity, journal, input and window ownership stay in PipWindow.
 internal interface IPipRenderBackend : IDisposable
 {
     PipBackendKind Kind { get; }
@@ -19,7 +19,7 @@ internal interface IPipRenderBackend : IDisposable
 internal sealed record PipCaptureStart(PipSource Source, nint Destination, Size Client,
     nint Monitor, Settings.PipPreferences Preferences, int SourceHz, int TargetHz, bool Software);
 
-/// <summary>Capture-only lifetime and scheduling. DWM never implements a fabricated frame stream.</summary>
+// DWM never implements a fabricated frame stream.
 internal interface IPipCaptureBackend : IPipRenderBackend
 {
     Task Completion { get; }
@@ -28,6 +28,5 @@ internal interface IPipCaptureBackend : IPipRenderBackend
     void SetClient(Size client);
     void SetRefresh(int source, int target);
 
-    /// <summary>Changes the frame limit and filter without restarting capture.</summary>
     void SetPacing(int frameRate, Settings.PipScaling scaling) { }
 }

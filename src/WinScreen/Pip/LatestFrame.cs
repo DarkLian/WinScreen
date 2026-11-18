@@ -1,6 +1,6 @@
 namespace WinScreen.Pip;
 
-/// <summary>One owned pending item, one consumer. Replacements and late publication are disposed immediately.</summary>
+// One owned pending item, one consumer. Replacements and late publications are disposed at once.
 internal sealed class LatestFrame<T> : IDisposable where T : class, IDisposable
 {
     private readonly object _gate = new();

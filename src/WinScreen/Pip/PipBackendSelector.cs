@@ -6,7 +6,7 @@ using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Pip;
 
-/// <summary>UI-thread coordinator. DWM stays registered while a separate worker proves first presentation.</summary>
+// UI thread only. DWM stays registered while a separate worker proves the first presentation.
 internal sealed class PipBackendSelector : IPipRenderBackend
 {
     private readonly DwmThumbnailBackend? _dwm;
@@ -75,10 +75,9 @@ internal sealed class PipBackendSelector : IPipRenderBackend
             ("program", source.IsWindow ? Diagnostics.LogValue.ProgramOf(source.Window) : Diagnostics.LogValue.Program("")));
     }
 
-    /// <summary>What a failed capture leads to, for the log.</summary>
     private enum AfterFailure { Recreate, Software, Compositor, Nothing }
 
-    /// <summary>A part of the screen has no compositor view, so the only way to show it is capture.</summary>
+    // Part of the screen has no compositor view, so capture is the only way to show it.
     private PipPreferences Effective(PipPreferences preferences)
     {
         PipPreferences valid = preferences.Validated();
@@ -128,7 +127,6 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         _dwm?.SetSelection(_selection);
     }
 
-    /// <exception cref="WindowOperationException">The source is gone, or a source with nothing to fall back on can't be shown.</exception>
     internal void Poll(Size client)
     {
         PollCapture(client);

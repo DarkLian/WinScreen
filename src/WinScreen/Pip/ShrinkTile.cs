@@ -4,11 +4,7 @@ using WinScreen.Windows;
 
 namespace WinScreen.Pip;
 
-/// <summary>
-/// A window shrunk to a small live tile where its corner was. The real window keeps its size, so
-/// nothing inside it rearranges; it is only made invisible until the tile is clicked, or until
-/// someone switches to it from the taskbar or Alt-Tab.
-/// </summary>
+// The real window keeps its size, so nothing inside it rearranges.
 public sealed class ShrinkTile : Form
 {
     private const int TileWidth = 240;
@@ -42,7 +38,7 @@ public sealed class ShrinkTile : Form
         int dpi = Dpi.Of(source);
         _width = Dpi.Scale(TileWidth, dpi);
         Size = new Size(_width, Dpi.Scale(TileHeight, dpi));
-        AccessibleDescription = T("shrink.controls"); // Said by a screen reader; nothing pops up on hover.
+        AccessibleDescription = T("shrink.controls");
         _menu.Items.Add(T("window.show"), null, (_, _) => ShowWindowAndClose());
         Tray.MenuRenderer.Apply(_menu);
         ContextMenuStrip = _menu;
@@ -52,7 +48,6 @@ public sealed class ShrinkTile : Form
             Location = KeptOnScreen(bounds);
     }
 
-    /// <summary>Raised when Windows refuses something, with a message for the person.</summary>
     public event Action<string>? Problem;
 
     protected override bool ShowWithoutActivation => true;
@@ -67,10 +62,8 @@ public sealed class ShrinkTile : Form
         }
     }
 
-    /// <summary>
-    /// Opens the tile, then hides the window it stands for. The live view is ready before the tile
-    /// appears, and being created on top needs no focus, so Windows has nothing to refuse.
-    /// </summary>
+    // The live view is ready before the tile appears, and being created on top needs no focus, so Windows has nothing
+    // to refuse.
     public void ShowOnTop()
     {
         _identity.Require();
@@ -161,12 +154,8 @@ public sealed class ShrinkTile : Form
             ShowWindowAndClose();
     }
 
-    /// <summary>
-    /// Brings the window back in front of the others, then closes the tile. Done while the click is still the last
-    /// thing the person did, which is when Windows lets WinScreen put a window in front; after the tile has gone,
-    /// Windows refused, and the window came back behind whatever was open.
-    /// </summary>
-    /// <summary>Whether the person brought the window back, rather than something else closing the tile.</summary>
+    // Bring the window back while the click is still the last thing the person did: only then does Windows let
+    // WinScreen put it in front.
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public bool BringBack { get; set; }
 
@@ -229,7 +218,6 @@ public sealed class ShrinkTile : Form
             Close();
         else if (User32.GetForegroundWindow() == _source)
         {
-            // Chosen from the taskbar or Alt+Tab: the person brought it back, as with a click on the tile.
             BringBack = true;
             Close();
         }

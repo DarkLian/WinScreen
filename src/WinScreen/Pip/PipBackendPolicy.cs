@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace WinScreen.Pip;
 
-/// <summary>One automatic recreation, then a stable fallback. Only an explicit retry reopens the circuit.</summary>
+// One automatic recreation, then a stable fallback. Only an explicit retry reopens the circuit.
 internal sealed class PipBackendPolicy
 {
     private bool _recreated;

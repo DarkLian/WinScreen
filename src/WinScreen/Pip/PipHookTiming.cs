@@ -2,10 +2,7 @@ using System.Diagnostics;
 
 namespace WinScreen.Pip;
 
-/// <summary>
-/// How long the mouse hook's callback takes, kept lock-free and bounded. Windows drops a low-level hook that
-/// answers slowly, so this is what shows whether the callback stays cheap. Holds durations only.
-/// </summary>
+// Windows drops a low-level hook that answers slowly; this shows whether the callback stays cheap.
 internal sealed class PipHookTiming
 {
     // Bucket upper bounds in microseconds; the last bucket takes everything slower.
@@ -30,7 +27,6 @@ internal sealed class PipHookTiming
     internal long Count => Interlocked.Read(ref _count);
     internal TimeSpan Max => TimeSpan.FromTicks(Interlocked.Read(ref _max) * 10);
 
-    /// <summary>The bucket bound below which at least this share of callbacks finished.</summary>
     internal TimeSpan Percentile(double share)
     {
         long count = Count, seen = 0;
@@ -44,7 +40,6 @@ internal sealed class PipHookTiming
         return Max;
     }
 
-    /// <summary>How many callbacks took longer than the given time.</summary>
     internal long Over(TimeSpan time)
     {
         long micros = time.Ticks / 10, over = 0;
