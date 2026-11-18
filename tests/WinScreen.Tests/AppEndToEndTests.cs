@@ -590,7 +590,8 @@ public sealed class AppEndToEndTests : IDisposable
     [Fact]
     public void The_toolbar_menus_stay_open_and_their_choices_work()
     {
-        var settings = new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.Arrange, AppCommand.ShowWindowMenu] } };
+        // On the left: another always-on-top tool (the owner's WindowTop) keeps its own bar at the top centre.
+        var settings = new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.Arrange, AppCommand.ShowWindowMenu], Placement = ToolbarPlacement.Left } };
         RestartWith(settings);
         using var target = new TargetProcess(Spot);
         target.UseTitleBar();
@@ -601,7 +602,7 @@ public sealed class AppEndToEndTests : IDisposable
             Assert.True(Desktop.WaitFor(() => Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar") == 0, 3000),
                 "The toolbar stayed after the pointer left.");
             Focus(target);
-            var rest = new Point(target.Center.X, Spot.Top + 12);
+            var rest = new Point(Spot.Left + WinScreen.Native.Dpi.Scale(34, WinScreen.Native.Dpi.Of(target.Handle)) + 12, Spot.Top + 12);
             Desktop.RequireWindowAt(rest, target.Handle);
             Desktop.MoveMouse(new Point(rest.X + 30, rest.Y));
             Desktop.MoveMouse(rest);
