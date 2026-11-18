@@ -3,7 +3,7 @@ using WinScreen.Native;
 
 namespace WinScreen.Tray;
 
-/// <summary>Temporary focus rights and menu lifetime. Created only when a menu is requested.</summary>
+// Temporary focus rights and menu lifetime. Created only when a menu is requested.
 internal sealed class WindowMenuHost : Form
 {
     private const int FirstHotkey = 0x5760, EscapeHotkey = 0x5780;
@@ -17,7 +17,6 @@ internal sealed class WindowMenuHost : Form
     internal bool NeedsHook;
     internal Action? FallbackOpened;
 
-    /// <summary>The menu itself; this form only holds it.</summary>
     internal ContextMenuStrip Popup => _menu;
 
     public WindowMenuHost(ContextMenuStrip menu, Point point)

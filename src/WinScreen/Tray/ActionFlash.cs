@@ -2,7 +2,6 @@ using WinScreen.Native;
 
 namespace WinScreen.Tray;
 
-/// <summary>A brief label over a window, for changes that are too frequent for a notification.</summary>
 internal sealed class ActionFlash : Form
 {
     private const int VisibleMilliseconds = 1000;
@@ -45,7 +44,6 @@ internal sealed class ActionFlash : Form
         }
     }
 
-    /// <summary>Shows the text near the top of this area, kept on screen, and restarts the countdown.</summary>
     public void ShowOver(Rectangle area, string text)
     {
         _label.Text = text;

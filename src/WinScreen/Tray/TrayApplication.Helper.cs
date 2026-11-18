@@ -5,32 +5,22 @@ using WinScreen.Settings;
 
 namespace WinScreen.Tray;
 
-/// <summary>
-/// The ordinary copy and its administrator helper (10-2): starting the helper, handing it what is for administrator
-/// apps' windows, and the helper's side, which acts only on those and speaks through the ordinary copy.
-/// </summary>
 public sealed partial class TrayApplication
 {
     private const int HelperCheckMilliseconds = 2000, HelperStartsAllowed = 3;
     private static readonly TimeSpan OrdinaryCopyWait = TimeSpan.FromSeconds(60);
 
-    /// <summary>This copy is the ordinary one and Run as administrator wants a helper beside it.</summary>
     private bool HelperWanted =>
         AppRoles.WantsHelper(_role, _settings.RunAsAdministrator, _settings.AdministratorHelper, ProcessInfo.CanElevate);
 
-    /// <summary>The helper way is in use: the sign-in task starts the helper, which starts the ordinary copy.</summary>
     private bool HelperChosen => _role == AppRole.Helper || HelperWanted;
 
-    /// <summary>Whether the helper is connected, for tests.</summary>
     internal bool HelperConnected => _helper?.Connected == true;
 
-    /// <summary>The helper's process while connected, else 0, for tests.</summary>
     internal uint HelperProcess => _helper?.Peer ?? 0;
 
-    /// <summary>
-    /// The ordinary copy's side: serves the link and starts the helper if none is running (the sign-in task may have
-    /// started this copy through one). Followed every two seconds: a helper that went is started again, a few times.
-    /// </summary>
+    // Started through the sign-in task, this copy may already have a helper. Followed every two seconds: a helper that
+    // went is started again, a few times.
     private void StartHelper()
     {
         if (!HelperWanted) return;
@@ -73,7 +63,6 @@ public sealed partial class TrayApplication
         Alert(T("settings.admin"), T("settings.admin.declined"), ToolTipIcon.Info);
     }
 
-    /// <summary>Run as administrator turned off: the helper puts its windows back and goes.</summary>
     private void StopHelper()
     {
         _helperCheck?.Dispose();
@@ -83,7 +72,6 @@ public sealed partial class TrayApplication
         _helper = null;
     }
 
-    /// <summary>What the helper sends: its alerts, a Settings request, and settings it changed (only this copy writes them).</summary>
     private void FromHelper(HelperLink.Message message)
     {
         switch (message.Kind)
@@ -111,10 +99,7 @@ public sealed partial class TrayApplication
         }
     }
 
-    /// <summary>
-    /// The helper's side: finds the ordinary copy and talks to it until it goes, then goes too, putting back what it
-    /// changed. Started by the sign-in task with no ordinary copy yet, it starts one, as the person.
-    /// </summary>
+    // Started by the sign-in task with no ordinary copy yet, it starts one, as the person.
     private void StartAsHelper()
     {
         _ordinary = new HelperLink.HelperEnd(() => _toolbar.BeginInvoke(LeaveAsHelper));
@@ -122,14 +107,15 @@ public sealed partial class TrayApplication
         _ordinary.ConnectionChanged += connected => _toolbar.BeginInvoke(() => Diagnostics.Log.Event("helper.link", ("connected", connected)));
         _ordinary.Start(OrdinaryCopyWait);
         if (HelperLink.FindCopy(Hotkeys.HotkeyHost.WindowTitle, elevated: false) != 0) return;
-        // Started at sign-in: the ordinary copy is started as the person, through the shell, which may still be starting.
+        // Started at sign-in: the ordinary copy is started as the person, through the shell, which may still be
+        // starting.
         _helperCheck = new System.Windows.Forms.Timer { Interval = HelperCheckMilliseconds };
         _helperCheck.Tick += (_, _) => StartOrdinaryCopy();
         _helperCheck.Start();
         StartOrdinaryCopy();
     }
 
-    /// <summary>Two-second looks: a start every third, the last at about half a minute.</summary>
+    // Two-second looks: a start every third, the last at about half a minute.
     private const int OrdinaryLooksAllowed = 13;
 
     private void StartOrdinaryCopy()
@@ -155,10 +141,9 @@ public sealed partial class TrayApplication
         LeaveAsHelper();
     }
 
-    /// <summary>The ordinary copy went (or never came): the helper puts back what it changed and goes, trying again until it can.</summary>
     private void LeaveAsHelper()
     {
-        if (Exiting) return; // Already gone the way it was asked to.
+        if (Exiting) return;
         Diagnostics.Log.Event("helper.leaving");
         ExitThread();
         if (Exiting) return;
@@ -171,14 +156,14 @@ public sealed partial class TrayApplication
         again.Start();
     }
 
-    /// <summary>What the ordinary copy sends: a command for an administrator app's window, settings saved, or to go.</summary>
     private void FromOrdinaryCopy(HelperLink.Message message)
     {
         switch (message.Kind)
         {
             case HelperLink.Run when Enum.IsDefined((AppCommand)message.Command):
                 nint window = (nint)message.Window;
-                // Only a window this copy may act on: an administrator app's, or none for the commands for every window.
+                // Only a window this copy may act on: an administrator app's, or none for the commands for every
+                // window.
                 if (window != 0 && (!User32.IsWindow(window) || !CanReach(window))) return;
                 RunOnDisplay((AppCommand)message.Command, window, message.DisplayBounds);
                 break;
@@ -192,10 +177,8 @@ public sealed partial class TrayApplication
         }
     }
 
-    /// <summary>
-    /// The helper reads the settings the ordinary copy saved. Read without setting a damaged file aside, as only the
-    /// writer does that: one it can't read leaves things as they are.
-    /// </summary>
+    // Read without setting a damaged file aside: only the writer does that. One it can't read leaves things as they
+    // are.
     private void ReloadSettings()
     {
         AppSettings? loaded = null;
@@ -229,7 +212,6 @@ public sealed partial class TrayApplication
         FollowStartup(_settings, asAdministrator: true, AppRoles.HelperArgument);
     }
 
-    /// <summary>Starting with Windows, as the helper sets it: the sign-in task only an elevated copy can make or take away.</summary>
     private void FollowStartup(AppSettings settings, bool asAdministrator, string arguments)
     {
         try
@@ -244,10 +226,8 @@ public sealed partial class TrayApplication
         }
     }
 
-    /// <summary>
-    /// Writes settings. The helper never writes them itself (one writer, 10-2): it hands them to the ordinary copy, which
-    /// saves and puts them into effect, then hands them back. Throws when they couldn't be written or handed over.
-    /// </summary>
+    // The helper never writes settings itself (one writer): it hands them to the ordinary copy, which saves and applies
+    // them, then hands them back. Throws when they couldn't be written or handed over.
     private void SaveSettings(AppSettings settings)
     {
         if (_role != AppRole.Helper)

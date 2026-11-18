@@ -11,7 +11,6 @@ using WinScreen.Updates;
 
 namespace WinScreen.Tray;
 
-/// <summary>The running app: a tray icon, the global hotkeys, the toolbar, and what each command does.</summary>
 public sealed partial class TrayApplication : ApplicationContext
 {
     private const int MenuTextLimit = 60;
@@ -38,11 +37,8 @@ public sealed partial class TrayApplication : ApplicationContext
     private readonly AnchorSet _anchors = new();
     private readonly AutomaticAnchors _automaticAnchors;
     private readonly RecoveryWatcher _recoveryWatcher;
-    /// <summary>What this copy is (10-2): which windows it acts on, and whether it has a tray icon and hotkeys.</summary>
     private readonly AppRole _role;
-    /// <summary>The ordinary copy's link to its administrator helper, while Run as administrator wants one.</summary>
     private HelperLink.OrdinaryEnd? _helper;
-    /// <summary>The helper's link to the ordinary copy it works for.</summary>
     private HelperLink.HelperEnd? _ordinary;
     private System.Windows.Forms.Timer? _helperCheck;
     private int _helperStarts;
@@ -58,7 +54,7 @@ public sealed partial class TrayApplication : ApplicationContext
     private readonly Dictionary<nint, WindowIdentity> _setupNone = [];
     private readonly SavedViews _savedViews = new();
     private readonly Dictionary<nint, long> _setupRetryAt = [];
-    /// <summary>When a saved setup first looked at each window, so a new window can draw before it's judged dark.</summary>
+    // So a new window can draw before it's judged dark.
     private readonly Dictionary<nint, long> _setupFirstSeen = [];
     private const long NewWindowDrawsWithin = 6000;
     private readonly ToolStripMenuItem _targetTitle = new();
@@ -211,7 +207,6 @@ public sealed partial class TrayApplication : ApplicationContext
         IReadOnlyList<HotkeyProblem> problems = StartUp();
         if (_role != AppRole.Helper)
         {
-            // A built-in shortcut that types a letter on this keyboard is explained once, not at every sign-in.
             if (!firstRun)
                 problems = problems.Where(problem => !TypesTextByDefault(problem.Command)).ToArray();
             if (problems.Count > 0)
@@ -235,7 +230,6 @@ public sealed partial class TrayApplication : ApplicationContext
         if (_role == AppRole.Helper) StartAsHelper();
         else if (HelperWanted) StartHelper();
 
-        // Restarted for a change made in Settings: Settings comes back on the same page.
         if (settingsPage is { } page)
         {
             var reopen = new System.Windows.Forms.Timer { Interval = 300 };
@@ -254,7 +248,6 @@ public sealed partial class TrayApplication : ApplicationContext
         var newView = new ToolStripMenuItem(T("menu.tray.newView"), MenuParts.Icon(MenuParts.NewWindow),
             (_, _) => Run(AppCommand.PickPipSource, 0));
         menu.Items.Add(newView);
-        // Open views are listed here directly, between these two headings, each time the menu opens.
         ToolStripLabel viewsStart = MenuParts.Header(T("tray.openViews")), viewsEnd = MenuParts.Header(T("tray.lastWindow"));
         menu.Items.Add(viewsStart);
         menu.Items.Add(viewsEnd);
@@ -276,7 +269,6 @@ public sealed partial class TrayApplication : ApplicationContext
         menu.Items.Add(new ToolStripMenuItem(T("settings.title"), MenuParts.Icon(MenuParts.Settings), (_, _) => OpenSettings()));
         var check = new ToolStripMenuItem(T("updates.check"), MenuParts.Icon(MenuParts.Sync), async (_, _) => await CheckForUpdates());
         var restart = new ToolStripMenuItem(T("updates.restart"), MenuParts.Icon(MenuParts.Sync), (_, _) => RestartToUpdate()) { Visible = false };
-        // While an update waits, Restart to update takes Check for updates' place.
         menu.Opening += (_, _) => { restart.Visible = _updates.Ready; check.Visible = !restart.Visible; };
         menu.Items.Add(check);
         menu.Items.Add(restart);
@@ -310,12 +302,10 @@ public sealed partial class TrayApplication : ApplicationContext
             newView.ShortcutKeyDisplayString = MenuHotkey(AppCommand.PickPipSource);
             foreach ((AppCommand command, ToolStripMenuItem item) in everywhere)
                 item.ShortcutKeyDisplayString = MenuHotkey(command);
-            // Only offered while there is something to take away; the two that hide stay, ticked while hidden.
             everywhere[AppCommand.ClickThroughOffEverywhere].Available = _windows.ClickThroughCount > 0;
             everywhere[AppCommand.UnpinEverywhere].Available = _windows.PinnedCount > 0;
             everywhere[AppCommand.HideAnchors].Checked = _anchors.Hidden;
             everywhere[AppCommand.HideToolbar].Checked = _toolbarHidden;
-            // Nothing to read until something has been reported.
             _statusItem.Available = _lastStatus != T("tray.noActions");
             for (int index = menu.Items.IndexOf(viewsEnd) - 1; index > menu.Items.IndexOf(viewsStart); index--)
             {
@@ -330,7 +320,6 @@ public sealed partial class TrayApplication : ApplicationContext
         return menu;
     }
 
-    /// <summary>The hotkey to show beside a command in a menu: nothing when it has none.</summary>
     private string? MenuHotkey(AppCommand command) =>
         _settings.Hotkeys.TryGetValue(command, out string? keys) && !string.IsNullOrWhiteSpace(keys) ? keys : null;
 
@@ -363,10 +352,7 @@ public sealed partial class TrayApplication : ApplicationContext
         });
     }
 
-    /// <summary>
-    /// Opens a window's menu where it is asked for, from a gesture, a hotkey or a toolbar button. The menu is held by
-    /// a window of its own that takes the keyboard, so it stays open whatever happens to the toolbar meanwhile.
-    /// </summary>
+    // Held by a window of its own that takes the keyboard, so it stays open whatever happens to the toolbar meanwhile.
     private void ShowHostedMenu(nint window, Point point, AppCommand asked, Action<ContextMenuStrip, WindowMenuBuilder> fill)
     {
         if (_windowMenu is { IsDisposed: false } || FullScreenDecision(asked, window) != FullScreenAction.Run) return;
@@ -390,10 +376,6 @@ public sealed partial class TrayApplication : ApplicationContext
         });
     }
 
-    /// <summary>
-    /// The toolbar's two menu buttons. Arrange window lists everything that moves the window; Window menu lists what
-    /// the window menu offers that isn't a button on this bar already, so nothing shows twice.
-    /// </summary>
     private void ShowToolbarMenu(AppCommand command, nint window, Point point)
     {
         if (command == AppCommand.Arrange)
@@ -409,7 +391,6 @@ public sealed partial class TrayApplication : ApplicationContext
         });
     }
 
-    /// <summary>The views that are open, which may have no original to act from, and what can be opened again.</summary>
     private List<ToolStripItem> ViewItems()
     {
         var items = new List<ToolStripItem>();
@@ -452,10 +433,8 @@ public sealed partial class TrayApplication : ApplicationContext
         return items;
     }
 
-    /// <summary>
-    /// Puts saved settings into effect when WinScreen starts. A hotkey that can't be used is reported and
-    /// the rest of the app carries on, because at startup nothing is running that a refusal could protect.
-    /// </summary>
+    // A hotkey that can't be used is reported and the rest carries on: at startup nothing is running that a refusal
+    // could protect.
     private IReadOnlyList<HotkeyProblem> StartUp()
     {
         // The helper takes no hotkeys: the ordinary copy has them, and hands it what is for administrator apps.
@@ -488,7 +467,6 @@ public sealed partial class TrayApplication : ApplicationContext
         return problems;
     }
 
-    /// <summary>Puts changes from Settings into effect and saves them, or changes nothing and says why.</summary>
     private IReadOnlyList<HotkeyProblem> Apply(AppSettings settings)
     {
         bool experimentalBefore = _settings.ExperimentalFeatures;
@@ -531,7 +509,6 @@ public sealed partial class TrayApplication : ApplicationContext
         ApplyPreferences(experimentalBefore, before);
         Native.Translucency.Allowed = _settings.MenuTransparency;
         if (_settings.Theme != themeBefore) ChangeTheme();
-        // The helper reads them again, or goes when Run as administrator was turned off (10-2).
         if (_helper is not null && !HelperWanted) StopHelper();
         else _helper?.Send(new HelperLink.Message(HelperLink.SettingsSaved));
         if (adminChanged && HelperWanted)
@@ -543,10 +520,6 @@ public sealed partial class TrayApplication : ApplicationContext
         return [];
     }
 
-    /// <summary>
-    /// Hands over to a copy running as administrator, which Windows asks about first. If the person says no, the
-    /// choice goes back to off, since it can't be had without that.
-    /// </summary>
     private void RestartAsAdministrator()
     {
         if (Elevation.StartElevatedCopy())
@@ -562,10 +535,8 @@ public sealed partial class TrayApplication : ApplicationContext
         Alert(T("settings.admin"), T("settings.admin.declined"), ToolTipIcon.Info);
     }
 
-    /// <summary>Asks before a restart closes views and puts windows back. Tests answer it themselves.</summary>
     internal Func<int, int, bool> AskToRestart { get; init; }
 
-    /// <summary>Starts the copy that takes over, opening Settings on the page given. Tests stand in for it.</summary>
     internal Func<int, bool> StartCopy { get; init; } = Elevation.StartFreshCopy;
 
     private bool AskInSettings(int views, int changed) =>
@@ -574,20 +545,16 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private bool _restarting;
 
-    /// <summary>True once WinScreen has started to exit, for tests.</summary>
     internal bool Exiting { get; private set; }
 
-    /// <summary>
-    /// A new language needs a new start. It goes the way exit does, so every view closes and every window is put
-    /// back first; if one can't be, WinScreen stays running and says so. With views or changed windows it asks first;
-    /// with nothing open it just restarts. The new copy opens Settings on the same page.
-    /// </summary>
+    // A new language needs a new start, which goes the way exit does: every view closes and every window is put back
+    // first; if one can't be, WinScreen stays running and says so.
     private void RestartForLanguage()
     {
         int page = _settingsWindow is { IsDisposed: false } open ? open.PageIndex : 0;
         int views = _viewsInOrder.Count, changed = _windows.PendingRestores;
         if (views + changed > 0 && !AskToRestart(views, changed))
-            return; // Kept: the language changes at the next start.
+            return;
         Diagnostics.Log.Event("app.restarting", ("views", views), ("windows", changed));
         if (_settingsWindow is { IsDisposed: false } settings) settings.Close();
         if (!TakeEverythingAwayForExit())
@@ -606,10 +573,8 @@ public sealed partial class TrayApplication : ApplicationContext
         ExitThread();
     }
 
-    /// <summary>
-    /// Changes between light and dark without restarting. Menus follow the next time they open; Settings sets its
-    /// colours as it is made, so it is opened again on the same page, once the save that changed the look is done.
-    /// </summary>
+    // Settings sets its colours as it is made, so it is opened again on the same page, once the save that changed the
+    // look is done.
     private void ChangeTheme()
     {
         bool darkBefore = MenuStyle.Dark;
@@ -661,7 +626,6 @@ public sealed partial class TrayApplication : ApplicationContext
         old.FormClosed += (_, _) => _reopenWhenBack = false;
     }
 
-    /// <summary>Keeps where Settings was and whether it was maximized, for the next time it opens.</summary>
     private void RememberPlacement(SettingsWindow window)
     {
         if (!window.IsHandleCreated) return;
@@ -670,10 +634,9 @@ public sealed partial class TrayApplication : ApplicationContext
         if (placement == _settings.SettingsWindowPlacement) return;
         _settings.SettingsWindowPlacement = placement;
         try { _settings.Save(_settingsPath); }
-        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(failure); } // Opens centred next time instead.
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(failure); }
     }
 
-    /// <summary>With the look set to follow Windows, Settings is made again when Windows changes between light and dark.</summary>
     private void FollowWindowsTheme(object? sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
     {
         if (e.Category != Microsoft.Win32.UserPreferenceCategory.General || _settings.Theme is "light" or "dark") return;
@@ -684,12 +647,9 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private bool _wasDark = MenuStyle.Dark;
 
-    /// <summary>
-    /// Puts the settings into effect in every part of WinScreen and on every open view. With the settings that were in
-    /// effect before, only the parts whose settings changed are touched: Settings applies each change as it is made, and
-    /// resetting the toolbar or every view for an unrelated switch would be felt. Each part is put into effect on its
-    /// own, so one that fails doesn't leave the others as they were.
-    /// </summary>
+    // With the settings in effect before, only parts whose settings changed are touched: Settings applies each change
+    // as it is made, and resetting the toolbar or every view for an unrelated switch would be felt.
+    // Each part is applied on its own, so one that fails doesn't leave the others as they were.
     private void ApplyPreferences(bool experimentalBefore, AppSettings? before = null)
     {
         bool Changed<T>(Func<AppSettings, T> part) => before is null ||
@@ -729,7 +689,7 @@ public sealed partial class TrayApplication : ApplicationContext
             bool looking = _settings.Updates != UpdateMode.Off;
             bool installing = _settings.Updates == UpdateMode.Install && VelopackUpdateSession.IsInstalled;
             if (looking && !_updatesWereOn)
-                _updateTimer.Interval = 30_000; // Check soon after it's turned on, then every few hours.
+                _updateTimer.Interval = 30_000;
             _updatesWereOn = looking;
             _updates.SetEnabled(installing);
             _updates.SetTelling(looking && !installing);
@@ -812,25 +772,21 @@ public sealed partial class TrayApplication : ApplicationContext
     private static string Describe(IEnumerable<HotkeyProblem> problems) =>
         string.Join(Environment.NewLine, problems.Select(problem => problem.Message));
 
-    /// <summary>Only windows a person would look for, that are really out of sight and allowed by Settings.</summary>
     private bool CanHaveAutomaticAnchor(nint window) =>
         WindowInfo.IsMainWindow(window) && _windows.CanControl(window) && !WindowInfo.IsConcealed(window) &&
         !_windows.IsHidden(window) && _settings.Anchors.Allows(WindowInfo.ProgramOf(window)) && CanReach(window);
 
     private bool Paused => _settings.PauseInFullScreen && FullScreenNow() != FullScreenState.None;
 
-    /// <summary>
-    /// Full screen as WinScreen takes it: a window it filled itself with Fill display is not a game to step back for.
-    /// One of WinScreen's own windows in front (a menu it opened) is not a game either: Windows can go on calling the
-    /// filled window behind it full screen, and the menu was closed the moment it opened (the owner, 15 Nov).
-    /// </summary>
+    // A window WinScreen filled itself with Fill display is not a game to step back for. Nor is one of WinScreen's own
+    // windows in front (a menu it opened): Windows can go on calling the filled window behind it full screen, which
+    // closed the menu the moment it opened.
     private FullScreenState FullScreenNow() =>
         FullScreenPolicy.Seen(FullScreen.Current(), User32.GetForegroundWindow(), window => _windows.FilledByWinScreen(window) || IsOwn(window));
 
     private static bool IsOwn(nint window) =>
         User32.GetWindowThreadProcessId(window, out uint process) != 0 && process == Environment.ProcessId;
 
-    /// <summary>Covers its display as a game or a full-screen app does, rather than because WinScreen filled it.</summary>
     private bool FillsLikeAGame(nint window) =>
         !User32.IsZoomed(window) && WindowInfo.FillsMonitor(window) && !_windows.FilledByWinScreen(window);
 
@@ -854,7 +810,6 @@ public sealed partial class TrayApplication : ApplicationContext
                !(_ruleOf.TryGetValue(window, out var rule) && rule.NoToolbar && _setupDone.GetValueOrDefault(window)?.Matches() == true);
     }
 
-    /// <summary>A rule says the toolbar comes where its title bar usually is, without asking the window (10-4).</summary>
     private bool ToolbarByPosition(nint window) =>
         _ruleOf.TryGetValue(window, out var rule) && rule.ToolbarByPosition && !rule.NoToolbar &&
         _setupDone.GetValueOrDefault(window)?.Matches() == true;
@@ -864,7 +819,6 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private bool IsOn(AppCommand command, nint window) => _commands.IsOn(command, window);
 
-    /// <summary>A hotkey pressed on a PiP view or Shrink tile means the window that view stands for.</summary>
     private nint TargetOf(nint foreground)
     {
         foreach ((nint source, PipWindow view) in _pips)
@@ -907,10 +861,7 @@ public sealed partial class TrayApplication : ApplicationContext
         _borders.Show(_settings.HighlightPinned ? _windows.VisiblePinnedWindows() : []);
     }
 
-    /// <summary>
-    /// Keeps the mouse hook only for as long as it could do anything. With the feature off this is one
-    /// comparison, and the hook's absence is the point: nothing runs behind a game.
-    /// </summary>
+    // With the feature off this is one comparison, and the hook's absence is the point: nothing runs behind a game.
     private void FollowModifierHook(nint foreground)
     {
         _modifierDrag.OpacityWheelEnabled = _settings.OpacityWheel;
@@ -948,7 +899,8 @@ public sealed partial class TrayApplication : ApplicationContext
         Point cursor = Cursor.Position;
         // Windows drops a slow hook without saying so. Input with no callback means it has, so put it back, ending
         // any drag it was in the middle of (its release will never be seen).
-        // An ordinary copy's hook isn't told about input aimed at an administrator window, so silence there is expected.
+        // An ordinary copy's hook isn't told about input aimed at an administrator window, so silence there is
+        // expected.
         bool silent = ModifierHookPolicy.LooksDropped(_modifierDrag.Active, cursor != _hookCursor,
             System.Diagnostics.Stopwatch.GetElapsedTime(_modifierDrag.LastCallback), System.Diagnostics.Stopwatch.GetElapsedTime(_hookAwayAt),
             _modifierDrag.Active && cursor != _hookCursor &&
@@ -976,7 +928,7 @@ public sealed partial class TrayApplication : ApplicationContext
                _settings.ModifierExclusions.Contains(program, StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>Asked inside the mouse hook, only for a press with the modifier held, so it can afford these calls.</summary>
+    // Asked inside the mouse hook, only for a press with the modifier held, so it can afford these calls.
     private bool CanDrag(nint window)
     {
         // A maximized window can be dragged out of maximized; one that fills the screen without being maximized is
@@ -993,10 +945,7 @@ public sealed partial class TrayApplication : ApplicationContext
         return CanReach(window);
     }
 
-    /// <summary>
-    /// Windows only lets an app reach an administrator app's windows when it runs as administrator too. Since 10-2 the
-    /// administrator helper acts only on those, and the ordinary copy on all the others (<see cref="AppRoles.Reaches"/>).
-    /// </summary>
+    // Windows only lets an app reach an administrator app's windows when it runs as administrator too.
     private bool CanReach(nint window)
     {
         if (_role == AppRole.Elevated) return true;
@@ -1012,12 +961,9 @@ public sealed partial class TrayApplication : ApplicationContext
         !FullScreen.IsAway() && !User32.IsIconic(window) && (!WindowInfo.FillsMonitor(window) || _windows.FilledByWinScreen(window)) &&
         CanGesture(window);
 
-    /// <summary>
-    /// Gives a window its rule (a saved setup, roadmap P1-5) the first time it comes forward, and never again unless
-    /// the rule says every time: pinning needs a window that is forward, and whatever the person changes after that
-    /// must stay changed. A window no rule is for is looked at again when its title changes, since rules can look at
-    /// the title.
-    /// </summary>
+    // Only the first time a window comes forward unless the rule says every time: pinning needs a window that is
+    // forward, and whatever the person changes after that must stay changed. A window no rule is for is looked at again
+    // when its title changes.
     private void ApplySavedSetup(nint window)
     {
         // Runs four times a second, so a window already looked at, or no saved setups at all, costs nothing.
@@ -1048,7 +994,6 @@ public sealed partial class TrayApplication : ApplicationContext
 
         if (_settings.SetupForWindow(window) is not { } setup)
         {
-            // No rule for this window. Looked at again when its title or the saved setups change.
             try
             {
                 _setupNone[window] = WindowIdentity.Observe(window);
@@ -1057,8 +1002,8 @@ public sealed partial class TrayApplication : ApplicationContext
             catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
             return;
         }
-        // A new window may not have drawn yet: Chrome shows a blank dark frame first, which Dark mode took for a window
-        // that is dark already and left alone (the owner, 16 Nov). The setup waits for it a few seconds.
+        // A new window may not have drawn yet: Chrome shows a blank dark frame first, which Dark took for a window
+        // already dark. The setup waits for it a few seconds.
         long now = Environment.TickCount64;
         if (!_setupFirstSeen.TryGetValue(window, out long firstSeen)) _setupFirstSeen[window] = firstSeen = now;
         if (setup.Dark && _settings.ExperimentalFeatures && now - firstSeen < NewWindowDrawsWithin &&
@@ -1102,26 +1047,20 @@ public sealed partial class TrayApplication : ApplicationContext
         }
     }
 
-    /// <summary>The rule last applied to each window, for what it asks of the toolbar.</summary>
     private readonly Dictionary<nint, ProgramSetup> _ruleOf = [];
-    /// <summary>Windows whose rule was changed in Settings since it was applied: they get it again when they come forward.</summary>
     private readonly HashSet<nint> _ruleRenewed = [];
 
-    /// <summary>
-    /// Saved setups were changed in Settings. A window whose rule changed, went off or was removed follows at once in
-    /// what it asks of the toolbar, and gets the rest the next time it comes forward; whatever the old rule did stays
-    /// as it is, like any other change the person can undo.
-    /// </summary>
+    // A window whose rule changed follows at once in what it asks of the toolbar, and gets the rest the next time it
+    // comes forward; what the old rule did stays, like any other change the person can undo.
     private void RulesChanged()
     {
         foreach ((nint window, ProgramSetup old) in _ruleOf.ToArray())
         {
             if (!_setupDone.TryGetValue(window, out var done) || !done.Matches())
-                continue; // Gone; the next look clears it.
+                continue;
             ProgramSetup? now = _settings.SetupForWindow(window);
             if (now is null)
             {
-                // No rule for it any more: looked at afresh, as a window that never had one.
                 _ruleOf.Remove(window);
                 _setupDone.Remove(window);
                 _ruleRenewed.Remove(window);
@@ -1135,15 +1074,14 @@ public sealed partial class TrayApplication : ApplicationContext
     private readonly Dictionary<nint, string> _setupNoneTitle = [];
     private nint _setupForeground;
 
-    /// <summary>
-    /// Brings back a saved view, for the first window of its program in this session. A view that keeps
-    /// updating doesn't hide its source yet: this window just opened and the person is about to use it.
-    /// </summary>
+    // A view that keeps updating doesn't hide its source yet: this window just opened and the person is about to use
+    // it.
     private void RestoreSavedView(nint window, ProgramSetup setup)
     {
         if (!_savedViews.ShouldOpen(setup, _pips.ContainsKey(window)))
             return;
-        // Its saved Keep hidden decides, not the default for new views: kept, it hides once the person leaves the window.
+        // Its saved Keep hidden decides, not the default for new views: kept, it hides once the person leaves the
+        // window.
         if (OpenViewOf(window, hideOriginal: false) is not { IsDisposed: false } pip)
             return;
         pip.ApplyPreset(setup.View!);
@@ -1152,7 +1090,6 @@ public sealed partial class TrayApplication : ApplicationContext
             _savedViews.ConcealOnLeaving(window, pip);
     }
 
-    /// <summary>Saves how this window is now for its program, or forgets the program's setup if it has none.</summary>
     private void SaveSetup(nint window)
     {
         string program = WindowInfo.ProgramOf(window);
@@ -1222,8 +1159,8 @@ public sealed partial class TrayApplication : ApplicationContext
             preview.Close();
             if (!preview.IsDisposed) return;
         }
-        // The tile hides the window, which an effect can't share, so Dark mode or Glass is off while it's a tile and
-        // comes back when the person brings the window back (the owner, 15 Nov: it seemed to vanish).
+        // The tile hides the window, which an effect can't share, so Dark or Glass is off while it's a tile and comes
+        // back when the person brings the window back.
         Glass.ContentLook? look = _content.Has(window, Glass.ContentLook.Dark) ? Glass.ContentLook.Dark
             : _content.Has(window, Glass.ContentLook.Glass) ? Glass.ContentLook.Glass : null;
         _content.TurnOff(window);
@@ -1299,10 +1236,7 @@ public sealed partial class TrayApplication : ApplicationContext
             if (!view.IsDisposed) view.EndVisit();
     }
 
-    /// <summary>
-    /// WinScreen's own windows that stay above views, lowest first: Settings, then a view's own menu, the
-    /// window menu, and the tray menu with whichever of their submenus are open.
-    /// </summary>
+    // Lowest first.
     private IEnumerable<nint> AppWindowsAbove()
     {
         // Maximized it fills the screen, so it stays with ordinary windows instead of over every view.
@@ -1323,21 +1257,16 @@ public sealed partial class TrayApplication : ApplicationContext
             yield return window;
     }
 
-    /// <summary>Opens Settings, or brings it forward; <paramref name="bounds"/> and <paramref name="page"/> reopen it where it was.</summary>
-    /// <param name="reopening">True when Settings is only made again in the other colours, replacing the one open.</param>
-    /// <param name="unsaved">Changes the window it replaces had not saved.</param>
-    /// <param name="quietly">Shown without taking the keyboard from what has it.</param>
     private void OpenSettings(Rectangle? bounds = null, int page = 0, bool reopening = false, SettingsWindow.UnsavedEdits? unsaved = null,
         bool quietly = false, FormWindowState state = FormWindowState.Normal)
     {
         if (_role == AppRole.Helper)
         {
-            _ordinary?.Send(new HelperLink.Message(HelperLink.OpenSettings)); // Settings are the ordinary copy's (10-2).
+            _ordinary?.Send(new HelperLink.Message(HelperLink.OpenSettings)); // Settings are the ordinary copy's.
             return;
         }
         if (_settingsWindow is { IsDisposed: false })
         {
-            // Back from the taskbar as it was, maximized or not.
             if (_settingsWindow.IsHandleCreated && _settingsWindow.WindowState == FormWindowState.Minimized)
                 User32.ShowWindow(_settingsWindow.Handle, User32.SW_RESTORE);
             _settingsWindow.Activate();
@@ -1366,7 +1295,6 @@ public sealed partial class TrayApplication : ApplicationContext
         if (!quietly) _settingsWindow.Activate();
     }
 
-    /// <summary>Writes the diagnostics file and shows it in File Explorer, for the person to attach to a report.</summary>
     private void SaveDiagnostics()
     {
         try
@@ -1390,7 +1318,6 @@ public sealed partial class TrayApplication : ApplicationContext
         }
         if (!VelopackUpdateSession.IsInstalled)
         {
-            // A portable copy can't replace itself: it says whether a newer one is out and offers its page (D14).
             (string? version, bool failed) = await _updates.LookNow();
             if (version is not null) TellAboutVersion(version);
             else Balloon(T("updates.title"), failed ? T("updates.checkFailed") : T("updates.upToDate"), ToolTipIcon.Info);
@@ -1399,11 +1326,7 @@ public sealed partial class TrayApplication : ApplicationContext
         Balloon(T("updates.title"), await _updates.CheckNow(), ToolTipIcon.Info);
     }
 
-    /// <summary>
-    /// "Tell me", or a copy that can't install: a newer version is out. A click downloads it for an installed copy (it
-    /// installs on exit), or opens its release page for a portable one. Shown even with notifications off: telling is
-    /// what the person chose.
-    /// </summary>
+    // Shown even with notifications off: telling is what the person chose.
     private void TellAboutVersion(string version)
     {
         bool installed = VelopackUpdateSession.IsInstalled;
@@ -1411,10 +1334,7 @@ public sealed partial class TrayApplication : ApplicationContext
             ToolTipIcon.Info, installed ? () => _ = DownloadToldVersion() : () => OpenReleasePage(version));
     }
 
-    /// <summary>
-    /// The first start of a published version after an update says so once, quietly: WinScreen often starts at sign-in
-    /// with nobody watching, so never a window by itself. A click opens the list.
-    /// </summary>
+    // WinScreen often starts at sign-in with nobody watching, so never a window by itself.
     private void OfferWhatsNew(bool firstRun)
     {
         string version = AppInfo.Version;
@@ -1429,10 +1349,6 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private bool _restartForUpdate;
 
-    /// <summary>
-    /// Installs a downloaded update now: WinScreen exits the ordinary way (every view closed, every window put back,
-    /// or it stays and says so) and the installer starts it again. It asks first when something would be closed.
-    /// </summary>
     internal void RestartToUpdate()
     {
         if (!_updates.Ready) return;
@@ -1464,7 +1380,8 @@ public sealed partial class TrayApplication : ApplicationContext
 
     protected override void ExitThreadCore()
     {
-        // Settings first, while everything it puts into effect is still there: closing it applies a change still settling.
+        // Settings first, while everything it puts into effect is still there: closing it applies a change still
+        // settling.
         if (_settingsWindow is { IsDisposed: false } settings) settings.Close();
         // Windows go back first: if that fails WinScreen stays running, with its views still in place.
         if (!TakeEverythingAwayForExit())
@@ -1513,10 +1430,8 @@ public sealed partial class TrayApplication : ApplicationContext
         Diagnostics.Log.Event("command", ("name", command), ("outcome", outcome),
             ("program", window == 0 ? Diagnostics.LogValue.Program("") : Diagnostics.LogValue.ProgramOf(window)));
 
-    /// <summary>
-    /// The one way every command runs, from hotkeys, menus and the toolbar: the checks in a fixed order, then the
-    /// command's definition (<see cref="CommandTable"/>). Says how it went.
-    /// </summary>
+    // The one way every command runs, from hotkeys, menus and the toolbar: the checks in a fixed order, then the
+    // command's definition.
     private CommandOutcome RunOnDisplay(AppCommand command, nint window, Rectangle? display)
     {
         if (!_commands.TryGet(command, out CommandDefinition definition))
@@ -1526,7 +1441,7 @@ public sealed partial class TrayApplication : ApplicationContext
             case CommandTarget.EveryWindow:
                 LogCommand(command, 0, CommandOutcome.Started);
                 definition.Run(0, null);
-                // Administrator apps' windows are the helper's (10-2): it does the same for them.
+                // Administrator apps' windows are the helper's: it does the same for them.
                 _helper?.Send(new HelperLink.Message(HelperLink.Run, (int)command));
                 return CommandOutcome.Started;
             case CommandTarget.UnderPointer:
@@ -1542,7 +1457,7 @@ public sealed partial class TrayApplication : ApplicationContext
 
         if (definition.Target != CommandTarget.NoWindow && window != 0 && !CanReach(window))
         {
-            // An administrator app's window, from the ordinary copy: its helper runs the command there (10-2).
+            // An administrator app's window, from the ordinary copy: its helper runs the command there.
             if (_helper is { Connected: true } helper && User32.IsWindow(window))
             {
                 LogCommand(command, window, CommandOutcome.Started);
@@ -1605,7 +1520,7 @@ public sealed partial class TrayApplication : ApplicationContext
         }
     }
 
-    /// <summary>The commands for every window at once. They only take things away, so they work at any time.</summary>
+    // They only take things away, so they work at any time.
     private void RunEverywhere(AppCommand command)
     {
         string name = CommandCatalog.Name(command);
@@ -1638,7 +1553,6 @@ public sealed partial class TrayApplication : ApplicationContext
         }
     }
 
-    /// <summary>True while the toolbar is put away until it's asked for again or WinScreen starts again.</summary>
     private bool _toolbarHidden;
 
     private void Attempt(Action action)
@@ -1654,7 +1568,6 @@ public sealed partial class TrayApplication : ApplicationContext
         }
     }
 
-    /// <summary>Everything that moves a window, from one button, so the toolbar doesn't need a button for each.</summary>
     private void ShowArrangeMenu(nint window) =>
         ShowHostedMenu(window, Cursor.Position, AppCommand.Arrange, (menu, builder) => builder.PopulateArrange(menu.Items));
 
@@ -1680,10 +1593,6 @@ public sealed partial class TrayApplication : ApplicationContext
             (T("common.copy"), () => WindowUtilities.CopyText(text), true)).ShowInFront();
     }
 
-    /// <summary>
-    /// Opens a view of a window, or returns null when the person chose not to restore a minimized one. A new view hides
-    /// its original (Keep hidden), so it keeps changing when the original is covered.
-    /// </summary>
     private PipWindow? OpenViewOf(nint window, bool hideOriginal = true)
     {
         if (_shrunk.TryGetValue(window, out var tile))
@@ -1739,7 +1648,7 @@ public sealed partial class TrayApplication : ApplicationContext
         if (_settings.ExperimentalFeatures && _settings.PipAutoMove)
             pip.SetAutoMove(true);
         if (_settings.ExperimentalFeatures && _settings.PipMiddleClickScroll)
-            pip.SetMiddleClickScroll(true); // Takes effect once the view is used directly.
+            pip.SetMiddleClickScroll(true);
     }
 
     private void ChangePresets(Action<List<PipPreset>> change)
@@ -1769,7 +1678,6 @@ public sealed partial class TrayApplication : ApplicationContext
         }
     }
 
-    /// <summary>Adds a program to Settings' Show original list, chosen from a view's chip.</summary>
     private void ShowOriginalFor(string program)
     {
         if (_settings.PipOriginalPrograms.Contains(program, StringComparer.OrdinalIgnoreCase)) return;
@@ -1880,12 +1788,9 @@ public sealed partial class TrayApplication : ApplicationContext
         }
     }
 
-    /// <summary>Failures a command can meet in normal use, such as a locked settings file or a refused screen capture.</summary>
     private static bool IsExpected(Exception failure) => failure is WindowOperationException or IOException
         or UnauthorizedAccessException or System.Security.SecurityException or ExternalException;
 
-    /// <summary>Picture-safe Dark when it's chosen in Settings, otherwise the simple filter. Only one at a time.</summary>
-    /// <summary>The ways a window's colours can be changed. A window has at most one of them at a time.</summary>
     private enum Look { None, FilterDark, PictureDark, ColorGlass, LayeredGlass }
 
     private Look DarkLook(nint window) =>
@@ -1894,22 +1799,15 @@ public sealed partial class TrayApplication : ApplicationContext
     private Look GlassLook(nint window) =>
         _windows.IsGlass(window) ? Look.ColorGlass : _content.Has(window, Glass.ContentLook.Glass) ? Look.LayeredGlass : Look.None;
 
-    /// <summary>
-    /// Picture-keeping Dark when it's chosen in Settings (the default) and there is a graphics card for it, otherwise the
-    /// filter. Glass goes first: the two can't share a window.
-    /// </summary>
+    // Glass goes first: the two can't share a window.
     private void ToggleDark(nint window) => SwitchLook(window, DarkLook(window), GlassLook(window),
         _settings.Effects.PictureSafeDark && Glass.ContentOverlay.GraphicsCardPresent ? Look.PictureDark : Look.FilterDark);
 
-    /// <summary>Layered Glass when it's chosen in Settings, otherwise the colour-key Glass. Dark goes first.</summary>
     private void ToggleGlass(nint window) => SwitchLook(window, GlassLook(window), DarkLook(window),
         _settings.Effects.LayeredGlass && Glass.ContentOverlay.GraphicsCardPresent ? Look.LayeredGlass : Look.ColorGlass);
 
-    /// <summary>
-    /// Turns <paramref name="current"/> off when the window has it; otherwise turns <paramref name="other"/> off and
-    /// <paramref name="wanted"/> on. When the new look fails or is refused, the old one is put back, so a window never
-    /// ends up with both, and never loses one for nothing.
-    /// </summary>
+    // When the new look fails or is refused the old one is put back, so a window never ends up with both, and never
+    // loses one for nothing.
     private void SwitchLook(nint window, Look current, Look other, Look wanted)
     {
         if (current != Look.None)
@@ -1975,10 +1873,8 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private readonly PressWatch _pressWatch = new();
 
-    /// <summary>
-    /// The watchdog (11.1, INV-18): a look whose window has stopped taking presses for a second is turned off, and the
-    /// person is told. Colour-key Glass is left out: Windows passes presses on its see-through colour by design.
-    /// </summary>
+    // The watchdog (INV-18): a look whose window has stopped taking presses for a second is turned off, and the person
+    // is told. Colour-key Glass is left out: Windows passes presses on its see-through colour by design.
     private void FollowLookPresses()
     {
         if (_content.Count == 0 && !_dark.Targets.Any()) return;
@@ -2008,7 +1904,6 @@ public sealed partial class TrayApplication : ApplicationContext
             _flash.ShowOver(bounds, string.Format(T("window.opacity.percent"), (int)Math.Round(alpha * 100.0 / 255)));
     }
 
-    /// <summary>Reports a routine success, which someone can choose not to be told about.</summary>
     private void Confirm(string title, string text)
     {
         Remember(title, text);
@@ -2016,7 +1911,7 @@ public sealed partial class TrayApplication : ApplicationContext
             Balloon(title, text, ToolTipIcon.None);
     }
 
-    /// <summary>Reports something that didn't happen or needs a decision. It's always shown, or it would look like nothing happened.</summary>
+    // Always shown, or it would look like nothing happened.
     private void Alert(string title, string text, ToolTipIcon icon = ToolTipIcon.Warning)
     {
         Remember(title, text);
@@ -2031,17 +1926,15 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private void ShowStatus() => _statusItem.Text = T("tray.resultPrefix") + MenuText(_lastStatus);
 
-    /// <summary>
-    /// What a click on the balloon showing now does, or nothing. Windows reports a click on any balloon the same way,
-    /// so each balloon sets it, and one without an action clears it: a later error can't open an earlier offer.
-    /// </summary>
+    // Windows reports a click on any balloon the same way, so each balloon sets this, and one without an action clears
+    // it: a later error can't open an earlier offer.
     private Action? _balloonAction;
 
     private void Balloon(string title, string text, ToolTipIcon icon, Action? onClick = null)
     {
         if (_role == AppRole.Helper)
         {
-            // No icon of its own: the ordinary copy shows it (10-2).
+            // No icon of its own: the ordinary copy shows it.
             if (_ordinary?.Send(new HelperLink.Message(HelperLink.Alert, Title: title, Text: text, Icon: (int)icon)) != true)
                 Diagnostics.Log.Event("helper.alertLost");
             return;
@@ -2050,7 +1943,7 @@ public sealed partial class TrayApplication : ApplicationContext
         _tray.ShowBalloonTip(BalloonMilliseconds, title, string.IsNullOrEmpty(text) ? " " : text, icon);
     }
 
-    /// <summary>Keeps the tray menu a sensible width whatever a window calls itself. "&amp;" would otherwise vanish as a shortcut mark.</summary>
+    // "&" would otherwise vanish as a shortcut mark.
     private static string MenuText(string text)
     {
         string flat = text.ReplaceLineEndings(" ");

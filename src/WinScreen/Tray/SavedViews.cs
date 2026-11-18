@@ -3,10 +3,7 @@ using WinScreen.Settings;
 
 namespace WinScreen.Tray;
 
-/// <summary>
-/// Which saved views have come back this session, and which sources wait to hide. One view per program:
-/// ten browser windows shouldn't open ten views.
-/// </summary>
+// One view per program: ten browser windows shouldn't open ten views.
 internal sealed class SavedViews
 {
     private readonly HashSet<string> _opened = new(StringComparer.OrdinalIgnoreCase);
@@ -33,7 +30,6 @@ internal sealed class SavedViews
 
     internal void ConcealOnLeaving(nint window, IConcealable view) => _waiting[window] = view;
 
-    /// <summary>Hides each waiting source once another window has the foreground. Nothing to do costs one count.</summary>
     public void ConcealIfLeft(nint foreground)
     {
         if (_waiting.Count == 0 || foreground == 0)

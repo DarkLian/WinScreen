@@ -6,7 +6,7 @@ using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Tray;
 
-/// <summary>One command list and target check for the tray and pointer menus.</summary>
+// One command list and target check for the tray and pointer menus.
 internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<AppCommand, nint> run,
     Action<nint, Rectangle> fill, Func<AppCommand, bool> available, Func<AppCommand, nint, bool> enabled,
     Func<AppCommand, nint, bool> isOn, Action staleTarget)
@@ -16,16 +16,12 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     internal Action<nint, string>? MoveToDisplay { get; init; }
     private sealed record Resize(Size Size);
 
-    /// <summary>Gives a window one of the preset sizes (roadmap P2-14); without it there is no Size menu.</summary>
     internal Action<nint, Size>? ResizeTo { get; init; }
 
-    /// <summary>The sizes offered, as the visible frame: common screen and video sizes.</summary>
     internal static readonly Size[] PresetSizes = [new(800, 600), new(1024, 768), new(1280, 720), new(1366, 768), new(1600, 900), new(1920, 1080)];
 
-    /// <summary>The hotkey to show beside a command, or empty.</summary>
     internal Func<AppCommand, string>? Hotkey { get; init; }
 
-    /// <summary>The window's opacity in percent, and the way to set it; without both there is no slider.</summary>
     internal Func<nint, int>? OpacityPercent { get; init; }
     internal Action<nint, int>? SetOpacityPercent { get; init; }
 
@@ -77,7 +73,6 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         fillItem.Tag = AppCommand.ToggleBorderlessFill;
         borderless.DropDownItems.Add(fillItem);
         items.Add(borderless);
-        // Effects that are still experimental sit together, and the whole entry goes when none is turned on in Settings.
         var experimental = new ToolStripMenuItem(T("menu.effects")) { Tag = new Group() }.WithIcon(MenuParts.Repair).Experimental();
         foreach (AppCommand command in new[] { AppCommand.ToggleDark, AppCommand.ToggleGlass, AppCommand.ToggleShrink, AppCommand.ToggleCrop })
             experimental.DropDownItems.Add(Command(command));
@@ -109,10 +104,6 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         items.Add(Command(AppCommand.RestoreWindow));
     }
 
-    /// <summary>
-    /// The Arrange commands. With <paramref name="places"/> off the nine corners, edges and centre are left out, for a
-    /// menu that shows the placement grid; the commands and their shortcuts stay the same.
-    /// </summary>
     internal void PopulateArrange(ToolStripItemCollection items, bool places = true)
     {
         IEnumerable<AppCommand?> actions = places ? CommandCatalog.ArrangeMenu
@@ -141,11 +132,6 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         }
     }
 
-    /// <summary>
-    /// Takes out of a window menu what a toolbar already shows as buttons, for the toolbar's own Window menu: the
-    /// commands themselves, the opacity slider when both opacity buttons are there, and the place grid when Arrange
-    /// window is. What is left of More moves up into the menu, and headings and dividers with nothing left under them go.
-    /// </summary>
     internal static void LeaveOut(ToolStripItemCollection items, IReadOnlySet<AppCommand> onBar)
     {
         bool Shown(ToolStripItem item) => item switch
@@ -171,7 +157,6 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         Tidy(items);
     }
 
-    /// <summary>Drops headings with nothing under them and dividers at either end or next to another.</summary>
     private static void Tidy(ToolStripItemCollection items)
     {
         bool Ends(ToolStripItem? item) => item is null or ToolStripSeparator || Equals(item.Tag, MenuParts.HeaderTag);

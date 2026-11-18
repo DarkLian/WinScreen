@@ -6,57 +6,39 @@ using WinScreen.Settings;
 
 namespace WinScreen.Tray;
 
-/// <summary>What a script asked of WinScreen on its command line (roadmap P2-2).</summary>
 internal abstract record CommandLineRequest
 {
-    /// <summary>No command-line request: WinScreen starts as usual.</summary>
     public sealed record None : CommandLineRequest;
     public sealed record ListCommands : CommandLineRequest;
-    /// <summary>Run a command in the running copy. Target is "active", "pointer" or "title:text".</summary>
     public sealed record Run(AppCommand Command, string Target) : CommandLineRequest;
     public sealed record Wrong(string Problem) : CommandLineRequest;
 }
 
-/// <summary>How a command-line run ended, as the process's exit code.</summary>
 internal enum CommandLineExit
 {
     Done = 0,
-    /// <summary>The command line itself was wrong: an unknown command or option.</summary>
     Usage = 2,
-    /// <summary>No WinScreen of this copy is running, or it couldn't be reached.</summary>
     NotRunning = 3,
-    /// <summary>WinScreen refused or paused the command: full screen, an administrator app, experimental features off.</summary>
     NotDone = 4,
-    /// <summary>The command ran and failed.</summary>
     Failed = 5,
-    /// <summary>No window was there to act on.</summary>
     NoWindow = 6,
 }
 
-/// <summary>
-/// <c>WinScreen.exe --run &lt;command&gt; [--window active|pointer|title:&lt;text&gt;]</c> and
-/// <c>WinScreen.exe --list-commands</c>. The command goes to the running copy, which runs it as a hotkey would and
-/// answers how it went; nothing is run by this second copy itself.
-/// </summary>
-/// <remarks>
-/// Two steps, because a command can't run inside the message that brings it: Windows refuses calls to other
-/// programs' objects there (RPC_E_CANTCALLOUT_ININPUTSYNCCALL), which picture-keeping Dark and Glass, views and the
-/// accessibility route all make. So the running copy answers at once with a ticket and runs the command just
-/// after, and this copy asks for the ticket's result until there is one.
-/// </remarks>
+// A command can't run inside the message that brings it: Windows refuses calls to other programs' objects there
+// (RPC_E_CANTCALLOUT_ININPUTSYNCCALL), which Dark, Glass, views and the accessibility route all make.
+// So the running copy answers at once with a ticket and runs the command just after, and this copy asks for the
+// ticket's result until there is one.
 internal static class CommandLine
 {
-    /// <summary>What the WM_COPYDATA from a command line holds: "WSR1".</summary>
+    // "WSR1".
     internal const nint MessageKind = 0x57535231;
-    /// <summary>What the WM_COPYDATA asking for a ticket's result holds: "WSR2", then the ticket.</summary>
+    // "WSR2", then the ticket.
     internal const nint ResultKind = 0x57535232;
-    /// <summary>The answer to a result question while the command is still running.</summary>
     internal const int Pending = 255;
     private const int ResultMilliseconds = 60000;
     private const uint TimeoutMilliseconds = 15000;
     private const uint AbortIfHung = 0x0002;
 
-    /// <summary>Reads the arguments; anything that isn't a command-line request is left to the normal start.</summary>
     internal static CommandLineRequest Parse(IReadOnlyList<string> arguments)
     {
         int list = IndexOf(arguments, "--list-commands"), run = IndexOf(arguments, "--run");
@@ -98,7 +80,6 @@ internal static class CommandLine
         return -1;
     }
 
-    /// <summary>What a command's outcome means to a script.</summary>
     internal static CommandLineExit ExitFor(CommandOutcome outcome) => outcome switch
     {
         CommandOutcome.Started => CommandLineExit.Done,
@@ -106,7 +87,6 @@ internal static class CommandLine
         _ => CommandLineExit.NotDone,
     };
 
-    /// <summary>The text that goes to the running copy, and back from it.</summary>
     internal static string Encode(AppCommand command, string target) => command + "\n" + target;
 
     internal static (AppCommand Command, string Target)? Decode(string text)
@@ -117,7 +97,6 @@ internal static class CommandLine
             : null;
     }
 
-    /// <summary>Handles a command-line request and says what the exit code is. Writes only for --list-commands and problems.</summary>
     internal static CommandLineExit Handle(CommandLineRequest request)
     {
         ParentConsole.Attach();
@@ -147,7 +126,6 @@ internal static class CommandLine
         _ => T("cli.notDone"),
     };
 
-    /// <summary>Gives the command to the running copy of this same program, and waits for how it went.</summary>
     private static CommandLineExit Send(AppCommand command, string target)
     {
         nint window = User32.FindWindow(null, HotkeyHost.WindowTitle);
@@ -167,7 +145,6 @@ internal static class CommandLine
         return CommandLineExit.Failed;
     }
 
-    /// <summary>One WM_COPYDATA to the running copy and its answer, or null when it couldn't be reached.</summary>
     private static int? Ask(nint window, nint kind, string text)
     {
         nint data = Marshal.StringToHGlobalUni(text);
@@ -187,11 +164,9 @@ internal static class CommandLine
         }
     }
 
-    /// <summary>Reads a command-line request a running copy received, or null for anything else.</summary>
     internal static (AppCommand Command, string Target)? Received(nint copyData) =>
         Text(copyData, MessageKind) is { } text ? Decode(text) : null;
 
-    /// <summary>Reads a question for a ticket's result, or null for anything else.</summary>
     internal static int? AskedFor(nint copyData) =>
         Text(copyData, ResultKind) is { } text && int.TryParse(text, System.Globalization.NumberStyles.None,
             System.Globalization.CultureInfo.InvariantCulture, out int ticket) ? ticket : null;

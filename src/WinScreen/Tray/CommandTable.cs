@@ -2,23 +2,18 @@ using WinScreen.Settings;
 
 namespace WinScreen.Tray;
 
-/// <summary>What a command works on.</summary>
 internal enum CommandTarget
 {
-    /// <summary>One window: the active one, the one under a menu, or the one a view stands for.</summary>
     Window,
-    /// <summary>No window in particular, such as choosing what a new view shows or putting every window back.</summary>
     NoWindow,
-    /// <summary>Every window at once. These only take things away, so they run at any time.</summary>
+    // These only take things away, so they run at any time.
     EveryWindow,
-    /// <summary>The window under the pointer, found when the command runs.</summary>
     UnderPointer,
 }
 
-/// <summary>How a command went, for the log and for anyone who asked for it (a script, a rule).</summary>
 internal enum CommandOutcome
 {
-    /// <summary>It got past every check and ran. A failure while running adds a second line, Failed.</summary>
+    // A failure while running adds a second line, Failed.
     Started,
     ClosedLatestView,
     ExclusiveFullScreen,
@@ -28,44 +23,29 @@ internal enum CommandOutcome
     Failed,
 }
 
-/// <summary>
-/// The parts of a window WinScreen can change, one per thing Put back has to take away. A command says which part
-/// it changes (<see cref="CommandDefinition.Undoes"/>); the orders below are the only place the order is written.
-/// </summary>
+// One per thing Put back has to take away; the orders in PutBackOrder are the only place the order is written.
 internal enum WindowPart
 {
-    /// <summary>A crop still being chosen over the window.</summary>
     CropChoice,
     View,
-    /// <summary>A program muted from a view's menu (<see cref="Windows.ProgramSound"/>).</summary>
     Sound,
     Tile,
-    /// <summary>The filter kind of Dark (a Magnification overlay).</summary>
     FilterDark,
-    /// <summary>Picture-keeping Dark and layered Glass (a D3D overlay).</summary>
     ContentEffect,
     Anchor,
-    /// <summary>Everything <see cref="Windows.WindowController"/> changed and journalled: pin, opacity, crop, borderless…</summary>
     WindowChanges,
 }
 
-/// <summary>The orders in which parts are taken away. Each holds every part once.</summary>
 internal static class PutBackOrder
 {
-    /// <summary>
-    /// Put back and Put every window back: WinScreen's own surfaces go first, so the window is uncovered and
-    /// shown before its own changes are undone.
-    /// </summary>
+    // WinScreen's own surfaces go first, so the window is uncovered and shown before its own changes are undone.
     public static readonly WindowPart[] PutBack =
     [
         WindowPart.CropChoice, WindowPart.View, WindowPart.Sound, WindowPart.Tile, WindowPart.FilterDark, WindowPart.ContentEffect,
         WindowPart.Anchor, WindowPart.WindowChanges,
     ];
 
-    /// <summary>
-    /// Exit: the windows go back first. If that fails WinScreen stays running with its views in place, which are
-    /// then the way back to a hidden window.
-    /// </summary>
+    // The windows go back first: if that fails WinScreen stays running, its views then the way back to a hidden window.
     public static readonly WindowPart[] Exit =
     [
         WindowPart.CropChoice, WindowPart.WindowChanges, WindowPart.View, WindowPart.Sound, WindowPart.Tile, WindowPart.FilterDark,
@@ -73,32 +53,23 @@ internal static class PutBackOrder
     ];
 }
 
-/// <summary>
-/// One command: what it does and how to tell whether it is on for a window. Its name, icon, experimental flag and
-/// full-screen class stay where every surface already reads them (<see cref="CommandCatalog"/>,
-/// <see cref="MenuParts.IconOf"/>, <see cref="Windows.FullScreenPolicy"/>).
-/// </summary>
+// Name, icon, experimental flag and full-screen class stay where every surface already reads them (CommandCatalog,
+// MenuParts.IconOf, FullScreenPolicy).
 internal sealed record CommandDefinition(AppCommand Command, Action<nint, Rectangle?> Run)
 {
     public CommandTarget Target { get; init; } = CommandTarget.Window;
 
-    /// <summary>True while the command's change is in place on a window; null for a command with no state.</summary>
     public Func<nint, bool>? IsOn { get; init; }
 
-    /// <summary>Put back and Put every window back: they run in full screen, on refused windows and with the switch off.</summary>
+    // Run in full screen, on refused windows and with the switch off.
     public bool Recovers { get; init; }
 
-    /// <summary>The parts of a window this command can change, which Put back takes away; empty when it leaves nothing.</summary>
     public WindowPart[] Undoes { get; init; } = [];
 
-    /// <summary>
-    /// True when running the command on this window opens a menu or dialog that waits for the person. A script that
-    /// ran it is told how it went once that is open, not once it is closed.
-    /// </summary>
+    // A script that ran it is told how it went once the menu or dialog is open, not once it is closed.
     public Func<nint, bool>? Opens { get; init; }
 }
 
-/// <summary>Every command, defined once, gathered from the lists each area contributes.</summary>
 internal sealed class CommandTable
 {
     private readonly Dictionary<AppCommand, CommandDefinition> _definitions = [];

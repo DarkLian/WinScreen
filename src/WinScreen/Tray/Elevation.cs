@@ -5,21 +5,17 @@ using System.Security.Principal;
 
 namespace WinScreen.Tray;
 
-/// <summary>Scheduled tasks: the one way to start a program as administrator at sign-in without asking each time.</summary>
 public interface ITaskScheduler
 {
     bool Exists(string name);
     void Create(string name, string xml);
     void Delete(string name);
 
-    /// <summary>Runs a task now, as it would run at its trigger. False when it couldn't.</summary>
     bool Run(string name) => false;
 
-    /// <summary>The program a task starts, or null when there is no such task or it can't be read.</summary>
     string? CommandOf(string name) => null;
 }
 
-/// <summary>Windows' own Task Scheduler, through schtasks. Creating a task that runs as administrator needs one.</summary>
 internal sealed class SchtasksScheduler : ITaskScheduler
 {
     public bool Exists(string name) => Run("/Query", "/TN", name) == 0;
@@ -81,18 +77,12 @@ internal sealed class SchtasksScheduler : ITaskScheduler
     }
 }
 
-/// <summary>Running WinScreen as administrator, so it can also change administrator apps' windows.</summary>
 internal static class Elevation
 {
-    /// <summary>Given to a copy started as administrator, which doesn't ask again if Windows still said no.</summary>
+    // It doesn't ask again if Windows still said no.
     public const string ElevatedArgument = "--elevated";
-    /// <summary>Followed by a process id: wait for that copy to close before starting.</summary>
     public const string AfterArgument = "--after";
 
-    /// <summary>
-    /// Starts a copy as administrator that takes over once this one has closed. Windows asks the person first;
-    /// false when they said no or it couldn't start.
-    /// </summary>
     public static bool StartElevatedCopy()
     {
         try
@@ -107,13 +97,8 @@ internal static class Elevation
         catch (Win32Exception) { return false; } // Including "The operation was canceled by the user."
     }
 
-    /// <summary>Followed by a page number: open Settings on that page once started.</summary>
     public const string SettingsPageArgument = "--settings-page";
 
-    /// <summary>
-    /// Starts a copy with this one's rights that takes over once this one has closed, and opens Settings on
-    /// <paramref name="settingsPage"/>. It doesn't ask for administrator rights again. False when it couldn't start.
-    /// </summary>
     public static bool StartFreshCopy(int settingsPage)
     {
         try
@@ -132,21 +117,18 @@ internal static class Elevation
         }
     }
 
-    /// <summary>The Settings page to open once started, from the arguments.</summary>
     public static int? SettingsPage(IReadOnlyList<string> arguments)
     {
         int at = arguments.ToList().IndexOf(SettingsPageArgument);
         return at >= 0 && at + 1 < arguments.Count && int.TryParse(arguments[at + 1], out int page) && page >= 0 ? page : null;
     }
 
-    /// <summary>The copy this one should wait for, from its arguments.</summary>
     public static int? WaitingFor(IReadOnlyList<string> arguments)
     {
         int at = arguments.ToList().IndexOf(AfterArgument);
         return at >= 0 && at + 1 < arguments.Count && int.TryParse(arguments[at + 1], out int id) ? id : null;
     }
 
-    /// <summary>Waits a while for the copy that started this one to close, so only one runs at a time.</summary>
     public static void WaitForExit(int processId)
     {
         try
@@ -157,11 +139,7 @@ internal static class Elevation
         catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception) { Diagnostics.Log.Swallowed(e); } // Gone already.
     }
 
-    /// <summary>
-    /// The task that starts WinScreen as administrator when this person signs in: at normal priority (tasks start
-    /// lower otherwise), with no time limit, and on battery too.
-    /// </summary>
-    /// <param name="arguments">What it is given: the administrator helper's argument with the helper chosen (10-2).</param>
+    // Normal priority (tasks start lower otherwise), no time limit, and on battery too.
     public static string TaskXml(string command, string user, string arguments = "")
     {
         string who = SecurityElement.Escape(user), what = SecurityElement.Escape(command);
@@ -186,10 +164,7 @@ internal static class Elevation
 
     public static string CurrentUser => WindowsIdentity.GetCurrent().Name;
 
-    /// <summary>
-    /// Starts the administrator helper (10-2): by the sign-in task when there is one, which Windows runs as administrator
-    /// without asking; otherwise Windows asks the person first. False when they said no or it couldn't start.
-    /// </summary>
+    // The sign-in task runs as administrator without asking; otherwise Windows asks the person first.
     public static bool StartHelper(ITaskScheduler tasks)
     {
         // The task only when it starts this very program: another copy (an installed one, beside a portable one) would
@@ -210,18 +185,11 @@ internal static class Elevation
         catch (Win32Exception) { return false; } // Including "The operation was canceled by the user."
     }
 
-    /// <summary>
-    /// Where this copy's data is, for a copy it starts through Windows (which gives it the person's own environment):
-    /// empty for the usual place.
-    /// </summary>
+    // Windows gives a copy it starts the person's own environment, so a data folder elsewhere is passed as an argument.
     public static string DataFolderArguments() =>
         Environment.GetEnvironmentVariable(AppRoles.DataFolderVariable) is { Length: > 0 } folder
             ? $"{AppRoles.DataFolderArgument} \"{folder}\"" : "";
 
-    /// <summary>
-    /// From the helper, when no ordinary copy could be started as the person: the one elevated copy of before
-    /// (<see cref="AppRoles.SingleArgument"/>), so WinScreen runs either way. False when it didn't start.
-    /// </summary>
     public static bool StartSingleCopy()
     {
         try

@@ -5,10 +5,7 @@ using WinScreen.Windows;
 
 namespace WinScreen.Tray;
 
-/// <summary>
-/// A small bar of buttons that appears on the title bar of the window in use when the mouse rests
-/// there. It never takes focus, so the window it acts on stays active.
-/// </summary>
+// Never takes focus, so the window it acts on stays active.
 public sealed class WindowToolbar : Form
 {
     private const int WM_MOUSEACTIVATE = 0x0021;
@@ -90,7 +87,6 @@ public sealed class WindowToolbar : Form
                     return;
                 }
 
-                // The two buttons that open a menu open it under themselves, not at the pointer.
                 if (command is AppCommand.Arrange or AppCommand.ShowWindowMenu && OpenMenu is { } open)
                 {
                     Rectangle shown = button.RectangleToScreen(button.ClientRectangle);
@@ -111,25 +107,17 @@ public sealed class WindowToolbar : Form
         _watch.Tick += (_, _) => Watch();
     }
 
-    /// <summary>Opens the menu of a button that has one, under the button, for the window the bar is showing for.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Action<AppCommand, nint, Point>? OpenMenu { get; init; }
 
-    /// <summary>
-    /// Windows a rule says to show the toolbar for where a title bar usually is, without asking the window: apps that
-    /// draw their own top row answer "content" there (10-4).
-    /// </summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<nint, bool> ByPosition { get; init; } = _ => false;
 
-    /// <summary>The commands that have a button on the bar now, so a menu from it can leave them out.</summary>
     internal IReadOnlySet<AppCommand> ShownButtons =>
         _buttons.Keys.Where(command => _preferences.Buttons.Contains(command) && _isAvailable(command)).ToHashSet();
 
-    /// <summary>The window the toolbar is showing for, or none.</summary>
     public nint Window => Visible ? _window : 0;
 
-    /// <summary>False when nothing would be on the bar, so it must not open.</summary>
     internal bool HasButtons { get; private set; }
 
     public void Enable(bool on)
@@ -174,15 +162,10 @@ public sealed class WindowToolbar : Form
         base.Dispose(disposing);
     }
 
-    /// <summary>The coloured icon each button shows.</summary>
     private static char ButtonIcon(AppCommand command) => MenuParts.IconOf(command) ?? MenuParts.More;
 
 
-    /// <summary>
-    /// Moved onto a display at another scale: Windows Forms has just rescaled the bar on top of the size it was given
-    /// for that display, so it is laid out again (roadmap P2-3; measured in the two-display VM, 14 Nov 2026: the bar
-    /// came out 23 px high around 34 px buttons).
-    /// </summary>
+    // WinForms has just rescaled the bar on top of the size it was given for that display, so it is laid out again.
     protected override void OnDpiChanged(DpiChangedEventArgs e)
     {
         base.OnDpiChanged(e);
@@ -190,7 +173,6 @@ public sealed class WindowToolbar : Form
         Arrange(e.DeviceDpiNew);
     }
 
-    /// <summary>Sizes the buttons for this monitor and lays out the ones currently available.</summary>
     private void Arrange(int dpi)
     {
         AppCommand[] available = _buttons.Keys.Where(command => _preferences.Buttons.Contains(command) && _isAvailable(command)).ToArray();
@@ -264,7 +246,8 @@ public sealed class WindowToolbar : Form
         int caption = Dpi.Scale(CaptionHeight, dpi);
         var bar = new Rectangle(ToolbarGeometry.PlaceAt(window, Size, area, reserved, caption, _preferences.Placement), Size);
         Rectangle buttonsZone = ToolbarGeometry.CaptionButtonsZone(window, area, reserved, caption);
-        // With Either, resting on the buttons counts as the minimize trigger; anywhere else on the bar's spot, the title bar.
+        // With Either, resting on the buttons counts as the minimize trigger; anywhere else on the bar's spot, the
+        // title bar.
         bool minimizeTrigger = _preferences.Trigger == ToolbarTrigger.MinimizeButton ||
                                (_preferences.Trigger == ToolbarTrigger.Either && buttonsZone.Contains(cursor));
         if (minimizeTrigger) bar.Y = ToolbarGeometry.BelowCaption(window, Height, area, caption);
@@ -305,12 +288,9 @@ public sealed class WindowToolbar : Form
         KeepAbove(Handle, foreground);
     }
 
-    /// <summary>
-    /// Asks the window itself, so tabs, menus and other content drawn at the top of an app don't count as its title
-    /// bar. Some apps draw their title bar in a window of its own inside the main one (File Explorer, Windows
-    /// Terminal), and the main window answers "content" all along its top; so the window under the pointer is asked
-    /// too, when it belongs to this one.
-    /// </summary>
+    // Asks the window itself, so content drawn at an app's top doesn't count as its title bar. Some apps draw their
+    // title bar in a child window (File Explorer, Windows Terminal) and the main window answers "content" all along its
+    // top, so the window under the pointer is asked too.
     internal static bool MatchesTrigger(nint window, Point cursor, ToolbarTrigger trigger)
     {
         // The minimize button where Windows draws it, when Windows says: the app's own answer can be off by a button.
@@ -327,7 +307,6 @@ public sealed class WindowToolbar : Form
             CaptionCheckMilliseconds, out nint hit) != 0 ? hit : -1;
     }
 
-    /// <summary>What is on shows on a tinted button, as the coloured icons keep their own colours.</summary>
     private void ShowStates()
     {
         foreach ((AppCommand command, Button button) in _buttons)
@@ -343,12 +322,9 @@ public sealed class WindowToolbar : Form
                                       Rectangle.FromLTRB(current.Left, current.Top, current.Right, current.Bottom) ==
                                       _targetBounds;
 
-    /// <summary>
-    /// Puts the bar over its window. A pinned window is in the topmost group too, and Show alone can leave the bar
-    /// underneath it. Windows also doesn't let WinScreen, which isn't the program in front, put the bar over the pinned
-    /// window in front: the bar stayed underneath and its buttons couldn't be clicked (the owner, 15 Nov). Going lower
-    /// is always allowed, so then the window goes just under the bar, one place down.
-    /// </summary>
+    // A pinned window is topmost too, and Show alone can leave the bar under it. Windows also doesn't let WinScreen,
+    // not being in front, put the bar over the pinned window in front, so then the window goes just under the bar
+    // instead: going lower is always allowed.
     internal static void KeepAbove(nint bar, nint window)
     {
         WinScreen.Windows.TopLayer.Raise(bar);
@@ -356,7 +332,6 @@ public sealed class WindowToolbar : Form
             User32.SetWindowPos(window, bar, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
     }
 
-    /// <summary>Whether <paramref name="upper"/> comes before <paramref name="lower"/> in the order of windows.</summary>
     private static bool IsAbove(nint upper, nint lower)
     {
         for (nint w = User32.GetWindow(lower, 3); w != 0; w = User32.GetWindow(w, 3)) // GW_HWNDPREV

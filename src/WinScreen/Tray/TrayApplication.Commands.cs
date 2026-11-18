@@ -5,14 +5,10 @@ using WinScreen.Windows;
 
 namespace WinScreen.Tray;
 
-/// <summary>
-/// What each command does (roadmap P1-6). Every area gives its own list; <see cref="CommandTable"/> checks that
-/// each command is defined once, and <see cref="RunOnDisplay"/> runs them all the same way. A new command is a new
-/// line here plus its name in <see cref="CommandCatalog"/>.
-/// </summary>
+// CommandTable checks that each command is defined once. A new command is a line here plus its name in CommandCatalog.
 public sealed partial class TrayApplication
 {
-    /// <summary>Every command, by area. Built without touching any state, so a test can list it.</summary>
+    // Built without touching any state, so a test can list it.
     internal IEnumerable<CommandDefinition>[] CommandAreas() =>
         [WindowCommands(), ArrangeCommands(), ViewCommands(), EffectCommands(), AnchorCommands(), EverywhereCommands(), RecoveryCommands()];
 
@@ -20,7 +16,6 @@ public sealed partial class TrayApplication
 
     private static bool Always(nint window) => true;
 
-    /// <summary>Changes WinScreen makes to the window itself, all through <see cref="WindowController"/>.</summary>
     private IEnumerable<CommandDefinition> WindowCommands() =>
     [
         Define(AppCommand.TogglePin, window =>
@@ -51,7 +46,6 @@ public sealed partial class TrayApplication
             with { IsOn = window => _settings.SetupForWindow(window) is not null },
     ];
 
-    /// <summary>Where a window is: the nine places, another display, exact bounds, and back.</summary>
     private IEnumerable<CommandDefinition> ArrangeCommands() =>
     [
         Define(AppCommand.Arrange, window => ShowArrangeMenu(window)) with { Opens = Always },
@@ -73,7 +67,6 @@ public sealed partial class TrayApplication
         }) with { Target = CommandTarget.UnderPointer, Opens = Always },
     ];
 
-    /// <summary>Views of a window or of the screen, Shrink tiles and crops.</summary>
     private IEnumerable<CommandDefinition> ViewCommands() =>
     [
         Define(AppCommand.OpenPip, window =>
@@ -86,7 +79,6 @@ public sealed partial class TrayApplication
         Define(AppCommand.ToggleCrop, window => ToggleCrop(window)) with { IsOn = window => _windows.IsCropped(window), Undoes = [WindowPart.CropChoice, WindowPart.WindowChanges] },
     ];
 
-    /// <summary>Dark and Glass, whichever kind of each Settings chooses. A window has at most one of them.</summary>
     private IEnumerable<CommandDefinition> EffectCommands() =>
     [
         Define(AppCommand.ToggleDark, window => ToggleDark(window))
@@ -98,7 +90,6 @@ public sealed partial class TrayApplication
     private IEnumerable<CommandDefinition> AnchorCommands() =>
     [
         Define(AppCommand.ToggleAnchor, window => _anchors.Toggle(window)) with { IsOn = window => _anchors.Has(window), Undoes = [WindowPart.Anchor] },
-        // The Anchor is the way back: clicking it shows the window again.
         Define(AppCommand.MinimizeToAnchor, window =>
         {
             if (!_anchors.Has(window)) _anchors.Toggle(window);
@@ -110,22 +101,15 @@ public sealed partial class TrayApplication
         CommandCatalog.Everywhere.Select(command =>
             Define(command, _ => RunEverywhere(command)) with { Target = CommandTarget.EveryWindow });
 
-    /// <summary>Put back and Put every window back.</summary>
     private IEnumerable<CommandDefinition> RecoveryCommands() =>
     [
         Define(AppCommand.RestoreWindow, PutBack) with { Recovers = true },
         Define(AppCommand.RestoreAll, _ => PutEveryWindowBack()) with { Target = CommandTarget.NoWindow, Recovers = true },
     ];
 
-    /// <summary>
-    /// A command from the command line (roadmap P2-2), run as a hotkey would run it, on the window the script named:
-    /// the active one, the one under the pointer, or the topmost open window whose title contains some text.
-    /// </summary>
-    /// <remarks>
-    /// <paramref name="answer"/> is told how it went, once. A command that opens a menu or dialog answers once that
-    /// is open: a message posted before it runs is handled by the menu's or dialog's own loop. If the command
-    /// returns before that, its own outcome is the answer.
-    /// </remarks>
+    // answer is told once. A command that opens a menu or dialog answers once it is open: a message posted before it
+    // runs is handled by the menu's or dialog's own loop. If the command returns before that, its own outcome is the
+    // answer.
     private void RunFromCommandLine(AppCommand command, string target, Action<CommandLineExit> answer)
     {
         bool answered = false;
@@ -146,7 +130,6 @@ public sealed partial class TrayApplication
         }
     }
 
-    /// <summary>The window a command from the command line is for, or why it can't run.</summary>
     private CommandLineExit? Validate(AppCommand command, string target, out nint window)
     {
         window = 0;
@@ -168,17 +151,12 @@ public sealed partial class TrayApplication
         return null;
     }
 
-    /// <summary>
-    /// Gives a window one of the preset sizes (roadmap P2-14): its visible frame keeps its top-left corner, and the
-    /// whole of it stays on its display, smaller there if the display is smaller.
-    /// </summary>
     private void ResizeWindow(nint window, Size size)
     {
         if (!WindowInfo.TryGetFrameBounds(window, out Rectangle frame, out _)) return;
         _placer.SetFrame(window, Windows.PlacementGeometry.Resized(frame, size, Screen.FromHandle(window).WorkingArea));
     }
 
-    /// <summary>The topmost visible main window whose title contains the text (any case, * for any run).</summary>
     private static nint WindowTitled(string text)
     {
         for (nint window = Native.User32.GetWindow(Native.User32.GetDesktopWindow(), 5); window != 0; window = Native.User32.GetWindow(window, 2))
@@ -188,7 +166,6 @@ public sealed partial class TrayApplication
         return 0;
     }
 
-    /// <summary>True while a window has this part from WinScreen.</summary>
     private bool Has(WindowPart part, nint window) => part switch
     {
         WindowPart.CropChoice => _croppingWindow == window,
@@ -202,7 +179,6 @@ public sealed partial class TrayApplication
         _ => false,
     };
 
-    /// <summary>Takes one part away from one window. False only when the window's own changes couldn't all be undone.</summary>
     private bool TakeAway(WindowPart part, nint window)
     {
         switch (part)
@@ -219,7 +195,6 @@ public sealed partial class TrayApplication
         return true;
     }
 
-    /// <summary>Takes one part away from every window. Returns how many windows' own changes couldn't be undone.</summary>
     private int TakeAwayEverywhere(WindowPart part)
     {
         switch (part)
@@ -270,10 +245,8 @@ public sealed partial class TrayApplication
             Confirm(T("window.restoreAll"), T("recovery.restored"));
     }
 
-    /// <summary>
-    /// What exit takes away, in <see cref="PutBackOrder.Exit"/>'s order. False, with nothing after the windows taken
-    /// away, when the windows' own changes couldn't all be undone: WinScreen then stays running.
-    /// </summary>
+    // False, with nothing after the windows taken away, when their own changes couldn't all be undone: WinScreen then
+    // stays running.
     private bool TakeEverythingAwayForExit()
     {
         foreach (WindowPart part in PutBackOrder.Exit)

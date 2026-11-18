@@ -3,20 +3,15 @@ using WinScreen.Windows;
 
 namespace WinScreen.Tray;
 
-/// <summary>
-/// A crop made by clicking a control follows that control when the window is resized (roadmap P2-11, step 8.1): the
-/// control is found again by the same way down the window's controls, and the crop moves to where it is now. When it
-/// can't be found, the crop keeps its rectangle, as a crop dragged out by hand always does.
-/// </summary>
+// A crop made by clicking a control follows it when the window is resized: found again by the same path down the
+// window's controls. Not found, the crop keeps its rectangle.
 public sealed partial class TrayApplication
 {
     private readonly Dictionary<nint, CropControl> _cropControls = [];
     private bool _cropLooking;
 
-    /// <summary>The control a window is cropped to, the window it belongs to, and the window's size when last fitted.</summary>
     private sealed record CropControl(FoundElement Element, WindowIdentity Identity, Size Size);
 
-    /// <summary>Remembers the control a crop was made from, or forgets it for a crop dragged out by hand.</summary>
     private void RememberCropControl(nint window, FoundElement? element, WindowIdentity identity)
     {
         if (element is null || element.Window != window || !User32.GetWindowRect(window, out Rect r))
@@ -27,10 +22,7 @@ public sealed partial class TrayApplication
         _cropControls[window] = new CropControl(element, identity, new Size(r.Right - r.Left, r.Bottom - r.Top));
     }
 
-    /// <summary>
-    /// From the watch, four times a second: a window cropped to a control that has changed size is looked at again,
-    /// one window at a time and away from this thread, since an app can be slow to answer.
-    /// </summary>
+    // One window at a time and off this thread, since an app can be slow to answer.
     private void FollowCropControls()
     {
         if (_cropControls.Count == 0 || _cropLooking) return;
@@ -59,7 +51,6 @@ public sealed partial class TrayApplication
         }
     }
 
-    /// <summary>Crops the window to where its control is now, or leaves the crop as it is when the control is gone.</summary>
     private void Refit(nint window, CropControl follow, Rectangle? control)
     {
         _cropLooking = false;

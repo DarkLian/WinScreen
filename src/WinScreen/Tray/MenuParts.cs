@@ -3,8 +3,6 @@ using WinScreen.Settings;
 
 namespace WinScreen.Tray;
 
-/// <summary>What WinScreen's menus are built from besides plain commands: group headings, icons, and two rows that
-/// hold a control (an opacity slider and a grid of places).</summary>
 internal static class MenuParts
 {
     // Windows 11's icon font, or on Windows 10 the older one it grew from: the same glyphs at the same code points.
@@ -26,27 +24,19 @@ internal static class MenuParts
 
     internal static int Scale(int value) => (int)Math.Round(value * SystemDpi / 96.0);
 
-    /// <summary>A small picture of a glyph in its own colour, or null where the icon font is missing.</summary>
     internal static Image? Icon(char glyph)
     {
-        // WinScreen's own coloured drawing where there is one; the font's outline, coloured, otherwise.
         if (ColorIcons.Of(glyph, Scale(16)) is { } drawn) return drawn;
         Image? picture = Icon(glyph, ColorOf(glyph), twoTone: true);
         if (picture is not null) Themed.AddOrUpdate(picture, new StrongBox<char>(glyph));
         return picture;
     }
 
-    /// <summary>Icons drawn in their own colour, by glyph: their colour depends on the light or dark look.</summary>
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Image, StrongBox<char>> Themed = [];
 
-    /// <summary>The same icon in the look in use now, for one made before the look changed.</summary>
     internal static Image ForCurrentTheme(Image image) =>
         Themed.TryGetValue(image, out StrongBox<char>? glyph) && Icon(glyph.Value) is { } current ? current : image;
 
-    /// <summary>
-    /// The colour an icon is drawn in, as Windows 11 colours its own: a few families of colour by what the icon is
-    /// about, a lighter shade of each in the dark theme, and the text colour for plain ones.
-    /// </summary>
     internal static Color ColorOf(char glyph)
     {
         bool dark = MenuStyle.Dark;
@@ -70,7 +60,6 @@ internal static class MenuParts
         };
     }
 
-    /// <summary>A glyph in one colour; with <paramref name="twoTone"/>, its inside washed with that colour too.</summary>
     internal static Image? Icon(char glyph, Color color, bool twoTone = false)
     {
         if (IconFont is null) return null;
@@ -95,7 +84,6 @@ internal static class MenuParts
             }
             graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
-            // Two tones, as Windows 11 draws its own: the shape filled with a soft wash of the colour, the outline over it.
             if (twoTone && Silhouette(shape) is { } inside)
             {
                 using (inside)
@@ -107,11 +95,8 @@ internal static class MenuParts
         return Icons[(glyph, size, color.ToArgb(), twoTone)] = picture;
     }
 
-    /// <summary>
-    /// The inside of an outline icon: its outer edges only, with the gaps between the lines filled. An outline glyph is
-    /// rings of ink; the rings' outer edges wind one way and their inner edges the other, so keeping the edges that wind
-    /// like the largest one keeps the outer ones.
-    /// </summary>
+    // An outline glyph is rings of ink whose outer edges wind one way and inner edges the other, so keeping the edges
+    // that wind like the largest keeps the outer ones.
     private static System.Drawing.Drawing2D.GraphicsPath? Silhouette(System.Drawing.Drawing2D.GraphicsPath glyph)
     {
         using var flat = (System.Drawing.Drawing2D.GraphicsPath)glyph.Clone();
@@ -148,7 +133,6 @@ internal static class MenuParts
 
     private static readonly ConditionalWeakTable<ToolStripItem, object> Experimentals = [];
 
-    /// <summary>Marks a command as experimental: it shows the same tag after its words as Settings does.</summary>
     internal static T Experimental<T>(this T item) where T : ToolStripItem
     {
         Experimentals.AddOrUpdate(item, item);
@@ -156,37 +140,31 @@ internal static class MenuParts
         return item;
     }
 
-    /// <summary>
-    /// Shows a command's shortcut keys. A menu is only as wide as its words and keys, so an experimental command's keys
-    /// carry the tag's words in front, unseen, to leave room for the tag; only the keys after them are drawn.
-    /// </summary>
+    // A menu is only as wide as its words and keys, so an experimental command's keys carry the tag's words in front,
+    // unseen, to leave room for the tag; only the keys after them are drawn.
     internal static void ShowKeys(ToolStripMenuItem item, string? keys)
     {
         keys = KeysOnly(keys);
         item.ShortcutKeyDisplayString = IsExperimental(item) ? TagRoom + keys : keys.Length > 0 ? keys : null;
     }
 
-    /// <summary>The keys a command shows, without the room kept for a tag.</summary>
     internal static string KeysOnly(string? shown) => shown is null ? "" : shown.StartsWith(TagRoom, StringComparison.Ordinal) ? shown[TagRoom.Length..] : shown;
 
-    private static string TagRoom => TagText + "\u2003\u2003"; // Two wide spaces: the gap before the tag.
+    private static string TagRoom => TagText + "\u2003\u2003";
 
     internal static bool IsExperimental(ToolStripItem item) => Experimentals.TryGetValue(item, out _);
 
-    /// <summary>The words on the tag, the same everywhere: in every menu and in Settings.</summary>
     internal static string TagText => Localization.UiText.T("common.experimental");
 
     private const TextFormatFlags TagFormat = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
         TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
 
-    /// <summary>How big the tag is, for a size in pixels at 100% scaling turned into this display's.</summary>
     internal static Size TagSize(Func<int, int> unit)
     {
         Size text = Native.DirectText.MeasureText(TagText, MenuStyle.SmallFont, Size.Empty, TagFormat);
         return new Size(text.Width + unit(12), text.Height + unit(4));
     }
 
-    /// <summary>Draws the tag with its left edge at <paramref name="left"/>, centred on <paramref name="middle"/>.</summary>
     internal static void DrawTag(Graphics g, int left, int middle, Func<int, int> unit, bool enabled = true)
     {
         Size size = TagSize(unit);
@@ -200,7 +178,6 @@ internal static class MenuParts
         Native.DirectText.DrawText(g, TagText, MenuStyle.SmallFont, area, enabled ? MenuStyle.TagText : MenuStyle.Disabled, TagFormat);
     }
 
-    /// <summary>A quiet line naming the group of commands under it. It can't be chosen.</summary>
     internal static ToolStripLabel Header(string text) => new(text)
     {
         ForeColor = MenuStyle.Muted,
@@ -214,7 +191,6 @@ internal static class MenuParts
 
     private static readonly ConditionalWeakTable<ToolStripItem, object> Choices = [];
 
-    /// <summary>Marks one of several commands of which only one is on: it shows a dot when on, not a tick.</summary>
     internal static T OneOf<T>(this T item) where T : ToolStripItem
     {
         Choices.AddOrUpdate(item, item);
@@ -223,7 +199,6 @@ internal static class MenuParts
 
     internal static bool IsOneOf(ToolStripItem item) => Choices.TryGetValue(item, out _);
 
-    /// <summary>Quiet lines that say something in a menu, one per line; a tab splits a line into what and how.</summary>
     internal static IEnumerable<NoteRow> Notes(string text) => text.Split('\n')
         .Select(line => line.Split('\t', 2))
         .Select(parts => new NoteRow(parts[0], parts.Length > 1 ? parts[1] : ""));
@@ -252,10 +227,7 @@ internal static class MenuParts
     };
 }
 
-/// <summary>
-/// A quiet line in a menu that says something rather than does something: what on the left and, when given, how in a
-/// second column shared by the menu's notes. It can't be chosen, so it is never greyed like a command that is off.
-/// </summary>
+// It can't be chosen, so it is never greyed like a command that is off.
 internal sealed class NoteRow : ToolStripLabel
 {
     internal NoteRow(string text, string how = "") : base(text)
@@ -268,10 +240,8 @@ internal sealed class NoteRow : ToolStripLabel
 
     internal string How { get; }
 
-    /// <summary>The space between what and how, as wide as the gap before a command's keys.</summary>
     internal static int Gap => MenuParts.Scale(32);
 
-    /// <summary>The room right of how, where a command's keys end.</summary>
     internal static int RightRoom => MenuParts.Scale(16);
 
     private const TextFormatFlags Measure = TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
@@ -280,7 +250,6 @@ internal sealed class NoteRow : ToolStripLabel
 
     private IEnumerable<NoteRow> Siblings => Owner?.Items.OfType<NoteRow>() ?? [this];
 
-    /// <summary>Where how starts, from the row's left: one column for every note in the menu, so they line up.</summary>
     internal int HowLeft => Padding.Left + Siblings.Max(note => note.Measured(note.Text ?? "")) + Gap;
 
     public override Size GetPreferredSize(Size constrainingSize)
@@ -291,7 +260,6 @@ internal sealed class NoteRow : ToolStripLabel
     }
 }
 
-/// <summary>A menu row with a slider: the window's opacity, changed as the slider moves.</summary>
 internal sealed class OpacityRow : ToolStripControlHost
 {
     private readonly Slider _slider;
@@ -306,7 +274,6 @@ internal sealed class OpacityRow : ToolStripControlHost
         _slider.ValueChanged += () => { if (!_setting) changed(_slider.Value); };
     }
 
-    /// <summary>Percent solid, 20 to 100.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal int Value
     {
@@ -319,7 +286,6 @@ internal sealed class OpacityRow : ToolStripControlHost
         }
     }
 
-    /// <summary>Drawn here rather than by Windows, so it sits in the menu like the rows around it.</summary>
     private sealed class Slider : Control
     {
         // A window never goes below 20% (WindowController.MinimumOpacity), so neither does the slider.
@@ -353,7 +319,7 @@ internal sealed class OpacityRow : ToolStripControlHost
             }
         }
 
-        private int Left0 => MenuParts.Scale(6); // Lines the title up with the words of the rows around it.
+        private int Left0 => MenuParts.Scale(6);
         private int Right0 => Width - MenuParts.Scale(14);
         private int TrackY => MenuParts.Scale(32);
         private int ThumbX => Left0 + (int)Math.Round((Right0 - Left0) * (_value - Minimum) / (double)(Maximum - Minimum));
@@ -406,11 +372,8 @@ internal sealed class OpacityRow : ToolStripControlHost
             _dragging = Capture = false;
         }
 
-        /// <summary>
-        /// The wheel doesn't move the slider: it is set by clicking or dragging, as everywhere in WinScreen, so a turn
-        /// of the wheel on the way past changes nothing. The wheel is still taken here: left to the menu, it went on
-        /// to the window under it, which took the focus and closed the menu.
-        /// </summary>
+        // The wheel doesn't move the slider, but it is still taken here: left to the menu, it went on to the window
+        // under it, which took the focus and closed the menu.
         protected override void OnMouseWheel(MouseEventArgs e)
         {
             if (e is HandledMouseEventArgs handled) handled.Handled = true;
@@ -437,10 +400,8 @@ internal sealed class OpacityRow : ToolStripControlHost
     }
 }
 
-/// <summary>A menu row with nine small places to put the window: each corner, each edge and the centre.</summary>
 internal sealed class PlacementRow : ToolStripControlHost
 {
-    /// <param name="keys">The shortcut for a place, or empty; it is shown in the place's tip.</param>
     public PlacementRow(Action<AppCommand> chosen, Func<AppCommand, string?>? keys = null) : base(new Grid())
     {
         var grid = (Grid)Control;
@@ -519,22 +480,18 @@ internal sealed class PlacementRow : ToolStripControlHost
             int hot = At(e.Location);
             if (hot == _hot) return;
             _hot = hot;
-            // The keys carry on from the place under the pointer, so only one place is ever lit.
             if (hot >= 0) _chosen = hot;
             _tips.SetToolTip(this, hot < 0 ? "" : TipAt(hot));
             Invalidate();
         }
 
-        /// <summary>The place the keys are on; a screen reader hears its name as it moves.</summary>
         private void Choose(int index)
         {
             _chosen = index;
-            _hot = -1; // The pointer's place gives way to the keys'.
+            _hot = -1;
             Invalidate();
             if (!Focused) return;
             AccessibilityNotifyClients(AccessibleEvents.Focus, index);
-            // The pointer's tip names the place under it; the keys get the same, beside the grid on that place's row,
-            // where it covers none of the other places.
             Rectangle cell = Cell(index);
             _tips.Show(TipAt(index), this, Cell(Places.Length - 1).Right + MenuParts.Scale(8), cell.Top, 2000);
         }
@@ -549,7 +506,6 @@ internal sealed class PlacementRow : ToolStripControlHost
 
         protected override AccessibleObject CreateAccessibilityInstance() => new GridAccessible(this);
 
-        /// <summary>The nine places as nine buttons, each named for where it puts the window.</summary>
         private sealed class GridAccessible(Grid grid) : ControlAccessibleObject(grid)
         {
             private readonly Place[] _places = Enumerable.Range(0, grid.Count).Select(index => new Place(grid, index)).ToArray();
@@ -586,7 +542,6 @@ internal sealed class PlacementRow : ToolStripControlHost
             if (e.Button == MouseButtons.Left && At(e.Location) is >= 0 and var index) Chosen?.Invoke(Places[index]);
         }
 
-        // Up and Down move between the rows; from the top or bottom row they go on to the menu's other commands.
         protected override bool IsInputKey(Keys keyData) => (keyData & Keys.KeyCode) switch
         {
             Keys.Left or Keys.Right => true,
@@ -622,16 +577,11 @@ internal sealed class PlacementRow : ToolStripControlHost
     }
 }
 
-/// <summary>
-/// Keeps a menu open after a choice that is often followed by another, such as turning something on or off, so the
-/// menu needn't be opened again for each. Choices that open a window or are done with the menu close it as usual.
-/// </summary>
 internal static class StayingOpen
 {
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ToolStripItem, object> Marked = new();
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ToolStripDropDown, object> Hooked = new();
 
-    /// <summary>Window commands that change something and leave the person where they were.</summary>
     private static readonly HashSet<AppCommand> Commands =
     [
         AppCommand.TogglePin, AppCommand.ToggleClickThrough, AppCommand.ToggleAnchor, AppCommand.ToggleDarkTitleBar,
@@ -641,7 +591,6 @@ internal static class StayingOpen
         AppCommand.HideToolbar,
     ];
 
-    /// <summary>Marks a choice that leaves its menu open.</summary>
     internal static T Keep<T>(T item) where T : ToolStripItem
     {
         Marked.AddOrUpdate(item, true);
@@ -651,10 +600,6 @@ internal static class StayingOpen
     internal static bool Keeps(ToolStripItem item) =>
         Marked.TryGetValue(item, out _) || item.Tag is AppCommand command && (Commands.Contains(command) || CommandCatalog.AnchorOf(command) is not null);
 
-    /// <summary>
-    /// Follows <paramref name="menu"/> and every menu that opens from it; after a choice that keeps it open,
-    /// <paramref name="refresh"/> brings its ticks up to date.
-    /// </summary>
     internal static void Follow(ToolStripDropDown menu, Action refresh) => Hook(menu, new Choice(refresh));
 
     private sealed class Choice(Action refresh)

@@ -4,17 +4,15 @@ using WinScreen.Native;
 
 namespace WinScreen.Tray;
 
-/// <summary>The colours WinScreen's menus are drawn with, in the light and the dark theme.</summary>
 internal static class MenuStyle
 {
     internal static bool Dark => Application.IsDarkModeEnabled;
 
-    /// <summary>Windows' high-contrast theme is on: WinScreen draws with its colours, not its own (roadmap P2-4).</summary>
     internal static bool HighContrast => _contrastHere || SystemInformation.HighContrast;
 
     [ThreadStatic] private static bool _contrastHere;
 
-    /// <summary>For tests: draws as in a high-contrast theme on this thread until disposed, and nowhere else.</summary>
+    // For tests: on this thread only, until disposed.
     internal static IDisposable AsIfHighContrast()
     {
         _contrastHere = true;
@@ -26,10 +24,6 @@ internal static class MenuStyle
         public void Dispose() => _contrastHere = false;
     }
 
-    /// <summary>
-    /// Light, dark or as Windows is ("system"). It can change while WinScreen runs: windows made afterwards and
-    /// everything WinScreen draws itself follow at once.
-    /// </summary>
     internal static void UseTheme(string theme)
     {
 #pragma warning disable WFO5001 // WinForms marks dark mode as experimental; anything it doesn't draw dark stays readable.
@@ -42,21 +36,17 @@ internal static class MenuStyle
 #pragma warning restore WFO5001
     }
 
-    // Windows 11's own interface face where it exists, and the face Windows 10 uses otherwise.
     internal static readonly string Face =
         FontFamily.Families.Any(family => family.Name == "Segoe UI Variable Text") ? "Segoe UI Variable Text" : "Segoe UI";
     internal static readonly Font Font = new(Face, 9.75f);
     internal static readonly Font SmallFont = new(Face, 8.25f);
     internal static readonly Font TitleFont = new(Face, 9.75f, FontStyle.Bold);
-    // Menus use Windows 11's own menu sizes: words at 14 px (10.5 pt at 100%), group headings at 12 px, the title in semibold.
     internal static readonly Font MenuFont = new(Face, 10.5f);
     internal static readonly Font MenuHeaderFont = new(Face, 9f);
     private static readonly Dictionary<(Font, int), Font> Fitted = [];
 
-    /// <summary>
-    /// A menu font for a display at <paramref name="dpi"/> (roadmap P2-3). WinScreen's text is drawn at the system's
-    /// DPI, so on a display at another scale the font is made that much larger or smaller, to come out at its size there.
-    /// </summary>
+    // WinScreen's text is drawn at the system's DPI, so on a display at another scale the font is made that much larger
+    // or smaller.
     internal static Font ForDpi(Font font, int dpi)
     {
         if (dpi <= 0 || Math.Abs(dpi - Native.DirectText.TypeDpi) < 0.5f) return font;
@@ -72,37 +62,26 @@ internal static class MenuStyle
     internal static Color Disabled => HighContrast ? SystemColors.GrayText : Dark ? Color.FromArgb(120, 120, 120) : Color.FromArgb(160, 160, 160);
     internal static Color Hover => HighContrast ? SystemColors.Menu : Dark ? Color.FromArgb(61, 61, 61) : Color.FromArgb(234, 234, 234);
 
-    /// <summary>Whether menus show a blurred glimpse of what is behind them, as Windows' Transparency effects asks.</summary>
     internal static bool Translucent => !HighContrast && Native.Translucency.On;
-    /// <summary>What a menu's background is painted: see-through over the blur when translucent, its colour otherwise.</summary>
     internal static Color Ground => Translucent ? Color.Transparent : Back;
-    /// <summary>The highlight under the pointer: a soft wash over the blur, as Windows 11's menus have.</summary>
     internal static Color HoverWash => !Translucent ? Hover : Dark ? Color.FromArgb(26, 255, 255, 255) : Color.FromArgb(20, 0, 0, 0);
-    /// <summary>The tint over the blur, lighter than a solid menu so what is behind shows through a little.</summary>
     internal static Color Tint => Dark ? Color.FromArgb(0xD8, 40, 40, 40) : Color.FromArgb(0xE0, 245, 245, 245);
     internal static Color Line => HighContrast ? SystemColors.MenuText : Dark ? Color.FromArgb(70, 70, 70) : Color.FromArgb(222, 222, 222);
     internal static Color Accent => HighContrast ? SystemColors.Highlight : Dark ? Color.FromArgb(96, 205, 255) : Color.FromArgb(0, 95, 184);
     internal static Color AccentBack => HighContrast ? SystemColors.Menu : Dark ? Color.FromArgb(40, 62, 76) : Color.FromArgb(221, 235, 247);
-    /// <summary>The tag on what is experimental, in menus and in Settings: Windows 11's caution colours.</summary>
     internal static Color TagBack => HighContrast ? SystemColors.Menu : Dark ? Color.FromArgb(67, 53, 25) : Color.FromArgb(255, 244, 206);
     internal static Color TagText => HighContrast ? SystemColors.MenuText : Dark ? Color.FromArgb(252, 225, 0) : Color.FromArgb(121, 82, 0);
 }
 
-/// <summary>
-/// Draws WinScreen's menus: no icon gutter, a rounded highlight under the pointer, a tinted mark for what is on,
-/// thin dividers, and rounded corners where Windows offers them.
-/// </summary>
 internal sealed class MenuRenderer : ToolStripProfessionalRenderer
 {
     internal static readonly MenuRenderer Instance = new();
     private static readonly ConditionalWeakTable<ToolStripDropDown, object> Styled = [];
-    /// <summary>The name of a menu's first line when it says what the menu is about; it is drawn as a title, not as a greyed command.</summary>
     internal const string TitleName = "inputStatus";
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2;
 
     private MenuRenderer() : base(new Colors()) => RoundedEdges = false;
 
-    /// <summary>Gives a menu this look, and its submenus as they open, rows that appear later included.</summary>
     internal static void Apply(ToolStripDropDown menu)
     {
         if (Styled.TryGetValue(menu, out _)) return;
@@ -119,11 +98,8 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         menu.HandleCreated += (_, _) => { if (Blurred.TryGetValue(menu, out StrongBox<Color?>? applied)) applied.Value = null; };
     }
 
-    /// <summary>
-    /// Places a submenu against the edge of the menu it opens from. Windows leaves a few pixels between them, and
-    /// where a menu lay under that gap, the pointer crossing it chose that menu's row instead, which closed the
-    /// submenus on the way. It is moved before it shows, so nothing jumps.
-    /// </summary>
+    // Windows leaves a few pixels between a submenu and its menu, and where a menu lay under that gap the pointer
+    // crossing it chose that menu's row, closing the submenus. Moved before it shows, so nothing jumps.
     private sealed class SubmenuEdge : NativeWindow
     {
         private const int WM_WINDOWPOSCHANGING = 0x0046, WM_DPICHANGED = 0x02E0;
@@ -164,22 +140,18 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
             if ((position.Flags & SWP_NOMOVE) != 0 || position.Width <= 0) return;
             if (!User32.GetWindowRect(parent.Handle, out Rect from)) return;
             int most = MenuParts.Scale(8), x = position.X;
-            if (x > from.Right && x - from.Right <= most) x = from.Right; // Opened to the right.
-            else if (x + position.Width < from.Left && from.Left - (x + position.Width) <= most) x = from.Left - position.Width; // To the left.
+            if (x > from.Right && x - from.Right <= most) x = from.Right;
+            else if (x + position.Width < from.Left && from.Left - (x + position.Width) <= most) x = from.Left - position.Width;
             if (x == position.X) return;
             position.X = x;
             System.Runtime.InteropServices.Marshal.StructureToPtr(position, place, false);
         }
     }
 
-    /// <summary>
-    /// Two layouts, measured at 100% from menus the owner chose. With icons, as File Explorer's: 14 px words, rows 31 px
-    /// apart, an icon 14 px in from the edge and words 40 px in. With no icons and nothing ticked there is no icon
-    /// column: 13 px words, rows 28 px apart, words and headings 18 px in.
-    /// </summary>
+    // Measured at 100% from Windows 11's own menus. With icons: 14 px words, rows 31 px apart, icon 14 px and words 40
+    // px in. Without icons or ticks: 13 px words, rows 28 px apart, words and headings 18 px in.
     private static void Prepare(ToolStripDropDown menu)
     {
-        // The light or dark look may have changed since the menu was made.
         if (menu.BackColor != MenuStyle.Back) menu.BackColor = MenuStyle.Back;
         if (menu.ForeColor != MenuStyle.Text) menu.ForeColor = MenuStyle.Text;
         int gap = MenuParts.Scale(5), dpi = menu.DeviceDpi;
@@ -187,7 +159,8 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
             item is ToolStripMenuItem { Checked: true } or ToolStripMenuItem { CheckOnClick: true });
         if (menu is ToolStripDropDownMenu withMargin && withMargin.ShowImageMargin != icons) withMargin.ShowImageMargin = icons;
         int inset = MenuParts.Scale(icons ? 8 : 13);
-        // Beside icons the words are a size up, as in File Explorer's menu; a list of words alone is set a little smaller.
+        // Beside icons the words are a size up, as in File Explorer's menu; a list of words alone is set a little
+        // smaller.
         // At the size of the display the menu is on: Windows Forms rescales a menu's font when it moves to a display
         // at another scale, which a font in points doesn't need (it came out at 7 pt at 100% beside a 150% display).
         Font font = MenuStyle.ForDpi(icons ? MenuStyle.MenuFont : MenuStyle.Font, dpi);
@@ -201,7 +174,6 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
             else if (item.Name != TitleName && !Equals(item.Tag, MenuParts.HeaderTag) && item.Font != font) item.Font = font;
             if (item is ToolStripMenuItem entry)
             {
-                // As much room on the right as the words move right, so a long one is never cut off.
                 var padding = new Padding(0, gap, TextRoom(menu), gap);
                 if (entry.Padding != padding) entry.Padding = padding;
                 if (entry.HasDropDownItems) Apply(entry.DropDown);
@@ -213,13 +185,10 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         }
     }
 
-    /// <summary>How far an icon moves right of where Windows places it, to sit 14 px in as Windows 11's own do.</summary>
     private static int IconRoom => MenuParts.Scale(10);
 
-    /// <summary>How far the words move right of where Windows places them: to 40 px in beside icons, 18 px without.</summary>
     private static int TextRoom(ToolStrip? menu) => MenuParts.Scale(menu is ToolStripDropDownMenu { ShowImageMargin: false } ? 7 : 4);
 
-    /// <summary>The space between an experimental command's words and its tag.</summary>
     private static int TagGap => MenuParts.Scale(8);
 
     private static readonly ConditionalWeakTable<ToolStripDropDown, StrongBox<Color?>> Blurred = [];
@@ -229,7 +198,6 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         if (!menu.IsHandleCreated) return;
         int round = DWMWCP_ROUND;
         Dwmapi.DwmSetWindowAttribute(menu.Handle, DWMWA_WINDOW_CORNER_PREFERENCE, in round, sizeof(int)); // Windows 11; refused before it.
-        // The blur behind follows Transparency effects and the light or dark look, which may have changed since.
         Color? tint = MenuStyle.Translucent ? MenuStyle.Tint : null;
         StrongBox<Color?> applied = Blurred.GetValue(menu, _ => new StrongBox<Color?>(null));
         if (applied.Value == tint) return;
@@ -252,17 +220,14 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
 
     protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
     {
-        // See-through over the blur Windows draws behind a translucent menu.
         e.Graphics.CompositingMode = CompositingMode.SourceCopy;
         using var brush = new SolidBrush(MenuStyle.Ground);
         e.Graphics.FillRectangle(brush, e.AffectedBounds);
         e.Graphics.CompositingMode = CompositingMode.SourceOver;
     }
 
-    /// <summary>
-    /// A row's words, drawn with DirectWrite: smoother, and see-through where they should be over a translucent menu,
-    /// which Windows' own text drawing isn't. Words set from the left may run a little past the room Windows measured.
-    /// </summary>
+    // DirectWrite: see-through where it should be over a translucent menu, which Windows' own text drawing isn't. Words
+    // set from the left may run a little past the room Windows measured.
     private static void DrawWords(ToolStripItemTextRenderEventArgs e)
     {
         Rectangle area = e.TextRectangle;
@@ -271,7 +236,7 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         Native.DirectText.DrawText(e.Graphics, e.Text, e.TextFont ?? MenuStyle.MenuFont, area, e.TextColor, e.TextFormat);
     }
 
-    protected override void OnRenderImageMargin(ToolStripRenderEventArgs e) { } // No gutter behind the icons.
+    protected override void OnRenderImageMargin(ToolStripRenderEventArgs e) { }
 
     protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
     {
@@ -329,7 +294,6 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         MenuParts.DrawTag(e.Graphics, e.TextRectangle.Left + words + TagGap, e.Item.Height / 2, MenuParts.Scale, e.Item.Enabled);
     }
 
-    /// <summary>What is on gets a tinted square, with its icon in it or a tick when it has none.</summary>
     protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
     {
         Rectangle r = Centred(e.ImageRectangle, e.Item);
@@ -338,10 +302,9 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         using (GraphicsPath path = Rounded(box, MenuParts.Scale(4)))
         using (var back = new SolidBrush(MenuStyle.AccentBack))
             e.Graphics.FillPath(back, path);
-        if (e.Item.Image is not null) return; // The icon is drawn over the square next.
+        if (e.Item.Image is not null) return;
         if (MenuParts.IsOneOf(e.Item))
         {
-            // One of several: a dot, as Windows marks the choice made among others.
             float size = MenuParts.Scale(6);
             using var dot = new SolidBrush(e.Item.Enabled ? MenuStyle.Accent : MenuStyle.Disabled);
             e.Graphics.FillEllipse(dot, r.Left + (r.Width - size) / 2f, r.Top + (r.Height - size) / 2f, size, size);
@@ -357,7 +320,7 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         ]);
     }
 
-    /// <summary>An icon's place moved to the middle of its row: Windows puts it a little high.</summary>
+    // Windows puts an icon a little high.
     private static Rectangle Centred(Rectangle image, ToolStripItem? item) =>
         item is null ? image : image with { X = image.X + IconRoom, Y = (item.Height - image.Height) / 2 };
 
@@ -378,7 +341,6 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         e.Graphics.DrawLine(pen, MenuParts.Scale(8), y, e.Item.Width - MenuParts.Scale(8), y);
     }
 
-    /// <summary>A thin chevron centred on the row, as Windows 11 draws one, in place of the small filled arrow.</summary>
     protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
     {
         if (e.Direction != ArrowDirection.Right && e.Direction != ArrowDirection.Left) { base.OnRenderArrow(e); return; }

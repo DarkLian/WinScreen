@@ -2,7 +2,6 @@ using WinScreen.Native;
 
 namespace WinScreen.Tray;
 
-/// <summary>A see-through outline of where a dragged window will snap when it's let go.</summary>
 internal sealed class SnapPreview : Form
 {
     private const int Inset = 6;
@@ -29,7 +28,6 @@ internal sealed class SnapPreview : Form
         }
     }
 
-    /// <summary>Shows the outline over this area, or hides it for null.</summary>
     public void ShowAt(Rectangle? area)
     {
         if (area is not { } r)
