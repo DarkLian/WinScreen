@@ -1,4 +1,33 @@
 {
+  "1.2.0": {
+    "en": [
+      "Put a picture, animated GIF or video behind any app: turn on Glass for a window and choose one in Settings → Backgrounds, for every app or for each app.",
+      "A background video can play its sound, from the window you used last, and pauses while its window is minimized or on another desktop.",
+      "Glass's settings are now on the Backgrounds page; Dark mode's stay in Appearance.",
+      "Glass and Dark mode no longer leave boxes or black areas round pictures after scrolling.",
+      "Run as administrator uses a small helper, so WinScreen itself keeps running as you.",
+      "Drag a link out of a browser view, and type with an input method through a view.",
+      "Many smaller fixes."
+    ],
+    "zh-Hans": [
+      "在任何应用后面放图片、GIF 动图或视频：为窗口开启玻璃效果，然后在“设置 → 背景”中选择，可以所有应用共用，也可以每个应用单独设置。",
+      "背景视频可以播放声音，只从最近使用的窗口播放；窗口最小化或在其他桌面时会暂停。",
+      "玻璃效果的选项现在在“背景”页面中；深色模式的选项仍在“外观”中。",
+      "滚动后，玻璃效果和深色模式不再在图片周围留下方块或黑色区域。",
+      "以管理员身份运行时会使用一个小助手，WinScreen 本身仍以你的身份运行。",
+      "可以把链接从浏览器视图中拖出来，也可以通过视图用输入法打字。",
+      "还有许多小修正。"
+    ],
+    "zh-Hant": [
+      "在任何應用程式後面放圖片、GIF 動畫或影片：為視窗開啟玻璃效果，然後在「設定 → 背景」中選擇，可以所有應用程式共用，也可以每個應用程式各自設定。",
+      "背景影片可以播放聲音，只從最近使用的視窗播放；視窗最小化或在其他桌面時會暫停。",
+      "玻璃效果的選項現在在「背景」頁面中；深色模式的選項仍在「外觀」中。",
+      "捲動後，玻璃效果和深色模式不再在圖片周圍留下方塊或黑色區域。",
+      "以系統管理員身分執行時會使用一個小幫手，WinScreen 本身仍以你的身分執行。",
+      "可以把連結從瀏覽器檢視中拖出來，也可以透過檢視用輸入法打字。",
+      "還有許多小修正。"
+    ]
+  },
   "1.1.1": {
     "en": [
       "Drag files, pictures or text onto a view to drop them in its window.",
