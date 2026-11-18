@@ -122,8 +122,15 @@ e pausa enquanto a janela está minimizada ou em outra área de trabalho.
 **Efeitos** *(experimental)*
 - Modo escuro que mantém imagens e vídeos como estão, ou um filtro simples
 - Vidro que esmaece só o fundo
-- Uma imagem ou um vídeo atrás do Vidro, para todos os apps ou para cada um, com som se quiser
 - Cortar uma janela, ou encolhê-la para um bloco ao vivo
+
+**Fundos** *(experimental)*
+- Uma imagem, um GIF animado ou um vídeo atrás do texto de uma janela, com o Vidro
+- Um fundo para todos os apps, e apps com o seu próprio ou sem nenhum
+- Preencher, ajustar, ampliar, lado a lado ou centralizar
+- Uma visualização grande: clique para escolher um arquivo ou solte um nela
+- O som de um vídeo, com volume próprio, da última janela que você usou
+- Os vídeos pausam enquanto a janela está minimizada ou em outra área de trabalho
 
 **No dia a dia**
 - Uma barra de ferramentas nas barras de título, um menu da janela com Ctrl+clique direito e um menu completo na bandeja do sistema

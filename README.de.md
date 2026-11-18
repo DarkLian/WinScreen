@@ -122,8 +122,15 @@ Video kann mit Ton laufen und pausiert, solange sein Fenster minimiert oder auf 
 **Effekte** *(experimentell)*
 - Dunkelmodus, der Bilder und Videos lässt, wie sie sind, oder ein einfacher Filter
 - Glas, das nur den Hintergrund ausblendet
-- Ein Bild oder Video hinter Glas, für alle Apps oder für jede App einzeln, auf Wunsch mit Ton
 - Ein Fenster zuschneiden oder zu einer Live-Kachel verkleinern
+
+**Hintergründe** *(experimentell)*
+- Ein Bild, animiertes GIF oder Video hinter dem Text eines Fensters, durch Glas
+- Ein Hintergrund für alle Apps, dazu Apps mit eigenem oder ganz ohne
+- Ausfüllen, Anpassen, Strecken, Kacheln oder Zentrieren
+- Eine große Vorschau: Klick darauf, um eine Datei zu wählen, oder zieh eine Datei darauf
+- Der Ton eines Videos mit eigener Lautstärke, aus dem zuletzt benutzten Fenster
+- Videos pausieren, solange ihr Fenster minimiert oder auf einem anderen Desktop ist
 
 **Im Alltag**
 - Eine Symbolleiste auf Titelleisten, ein Fenstermenü per Strg+Rechtsklick und ein vollständiges Infobereich-Menü

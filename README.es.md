@@ -61,10 +61,10 @@ Cristal difumina solo el fondo. Configura una ventana una vez, pulsa Ctrl+Alt+Ma
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Cristal difumina solo el fondo. Configura una ventana una vez, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.">
 </p>
 
-Cristal con un video detrás: la ventana de cualquier aplicación puede tener su propio fondo animado.
+Cristal con un vídeo detrás: la ventana de cualquier aplicación puede tener su propio fondo animado.
 
 <p align="center">
-  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Cristal con un video detrás: la ventana de cualquier aplicación puede tener su propio fondo animado.">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Cristal con un vídeo detrás: la ventana de cualquier aplicación puede tener su propio fondo animado.">
 </p>
 
 ## Usa aplicaciones desde una vista pequeña
@@ -80,11 +80,11 @@ VS Code y Discord. Para una aplicación que no funciona bien a través de una vi
 puede traer de vuelta la ventana real, que se vuelve a ocultar cuando cambias a otra.
 [Qué funciona dónde](docs/FEATURE_COMPATIBILITY.md) (en inglés) tiene los detalles.
 
-## Una imagen o un video detrás de cualquier aplicación
+## Una imagen o un vídeo detrás de cualquier aplicación
 
-Activa Cristal en una ventana (**Ctrl+Alt+G**) y podrá mostrar una imagen, un GIF animado o un video detrás de su
+Activa Cristal en una ventana (**Ctrl+Alt+G**) y podrá mostrar una imagen, un GIF animado o un vídeo detrás de su
 texto. En **Settings → Backgrounds** elige uno para todas las aplicaciones o dale a una aplicación el suyo propio. Un
-video puede sonar, y se pausa mientras su ventana está minimizada o en otro escritorio.
+vídeo puede sonar, y se pausa mientras su ventana está minimizada o en otro escritorio.
 
 ## Funciones
 
@@ -122,8 +122,15 @@ video puede sonar, y se pausa mientras su ventana está minimizada o en otro esc
 **Efectos** *(experimental)*
 - Modo oscuro que deja las imágenes y los vídeos como están, o un filtro sencillo
 - Cristal que difumina solo el fondo
-- Una imagen o un vídeo detrás de Cristal, para todas las aplicaciones o para cada una, con sonido si quieres
 - Recortar una ventana, o reducirla a un mosaico en vivo
+
+**Fondos** *(experimental)*
+- Una imagen, un GIF animado o un vídeo detrás del texto de una ventana, con Cristal
+- Un fondo para todas las aplicaciones, y aplicaciones con el suyo propio o sin ninguno
+- Rellenar, ajustar, expandir, mosaico o centrar
+- Una vista previa grande: haz clic para elegir un archivo o suelta uno encima
+- El sonido de un vídeo, con su propio volumen, desde la última ventana que usaste
+- Los vídeos se pausan mientras su ventana está minimizada o en otro escritorio
 
 **Uso diario**
 - Una barra de herramientas en las barras de título, un menú de ventana con Ctrl+clic derecho y un menú completo en la bandeja

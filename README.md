@@ -118,8 +118,15 @@ while its window is minimized or on another desktop.
 **Effects** *(experimental)*
 - Dark mode that keeps pictures and video as they are, or a simple filter
 - Glass that fades only the background
-- A picture or video behind Glass, for every app or one app at a time, with sound if you like
 - Crop a window, or shrink it to a live tile
+
+**Backgrounds** *(experimental)*
+- A picture, animated GIF or video behind a window's text, through Glass
+- One background for every app, and apps with their own or with none
+- Fill, fit, stretch, tile or center
+- A large preview: click it to choose a file, or drop one onto it
+- A video's sound, with its own volume, from the window you used last
+- Videos pause while their window is minimized or on another desktop
 
 **Everyday use**
 - A toolbar on title bars, a window menu on Ctrl+right-click, and a full tray menu

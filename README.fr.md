@@ -124,8 +124,15 @@ autre bureau.
 **Effets** *(expérimental)*
 - Un mode sombre qui laisse les images et les vidéos telles quelles, ou un simple filtre
 - Un effet verre qui n'atténue que l'arrière-plan
-- Une image ou une vidéo derrière l'effet verre, pour toutes les applications ou chacune à part, avec le son si vous voulez
 - Rogner une fenêtre, ou la réduire en vignette en direct
+
+**Arrière-plans** *(expérimental)*
+- Une image, un GIF animé ou une vidéo derrière le texte d'une fenêtre, grâce à l'effet verre
+- Un arrière-plan pour toutes les applications, et des applications avec le leur ou sans
+- Remplir, ajuster, étirer, mosaïque ou centrer
+- Un grand aperçu : cliquez pour choisir un fichier, ou déposez-en un dessus
+- Le son d'une vidéo, avec son propre volume, depuis la dernière fenêtre utilisée
+- Les vidéos se mettent en pause quand leur fenêtre est réduite ou sur un autre bureau
 
 **Au quotidien**
 - Une barre d'outils sur les barres de titre, un menu de fenêtre par Ctrl+clic droit et un menu complet dans la zone de notification
