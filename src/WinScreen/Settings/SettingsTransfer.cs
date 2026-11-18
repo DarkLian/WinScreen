@@ -14,6 +14,7 @@ internal static class SettingsTransfer
         var content = JsonSerializer.SerializeToNode(settings)!.AsObject();
         content.Remove(nameof(AppSettings.StartWithWindows));
         content.Remove(nameof(AppSettings.RunAsAdministrator)); // This computer's choice, like starting with Windows.
+        content.Remove(nameof(AppSettings.AdministratorHelper));
         content.Remove(nameof(AppSettings.SettingsWindowPlacement)); // Where it sat on this computer's screens.
         content.Remove(nameof(AppSettings.WelcomeShown));
         var document = new JsonObject { ["FormatVersion"] = Version, ["Settings"] = content };
@@ -39,6 +40,7 @@ internal static class SettingsTransfer
             () => throw new JsonException(Localization.UiText.T("settings.transfer.invalid")));
         imported.StartWithWindows = current.StartWithWindows;
         imported.RunAsAdministrator = current.RunAsAdministrator;
+        imported.AdministratorHelper = current.AdministratorHelper;
         imported.SettingsWindowPlacement = current.SettingsWindowPlacement;
         imported.WelcomeShown = current.WelcomeShown;
         imported.Imported = true;

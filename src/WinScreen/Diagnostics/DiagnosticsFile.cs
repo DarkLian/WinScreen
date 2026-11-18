@@ -27,7 +27,9 @@ internal static class DiagnosticsFile
         Log.Event("diagnostics.saved");
         StartupFacts.LogNow(); // The facts again, in case the start of this session has rolled out of the log.
         Log.Flush(TimeSpan.FromSeconds(2));
-        logFiles ??= Log.Files;
+        // The administrator helper's log beside this copy's (10-2): it writes its own file.
+        logFiles ??= [.. Log.Files, .. new[] { DiagnosticLog.OlderOf(DiagnosticLog.HelperFileName), DiagnosticLog.HelperFileName }
+            .Select(name => Path.Combine(dataFolder, name)).Where(file => File.Exists(file) && !Log.Files.Contains(file, StringComparer.OrdinalIgnoreCase))];
 
         string folder = Path.Combine(dataFolder, FolderName);
         Directory.CreateDirectory(folder);

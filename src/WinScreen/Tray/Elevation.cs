@@ -11,6 +11,12 @@ public interface ITaskScheduler
     bool Exists(string name);
     void Create(string name, string xml);
     void Delete(string name);
+
+    /// <summary>Runs a task now, as it would run at its trigger. False when it couldn't.</summary>
+    bool Run(string name) => false;
+
+    /// <summary>The program a task starts, or null when there is no such task or it can't be read.</summary>
+    string? CommandOf(string name) => null;
 }
 
 /// <summary>Windows' own Task Scheduler, through schtasks. Creating a task that runs as administrator needs one.</summary>
@@ -36,8 +42,28 @@ internal sealed class SchtasksScheduler : ITaskScheduler
             throw new IOException(Localization.UiText.T("errors.admin.task"));
     }
 
-    private static int Run(params string[] arguments)
+    public bool Run(string name) => Run("/Run", "/TN", name) == 0;
+
+    public string? CommandOf(string name)
     {
+        if (Run(out string xml, "/Query", "/TN", name, "/XML") != 0) return null;
+        try
+        {
+            var document = System.Xml.Linq.XDocument.Parse(xml);
+            return document.Descendants().FirstOrDefault(element => element.Name.LocalName == "Command")?.Value.Trim();
+        }
+        catch (System.Xml.XmlException failure)
+        {
+            Diagnostics.Log.Swallowed(failure);
+            return null;
+        }
+    }
+
+    private static int Run(params string[] arguments) => Run(out _, arguments);
+
+    private static int Run(out string output, params string[] arguments)
+    {
+        output = "";
         var start = new ProcessStartInfo("schtasks.exe")
         {
             UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -46,8 +72,9 @@ internal sealed class SchtasksScheduler : ITaskScheduler
         try
         {
             using Process process = Process.Start(start)!;
-            process.StandardOutput.ReadToEnd();
-            process.StandardError.ReadToEnd();
+            var error = process.StandardError.ReadToEndAsync();
+            output = process.StandardOutput.ReadToEnd();
+            error.GetAwaiter().GetResult();
             return process.WaitForExit(15000) ? process.ExitCode : -1;
         }
         catch (Win32Exception) { return -1; }
@@ -134,9 +161,11 @@ internal static class Elevation
     /// The task that starts WinScreen as administrator when this person signs in: at normal priority (tasks start
     /// lower otherwise), with no time limit, and on battery too.
     /// </summary>
-    public static string TaskXml(string command, string user)
+    /// <param name="arguments">What it is given: the administrator helper's argument with the helper chosen (10-2).</param>
+    public static string TaskXml(string command, string user, string arguments = "")
     {
         string who = SecurityElement.Escape(user), what = SecurityElement.Escape(command);
+        string given = arguments.Length == 0 ? "" : $"<Arguments>{SecurityElement.Escape(arguments)}</Arguments>";
         return $"""
             <?xml version="1.0" encoding="UTF-16"?>
             <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -150,10 +179,63 @@ internal static class Elevation
                 <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
                 <Priority>4</Priority>
               </Settings>
-              <Actions Context="Author"><Exec><Command>{what}</Command></Exec></Actions>
+              <Actions Context="Author"><Exec><Command>{what}</Command>{given}</Exec></Actions>
             </Task>
             """;
     }
 
     public static string CurrentUser => WindowsIdentity.GetCurrent().Name;
+
+    /// <summary>
+    /// Starts the administrator helper (10-2): by the sign-in task when there is one, which Windows runs as administrator
+    /// without asking; otherwise Windows asks the person first. False when they said no or it couldn't start.
+    /// </summary>
+    public static bool StartHelper(ITaskScheduler tasks)
+    {
+        // The task only when it starts this very program: another copy (an installed one, beside a portable one) would
+        // start its own helper. A copy with its data elsewhere (tests) tells its helper where, which a task can't.
+        string? dataFolder = Environment.GetEnvironmentVariable(AppRoles.DataFolderVariable);
+        if (dataFolder is null && string.Equals(tasks.CommandOf(StartWithWindows.TaskName), Environment.ProcessPath, StringComparison.OrdinalIgnoreCase) &&
+            tasks.Run(StartWithWindows.TaskName))
+            return true;
+        try
+        {
+            Process.Start(new ProcessStartInfo(Environment.ProcessPath!)
+            {
+                UseShellExecute = true, Verb = "runas",
+                Arguments = (AppRoles.HelperArgument + " " + DataFolderArguments()).Trim(),
+            })?.Dispose();
+            return true;
+        }
+        catch (Win32Exception) { return false; } // Including "The operation was canceled by the user."
+    }
+
+    /// <summary>
+    /// Where this copy's data is, for a copy it starts through Windows (which gives it the person's own environment):
+    /// empty for the usual place.
+    /// </summary>
+    public static string DataFolderArguments() =>
+        Environment.GetEnvironmentVariable(AppRoles.DataFolderVariable) is { Length: > 0 } folder
+            ? $"{AppRoles.DataFolderArgument} \"{folder}\"" : "";
+
+    /// <summary>
+    /// From the helper, when no ordinary copy could be started as the person: the one elevated copy of before
+    /// (<see cref="AppRoles.SingleArgument"/>), so WinScreen runs either way. False when it didn't start.
+    /// </summary>
+    public static bool StartSingleCopy()
+    {
+        try
+        {
+            var start = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
+            start.ArgumentList.Add(AppRoles.SingleArgument);
+            start.ArgumentList.Add(ElevatedArgument);
+            Process.Start(start)?.Dispose();
+            return true;
+        }
+        catch (Win32Exception failure)
+        {
+            Diagnostics.Log.Swallowed(failure);
+            return false;
+        }
+    }
 }

@@ -17,9 +17,10 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
     private readonly Dictionary<int, int> _dispatch = [];
     private int _nextId = 0x4000;
 
-    public HotkeyHost()
+    /// <param name="title">The window's title: the administrator helper's differs, so the command line finds the ordinary copy.</param>
+    public HotkeyHost(string title = WindowTitle)
     {
-        CreateHandle(new CreateParams { Caption = WindowTitle });
+        CreateHandle(new CreateParams { Caption = title });
     }
 
     public event Action<int>? Pressed;

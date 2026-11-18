@@ -14,6 +14,9 @@ public sealed class StartWithWindows(string keyPath = StartWithWindows.RunKey, I
     private const string ValueName = "WinScreen";
 
     private readonly ITaskScheduler _tasks = tasks ?? new SchtasksScheduler();
+
+    /// <summary>The scheduler the sign-in task lives in; the ordinary copy runs it to start its helper (10-2).</summary>
+    internal ITaskScheduler Tasks => _tasks;
     private readonly Func<bool> _elevated = elevated ?? (() => Native.ProcessInfo.SelfElevated);
 
     /// <summary>Starting as administrator is chosen.</summary>
@@ -21,6 +24,15 @@ public sealed class StartWithWindows(string keyPath = StartWithWindows.RunKey, I
 
     /// <summary>What it starts: this copy of WinScreen.</summary>
     internal string Command { get; init; } = Environment.ProcessPath ?? "WinScreen.exe";
+
+    /// <summary>What the task gives it: with the administrator helper chosen, the helper's argument (10-2).</summary>
+    public string TaskArguments { get; set; } = "";
+
+    /// <summary>
+    /// The ordinary copy with a helper: the task is the helper's to make or take away (it is elevated); this copy only
+    /// writes the Run entry (10-2).
+    /// </summary>
+    public bool TaskByHelper { get; set; }
 
     internal object? ReadValue()
     {
@@ -52,7 +64,8 @@ public sealed class StartWithWindows(string keyPath = StartWithWindows.RunKey, I
                 if (value && !byTask) key.SetValue(ValueName, $"\"{Command}\"");
                 else key.DeleteValue(ValueName, throwOnMissingValue: false);
             }
-            if (byTask) _tasks.Create(TaskName, Elevation.TaskXml(Command, Elevation.CurrentUser));
+            if (TaskByHelper && !_elevated()) return;
+            if (byTask) _tasks.Create(TaskName, Elevation.TaskXml(Command, Elevation.CurrentUser, TaskArguments));
             else if (_tasks.Exists(TaskName)) _tasks.Delete(TaskName);
         }
     }

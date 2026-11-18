@@ -31,13 +31,21 @@ public sealed partial class TrayApplication : ApplicationContext
     private bool _hookReported;
     private readonly AppSettings _settings;
     private readonly string _settingsPath;
-    private readonly HotkeyHost _hotkeys = new();
+    private readonly HotkeyHost _hotkeys;
     private readonly NotifyIcon _tray = new();
     private readonly StartWithWindows _startup = new();
     private readonly DarkMode _dark = new();
     private readonly AnchorSet _anchors = new();
     private readonly AutomaticAnchors _automaticAnchors;
-    private readonly RecoveryWatcher _recoveryWatcher = new();
+    private readonly RecoveryWatcher _recoveryWatcher;
+    /// <summary>What this copy is (10-2): which windows it acts on, and whether it has a tray icon and hotkeys.</summary>
+    private readonly AppRole _role;
+    /// <summary>The ordinary copy's link to its administrator helper, while Run as administrator wants one.</summary>
+    private HelperLink.OrdinaryEnd? _helper;
+    /// <summary>The helper's link to the ordinary copy it works for.</summary>
+    private HelperLink.HelperEnd? _ordinary;
+    private System.Windows.Forms.Timer? _helperCheck;
+    private int _helperStarts;
     private readonly Glass.ContentEffects _content;
     private readonly PinBorders _borders = new();
     private readonly ActionFlash _flash = new();
@@ -72,8 +80,11 @@ public sealed partial class TrayApplication : ApplicationContext
     private WindowMenuHost? _windowMenu;
 
     internal TrayApplication(WindowController windows, AppSettings settings, string settingsPath, ProgramSound? sound = null,
-        int? settingsPage = null)
+        int? settingsPage = null, AppRole? role = null)
     {
+        _role = role ?? (ProcessInfo.SelfElevated ? AppRole.Elevated : AppRole.Ordinary);
+        _hotkeys = new HotkeyHost(AppRoles.HostTitle(_role));
+        _recoveryWatcher = _role == AppRole.Helper ? new RecoveryWatcher([AppRoles.HelperArgument]) : new RecoveryWatcher();
         AskToRestart = AskInSettings;
         _windows = windows;
         _sound = sound ?? new ProgramSound(Native.AudioSessions.Instance, null);
@@ -192,21 +203,24 @@ public sealed partial class TrayApplication : ApplicationContext
             if (e.Button == MouseButtons.Left)
                 OpenSettings();
         };
-        _tray.Visible = true;
+        _tray.Visible = _role != AppRole.Helper; // The helper speaks through the ordinary copy's icon.
         Microsoft.Win32.SystemEvents.UserPreferenceChanged += FollowWindowsTheme;
         ShowStatus();
 
         bool firstRun = !_settings.WelcomeShown;
         IReadOnlyList<HotkeyProblem> problems = StartUp();
-        // A built-in shortcut that types a letter on this keyboard is explained once, not at every sign-in.
-        if (!firstRun)
-            problems = problems.Where(problem => !TypesTextByDefault(problem.Command)).ToArray();
-        if (problems.Count > 0)
-            Alert(T("hotkeys.someUnavailable"), Describe(problems));
-        else if (firstRun)
-            Balloon(T("app.running"), T("tray.welcome"),
-                ToolTipIcon.None);
-        OfferWhatsNew(firstRun);
+        if (_role != AppRole.Helper)
+        {
+            // A built-in shortcut that types a letter on this keyboard is explained once, not at every sign-in.
+            if (!firstRun)
+                problems = problems.Where(problem => !TypesTextByDefault(problem.Command)).ToArray();
+            if (problems.Count > 0)
+                Alert(T("hotkeys.someUnavailable"), Describe(problems));
+            else if (firstRun)
+                Balloon(T("app.running"), T("tray.welcome"),
+                    ToolTipIcon.None);
+            OfferWhatsNew(firstRun);
+        }
         if (_windows.RecoveryWarning is { } warning)
             Alert(T("recovery.attention"), warning);
 
@@ -217,7 +231,9 @@ public sealed partial class TrayApplication : ApplicationContext
             _updateTimer.Interval = 6 * 60 * 60 * 1000;
             await _updates.Check();
         };
-        _updateTimer.Start();
+        if (_role != AppRole.Helper) _updateTimer.Start(); // The ordinary copy updates both.
+        if (_role == AppRole.Helper) StartAsHelper();
+        else if (HelperWanted) StartHelper();
 
         // Restarted for a change made in Settings: Settings comes back on the same page.
         if (settingsPage is { } page)
@@ -442,16 +458,25 @@ public sealed partial class TrayApplication : ApplicationContext
     /// </summary>
     private IReadOnlyList<HotkeyProblem> StartUp()
     {
-        List<HotkeyProblem> problems = ReadHotkeys(_settings, out var desired);
-        foreach (AppCommand command in _hotkeys.RegisterAvailable(desired).Cast<AppCommand>())
-            problems.Add(Taken(command, _settings));
+        // The helper takes no hotkeys: the ordinary copy has them, and hands it what is for administrator apps.
+        List<HotkeyProblem> problems = [];
+        if (_role != AppRole.Helper)
+        {
+            problems = ReadHotkeys(_settings, out var desired);
+            foreach (AppCommand command in _hotkeys.RegisterAvailable(desired).Cast<AppCommand>())
+                problems.Add(Taken(command, _settings));
+        }
 
         try
         {
             _startup.AsAdministrator = _settings.RunAsAdministrator;
+            _startup.TaskArguments = HelperChosen ? AppRoles.HelperArgument : "";
             if (_settings.StartWithWindows is { } startup) _startup.IsOn = startup;
-            _settings.WelcomeShown = true;
-            _settings.Save(_settingsPath);
+            if (_role != AppRole.Helper)
+            {
+                _settings.WelcomeShown = true;
+                SaveSettings(_settings);
+            }
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException
                                             or System.Security.SecurityException)
@@ -486,6 +511,7 @@ public sealed partial class TrayApplication : ApplicationContext
                         BackupFiles.Prune(_settingsPath, ".before-import-");
                     }
                     _startup.AsAdministrator = settings.RunAsAdministrator;
+                    _startup.TaskByHelper = _helper is not null;
                     if (startupChanged) _startup.IsOn = settings.StartWithWindows!.Value;
                     settings.Save(_settingsPath);
                 }
@@ -505,7 +531,12 @@ public sealed partial class TrayApplication : ApplicationContext
         ApplyPreferences(experimentalBefore, before);
         Native.Translucency.Allowed = _settings.MenuTransparency;
         if (_settings.Theme != themeBefore) ChangeTheme();
-        if (adminChanged && _settings.RunAsAdministrator && !ProcessInfo.SelfElevated)
+        // The helper reads them again, or goes when Run as administrator was turned off (10-2).
+        if (_helper is not null && !HelperWanted) StopHelper();
+        else _helper?.Send(new HelperLink.Message(HelperLink.SettingsSaved));
+        if (adminChanged && HelperWanted)
+            _toolbar.BeginInvoke(StartHelper);
+        else if (adminChanged && _settings.RunAsAdministrator && !ProcessInfo.SelfElevated)
             _toolbar.BeginInvoke(RestartAsAdministrator); // After Settings has finished saving.
         else if (_settings.Language != before.Language)
             _toolbar.BeginInvoke(RestartForLanguage);
@@ -962,12 +993,15 @@ public sealed partial class TrayApplication : ApplicationContext
         return CanReach(window);
     }
 
-    /// <summary>Windows only lets an app reach an administrator app's windows when it runs as administrator too.</summary>
-    private static bool CanReach(nint window)
+    /// <summary>
+    /// Windows only lets an app reach an administrator app's windows when it runs as administrator too. Since 10-2 the
+    /// administrator helper acts only on those, and the ordinary copy on all the others (<see cref="AppRoles.Reaches"/>).
+    /// </summary>
+    private bool CanReach(nint window)
     {
-        if (ProcessInfo.SelfElevated) return true;
+        if (_role == AppRole.Elevated) return true;
         User32.GetWindowThreadProcessId(window, out uint process);
-        return !ProcessInfo.IsElevated(process);
+        return AppRoles.Reaches(_role, ProcessInfo.IsElevated(process));
     }
 
     private bool CanOpenWindowMenu(nint window) => CanGesture(window) && !User32.IsIconic(window) &&
@@ -989,7 +1023,7 @@ public sealed partial class TrayApplication : ApplicationContext
         // Runs four times a second, so a window already looked at, or no saved setups at all, costs nothing.
         bool cameForward = window != _setupForeground;
         _setupForeground = window;
-        if (_settings.SavedSetups.Count == 0 || Paused || !WindowInfo.IsMainWindow(window) ||
+        if (_settings.SavedSetups.Count == 0 || Paused || !WindowInfo.IsMainWindow(window) || !CanReach(window) ||
             _setupRetryAt.GetValueOrDefault(window) > Environment.TickCount64)
             return;
         if (_setupDone.TryGetValue(window, out var done) && done.Matches() &&
@@ -1159,7 +1193,7 @@ public sealed partial class TrayApplication : ApplicationContext
             _settings.SavedSetups.Add(setup);
         try
         {
-            _settings.Save(_settingsPath);
+            SaveSettings(_settings);
         }
         catch
         {
@@ -1296,6 +1330,11 @@ public sealed partial class TrayApplication : ApplicationContext
     private void OpenSettings(Rectangle? bounds = null, int page = 0, bool reopening = false, SettingsWindow.UnsavedEdits? unsaved = null,
         bool quietly = false, FormWindowState state = FormWindowState.Normal)
     {
+        if (_role == AppRole.Helper)
+        {
+            _ordinary?.Send(new HelperLink.Message(HelperLink.OpenSettings)); // Settings are the ordinary copy's (10-2).
+            return;
+        }
         if (_settingsWindow is { IsDisposed: false })
         {
             // Back from the taskbar as it was, maximized or not.
@@ -1457,6 +1496,9 @@ public sealed partial class TrayApplication : ApplicationContext
         // it runs from. It installs at the next ordinary exit instead.
         if (!_restarting) Task.Run(() => _updates.ApplyOnExit(_restartForUpdate)).GetAwaiter().GetResult();
         _updates.Dispose();
+        _helperCheck?.Dispose();
+        _helper?.Dispose(); // Its helper sees the link close, puts its windows back and goes.
+        _ordinary?.Dispose();
         _hotkeys.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
@@ -1484,6 +1526,8 @@ public sealed partial class TrayApplication : ApplicationContext
             case CommandTarget.EveryWindow:
                 LogCommand(command, 0, CommandOutcome.Started);
                 definition.Run(0, null);
+                // Administrator apps' windows are the helper's (10-2): it does the same for them.
+                _helper?.Send(new HelperLink.Message(HelperLink.Run, (int)command));
                 return CommandOutcome.Started;
             case CommandTarget.UnderPointer:
                 definition.Run(0, null);
@@ -1494,6 +1538,24 @@ public sealed partial class TrayApplication : ApplicationContext
         {
             User32.GetWindowThreadProcessId(window, out uint pid);
             if (window == 0 || pid == Environment.ProcessId) window = _lastIdentity.Window;
+        }
+
+        if (definition.Target != CommandTarget.NoWindow && window != 0 && !CanReach(window))
+        {
+            // An administrator app's window, from the ordinary copy: its helper runs the command there (10-2).
+            if (_helper is { Connected: true } helper && User32.IsWindow(window))
+            {
+                LogCommand(command, window, CommandOutcome.Started);
+                Diagnostics.Log.Event("command.forwarded", ("name", command));
+                return helper.Send(new HelperLink.Message(HelperLink.Run, (int)command, window, HelperLink.Message.From(display)))
+                    ? CommandOutcome.Started : CommandOutcome.Failed;
+            }
+            // The helper is asked only for administrator apps' windows; anything else is the ordinary copy's.
+            if (_role == AppRole.Helper)
+            {
+                LogCommand(command, window, CommandOutcome.Refused);
+                return CommandOutcome.Refused;
+            }
         }
 
         bool recovery = definition.Recovers;
@@ -1686,7 +1748,7 @@ public sealed partial class TrayApplication : ApplicationContext
         change(_settings.PipPresets);
         try
         {
-            _settings.Save(_settingsPath);
+            SaveSettings(_settings);
         }
         catch (Exception failure) when (IsExpected(failure))
         {
@@ -1715,7 +1777,7 @@ public sealed partial class TrayApplication : ApplicationContext
         draft.PipOriginalPrograms.Add(program);
         // One or the other, as in Settings: nothing is sent to a program whose original is shown.
         draft.PipHover.Programs.RemoveAll(name => name.Equals(program, StringComparison.OrdinalIgnoreCase));
-        try { draft.Save(_settingsPath); _settings.CopyFrom(draft); }
+        try { SaveSettings(draft); _settings.CopyFrom(draft); }
         catch (Exception failure) when (IsExpected(failure)) { Alert(T("errors.settings.saveFailed"), failure.Message); return; }
         Pip.PipOriginalApps.Programs = _settings.PipOriginalPrograms;
         Pip.PipHoverApps.Preferences = _settings.PipHover;
@@ -1727,7 +1789,7 @@ public sealed partial class TrayApplication : ApplicationContext
     {
         var draft = _settings.Clone();
         change(draft.PipBookmarks);
-        try { draft.Save(_settingsPath); _settings.CopyFrom(draft); }
+        try { SaveSettings(draft); _settings.CopyFrom(draft); }
         catch (Exception failure) when (IsExpected(failure)) { Alert(T("errors.settings.saveFailed"), failure.Message); }
     }
 
@@ -1977,6 +2039,13 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private void Balloon(string title, string text, ToolTipIcon icon, Action? onClick = null)
     {
+        if (_role == AppRole.Helper)
+        {
+            // No icon of its own: the ordinary copy shows it (10-2).
+            if (_ordinary?.Send(new HelperLink.Message(HelperLink.Alert, Title: title, Text: text, Icon: (int)icon)) != true)
+                Diagnostics.Log.Event("helper.alertLost");
+            return;
+        }
         _balloonAction = onClick;
         _tray.ShowBalloonTip(BalloonMilliseconds, title, string.IsNullOrEmpty(text) ? " " : text, icon);
     }

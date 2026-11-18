@@ -479,6 +479,13 @@ public sealed class AppSettings
     /// <summary>WinScreen runs as administrator, so it can also change administrator apps' windows.</summary>
     public bool RunAsAdministrator { get; set; }
 
+    /// <summary>
+    /// With <see cref="RunAsAdministrator"/>: WinScreen runs as the person, with a small elevated helper for
+    /// administrator apps' windows (10-2). Off keeps the one elevated copy of before. Only in the file, as a way back
+    /// while the helper is new.
+    /// </summary>
+    public bool AdministratorHelper { get; set; } = true;
+
     /// <summary>Where Settings was last, and whether it filled the screen, to open it the same way next time.</summary>
     public SettingsPlacement? SettingsWindowPlacement { get; set; }
 

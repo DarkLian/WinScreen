@@ -52,7 +52,14 @@ internal static partial class ProcessInfo
     /// </summary>
     public static bool CanElevate { get; } = SelfElevated || ElevationType() == TokenElevationTypeLimited;
 
+    /// <summary>
+    /// Whether Windows gave this person two sets of rights, one held back (UAC on, an administrator account): only then
+    /// can an ordinary copy of WinScreen run beside an elevated one (10-2).
+    /// </summary>
+    public static bool SplitToken { get; } = ElevationType() is TokenElevationTypeFull or TokenElevationTypeLimited;
+
     private const int TokenElevationTypeKind = 18;
+    private const int TokenElevationTypeFull = 2;
     private const int TokenElevationTypeLimited = 3;
 
     private static int ElevationType()

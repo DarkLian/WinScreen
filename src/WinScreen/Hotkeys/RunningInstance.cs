@@ -18,7 +18,10 @@ internal static class RunningInstance
     {
         nint window = User32.FindWindow(null, HotkeyHost.WindowTitle);
         if (window == 0)
+        {
+            WaitForHelper();
             return;
+        }
         string targetPath = Windows.WindowInfo.ExecutablePath(window);
         if (!string.Equals(targetPath, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(
@@ -36,5 +39,29 @@ internal static class RunningInstance
             throw new TimeoutException(
                 UiText.T(
                     "errors.app.shutdownUnconfirmed"));
+        WaitForHelper();
+    }
+
+    /// <summary>
+    /// The administrator helper (10-2) goes when the ordinary copy does, putting its windows back first; an update must
+    /// wait for that too, or the helper still holds the files. Its window can't be sent anything from here (it is
+    /// elevated), so this only waits.
+    /// </summary>
+    private static void WaitForHelper()
+    {
+        nint helper = User32.FindWindow(null, Tray.AppRoles.HelperHostTitle);
+        if (helper == 0) return;
+        User32.GetWindowThreadProcessId(helper, out uint id);
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById((int)id);
+            if (!string.Equals(Native.ProcessInfo.PathOf(id), Environment.ProcessPath, StringComparison.OrdinalIgnoreCase)) return;
+            if (!process.WaitForExit(CloseTimeoutMilliseconds))
+                throw new TimeoutException(UiText.T("errors.app.shutdownUnconfirmed"));
+        }
+        catch (Exception gone) when (gone is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Diagnostics.Log.Swallowed(gone); // Already gone.
+        }
     }
 }

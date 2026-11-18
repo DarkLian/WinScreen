@@ -1,0 +1,262 @@
+using static WinScreen.Localization.UiText;
+using System.Text.Json;
+using WinScreen.Native;
+using WinScreen.Settings;
+
+namespace WinScreen.Tray;
+
+/// <summary>
+/// The ordinary copy and its administrator helper (10-2): starting the helper, handing it what is for administrator
+/// apps' windows, and the helper's side, which acts only on those and speaks through the ordinary copy.
+/// </summary>
+public sealed partial class TrayApplication
+{
+    private const int HelperCheckMilliseconds = 2000, HelperStartsAllowed = 3;
+    private static readonly TimeSpan OrdinaryCopyWait = TimeSpan.FromSeconds(60);
+
+    /// <summary>This copy is the ordinary one and Run as administrator wants a helper beside it.</summary>
+    private bool HelperWanted =>
+        AppRoles.WantsHelper(_role, _settings.RunAsAdministrator, _settings.AdministratorHelper, ProcessInfo.CanElevate);
+
+    /// <summary>The helper way is in use: the sign-in task starts the helper, which starts the ordinary copy.</summary>
+    private bool HelperChosen => _role == AppRole.Helper || HelperWanted;
+
+    /// <summary>Whether the helper is connected, for tests.</summary>
+    internal bool HelperConnected => _helper?.Connected == true;
+
+    /// <summary>The helper's process while connected, else 0, for tests.</summary>
+    internal uint HelperProcess => _helper?.Peer ?? 0;
+
+    /// <summary>
+    /// The ordinary copy's side: serves the link and starts the helper if none is running (the sign-in task may have
+    /// started this copy through one). Followed every two seconds: a helper that went is started again, a few times.
+    /// </summary>
+    private void StartHelper()
+    {
+        if (!HelperWanted) return;
+        if (_helper is null)
+        {
+            _helper = new HelperLink.OrdinaryEnd();
+            _helper.Received += message => _toolbar.BeginInvoke(() => FromHelper(message));
+            _helper.ConnectionChanged += connected => _toolbar.BeginInvoke(() => Diagnostics.Log.Event("helper.link", ("connected", connected)));
+            _helper.Start();
+        }
+        _helperStarts = 0;
+        if (_helperCheck is null)
+        {
+            _helperCheck = new System.Windows.Forms.Timer { Interval = HelperCheckMilliseconds };
+            _helperCheck.Tick += (_, _) => FollowHelper();
+            _helperCheck.Start();
+        }
+        FollowHelper();
+    }
+
+    private void FollowHelper()
+    {
+        if (_helper is not { } link || link.Connected) return;
+        if (HelperLink.FindCopy(AppRoles.HelperHostTitle, elevated: true) != 0) return; // Starting, or about to connect.
+        if (_helperStarts >= HelperStartsAllowed)
+        {
+            if (_helperStarts++ == HelperStartsAllowed) Alert(T("settings.admin"), T("settings.admin.helperFailed"));
+            return;
+        }
+        _helperStarts++;
+        Diagnostics.Log.Event("helper.starting", ("attempt", _helperStarts));
+        if (Elevation.StartHelper(_startup.Tasks)) return;
+        // Windows asked and the person said no: as before, the choice goes back to off.
+        StopHelper();
+        _settings.RunAsAdministrator = false;
+        _startup.AsAdministrator = false;
+        try { SaveSettings(_settings); }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(failure); }
+        if (_settingsWindow is { IsDisposed: false } open) open.LoadValues(_settings);
+        Alert(T("settings.admin"), T("settings.admin.declined"), ToolTipIcon.Info);
+    }
+
+    /// <summary>Run as administrator turned off: the helper puts its windows back and goes.</summary>
+    private void StopHelper()
+    {
+        _helperCheck?.Dispose();
+        _helperCheck = null;
+        _helper?.Send(new HelperLink.Message(HelperLink.Exit));
+        _helper?.Dispose();
+        _helper = null;
+    }
+
+    /// <summary>What the helper sends: its alerts, a Settings request, and settings it changed (only this copy writes them).</summary>
+    private void FromHelper(HelperLink.Message message)
+    {
+        switch (message.Kind)
+        {
+            case HelperLink.Alert when message.Title is { } title:
+                Remember(title, message.Text ?? "");
+                Balloon(title, message.Text ?? "", Enum.IsDefined((ToolTipIcon)message.Icon) ? (ToolTipIcon)message.Icon : ToolTipIcon.Info);
+                break;
+            case HelperLink.OpenSettings:
+                OpenSettings();
+                break;
+            case HelperLink.Save when message.Text is { } json:
+                try
+                {
+                    AppSettings changed = AppSettings.Parse(json);
+                    if (Apply(changed) is { Count: > 0 } problems) Alert(T("errors.settings.saveFailed"), Describe(problems));
+                    if (_settingsWindow is { IsDisposed: false } open) open.LoadValues(_settings);
+                }
+                catch (Exception failure) when (failure is JsonException or IOException or UnauthorizedAccessException)
+                {
+                    Diagnostics.Log.Error("helper.saveFailed", failure);
+                    Alert(T("errors.settings.saveFailed"), failure.Message);
+                }
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The helper's side: finds the ordinary copy and talks to it until it goes, then goes too, putting back what it
+    /// changed. Started by the sign-in task with no ordinary copy yet, it starts one, as the person.
+    /// </summary>
+    private void StartAsHelper()
+    {
+        _ordinary = new HelperLink.HelperEnd(() => _toolbar.BeginInvoke(LeaveAsHelper));
+        _ordinary.Received += message => _toolbar.BeginInvoke(() => FromOrdinaryCopy(message));
+        _ordinary.ConnectionChanged += connected => _toolbar.BeginInvoke(() => Diagnostics.Log.Event("helper.link", ("connected", connected)));
+        _ordinary.Start(OrdinaryCopyWait);
+        if (HelperLink.FindCopy(Hotkeys.HotkeyHost.WindowTitle, elevated: false) != 0) return;
+        // Started at sign-in: the ordinary copy is started as the person, through the shell, which may still be starting.
+        _helperCheck = new System.Windows.Forms.Timer { Interval = HelperCheckMilliseconds };
+        _helperCheck.Tick += (_, _) => StartOrdinaryCopy();
+        _helperCheck.Start();
+        StartOrdinaryCopy();
+    }
+
+    /// <summary>Two-second looks: a start every third, the last at about half a minute.</summary>
+    private const int OrdinaryLooksAllowed = 13;
+
+    private void StartOrdinaryCopy()
+    {
+        if (_ordinary?.Connected == true || HelperLink.FindCopy(Hotkeys.HotkeyHost.WindowTitle, elevated: false) != 0)
+        {
+            _helperCheck?.Dispose();
+            _helperCheck = null;
+            return;
+        }
+        int look = ++_helperStarts;
+        if (look <= OrdinaryLooksAllowed)
+        {
+            // A start the shell took gets a few seconds to show its window before the next.
+            if (look % 3 == 1 && UnelevatedStart.Run(Environment.ProcessPath!, Elevation.DataFolderArguments()))
+                Diagnostics.Log.Event("helper.startedOrdinaryCopy", ("attempt", look / 3 + 1));
+            return;
+        }
+        // No way to start WinScreen as the person: the one elevated copy of before takes over, and this helper goes.
+        _helperCheck?.Dispose();
+        _helperCheck = null;
+        Diagnostics.Log.Event("helper.fallingBack", ("started", Elevation.StartSingleCopy()));
+        LeaveAsHelper();
+    }
+
+    /// <summary>The ordinary copy went (or never came): the helper puts back what it changed and goes, trying again until it can.</summary>
+    private void LeaveAsHelper()
+    {
+        if (Exiting) return; // Already gone the way it was asked to.
+        Diagnostics.Log.Event("helper.leaving");
+        ExitThread();
+        if (Exiting) return;
+        var again = new System.Windows.Forms.Timer { Interval = 5000 };
+        again.Tick += (_, _) =>
+        {
+            ExitThread();
+            if (Exiting) again.Dispose();
+        };
+        again.Start();
+    }
+
+    /// <summary>What the ordinary copy sends: a command for an administrator app's window, settings saved, or to go.</summary>
+    private void FromOrdinaryCopy(HelperLink.Message message)
+    {
+        switch (message.Kind)
+        {
+            case HelperLink.Run when Enum.IsDefined((AppCommand)message.Command):
+                nint window = (nint)message.Window;
+                // Only a window this copy may act on: an administrator app's, or none for the commands for every window.
+                if (window != 0 && (!User32.IsWindow(window) || !CanReach(window))) return;
+                RunOnDisplay((AppCommand)message.Command, window, message.DisplayBounds);
+                break;
+            case HelperLink.SettingsSaved:
+                ReloadSettings();
+                break;
+            case HelperLink.Exit:
+                ReloadSettings(); // Run as administrator off: the sign-in task follows, then the helper goes.
+                if (!Exiting) ExitThread();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The helper reads the settings the ordinary copy saved. Read without setting a damaged file aside, as only the
+    /// writer does that: one it can't read leaves things as they are.
+    /// </summary>
+    private void ReloadSettings()
+    {
+        AppSettings? loaded = null;
+        for (int attempt = 0; attempt < 5 && loaded is null; attempt++)
+        {
+            try { loaded = AppSettings.Parse(File.ReadAllText(_settingsPath)); }
+            catch (IOException failure) { Diagnostics.Log.Swallowed(failure); Thread.Sleep(50); }
+            catch (Exception failure) when (failure is JsonException or UnauthorizedAccessException)
+            {
+                Diagnostics.Log.Swallowed(failure);
+                return;
+            }
+        }
+        if (loaded is null) return;
+        if (!loaded.RunAsAdministrator || !loaded.AdministratorHelper)
+        {
+            // The sign-in task is an elevated copy's to change: back to the Run entry, or to the one elevated copy.
+            FollowStartup(loaded, asAdministrator: loaded.RunAsAdministrator, arguments: "");
+            if (!Exiting) ExitThread();
+            return;
+        }
+        bool experimentalBefore = _settings.ExperimentalFeatures;
+        string themeBefore = _settings.Theme;
+        AppSettings before = _settings.Clone();
+        _settings.CopyFrom(loaded);
+        _setupNone.Clear();
+        RulesChanged();
+        ApplyPreferences(experimentalBefore, before);
+        Native.Translucency.Allowed = _settings.MenuTransparency;
+        if (_settings.Theme != themeBefore) ChangeTheme();
+        FollowStartup(_settings, asAdministrator: true, AppRoles.HelperArgument);
+    }
+
+    /// <summary>Starting with Windows, as the helper sets it: the sign-in task only an elevated copy can make or take away.</summary>
+    private void FollowStartup(AppSettings settings, bool asAdministrator, string arguments)
+    {
+        try
+        {
+            _startup.AsAdministrator = asAdministrator;
+            _startup.TaskArguments = arguments;
+            if (settings.StartWithWindows is { } startup) _startup.IsOn = startup;
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            Alert(T("errors.settings.saveFailed"), failure.Message);
+        }
+    }
+
+    /// <summary>
+    /// Writes settings. The helper never writes them itself (one writer, 10-2): it hands them to the ordinary copy, which
+    /// saves and puts them into effect, then hands them back. Throws when they couldn't be written or handed over.
+    /// </summary>
+    private void SaveSettings(AppSettings settings)
+    {
+        if (_role != AppRole.Helper)
+        {
+            settings.Save(_settingsPath);
+            _helper?.Send(new HelperLink.Message(HelperLink.SettingsSaved));
+            return;
+        }
+        if (_ordinary?.Send(new HelperLink.Message(HelperLink.Save, Text: JsonSerializer.Serialize(settings))) != true)
+            throw new IOException(T("errors.settings.saveFailed"));
+    }
+}

@@ -44,6 +44,18 @@ public sealed class AdministratorStartTests : IDisposable
     }
 
     [Fact]
+    public void With_the_helper_chosen_the_task_starts_the_helper()
+    {
+        _elevated = true;
+        StartWithWindows admin = Startup(true);
+        admin.TaskArguments = AppRoles.HelperArgument;
+        admin.IsOn = true;
+        Assert.Contains("<Arguments>" + AppRoles.HelperArgument + "</Arguments>", _tasks.Made[StartWithWindows.TaskName]);
+        Assert.Null(RunValue);
+        Assert.True(admin.IsOn);
+    }
+
+    [Fact]
     public void Without_administrator_rights_nothing_an_administrator_copy_set_up_is_touched()
     {
         _elevated = true;

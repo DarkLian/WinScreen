@@ -375,7 +375,8 @@ rule.toolbarByPosition 6E8EDFB6FEDD1AA7
 rule.windowClass AFBFFAEB48EE6D52
 settings.admin E574078726F7B6E1
 settings.admin.declined 4FEDD79E180C2724
-settings.admin.help 90E5588334A26159
+settings.admin.help FBD765765CF75642
+settings.admin.helperFailed B59CADF2AE1366EC
 settings.admin.unavailable 466E0F9045803572
 settings.customization B70682D027CE5073
 settings.dark.detect 706DD5D92E45D86D

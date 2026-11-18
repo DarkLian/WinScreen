@@ -1102,7 +1102,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     {
         if (journal is null)
             return;
-        using Mutex recovery = RecoveryWatcher.ForRecovery(out bool held);
+        using Mutex recovery = RecoveryWatcher.ForRecovery(out bool held, journal.RecoveryMutex);
         if (!held)
         {
             _recoveryBlocked = true;

@@ -11,7 +11,7 @@ namespace WinScreen.Windows;
 internal sealed class RecoveryWatcher : IDisposable
 {
     private const string Flag = "--watch";
-    private const string RecoveryMutex = @"Local\WinScreen.Recovery";
+    internal const string RecoveryMutex = @"Local\WinScreen.Recovery";
     private const int RecoveryWaitMilliseconds = 5000;
 
     private readonly Func<int, Process?> _start;
@@ -21,6 +21,11 @@ internal sealed class RecoveryWatcher : IDisposable
     private long _retryAt;
 
     public RecoveryWatcher() : this(StartCopy)
+    {
+    }
+
+    /// <summary>A watcher started with <paramref name="arguments"/> after the parent's id: the administrator helper's role.</summary>
+    public RecoveryWatcher(IReadOnlyList<string> arguments) : this(parent => StartCopy(parent, arguments))
     {
     }
 
@@ -94,7 +99,9 @@ internal sealed class RecoveryWatcher : IDisposable
     }
 
     /// <summary>Starts another copy of this program, but only from the real app: never from a test host.</summary>
-    private static Process? StartCopy(int parent)
+    private static Process? StartCopy(int parent) => StartCopy(parent, []);
+
+    private static Process? StartCopy(int parent, IReadOnlyList<string> arguments)
     {
         string? path = Environment.ProcessPath;
         if (path is null || !string.Equals(Path.GetFileNameWithoutExtension(path), "WinScreen", StringComparison.OrdinalIgnoreCase))
@@ -102,12 +109,17 @@ internal sealed class RecoveryWatcher : IDisposable
         var start = new ProcessStartInfo(path) { UseShellExecute = false, CreateNoWindow = true };
         start.ArgumentList.Add(Flag);
         start.ArgumentList.Add(parent.ToString());
+        foreach (string argument in arguments) start.ArgumentList.Add(argument);
         return Process.Start(start);
     }
 
     /// <summary>The parent's id when this copy was started to watch, or null for a normal start.</summary>
     public static int? ParentFrom(string[] arguments) =>
-        arguments is [Flag, var text] && int.TryParse(text, out int parent) && parent > 0 ? parent : null;
+        (arguments.Length == 2 || arguments.Length == 3 && arguments[2] == HelperRole) && arguments[0] == Flag &&
+        int.TryParse(arguments[1], out int parent) && parent > 0 ? parent : null;
+
+    /// <summary>After the parent's id: the parent is the administrator helper, with its own journal (10-2).</summary>
+    internal const string HelperRole = "--administrator-helper";
 
     /// <summary>
     /// Waits for the parent to die or to say it no longer needs this. Runs in the watcher, and asks
@@ -118,7 +130,9 @@ internal sealed class RecoveryWatcher : IDisposable
     public static void Watch(int parent, Action recover, string runningInstance = RunningInstance.MutexName)
         => WatchUntilRecovered(parent, () => { recover(); return true; }, runningInstance);
 
-    public static void WatchUntilRecovered(int parent, Func<bool> recover, string runningInstance = RunningInstance.MutexName)
+    /// <param name="recoveryMutex">The lock for the journal it recovers from (<see cref="ForRecovery"/>).</param>
+    public static void WatchUntilRecovered(int parent, Func<bool> recover, string runningInstance = RunningInstance.MutexName,
+        string recoveryMutex = RecoveryMutex)
     {
         using EventWaitHandle stop = new(false, EventResetMode.ManualReset, StopName(parent));
         if (!WaitForParent(parent, stop))
@@ -126,7 +140,7 @@ internal sealed class RecoveryWatcher : IDisposable
 
         while (!stop.WaitOne(0))
         {
-            using Mutex guard = ForRecovery(out bool held);
+            using Mutex guard = ForRecovery(out bool held, recoveryMutex);
             if (held)
             {
                 try
@@ -167,9 +181,10 @@ internal sealed class RecoveryWatcher : IDisposable
     }
 
     /// <summary>Only one copy recovers at a time, so a restart and a watcher can't both act on the journal.</summary>
-    public static Mutex ForRecovery(out bool held)
+    /// <param name="name">One per journal: the administrator helper's has its own.</param>
+    public static Mutex ForRecovery(out bool held, string name = RecoveryMutex)
     {
-        var mutex = new Mutex(false, RecoveryMutex);
+        var mutex = new Mutex(false, name);
         try { held = mutex.WaitOne(RecoveryWaitMilliseconds); }
         catch (AbandonedMutexException) { held = true; } // The other copy died; recovery is still safe to run.
         return mutex;

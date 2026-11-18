@@ -45,8 +45,11 @@ public sealed record WindowRecord(
 /// Keeps the list of changed windows on disk. A forced kill skips every exit handler, so the next
 /// start reads this file and puts back any window that was left moved or see-through.
 /// </summary>
-public sealed class ChangeJournal(string path)
+public sealed class ChangeJournal(string path, string recoveryMutex = RecoveryWatcher.RecoveryMutex)
 {
+    /// <summary>The lock taken while recovering from this journal (one per journal, 10-2).</summary>
+    public string RecoveryMutex => recoveryMutex;
+
     /// <summary>The file could not be read, or kept safe, so writing over it could lose recovery data.</summary>
     public bool ReadFailed { get; private set; }
 

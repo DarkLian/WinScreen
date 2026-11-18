@@ -81,10 +81,11 @@ public static class Log
     internal static DiagnosticLog? Current => s_current;
 
     /// <summary>Starts writing to <c>winscreen.log</c> in the data folder. Once per process.</summary>
-    public static void Start(string folder, string role)
+    /// <param name="file">The file's name: the administrator helper writes its own (one writer per file).</param>
+    public static void Start(string folder, string role, string file = DiagnosticLog.FileName)
     {
         if (s_current is not null) return;
-        s_current = new DiagnosticLog(folder);
+        s_current = new DiagnosticLog(folder, file: file);
         Event("log.started", ("role", LogValue.Known(role)), ("version", LogValue.Known(Updates.AppInfo.Version)),
             ("process", Environment.ProcessId));
     }
@@ -122,6 +123,8 @@ internal sealed class DiagnosticLog : IDisposable
 {
     internal const string FileName = "winscreen.log";
     internal const string OlderFileName = "winscreen.1.log";
+    /// <summary>The administrator helper's log (10-2): its own file, one writer per file.</summary>
+    internal const string HelperFileName = "winscreen-administrator.log";
     private const int LongestLine = 2000;
     private const int GiveUpAfterFailures = 5;
 
@@ -144,11 +147,11 @@ internal sealed class DiagnosticLog : IDisposable
     /// <summary>For tests: runs on the writer thread before each batch, so a test can hold the writer still.</summary>
     internal Action? BeforeWrite { get; init; }
 
-    public DiagnosticLog(string folder, long maxBytes = 512 * 1024, int capacity = 2048, TimeSpan? mergeFor = null)
+    public DiagnosticLog(string folder, long maxBytes = 512 * 1024, int capacity = 2048, TimeSpan? mergeFor = null, string file = FileName)
     {
         Directory.CreateDirectory(folder);
-        _current = Path.Combine(folder, FileName);
-        _older = Path.Combine(folder, OlderFileName);
+        _current = Path.Combine(folder, file);
+        _older = Path.Combine(folder, OlderOf(file));
         _maxBytes = maxBytes;
         _capacity = capacity;
         _mergeFor = mergeFor ?? TimeSpan.FromMinutes(1);
@@ -158,6 +161,9 @@ internal sealed class DiagnosticLog : IDisposable
     }
 
     internal IReadOnlyList<string> Files => new[] { _older, _current }.Where(File.Exists).ToArray();
+
+    /// <summary>The file a log moves to when full: winscreen.log to winscreen.1.log.</summary>
+    internal static string OlderOf(string file) => Path.GetFileNameWithoutExtension(file) + ".1" + Path.GetExtension(file);
 
     internal int Dropped => Volatile.Read(ref _dropped);
 
