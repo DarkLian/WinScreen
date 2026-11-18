@@ -59,6 +59,12 @@ Glass fades only the background. Set a window up once, press Ctrl+Alt+Shift+S, a
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glass fades only the background. Set a window up once, press Ctrl+Alt+Shift+S, and it opens that way next time.">
 </p>
 
+Glass with a video behind it: any app's window can have its own live background.
+
+<p align="center">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Glass with a video behind it: any app's window can have its own live background.">
+</p>
+
 ## Use apps through a small view
 
 Press **Ctrl+Alt+P** on a window for a small live view of it that stays on top. Turn on **Interactive** in the view's
@@ -69,6 +75,12 @@ The real window stays hidden out of the way, so a video, chat or document stays 
 **Enhanced hover** keeps hover effects working in browsers and apps like VS Code and Discord. For an app that doesn't
 work well through a view, such as a game, a click on its view can bring the real window back instead, and it hides
 again when you switch away. [What works where](docs/FEATURE_COMPATIBILITY.md) lists the details.
+
+## A picture or video behind any app
+
+Turn on Glass for a window (**Ctrl+Alt+G**) and it can show a picture, animated GIF or video behind its text. Choose
+one in **Settings → Backgrounds** for every app, or give an app its own. A video can play its sound, and it pauses
+while its window is minimized or on another desktop.
 
 ## Features
 

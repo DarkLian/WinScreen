@@ -61,6 +61,12 @@ L'effet verre n'atténue que l'arrière-plan. Réglez une fenêtre une fois, app
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="L'effet verre n'atténue que l'arrière-plan. Réglez une fenêtre une fois, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.">
 </p>
 
+L'effet verre avec une vidéo derrière : chaque fenêtre d'application peut avoir son propre fond animé.
+
+<p align="center">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="L'effet verre avec une vidéo derrière : chaque fenêtre d'application peut avoir son propre fond animé.">
+</p>
+
 ## Utilisez vos applications dans une petite vue
 
 Appuyez sur **Ctrl+Alt+P** sur une fenêtre pour en obtenir une petite vue en direct qui reste au premier plan. Activez
@@ -74,6 +80,13 @@ pendant que vous travaillez.
 Discord. Pour une application qui fonctionne mal dans une vue, comme un jeu, un clic sur sa vue peut plutôt ramener la
 vraie fenêtre, qui se cache à nouveau quand vous passez à autre chose.
 [Ce qui fonctionne où](docs/FEATURE_COMPATIBILITY.md) (en anglais) donne les détails.
+
+## Une image ou une vidéo derrière n'importe quelle application
+
+Activez l'effet verre sur une fenêtre (**Ctrl+Alt+G**) et elle peut afficher une image, un GIF animé ou une vidéo
+derrière son texte. Dans **Settings → Backgrounds**, choisissez-en un pour toutes les applications, ou donnez à une
+application le sien. Une vidéo peut jouer son son, et elle se met en pause quand sa fenêtre est réduite ou sur un
+autre bureau.
 
 ## Fonctions
 

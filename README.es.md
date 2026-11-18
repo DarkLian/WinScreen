@@ -61,6 +61,12 @@ Cristal difumina solo el fondo. Configura una ventana una vez, pulsa Ctrl+Alt+Ma
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Cristal difumina solo el fondo. Configura una ventana una vez, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.">
 </p>
 
+Cristal con un video detrás: la ventana de cualquier aplicación puede tener su propio fondo animado.
+
+<p align="center">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Cristal con un video detrás: la ventana de cualquier aplicación puede tener su propio fondo animado.">
+</p>
+
 ## Usa aplicaciones desde una vista pequeña
 
 Pulsa **Ctrl+Alt+P** sobre una ventana para tener una pequeña vista en vivo de ella que se queda encima. Activa
@@ -73,6 +79,12 @@ fuera del camino, así que un vídeo, un chat o un documento siguen a mano en un
 VS Code y Discord. Para una aplicación que no funciona bien a través de una vista, como un juego, un clic en su vista
 puede traer de vuelta la ventana real, que se vuelve a ocultar cuando cambias a otra.
 [Qué funciona dónde](docs/FEATURE_COMPATIBILITY.md) (en inglés) tiene los detalles.
+
+## Una imagen o un video detrás de cualquier aplicación
+
+Activa Cristal en una ventana (**Ctrl+Alt+G**) y podrá mostrar una imagen, un GIF animado o un video detrás de su
+texto. En **Settings → Backgrounds** elige uno para todas las aplicaciones o dale a una aplicación el suyo propio. Un
+video puede sonar, y se pausa mientras su ventana está minimizada o en otro escritorio.
 
 ## Funciones
 

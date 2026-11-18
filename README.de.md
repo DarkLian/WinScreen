@@ -61,6 +61,12 @@ Glas blendet nur den Hintergrund aus. Richte ein Fenster einmal ein, drück Strg
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glas blendet nur den Hintergrund aus. Richte ein Fenster einmal ein, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.">
 </p>
 
+Glas mit einem Video dahinter: Jedes App-Fenster kann seinen eigenen bewegten Hintergrund haben.
+
+<p align="center">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Glas mit einem Video dahinter: Jedes App-Fenster kann seinen eigenen bewegten Hintergrund haben.">
+</p>
+
 ## Apps über eine kleine Ansicht benutzen
 
 Drück **Strg+Alt+P** auf einem Fenster, und du bekommst eine kleine Live-Ansicht davon, die immer im Vordergrund bleibt.
@@ -73,6 +79,12 @@ ein Video, ein Chat oder ein Dokument in einer Ecke griffbereit, während du arb
 Bei einer App, die über eine Ansicht nicht gut läuft, etwa einem Spiel, kann ein Klick auf die Ansicht stattdessen das
 echte Fenster zurückholen, und es versteckt sich wieder, sobald du wegwechselst.
 [Was wo funktioniert](docs/FEATURE_COMPATIBILITY.md) (auf Englisch) listet die Details auf.
+
+## Ein Bild oder Video hinter jeder App
+
+Schalte Glas für ein Fenster ein (**Strg+Alt+G**), und hinter seinem Text kann ein Bild, ein animiertes GIF oder ein
+Video erscheinen. Unter **Settings → Backgrounds** wählst du eins für alle Apps oder gibst einer App ihr eigenes. Ein
+Video kann mit Ton laufen und pausiert, solange sein Fenster minimiert oder auf einem anderen Desktop ist.
 
 ## Funktionen
 

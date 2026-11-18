@@ -61,6 +61,12 @@ Vidro esmaece só o fundo. Ajuste uma janela uma vez, pressione Ctrl+Alt+Shift+S
   <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Vidro esmaece só o fundo. Ajuste uma janela uma vez, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.">
 </p>
 
+Vidro com um vídeo atrás: a janela de qualquer app pode ter seu próprio fundo animado.
+
+<p align="center">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Vidro com um vídeo atrás: a janela de qualquer app pode ter seu próprio fundo animado.">
+</p>
+
 ## Use aplicativos por uma pequena visualização
 
 Pressione **Ctrl+Alt+P** em uma janela para ter uma pequena visualização ao vivo dela, que fica sempre visível. Ative
@@ -73,6 +79,12 @@ O **Enhanced hover** mantém os efeitos de passar o mouse funcionando em navegad
 Discord. Para um aplicativo que não funciona bem por uma visualização, como um jogo, um clique na visualização pode
 trazer a janela real de volta, e ela se esconde de novo quando você muda para outra.
 [O que funciona onde](docs/FEATURE_COMPATIBILITY.md) (em inglês) traz os detalhes.
+
+## Uma imagem ou vídeo atrás de qualquer app
+
+Ative o Vidro em uma janela (**Ctrl+Alt+G**) e ela pode mostrar uma imagem, um GIF animado ou um vídeo atrás do texto.
+Em **Settings → Backgrounds**, escolha um para todos os apps ou dê a um app o seu próprio. Um vídeo pode tocar com som
+e pausa enquanto a janela está minimizada ou em outra área de trabalho.
 
 ## Recursos
 
