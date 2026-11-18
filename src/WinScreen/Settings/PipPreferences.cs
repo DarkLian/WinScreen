@@ -8,7 +8,7 @@ public enum PipBackendPreference { Auto, Dwm, Wgc }
 [JsonConverter(typeof(PipEnumConverter<PipScaling>))]
 public enum PipScaling { Auto, Crisp, Smooth }
 
-/// <summary>Preferences, never a persisted hardware blacklist. Zero FPS follows the destination monitor.</summary>
+// Preferences, never a persisted hardware blacklist. Zero FPS follows the destination monitor.
 public sealed class PipPreferences
 {
     public PipBackendPreference Backend { get; set; } = PipBackendPreference.Auto;
@@ -33,7 +33,6 @@ public sealed class PipPreferences
 
     internal byte Alpha => (byte)Math.Round(OpacityPercent * 255.0 / 100);
 
-    /// <summary>These preferences as one view uses them. The originals are left alone.</summary>
     internal PipPreferences With(PipOverrides overrides)
     {
         PipPreferences result = Validated();
@@ -44,11 +43,9 @@ public sealed class PipPreferences
     }
 }
 
-/// <summary>What one view does differently from Settings. It ends with the view unless saved as a preset.</summary>
 internal sealed record PipOverrides(int? FrameRate = null, int? OpacityPercent = null, PipScaling? Scaling = null,
     bool PositionLocked = false, bool ClickThrough = false, bool KeepAspectRatio = true, bool? TitleBarAlways = null);
 
-/// <summary>A crop as shares of the whole source, so it still fits after the window is resized.</summary>
 public sealed record PipCropShares(double X, double Y, double Width, double Height)
 {
     internal PipCropShares? Validated() =>
@@ -68,8 +65,8 @@ public sealed record PipCropShares(double X, double Y, double Width, double Heig
     }
 }
 
-/// <summary>A named view setup. Null values follow Settings. A crop is in pixels of the source,
-/// with shares alongside it in newer files; older files have pixels only and keep working.</summary>
+// A crop is in pixels of the source, with shares alongside it in newer files; older files have pixels only and keep
+// working.
 public sealed class PipPreset
 {
     public const int NameLimit = 60;
@@ -95,11 +92,9 @@ public sealed class PipPreset
         ? new Rectangle(CropX, CropY, CropWidth, CropHeight)
         : Rectangle.Empty;
 
-    /// <summary>The crop for a source of this size.</summary>
     internal Rectangle CropFor(Size whole) =>
         CropShares is { } shares && whole.Width > 0 && whole.Height > 0 ? shares.Within(whole) : Crop;
 
-    /// <summary>This preset with its numbers in range, or null when it has no usable name.</summary>
     internal PipPreset? Validated()
     {
         string name = (Name ?? "").Trim();
@@ -122,7 +117,7 @@ public sealed class PipPreset
     }
 }
 
-/// <summary>A damaged saved view is dropped. It must never cost the rest of the settings.</summary>
+// A damaged saved view is dropped: it must never cost the rest of the settings.
 internal sealed class SavedViewConverter : JsonConverter<PipPreset>
 {
     public override PipPreset? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -136,7 +131,7 @@ internal sealed class SavedViewConverter : JsonConverter<PipPreset>
         JsonSerializer.Serialize(writer, value);
 }
 
-/// <summary>One damaged preset is skipped. It must never cost the rest of the settings.</summary>
+// One damaged preset is skipped: it must never cost the rest of the settings.
 internal sealed class PipPresetListConverter : JsonConverter<List<PipPreset>>
 {
     public override List<PipPreset> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -169,7 +164,7 @@ internal sealed class PipPresetListConverter : JsonConverter<List<PipPreset>>
     }
 }
 
-/// <summary>An unknown choice must not discard unrelated settings or opt a previous install into capture.</summary>
+// An unknown choice must not discard unrelated settings or opt a previous install into capture.
 internal sealed class PipEnumConverter<T> : JsonConverter<T> where T : struct, Enum
 {
     public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)

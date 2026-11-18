@@ -2,18 +2,11 @@
 
 namespace WinScreen.Settings;
 
-/// <summary>
-/// A small window of facts to read and copy, such as a view's diagnostics or a window's details, in the same look as
-/// Settings. It opens in front and leaves everything else usable: it never waits to be closed, so a view stays
-/// usable while it is open, and several can be open at once.
-/// </summary>
+// Never waits to be closed, so a view stays usable while it is open.
 internal sealed class InfoWindow : Form
 {
     private static readonly Font TitleFont = new(SettingsStyle.PageTitleFont.FontFamily, 15f);
 
-    /// <param name="title">What the facts are about, as the window's title and heading.</param>
-    /// <param name="text">The facts, a line each.</param>
-    /// <param name="actions">Buttons beside Close, such as Copy; each with whether it can be used.</param>
     internal InfoWindow(string title, string text, params (string Text, Action Click, bool Enabled)[] actions)
     {
         SuspendLayout();
@@ -42,7 +35,6 @@ internal sealed class InfoWindow : Form
         };
         var card = new CardPanel { Dock = DockStyle.Fill, Padding = new Padding(14, 12, 6, 6) };
         card.Controls.Add(box);
-        // A scroll bar only while the facts don't all fit; long lines wrap instead of scrolling sideways.
         box.Resize += (_, _) =>
         {
             int needs = Native.DirectText.MeasureText(box.Text, box.Font, new Size(box.ClientSize.Width, 0), TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height;
@@ -71,7 +63,6 @@ internal sealed class InfoWindow : Form
         Shown += (_, _) => { box.SelectionStart = 0; box.SelectionLength = 0; close.Focus(); };
     }
 
-    /// <summary>Opens it in front, without waiting for it to close.</summary>
     internal void ShowInFront()
     {
         Show();

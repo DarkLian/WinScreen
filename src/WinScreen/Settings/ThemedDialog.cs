@@ -2,11 +2,6 @@ using static WinScreen.Localization.UiText;
 
 namespace WinScreen.Settings;
 
-/// <summary>
-/// A small dialog in the same look as Settings (roadmap P2-5): its colours in light and dark, a title bar to match,
-/// Settings' own buttons, and typed-into boxes in Settings' frames. Rows of label and control, then Apply or OK
-/// with Cancel, or OK alone.
-/// </summary>
 internal class ThemedDialog : Form
 {
     private readonly TableLayoutPanel _table = new() { ColumnCount = 2, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, BackColor = SettingsStyle.Page };
@@ -40,7 +35,6 @@ internal class ThemedDialog : Form
         ResumeLayout(false);
     }
 
-    /// <summary>A label and the control that sets it. A text or number box gets Settings' frame.</summary>
     protected void Row(string label, Control control)
     {
         _table.Controls.Add(new SoftLabel { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = false,
@@ -48,7 +42,6 @@ internal class ThemedDialog : Form
         _table.Controls.Add(Framed(control));
     }
 
-    /// <summary>A control across both columns: a check box, a note, a line of text.</summary>
     protected void Whole(Control control)
     {
         control.Margin = new Padding(0, 6, 0, 6);
@@ -57,7 +50,6 @@ internal class ThemedDialog : Form
         _table.SetColumnSpan(added, 2);
     }
 
-    /// <summary>A quiet line of explanation across both columns.</summary>
     protected void Note(string text) =>
         Whole(new SoftLabel { Text = text, AutoSize = true, UseMnemonic = false, ForeColor = SettingsStyle.Secondary, MaximumSize = new Size(560, 0) });
 
@@ -75,7 +67,6 @@ internal class ThemedDialog : Form
         return box;
     }
 
-    /// <summary>The buttons at the bottom: the first takes Enter, the last (when there are two) takes Esc.</summary>
     protected void Buttons(string accept, string? cancel = null)
     {
         var ok = new PlainButton { Text = accept, Primary = true, DialogResult = DialogResult.OK, Margin = new Padding(8, 0, 0, 0) };
@@ -101,7 +92,6 @@ internal class ThemedDialog : Form
     }
 }
 
-/// <summary>A message in the same look as Settings, in place of Windows' own message box.</summary>
 internal sealed class ThemedMessage : ThemedDialog
 {
     private ThemedMessage(string title, string text, bool okCancel) : base(title)
@@ -110,7 +100,6 @@ internal sealed class ThemedMessage : ThemedDialog
         Buttons(T("common.ok"), okCancel ? T("common.cancel") : null);
     }
 
-    /// <summary>Shows the message and waits; OK or Cancel (Cancel also when closed).</summary>
     internal static DialogResult Show(IWin32Window? owner, string text, string title, bool okCancel = false)
     {
         using var message = new ThemedMessage(title, text, okCancel);

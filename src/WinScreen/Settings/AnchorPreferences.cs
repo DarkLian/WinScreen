@@ -1,7 +1,7 @@
 namespace WinScreen.Settings;
 
 public enum AnchorSide { Right, Left, NearWindow }
-/// <summary>How an Anchor looks. New looks go at the end, so saved choices keep their meaning.</summary>
+// New looks go at the end, so saved choices keep their meaning.
 public enum AnchorLook { Dark, Light, NoBackground }
 
 public sealed record AnchorPreferences
@@ -17,14 +17,8 @@ public sealed record AnchorPreferences
     public AnchorLook Style { get; init; }
     public bool RecencyEmphasis { get; init; } = true;
     public bool AvoidContent { get; init; }
-    /// <summary>Resting the pointer on an Anchor shows its window's live picture beside it.</summary>
     public bool HoverPreview { get; init; } = true;
-    /// <summary>A window with an Anchor the person added has no taskbar button while the Anchor is there.</summary>
     public bool OffTaskbar { get; init; }
-    /// <summary>
-    /// Anchors show on every virtual desktop, so one can take you back to its window's desktop. Off, an Anchor shows only
-    /// on its window's desktop.
-    /// </summary>
     public bool EveryDesktop { get; init; } = true;
 
     internal AnchorPreferences Validated() => this with
@@ -40,7 +34,6 @@ public sealed record AnchorPreferences
     private static List<string> Clean(List<string>? names) =>
         [.. (names ?? []).Where(name => !string.IsNullOrWhiteSpace(name)).Select(name => name.Trim())];
 
-    /// <summary>Whether this program's windows may get an automatic Anchor.</summary>
     internal bool Allows(string program) => !ExcludedPrograms.Any(name => Same(name, program)) &&
         (OnlyPrograms.Count == 0 || OnlyPrograms.Any(name => Same(name, program)));
 

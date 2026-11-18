@@ -1,9 +1,7 @@
 namespace WinScreen.Settings;
 
-/// <summary>
-/// Layered Glass and picture-safe Dark. Both are on by default (the owner's choices: Dark 14 Nov, Glass 15 Nov 2026, since
-/// plain Glass passes presses through its see-through page); a PC with no graphics card gets the filter and plain Glass.
-/// </summary>
+// Both on by default (plain Glass passes presses through its see-through page); a PC with no graphics card gets the
+// filter and plain Glass.
 public sealed record EffectPreferences
 {
     public bool LayeredGlass { get; init; } = true;

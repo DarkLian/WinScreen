@@ -3,58 +3,43 @@ using WinScreen.Tray;
 
 namespace WinScreen.Settings;
 
-/// <summary>
-/// The Settings window's colours and type, modelled on Windows 11's own Settings. Every part asks for a colour by
-/// what it is for (a card, a control on a card, text that explains) and gets the light or dark value from here.
-/// </summary>
 internal static class SettingsStyle
 {
     private static bool Dark => MenuStyle.Dark;
     private static Color Rgb(int value) => Color.FromArgb(value >> 16 & 0xFF, value >> 8 & 0xFF, value & 0xFF);
 
-    /// <summary><paramref name="top"/> laid over <paramref name="under"/> at <paramref name="amount"/> strength.</summary>
     internal static Color Blend(Color top, Color under, double amount) => Color.FromArgb(
         (int)Math.Round(under.R + (top.R - under.R) * amount),
         (int)Math.Round(under.G + (top.G - under.G) * amount),
         (int)Math.Round(under.B + (top.B - under.B) * amount));
 
-    // Surfaces.
-    // In a high-contrast theme every surface, text and mark takes Windows' own colours for it (roadmap P2-4).
+    // In a high-contrast theme every surface, text and mark takes Windows' own colours for it.
     private static bool Contrast => Tray.MenuStyle.HighContrast;
     internal static Color Page => Contrast ? SystemColors.Window : Dark ? Rgb(0x202020) : Rgb(0xF3F3F3);
     internal static Color Side => Page;
     internal static Color Card => Contrast ? SystemColors.Window : Dark ? Rgb(0x2B2B2B) : Rgb(0xFBFBFB);
     internal static Color CardStroke => Contrast ? SystemColors.WindowText : Dark ? Rgb(0x1D1D1D) : Rgb(0xE5E5E5);
-    /// <summary>The line between options on a card: a shade lighter than the card, so options read as one group.</summary>
     internal static Color Divider => Contrast ? SystemColors.GrayText : Dark ? Blend(Color.White, Card, 0.055) : Rgb(0xEBEBEB);
-    /// <summary>The background of a list that drops down, the same as the menus'.</summary>
     internal static Color Flyout => MenuStyle.Back;
 
-    // Text.
-    // In the dark theme, a little short of pure white: full white on a dark grey glares at reading size.
+    // A little short of pure white in the dark theme: full white on dark grey glares at reading size.
     internal static Color Text => Contrast ? SystemColors.WindowText : Dark ? Rgb(0xEDEDED) : Rgb(0x1B1B1B);
     internal static Color Secondary => Contrast ? SystemColors.WindowText : Dark ? Rgb(0xC5C5C5) : Rgb(0x5F5F5F);
     internal static Color Tertiary => Contrast ? SystemColors.WindowText : Dark ? Rgb(0x9E9E9E) : Rgb(0x6E6E6E);
     internal static Color Disabled => Contrast ? SystemColors.GrayText : Dark ? Rgb(0x8A8A8A) : Rgb(0x9A9A9A);
     internal static Color Error => Dark ? Rgb(0xFF99A4) : Rgb(0xC42B1C);
 
-    // Controls: each sits on a surface and is drawn a little lighter (or, in the light theme, whiter) than it.
     internal static Color FillOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.0605) : Blend(Color.White, surface, 0.7);
     internal static Color HoverOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.0837) : Blend(Rgb(0xF9F9F9), surface, 0.5);
     internal static Color PressedOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.0326) : Blend(Rgb(0xF9F9F9), surface, 0.3);
     internal static Color DisabledOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.042) : Blend(Rgb(0xF9F9F9), surface, 0.3);
-    /// <summary>A text box while it is being typed in.</summary>
     internal static Color ActiveOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Rgb(0x1E1E1E), surface, 0.7) : Color.White;
     internal static Color StrokeOn(Color fill) => Contrast ? SystemColors.WindowText : Dark ? Blend(Color.White, fill, 0.07) : Blend(Color.Black, fill, 0.1);
-    /// <summary>The line under a text box that isn't being typed in.</summary>
     internal static Color Underline => Contrast ? SystemColors.WindowText : Dark ? Rgb(0x9A9A9A) : Rgb(0x868686);
-    /// <summary>A row under the pointer, in a list or in the list of pages.</summary>
     internal static Color RowHoverOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.0419) : Blend(Color.Black, surface, 0.0373);
-    /// <summary>The chosen row of a list: a soft grey wash, as Windows 11 has, with a bar of the accent colour at the start.</summary>
     internal static Color RowSelectedOn(Color surface) => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, surface, 0.0605) : Blend(Color.Black, surface, 0.0373);
     internal static Color NavSelected => Contrast ? SystemColors.Window : Dark ? Blend(Color.White, Page, 0.0605) : Blend(Color.Black, Page, 0.0373);
 
-    // Accent: the one chosen in Windows, as Windows' own Settings shows it.
     private static readonly Lazy<(Color Dark, Color Light)?> SystemAccent = new(ReadAccent);
     internal static Color Accent => Contrast ? SystemColors.Highlight : Dark ? SystemAccent.Value?.Dark ?? Rgb(0x60CDFF) : SystemAccent.Value?.Light ?? Rgb(0x005FB8);
     internal static Color AccentHover => Contrast ? SystemColors.Highlight : Blend(Accent, Page, 0.9);
@@ -80,11 +65,8 @@ internal static class SettingsStyle
     // Type. Windows 11's own faces where they exist (some names are cut short by Windows), Segoe UI otherwise.
     private static string Face(string prefix, string fallback) =>
         FontFamily.Families.FirstOrDefault(family => family.Name.StartsWith(prefix, StringComparison.Ordinal))?.Name ?? fallback;
-    /// <summary>
-    /// Smooths text in grey on a dark background, where Windows' colour smoothing makes small light text look thin and
-    /// sharp, with coloured edges. Dark text on a light background keeps the colour smoothing: in grey it came out pale
-    /// and washed out next to Windows 11's own Settings. Text drawn on <paramref name="g"/> afterwards follows it.
-    /// </summary>
+    // Grey smoothing on a dark background, where Windows' colour smoothing makes small light text thin and fringed;
+    // dark text on light keeps colour smoothing, which in grey came out pale next to Windows 11's own Settings.
     internal static void SoftText(Graphics g) => g.TextRenderingHint = Dark
         ? System.Drawing.Text.TextRenderingHint.AntiAliasGridFit : System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
@@ -109,13 +91,8 @@ internal static class SettingsStyle
 
     internal static int Unit(Control control, int value) => (int)Math.Round(value * control.DeviceDpi / 96.0);
 
-    /// <summary>
-    /// Whether to ring <paramref name="control"/> as where the keyboard is. As in Windows 11, the ring shows only
-    /// while the keyboard is being used to move around, not after a click.
-    /// </summary>
     internal static bool ShowsFocus(Control control) => control.Focused && FocusVisuals.Keyboard;
 
-    /// <summary>The ring that shows where the keyboard is, as Windows 11 draws it.</summary>
     internal static void FocusRing(Graphics g, Rectangle area, int radius, Control control)
     {
         g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -124,7 +101,6 @@ internal static class SettingsStyle
         g.DrawPath(pen, path);
     }
 
-    /// <summary>The short bar of accent colour at the start of a chosen row.</summary>
     internal static void SelectionBar(Graphics g, Rectangle row, Control control)
     {
         int height = Math.Min(Unit(control, 16), row.Height - Unit(control, 8));
@@ -135,7 +111,6 @@ internal static class SettingsStyle
         g.FillPath(brush, path);
     }
 
-    /// <summary>A small downward chevron, for a list that drops down.</summary>
     internal static void Chevron(Graphics g, Point centre, Color color, Control control, bool up = false)
     {
         float w = Unit(control, 4), h = Unit(control, 2) * (up ? -1 : 1);
@@ -145,26 +120,19 @@ internal static class SettingsStyle
     }
 }
 
-/// <summary>A setting that can say more about itself under its name, which a search also looks through.</summary>
 internal interface IDescribed
 {
     string Description { get; }
 }
 
-/// <summary>
-/// Where a setting's icon, name and description go in its card, as Windows 11 lays them out, and how they are drawn.
-/// </summary>
 internal static class SettingText
 {
-    /// <summary>Where the icon starts, at 100% scaling, from the row's left edge.</summary>
     internal const int IconLeft = 6;
-    /// <summary>Where the words start with an icon before them, and without one, at 100% scaling.</summary>
     internal const int WithIcon = 47, WithoutIcon = 4;
     private const TextFormatFlags Words = TextFormatFlags.WordBreak | TextFormatFlags.Left | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
 
     internal static int Left(Control row, char glyph) => SettingsStyle.Unit(row, glyph != '\0' ? WithIcon : WithoutIcon);
 
-    /// <summary>How tall the name and the description are together, at this width.</summary>
     internal static int Height(Control row, string title, string description, int width)
     {
         int height = Native.DirectText.MeasureText(title, row.Font, new Size(width, 0), Words).Height;
@@ -173,7 +141,6 @@ internal static class SettingText
         return height;
     }
 
-    /// <summary>Draws the icon, the name and, under it in grey, the description, all centred on the row's height.</summary>
     internal static void Draw(Graphics g, Control row, char glyph, string title, string description, int width, bool enabled)
     {
         int left = Left(row, glyph);
@@ -190,15 +157,12 @@ internal static class SettingText
     }
 }
 
-/// <summary>An on/off option drawn as a row: its icon, name and description on the left, a switch on the right. Still
-/// a check box to everything that reads or sets it.</summary>
+// Still a check box to everything that reads or sets it.
 internal sealed class SwitchBox : CheckBox, IDescribed
 {
-    /// <summary>The width a row takes inside a card, at 100% scaling.</summary>
     internal const int RowWidth = 524;
     private bool _hot;
 
-    /// <summary>Only the switch, with no words beside it: for a cell in a table whose row says what it is.</summary>
     [System.ComponentModel.DefaultValue(false)]
     public bool Compact { get; set; }
 
@@ -211,7 +175,6 @@ internal sealed class SwitchBox : CheckBox, IDescribed
     private int Unit(int value) => SettingsStyle.Unit(this, value);
     private int TextWidth => Unit(RowWidth) + Extra - Unit(64) - (SettingText.Left(this, Glyph) - Unit(SettingText.WithoutIcon));
 
-    /// <summary>The icon before its name, or none.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal char Glyph
     {
@@ -219,7 +182,6 @@ internal sealed class SwitchBox : CheckBox, IDescribed
         set { field = value; Fit(); }
     }
 
-    /// <summary>More about the option, in grey under its name.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public string Description
     {
@@ -233,7 +195,6 @@ internal sealed class SwitchBox : CheckBox, IDescribed
         Invalidate();
     }
 
-    /// <summary>How much wider than usual the row is, in pixels, for a Settings window made wider.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal int Extra
     {
@@ -294,10 +255,6 @@ internal sealed class SwitchBox : CheckBox, IDescribed
     protected override void OnTextChanged(EventArgs e) { base.OnTextChanged(e); Invalidate(); }
 }
 
-/// <summary>
-/// A titled group of settings: the title above, each setting in a card of its own under it, as Windows 11 has them.
-/// A note belongs to the setting above it and shares its card.
-/// </summary>
 internal sealed class SettingsCard : Panel
 {
     private readonly Label _title = new SoftLabel() { AutoSize = true, Margin = Padding.Empty };
@@ -322,7 +279,6 @@ internal sealed class SettingsCard : Panel
         Paint += (_, e) => { SettingsStyle.SoftText(e.Graphics); DrawBadge(e.Graphics); };
     }
 
-    /// <summary>The card's title, for anything looking a section up by name.</summary>
     [System.Diagnostics.CodeAnalysis.AllowNull]
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public override string Text { get => _title.Text; set => _title.Text = value ?? ""; }
@@ -341,13 +297,8 @@ internal sealed class SettingsCard : Panel
             value => SettingsStyle.Unit(this, value));
     }
 
-    /// <summary>
-    /// The settings, each in a card of its own with a small gap between them. The parts keep the card's colour as
-    /// their own, and the room around and between them is painted here.
-    /// </summary>
     private sealed class Body : FlowLayoutPanel
     {
-        /// <summary>The room inside a card above and below what it holds, and the gap between cards, at 100% scaling.</summary>
         private const int Inside = 8, Gap = 4;
         private bool _regrouping;
 
@@ -364,7 +315,6 @@ internal sealed class SettingsCard : Panel
 
         private int Unit(int value) => SettingsStyle.Unit(this, value);
 
-        /// <summary>The settings in order, each with the notes and parts that share its card.</summary>
         private List<List<Control>> Groups()
         {
             var groups = new List<List<Control>>();
@@ -376,7 +326,6 @@ internal sealed class SettingsCard : Panel
             return groups;
         }
 
-        /// <summary>Spaces the cards apart: room inside each card above and below, and a gap between them.</summary>
         private void Regroup()
         {
             if (_regrouping) return;
@@ -429,10 +378,8 @@ internal sealed class SettingsCard : Panel
     }
 }
 
-/// <summary>A label whose words are smoothed like the rest of Settings (<see cref="SettingsStyle.SoftText"/>).</summary>
 internal class SoftLabel : Label
 {
-    /// <summary>How the label's words are set, from its own settings, as Windows' label would set them.</summary>
     private TextFormatFlags Flags
     {
         get
@@ -449,7 +396,7 @@ internal class SoftLabel : Label
         }
     }
 
-    /// <summary>Its size measured the way its words are drawn, so they fit exactly.</summary>
+    // Measured the way its words are drawn, so they fit exactly.
     public override Size GetPreferredSize(Size proposedSize)
     {
         if (!Native.DirectText.Available || !AutoSize) return base.GetPreferredSize(proposedSize);
@@ -468,7 +415,6 @@ internal class SoftLabel : Label
     }
 }
 
-/// <summary>A plain card: a rounded panel in the card colour, for content that isn't a list of options.</summary>
 internal class CardPanel : Panel
 {
     public CardPanel()
@@ -479,8 +425,6 @@ internal class CardPanel : Panel
 
     protected override void OnPaint(PaintEventArgs e) => Draw(e.Graphics, this, drawRows: false);
 
-    /// <summary>Draws a card over the whole of <paramref name="card"/>; with <paramref name="drawRows"/>, a line between
-    /// options too. A note belongs to the option above it, so no line comes between them.</summary>
     internal static void Draw(Graphics g, Control card, bool drawRows)
     {
         g.Clear(card.Parent?.BackColor ?? SettingsStyle.Page);
@@ -506,42 +450,33 @@ internal class CardPanel : Panel
     }
 }
 
-/// <summary>Which parts of a group of settings share the card of the setting above them.</summary>
 internal static class SettingGroups
 {
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Control, object> Joined = new();
 
-    /// <summary>Puts <paramref name="part"/> in the same card as what comes before it, such as a button under a table.</summary>
     internal static T JoinAbove<T>(T part) where T : Control
     {
         Joined.AddOrUpdate(part, true);
         return part;
     }
 
-    /// <summary>A note shares the card of the setting above it, and so does a part joined to it.</summary>
     internal static bool SharesCardAbove(Control part) => part is NoteLabel || Joined.TryGetValue(part, out _);
 }
 
-/// <summary>A line of explanation in grey: under the setting it belongs to, in the same card.</summary>
 internal sealed class NoteLabel : SoftLabel;
 
-/// <summary>
-/// One setting chosen with a box, a list or a number: its icon, name and description on the left, what sets it on the
-/// right, centred on the row.
-/// </summary>
 internal sealed class SettingRowPanel : Panel, IDescribed
 {
     private readonly Control _control;
 
-    /// <summary>What sets it: a box, a list or a number.</summary>
     internal Control Setting => _control;
 
     internal SettingRowPanel(string text, Control control)
     {
         _control = control;
         Text = text;
-        // A screen reader reads the row's name for the box, list or slider that sets it (roadmap P2-4).
-        // A framed box is inside its frame, so whatever in the row takes the keyboard gets the name.
+        // A screen reader reads the row's name for whatever in the row takes the keyboard; a framed box is inside its
+        // frame.
         string name = text.TrimEnd(':', '：', ' ');
         void Name(Control part)
         {
@@ -559,7 +494,6 @@ internal sealed class SettingRowPanel : Panel, IDescribed
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
 
-    /// <summary>The icon before its name, or none.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal char Glyph
     {
@@ -567,7 +501,6 @@ internal sealed class SettingRowPanel : Panel, IDescribed
         set { field = value; PerformLayout(); Invalidate(); }
     }
 
-    /// <summary>More about the setting, in grey under its name.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public string Description
     {
@@ -580,7 +513,7 @@ internal sealed class SettingRowPanel : Panel, IDescribed
     protected override void OnLayout(LayoutEventArgs levent)
     {
         base.OnLayout(levent);
-        if (_control is null) return; // Still being built.
+        if (_control is null) return;
         if (_control is ComboBox choices) FitChoices(choices);
         int height = Math.Max(Math.Max(Unit(42), _control.Height + Unit(10)),
             SettingText.Height(this, Text, Description, TextWidth) + Unit(Description.Length > 0 ? 18 : 14));
@@ -588,10 +521,7 @@ internal sealed class SettingRowPanel : Panel, IDescribed
         _control.Location = new Point(Width - _control.Width - Unit(6), (Height - _control.Height) / 2);
     }
 
-    /// <summary>
-    /// A list of choices as wide as its longest one, with room for the arrow, as Windows 11's are; never narrower than
-    /// Windows 11's narrowest. Measured each time, so another language or display scaling fits too.
-    /// </summary>
+    // Measured each time, so another language or display scaling fits too.
     private void FitChoices(ComboBox box)
     {
         int widest = 0;
@@ -613,7 +543,6 @@ internal sealed class SettingRowPanel : Panel, IDescribed
     }
 }
 
-/// <summary>The list of pages down the left of the Settings window.</summary>
 internal sealed class NavList : Control
 {
     internal sealed record Entry(string Text, char Glyph, object? Page);
@@ -631,7 +560,6 @@ internal sealed class NavList : Control
         AccessibleRole = AccessibleRole.List;
     }
 
-    /// <summary>A screen reader hears the list's name and the page that is open, and hears it change.</summary>
     protected override AccessibleObject CreateAccessibilityInstance() => new Spoken(this);
 
     private sealed class Spoken(NavList owner) : ControlAccessibleObject(owner)
@@ -643,7 +571,6 @@ internal sealed class NavList : Control
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
 
-    /// <summary>Adds a group heading.</summary>
     internal void AddHeading(string text) => _entries.Add(new Entry(text, '\0', null));
     internal void Add(string text, char glyph, object page) => _entries.Add(new Entry(text, glyph, page));
 
@@ -654,7 +581,6 @@ internal sealed class NavList : Control
         set { _selected = value; Invalidate(); AccessibilityNotifyClients(AccessibleEvents.ValueChange, -1); }
     }
 
-    /// <summary>Shows only these pages, or all of them again with null. A heading with none of its pages left goes too.</summary>
     internal void Filter(IEnumerable<object>? pages)
     {
         _shown = pages is null ? null : [.. pages];
@@ -768,21 +694,15 @@ internal sealed class NavList : Control
     protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
 }
 
-/// <summary>A button drawn flat with rounded corners: filled in the accent colour for the main one, a quiet control otherwise.</summary>
 internal sealed class PlainButton : Button
 {
     private bool _hot, _pressed;
     [System.ComponentModel.DefaultValue(false)]
     public bool Primary { get; set; }
 
-    /// <summary>An icon instead of words, for a small square button whose purpose its icon and tooltip say.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal char Glyph { get; set { field = value; Invalidate(); } }
 
-    /// <summary>
-    /// A button that takes something away: only its grey icon shows, and a light red wash and red icon come up under
-    /// the pointer.
-    /// </summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal bool Removes { get; set { field = value; Invalidate(); } }
 
@@ -797,7 +717,6 @@ internal sealed class PlainButton : Button
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
 
-    /// <summary>As big as its words need and no bigger: a standard button leaves far more room around them.</summary>
     public override Size GetPreferredSize(Size proposedSize)
     {
         if (Glyph != '\0') return new Size(Unit(32), Unit(32));
@@ -840,7 +759,6 @@ internal sealed class PlainButton : Button
     protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
 }
 
-/// <summary>The pages of the Settings window. Its row of tabs is never shown: the list on the left chooses the page.</summary>
 internal sealed class PagesControl : TabControl
 {
     private const int TCM_ADJUSTRECT = 0x1328;
@@ -853,10 +771,6 @@ internal sealed class PagesControl : TabControl
     }
 }
 
-/// <summary>
-/// Whether the keyboard or the pointer was used last in WinScreen's windows. Windows 11 shows where the keyboard is
-/// only while it is used to move around: a click hides the ring again.
-/// </summary>
 internal static class FocusVisuals
 {
     private const int WM_KEYDOWN = 0x0100, WM_SYSKEYDOWN = 0x0104, WM_LBUTTONDOWN = 0x0201, WM_RBUTTONDOWN = 0x0204,
@@ -865,7 +779,6 @@ internal static class FocusVisuals
 
     internal static bool Keyboard { get; private set; }
 
-    /// <summary>Starts following the keyboard and the pointer, once for the whole app.</summary>
     internal static void Watch()
     {
         if (_watching) return;
@@ -877,14 +790,12 @@ internal static class FocusVisuals
     {
         if (Keyboard == keyboard) return;
         Keyboard = keyboard;
-        // The control that has the keyboard draws its ring, or takes it away.
         if (Form.ActiveForm?.ActiveControl is { } focused) Deepest(focused).Invalidate();
     }
 
     private static Control Deepest(Control control) =>
         control is ContainerControl { ActiveControl: { } inner } ? Deepest(inner) : control;
 
-    /// <summary>Takes in one message: a key that moves around shows the ring, a click hides it.</summary>
     internal static void Saw(int message, nint wParam)
     {
         switch (message)

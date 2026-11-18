@@ -3,11 +3,8 @@ using System.Runtime.InteropServices;
 
 namespace WinScreen.Settings;
 
-/// <summary>
-/// A thin scroll bar drawn the Windows 11 way: a slim line at rest that widens, with arrows, under the pointer. Windows
-/// draws a list's own scroll bar thick and dark, so that one is hidden past the list's edge and this one sits over it,
-/// reading where the list is from Windows and moving it the list's own way.
-/// </summary>
+// Windows draws a list's own scroll bar thick and dark, so that one is hidden past the list's edge and this one sits
+// over it, reading the position from Windows and scrolling the list its own way.
 internal sealed class ThinScrollBar : Control
 {
     private const int SB_VERT = 1, SIF_RANGE = 0x1, SIF_PAGE = 0x2, SIF_POS = 0x4;
@@ -32,9 +29,6 @@ internal sealed class ThinScrollBar : Control
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetScrollInfo(nint window, int bar, ref ScrollInfo info);
 
-    /// <param name="target">What scrolls.</param>
-    /// <param name="scrollTo">Moves it so that the given position, in its own scroll units, is at the top.</param>
-    /// <param name="back">The colour behind the bar.</param>
     internal ThinScrollBar(Control target, Action<int> scrollTo, Func<Color> back)
     {
         _target = target;
@@ -53,7 +47,6 @@ internal sealed class ThinScrollBar : Control
     private bool Needed => _page > 0 && Range > _page;
     private int Arrow => _hot ? Unit(14) : Unit(4);
 
-    /// <summary>Rereads where the target is; called whenever it may have moved.</summary>
     internal void Sync()
     {
         if (!_target.IsHandleCreated || IsDisposed) return;
@@ -99,7 +92,6 @@ internal sealed class ThinScrollBar : Control
         using (var brush = new SolidBrush(color))
             g.FillPath(brush, path);
         if (!_hot && !_dragging) return;
-        // Small filled arrows at both ends, as Windows 11 shows them under the pointer.
         float x = Width / 2f, half = Unit(4), tall = Unit(3);
         using var arrow = new SolidBrush(color);
         float top = Arrow / 2f, bottom = Height - Arrow / 2f;
@@ -167,26 +159,17 @@ internal sealed class ThinScrollBar : Control
     }
 }
 
-/// <summary>
-/// A Settings page laid out in one column, as in Windows 11's Settings: as wide as the room up to a width still easy
-/// to read, and centred in a window wider than that. The page title follows where the column starts.
-/// </summary>
 internal interface IColumnPage
 {
-    /// <summary>How far the column is moved in from its usual place, to centre it, in pixels.</summary>
     int Shift { get; }
     event Action? Shifted;
 }
 
-/// <summary>Where the column goes in a page of a given width, shared by every page so their edges line up.</summary>
 internal static class PageColumn
 {
-    /// <summary>The widest the column gets, at 100% scaling: past this a line of words gets too long to read easily.</summary>
     internal const int Widest = 1000;
-    /// <summary>The room kept on the right, at 100% scaling, where the scroll bar shows over a page.</summary>
     internal const int RightGap = 10;
 
-    /// <summary>The room for the column in a page this wide, and how far it moves in to be centred there.</summary>
     internal static (int Room, int Shift) In(Control page, int width, int content)
     {
         int room = Math.Max(0, width - SettingsStyle.Unit(page, RightGap));
@@ -194,7 +177,6 @@ internal static class PageColumn
     }
 }
 
-/// <summary>A page that holds one column of its own, such as the table of actions, kept to the width of the others.</summary>
 internal sealed class ColumnPanel : Panel, IColumnPage
 {
     public int Shift { get; private set; }
@@ -215,19 +197,15 @@ internal sealed class ColumnPanel : Panel, IColumnPage
     }
 }
 
-/// <summary>A page of cards that scrolls, and says so whenever what it shows may have moved.</summary>
 internal sealed class ScrollPage : FlowLayoutPanel, IColumnPage
 {
     private const int WM_PAINT = 0x000F, WM_VSCROLL = 0x0115, WM_MOUSEWHEEL = 0x020A;
-    /// <summary>The widest the cards get, at 100% scaling: past this a line of words gets too long to read easily.</summary>
     internal const int WidestCard = PageColumn.Widest;
-    /// <summary>The height a page has in a Settings window of the usual size, at 100% scaling.</summary>
     private const int UsualHeight = 560;
     internal event Action? Moved;
     public event Action? Shifted;
     private int _usualLeft = -1;
 
-    /// <summary>How much wider than usual its rows are now, in pixels.</summary>
     internal int Extra { get; private set; }
 
     public int Shift { get; private set; }
@@ -238,10 +216,6 @@ internal sealed class ScrollPage : FlowLayoutPanel, IColumnPage
         Restretch();
     }
 
-    /// <summary>
-    /// Widens the rows to the room there is, up to <see cref="WidestCard"/>, and lets lists show more rows in a taller
-    /// window. Called again when a part of the page is made anew.
-    /// </summary>
     internal void Restretch()
     {
         if (Controls.Count == 0) return;
@@ -266,11 +240,8 @@ internal sealed class ScrollPage : FlowLayoutPanel, IColumnPage
 
     private bool _dropping;
 
-    /// <summary>
-    /// The page never scrolls sideways, as its rows always fit. Windows Forms remembers how wide the page once was,
-    /// though, and after the window shrinks it kept a dark sideways scroll bar for that old width; the page is made to
-    /// measure itself afresh, staying where it was scrolled to.
-    /// </summary>
+    // WinForms remembers how wide the page once was and kept a dark sideways scroll bar after the window shrank, so the
+    // page is made to measure itself afresh, staying where it was scrolled to.
     private void DropSidewaysScroll()
     {
         const long WS_HSCROLL = 0x00100000;
@@ -307,7 +278,6 @@ internal sealed class ScrollPage : FlowLayoutPanel, IColumnPage
     }
 }
 
-/// <summary>Holds a <see cref="ScrollPage"/> with Windows' scroll bar cut off at the edge and a thin one over it.</summary>
 internal sealed class ScrollHost : Panel
 {
     private readonly ScrollPage _page;
@@ -340,7 +310,6 @@ internal sealed class ScrollHost : Panel
     }
 }
 
-/// <summary>The table of actions, saying whenever it may have scrolled.</summary>
 internal sealed class ThemedTable : ListView
 {
     private const int WM_PAINT = 0x000F, WM_VSCROLL = 0x0115, WM_MOUSEWHEEL = 0x020A, LVM_SCROLL = 0x1014;
@@ -351,7 +320,6 @@ internal sealed class ThemedTable : ListView
     // Windows redraws a row as the pointer passes over it; drawn straight onto the screen, its words blinked.
     public ThemedTable() => DoubleBuffered = true;
 
-    /// <summary>Windows' own dotted focus box stays hidden; the table draws Windows 11's ring itself, for the keyboard only.</summary>
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
@@ -367,7 +335,6 @@ internal sealed class ThemedTable : ListView
         else if (m.Msg is WM_VSCROLL or WM_MOUSEWHEEL or LVM_SCROLL) Invalidate();
     }
 
-    /// <summary>Puts the row at <paramref name="row"/> at the top, the way the table's own scroll bar would.</summary>
     internal void ScrollToRow(int row)
     {
         if (Items.Count == 0 || !IsHandleCreated) return;

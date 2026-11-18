@@ -5,17 +5,13 @@ using WinScreen.Tray;
 
 namespace WinScreen.Settings;
 
-/// <summary>
-/// A rounded box drawn around a control whose own border Windows would draw too bright: a text box, a number box, a
-/// list or a table. The control inside loses its border and takes the box's colour.
-/// </summary>
+// Windows draws these controls' own borders too bright, so the control inside loses its border and this box is drawn
+// round it.
 internal sealed class InputFrame : Panel
 {
     internal enum Look
     {
-        /// <summary>Something typed into: a control fill, with a line under it that turns the accent colour while typing.</summary>
         Text,
-        /// <summary>A list or a table: the card colour, with an edge that turns the accent colour while it has the keyboard.</summary>
         List,
     }
 
@@ -24,15 +20,12 @@ internal sealed class InputFrame : Panel
     private bool _hot;
     private int _hotSpin = -1;
 
-    /// <summary>An icon drawn at the start of the box, as in a search field.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal char Glyph { get => _glyph; init { _glyph = value; Place(); } }
     private readonly char _glyph;
-    /// <summary>A colour shown at the start of the box, for a box that holds one; null shows none.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<Color?>? Swatch { get => _swatch; init { _swatch = value; Place(); } }
     private readonly Func<Color?>? _swatch;
-    /// <summary>Room left empty at the end of the box, at 100% scaling: for an error icon beside the text.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal int ReserveEnd { get => _reserveEnd; init { _reserveEnd = value; Place(); } }
     private readonly int _reserveEnd;
@@ -50,7 +43,6 @@ internal sealed class InputFrame : Panel
     private NumericUpDown? Number => _inner as NumericUpDown;
     private bool Active => _inner?.ContainsFocus == true;
 
-    /// <summary>Puts a different control in the box, or none.</summary>
     internal void Host(Control? inner)
     {
         if (_inner == inner) return;
@@ -221,12 +213,10 @@ internal sealed class InputFrame : Panel
         Color fill = Fill;
         using GraphicsPath path = SettingsStyle.Rounded(area, radius);
         using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
-        // A list keeps its quiet edge while it has the keyboard, as in Windows 11: its chosen row shows where it is.
         Color edge = _look == Look.List ? SettingsStyle.StrokeOn(SettingsStyle.Blend(SettingsStyle.Text, fill, 0.03)) : SettingsStyle.StrokeOn(fill);
         using (var pen = new Pen(edge)) g.DrawPath(pen, path);
         if (_look == Look.Text && enabled)
         {
-            // The line under the words, inside the rounded corners: thin at rest, thicker in the accent colour while typing.
             int thick = Active ? Unit(2) : 1;
             g.SetClip(path);
             using var line = new SolidBrush(Active ? SettingsStyle.Accent : SettingsStyle.Underline);
@@ -263,16 +253,13 @@ internal sealed class InputFrame : Panel
     }
 }
 
-/// <summary>
-/// A text box that says what to type while it is empty, also while it has the keyboard, as Windows 11's search boxes
-/// do. WinForms' own waiting words go when the box is clicked, and Windows' own are not drawn in a box with no border.
-/// </summary>
+// WinForms' own placeholder goes when the box is clicked, and Windows' isn't drawn in a box with no border, so the hint
+// is drawn here, also while focused.
 internal sealed class HintTextBox : TextBox
 {
     private const int WM_PAINT = 0x000F, EM_GETMARGINS = 0x00D4;
     private bool _wasEmpty = true;
 
-    /// <summary>What the box says while nothing is typed in it.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal string Hint { get; set { field = value; Invalidate(); } } = "";
 
@@ -289,10 +276,8 @@ internal sealed class HintTextBox : TextBox
     [DllImport("user32.dll")] private static extern nint BeginPaint(nint window, out PaintStruct paint);
     [DllImport("user32.dll")] private static extern bool EndPaint(nint window, ref PaintStruct paint);
 
-    /// <summary>
-    /// An empty box is drawn whole by itself, background and hint in one go: Windows wiping it first and the hint
-    /// following made it blink as the pointer passed and its colour changed.
-    /// </summary>
+    // An empty box is drawn whole, background and hint in one go: Windows wiping it first and the hint following made
+    // it blink.
     protected override void WndProc(ref Message m)
     {
         // Asked only for these two: asking how long the text is sends a message of its own.
@@ -346,7 +331,6 @@ internal sealed class HintTextBox : TextBox
     }
 }
 
-/// <summary>A list that drops down to choose one thing, drawn as Windows 11 draws one.</summary>
 internal sealed class ThemedCombo : ComboBox
 {
     private bool _hot;
@@ -365,7 +349,6 @@ internal sealed class ThemedCombo : ComboBox
 
     private int Unit(int value) => SettingsStyle.Unit(this, value);
 
-    /// <summary>Rows of the open list with room around the words; the box itself is as tall as every other box.</summary>
     private void FitHeight()
     {
         ItemHeight = Math.Max(Native.DirectText.MeasureText("Ag", Font).Height + Unit(12), Unit(26));
@@ -432,12 +415,8 @@ internal sealed class ThemedCombo : ComboBox
     protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
 }
 
-/// <summary>
-/// A box to search for a program or type its name, as Windows 11's search boxes are: a search icon, words saying what
-/// to do that stay readable, and suggestions from the programs running now as soon as typing starts. Its arrow opens
-/// all of them. Windows draws the box's edge and arrow in the light theme's colours, so they are drawn over after it
-/// paints; the typing part is its own window, and only the icon and the waiting words are drawn into it.
-/// </summary>
+// Windows draws the box's edge and arrow in the light theme's colours, so they are drawn over after it paints; the
+// typing part is its own window, and only the icon and placeholder are drawn into it.
 internal sealed class ThemedPicker : ComboBox
 {
     private const int EM_SETMARGINS = 0x00D3, EC_LEFTMARGIN = 0x1, MostSuggestions = 12;
@@ -446,15 +425,12 @@ internal sealed class ThemedPicker : ComboBox
     private TypingPart? _typing;
     private nint _listWindow;
 
-    /// <summary>What the box says while nothing is typed in it.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal string Placeholder { get; set; } = "";
 
-    /// <summary>The names it offers, read again each time the list opens or typing starts.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<IEnumerable<string>>? Choices { get; set; }
 
-    /// <summary>The picture beside a name in the list, at a size in pixels, or null for none.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<string, int, Image?>? IconOf { get; set; }
 
@@ -471,10 +447,8 @@ internal sealed class ThemedPicker : ComboBox
     private Color Surface => Parent?.BackColor ?? SettingsStyle.Card;
     private Color Fill => !Enabled ? SettingsStyle.DisabledOn(Surface) : Focused || ContainsFocus ? SettingsStyle.ActiveOn(Surface)
         : _hot ? SettingsStyle.HoverOn(Surface) : SettingsStyle.FillOn(Surface);
-    /// <summary>The room before the words, where the search icon is.</summary>
     private int IconRoom => Unit(30);
 
-    /// <summary>Rows of the open list with room around the words; the box itself is as tall as every other box.</summary>
     private void FitHeight()
     {
         ItemHeight = Math.Max(Native.DirectText.MeasureText("Ag", Font).Height + Unit(12), Unit(26));
@@ -515,10 +489,8 @@ internal sealed class ThemedPicker : ComboBox
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetComboBoxInfo(nint combo, ref ComboInfo info);
 
-    /// <summary>
-    /// Fits the open list to what it offers: Windows opens it at its full height whatever it holds. Kept against the
-    /// box when it opened upward for want of room below.
-    /// </summary>
+    // Windows opens the list at its full height whatever it holds. Kept against the box when it opened upward for want
+    // of room below.
     private void FitList()
     {
         if (!DroppedDown || _listWindow == 0 || !Native.User32.GetWindowRect(_listWindow, out Native.Rect r)) return;
@@ -536,7 +508,6 @@ internal sealed class ThemedPicker : ComboBox
         base.OnHandleDestroyed(e);
     }
 
-    /// <summary>Moves the typing part to where <see cref="CenterTyping"/> keeps it, after anything that changes the box.</summary>
     private void PlaceTyping()
     {
         if (_typing is not { Handle: not 0 } typing || !Native.User32.GetWindowRect(typing.Handle, out Native.Rect r)) return;
@@ -554,7 +525,8 @@ internal sealed class ThemedPicker : ComboBox
 
     protected override void WndProc(ref Message m)
     {
-        // The box is painted here alone, in one go: Windows' own box, painted first and covered after, showed as a blink.
+        // The box is painted here alone, in one go: Windows' own box, painted first and covered after, showed as a
+        // blink.
         if (m.Msg == ListRows.WM_ERASEBKGND && IsHandleCreated) { m.Result = 1; return; }
         if (m.Msg == ListRows.WM_PAINT && IsHandleCreated)
         {
@@ -597,10 +569,7 @@ internal sealed class ThemedPicker : ComboBox
         SettingsStyle.Chevron(g, new Point(Width - Unit(14), Height / 2), Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, this);
     }
 
-    /// <summary>
-    /// Paints the typing part off screen and puts it up whole: its words as Windows writes them, then the search icon
-    /// and, while nothing is typed, the waiting words. Painted in steps on the screen, the icon and words blinked.
-    /// </summary>
+    // Painted off screen and put up whole: painted in steps on the screen, the icon and words blinked.
     private void PaintTyping(nint typing)
     {
         const int WM_PRINTCLIENT = 0x0318, PRF_CLIENT = 0x4, WM_GETTEXTLENGTH = 0x000E;
@@ -634,7 +603,6 @@ internal sealed class ThemedPicker : ComboBox
         }
     }
 
-    /// <summary>The search icon, and the waiting words while nothing is typed.</summary>
     private void DrawInTyping(Graphics g, Rectangle area, bool typed)
     {
         Color quiet = Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled;
@@ -659,10 +627,7 @@ internal sealed class ThemedPicker : ComboBox
         public uint Flags;
     }
 
-    /// <summary>
-    /// Keeps the typing part at most one line tall and centred in the box: Windows puts it near the top and writes at
-    /// its top, which leaves the words high.
-    /// </summary>
+    // Windows puts the typing part near the top and writes at its top, which leaves the words high.
     private void CenterTyping(nint place)
     {
         const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2;
@@ -675,7 +640,8 @@ internal sealed class ThemedPicker : ComboBox
             position.X = PointToClient(new Point(now.Left, now.Top)).X;
             position.Flags &= ~SWP_NOMOVE;
         }
-        // Placed so its capitals sit in the middle of the box, as the words in the other boxes do; a line's capitals sit
+        // Placed so its capitals sit in the middle of the box, as the words in the other boxes do; a line's capitals
+        // sit
         // high in it, above the room kept for descenders.
         position.Y = Math.Clamp((box.Bottom - box.Top) / 2 - CapitalsMiddle(Font), 0, Math.Max(0, box.Bottom - box.Top - line));
         position.Height = line;
@@ -684,7 +650,6 @@ internal sealed class ThemedPicker : ComboBox
 
     private static readonly Dictionary<(string, float, FontStyle), int> Capitals = [];
 
-    /// <summary>How far down a line of this font the middle of its capitals is, found by writing one and looking.</summary>
     internal static int CapitalsMiddle(Font font)
     {
         if (Capitals.TryGetValue((font.Name, font.Size, font.Style), out int middle)) return middle;
@@ -712,7 +677,6 @@ internal sealed class ThemedPicker : ComboBox
     {
         private const int WM_IME_STARTCOMPOSITION = 0x010D, WM_IME_ENDCOMPOSITION = 0x010E, WM_WINDOWPOSCHANGING = 0x0046;
 
-        /// <summary>While a character is being put together in an input method, before it reaches the box.</summary>
         internal bool Composing { get; private set; }
 
         internal void Redraw()
@@ -737,7 +701,7 @@ internal sealed class ThemedPicker : ComboBox
     protected override void OnTextChanged(EventArgs e)
     {
         base.OnTextChanged(e);
-        _typing?.Redraw(); // The waiting words come and go with what's typed.
+        _typing?.Redraw();
     }
 
     protected override void OnDropDown(EventArgs e)
@@ -747,7 +711,6 @@ internal sealed class ThemedPicker : ComboBox
         base.OnDropDown(e);
     }
 
-    /// <summary>As a name is typed, the running programs whose names hold it are offered under the box.</summary>
     protected override void OnTextUpdate(EventArgs e)
     {
         base.OnTextUpdate(e);
@@ -771,7 +734,8 @@ internal sealed class ThemedPicker : ComboBox
                 Cursor.Current = Cursors.Default; // Opening the list hides the pointer otherwise.
             }
             else if (matches.Count == 0 && DroppedDown) DroppedDown = false;
-            // Closing a list just emptied can leave the box pointing at a row no longer there; reading its words then fails.
+            // Closing a list just emptied can leave the box pointing at a row no longer there; reading its words then
+            // fails.
             if (SelectedIndex >= Items.Count) SelectedIndex = -1;
             FitList();
             // Changing the list and opening it both take over the box's words; what was typed is put back.
@@ -826,8 +790,9 @@ internal sealed class ThemedPicker : ComboBox
     protected override void OnFontChanged(EventArgs e) { base.OnFontChanged(e); FitHeight(); SetMargin(); PlaceTyping(); }
     protected override void OnDpiChangedAfterParent(EventArgs e) { base.OnDpiChangedAfterParent(e); FitHeight(); SetMargin(); PlaceTyping(); }
     protected override void OnParentChanged(EventArgs e) { base.OnParentChanged(e); Restyle(); }
-    protected override void OnParentBackColorChanged(EventArgs e) { base.OnParentBackColorChanged(e); Restyle(); } // Placed on a card.
-    // Moving between the box's edge and its typing part says the pointer came in again; it is redrawn only when that changes something.
+    protected override void OnParentBackColorChanged(EventArgs e) { base.OnParentBackColorChanged(e); Restyle(); }
+    // Moving between the box's edge and its typing part says the pointer came in again; it is redrawn only when that
+    // changes something.
     protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); Hover(true); }
     protected override void OnMouseLeave(EventArgs e)
     {
@@ -850,16 +815,12 @@ internal sealed class ThemedPicker : ComboBox
     protected override void OnDropDownClosed(EventArgs e) { base.OnDropDownClosed(e); Invalidate(); }
 }
 
-/// <summary>
-/// The height every box in Settings has, at 100% scaling, as Windows 11 makes its text boxes, lists and buttons; and a
-/// way to give it to a list that drops down, whose own height follows its rows.
-/// </summary>
 internal static class BoxHeight
 {
     internal const int Standard = 32;
     private const int CB_SETITEMHEIGHT = 0x0153, CB_GETITEMHEIGHT = 0x0154;
 
-    /// <summary>Sets the height of the part that shows the choice, leaving the rows of the open list as they are.</summary>
+    // Only the part that shows the choice; the open list's rows keep their own height.
     internal static void Fit(ComboBox box)
     {
         if (!box.IsHandleCreated) return;
@@ -871,10 +832,8 @@ internal static class BoxHeight
     }
 }
 
-/// <summary>
-/// The pictures of programs, by the names the program lists use, each made once. A program's file is found from its
-/// window while it runs, and remembered in a small file so its picture still shows after it has closed.
-/// </summary>
+// A program's file is found from its window while it runs, and remembered in a small file so its picture still shows
+// after it has closed.
 internal static class ProgramIcons
 {
     private static readonly Dictionary<string, string> Paths = new(StringComparer.OrdinalIgnoreCase);
@@ -882,7 +841,6 @@ internal static class ProgramIcons
     private static readonly Dictionary<string, long> Missed = new(StringComparer.OrdinalIgnoreCase);
     private static string? _file;
 
-    /// <summary>Where the programs' files are remembered between runs; read when set.</summary>
     internal static string? File
     {
         get => _file;
@@ -899,7 +857,6 @@ internal static class ProgramIcons
         }
     }
 
-    /// <summary>Remembers where a running program's file is, from one of its windows.</summary>
     internal static void Remember(string name, nint window)
     {
         string path = WinScreen.Windows.WindowInfo.ExecutablePath(window);
@@ -914,7 +871,7 @@ internal static class ProgramIcons
     private static Dictionary<string, nint> _running = new(StringComparer.OrdinalIgnoreCase);
     private static long _runningAt = -100_000; // Long enough ago that the first look runs.
 
-    /// <summary>A window of each program running now, looked up at most every half minute: rows are drawn often.</summary>
+    // At most every half minute: rows are drawn often.
     private static Dictionary<string, nint> Running()
     {
         if (Environment.TickCount64 - _runningAt < 30000) return _running;
@@ -929,7 +886,6 @@ internal static class ProgramIcons
         return _running = found;
     }
 
-    /// <summary>The program's file: remembered, from a copy running now, or from where Windows says it is installed.</summary>
     private static string? Find(string name)
     {
         if (Paths.TryGetValue(name, out string? known) && System.IO.File.Exists(known)) return known;
@@ -962,14 +918,12 @@ internal static class ProgramIcons
         }
         catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
-            // No picture then; the name is still there.
             Diagnostics.Log.Swallowed(e);
         }
         return Made[(name, size)] = picture;
     }
 }
 
-/// <summary>Rows drawn the Windows 11 way for <see cref="ThemedList"/> and <see cref="ThemedCheckList"/>.</summary>
 internal static class ListRows
 {
     internal const int LB_SETITEMHEIGHT = 0x01A0;
@@ -980,7 +934,6 @@ internal static class ListRows
 
     internal static int RowHeight(Control list) => Math.Max(Native.DirectText.MeasureText("Ag", list.Font).Height + SettingsStyle.Unit(list, 12), SettingsStyle.Unit(list, 30));
 
-    /// <summary>The background of a row: a wash under the pointer, the accent wash and bar when chosen.</summary>
     internal static Rectangle Background(Graphics g, ListBox list, Rectangle bounds, bool selected, bool hot)
     {
         using (var back = new SolidBrush(list.BackColor)) g.FillRectangle(back, bounds);
@@ -997,7 +950,6 @@ internal static class ListRows
         return row;
     }
 
-    /// <summary>What an empty list says instead of showing nothing.</summary>
     internal static void Empty(ListBox list, string text)
     {
         if (list.Items.Count > 0 || text.Length == 0 || !list.IsHandleCreated) return;
@@ -1015,10 +967,7 @@ internal static class ListRows
 
     internal const int WM_ERASEBKGND = 0x0014;
 
-    /// <summary>
-    /// Fills only the part no row covers: each row paints its own background, and Windows filling under all of them
-    /// first showed as a blink.
-    /// </summary>
+    // Each row paints its own background; Windows filling under all of them first showed as a blink.
     internal static void EraseBelowRows(ListBox list, ref Message m)
     {
         int bottom = list.Items.Count == 0 ? 0 : Math.Max(0, list.GetItemRectangle(list.Items.Count - 1).Bottom);
@@ -1032,7 +981,6 @@ internal static class ListRows
         m.Result = 1;
     }
 
-    /// <summary>Moves the pointer's wash to another row, redrawing just the two rows.</summary>
     internal static void MoveHot(ListBox list, ref int hot, int now)
     {
         if (now == hot) return;
@@ -1041,11 +989,8 @@ internal static class ListRows
         hot = now;
     }
 
-    /// <summary>
-    /// Draws a row off screen and puts it up whole: drawn straight onto the screen, the background showed for a moment
-    /// before the words. The row is drawn at the buffer's own top left, since words go through Windows, which does not
-    /// follow the buffer's shift to where the row sits.
-    /// </summary>
+    // Drawn off screen and put up whole, or the background showed before the words. Drawn at the buffer's own top left:
+    // words go through Windows, which doesn't follow the buffer's transform.
     internal static void DrawBuffered(DrawItemEventArgs e, Action<Graphics, Rectangle> draw)
     {
         using BufferedGraphics buffer = BufferedGraphicsManager.Current.Allocate(e.Graphics, e.Bounds);
@@ -1056,17 +1001,14 @@ internal static class ListRows
     }
 }
 
-/// <summary>A list of names with Windows 11's rows, and a line of its own to say so when it is empty.</summary>
 internal class ThemedList : ListBox
 {
     private int _hot = -1;
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal string EmptyText { get; set; } = "";
     internal event EventHandler? ItemsChanged;
-    /// <summary>After every repaint, which is when it may have scrolled.</summary>
     internal event Action? Painted;
 
-    /// <summary>A picture before each entry, such as its program's icon, at the size asked for; none when null.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<object, int, Image?>? IconOf { get; set; }
 
@@ -1134,7 +1076,6 @@ internal class ThemedList : ListBox
     protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); ListRows.MoveHot(this, ref _hot, -1); }
 }
 
-/// <summary>A list of things to tick, with Windows 11's rows and check boxes.</summary>
 internal sealed class ThemedCheckList : CheckedListBox
 {
     private int _hot = -1;
@@ -1147,14 +1088,12 @@ internal sealed class ThemedCheckList : CheckedListBox
         ForeColor = SettingsStyle.Text;
     }
 
-    /// <summary>The height of one row. The list's own ItemHeight follows the font only, so the rows are set to this instead.</summary>
+    // The list's own ItemHeight follows the font only.
     internal int RowHeight => ListRows.RowHeight(this);
 
-    /// <summary>Which entries are experimental, to show the tag after their words.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<object, bool>? Tagged { get; set; }
 
-    /// <summary>An icon drawn between the box and the words, given the entry and the size in pixels; the words then line up in one column.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<object, int, Image?>? IconOf { get; set; }
 
@@ -1248,10 +1187,6 @@ internal sealed class ThemedCheckList : CheckedListBox
     }
 }
 
-/// <summary>
-/// A list of programs with a way to add one and remove one: the same on every page that has one. It is as tall as its
-/// programs need, up to six rows, and says so when it is empty.
-/// </summary>
 internal sealed class ProgramList : Panel
 {
     private readonly Label? _title;
@@ -1262,10 +1197,6 @@ internal sealed class ProgramList : Panel
     private readonly PlainButton _remove;
     private readonly PlainButton? _change;
 
-    /// <param name="list">The list the page reads and fills.</param>
-    /// <param name="picker">Where a name is typed or chosen, or null for a list nothing is added to by hand.</param>
-    /// <param name="remove">What removing the chosen entry does; by default it leaves the list.</param>
-    /// <param name="change">What changing the chosen entry does (a Change button, and a double-click); none by default.</param>
     internal ProgramList(ThemedList list, ComboBox? picker, string? title, string empty, string addText, string removeText,
         Action<object>? remove = null, Action<object>? change = null, string? changeText = null)
     {
@@ -1328,7 +1259,6 @@ internal sealed class ProgramList : Panel
         if (_change is not null) _change.Enabled = _list.SelectedIndex >= 0;
     }
 
-    /// <summary>The most rows it shows before it scrolls: more in a taller Settings window.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal int MostRows
     {
@@ -1388,11 +1318,7 @@ internal sealed class ProgramList : Panel
     }
 }
 
-/// <summary>
-/// A number chosen by sliding, as in Windows 11's Settings: the value beside a track that fills up to a round thumb.
-/// The thumb's dot grows under the pointer and shrinks while held. The wheel and the arrow keys move it a step at a
-/// time. The number box it stands for stays inside, hidden, and holds the value.
-/// </summary>
+// The number box it stands for stays inside, hidden, and holds the value.
 internal sealed class NumberSlider : Control
 {
     private readonly NumericUpDown _number;
@@ -1424,7 +1350,6 @@ internal sealed class NumberSlider : Control
     private int Unit(int value) => SettingsStyle.Unit(this, value);
     private bool Usable => Enabled && _number.Enabled;
 
-    /// <summary>Room for the longest value, then a track about as long as Windows 11's.</summary>
     internal void Fit()
     {
         var size = new Size(NumberRoom + Unit(TrackLength + 20), Unit(BoxHeight.Standard));
@@ -1463,7 +1388,6 @@ internal sealed class NumberSlider : Control
             FillBar(g, brush, left, right, middle, thick);
         using (var brush = new SolidBrush(fill))
             FillBar(g, brush, left, x, middle, thick);
-        // The thumb: a round face with a faint edge, and the accent dot in it.
         float outer = Unit(10);
         var face = new RectangleF(x - outer, middle - outer, outer * 2, outer * 2);
         Color faceColor = MenuStyle.Dark ? Color.FromArgb(0x45, 0x45, 0x45) : Color.White;
@@ -1483,7 +1407,6 @@ internal sealed class NumberSlider : Control
         g.FillPath(brush, path);
     }
 
-    /// <summary>Starts the dot growing or shrinking towards the size for the pointer's state.</summary>
     private void Become()
     {
         float target = !Usable ? Rest : _held ? Pressed : _hot ? Hover : Rest;

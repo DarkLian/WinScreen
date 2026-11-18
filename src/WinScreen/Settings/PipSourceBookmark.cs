@@ -6,7 +6,7 @@ namespace WinScreen.Settings;
 internal sealed record BookmarkDisplay(string Device, Rectangle Bounds, bool Primary = false);
 internal sealed record ResolvedBookmark(BookmarkDisplay Display, Rectangle? Region, bool NeedsPreview);
 
-/// <summary>A reusable capture source. Region shares are measured from the display's own corner.</summary>
+// Region shares are measured from the display's own corner.
 public sealed class PipSourceBookmark
 {
     public string Name { get; set; } = "";

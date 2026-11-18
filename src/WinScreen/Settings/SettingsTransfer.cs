@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 
 namespace WinScreen.Settings;
 
-/// <summary>A portable settings document, separate from this machine's startup and first-run state.</summary>
+// Separate from this machine's startup and first-run state.
 internal static class SettingsTransfer
 {
     private const int Version = 1;

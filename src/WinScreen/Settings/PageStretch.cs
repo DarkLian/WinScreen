@@ -2,19 +2,13 @@ using System.Runtime.CompilerServices;
 
 namespace WinScreen.Settings;
 
-/// <summary>
-/// Makes a Settings page's full-width rows wider together, so a bigger window shows longer lines rather than empty
-/// space. Each control's own width is kept the first time it is seen, and every stretch starts from that.
-/// </summary>
+// Each control's own width is kept the first time it is seen, and every stretch starts from that.
 internal static class PageStretch
 {
     private static readonly ConditionalWeakTable<Control, StrongBox<int>> Usual = new();
 
     private static int UsualWidth(Control control, int now) => Usual.GetValue(control, _ => new StrongBox<int>(now)).Value;
 
-    /// <param name="extra">Pixels to add to each full-width row.</param>
-    /// <param name="full">The width of a full row at the usual size; anything about this wide counts as one.</param>
-    /// <param name="rows">How many rows a list of programs shows before it scrolls.</param>
     internal static void Apply(Control container, int extra, int full, int rows)
     {
         int near = full - SettingsStyle.Unit(container, 16);

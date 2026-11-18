@@ -47,16 +47,14 @@ public enum AppCommand
     UnpinEverywhere,
     HideAnchors,
     HideToolbar,
-    /// <summary>Gives the window an Anchor and minimizes it, in one step (roadmap P2-14).</summary>
     MinimizeToAnchor,
 }
 
-/// <summary>The key to hold for modifier move and resize.</summary>
 public enum ModifierKey { Alt, Win }
 public enum WindowMenuGesture { CtrlRightClick, CtrlShiftRightClick, CtrlMiddleClick }
 
-/// <summary>What a program's windows get automatically. Click-through and Glass are left out on purpose:
-/// a window that opens unreachable, or with its colours removed, is never what someone wants.</summary>
+// Click-through and Glass are left out on purpose: a window that opens unreachable, or with its colours removed, is
+// never what someone wants.
 public sealed class ProgramSetup
 {
     public string Program { get; set; } = "";
@@ -68,45 +66,28 @@ public sealed class ProgramSetup
     public PipPreset? View { get; set; }
     public bool ViewKeepsUpdating { get; set; }
 
-    // Rules (roadmap P1-5, 14 Nov 2026). All optional: a setup saved before has none of them and works as it did.
-    // Older versions ignore these fields when they read the file.
+    // All optional: a setup saved before has none of them, and older versions ignore these fields.
 
-    /// <summary>Only windows whose title contains this text (any case; * stands for any run of characters).</summary>
     public string? TitleContains { get; set; }
-    /// <summary>Only windows of exactly this window class.</summary>
     public string? WindowClass { get; set; }
-    /// <summary>One of the nine places on the window's display, or the display below.</summary>
     public Windows.WindowAnchor? Place { get; set; }
-    /// <summary>The display to put the window on, by its device name. A display that isn't there is skipped.</summary>
     public string? Display { get; set; }
     public bool Borderless { get; set; }
     public bool Anchor { get; set; }
-    /// <summary>The toolbar never offers itself on these windows.</summary>
     public bool NoToolbar { get; set; }
-    /// <summary>
-    /// The toolbar offers itself where a title bar usually is, without asking the window: for apps that draw their own
-    /// top row and answer "content" everywhere (10-4). The person chooses it, since such an app may have its own
-    /// controls there.
-    /// </summary>
     public bool ToolbarByPosition { get; set; }
-    /// <summary>Applied each time the window comes forward again, not only the first time.</summary>
     public bool EveryTime { get; set; }
-    /// <summary>Kept, but not applied.</summary>
     public bool Off { get; set; }
 
-    /// <summary>False when the setup leaves a window exactly as it opens, so it isn't worth keeping.</summary>
     public bool ChangesAnything => Pinned || Alpha < 255 || Dark || View is not null || Place is not null ||
                                    !string.IsNullOrEmpty(Display) || Borderless || Anchor || NoToolbar || ToolbarByPosition;
 
-    /// <summary>True when the rule looks at more than the program: some of its windows only.</summary>
     internal bool Narrowed => !string.IsNullOrEmpty(TitleContains) || !string.IsNullOrEmpty(WindowClass);
 
-    /// <summary>True when a window with this title and class is one this rule is for (the program is matched apart).</summary>
     internal bool MatchesWindow(string title, string windowClass) =>
         (string.IsNullOrEmpty(WindowClass) || windowClass == WindowClass) &&
         (string.IsNullOrEmpty(TitleContains) || TitleMatches(title, TitleContains));
 
-    /// <summary>"Contains", ignoring case, where * in the pattern stands for any run of characters.</summary>
     internal static bool TitleMatches(string title, string pattern)
     {
         string[] parts = pattern.Split('*', StringSplitOptions.RemoveEmptyEntries);
@@ -120,10 +101,6 @@ public sealed class ProgramSetup
         return true;
     }
 
-    /// <summary>
-    /// The rule for a window: rules for its file path before rules for its program name, and among those, the ones
-    /// that look at the title or class before the ones that don't. Rules that are off never count.
-    /// </summary>
     internal static ProgramSetup? Choose(IEnumerable<ProgramSetup> rules, string program, string path, string title, string windowClass)
     {
         ProgramSetup[] on = rules.Where(rule => !rule.Off && rule.MatchesWindow(title, windowClass)).ToArray();
@@ -135,7 +112,6 @@ public sealed class ProgramSetup
                ?? byName.OrderByDescending(rule => rule.Narrowed).FirstOrDefault();
     }
 
-    /// <summary>What tells one program's setup from another's.</summary>
     internal string Key => string.IsNullOrEmpty(ExecutablePath) ? Program : ExecutablePath;
 
     public override string ToString()
@@ -170,15 +146,10 @@ public sealed class ProgramSetup
     }
 }
 
-/// <summary>Where the Settings window was: its size when not maximized, and whether it was maximized.</summary>
 public sealed record SettingsPlacement(int X, int Y, int Width, int Height, bool Maximized)
 {
     public Rectangle Bounds => new(X, Y, Width, Height);
 
-    /// <summary>
-    /// The place to open at, or null when it would be mostly off every screen now, as after a display was unplugged.
-    /// Its title bar must be on a screen, so it can always be moved.
-    /// </summary>
     internal SettingsPlacement? OnScreen(IEnumerable<Rectangle> workingAreas)
     {
         if (Width < 200 || Height < 150) return null;
@@ -187,13 +158,10 @@ public sealed record SettingsPlacement(int X, int Y, int Width, int Height, bool
     }
 }
 
-/// <summary>What is wrong with one command's hotkey, in words for the person.</summary>
 public sealed record HotkeyProblem(AppCommand Command, string Message);
 
-/// <summary>Every command's name and place, so the tray, toolbar and Settings all agree.</summary>
 public static class CommandCatalog
 {
-    /// <summary>The order commands appear in everywhere.</summary>
     public static readonly AppCommand[] Ordered =
     [
         AppCommand.TogglePin, AppCommand.OpacityDown, AppCommand.ToggleDefaultOpacity, AppCommand.OpacityUp,
@@ -202,14 +170,9 @@ public static class CommandCatalog
         AppCommand.RestoreWindow, AppCommand.RestoreAll,
     ];
 
-    /// <summary>
-    /// The toolbar's buttons, in order: the commands above but Restore all windows, then the window menu, which lists
-    /// what the bar doesn't show itself.
-    /// </summary>
     public static readonly AppCommand[] ToolbarButtons =
         [.. Ordered.Where(command => command != AppCommand.RestoreAll), AppCommand.ShowWindowMenu];
 
-    /// <summary>Commands with a place in the tray and Hotkeys but no toolbar button.</summary>
     public static readonly AppCommand[] Extra =
     [
         AppCommand.PickPipSource, AppCommand.AlignTopLeft, AppCommand.AlignTop, AppCommand.AlignTopRight,
@@ -220,17 +183,14 @@ public static class CommandCatalog
         AppCommand.MinimizeToAnchor,
     ];
 
-    /// <summary>Commands for every window at once, in the tray and Hotkeys only. None has a key until one is chosen.</summary>
     public static readonly AppCommand[] Everywhere =
     [
         AppCommand.ClickThroughOffEverywhere, AppCommand.UnpinEverywhere, AppCommand.HideAnchors, AppCommand.HideToolbar,
     ];
 
-    /// <summary>True for a command that works on no window in particular.</summary>
     public static bool ForAllWindows(AppCommand command) =>
         command is AppCommand.RestoreAll or AppCommand.PickPipSource || Everywhere.Contains(command);
 
-    /// <summary>What the Arrange menu offers, in order, with null where a divider goes.</summary>
     public static readonly AppCommand?[] ArrangeMenu =
     [
         AppCommand.AlignTopLeft, AppCommand.AlignTop, AppCommand.AlignTopRight, AppCommand.AlignLeft,
@@ -239,16 +199,13 @@ public static class CommandCatalog
         AppCommand.RestorePlacement, null, AppCommand.ToggleRollUp, AppCommand.SendToBottom, null, AppCommand.ShowWindowInfo,
     ];
 
-    /// <summary>The corner or edge an alignment command goes to, or null for any other command.</summary>
     public static Windows.WindowAnchor? AnchorOf(AppCommand command) =>
         command is >= AppCommand.AlignTopLeft and <= AppCommand.AlignBottomRight
             ? (Windows.WindowAnchor)(command - AppCommand.AlignTopLeft)
             : null;
 
-    /// <summary>Everything that can have a hotkey.</summary>
     public static IEnumerable<AppCommand> All => Ordered.Concat(Extra).Concat(Everywhere);
 
-    /// <summary>The last command of each group, where a divider follows.</summary>
     public static bool EndsGroup(AppCommand command) =>
         command is AppCommand.ToggleClickThrough or AppCommand.ToggleCrop or AppCommand.SaveWindowSetup or AppCommand.RestoreWindow;
 
@@ -302,13 +259,8 @@ public static class CommandCatalog
     };
 }
 
-/// <summary>
-/// Whether WinScreen looks for new versions (D12). Off means no network at all; Tell me only says one is out; Install
-/// for me downloads it and installs it when WinScreen closes (a portable copy, which can't, tells instead).
-/// </summary>
 public enum UpdateMode { Off = 0, TellMe = 1, Install = 2 }
 
-/// <summary>Everything a person can choose, stored as JSON in their app data folder.</summary>
 public sealed class AppSettings
 {
     public const int LowestOpacityPercent = 20;
@@ -316,20 +268,16 @@ public sealed class AppSettings
 
     private static readonly JsonSerializerOptions Format = new() { WriteIndented = true };
 
-    /// <summary>The format this version writes. Raise it only together with a new step in <see cref="Migrations"/>.</summary>
+    // Raise it only together with a new step in Migrations.
     public const int CurrentSchemaVersion = 2;
 
-    /// <summary>
-    /// Steps that bring a saved file up to date before it is read, in order: step <c>n</c> turns format <c>n</c>
-    /// into <c>n + 1</c>. Each works on the file's JSON alone. Files from before the format was numbered are 0.
-    /// </summary>
+    // Step n turns format n into n + 1, on the file's JSON alone. Files from before the format was numbered are 0.
     internal static readonly Action<JsonObject>[] Migrations =
     [
         OfferWindowMenuButton, // 0 → 1
         ChooseUpdates, // 1 → 2
     ];
 
-    /// <summary>The one switch becomes the three choices: on is Install for me, off is Off (D12).</summary>
     private static void ChooseUpdates(JsonObject root)
     {
         if (root.ContainsKey(nameof(Updates))) return;
@@ -337,7 +285,7 @@ public sealed class AppSettings
         root[nameof(Updates)] = (int)(automatic ? UpdateMode.Install : UpdateMode.Off);
     }
 
-    /// <summary>Settings from before the toolbar's Window menu button get it once; after that, taking it off stays off.</summary>
+    // Once: after that, taking it off stays off.
     private static void OfferWindowMenuButton(JsonObject root)
     {
         if (root[nameof(Toolbar)] is not JsonObject toolbar || toolbar.ContainsKey(nameof(ToolbarPreferences.WindowMenuOffered)))
@@ -347,16 +295,12 @@ public sealed class AppSettings
         toolbar[nameof(ToolbarPreferences.WindowMenuOffered)] = true;
     }
 
-    /// <summary>The format a file says it is in; 0 when it doesn't say, as before formats were numbered.</summary>
     private static int SchemaVersionOf(JsonObject root) =>
         root[nameof(SchemaVersion)] is JsonValue value && value.TryGetValue(out JsonElement element) &&
         element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out int version) && version > 0 ? version : 0;
 
-    /// <summary>
-    /// Takes out hotkeys for commands this version doesn't know, such as one a newer version added, and says how
-    /// many. Read as they are, one such name would make the whole file unreadable and every setting go back to its
-    /// default. Hotkeys are the only place a saved choice is a key; unknown values elsewhere are already tolerated.
-    /// </summary>
+    // Read as they are, one unknown command name would make the whole file unreadable and every setting go back to its
+    // default. Hotkeys are the only place a saved choice is a key.
     private static int DropUnknownKeys(JsonObject root)
     {
         if (root[nameof(Hotkeys)] is not JsonObject hotkeys) return 0;
@@ -367,10 +311,8 @@ public sealed class AppSettings
         return unknown.Length;
     }
 
-    /// <summary>
-    /// The file as a JSON object to change. Built from a <see cref="JsonDocument"/> so a name given twice keeps the
-    /// last value, as reading straight into the settings always did; a parsed <see cref="JsonObject"/> throws instead.
-    /// </summary>
+    // Through a JsonDocument so a name given twice keeps the last value, as reading straight into the settings does; a
+    // parsed JsonObject throws instead.
     private static JsonObject ReadObject(string json)
     {
         using JsonDocument document = JsonDocument.Parse(json);
@@ -416,32 +358,24 @@ public sealed class AppSettings
         [AppCommand.RestoreWindow] = "Ctrl+Alt+U",
     };
 
-    /// <summary>Programs WinScreen never touches, for example games that dislike overlays.</summary>
     public List<string> ExcludedPrograms { get; set; } = ["csgo", "cs2", "valorant", "eldenring"];
 
-    /// <summary>When any are listed, WinScreen works on these programs and no others.</summary>
     public List<string> IncludedPrograms { get; set; } = [];
 
-    /// <summary>What each program's windows get when they first come forward.</summary>
     public List<ProgramSetup> SavedSetups { get; set; } = [];
 
     public bool ShowToolbar { get; set; } = true;
     public bool ShowNotifications { get; set; } = true;
-    /// <summary>Menus get Windows 11's blurred background while its Transparency effects is on; off keeps them plain.</summary>
     public bool MenuTransparency { get; set; } = true;
     public UpdateMode Updates { get; set; }
 
-    /// <summary>The version that last started, so What's new is offered once after an update; null before 1.1.0.</summary>
     public string? LastSeenVersion { get; set; }
 
-    /// <summary>
-    /// Written for copies from before the three choices, which know only this switch; this version reads
-    /// <see cref="Updates"/> and takes this only from an older file (<see cref="ChooseUpdates"/>).
-    /// </summary>
+    // Written for copies from before the three update choices, which know only this switch; read only from an older
+    // file (ChooseUpdates).
     public bool AutomaticUpdates => Updates == UpdateMode.Install;
     public string Language { get; set; } = "system";
 
-    /// <summary>How WinScreen's own windows look: "system" follows Windows, or "light" or "dark".</summary>
     public string Theme { get; set; } = "system";
     public bool PauseInFullScreen { get; set; } = true;
     public bool AllowPipInFullScreen { get; set; }
@@ -449,23 +383,19 @@ public sealed class AppSettings
     public bool OpaqueOnHover { get; set; }
     public bool HighlightPinned { get; set; }
     public bool PipAutoMove { get; set; }
-    /// <summary>New views start with middle-click scrolling on while they are used directly; each view's menu still changes it.</summary>
     public bool PipMiddleClickScroll { get; set; }
     public bool ExperimentalFeatures { get; set; }
 
-    /// <summary>Hold a key and drag anywhere in a window to move or resize it. Off until someone asks for it.</summary>
     public bool ModifierDrag { get; set; }
 
     public ModifierKey ModifierKey { get; set; }
 
-    /// <summary>A window moved that way snaps to a display's edges, as with a title-bar drag.</summary>
     public bool SnapWhileDragging { get; set; } = true;
 
     public bool WindowMenu { get; set; }
     public WindowMenuGesture WindowMenuGesture { get; set; }
     public List<string> WindowMenuExclusions { get; set; } = [];
 
-    /// <summary>Programs that use the modifier and a drag themselves, such as drawing and 3D apps.</summary>
     public List<string> ModifierExclusions { get; set; } = ["blender", "maya", "3dsmax", "Photoshop", "krita", "gimp"];
 
     [JsonConverter(typeof(PipPreferencesConverter))]
@@ -476,55 +406,39 @@ public sealed class AppSettings
     public List<PipSourceBookmark> PipBookmarks { get; set; } = [];
     public bool? StartWithWindows { get; set; }
 
-    /// <summary>WinScreen runs as administrator, so it can also change administrator apps' windows.</summary>
     public bool RunAsAdministrator { get; set; }
 
-    /// <summary>
-    /// With <see cref="RunAsAdministrator"/>: WinScreen runs as the person, with a small elevated helper for
-    /// administrator apps' windows (10-2). Off keeps the one elevated copy of before. Only in the file, as a way back
-    /// while the helper is new.
-    /// </summary>
+    // JSON only, no Settings control: false keeps the one elevated copy instead of the helper.
     public bool AdministratorHelper { get; set; } = true;
 
-    /// <summary>Where Settings was last, and whether it filled the screen, to open it the same way next time.</summary>
     public SettingsPlacement? SettingsWindowPlacement { get; set; }
 
-    /// <summary>True once the first-run hint has been shown, so it doesn't return at every sign-in.</summary>
     public bool WelcomeShown { get; set; }
 
-    /// <summary>How solid a window is after the default see-through command, and after click-through.</summary>
     public int DefaultOpacityPercent { get; set; } = 80;
     public int OpacityStepPercent { get; set; } = 10;
     public bool OpacityWheel { get; set; }
 
-    /// <summary>Asks Windows to leave off the yellow border it draws around a window being captured.</summary>
     public bool HideCaptureBorder { get; set; } = true;
     public bool DetectAlreadyDark { get; set; } = true;
     public PinBorderPreferences PinBorder { get; set; } = new();
     public PipViewPreferences PipViews { get; set; } = new();
     public PipHoverPreferences PipHover { get; set; } = new();
 
-    /// <summary>Programs whose views show the original on a click, for apps that don't work through a view.</summary>
     public List<string> PipOriginalPrograms { get; set; } = [];
     public ToolbarPreferences Toolbar { get; set; } = new();
     public AnchorPreferences Anchors { get; set; } = new();
     public EffectPreferences Effects { get; set; } = new();
 
-    /// <summary>The format the file is written in (<see cref="CurrentSchemaVersion"/>); older files are brought up to date as they load.</summary>
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
     [JsonIgnore]
     internal bool Imported { get; set; }
 
-    /// <summary>The default level as Windows wants it, whatever the settings file says.</summary>
     [JsonIgnore]
     public byte DefaultAlpha =>
         (byte)Math.Round(Math.Clamp(DefaultOpacityPercent, LowestOpacityPercent, HighestOpacityPercent) * 255 / 100.0);
 
-    /// <summary>
-    /// True when WinScreen may work on this program: it isn't left alone, and it's on the list of programs
-    /// to work on when there is one.
-    /// </summary>
     public bool Allows(string program) =>
         !ExcludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase) &&
         (IncludedPrograms.Count == 0 || IncludedPrograms.Contains(program, StringComparer.OrdinalIgnoreCase));
@@ -547,7 +461,6 @@ public sealed class AppSettings
             property.SetValue(this, property.GetValue(copy));
     }
 
-    /// <summary>Reads the settings. A missing or damaged file gives the defaults.</summary>
     public static AppSettings Load(string path)
     {
         var defaults = new AppSettings();
@@ -664,12 +577,8 @@ public sealed class AppSettings
         File.Move(temporary, path, overwrite: true);
     }
 
-    /// <summary>
-    /// The hotkeys worth writing: a key, or an empty entry that clears a default. A command without a key and
-    /// without a default is left out, since a missing entry already reads as "none". So a command added in this
-    /// version reaches the file only once it is given a key, and an older version reading the file (which treats a
-    /// command it doesn't know as damage, up to 1.0.0) is spared it until then (roadmap step 6.4).
-    /// </summary>
+    // A command without a key or a default is left out (a missing entry reads as none), so an older version, which
+    // treats an unknown command as damage up to 1.0.0, is spared it until it is given a key.
     internal static Dictionary<AppCommand, string> WrittenHotkeys(Dictionary<AppCommand, string> hotkeys)
     {
         Dictionary<AppCommand, string> defaults = new AppSettings().Hotkeys;
@@ -677,12 +586,8 @@ public sealed class AppSettings
             .ToDictionary(pair => pair.Key, pair => pair.Value);
     }
 
-    /// <summary>
-    /// A file a newer WinScreen wrote is copied aside, once, before this version writes over it in its own format,
-    /// so it can be put back by hand after going back to the newer version. Loading alone never changes it. Newer
-    /// means a higher format, or the same format with hotkeys for commands this version doesn't know, which it
-    /// would leave out when saving.
-    /// </summary>
+    // Copied aside once before this version writes over it, so it can be put back by hand. Newer means a higher format,
+    // or hotkeys for commands this version doesn't know and would leave out.
     private static void KeepNewerFile(string path)
     {
         if (!File.Exists(path)) return;
@@ -706,13 +611,11 @@ public sealed class AppSettings
     }
 }
 
-/// <summary>Reads and writes hotkeys written the way people say them, such as "Ctrl+Alt+T".</summary>
 public static class HotkeyText
 {
     private const uint ModShift = 0x4;
     private const uint ModWin = 0x8;
 
-    /// <summary>The names people use for keys whose WinForms names are internal ones like Oem2 or D1.</summary>
     private static readonly Dictionary<Keys, string> Names = new()
     {
         [Keys.D0] = "0", [Keys.D1] = "1", [Keys.D2] = "2", [Keys.D3] = "3", [Keys.D4] = "4",
@@ -727,13 +630,12 @@ public static class HotkeyText
     private static readonly Dictionary<string, Keys> KeysByName =
         Names.ToDictionary(pair => pair.Value, pair => pair.Key);
 
-    /// <summary>True while either Windows key is held; WinForms doesn't report it as a modifier.</summary>
+    // WinForms doesn't report the Windows key as a modifier.
     internal static bool WinKeyDown =>
         (User32.GetKeyState(0x5B) & 0x8000) != 0 || (User32.GetKeyState(0x5C) & 0x8000) != 0;
 
     public static bool IsFunctionKey(Keys key) => key is >= Keys.F1 and <= Keys.F24;
 
-    /// <summary>The character this combination types on the current keyboard, or null when it types nothing.</summary>
     internal static string? TypedText(uint modifiers, Keys key)
     {
         const uint altGr = User32.MOD_CONTROL | User32.MOD_ALT;

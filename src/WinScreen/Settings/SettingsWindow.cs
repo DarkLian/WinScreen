@@ -5,14 +5,11 @@ using WinScreen.Updates;
 
 namespace WinScreen.Settings;
 
-/// <summary>
-/// The settings window. A change is put into effect and saved as soon as it is made, once it has settled: not while a
-/// slider is held or a list is open, and never half-typed.
-/// </summary>
+// A change is applied and saved once it has settled: not while a slider is held or a list is open, and never
+// half-typed.
 public sealed class SettingsWindow : Form
 {
     private const int ContentWidth = SwitchBox.RowWidth + 20;
-    /// <summary>The width of a box a number or colour is typed into, at 100% scaling.</summary>
     private const int NumberWidth = 120;
 
     private readonly AppSettings _settings;
@@ -46,7 +43,6 @@ public sealed class SettingsWindow : Form
     private readonly ComboBox _toolbarTrigger = new ThemedCombo { Width = 200 };
     private readonly NumericUpDown _toolbarDelay = new() { Minimum = 100, Maximum = 2000, Increment = 100, Width = 90 };
     private readonly ThemedCheckList _toolbarButtons = new() { CheckOnClick = true, Width = SwitchBox.RowWidth - 8 };
-    // The pages. Its own row of tabs is hidden: the list on the left chooses the page.
     private readonly TabControl _tabs = new PagesControl { Size = new Size(540, 520), TabStop = false, Multiline = true };
     private readonly NavList _nav = new() { Dock = DockStyle.Fill, AccessibleName = T("settings.pages") };
     private readonly HintTextBox _search = new();
@@ -164,14 +160,10 @@ private readonly ErrorProvider _errors = new();
     private string _savedState = "";
     private bool _refreshQueued;
 
-    /// <summary>How long a change rests before it is put into effect, so one being made isn't applied many times over.</summary>
     internal const int SettleMilliseconds = 300;
     private readonly System.Windows.Forms.Timer _settle = new() { Interval = SettleMilliseconds };
-    /// <summary>What's on screen differs from what's in effect.</summary>
     private bool _pending;
-    /// <summary>Changes are being put into effect now; anything changed meanwhile waits for the next turn.</summary>
     private bool _applying;
-    /// <summary>The window is being filled with values, which are what's in effect already.</summary>
     private bool _loading;
 
     private readonly Label _status = new SoftLabel()
@@ -276,7 +268,6 @@ private readonly ErrorProvider _errors = new();
         _nav.BackColor = SettingsStyle.Side;
         side.Controls.Add(_nav);
         side.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 10, BackColor = SettingsStyle.Side });
-        // Its edges line up with the highlighted page below, which sits a little in from the side's edges.
         var searchRoom = new Panel { Dock = DockStyle.Top, Height = BoxHeight.Standard, Padding = new Padding(2, 0, 2, 0), BackColor = SettingsStyle.Side };
         searchRoom.Controls.Add(new InputFrame(_search) { Glyph = MenuParts.Search, Dock = DockStyle.Fill });
         side.Controls.Add(searchRoom);
@@ -300,7 +291,6 @@ private readonly ErrorProvider _errors = new();
         foreach ((AppCommand command, TextBox box) in _hotkeys)
             box.TextChanged += (_, _) =>
             {
-                // A problem with a shortcut is said until that shortcut is changed again.
                 if (!_loading && _shortcutProblems.Remove(command)) _errors.SetError(box, "");
                 QueueApplyRefresh();
             };
@@ -316,10 +306,8 @@ private readonly ErrorProvider _errors = new();
         _ => null,
     } : null;
 
-    /// <summary>The title, and any message under the page, line up with the page's column wherever it is.</summary>
     private void FollowColumn()
     {
-        // The pages sit a little in from the edges of the space they are shown in.
         Rectangle page = _tabs.DisplayRectangle; // A page just chosen may not have its size yet.
         int left = _tabs.Margin.Left + page.Left, gap = _tabs.Margin.Right + _tabs.Width - page.Right;
         int column = ColumnOf(_tabs.SelectedTab)?.Shift ?? 0;
@@ -332,7 +320,6 @@ private readonly ErrorProvider _errors = new();
         if (IsHandleCreated) BeginInvoke(() => { if (!IsDisposed) _pageTitle.Parent?.PerformLayout(); });
     }
 
-    /// <summary>Each setting's icon, before its name in its card, as Windows 11 shows its settings.</summary>
     private void GiveIcons()
     {
         var icons = new Dictionary<Control, char>
@@ -363,7 +350,6 @@ private readonly ErrorProvider _errors = new();
         static IEnumerable<Control> Every(Control parent) => parent.Controls.Cast<Control>().SelectMany(child => new[] { child }.Concat(Every(child)));
     }
 
-    /// <summary>The page showing, for opening the window again where it was.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal int PageIndex
     {
@@ -371,20 +357,15 @@ private readonly ErrorProvider _errors = new();
         set => _tabs.SelectedIndex = Math.Clamp(value, 0, _tabs.TabCount - 1);
     }
 
-    /// <summary>True when what's on screen differs from what's in effect: a change still settling, or one that couldn't be applied.</summary>
     internal bool HasChanges => _pending;
 
-    /// <summary>
-    /// Shown without taking the keyboard, for when it is made again while something else is being used. It still stays
-    /// on top as Settings does, put there without being activated: WinForms' own TopMost activates the window.
-    /// </summary>
+    // On top as Settings is, put there without activating it: WinForms' own TopMost activates the window.
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal bool Quiet { get => _quiet; init { _quiet = value; StayOnTopQuietly(); } }
     private readonly bool _quiet;
 
     protected override bool ShowWithoutActivation => Quiet;
 
-    /// <summary>Whether it was made in the dark colours, so a later switch knows if it needs making again.</summary>
     internal bool MadeDark { get; } = MenuStyle.Dark;
 
     private void StayOnTopQuietly()
@@ -394,13 +375,8 @@ private readonly ErrorProvider _errors = new();
                 Native.User32.SWP_NOMOVE | Native.User32.SWP_NOSIZE | Native.User32.SWP_NOACTIVATE);
     }
 
-    /// <summary>What was changed here but not saved, with what saving needs to know about it.</summary>
     internal sealed record UnsavedEdits(AppSettings Values, bool Imported, ProgramSetup[] RemovedSetups, string[] AddedApps, string BorderColor);
 
-    /// <summary>
-    /// The changes not in effect yet, or null when there are none; read before the window closes. Whatever can be put
-    /// into effect is, first; what is left is what couldn't be, such as a colour still being typed.
-    /// </summary>
     internal UnsavedEdits? Unsaved()
     {
         RefreshApply();
@@ -411,10 +387,8 @@ private readonly ErrorProvider _errors = new();
         return new UnsavedEdits(values, _pendingImport is not null, [.. _removedSetups], [.. _addedApps], _borderColor.Text);
     }
 
-    /// <summary>
-    /// Shows changes another Settings window had not saved, still waiting to be saved: Settings is made again when the
-    /// look changes between light and dark, and closing the old window would otherwise drop them.
-    /// </summary>
+    // Settings is made again when the look changes between light and dark; closing the old window would otherwise drop
+    // these.
     internal void TakeUnsaved(UnsavedEdits? edits)
     {
         if (edits is null) return;
@@ -429,7 +403,6 @@ private readonly ErrorProvider _errors = new();
         RefreshApply();
     }
 
-    /// <summary>Puts what's on screen into effect now, without waiting for it to settle. False if some of it couldn't be.</summary>
     internal bool ApplyChanges()
     {
         if (_applying) return false;
@@ -451,25 +424,16 @@ private readonly ErrorProvider _errors = new();
         _settle.Stop();
     }
 
-    /// <summary>
-    /// Rechecks whether anything differs from what's in effect, and if so puts it into effect once it settles.
-    /// Changing something and changing it back leaves nothing to do.
-    /// </summary>
     internal void RefreshApply()
     {
         _refreshQueued = false;
         if (IsDisposed) return;
         _pending = _pendingImport is not null || CurrentState() != _savedState;
         if (!_pending || _loading) { if (!_pending) _settle.Stop(); return; }
-        _settle.Stop(); // Each change starts the wait again.
+        _settle.Stop();
         _settle.Start();
     }
 
-    /// <summary>
-    /// Puts the changes into effect once nothing is being done that would change them again at once: a button held
-    /// (a slider being dragged), or a list open (its choice being looked through). Something half-typed, such as a
-    /// colour, waits until it is whole.
-    /// </summary>
     private void ApplyWhenSettled()
     {
         _settle.Stop();
@@ -485,10 +449,8 @@ private readonly ErrorProvider _errors = new();
             child is ComboBox { IsHandleCreated: true, DroppedDown: true } || ListOpen(child));
     }
 
-    /// <summary>False while something typed isn't whole yet: a colour must be all six digits before it is used.</summary>
     private bool InputsComplete() => HexColor(_borderColor.Text) is not null;
 
-    /// <summary>What's on screen goes into effect as the window closes, if it can.</summary>
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         base.OnFormClosing(e);
@@ -497,10 +459,6 @@ private readonly ErrorProvider _errors = new();
         if (_pending && InputsComplete() && !_applying) ApplyChanges();
     }
 
-    /// <summary>
-    /// Shows the saved setups again after one was saved or forgotten from a window's menu while this is open. One
-    /// removed here and not yet in effect stays removed.
-    /// </summary>
     internal void SetupsChanged()
     {
         bool wasPending = _pending;
@@ -511,7 +469,6 @@ private readonly ErrorProvider _errors = new();
         else RefreshApply();
     }
 
-    /// <summary>Esc closes the window, as the Cancel button it used to have did.</summary>
     protected override bool ProcessDialogKey(Keys keyData)
     {
         if (keyData != Keys.Escape) return base.ProcessDialogKey(keyData);
@@ -519,7 +476,6 @@ private readonly ErrorProvider _errors = new();
         return true;
     }
 
-    /// <summary>Every piece of text on a page, for finding a setting by a word in it.</summary>
     private static IEnumerable<Control> WithText(Control parent) => parent.Controls.Cast<Control>()
         .SelectMany(child => new[] { child }.Concat(WithText(child)))
         .Where(control => control is Label or CheckBox or Button or SettingsCard or SettingRowPanel && control.Text.Length > 0);
@@ -528,7 +484,6 @@ private readonly ErrorProvider _errors = new();
         (control.Text.Replace("&", "") + (control is IDescribed described ? " " + described.Description : ""))
         .Contains(_search.Text.Trim(), StringComparison.CurrentCultureIgnoreCase);
 
-    /// <summary>Leaves only the pages that mention what was typed, and goes to the first of them.</summary>
     private void SearchSettings()
     {
         if (string.IsNullOrWhiteSpace(_search.Text)) { _nav.Filter(null); return; }
@@ -550,7 +505,6 @@ private readonly ErrorProvider _errors = new();
         ShowSearchMatch();
     }
 
-    /// <summary>Scrolls the page to the first thing on it that matches the search.</summary>
     private void ShowSearchMatch()
     {
         if (string.IsNullOrWhiteSpace(_search.Text) || _tabs.SelectedTab is not { } page) return;
@@ -588,10 +542,7 @@ private readonly ErrorProvider _errors = new();
         }
     }
 
-    /// <summary>
-    /// Everything the window would save, written out so two moments can be compared, with what is typed in the colour
-    /// box as it is: a colour still being typed is a change not yet in effect.
-    /// </summary>
+    // What is typed in the colour box is taken as it is: a colour still being typed is a change not yet in effect.
     private string CurrentState()
     {
         AppSettings draft = Draft(new AppSettings());
@@ -610,7 +561,6 @@ private readonly ErrorProvider _errors = new();
         FollowColumn();
     }
 
-    /// <summary>The title bar takes the window's own colours instead of the accent colour, where Windows allows it.</summary>
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
@@ -641,18 +591,13 @@ private readonly ErrorProvider _errors = new();
 
     private const int WM_MOUSEWHEEL = 0x020A, WM_MOUSEHWHEEL = 0x020E;
 
-    /// <summary>
-    /// The wheel only ever scrolls. Over a setting of any kind (a switch, a slider, a list to choose from, a box) it
-    /// scrolls the page instead of changing the setting, so reading down a page is never interrupted; settings change
-    /// by clicking or dragging. A list with more in it than it shows scrolls itself until it reaches its end, and an
-    /// open drop-down list keeps the wheel. Nothing scrolls sideways.
-    /// </summary>
+    // The wheel only ever scrolls: over a setting it scrolls the page instead of changing it. A list with more than it
+    // shows scrolls itself until its end, and an open drop-down keeps the wheel.
     private sealed class WheelRouter(SettingsWindow owner) : IMessageFilter
     {
         public bool PreFilterMessage(ref Message m) => m.Msg is WM_MOUSEWHEEL or WM_MOUSEHWHEEL && owner.RouteWheel(m);
     }
 
-    /// <summary>True when the wheel was dealt with here; false leaves it to Windows as usual.</summary>
     internal bool RouteWheel(Message m)
     {
         if (IsDisposed || !Visible) return false;
@@ -683,13 +628,10 @@ private readonly ErrorProvider _errors = new();
 
     private bool _belowOthers;
 
-    /// <summary>True while it fills the screen, when it stops keeping above other windows and views.</summary>
     internal bool FillsScreen => WindowState == FormWindowState.Maximized;
 
-    /// <summary>
-    /// Maximized, Settings would hide every view and pinned window, so it stops staying on top until it is made
-    /// smaller again. Done without activating it, as WinForms' own TopMost would.
-    /// </summary>
+    // Maximized, Settings would hide every view and pinned window, so it stops staying on top until made smaller. Done
+    // without activating it, as WinForms' own TopMost would.
     private void FollowWindowState()
     {
         if (!IsHandleCreated || !(TopMost || Quiet)) return;
@@ -727,11 +669,8 @@ private readonly ErrorProvider _errors = new();
         base.Dispose(disposing);
     }
 
-    /// <summary>
-    /// One of WinScreen's own shortcuts pressed while a shortcut box has the keys: Windows hands it to WinScreen as the
-    /// command, so the box never sees it. It goes in the box instead, as if typed there, and nothing runs. True when a
-    /// box took it.
-    /// </summary>
+    // Windows hands one of WinScreen's own shortcuts to WinScreen as the command, so the box never sees it: it goes in
+    // the box instead, and nothing runs.
     internal bool TakeShortcut(string combination)
     {
         if (string.IsNullOrEmpty(combination) || !ContainsFocus) return false;
@@ -741,7 +680,6 @@ private readonly ErrorProvider _errors = new();
         return true;
     }
 
-    /// <summary>Called when a key combination is pressed in a hotkey box.</summary>
     internal void CaptureHotkey(AppCommand command, Keys keyData, bool win = false)
     {
         Keys key = keyData & Keys.KeyCode;
@@ -762,11 +700,6 @@ private readonly ErrorProvider _errors = new();
         _status.Text = usable ? "" : T("hotkeys.modifierRequired");
     }
 
-    /// <summary>
-    /// Puts what is on screen into effect and saves it. A shortcut that can't be had goes back to the one in effect,
-    /// with the reason shown, and everything else still goes into effect. False when nothing could be saved, such as
-    /// when the settings file can't be written; what's on screen stays, to be tried again with the next change.
-    /// </summary>
     internal bool SaveChanges()
     {
         AppSettings draft = Draft((_pendingImport ?? _settings).Clone());
@@ -826,10 +759,6 @@ private readonly ErrorProvider _errors = new();
         }
     }
 
-    /// <summary>
-    /// What's on screen, on top of <paramref name="draft"/>. A program name still in its box, not yet added, isn't
-    /// part of it: it is added with Add or Enter.
-    /// </summary>
     private AppSettings Draft(AppSettings draft)
     {
         static List<string> Programs(ListBox list, ComboBox typed) => list.Items.Cast<string>().ToList();
@@ -913,10 +842,7 @@ private readonly ErrorProvider _errors = new();
         return draft;
     }
 
-    /// <summary>
-    /// The plain on/off settings: each switch with the setting it reads and writes (roadmap P2-9). Filling Settings
-    /// in and reading it back both go through this list, so a new one is one line here.
-    /// </summary>
+    // Filling Settings in and reading it back both go through this list, so a new switch is one line here.
     private (CheckBox Box, Func<AppSettings, bool> Read, Action<AppSettings, bool> Write)[] Switches =>
     [
         (_showToolbar, settings => settings.ShowToolbar, (settings, on) => settings.ShowToolbar = on),
@@ -945,10 +871,6 @@ private readonly ErrorProvider _errors = new();
 
     internal void SetDefaultOpacity(int percent) => _defaultOpacity.Value = percent;
 
-    /// <summary>
-    /// Changes a saved setup's rule (roadmap P1-5): which windows it is for and what they get. A copy is changed, so
-    /// Cancel leaves everything as it was; Apply puts the copy in the list's place and saves like any other change.
-    /// </summary>
     internal void ChangeSetup(ProgramSetup setup)
     {
         int index = _setups.Items.IndexOf(setup);
@@ -959,10 +881,8 @@ private readonly ErrorProvider _errors = new();
         ReplaceSetup(setup, dialog.Result());
     }
 
-    /// <summary>
-    /// A setup as changed, in the list's place of the one shown. What is saved is built from the setups in effect (so
-    /// one saved from a window's menu meanwhile is kept), so the change is kept against the setup it was made to.
-    /// </summary>
+    // What is saved is built from the setups in effect (so one saved from a window's menu meanwhile is kept), so the
+    // change is kept against the setup it was made to.
     internal void ReplaceSetup(ProgramSetup shown, ProgramSetup changed)
     {
         int index = _setups.Items.IndexOf(shown);
@@ -974,10 +894,8 @@ private readonly ErrorProvider _errors = new();
         QueueApplyRefresh();
     }
 
-    /// <summary>
-    /// A change made here and not yet saved, kept against the setup as it was written when the change was made: what is
-    /// in effect is a fresh copy after every save, so the setup is found again by what it says, not by which object it is.
-    /// </summary>
+    // What is in effect is a fresh copy after every save, so the setup is found again by what it says, not by which
+    // object it is.
     private sealed class SetupChange(string before, ProgramSetup after)
     {
         public string Before { get; } = before;
@@ -990,7 +908,6 @@ private readonly ErrorProvider _errors = new();
 
     private static string Written(ProgramSetup setup) => System.Text.Json.JsonSerializer.Serialize(setup);
 
-    /// <summary>Forgets a program's saved setup, the way the Remove button does.</summary>
     internal void RemoveSetup(ProgramSetup setup)
     {
         _setups.Items.Remove(setup);
@@ -1000,10 +917,7 @@ private readonly ErrorProvider _errors = new();
         QueueApplyRefresh();
     }
 
-    /// <summary>
-    /// A program put on the Show original list from a view, while this window is open. It's already saved; this
-    /// window shows it too, so its next change doesn't save the list without it.
-    /// </summary>
+    // Already saved; shown here too so the window's next change doesn't save the list without it.
     internal void AddOriginalProgram(string program)
     {
         string name = ProgramName(program);
@@ -1030,10 +944,6 @@ private readonly ErrorProvider _errors = new();
     private PipHoverPreferences _hover = new();
     private bool _hoverShowsOwn = true, _loadingHover;
 
-    /// <summary>
-    /// With "choose for me" on, the four boxes show what WinScreen picks and can't be changed; the person's own
-    /// picks are kept for when it is turned off again.
-    /// </summary>
     private void ShowHoverChoices()
     {
         bool own = !_hoverAutomatic.Checked;
@@ -1050,10 +960,7 @@ private readonly ErrorProvider _errors = new();
         _hoverExplorer.Checked = own ? _hover.FileExplorer : Pip.PipHoverApps.Recommended(Pip.PipHoverApp.FileExplorer);
     }
 
-    /// <summary>
-    /// Fills the table of apps: the four kinds WinScreen knows, then every program named for Enhanced hover or for
-    /// showing its original. A program has one or the other, never both: with its original shown, nothing is sent to it.
-    /// </summary>
+    // A program has Enhanced hover or Show original, never both: with its original shown, nothing is sent to it.
     private void RebuildApps(int focusRemoveAt = -1)
     {
         // The page is rebuilt unseen and left where it was scrolled to: taking away the button that had the keyboard
@@ -1068,11 +975,11 @@ private readonly ErrorProvider _errors = new();
         finally
         {
             if (scroller is not null) scroller.AutoScrollPosition = new Point(0, scrolled);
-            // Turning drawing off hides the page from Windows, so it is back on before anything in it takes the keyboard.
+            // Turning drawing off hides the page from Windows, so it is back on before anything in it takes the
+            // keyboard.
             if (hid) Native.User32.SendMessage(scroller!.Handle, WM_SETREDRAW, 1, 0);
             if (hadKeyboard)
             {
-                // The keyboard goes to the remove button that now sits where the removed one was, or to the box.
                 Control[] removes = _appRows.Controls.Cast<Control>().SelectMany(row => row.Controls.OfType<PlainButton>()).ToArray();
                 if (focusRemoveAt >= 0 && removes.Length > 0) removes[Math.Min(focusRemoveAt, removes.Length - 1)].Focus();
                 else _newApp.Focus();
@@ -1091,8 +998,6 @@ private readonly ErrorProvider _errors = new();
         bool scaled = IsHandleCreated;
         int Measured(string text) => (int)Math.Ceiling(Native.DirectText.MeasureText(text, SettingsStyle.CaptionFont, Size.Empty,
             TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Width / scale);
-        // Each switch sits in the middle of a column as wide as its heading, however long that is in the language
-        // shown, with clear room between the two columns.
         string hoverText = T("menu.view.hover"), originalText = T("settings.pip.apps.original");
         const int switchWidth = 40, between = 32, removeAt = SwitchBox.RowWidth - 36;
         int originalColumn = Math.Max(Measured(originalText), switchWidth), hoverColumn = Math.Max(Measured(hoverText), switchWidth);
@@ -1112,7 +1017,7 @@ private readonly ErrorProvider _errors = new();
         {
             var row = new Panel { Size = new Size(SwitchBox.RowWidth, heading ? 24 : 34), Margin = new Padding(3, 0, 3, 0), BackColor = SettingsStyle.Card };
             row.Controls.Add(new SoftLabel { Text = name, AutoSize = false, Bounds = new Rectangle(1, 0, Math.Max(60, namesEnd), row.Height),
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right, // Wider rows give names more room.
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, UseMnemonic = false,
                 ForeColor = heading ? SettingsStyle.Secondary : SettingsStyle.Text, Font = heading ? SettingsStyle.CaptionFont : SettingsStyle.BodyFont });
             return row;
@@ -1125,7 +1030,7 @@ private readonly ErrorProvider _errors = new();
         void Place(Panel row, Control control, int at)
         {
             control.Location = new Point(at, (row.Height - control.Height) / 2);
-            control.Anchor = AnchorStyles.Top | AnchorStyles.Right; // The columns stay at the right edge as rows widen.
+            control.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             row.Controls.Add(control);
             control.BringToFront();
         }
@@ -1173,13 +1078,11 @@ private readonly ErrorProvider _errors = new();
                 if (!_addedApps.Contains(program, StringComparer.OrdinalIgnoreCase)) _addedApps.Add(program);
                 QueueApplyRefresh();
             };
-            // Only programs added here can go: the kinds above them are always listed. The button sits in a column of
-            // its own, so the switches stay where they are whatever is added or taken away.
             string removeText = string.Format(T("settings.pip.apps.remove"), program);
             var remove = new PlainButton { Glyph = MenuParts.Delete, Removes = true, AutoSize = false, Padding = Padding.Empty,
                 AccessibleName = removeText };
             remove.Size = remove.GetPreferredSize(Size.Empty);
-            _tips.SetToolTip(remove, T("common.remove").Replace("&", "")); // The full sentence is for screen readers.
+            _tips.SetToolTip(remove, T("common.remove").Replace("&", ""));
             int place = Array.IndexOf(programs, program);
             remove.Click += (_, _) =>
             {
@@ -1199,7 +1102,7 @@ private readonly ErrorProvider _errors = new();
         }
         _appRows.ResumeLayout(true);
         for (Control? parent = _appRows.Parent; parent is not null; parent = parent.Parent)
-            if (parent is ScrollPage page) { page.Restretch(); break; } // The new rows widen like the others.
+            if (parent is ScrollPage page) { page.Restretch(); break; }
     }
 
     private static ComboBox ProgramPicker()
@@ -1214,7 +1117,6 @@ private readonly ErrorProvider _errors = new();
         };
     }
 
-    /// <summary>The programs with a window open right now, under the names the lists use.</summary>
     private static IEnumerable<string> RunningPrograms()
     {
         var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1229,7 +1131,6 @@ private readonly ErrorProvider _errors = new();
                 }
                 catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
                 {
-                    // Ended while being listed, or not readable from here.
                     Diagnostics.Log.Swallowed(e);
                 }
             }
@@ -1240,7 +1141,6 @@ private readonly ErrorProvider _errors = new();
 
     internal void SetUpdateMode(UpdateMode mode) => _updateMode.SelectedIndex = (int)mode;
 
-    /// <summary>Whether a downloaded update waits; Restart to update shows only then.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<bool>? UpdateReady { get; init; }
 
@@ -1279,10 +1179,6 @@ private readonly ErrorProvider _errors = new();
         box.Checked = on;
     }
 
-    /// <summary>
-    /// Fills the window with <paramref name="values"/>. Without any, it shows what's in effect (or a file being brought
-    /// in), and anything not yet in effect is dropped.
-    /// </summary>
     internal void LoadValues(AppSettings? values = null)
     {
         bool inEffect = values is null && _pendingImport is null || ReferenceEquals(values, _settings);
@@ -1388,17 +1284,12 @@ private readonly ErrorProvider _errors = new();
         return tab;
     }
 
-    /// <summary>
-    /// A line of explanation. In a group of settings it becomes the description under the setting above it, in the
-    /// same card; after anything else it stays a line of its own in that card.
-    /// </summary>
     private static Label Note(string text) => new NoteLabel()
     {
         Text = text, AutoSize = true, MaximumSize = new Size(SwitchBox.RowWidth - 8, 0), Margin = new Padding(7, 6, 3, 2),
         ForeColor = SettingsStyle.Secondary, Font = SettingsStyle.CaptionFont, UseMnemonic = false,
     };
 
-    /// <summary>A titled group of options.</summary>
     private static SettingsCard Section(string title, params Control[] items) => Card(title, false, items);
 
     private static SettingsCard Card(string title, bool experimental, params Control[] items)
@@ -1406,7 +1297,6 @@ private readonly ErrorProvider _errors = new();
         var kept = new List<Control>();
         foreach (Control item in items)
         {
-            // A note under a setting says more about it: it goes in under the setting's name, as Windows 11 has it.
             if (item is NoteLabel note && kept.Count > 0)
             {
                 string Joined(string before) => before.Length == 0 ? note.Text : before + Environment.NewLine + note.Text;
@@ -1419,17 +1309,13 @@ private readonly ErrorProvider _errors = new();
         return new SettingsCard(title, experimental, ContentWidth, kept);
     }
 
-    /// <summary>One option: what it is on the left, the control that sets it on the right.</summary>
     private static Control SettingRow(string text, Control control)
     {
-        // A box typed into gets the same rounded frame as every other one.
-        // A number is chosen with a slider, and a list is as wide as its longest choice, as in Windows 11.
         if (control is NumericUpDown number) control = new NumberSlider(number) { AccessibleName = text.TrimEnd(':', '：', ' ') };
         else if (control is TextBox box) control = new InputFrame(box);
         return new SettingRowPanel(text.TrimEnd(':', '：', ' '), control);
     }
 
-    /// <summary>A page that scrolls: cards one under another.</summary>
     private static FlowLayoutPanel ScrollingPage() => new ScrollPage
     {
         FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill, AutoScroll = true,
@@ -1520,7 +1406,6 @@ private readonly ErrorProvider _errors = new();
             Note(T("pip.diagnostics.retryHelp"))));
         page.Controls.Add(Card(T("settings.pip.moving"), true, _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
         page.Controls.Add(Card(T("pip.interactive"), true, _pipMiddleScroll, Note(T("settings.pip.middleScrollHelp"))));
-        // One table says, for each kind of app and each program added, what a view of it does.
         _hoverOptions = new Control();
         _hoverOptions.EnabledChanged += (_, _) => { ShowHoverChoices(); RebuildApps(); };
         foreach (CheckBox kind in new[] { _hoverBrowsers, _hoverFirefox, _hoverElectron, _hoverExplorer })
@@ -1531,14 +1416,13 @@ private readonly ErrorProvider _errors = new();
         _newApp.Dock = DockStyle.None;
         _newApp.Width = 300;
         var add = new PlainButton { Text = T("common.add"), Enabled = false };
-        _newApp.TextChanged += (_, _) => add.Enabled = _newApp.Text.Trim().Length > 0; // Nothing to add until a name is typed.
+        _newApp.TextChanged += (_, _) => add.Enabled = _newApp.Text.Trim().Length > 0;
         void AddApp()
         {
             string name = ProgramName(_newApp.Text);
             _newApp.Text = "";
             if (name.Length == 0) return;
             if (!_addedApps.Contains(name, StringComparer.OrdinalIgnoreCase)) _addedApps.Add(name);
-            // A program is added because it doesn't work through a view; Enhanced hover is the other choice on its row.
             if (!_hoverPrograms.Items.Cast<string>().Contains(name, StringComparer.OrdinalIgnoreCase)) AddProgram(_originalPrograms, name);
             RebuildApps();
             QueueApplyRefresh();
@@ -1551,7 +1435,6 @@ private readonly ErrorProvider _errors = new();
             if (_newApp.DroppedDown) _newApp.DroppedDown = false; // Enter on a suggestion takes it and adds it.
             AddApp();
         };
-        // Both centred on one line, as the program lists on other pages place them: anchored to neither top nor bottom.
         _newApp.Margin = new Padding(0, 0, 8, 0);
         add.Margin = Padding.Empty;
         _newApp.Anchor = add.Anchor = AnchorStyles.Left;
@@ -1574,7 +1457,6 @@ private readonly ErrorProvider _errors = new();
         return page;
     }
 
-    /// <summary>A list of programs with a box to add one, as every page that has one shows it.</summary>
     private static ProgramList Programs(ThemedList list, ComboBox picker, string? title, string empty) =>
         new(list, picker, title, empty, T("common.add"), T("common.remove"));
 
@@ -1609,7 +1491,6 @@ private readonly ErrorProvider _errors = new();
                 _removedSetups.Clear();
                 _changedSetups.Clear();
                 LoadValues();
-                // Brought in whole, at once: what was in effect before is kept as a backup.
                 if (ApplyChanges()) _status.Text = T("settings.transfer.imported");
             }
             catch (Exception e) when (e is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
@@ -1638,7 +1519,6 @@ private readonly ErrorProvider _errors = new();
         return page;
     }
 
-    /// <summary>The colour a #RRGGBB box holds, or null while what's typed isn't one yet.</summary>
     private static Color? HexColor(string text) =>
         text.Trim() is { Length: 7 } hex && hex[0] == '#' && int.TryParse(hex.AsSpan(1), System.Globalization.NumberStyles.HexNumber,
             System.Globalization.CultureInfo.InvariantCulture, out int rgb)
@@ -1650,7 +1530,6 @@ private readonly ErrorProvider _errors = new();
         _toolbarTrigger.Items.AddRange([T("toolbar.trigger.titleBar"), T("toolbar.trigger.minimize"), T("toolbar.trigger.either")]);
         foreach (AppCommand command in ToolbarPreferences.DefaultButtons()) _toolbarButtons.Items.Add(new ToolbarChoice(command));
         _toolbarButtons.Tagged = item => item is ToolbarChoice { Command: var command } && CommandCatalog.IsExperimental(command);
-        // Each button with the icon it has on the bar, so the list reads like the bar.
         _toolbarButtons.IconOf = (item, pixels) => item is ToolbarChoice { Command: var shown }
             ? Tray.ColorIcons.Of(MenuParts.IconOf(shown) ?? MenuParts.More, pixels) : null;
         FlowLayoutPanel page = ScrollingPage();
@@ -1716,7 +1595,6 @@ private readonly ErrorProvider _errors = new();
         clear.Click += (_, _) => SetSelected(false);
         reset.Click += (_, _) => SetSelected(true);
 
-        // The chosen action's shortcut, in a card under the table: its name, the box to press keys in, and the buttons.
         var editor = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 4, RowCount = 2, BackColor = SettingsStyle.Card };
         editor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (int i = 0; i < 3; i++) editor.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -1756,14 +1634,11 @@ private readonly ErrorProvider _errors = new();
         };
         _features.Resize += (_, _) => FitFeatureColumns();
         _features.ClientSizeChanged += (_, _) => FitFeatureColumns();
-        table.Resize += (_, _) => FitFeatureColumns(); // The room that shows can change without the table's own size.
+        table.Resize += (_, _) => FitFeatureColumns();
         return page;
     }
 
-    /// <summary>
-    /// Draws the table of actions in the window's colours: Windows draws its headings unreadable in the dark theme,
-    /// and its chosen row hard to tell apart.
-    /// </summary>
+    // Windows draws the table's headings unreadable in the dark theme, and its chosen row hard to tell apart.
     private void DrawFeatures()
     {
         _features.OwnerDraw = true;
@@ -1819,7 +1694,6 @@ private readonly ErrorProvider _errors = new();
                 bool problem = index == 4 && item.Tag is AppCommand command && _shortcutProblems.ContainsKey(command);
                 Color color = problem ? SettingsStyle.Error : index is 0 or 3 ? SettingsStyle.Text : SettingsStyle.Secondary;
                 int inset = Unit(FeatureInset(index));
-                // An experimental action's name has the tag after it, as in the menus; the name gives way to it if short of room.
                 bool tagged = index == 0 && item.Tag is AppCommand action && CommandCatalog.IsExperimental(action);
                 int tag = tagged ? Unit(8) + MenuParts.TagSize(Unit).Width : 0;
                 const TextFormatFlags format = FeatureText;
@@ -1836,19 +1710,13 @@ private readonly ErrorProvider _errors = new();
         }
     }
 
-    /// <summary>How the table's words are set, measured the same way as drawn so a column fits its words exactly.</summary>
     private const TextFormatFlags FeatureText = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
         TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
 
     private const TextFormatFlags FeatureMeasure = FeatureText & ~TextFormatFlags.EndEllipsis; // Measuring with it would cut them short.
 
-    /// <summary>Where a column's words start, at 100% scaling: the first further in, past the bar of a chosen row.</summary>
     private static int FeatureInset(int column) => column == 0 ? 18 : 12;
 
-    /// <summary>
-    /// Gives each column of the table the room its longest entry needs and the name column the rest, so nothing is cut
-    /// short while there is room. Columns can still be dragged wider.
-    /// </summary>
     private void FitFeatureColumns()
     {
         // Sizes still change while the window closes, when the table's rows are already being taken apart.
@@ -1867,9 +1735,7 @@ private readonly ErrorProvider _errors = new();
                     widest = Math.Max(widest, Native.DirectText.MeasureText(item.SubItems[column].Text, _features.Font, Size.Empty, FeatureMeasure).Width);
             need[column] = widest + pad;
         }
-        // A problem can be a whole sentence; the state column stays short, and it shows in full under the page.
         need[4] = Math.Min(need[4], SettingsStyle.Unit(_features, 150));
-        // The name column keeps room for an experimental action's whole name and its tag; the others give way first.
         int least = SettingsStyle.Unit(_features, 150);
         int tag = SettingsStyle.Unit(_features, FeatureInset(0) + 8 + 4) + MenuParts.TagSize(value => SettingsStyle.Unit(_features, value)).Width;
         foreach (ListViewItem? item in _features.Items)

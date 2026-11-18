@@ -4,7 +4,6 @@ using System.Text.Json.Serialization;
 namespace WinScreen.Settings;
 
 public enum ToolbarPlacement { Left, Centre, Right }
-/// <summary>Where resting the pointer opens the toolbar. Either: the title bar or the minimize button, whichever it rests on.</summary>
 public enum ToolbarTrigger { TitleBar, MinimizeButton, Either }
 
 public sealed record ToolbarPreferences
@@ -15,10 +14,8 @@ public sealed record ToolbarPreferences
     [JsonConverter(typeof(ToolbarButtonListConverter))]
     public List<AppCommand> Buttons { get; init; } = DefaultButtons();
 
-    /// <summary>
-    /// Marks settings made since the toolbar got its Window menu button. Older settings get the button once, as they
-    /// load (<see cref="AppSettings.Parse"/>); after that, taking it off stays off.
-    /// </summary>
+    // Older settings get the Window menu button once as they load (AppSettings.Parse); after that, taking it off stays
+    // off.
     public bool WindowMenuOffered { get; init; } = true;
 
     internal static List<AppCommand> DefaultButtons() => [.. CommandCatalog.ToolbarButtons];
@@ -32,10 +29,8 @@ public sealed record ToolbarPreferences
     };
 }
 
-/// <summary>
-/// Saves button names, so reordering commands can't change someone's choice. A name this version
-/// doesn't know is skipped: it must never cost the rest of the settings.
-/// </summary>
+// Saves button names, so reordering commands can't change someone's choice. A name this version doesn't know is
+// skipped: it must never cost the rest of the settings.
 internal sealed class ToolbarButtonListConverter : JsonConverter<List<AppCommand>>
 {
     public override List<AppCommand> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)

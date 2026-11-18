@@ -4,10 +4,6 @@ using WinScreen.Windows;
 
 namespace WinScreen.Settings;
 
-/// <summary>
-/// Changes one saved setup ("rule", roadmap P1-5): which of its program's windows it is for, and what they get. Says
-/// how many open windows it is for as the fields change.
-/// </summary>
 internal sealed class RuleDialog : ThemedDialog
 {
     private readonly ProgramSetup _rule;
@@ -72,7 +68,6 @@ internal sealed class RuleDialog : ThemedDialog
         Whole(_off);
         Buttons(T("common.apply"), T("common.cancel"));
 
-        // No toolbar and a toolbar by position can't both be had.
         _noToolbar.CheckedChanged += (_, _) => { _byPosition.Enabled = !_noToolbar.Checked; if (_noToolbar.Checked) _byPosition.Checked = false; };
         _title.TextChanged += (_, _) => CountMatches();
         _class.TextChanged += (_, _) => CountMatches();
@@ -83,7 +78,7 @@ internal sealed class RuleDialog : ThemedDialog
 
     private static ComboBox Choice() => new ThemedCombo { Width = 260 };
 
-    /// <summary>The rule as the fields say, kept as the same saved setup so the Settings list doesn't lose its place.</summary>
+    // Kept as the same saved setup, so the Settings list doesn't lose its place.
     public ProgramSetup Result()
     {
         _rule.TitleContains = Blank(_title.Text);
@@ -104,7 +99,6 @@ internal sealed class RuleDialog : ThemedDialog
 
     private static string? Blank(string text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
-    /// <summary>How many open main windows of the program the title and class written so far are for.</summary>
     private void CountMatches()
     {
         var probe = new ProgramSetup { Program = _rule.Program, ExecutablePath = _rule.ExecutablePath, TitleContains = Blank(_title.Text), WindowClass = Blank(_class.Text) };
