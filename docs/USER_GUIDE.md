@@ -215,7 +215,8 @@ Glass keeps a soft shadow of the page's color around text, so it stays readable 
 the **Glass** card of **Settings → Backgrounds** change that:
 
 - **Text color**: **Light** or **Dark** turns the page the other way round when it needs to, as Dark mode does. You
-  get light text with a dark shadow, or dark text with a light one. Gray parts of pictures turn too.
+  get light text with a dark shadow, or dark text with a light one. Pictures turn too, as in Dark mode, unless you
+  keep their areas as they are.
 - **Shadow behind text**: turn it off for text with no shadow.
 
 ### Glass for each app or window

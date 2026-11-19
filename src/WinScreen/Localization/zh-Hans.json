@@ -426,7 +426,7 @@
   "settings.effects.textColor.asItIs": "保持原样",
   "settings.effects.textColor.dark": "深色",
   "settings.effects.textColor.light": "浅色",
-  "settings.effects.textColorHelp": "选浅色或深色时，页面会在需要时像深色模式一样反转，让文字在动态背景上更清楚。图片中的灰色部分也会反转。",
+  "settings.effects.textColorHelp": "选浅色或深色时，页面会在需要时像深色模式一样反转，让文字在动态背景上更清楚。图片也会反转，除非用“让区域保持原样”标记它们。",
   "settings.effects.title": "玻璃和深色的效果",
   "settings.experimental": "实验性功能",
   "settings.experimental.enable": "开启实验性功能（深色、玻璃、裁剪、缩小等）",

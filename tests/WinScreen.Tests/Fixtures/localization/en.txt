@@ -428,7 +428,7 @@ settings.effects.textColor 4A69D01660468781
 settings.effects.textColor.asItIs C55E278E7EAE4765
 settings.effects.textColor.dark 60ACC53F13A5D1BF
 settings.effects.textColor.light DBCD5E7BB7A0F538
-settings.effects.textColorHelp 2E8A3C86DB8B46FD
+settings.effects.textColorHelp 5ED55B2095A5B877
 settings.effects.title 586126300AF63122
 settings.experimental 3DC9F569422DCFDA
 settings.experimental.enable A717199D1CD94049

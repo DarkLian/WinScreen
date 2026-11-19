@@ -426,7 +426,7 @@
   "settings.effects.textColor.asItIs": "As it is",
   "settings.effects.textColor.dark": "Dark",
   "settings.effects.textColor.light": "Light",
-  "settings.effects.textColorHelp": "Light or Dark turns a page the other way round when needed, as Dark mode does, so text stands out over a moving background. Gray parts of pictures turn too.",
+  "settings.effects.textColorHelp": "Light or Dark turns a page the other way round when needed, as Dark mode does, so text stands out over a moving background. Pictures turn too, unless you keep their areas as they are.",
   "settings.effects.title": "How Glass and Dark look",
   "settings.experimental": "Experimental",
   "settings.experimental.enable": "Turn on experimental features (Dark, Glass, Crop, Shrink and more)",

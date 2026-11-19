@@ -125,6 +125,7 @@ autre bureau.
 - Un mode sombre qui laisse les images et les vidéos telles quelles, ou un simple filtre
 - Un effet verre qui n'atténue que l'arrière-plan
 - L'intensité de l'effet verre, pour chaque application ou pour une seule fenêtre
+- Un texte clair ou foncé avec l'effet verre, avec ou sans ombre douce
 - Des zones des fenêtres d'une application, comme une vidéo, que l'effet verre et le mode sombre laissent telles quelles
 - Rogner une fenêtre, ou la réduire en vignette en direct
 

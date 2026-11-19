@@ -123,6 +123,7 @@ Video kann mit Ton laufen und pausiert, solange sein Fenster minimiert oder auf 
 - Dunkelmodus, der Bilder und Videos lässt, wie sie sind, oder ein einfacher Filter
 - Glas, das nur den Hintergrund ausblendet
 - Wie stark Glas ausblendet, für jede App oder für ein einzelnes Fenster
+- Helle oder dunkle Schrift über Glas, mit oder ohne weichen Schatten
 - Bereiche eines App-Fensters, etwa ein Video, die Glas und Dunkelmodus unverändert lassen
 - Ein Fenster zuschneiden oder zu einer Live-Kachel verkleinern
 
