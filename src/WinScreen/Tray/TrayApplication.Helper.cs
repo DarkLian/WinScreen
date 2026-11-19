@@ -47,7 +47,7 @@ public sealed partial class TrayApplication
     {
         if (_toolbar.IsDisposed || !_toolbar.IsHandleCreated) return;
         try { _toolbar.BeginInvoke(action); }
-        catch (InvalidOperationException) { }
+        catch (InvalidOperationException failure) { Diagnostics.Log.Swallowed(failure); }
     }
 
     private void FollowHelper()
