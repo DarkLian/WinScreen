@@ -210,6 +210,8 @@ gestures.title 54E24437E9670DAA
 hotkeys.conflictPrefix 40AB567773FD9C6C
 hotkeys.modifierRequired 2FBCFBE92D0FC5AF
 hotkeys.someUnavailable 0FA7F717D2B4CC07
+keptAreas.instructions 5546A4F83BCE74A8
+keptAreas.title 0FBC0D88E89EEE0B
 menu.effects 86A00CF74253C265
 menu.group.elsewhere 8875BE70B328E00F
 menu.group.look B70682D027CE5073
@@ -407,6 +409,8 @@ settings.customization B70682D027CE5073
 settings.dark.detect 706DD5D92E45D86D
 settings.dark.title A6B75D0680322A61
 settings.effects.background 9D911AA2E0E4110B
+settings.effects.fade EE93D7FBF7CCFCB9
+settings.effects.fadeHelp C2955F42B63E6D58
 settings.effects.help 20A4D11004417111
 settings.effects.layeredGlass 89FFD556EA827C2F
 settings.effects.text 2317E7A1901A6CD7
@@ -418,6 +422,10 @@ settings.fullScreen.pause 0533994D4EE99C8C
 settings.general 91E25F4DDC6F6CD8
 settings.glass.title 1CF9F76E181DA84D
 settings.hotkeys.captureHelp ED90BD3D0AD09FB7
+settings.keptAreas.empty ABB8BDE25543E3E3
+settings.keptAreas.help 4215C9440CF1EA0D
+settings.keptAreas.list B814BA1E96F8C057
+settings.keptAreas.title D2CCA911760FAAB6
 settings.language DF028FD6BD35363E
 settings.language.restart 99EF4C2F084CC15C
 settings.language.system 462FB40293FA5630
@@ -560,6 +568,7 @@ window.info.processId 4413D6DC97384239
 window.info.program 4A92B6E675A43482
 window.info.threadId F9E445E5EC7A3827
 window.info.title 6FE38ED1EE10422A
+window.keepAreas 5471AE4757C6898E
 window.menu 12B8DF5980298D8C
 window.minimize 1AAE174509FB56B5
 window.opacity.decrease 3E7E28F3CD537F1C

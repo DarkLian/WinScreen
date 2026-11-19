@@ -85,6 +85,8 @@ public sealed partial class TrayApplication
             with { IsOn = window => _dark.IsDark(window) || _content.Has(window, Glass.ContentLook.Dark), Undoes = [WindowPart.FilterDark, WindowPart.ContentEffect] },
         Define(AppCommand.ToggleGlass, window => ToggleGlass(window))
             with { IsOn = window => _windows.IsGlass(window) || _content.Has(window, Glass.ContentLook.Glass), Undoes = [WindowPart.WindowChanges, WindowPart.ContentEffect] },
+        Define(AppCommand.KeepAreas, window => KeepAreas(window))
+            with { IsOn = window => _settings.KeptAreas.For(WindowInfo.ProgramOf(window)).Count > 0, Undoes = [WindowPart.CropChoice], Opens = Always },
     ];
 
     private IEnumerable<CommandDefinition> AnchorCommands() =>

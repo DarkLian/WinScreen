@@ -48,6 +48,7 @@ public enum AppCommand
     HideAnchors,
     HideToolbar,
     MinimizeToAnchor,
+    KeepAreas,
 }
 
 public enum ModifierKey { Alt, Win }
@@ -180,7 +181,7 @@ public static class CommandCatalog
         AppCommand.AlignBottom, AppCommand.AlignBottomRight, AppCommand.MoveToNextDisplay, AppCommand.PlaceExactly,
         AppCommand.RestorePlacement, AppCommand.SendToBottom, AppCommand.ShowWindowInfo, AppCommand.ToggleRollUp,
         AppCommand.ShowWindowMenu, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.ToggleDarkTitleBar,
-        AppCommand.MinimizeToAnchor,
+        AppCommand.MinimizeToAnchor, AppCommand.KeepAreas,
     ];
 
     public static readonly AppCommand[] Everywhere =
@@ -211,7 +212,7 @@ public static class CommandCatalog
 
     public static bool IsExperimental(AppCommand command) =>
         command is AppCommand.ToggleDark or AppCommand.ToggleGlass or AppCommand.ToggleShrink or AppCommand.ToggleCrop
-            or AppCommand.ToggleRollUp;
+            or AppCommand.ToggleRollUp or AppCommand.KeepAreas;
 
     public static string Name(AppCommand command) => command switch
     {
@@ -255,6 +256,7 @@ public static class CommandCatalog
         AppCommand.HideAnchors => T("everywhere.anchors"),
         AppCommand.HideToolbar => T("everywhere.toolbar"),
         AppCommand.MinimizeToAnchor => T("anchor.minimize"),
+        AppCommand.KeepAreas => T("window.keepAreas"),
         _ => command.ToString(),
     };
 }
@@ -430,6 +432,7 @@ public sealed class AppSettings
     public AnchorPreferences Anchors { get; set; } = new();
     public EffectPreferences Effects { get; set; } = new();
     public BackgroundPreferences Backgrounds { get; set; } = new();
+    public KeptAreaPreferences KeptAreas { get; set; } = new();
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -518,6 +521,7 @@ public sealed class AppSettings
         loaded.Anchors = (loaded.Anchors ?? new()).Validated();
         loaded.Effects = (loaded.Effects ?? new()).Validated();
         loaded.Backgrounds = (loaded.Backgrounds ?? new()).Validated();
+        loaded.KeptAreas = (loaded.KeptAreas ?? new()).Validated();
         loaded.ModifierExclusions = (loaded.ModifierExclusions ?? defaults.ModifierExclusions)
             .Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
         loaded.ModifierKey = Enum.IsDefined(loaded.ModifierKey) ? loaded.ModifierKey : ModifierKey.Alt;

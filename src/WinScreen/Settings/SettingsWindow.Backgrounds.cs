@@ -7,6 +7,12 @@ namespace WinScreen.Settings;
 public sealed partial class SettingsWindow
 {
     private const int MostBackgroundRows = 5;
+    private const int MostKeptRows = 4;
+    private readonly ThemedList _keptList = new() { AccessibleName = T("settings.keptAreas.list"), EmptyText = T("settings.keptAreas.empty") };
+    private readonly PlainButton _keptRemove = new() { Text = T("common.remove"), Enabled = false };
+    // Taken away here but still in effect until applied; areas marked from a window's menu meanwhile are kept.
+    private readonly HashSet<string> _removedKept = new(StringComparer.OrdinalIgnoreCase);
+    private InputFrame? _keptFrame;
     private readonly BackgroundList _backgroundList = new() { AccessibleName = T("settings.backgrounds.list") };
     private readonly ComboBox _newBackgroundApp = ProgramPicker();
     private readonly BackdropPreview _backgroundPreview = new() { AccessibleName = T("settings.backgrounds.preview") };
@@ -75,15 +81,78 @@ public sealed partial class SettingsWindow
             SettingRow(T("settings.backgrounds.fit"), _backgroundFit), SettingRow(T("settings.backgrounds.sound"), _backgroundVolume),
             Note(T("settings.backgrounds.soundHelp")));
 
+        _keptFrame = new InputFrame(_keptList, InputFrame.Look.List) { Width = SwitchBox.RowWidth, Margin = new Padding(3, 6, 3, 4) };
+        _keptList.FontChanged += (_, _) => FitKeptList();
+        _keptFrame.DpiChangedAfterParent += (_, _) => FitKeptList();
+        _keptList.SelectedIndexChanged += (_, _) => _keptRemove.Enabled = _keptList.SelectedItem is not null;
+        _keptList.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Delete || _keptList.SelectedItem is null) return;
+            e.Handled = true;
+            RemoveKept();
+        };
+        _keptRemove.Click += (_, _) => RemoveKept();
+        _keptRemove.Margin = Padding.Empty;
+        var keptButtons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(4, 8, 3, 6), BackColor = SettingsStyle.Card };
+        keptButtons.Controls.Add(_keptRemove);
+
         FlowLayoutPanel page = ScrollingPage();
         // Glass's own settings decide how much of the background shows, so they come first.
         page.Controls.Add(Card(T("settings.glass.title"), true, _layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
-            Note(T("settings.effects.help"))));
+            SettingRow(T("settings.effects.fade"), _glassFade), Note(T("settings.effects.fadeHelp")), Note(T("settings.effects.help"))));
+        page.Controls.Add(Card(T("settings.keptAreas.title"), true, Note(T("settings.keptAreas.help")), _keptFrame, keptButtons));
         page.Controls.Add(Card(T("settings.backgrounds.title"), true, Note(T("settings.backgrounds.help")), _backgroundFrame, adding));
         page.Controls.Add(_backgroundEditor);
         ListBackgrounds(null);
+        ListKept();
         return page;
+    }
+
+    internal void KeptAreasChanged()
+    {
+        bool wasPending = _pending;
+        ListKept();
+        if (!wasPending) MarkSaved();
+        else RefreshApply();
+    }
+
+    private void ListKept()
+    {
+        string? selected = (_keptList.SelectedItem as KeptEntry)?.Program;
+        _keptList.BeginUpdate();
+        _keptList.Items.Clear();
+        foreach (AppKeptAreas app in _settings.KeptAreas.Apps.Where(app => !_removedKept.Contains(app.Program)))
+            _keptList.Items.Add(new KeptEntry(app.Program, app.Areas.Count));
+        _keptList.EndUpdate();
+        int at = _keptList.Items.Cast<KeptEntry>().ToList().FindIndex(entry => string.Equals(entry.Program, selected, StringComparison.OrdinalIgnoreCase));
+        if (at >= 0) _keptList.SelectedIndex = at;
+        _keptRemove.Enabled = _keptList.SelectedItem is not null;
+        FitKeptList();
+    }
+
+    private void FitKeptList()
+    {
+        if (_keptFrame is null) return;
+        int rows = Math.Clamp(_keptList.Items.Count, 1, MostKeptRows);
+        _keptFrame.Height = _keptList.ItemHeight * rows + SettingsStyle.Unit(_keptFrame, 8);
+    }
+
+    private void RemoveKept()
+    {
+        if (_keptList.SelectedItem is not KeptEntry entry) return;
+        int at = _keptList.SelectedIndex;
+        bool hadKeyboard = _keptRemove.Focused;
+        _removedKept.Add(entry.Program);
+        ListKept();
+        if (_keptList.Items.Count > 0) _keptList.SelectedIndex = Math.Min(at, _keptList.Items.Count - 1);
+        if (hadKeyboard && !_keptRemove.Enabled) _keptList.Focus();
+        QueueApplyRefresh();
+    }
+
+    private sealed record KeptEntry(string Program, int Count)
+    {
+        public override string ToString() => $"{Program} ({Count})";
     }
 
     private string? ShownApp => (_backgroundList.SelectedItem as BackgroundEntry)?.Program;

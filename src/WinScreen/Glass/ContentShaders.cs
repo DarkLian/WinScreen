@@ -59,12 +59,17 @@ internal static class ContentShaders
     public const string Composite = """
         Texture2D<float4> source : register(t0);
         RWTexture2D<float4> output : register(u0);
-        cbuffer Options : register(b0) { float4 levels; float4 mode; float4 page; };
+        cbuffer Options : register(b0) { float4 levels; float4 mode; float4 page; float4 areas[8]; };
         [numthreads(16,16,1)]
         void Composite(uint3 id : SV_DispatchThreadID) {
             uint ow, oh; output.GetDimensions(ow, oh);
             if (id.x >= ow || id.y >= oh) return;
             float3 c = source.Load(int3(id.xy,0)).rgb;
+            // Areas marked to keep (left, top, right, bottom, in the window's pixels) are shown as they are.
+            for (uint a = 0; a < (uint)mode.z; a++) {
+                float4 r = areas[a];
+                if (id.x >= r.x && id.y >= r.y && id.x < r.z && id.y < r.w) { output[id.xy] = float4(c, 1); return; }
+            }
             float4 result;
             // Each pixel by itself, never by a guess at what is a picture: guesses changed from frame to frame as a
             // page scrolled, and parts of a picture flipped or went solid black.
@@ -85,7 +90,8 @@ internal static class ContentShaders
                 result = float4(25.0 / 255 + flipped * (1 - 25.0 / 255), 1);
             } else {
                 float away = length(c - page.rgb);
-                float d = smoothstep(0.03, 0.30, away);
+                // levels.z narrows the colours that fade: at 1, the band reaches 0.30; lower keeps pictures solid.
+                float d = smoothstep(0.03, 0.03 + 0.27 * levels.z, away);
                 float3 ink = d > 0.001 ? saturate((c - (1 - d) * page.rgb) / d) : c;
                 // Text keeps a thin halo of the page colour, a few pixels wide: dark text on a light page sat right on
                 // whatever was behind, often dark, and couldn't be read.

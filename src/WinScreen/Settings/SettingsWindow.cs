@@ -19,6 +19,7 @@ public sealed partial class SettingsWindow : Form
     private readonly CheckBox _layeredGlass = new SwitchBox { Text = T("settings.effects.layeredGlass"), AutoSize = true };
     private readonly NumericUpDown _glassBackground = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _glassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _glassFade = new() { Minimum = 10, Maximum = 100, Width = 70 };
     private readonly CheckBox _detectDark = new SwitchBox { Text = T("settings.dark.detect"), AutoSize = true };
     private readonly TextBox _borderColor = new() { Width = 90 };
     private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
@@ -336,7 +337,7 @@ private readonly ErrorProvider _errors = new();
             [_defaultOpacity] = '\uE706', [_opacityStep] = '\uE9E9', [_opacityWheel] = '\uE962', [_opaqueOnHover] = '\uE890',
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
-            [_glassText] = '\uE8D2', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767',
+            [_glassText] = '\uE8D2', [_glassFade] = '\uE790',[_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767',
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
             [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
             [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',
@@ -548,7 +549,7 @@ private readonly ErrorProvider _errors = new();
     {
         AppSettings draft = Draft(new AppSettings());
         draft.SavedSetups = _setups.Items.Cast<ProgramSetup>().ToList();
-        return System.Text.Json.JsonSerializer.Serialize(draft) + "\0" + _borderColor.Text.Trim();
+        return System.Text.Json.JsonSerializer.Serialize(draft) + "\0" + _borderColor.Text.Trim() + "\0" + string.Join("|", _removedKept.Order());
     }
 
     internal void SetBorderColor(string text) => _borderColor.Text = text;
@@ -713,6 +714,7 @@ private readonly ErrorProvider _errors = new();
                     draft.SavedSetups[at] = System.Text.Json.JsonSerializer.Deserialize<ProgramSetup>(Written(change.After))!;
         draft.SavedSetups.RemoveAll(setup => _removedSetups.Any(removed =>
             removed.Program == setup.Program && removed.ExecutablePath == setup.ExecutablePath));
+        draft.KeptAreas = draft.KeptAreas.Without(_removedKept);
         try
         {
             IReadOnlyList<HotkeyProblem> problems = _apply(draft);
@@ -749,6 +751,8 @@ private readonly ErrorProvider _errors = new();
             _pendingImport = null;
             _removedSetups.Clear();
             _changedSetups.Clear();
+            _removedKept.Clear();
+            ListKept();
             RefreshFeatures();
             return true;
         }
@@ -823,7 +827,7 @@ private readonly ErrorProvider _errors = new();
         draft.Effects = new EffectPreferences
         {
             LayeredGlass = _layeredGlass.Checked,
-            BackgroundPercent = Number(_glassBackground), TextPercent = Number(_glassText),
+            BackgroundPercent = Number(_glassBackground), TextPercent = Number(_glassText), FadeRangePercent = Number(_glassFade),
         }.Validated();
         draft.Backgrounds = _backgroundEdit.Validated();
         draft.PinBorder = new PinBorderPreferences
@@ -1268,6 +1272,7 @@ private readonly ErrorProvider _errors = new();
         _layeredGlass.Checked = effects.LayeredGlass;
         _glassBackground.Value = effects.BackgroundPercent;
         _glassText.Value = effects.TextPercent;
+        _glassFade.Value = effects.FadeRangePercent;
         FillBackgrounds(values.Backgrounds);
         PinBorderPreferences border = values.PinBorder.Validated();
         _borderColor.Text = border.ColorHex;
@@ -1491,6 +1496,7 @@ private readonly ErrorProvider _errors = new();
                 _pendingImport = SettingsTransfer.Import(dialog.FileName, _settings);
                 _removedSetups.Clear();
                 _changedSetups.Clear();
+                _removedKept.Clear();
                 LoadValues();
                 if (ApplyChanges()) _status.Text = T("settings.transfer.imported");
             }

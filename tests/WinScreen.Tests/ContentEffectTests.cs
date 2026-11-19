@@ -7,6 +7,97 @@ using Xunit;
 
 namespace WinScreen.Tests;
 
+public sealed class ContentShaderTests
+{
+    // A mistake in a shader only shows when Glass starts on a PC with a graphics card; compiling needs none.
+    [Theory]
+    [InlineData(nameof(ContentShaders.Stats))]
+    [InlineData(nameof(ContentShaders.Composite))]
+    [InlineData(nameof(ContentShaders.Backdrop))]
+    public void Every_shader_compiles(string name)
+    {
+        string source = (string)typeof(ContentShaders).GetField(name)!.GetValue(null)!;
+        Assert.False(Vortice.D3DCompiler.Compiler.Compile(source, name, name, "cs_5_0").IsEmpty);
+    }
+}
+
+public sealed class KeptAreaTests
+{
+    private static readonly Size Window = new(1000, 700);
+
+    [Fact]
+    public void An_area_marked_comes_back_where_it_was()
+    {
+        foreach (Rectangle part in new[] { new Rectangle(0, 40, 1000, 600), new Rectangle(620, 500, 300, 150), new Rectangle(30, 20, 200, 100) })
+            Assert.Equal(part, KeptArea.Of(part, Window, 1).In(Window, 1));
+    }
+
+    // A player's picture sits between a top bar and a bottom bar that keep their height: each edge goes with the side
+    // it was nearer, so the area stays on the picture as the window grows.
+    [Fact]
+    public void Each_edge_keeps_its_distance_from_the_nearer_side_when_the_window_is_resized()
+    {
+        KeptArea picture = KeptArea.Of(Rectangle.FromLTRB(0, 40, 1000, 640), Window, 1);
+        Assert.Equal(Rectangle.FromLTRB(0, 40, 1600, 1040), picture.In(new Size(1600, 1100), 1));
+
+        KeptArea corner = KeptArea.Of(Rectangle.FromLTRB(700, 450, 980, 680), Window, 1);
+        Assert.True(corner.LeftFromRight);
+        Assert.True(corner.TopFromBottom);
+        Assert.Equal(Rectangle.FromLTRB(1300, 850, 1580, 1080), corner.In(new Size(1600, 1100), 1));
+    }
+
+    [Fact]
+    public void Areas_are_kept_at_100_percent_scaling_and_drawn_at_the_window_s_own()
+    {
+        KeptArea area = KeptArea.Of(new Rectangle(30, 60, 300, 150), new Size(1500, 1050), 1.5f);
+        Assert.Equal(20, area.Left);
+        Assert.Equal(40, area.Top);
+        Assert.Equal(new Rectangle(20, 40, 200, 100), area.In(Window, 1));
+    }
+
+    [Fact]
+    public void An_area_the_window_is_too_small_for_is_left_out()
+    {
+        KeptArea area = KeptArea.Of(Rectangle.FromLTRB(50, 50, 950, 650), Window, 1);
+        Assert.True(area.In(new Size(80, 80), 1).IsEmpty);
+    }
+
+    [Fact]
+    public void Saved_areas_are_tidied_and_found_by_program()
+    {
+        KeptAreaPreferences tidy = AppSettings.Parse("""
+            {"KeptAreas":{"Apps":[
+              {"Program":"VLC.exe","Areas":[{"Top":30},{"Top":30},{"Left":-5}]},
+              {"Program":"vlc","Areas":[{"Top":1}]},
+              {"Program":" ","Areas":[{"Top":1}]},
+              {"Program":"edge","Areas":[]},
+              null]}}
+            """).KeptAreas;
+        AppKeptAreas vlc = Assert.Single(tidy.Apps);
+        Assert.Equal("VLC", vlc.Program);
+        Assert.Equal(2, vlc.Areas.Count); // The same area twice is one; a negative edge becomes 0.
+        Assert.Equal(2, tidy.For("vlc.EXE").Count);
+        Assert.Empty(tidy.For("edge"));
+
+        var many = new KeptAreaPreferences().With("code", Enumerable.Range(0, 20).Select(top => new KeptArea { Top = top }));
+        Assert.Equal(KeptAreaPreferences.MostPerApp, many.For("code").Count);
+        Assert.Empty(many.With("code", []).Apps);
+        Assert.Empty(many.Without(["Code.exe"]).Apps);
+    }
+
+    [Fact]
+    public void Marking_adds_a_dragged_part_and_a_click_on_a_marked_part_takes_it_away()
+    {
+        using var overlay = new KeptAreaOverlay(new Rectangle(0, 0, 800, 600), [new Rectangle(10, 10, 100, 100)], 2);
+        overlay.Choose(new Rectangle(200, 200, 300, 150), new Point(500, 350));
+        Assert.Equal(2, overlay.Areas.Count);
+        overlay.Choose(new Rectangle(600, 400, 100, 100), new Point(700, 500)); // One too many: refused.
+        Assert.Equal(2, overlay.Areas.Count);
+        overlay.Choose(Rectangle.Empty, new Point(50, 50));
+        Assert.Equal(new[] { new Rectangle(200, 200, 300, 150) }, overlay.Areas);
+    }
+}
+
 public sealed class BackdropTests
 {
     private static readonly Size Picture = new(1600, 900), Window = new(800, 600);
@@ -142,6 +233,11 @@ public sealed class PageReaderTests
         EffectPreferences wild = AppSettings.Parse("""{"Effects":{"BackgroundPercent":400,"TextPercent":-3}}""").Effects;
         Assert.Equal(100, wild.BackgroundPercent);
         Assert.Equal(20, wild.TextPercent);
+        // The full range is the band Glass always had, so nobody's Glass changes on update.
+        Assert.Equal(100, effects.FadeRangePercent);
+        Assert.Equal(1f, effects.Levels.FadeRange);
+        Assert.Equal(10, AppSettings.Parse("""{"Effects":{"FadeRangePercent":0}}""").Effects.FadeRangePercent);
+        Assert.Equal(100, AppSettings.Parse("""{"Effects":{"FadeRangePercent":500}}""").Effects.FadeRangePercent);
         // Settings saved before Dark and Glass went pixel by pixel still load.
         Assert.True(AppSettings.Parse("""{"Effects":{"PictureSafeDark":false,"PicturePercent":50}}""").Effects.LayeredGlass);
     }

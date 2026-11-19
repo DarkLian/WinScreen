@@ -72,7 +72,8 @@ public sealed partial class TrayApplication : ApplicationContext
     private bool _updatesWereOn;
     private SettingsWindow? _settingsWindow;
     private PipSourcePicker? _picker;
-    private CropOverlay? _cropping;
+    // A crop or the areas kept as they are: one choice over a window at a time.
+    private Form? _cropping;
     private WindowMenuHost? _windowMenu;
 
     internal TrayApplication(WindowController windows, AppSettings settings, string settingsPath, ProgramSound? sound = null,
@@ -683,6 +684,11 @@ public sealed partial class TrayApplication : ApplicationContext
             Settings.BackgroundPreferences backgrounds = _settings.Backgrounds;
             Part(() => _content.SetBackgrounds(backgrounds.For));
         }
+        if (Changed(settings => settings.KeptAreas))
+        {
+            KeptAreaPreferences kept = _settings.KeptAreas;
+            Part(() => _content.SetKeptAreas(kept.For));
+        }
         if (Changed(settings => settings.HideCaptureBorder)) Part(() =>
         {
             if (_settings.HideCaptureBorder && !Pip.CaptureBorder.Wanted) Pip.CaptureBorder.Forget(); // Ask again: the Windows setting may have changed.
@@ -1220,6 +1226,54 @@ public sealed partial class TrayApplication : ApplicationContext
             }
             catch (Exception failure) when (IsExpected(failure))
             {
+                Alert(T("errors.operation.title"), failure.Message);
+            }
+        };
+        _cropping = overlay;
+        _croppingWindow = window;
+        try
+        {
+            overlay.ShowOnTop();
+        }
+        catch
+        {
+            CancelCrop();
+            throw;
+        }
+    }
+
+    private void KeepAreas(nint window)
+    {
+        if (_windows.IsHidden(window) || _windows.IsPeeking(window))
+            throw new WindowOperationException(T("errors.window.showFirst"));
+        if (User32.IsIconic(window))
+            User32.ShowWindow(window, User32.SW_RESTORE);
+        string program = WindowInfo.ProgramOf(window);
+        if (_cropping is { IsDisposed: false } || program.Length == 0 || !WindowInfo.TryGetFrameBounds(window, out Rectangle frame, out _))
+            return;
+
+        float scale = User32.GetDpiForWindow(window) is var dpi and > 0 ? dpi / 96f : 1;
+        var overlay = new KeptAreaOverlay(frame, _settings.KeptAreas.For(program).Select(area => area.In(frame.Size, scale)),
+            KeptAreaPreferences.MostPerApp);
+        var identity = WindowIdentity.Capture(window);
+        overlay.Done += areas =>
+        {
+            if (_cropping != overlay) return;
+            _cropping = null;
+            _croppingWindow = 0;
+            KeptAreaPreferences before = _settings.KeptAreas;
+            try
+            {
+                identity.Require();
+                _settings.KeptAreas = before.With(program, areas.Select(area => KeptArea.Of(area, frame.Size, scale)));
+                SaveSettings(_settings);
+                _content.SetKeptAreas(_settings.KeptAreas.For);
+                if (_settingsWindow is { IsDisposed: false } open) open.KeptAreasChanged();
+                User32.SetForegroundWindow(window);
+            }
+            catch (Exception failure) when (IsExpected(failure))
+            {
+                _settings.KeptAreas = before;
                 Alert(T("errors.operation.title"), failure.Message);
             }
         };

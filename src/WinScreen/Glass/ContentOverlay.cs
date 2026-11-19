@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Vortice.D3DCompiler;
 using Vortice.Direct3D;
@@ -15,7 +16,7 @@ namespace WinScreen.Glass;
 
 internal enum ContentLook { Glass, Dark }
 
-internal readonly record struct ContentLevels(float Background, float Text);
+internal readonly record struct ContentLevels(float Background, float Text, float FadeRange = 1);
 
 internal sealed unsafe class ContentOverlay : Form
 {
@@ -37,7 +38,9 @@ internal sealed unsafe class ContentOverlay : Form
     private volatile bool _stopping;
     private long _retryAfter;
     private System.Windows.Forms.Timer? _retry;
-    private ContentLevels _levels;
+    private volatile StrongBox<ContentLevels> _levels;
+    private volatile bool _changed;
+    private volatile Settings.KeptArea[] _kept;
     private readonly bool _leaveAlreadyDark;
     private volatile BackdropChoice? _backdrop;
     private volatile bool _hidden;
@@ -55,13 +58,15 @@ internal sealed unsafe class ContentOverlay : Form
     private GraphicsCaptureSession? _session;
     private global::Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice? _captureDevice;
 
-    public ContentOverlay(nint source, ContentLook look, ContentLevels levels, bool leaveAlreadyDark = true, BackdropChoice? backdrop = null)
+    public ContentOverlay(nint source, ContentLook look, ContentLevels levels, bool leaveAlreadyDark = true, BackdropChoice? backdrop = null,
+        Settings.KeptArea[]? kept = null)
     {
         _source = source;
         _look = look;
-        _levels = levels;
+        _levels = new(levels);
         _leaveAlreadyDark = leaveAlreadyDark;
         _backdrop = backdrop;
+        _kept = kept ?? [];
         _eventProc = OnWindowEvent;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -99,7 +104,20 @@ internal sealed unsafe class ContentOverlay : Form
         }
     }
 
-    public void SetLevels(ContentLevels levels) => _levels = levels;
+    // A still window sends no new frame, so a change redraws the last one.
+    public void SetLevels(ContentLevels levels)
+    {
+        _levels = new(levels);
+        _changed = true;
+        if (!_stopping) _arrived.Set();
+    }
+
+    public void SetKept(Settings.KeptArea[] kept)
+    {
+        _kept = kept;
+        _changed = true;
+        if (!_stopping) _arrived.Set();
+    }
 
     public void SetBackdrop(BackdropChoice? backdrop)
     {
@@ -287,7 +305,7 @@ internal sealed unsafe class ContentOverlay : Form
         _stats = _device!.CreateComputeShader(Compiler.Compile(ContentShaders.Stats, "Stats", "stats", "cs_5_0").Span);
         _composite = _device.CreateComputeShader(Compiler.Compile(ContentShaders.Composite, "Composite", "composite", "cs_5_0").Span);
         _backdropShader = _device.CreateComputeShader(Compiler.Compile(ContentShaders.Backdrop, "Backdrop", "backdrop", "cs_5_0").Span);
-        _options = _device.CreateBuffer(new BufferDescription(48, BindFlags.ConstantBuffer, ResourceUsage.Default));
+        _options = _device.CreateBuffer(new BufferDescription((uint)sizeof(Options), BindFlags.ConstantBuffer, ResourceUsage.Default));
         _place = _device.CreateBuffer(new BufferDescription(48, BindFlags.ConstantBuffer, ResourceUsage.Default));
         _edge = _device.CreateSamplerState(new SamplerDescription(Filter.MinMagMipLinear, TextureAddressMode.Clamp));
         _repeat = _device.CreateSamplerState(new SamplerDescription(Filter.MinMagMipLinear, TextureAddressMode.Wrap));
@@ -348,6 +366,8 @@ internal sealed unsafe class ContentOverlay : Form
                     break;
 
                 bool redraw = false;
+                bool changed = _changed;
+                _changed = false;
                 BackdropChoice? chosen = _backdrop;
                 // A new fit or volume is taken as it is: opening the file again would start a video over.
                 if (chosen != shown)
@@ -421,8 +441,15 @@ internal sealed unsafe class ContentOverlay : Form
                             Frames++;
                             drawn = true;
                             redraw = true;
+                            changed = false;
                         }
                     }
+
+                if (changed && drawn)
+                {
+                    Process(size, cacheView!, tilesView!, tiles!, staging!, outputView!);
+                    redraw = true;
+                }
 
                 if (drawn && redraw)
                     Present(size, output!, outputRead!, final!, finalView!, backdrop);
@@ -509,13 +536,28 @@ internal sealed unsafe class ContentOverlay : Form
         ReadPage(staging, columns, rows);
 
         (float pr, float pg, float pb) = _page.Page;
-        ContentLevels levels = _levels;
+        ContentLevels levels = _levels.Value;
         var options = new Options
         {
-            Background = levels.Background, Text = levels.Text,
+            Background = levels.Background, Text = levels.Text, FadeRange = levels.FadeRange,
             Mode = _look == ContentLook.Dark ? 2 : 0, AlreadyDark = _leaveAlreadyDark && _page.AlreadyDark ? 1 : 0,
             PageR = pr, PageG = pg, PageB = pb,
         };
+        Settings.KeptArea[] kept = _kept;
+        float scale = User32.GetDpiForWindow(_source) is var dpi and > 0 ? dpi / 96f : 1;
+        int count = 0;
+        foreach (Settings.KeptArea area in kept)
+        {
+            if (count == Options.MostAreas) break;
+            Rectangle place = area.In(size, scale);
+            if (place.IsEmpty) continue;
+            options.Areas[count * 4] = place.Left;
+            options.Areas[count * 4 + 1] = place.Top;
+            options.Areas[count * 4 + 2] = place.Right;
+            options.Areas[count * 4 + 3] = place.Bottom;
+            count++;
+        }
+        options.KeptCount = count;
         context.UpdateSubresource(in options, _options!);
         context.CSSetShader(_composite);
         context.CSSetConstantBuffer(0, _options);
@@ -560,11 +602,13 @@ internal sealed unsafe class ContentOverlay : Form
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct Options
+    private unsafe struct Options
     {
-        public float Background, Text, Unused1, Unused2;
-        public float Mode, AlreadyDark, Unused3, Unused4;
+        public float Background, Text, FadeRange, Unused2;
+        public const int MostAreas = 8;
+        public float Mode, AlreadyDark, KeptCount, Unused4;
         public float PageR, PageG, PageB, Unused5;
+        public fixed float Areas[MostAreas * 4];
     }
 
     private static void DisposeAll(params IDisposable?[] items)
