@@ -206,7 +206,14 @@ a little too. Two settings help:
 - **Keep areas as they are**, under **Effects** in a window's menu: drag over a video or picture, or click a
   highlighted part, and Glass and Dark mode leave it as it is. Click a marked area to remove it, and press Enter when
   you're done. An app can have up to eight, and they're kept for all its windows and follow them when you resize
-  them. The list is at the bottom of **Settings → Backgrounds**, where you can remove an app's areas.
+  them. The list is at the bottom of **Settings → Backgrounds**, where you can remove an app's areas. Plain Glass
+  keeps them too, on a PC with a graphics card.
+
+### Glass for each app or window
+
+Under **Glass for each app** in **Settings → Backgrounds**, add an app to give it its own Background, Text and Fade
+range. To change just one window, choose **Glass levels** under **Effects** in its menu: the changes show at once and
+last until the window closes, and **Save for this app** keeps them for all its windows.
 
 ## Remember a program's setup
 

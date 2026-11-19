@@ -122,6 +122,7 @@ vídeo puede sonar, y se pausa mientras su ventana está minimizada o en otro es
 **Efectos** *(experimental)*
 - Modo oscuro que deja las imágenes y los vídeos como están, o un filtro sencillo
 - Cristal que difumina solo el fondo
+- Cuánto difumina Cristal, para cada aplicación o para una sola ventana
 - Zonas de las ventanas de una aplicación, como un vídeo, que Cristal y el modo oscuro dejan como están
 - Recortar una ventana, o reducirla a un mosaico en vivo
 

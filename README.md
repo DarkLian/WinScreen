@@ -118,6 +118,7 @@ while its window is minimized or on another desktop.
 **Effects** *(experimental)*
 - Dark mode that keeps pictures and video as they are, or a simple filter
 - Glass that fades only the background
+- How much Glass fades, for each app or for a single window
 - Areas of an app's windows, such as a video, that Glass and Dark mode leave as they are
 - Crop a window, or shrink it to a live tile
 

@@ -122,6 +122,7 @@ e pausa enquanto a janela está minimizada ou em outra área de trabalho.
 **Efeitos** *(experimental)*
 - Modo escuro que mantém imagens e vídeos como estão, ou um filtro simples
 - Vidro que esmaece só o fundo
+- Quanto o Vidro esmaece, para cada app ou para uma só janela
 - Áreas das janelas de um app, como um vídeo, que o Vidro e o modo escuro deixam como estão
 - Cortar uma janela, ou encolhê-la para um bloco ao vivo
 
