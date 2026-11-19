@@ -27,8 +27,8 @@ public sealed partial class TrayApplication
         if (_helper is null)
         {
             _helper = new HelperLink.OrdinaryEnd();
-            _helper.Received += message => _toolbar.BeginInvoke(() => FromHelper(message));
-            _helper.ConnectionChanged += connected => _toolbar.BeginInvoke(() => Diagnostics.Log.Event("helper.link", ("connected", connected)));
+            _helper.Received += message => OnToolbar(() => FromHelper(message));
+            _helper.ConnectionChanged += connected => OnToolbar(() => Diagnostics.Log.Event("helper.link", ("connected", connected)));
             _helper.Start();
         }
         _helperStarts = 0;
@@ -39,6 +39,15 @@ public sealed partial class TrayApplication
             _helperCheck.Start();
         }
         FollowHelper();
+    }
+
+    // The link reports from its own thread, also as WinScreen closes: the end of the link came after the toolbar was
+    // gone and crashed WinScreen on the way out.
+    private void OnToolbar(Action action)
+    {
+        if (_toolbar.IsDisposed || !_toolbar.IsHandleCreated) return;
+        try { _toolbar.BeginInvoke(action); }
+        catch (InvalidOperationException) { }
     }
 
     private void FollowHelper()
@@ -102,9 +111,9 @@ public sealed partial class TrayApplication
     // Started by the sign-in task with no ordinary copy yet, it starts one, as the person.
     private void StartAsHelper()
     {
-        _ordinary = new HelperLink.HelperEnd(() => _toolbar.BeginInvoke(LeaveAsHelper));
-        _ordinary.Received += message => _toolbar.BeginInvoke(() => FromOrdinaryCopy(message));
-        _ordinary.ConnectionChanged += connected => _toolbar.BeginInvoke(() => Diagnostics.Log.Event("helper.link", ("connected", connected)));
+        _ordinary = new HelperLink.HelperEnd(() => OnToolbar(LeaveAsHelper));
+        _ordinary.Received += message => OnToolbar(() => FromOrdinaryCopy(message));
+        _ordinary.ConnectionChanged += connected => OnToolbar(() => Diagnostics.Log.Event("helper.link", ("connected", connected)));
         _ordinary.Start(OrdinaryCopyWait);
         if (HelperLink.FindCopy(Hotkeys.HotkeyHost.WindowTitle, elevated: false) != 0) return;
         // Started at sign-in: the ordinary copy is started as the person, through the shell, which may still be
