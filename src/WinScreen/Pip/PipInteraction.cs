@@ -92,8 +92,8 @@ internal sealed class PipInteraction : IDisposable
     private int _sharing; // 1 while the view's thread shares input state with the original's.
     private volatile bool _appBusy; // The app stopped answering; sharing waits until it answers again.
 
-    // Hook thread only: the buttons whose press the hook kept from the desktop, so their releases are kept too.
-    // Written by the hook only; the worker reads it to know whether a newer press is in progress.
+    // The buttons whose press the hook kept from the desktop, so their releases are kept too. Written by the hook, and
+    // by the view for a press that reached it first; the worker reads it to know whether a newer press is in progress.
     private int _swallowedBits;
     private MouseButtons _swallowed
     {
@@ -478,12 +478,37 @@ internal sealed class PipInteraction : IDisposable
             if (!Share(false)) _rechecked.Set(); // Nothing changed, so there is nothing to wait for.
             User32.SetForegroundWindow(_source);
         }
-        _swallowed |= button;
+        Interlocked.Or(ref _swallowedBits, (int)button);
         // Scrolling stops with the press itself, not when the worker reaches it: it may still be busy sending steps.
         bool endsScroll = _scrolling;
         if (endsScroll) _scrolling = false;
         Enqueue(new(EventKind.Press, point, button, Alt: alt, EndsScroll: endsScroll, OnLink: onLink));
         return true;
+    }
+
+    // A right press that reached the view itself, just before this visit's hook was there: it goes on as the hook sends
+    // one. The view's thread got it, so it may bring the app forward.
+    internal void TakePress(Point point, MouseButtons button)
+    {
+        if (_stopping || !InView(point)) return;
+        Interlocked.Exchange(ref _lastPress, Pack(point));
+        bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        if (!alt)
+        {
+            _rechecked.Reset();
+            Volatile.Write(ref _unsharedAt, Environment.TickCount);
+            if (!Share(false)) _rechecked.Set();
+            User32.SetForegroundWindow(_source);
+        }
+        Interlocked.Or(ref _swallowedBits, (int)button);
+        Enqueue(new(EventKind.Press, point, button, Alt: alt));
+    }
+
+    // Its release, when that reached the view too and not the hook.
+    internal void TakeRelease(Point point, MouseButtons button)
+    {
+        if ((Interlocked.And(ref _swallowedBits, ~(int)button) & (int)button) != 0)
+            Enqueue(new(EventKind.Release, point, button));
     }
 
     private bool OnWheel(Point point, bool horizontal, uint mouseData)
@@ -501,12 +526,11 @@ internal sealed class PipInteraction : IDisposable
     {
         if (_pressHandedOver && button == MouseButtons.Left)
         {
-            _swallowed &= ~button; // The real window has the press now: the release is its own.
+            Interlocked.And(ref _swallowedBits, ~(int)button); // The real window has the press now: the release is its own.
             _handedOverReleased = true;
             return false;
         }
-        bool swallow = (_swallowed & button) != 0;
-        _swallowed &= ~button;
+        bool swallow = (Interlocked.And(ref _swallowedBits, ~(int)button) & (int)button) != 0;
         if (swallow) Enqueue(new(EventKind.Release, point, button));
         if (_swallowed == MouseButtons.None && !_outside && !InView(point) && !_inPopup)
         {

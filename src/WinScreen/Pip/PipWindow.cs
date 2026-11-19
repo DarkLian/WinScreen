@@ -35,6 +35,7 @@ public sealed partial class PipWindow : Form
     private const int WM_MOUSEACTIVATE = 0x0021;
     private const int MA_NOACTIVATE = 3;
     private const int WM_SETCURSOR = 0x0020, HTCLIENT = 1;
+    private const int WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205;
 
     private bool _cursorFromFrame;
 
@@ -759,6 +760,19 @@ public sealed partial class PipWindow : Form
         // Keep the modifiers carried by the press. This inactive view may process it after Ctrl is released.
         if (m.Msg is 0x0201 or 0x0203)
             _controlAtPress = (m.WParam.ToInt64() & 0x0008) != 0; // MK_CONTROL
+        // Presses in quick succession don't move the pointer, and a visit starts with a move, so a right press can reach
+        // the view itself between visits. It starts one and goes to the app, never to the view's menu.
+        if (m.Msg == WM_RBUTTONDOWN)
+        {
+            _rightPressVisit = null;
+            if (_live is null && _interactiveItem.Checked && GiveRightPressToVisit(ClientPointOf(m.LParam))) return;
+        }
+        if (m.Msg == WM_RBUTTONUP && _rightPressVisit is { } visit)
+        {
+            _rightPressVisit = null;
+            if (visit == _live) visit.TakeRelease(PointToScreen(ClientPointOf(m.LParam)), MouseButtons.Right);
+            return;
+        }
         if (m.Msg == WM_DISPLAYCHANGE || (m.Msg == 0x0218 && (m.WParam == 7 || m.WParam == 18)))
         {
             PipDisplay.InvalidateRefresh();
@@ -795,6 +809,19 @@ public sealed partial class PipWindow : Form
 
         base.WndProc(ref m);
     }
+
+    private static Point ClientPointOf(nint lParam) => new((short)lParam.ToInt64(), (short)(lParam.ToInt64() >> 16));
+
+    private bool GiveRightPressToVisit(Point point)
+    {
+        BeginLive(point);
+        if (_live is not { } live) return false;
+        _rightPressVisit = live;
+        live.TakePress(PointToScreen(point), MouseButtons.Right);
+        return true;
+    }
+
+    internal bool MenuShown => _menu.Visible;
 
     internal void FollowDisplays()
     {
@@ -2085,6 +2112,7 @@ public sealed partial class PipWindow : Form
 
     private bool _sourceWasFocused;
     private long _liveEndedAt, _suspendedAt;
+    private PipInteraction? _rightPressVisit; // Its release may reach the view too, and goes to the same visit.
     private const long RevealGrace = 500;
 
     internal long LastReveal { get; private set; }

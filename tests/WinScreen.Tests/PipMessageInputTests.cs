@@ -112,6 +112,37 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
         finally { PipInteraction.DiagnoseInput = false; }
     }
 
+    // Presses in quick succession don't move the pointer, and a visit starts with a move: a right press between two
+    // visits used to reach the view and open its menu instead of the app's.
+    [Fact]
+    public void A_right_press_between_visits_opens_the_apps_menu_and_not_the_views()
+    {
+        using var source = new TargetProcess(new Rectangle(160, 120, 1000, 700));
+        source.EnableContextMenu();
+        Drive(source, (view, ui, _) =>
+        {
+            Hover(view);
+            ui(view.EndVisit);
+            Assert.Null(view.LiveInteraction);
+            while (source.NextReport(50) is not null) { }
+            mouse_event(8, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(16, 0, 0, 0, 0);
+            nint menu = 0;
+            bool opened = Desktop.WaitFor(() =>
+            {
+                while (source.NextReport(0) is { } report)
+                    if (report.StartsWith("context-open ")) menu = (nint)long.Parse(report[13..]);
+                return menu != 0 && User32.IsWindowVisible(menu);
+            }, 1500);
+            bool viewMenu = false;
+            ui(() => viewMenu = view.MenuShown);
+            Assert.False(viewMenu, "The view's own menu opened.");
+            Assert.True(opened, "No menu from the app.");
+            Assert.NotNull(view.LiveInteraction);
+            Desktop.Press(Keys.Escape);
+            Assert.True(Desktop.WaitFor(() => !User32.IsWindowVisible(menu)));
+        });
+    }
+
     [Fact]
     public void Each_button_double_click_and_wheel_arrives_once_with_coordinates_and_modifiers()
     {
@@ -497,7 +528,8 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
         {
             try { if (!browser.HasExited) browser.Kill(true); } catch (InvalidOperationException) { }
             browser.WaitForExit(5000);
-            try { Directory.Delete(root, true); } catch (IOException) { }
+            // A browser's helper processes can hold a file a moment longer.
+            try { Directory.Delete(root, true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
     }
 

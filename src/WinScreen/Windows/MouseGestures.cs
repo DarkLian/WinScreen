@@ -7,6 +7,8 @@ using WinScreen.Settings;
 
 namespace WinScreen.Windows;
 
+internal enum MenuGestureOutcome { Claimed, TurnedAway }
+
 // Only while the feature could act, so a game, a full-screen app, an excluded program or a locked PC never has it
 // running behind them.
 internal static class ModifierHookPolicy
@@ -90,6 +92,11 @@ internal sealed class MouseGestures : IDisposable
     public WindowMenuGesture MenuGesture { get => _menuGesture; set => _menuGesture = value; }
     public Func<nint, bool>? MenuEligible { get; set; }
     public Action<nint, Point>? MenuRequested { get; set; }
+    // The gesture was made over a window that can't have the menu. Told off the hook, for the log.
+    public Action<nint>? MenuTurnedAway { get; set; }
+    private long _menuDecisionTicks;
+    // How long the hook took to decide on the last menu press: Windows drops a hook that answers slowly.
+    public TimeSpan LastMenuDecision => TimeSpan.FromTicks(Interlocked.Read(ref _menuDecisionTicks));
     public Action<Point>? OutsidePressed { get; set; }
     public bool OpacityWheelEnabled { get; set; }
     public Func<nint, bool>? OpacityEligible { get; set; }
@@ -276,8 +283,15 @@ internal sealed class MouseGestures : IDisposable
         if (!_accepting || !MenuEnabled || MenuVisible || !MatchesMenu(MenuGesture, GetAsyncKeyState(0x11) < 0,
                 GetAsyncKeyState(0x10) < 0, GetAsyncKeyState(VK_MENU) < 0,
                 GetAsyncKeyState(VK_LWIN) < 0 || GetAsyncKeyState(VK_RWIN) < 0, middle)) return false;
+        long started = Stopwatch.GetTimestamp();
         nint window = User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y }), User32.GA_ROOT);
-        if (window == 0 || MenuEligible?.Invoke(window) != true) return false;
+        bool eligible = window != 0 && MenuEligible?.Invoke(window) == true;
+        Interlocked.Exchange(ref _menuDecisionTicks, Stopwatch.GetElapsedTime(started).Ticks);
+        if (!eligible)
+        {
+            MenuTurnedAway?.Invoke(window);
+            return false;
+        }
         _pendingRelease = middle ? WM_MBUTTONUP : WM_RBUTTONUP;
         _dragClaimed = false;
         _swallowRelease = true;

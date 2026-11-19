@@ -12,6 +12,8 @@ internal sealed class WindowMenuHost : Form
     private readonly Point _point;
     private readonly List<int> _claimed = [];
     private readonly System.Windows.Forms.Timer _deadline = new() { Interval = 150 };
+    private readonly long _made = Environment.TickCount64;
+    private long _shownAt;
     private bool _shown, _closing;
     internal bool ForceFallback;
     internal bool NeedsHook;
@@ -30,7 +32,11 @@ internal sealed class WindowMenuHost : Form
         Bounds = new Rectangle(point, new Size(1, 1));
         Opacity = 0;
         Text = "WinScreen.WindowMenu";
-        _menu.Closed += (_, _) => Finish();
+        _menu.Closed += (_, e) =>
+        {
+            Diagnostics.Log.Event("menu.closed", ("reason", e.CloseReason), ("openMs", Environment.TickCount64 - _shownAt));
+            Finish();
+        };
         _deadline.Tick += (_, _) => ShowMenu(false);
     }
 
@@ -79,6 +85,8 @@ internal sealed class WindowMenuHost : Form
         // Keep reservations until close: an injected key queued on another input desktop stays harmless.
         Show();
         bool activated = earned && User32.SetForegroundWindow(Handle);
+        _shownAt = Environment.TickCount64;
+        Diagnostics.Log.Event("menu.shown", ("earned", earned), ("activated", activated), ("waitedMs", _shownAt - _made));
         if (!activated)
         {
             User32.RegisterHotKey(Handle, EscapeHotkey, User32.MOD_NOREPEAT, (uint)Keys.Escape);

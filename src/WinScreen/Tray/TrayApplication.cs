@@ -103,7 +103,15 @@ public sealed partial class TrayApplication : ApplicationContext
         _modifierDrag.MenuEligible = CanOpenWindowMenu;
         // A hook lost in the middle of a drag is put back at once, not at the watch's next look two seconds later.
         _modifierDrag.HookSilent = () => _toolbar.BeginInvoke(() => { if (_modifierDrag.Active) _modifierDrag.Reinstall(); });
-        _modifierDrag.MenuRequested = (window, point) => _toolbar.BeginInvoke(() => ShowWindowMenu(window, point));
+        _modifierDrag.MenuRequested = (window, point) => _toolbar.BeginInvoke(() =>
+        {
+            Diagnostics.Log.Event("menu.gesture", ("outcome", MenuGestureOutcome.Claimed), ("decidedMs", _modifierDrag.LastMenuDecision.TotalMilliseconds),
+                ("program", Diagnostics.LogValue.ProgramOf(window)));
+            ShowWindowMenu(window, point);
+        });
+        _modifierDrag.MenuTurnedAway = window => _toolbar.BeginInvoke(() =>
+            Diagnostics.Log.Event("menu.gesture", ("outcome", MenuGestureOutcome.TurnedAway), ("decidedMs", _modifierDrag.LastMenuDecision.TotalMilliseconds),
+                ("program", Diagnostics.LogValue.ProgramOf(window)), ("class", Diagnostics.LogValue.ClassOf(window))));
         _modifierDrag.OutsidePressed = point => _toolbar.BeginInvoke(() => _windowMenu?.OutsidePress(point));
         _dark.Ignore(_toolbar.Handle);
         _ = _flash.Handle;
@@ -344,7 +352,11 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private void ShowWindowMenu(nint window, Point point)
     {
-        if (!CanOpenWindowMenu(window)) return;
+        if (!CanOpenWindowMenu(window))
+        {
+            Diagnostics.Log.Event("menu.notOpened", ("allowed", false), ("program", Diagnostics.LogValue.ProgramOf(window)));
+            return;
+        }
         ShowHostedMenu(window, point, AppCommand.ShowWindowMenu, (menu, builder) =>
         {
             menu.Items.Add(new ToolStripMenuItem(MenuText(WindowInfo.Title(window))) { Enabled = false, Name = MenuRenderer.TitleName });
@@ -356,7 +368,11 @@ public sealed partial class TrayApplication : ApplicationContext
     // Held by a window of its own that takes the keyboard, so it stays open whatever happens to the toolbar meanwhile.
     private void ShowHostedMenu(nint window, Point point, AppCommand asked, Action<ContextMenuStrip, WindowMenuBuilder> fill)
     {
-        if (_windowMenu is { IsDisposed: false } || FullScreenDecision(asked, window) != FullScreenAction.Run) return;
+        if (_windowMenu is { IsDisposed: false } || FullScreenDecision(asked, window) != FullScreenAction.Run)
+        {
+            Diagnostics.Log.Event("menu.notOpened", ("alreadyOpen", _windowMenu is { IsDisposed: false }), ("fullScreen", FullScreenNow()));
+            return;
+        }
         Attempt(() =>
         {
             WindowIdentity identity = WindowIdentity.Capture(window);
@@ -902,11 +918,13 @@ public sealed partial class TrayApplication : ApplicationContext
                             _settings.WindowMenuExclusions.Contains(program, StringComparer.OrdinalIgnoreCase);
         bool away = FullScreen.IsAway();
         if (away) _hookAwayAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        FullScreenState fullScreen = FullScreenNow();
+        bool fillsScreen = FillsLikeAGame(foreground);
         bool run = ModifierHookPolicy.ShouldRun(
             (_settings.ModifierDrag && !_hookForegroundExcluded) ||
             ((_settings.WindowMenu || fallbackMenu) && !menuExcluded) ||
             (_settings.OpacityWheel && !programExcluded),
-            FullScreenNow(), FillsLikeAGame(foreground), false, away);
+            fullScreen, fillsScreen, false, away);
         if (!run && _windowMenu is { IsDisposed: false }) _windowMenu.Close();
         Point cursor = Cursor.Position;
         // Windows drops a slow hook without saying so. Input with no callback means it has, so put it back, ending
@@ -919,11 +937,16 @@ public sealed partial class TrayApplication : ApplicationContext
             CanReach(User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = cursor.X, Y = cursor.Y }), User32.GA_ROOT)),
             TimeSpan.FromSeconds(HookSilenceSeconds));
         _hookCursor = cursor;
+        bool wasActive = _modifierDrag.Active;
         try
         {
             if (silent) _modifierDrag.Reinstall();
             _modifierDrag.SetActive(run);
             _hookReported = false;
+            // What stopped the gestures, for a press that did nothing.
+            if (wasActive && !_modifierDrag.Active)
+                Diagnostics.Log.Event("hook.gestures.paused", ("fullScreen", fullScreen), ("fillsScreen", fillsScreen), ("away", away),
+                    ("excluded", menuExcluded), ("program", Diagnostics.LogValue.ProgramOf(foreground)), ("class", Diagnostics.LogValue.ClassOf(foreground)));
         }
         catch (System.ComponentModel.Win32Exception failure)
         {
