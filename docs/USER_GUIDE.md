@@ -196,6 +196,19 @@ the same page.
 Videos play without sound until you turn **Sound** up. Only the window you used last plays sound, and a video
 pauses while its window is minimized or on another desktop.
 
+### Keep pictures and video solid
+
+Glass fades every color close to the page's own, so dark scenes on a dark page, or bright skies on a light one, fade
+a little too. Two settings help:
+
+- **Fade range** at the top of **Settings → Backgrounds**: lower it and only colors very near the page's fade, so
+  pictures and videos stay solid. Text edges look a little sharper.
+- **Keep areas as they are**, under **Effects** in a window's menu: drag over a video or picture, or click a
+  highlighted part, and Glass and Dark mode leave it as it is. Click a marked area to remove it, and press Enter when
+  you're done. An app can have up to eight, and they're kept for all its windows. Each edge stays the same distance
+  from the side of the window it's nearest, so a video player's picture stays covered when you resize it. The list
+  is in **Settings → Backgrounds**, where you can remove an app's areas.
+
 ## Remember a program's setup
 
 Set a window up the way you like it: pinned, see-through, dark, with a view open if you want one. Then press
