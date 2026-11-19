@@ -385,7 +385,7 @@ internal sealed class AnchorButton : Form
         }
 
         // A standalone Anchor cannot safely reveal a source owned by a view.
-        if (WindowInfo.IsConcealed(_target)) return;
+        if (WindowInfo.IsHiddenForView(_target)) return;
 
         if (User32.IsIconic(_target))
             User32.ShowWindow(_target, User32.SW_RESTORE);

@@ -758,7 +758,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     {
         if (Refusal(window) is { } refusal)
             throw new WindowOperationException(refusal);
-        if (IsHidden(window) || IsPeeking(window))
+        if (IsHidden(window) && !IsDrawnByEffect(window) || IsPeeking(window))
             throw new WindowOperationException(T("errors.window.showFirst"));
         EnsureResponsive(window);
         lock (_gate)
@@ -1817,6 +1817,16 @@ public static class WindowInfo
             if (window == owner) return true;
         }
         return false;
+    }
+
+    // A view's source is at 0. Glass and Dark leave the window at 1, still taking presses, and draw it again on top, so
+    // for everything else it is an ordinary window.
+    public static bool IsHiddenForView(nint window)
+    {
+        return (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_LAYERED) != 0
+               && User32.GetLayeredWindowAttributes(window, out _, out byte alpha, out uint flags)
+               && (flags & User32.LWA_ALPHA) != 0
+               && alpha == 0;
     }
 
     public static bool IsConcealed(nint window)

@@ -2054,8 +2054,8 @@ public sealed partial class PipWindow : Form
         {
             const long WS_DISABLED = 0x08000000;
             if (window == _source || window == Handle || !User32.IsWindowVisible(window) || User32.IsIconic(window) ||
-                (User32.GetWindowLongPtr(window, User32.GWL_STYLE) & WS_DISABLED) != 0 || _windows.IsHidden(window) ||
-                WindowInfo.IsConcealed(window))
+                (User32.GetWindowLongPtr(window, User32.GWL_STYLE) & WS_DISABLED) != 0 ||
+                _windows.IsHidden(window) && !_windows.IsDrawnByEffect(window) || WindowInfo.IsHiddenForView(window))
                 continue;
             long style = User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE);
             if ((style & (User32.WS_EX_NOACTIVATE | User32.WS_EX_TOOLWINDOW)) != 0) continue;

@@ -150,7 +150,7 @@ public sealed partial class TrayApplication : ApplicationContext
         _anchors.ShowRequested += window =>
         {
             if (_pips.TryGetValue(window, out var pip)) pip.GoToSource();
-            else if (!WindowInfo.IsConcealed(window))
+            else if (!WindowInfo.IsHiddenForView(window))
             {
                 if (User32.IsIconic(window)) User32.ShowWindow(window, User32.SW_RESTORE);
                 User32.SetForegroundWindow(window);
@@ -801,8 +801,9 @@ public sealed partial class TrayApplication : ApplicationContext
         string.Join(Environment.NewLine, problems.Select(problem => problem.Message));
 
     private bool CanHaveAutomaticAnchor(nint window) =>
-        WindowInfo.IsMainWindow(window) && _windows.CanControl(window) && !WindowInfo.IsConcealed(window) &&
-        !_windows.IsHidden(window) && _settings.Anchors.Allows(WindowInfo.ProgramOf(window)) && CanReach(window);
+        WindowInfo.IsMainWindow(window) && _windows.CanControl(window) && !WindowInfo.IsHiddenForView(window) &&
+        (!_windows.IsHidden(window) || _windows.IsDrawnByEffect(window)) && _settings.Anchors.Allows(WindowInfo.ProgramOf(window)) &&
+        CanReach(window);
 
     private bool Paused => _settings.PauseInFullScreen && FullScreenNow() != FullScreenState.None;
 

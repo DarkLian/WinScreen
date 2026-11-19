@@ -69,6 +69,37 @@ public sealed class AnchorExtrasTests
         });
     }
 
+    // Glass and Dark leave the window at opacity 1 and draw it again on top: an Anchor brought back only windows that
+    // weren't hidden at all, so on one with an effect it did nothing (the owner, 20 Nov 2026). A view's source stays hidden.
+    [Fact]
+    public void An_Anchor_brings_back_a_window_Glass_or_Dark_draws_and_leaves_a_views_source_hidden()
+    {
+        using var target = new TargetProcess(new Rectangle(240, 200, 300, 200));
+        using var source = new TargetProcess(new Rectangle(600, 200, 300, 200));
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var anchors = new AnchorSet();
+            object view = new();
+            try
+            {
+                windows.ConcealSolid(target.Handle);
+                Assert.True(WindowInfo.IsConcealed(target.Handle));
+                Assert.False(WindowInfo.IsHiddenForView(target.Handle));
+                anchors.Toggle(target.Handle);
+                Native.User32.ShowWindow(target.Handle, Native.User32.SW_MINIMIZE);
+                Assert.True(Desktop.WaitFor(() => Native.User32.IsIconic(target.Handle)));
+                MethodInfo bringForward = typeof(AnchorButton).GetMethod("BringForward", BindingFlags.NonPublic | BindingFlags.Instance)!;
+                bringForward.Invoke(Assert.Single(Buttons(anchors)), null);
+                Assert.True(Desktop.WaitFor(() => !Native.User32.IsIconic(target.Handle)), "The Anchor left the window minimized.");
+
+                windows.HideOwned(source.Handle, view);
+                Assert.True(WindowInfo.IsHiddenForView(source.Handle));
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
+
     /// <summary>A button taken away for an Anchor is in the record a crash leaves, so the next start puts it back.</summary>
     [Fact]
     public void A_taskbar_button_taken_for_an_Anchor_comes_back_after_a_crash()

@@ -199,7 +199,9 @@ internal sealed unsafe class ElementFinder : IDisposable
     {
         for (nint window = GetWindow(overlay, GW_HWNDNEXT); window != 0; window = GetWindow(window, GW_HWNDNEXT))
         {
-            if (User32.IsWindowVisible(window) && !User32.IsIconic(window) && !WindowInfo.IsConcealed(window) &&
+            // A window presses pass through, such as the one Glass or Dark draws a window again in, is never what is marked.
+            if (User32.IsWindowVisible(window) && !User32.IsIconic(window) && !WindowInfo.IsHiddenForView(window) &&
+                (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TRANSPARENT) == 0 &&
                 WindowInfo.TryGetVisibleBounds(window, out Rectangle bounds) && bounds.Contains(point) &&
                 (Dwmapi.DwmGetWindowAttribute(window, 14, out int cloaked, sizeof(int)) != 0 || cloaked == 0))
                 return window;
