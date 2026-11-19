@@ -221,6 +221,7 @@ internal static class MenuParts
         AppCommand.ToggleShrink => ColorIcons.Shrink,
         AppCommand.ToggleCrop => Crop,
         AppCommand.KeepAreas => Picture,
+        AppCommand.GlassLevels => Sliders,
         AppCommand.Arrange => ColorIcons.Move,
         AppCommand.OpacityUp => ColorIcons.Plus,
         AppCommand.OpacityDown => ColorIcons.Minus,

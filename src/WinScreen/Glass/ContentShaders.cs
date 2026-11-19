@@ -88,6 +88,10 @@ internal static class ContentShaders
                 float3 flipped = saturate(lerp(1 - c + 2 * hue, c + (1 - 2 * light), coloured));
                 // A white page becomes #191919 rather than black, as the filter kind does; the rest is lifted in step.
                 result = float4(25.0 / 255 + flipped * (1 - 25.0 / 255), 1);
+            } else if (mode.x == 1) {
+                // Plain Glass: only the page colour itself is see-through, as the colour-key kind does it. The page
+                // colour here is an average, so it is matched to within about 2/255.
+                result = length(c - page.rgb) < 0.008 ? float4(0, 0, 0, 0) : float4(c, 1);
             } else {
                 float away = length(c - page.rgb);
                 // levels.z narrows the colours that fade: at 1, the band reaches 0.30; lower keeps pictures solid.

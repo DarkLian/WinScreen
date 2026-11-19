@@ -15,7 +15,11 @@ internal sealed class ContentEffects : IDisposable
             if (_overlays.TryGetValue(window, out ContentOverlay? overlay) && !overlay.IsDisposed) overlay.SetOpacity(alpha);
         };
     }
-    private ContentLevels _levels = new(0.15f, 1);
+    private Func<string, ContentLevels> _levelsOf = _ => new(0.15f, 1);
+    // Set from a window's own Glass panel, for that window only, until it closes or its app's levels are saved.
+    private readonly Dictionary<nint, ContentLevels> _ownLevels = [];
+    // Glass that makes only the page colour see-through, drawn here so the kept areas stay as they are.
+    private readonly HashSet<nint> _plain = [];
     private Func<string, BackdropChoice?> _backgroundOf = _ => null;
     private Func<string, IReadOnlyList<Settings.KeptArea>> _keptOf = _ => [];
     private readonly Dictionary<nint, string> _programs = [];
@@ -42,12 +46,30 @@ internal sealed class ContentEffects : IDisposable
     internal nint OverlayOf(nint window) =>
         _overlays.TryGetValue(window, out ContentOverlay? overlay) && overlay.IsHandleCreated ? overlay.Handle : 0;
 
-    public void SetLevels(ContentLevels levels)
+    public void SetLevels(ContentLevels levels) => SetLevels(_ => levels);
+
+    // Called for each window's program, by name without ".exe".
+    public void SetLevels(Func<string, ContentLevels> levelsOf)
     {
-        _levels = levels;
-        foreach (ContentOverlay overlay in _overlays.Values)
-            overlay.SetLevels(levels);
+        _levelsOf = levelsOf;
+        foreach ((nint window, ContentOverlay overlay) in _overlays)
+            overlay.SetLevels(LevelsOf(window));
     }
+
+    // Null goes back to the levels of the window's app.
+    public void SetWindowLevels(nint window, ContentLevels? levels)
+    {
+        if (levels is { } own) _ownLevels[window] = own;
+        else _ownLevels.Remove(window);
+        if (_overlays.TryGetValue(window, out ContentOverlay? overlay)) overlay.SetLevels(LevelsOf(window));
+    }
+
+    public bool HasOwnLevels(nint window) => _ownLevels.ContainsKey(window);
+
+    public bool IsPlain(nint window) => _plain.Contains(window);
+
+    internal ContentLevels LevelsOf(nint window) =>
+        (_ownLevels.TryGetValue(window, out ContentLevels own) ? own : _levelsOf(ProgramOf(window))) with { Plain = _plain.Contains(window) };
 
     // Called for each window's program, by name without ".exe".
     public void SetBackgrounds(Func<string, BackdropChoice?> backgroundOf)
@@ -98,7 +120,7 @@ internal sealed class ContentEffects : IDisposable
             overlay.SetAudible(window == _audible);
     }
 
-    public bool Toggle(nint window, ContentLook look)
+    public bool Toggle(nint window, ContentLook look, bool plain = false)
     {
         if (_overlays.TryGetValue(window, out ContentOverlay? existing))
         {
@@ -107,7 +129,9 @@ internal sealed class ContentEffects : IDisposable
                 return false;
         }
 
-        var overlay = new ContentOverlay(window, look, _levels, LeaveAlreadyDark, look == ContentLook.Glass ? BackgroundOf(window) : null, KeptOf(window));
+        if (plain && look == ContentLook.Glass) _plain.Add(window);
+        else _plain.Remove(window);
+        var overlay = new ContentOverlay(window, look, LevelsOf(window), LeaveAlreadyDark, look == ContentLook.Glass ? BackgroundOf(window) : null, KeptOf(window));
         try
         {
             byte opacity = windows.OpacityOf(window);
@@ -174,6 +198,8 @@ internal sealed class ContentEffects : IDisposable
     {
         _overlays.Remove(window);
         _programs.Remove(window);
+        _ownLevels.Remove(window);
+        _plain.Remove(window);
         if (window != _audible) return;
         _audible = _overlays.Keys.FirstOrDefault(HasSound);
         Hear();

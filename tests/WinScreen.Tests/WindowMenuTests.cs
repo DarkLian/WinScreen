@@ -44,7 +44,7 @@ public sealed class WindowMenuBuilderTests
             }
             ToolStripItemCollection all = Built(CommandCatalog.ToolbarButtons.ToHashSet());
             AppCommand[] left = Commands(all).Select(item => item.Tag).OfType<AppCommand>().ToArray();
-            Assert.Equal([AppCommand.MinimizeToAnchor, AppCommand.ToggleDarkTitleBar, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.KeepAreas], left);
+            Assert.Equal([AppCommand.MinimizeToAnchor, AppCommand.ToggleDarkTitleBar, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.GlassLevels, AppCommand.KeepAreas], left);
             Assert.DoesNotContain(all.Cast<ToolStripItem>(), item => item is OpacityRow or PlacementRow);
             Assert.Contains(all.Cast<ToolStripItem>(), item => item.Text == UiText.T("window.openLocation"));
             Assert.Contains(all.Cast<ToolStripItem>(), item => item.Text == UiText.T("common.copy"));

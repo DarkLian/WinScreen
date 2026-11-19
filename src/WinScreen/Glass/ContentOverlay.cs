@@ -16,7 +16,7 @@ namespace WinScreen.Glass;
 
 internal enum ContentLook { Glass, Dark }
 
-internal readonly record struct ContentLevels(float Background, float Text, float FadeRange = 1);
+internal readonly record struct ContentLevels(float Background, float Text, float FadeRange = 1, bool Plain = false);
 
 internal sealed unsafe class ContentOverlay : Form
 {
@@ -540,7 +540,7 @@ internal sealed unsafe class ContentOverlay : Form
         var options = new Options
         {
             Background = levels.Background, Text = levels.Text, FadeRange = levels.FadeRange,
-            Mode = _look == ContentLook.Dark ? 2 : 0, AlreadyDark = _leaveAlreadyDark && _page.AlreadyDark ? 1 : 0,
+            Mode = _look == ContentLook.Dark ? 2 : levels.Plain ? 1 : 0, AlreadyDark = _leaveAlreadyDark && _page.AlreadyDark ? 1 : 0,
             PageR = pr, PageG = pg, PageB = pb,
         };
         Settings.KeptArea[] kept = _kept;

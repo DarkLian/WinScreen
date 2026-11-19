@@ -81,6 +81,15 @@ internal class ThemedDialog : Form
         _buttons.Controls.Add(ok);
     }
 
+    // For a window left open beside the work, where a button does something rather than answer.
+    protected PlainButton AddAction(string text, bool primary, Action run)
+    {
+        var button = new PlainButton { Text = text, Primary = primary, Margin = new Padding(8, 0, 0, 0) };
+        button.Click += (_, _) => run();
+        _buttons.Controls.Add(button);
+        return button;
+    }
+
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);

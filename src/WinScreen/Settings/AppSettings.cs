@@ -49,6 +49,7 @@ public enum AppCommand
     HideToolbar,
     MinimizeToAnchor,
     KeepAreas,
+    GlassLevels,
 }
 
 public enum ModifierKey { Alt, Win }
@@ -181,7 +182,7 @@ public static class CommandCatalog
         AppCommand.AlignBottom, AppCommand.AlignBottomRight, AppCommand.MoveToNextDisplay, AppCommand.PlaceExactly,
         AppCommand.RestorePlacement, AppCommand.SendToBottom, AppCommand.ShowWindowInfo, AppCommand.ToggleRollUp,
         AppCommand.ShowWindowMenu, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.ToggleDarkTitleBar,
-        AppCommand.MinimizeToAnchor, AppCommand.KeepAreas,
+        AppCommand.MinimizeToAnchor, AppCommand.KeepAreas, AppCommand.GlassLevels,
     ];
 
     public static readonly AppCommand[] Everywhere =
@@ -212,7 +213,7 @@ public static class CommandCatalog
 
     public static bool IsExperimental(AppCommand command) =>
         command is AppCommand.ToggleDark or AppCommand.ToggleGlass or AppCommand.ToggleShrink or AppCommand.ToggleCrop
-            or AppCommand.ToggleRollUp or AppCommand.KeepAreas;
+            or AppCommand.ToggleRollUp or AppCommand.KeepAreas or AppCommand.GlassLevels;
 
     public static string Name(AppCommand command) => command switch
     {
@@ -257,6 +258,7 @@ public static class CommandCatalog
         AppCommand.HideToolbar => T("everywhere.toolbar"),
         AppCommand.MinimizeToAnchor => T("anchor.minimize"),
         AppCommand.KeepAreas => T("window.keepAreas"),
+        AppCommand.GlassLevels => T("window.glassLevels"),
         _ => command.ToString(),
     };
 }

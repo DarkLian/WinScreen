@@ -241,6 +241,44 @@ public sealed class PageReaderTests
         // Settings saved before Dark and Glass went pixel by pixel still load.
         Assert.True(AppSettings.Parse("""{"Effects":{"PictureSafeDark":false,"PicturePercent":50}}""").Effects.LayeredGlass);
     }
+
+    [Fact]
+    public void An_app_with_its_own_glass_levels_uses_them_and_every_other_app_the_main_ones()
+    {
+        EffectPreferences effects = AppSettings.Parse("""
+            {"Effects":{"BackgroundPercent":20,"Apps":[
+              {"Program":"Chrome.exe","BackgroundPercent":60,"TextPercent":5,"FadeRangePercent":0},
+              {"Program":"chrome","BackgroundPercent":10},
+              {"Program":" ","BackgroundPercent":10}]}}
+            """).Effects;
+        AppGlassLevels chrome = Assert.Single(effects.Apps);
+        Assert.Equal("Chrome", chrome.Program);
+        Assert.Equal((60, 20, 1), (chrome.BackgroundPercent, chrome.TextPercent, chrome.FadeRangePercent));
+        Assert.Equal(0.6f, effects.LevelsFor("chrome").Background);
+        Assert.Equal(0.2f, effects.LevelsFor("notepad").Background);
+        // A new app starts from the main levels.
+        Assert.Equal(20, effects.LevelsOf("notepad").BackgroundPercent);
+
+        EffectPreferences changed = effects.With("CHROME", chrome with { BackgroundPercent = 30 });
+        Assert.Equal(30, Assert.Single(changed.Apps).BackgroundPercent);
+        Assert.Empty(changed.With("chrome.exe", null).Apps);
+        Assert.Equal(60, Assert.Single(effects.Apps).BackgroundPercent); // The original stays as it was.
+    }
+
+    [Fact]
+    public void A_window_set_on_its_own_goes_back_to_its_apps_levels_when_cleared()
+    {
+        using var effects = new ContentEffects(new WindowController([]));
+        effects.SetLevels(_ => new ContentLevels(0.3f, 1));
+        const nint window = 0x7FFF0001; // No such window: its program is unknown, and so it gets the main levels.
+        Assert.Equal(new ContentLevels(0.3f, 1), effects.LevelsOf(window));
+        effects.SetWindowLevels(window, new ContentLevels(0.5f, 0.8f, 0.2f));
+        Assert.True(effects.HasOwnLevels(window));
+        Assert.Equal(new ContentLevels(0.5f, 0.8f, 0.2f), effects.LevelsOf(window));
+        effects.SetWindowLevels(window, null);
+        Assert.False(effects.HasOwnLevels(window));
+        Assert.Equal(new ContentLevels(0.3f, 1), effects.LevelsOf(window));
+    }
 }
 
 [Trait("Category", "RealWindows")]

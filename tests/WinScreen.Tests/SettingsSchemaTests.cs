@@ -178,7 +178,7 @@ public sealed class SettingsSchemaTests : IDisposable
     /// The settings documents a newer version starts from: the newest published version's fixture, and this
     /// version's own defaults, so a setting added since the last release is covered too.
     /// </summary>
-    public static TheoryData<string> Documents() => new("fixture", "defaults", "backgrounds", "keptAreas");
+    public static TheoryData<string> Documents() => new("fixture", "defaults", "backgrounds", "keptAreas", "glassApps");
 
     private static string Document(string name) => name switch
     {
@@ -206,6 +206,13 @@ public sealed class SettingsSchemaTests : IDisposable
                     new AppKeptAreas { Program = "vlc", Areas = [new KeptArea { Top = 30, Bottom = 70 }, new KeptArea { Left = 10, Right = 400, RightFromLeft = true }] },
                     new AppKeptAreas { Program = "chrome", Areas = [new KeptArea { Left = 300, LeftFromRight = true, TopFromBottom = true, Top = 200 }] },
                 ],
+            },
+        }),
+        "glassApps" => JsonSerializer.Serialize(new AppSettings
+        {
+            Effects = new EffectPreferences
+            {
+                Apps = [new AppGlassLevels { Program = "chrome", BackgroundPercent = 40, TextPercent = 90, FadeRangePercent = 5 }],
             },
         }),
         _ => JsonSerializer.Serialize(new AppSettings()),

@@ -74,7 +74,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         borderless.DropDownItems.Add(fillItem);
         items.Add(borderless);
         var experimental = new ToolStripMenuItem(T("menu.effects")) { Tag = new Group() }.WithIcon(MenuParts.Repair).Experimental();
-        foreach (AppCommand command in new[] { AppCommand.ToggleDark, AppCommand.ToggleGlass, AppCommand.KeepAreas, AppCommand.ToggleShrink, AppCommand.ToggleCrop })
+        foreach (AppCommand command in new[] { AppCommand.ToggleDark, AppCommand.ToggleGlass, AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleShrink, AppCommand.ToggleCrop })
             experimental.DropDownItems.Add(Command(command));
         items.Add(experimental);
 

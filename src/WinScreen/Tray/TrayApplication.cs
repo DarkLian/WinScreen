@@ -678,7 +678,7 @@ public sealed partial class TrayApplication : ApplicationContext
             _anchors.Configure(_settings.Anchors);
             _automaticAnchors.Configure(_settings.Anchors.Automatic, _settings.Anchors.AvoidContent);
         });
-        if (Changed(settings => settings.Effects)) Part(() => _content.SetLevels(_settings.Effects.Levels));
+        if (Changed(settings => settings.Effects)) Part(() => _content.SetLevels(_settings.Effects.LevelsFor));
         if (Changed(settings => settings.Backgrounds))
         {
             Settings.BackgroundPreferences backgrounds = _settings.Backgrounds;
@@ -1276,7 +1276,12 @@ public sealed partial class TrayApplication : ApplicationContext
             {
                 _settings.KeptAreas = before;
                 Alert(T("errors.operation.title"), failure.Message);
+                return;
             }
+            // Colour-key Glass can't leave a part solid, so the window moves to the same look drawn by the effect.
+            if (areas.Count == 0 || GlassLook(window) != Look.ColorGlass || !Glass.ContentOverlay.GraphicsCardPresent) return;
+            try { SwitchLook(window, Look.ColorGlass, Look.None, Look.PlainGlass, replace: true); }
+            catch (Exception failure) when (IsExpected(failure)) { Alert(T("errors.operation.title"), failure.Message); }
         };
         _cropping = overlay;
         _croppingWindow = window;
@@ -1288,6 +1293,54 @@ public sealed partial class TrayApplication : ApplicationContext
         {
             CancelCrop();
             throw;
+        }
+    }
+
+    private Settings.GlassLevelsWindow? _glassLevels;
+
+    private void OpenGlassLevels(nint window)
+    {
+        if (GlassLook(window) != Look.LayeredGlass)
+            throw new WindowOperationException(T("errors.effects.glassFirst"));
+        string program = WindowInfo.ProgramOf(window);
+        if (program.Length == 0) return;
+        if (_glassLevels is { IsDisposed: false } open) open.Close();
+        Glass.ContentLevels now = _content.LevelsOf(window);
+        var levels = new AppGlassLevels
+        {
+            Program = program, BackgroundPercent = (int)Math.Round(now.Background * 100), TextPercent = (int)Math.Round(now.Text * 100),
+            FadeRangePercent = (int)Math.Round(now.FadeRange * 100),
+        };
+        var identity = WindowIdentity.Capture(window);
+        var panel = new Settings.GlassLevelsWindow(program, levels,
+            changed => { if (identity.Matches()) _content.SetWindowLevels(window, changed.Levels); },
+            save => SaveAppGlass(window, program, save),
+            () =>
+            {
+                _content.SetWindowLevels(window, null);
+                return _settings.Effects.LevelsOf(program);
+            },
+            () => identity.Matches() && GlassLook(window) == Look.LayeredGlass);
+        panel.FormClosed += (_, _) => { if (_glassLevels == panel) _glassLevels = null; };
+        _glassLevels = panel;
+        panel.ShowAt(Cursor.Position);
+    }
+
+    private void SaveAppGlass(nint window, string program, AppGlassLevels levels)
+    {
+        EffectPreferences before = _settings.Effects;
+        try
+        {
+            _settings.Effects = before.With(program, levels);
+            SaveSettings(_settings);
+            _content.SetLevels(_settings.Effects.LevelsFor);
+            _content.SetWindowLevels(window, null);
+            if (_settingsWindow is { IsDisposed: false } open) open.AppGlassChanged(program);
+        }
+        catch (Exception failure) when (IsExpected(failure))
+        {
+            _settings.Effects = before;
+            Alert(T("errors.operation.title"), failure.Message);
         }
     }
 
@@ -1852,25 +1905,41 @@ public sealed partial class TrayApplication : ApplicationContext
     private static bool IsExpected(Exception failure) => failure is WindowOperationException or IOException
         or UnauthorizedAccessException or System.Security.SecurityException or ExternalException;
 
-    private enum Look { None, FilterDark, ContentDark, ColorGlass, LayeredGlass }
+    private enum Look { None, FilterDark, ContentDark, ColorGlass, LayeredGlass, PlainGlass }
 
     private Look DarkLook(nint window) =>
         _dark.IsDark(window) ? Look.FilterDark : _content.Has(window, Glass.ContentLook.Dark) ? Look.ContentDark : Look.None;
 
     private Look GlassLook(nint window) =>
-        _windows.IsGlass(window) ? Look.ColorGlass : _content.Has(window, Glass.ContentLook.Glass) ? Look.LayeredGlass : Look.None;
+        _windows.IsGlass(window) ? Look.ColorGlass :
+        _content.Has(window, Glass.ContentLook.Glass) ? _content.IsPlain(window) ? Look.PlainGlass : Look.LayeredGlass : Look.None;
 
     // Glass goes first: the two can't share a window.
     private void ToggleDark(nint window) => SwitchLook(window, DarkLook(window), GlassLook(window),
         Glass.ContentOverlay.GraphicsCardPresent ? Look.ContentDark : Look.FilterDark);
 
+    // Plain Glass is the colour-key kind's look, drawn by the effect when the app has areas kept as they are.
     private void ToggleGlass(nint window) => SwitchLook(window, GlassLook(window), DarkLook(window),
-        _settings.Effects.LayeredGlass && Glass.ContentOverlay.GraphicsCardPresent ? Look.LayeredGlass : Look.ColorGlass);
+        !Glass.ContentOverlay.GraphicsCardPresent ? Look.ColorGlass : _settings.Effects.LayeredGlass ? Look.LayeredGlass :
+        _settings.KeptAreas.For(WindowInfo.ProgramOf(window)).Count > 0 ? Look.PlainGlass : Look.ColorGlass);
 
     // When the new look fails or is refused the old one is put back, so a window never ends up with both, and never
     // loses one for nothing.
-    private void SwitchLook(nint window, Look current, Look other, Look wanted)
+    // With replace, the current look is swapped for the wanted one, and put back if that fails.
+    private void SwitchLook(nint window, Look current, Look other, Look wanted, bool replace = false)
     {
+        if (replace && current != Look.None)
+        {
+            SetLook(window, current, false);
+            try { SetLook(window, wanted, true); }
+            catch (Exception failure) when (IsExpected(failure))
+            {
+                SetLook(window, current, true);
+                throw;
+            }
+            if (GlassLook(window) != wanted && DarkLook(window) != wanted) SetLook(window, current, true);
+            return;
+        }
         if (current != Look.None)
         {
             SetLook(window, current, false);
@@ -1921,6 +1990,9 @@ public sealed partial class TrayApplication : ApplicationContext
                 break;
             case Look.LayeredGlass:
                 if (on != _content.Has(window, Glass.ContentLook.Glass)) _content.Toggle(window, Glass.ContentLook.Glass);
+                break;
+            case Look.PlainGlass:
+                if (on != _content.Has(window, Glass.ContentLook.Glass)) _content.Toggle(window, Glass.ContentLook.Glass, plain: true);
                 break;
             case Look.ColorGlass:
                 if (_windows.IsGlass(window) != on) _windows.ToggleGlass(window);

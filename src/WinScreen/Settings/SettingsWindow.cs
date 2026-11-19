@@ -337,7 +337,8 @@ private readonly ErrorProvider _errors = new();
             [_defaultOpacity] = '\uE706', [_opacityStep] = '\uE9E9', [_opacityWheel] = '\uE962', [_opaqueOnHover] = '\uE890',
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
-            [_glassText] = '\uE8D2', [_glassFade] = '\uE790',[_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767',
+            [_glassText] = '\uE8D2', [_glassFade] = '\uE790', [_appGlassBackground] = '\uE706', [_appGlassText] = '\uE8D2',
+            [_appGlassFade] = '\uE790', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767',
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
             [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
             [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',
@@ -828,6 +829,7 @@ private readonly ErrorProvider _errors = new();
         {
             LayeredGlass = _layeredGlass.Checked,
             BackgroundPercent = Number(_glassBackground), TextPercent = Number(_glassText), FadeRangePercent = Number(_glassFade),
+            Apps = [.. _glassApps],
         }.Validated();
         draft.Backgrounds = _backgroundEdit.Validated();
         draft.PinBorder = new PinBorderPreferences
@@ -1273,6 +1275,7 @@ private readonly ErrorProvider _errors = new();
         _glassBackground.Value = effects.BackgroundPercent;
         _glassText.Value = effects.TextPercent;
         _glassFade.Value = effects.FadeRangePercent;
+        FillGlassApps(effects);
         FillBackgrounds(values.Backgrounds);
         PinBorderPreferences border = values.PinBorder.Validated();
         _borderColor.Text = border.ColorHex;

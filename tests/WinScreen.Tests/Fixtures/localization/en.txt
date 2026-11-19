@@ -106,6 +106,7 @@ errors.clipboard.busy 07E792AE58CC861C
 errors.crop.customShape 41EAF7F2ED983194
 errors.crop.empty C7D487A92850D48A
 errors.dark.filterUnavailable 72A79FF9979591DD
+errors.effects.glassFirst E6D694EE1EEB79C9
 errors.effects.otherStayed A69B5AF20809B7D3
 errors.effects.stoppedPresses A1B3818CAEDF2B5F
 errors.experimental.enableFirst A2645333102A0835
@@ -207,6 +208,10 @@ gestures.moveResize.modifier 5B5FBE08F1610FAD
 gestures.moveResize.snap 60F6726339DDC40E
 gestures.moveResize.title FE5FD15B7F4BD41A
 gestures.title AD3199BD0C814157
+glassLevels.help 979BD6A6DC2174BE
+glassLevels.reset 4489F4A4CDEC11A1
+glassLevels.save DC76C570A3405228
+glassLevels.title 059AF78C1AD15EB6
 hotkeys.conflictPrefix 1F5C3ED8889DCD97
 hotkeys.modifierRequired C45EEC45E4F634F7
 hotkeys.someUnavailable 0AB94515051F1A1E
@@ -421,9 +426,13 @@ settings.fullScreen.allowPip EEA9FF42701ADE36
 settings.fullScreen.pause 97DF462EEBEEA7CB
 settings.general C910D474DCD724BF
 settings.glass.title 82C268188CD66576
+settings.glassApps.empty B025877D5D323690
+settings.glassApps.help A03AAF99141A27B4
+settings.glassApps.list E8F3547982938962
+settings.glassApps.title DCCCB7DC099384B3
 settings.hotkeys.captureHelp 9A33394E0D7D91A5
 settings.keptAreas.empty 98924C091F6D008C
-settings.keptAreas.help B998C1F76E154930
+settings.keptAreas.help 77DF7AE6775F7C56
 settings.keptAreas.list 031B80C4FE027621
 settings.keptAreas.title FAF1A9475F381E0B
 settings.language A4FE65264EF7DBB3
@@ -557,6 +566,7 @@ window.dark 9B7878AEF90B527C
 window.darkTitleBar EE37B5C50AD78F10
 window.fillDisplay EBCD501FF60D39CF
 window.glass F8155BE62ED65419
+window.glassLevels DFF638B19C3BFF9B
 window.info 8409ADE6F3FB6CBE
 window.info.class B258A3139CD61855
 window.info.display 34E108C0896D0158
