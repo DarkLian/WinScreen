@@ -965,7 +965,8 @@ public sealed partial class TrayApplication : ApplicationContext
         return AppRoles.Reaches(_role, ProcessInfo.IsElevated(process));
     }
 
-    private bool CanOpenWindowMenu(nint window) => CanGesture(window) && !User32.IsIconic(window) &&
+    private bool CanOpenWindowMenu(nint window) => _windows.Refusal(window) is null && !_windows.MenuBlocked(window) &&
+        CanReach(window) && !User32.IsIconic(window) &&
         (!WindowInfo.FillsMonitor(window) || _windows.FilledByWinScreen(window)) && !_settings.WindowMenuExclusions.Contains(WindowInfo.ProgramOf(window),
             StringComparer.OrdinalIgnoreCase);
 
@@ -1244,7 +1245,7 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private void KeepAreas(nint window)
     {
-        if (_windows.IsHidden(window) || _windows.IsPeeking(window))
+        if (_windows.IsHidden(window) && !_windows.IsDrawnByEffect(window) || _windows.IsPeeking(window))
             throw new WindowOperationException(T("errors.window.showFirst"));
         if (User32.IsIconic(window))
             User32.ShowWindow(window, User32.SW_RESTORE);

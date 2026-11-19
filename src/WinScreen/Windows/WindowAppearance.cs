@@ -9,16 +9,20 @@ public sealed partial class WindowController
     internal const long BorderlessMask = User32.WS_CAPTION | User32.WS_THICKFRAME;
     internal const long SwitcherMask = User32.WS_EX_TOOLWINDOW | User32.WS_EX_APPWINDOW;
 
-    private sealed record GestureState(nint Window, bool Hidden, bool Peeking, bool Filled);
+    private sealed record GestureState(nint Window, bool Hidden, bool DrawnByEffect, bool Peeking, bool Filled);
     private volatile GestureState[] _gestureState = [];
 
     private void PublishGestureState() => _gestureState = _changed.Select(pair => new GestureState(pair.Key,
-        pair.Value.Hidden, pair.Value.PlacementBeforePeek is not null,
+        pair.Value.Hidden, pair.Value.Hidden && pair.Value.HiddenButUsable, pair.Value.PlacementBeforePeek is not null,
         pair.Value.PlacementBeforeBorderless is not null && pair.Value.BorderlessFilled)).ToArray();
 
     // The mouse hook must never wait for the controller's UI-thread lock.
     internal bool GestureBlocked(nint window) => _gestureState.Any(state =>
         state.Window == window && (state.Hidden || state.Peeking));
+
+    // A window Glass or Dark mode draws again is still on screen and in use, so its menu opens.
+    internal bool MenuBlocked(nint window) => _gestureState.Any(state =>
+        state.Window == window && (state.Hidden && !state.DrawnByEffect || state.Peeking));
 
     // Lock-free, from the last saved state, so the mouse hook and the full-screen checks can ask.
     internal bool FilledByWinScreen(nint window) => _gestureState.Any(state => state.Window == window && state.Filled);
