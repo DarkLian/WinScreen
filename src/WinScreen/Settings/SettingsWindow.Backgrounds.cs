@@ -17,6 +17,8 @@ public sealed partial class SettingsWindow
     private readonly NumericUpDown _appGlassBackground = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _appGlassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _appGlassFade = new() { Minimum = 1, Maximum = 100, Width = 70 };
+    private readonly ComboBox _appGlassTextColor = TextColorPicker();
+    private readonly SwitchBox _appGlassShadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
     private readonly List<Control> _appGlassRows = [];
     private List<AppGlassLevels> _glassApps = [];
     private bool _showingGlassApp;
@@ -111,9 +113,13 @@ public sealed partial class SettingsWindow
 
         foreach (NumericUpDown box in new[] { _appGlassBackground, _appGlassText, _appGlassFade })
             box.TextChanged += (_, _) => ChangeGlassApp();
+        _appGlassTextColor.SelectedIndexChanged += (_, _) => ChangeGlassApp();
+        _appGlassShadow.CheckedChanged += (_, _) => ChangeGlassApp();
         _appGlassRows.Add(SettingRow(T("settings.effects.background"), _appGlassBackground));
         _appGlassRows.Add(SettingRow(T("settings.effects.text"), _appGlassText));
         _appGlassRows.Add(SettingRow(T("settings.effects.fade"), _appGlassFade));
+        _appGlassRows.Add(SettingRow(T("settings.effects.textColor"), _appGlassTextColor));
+        _appGlassRows.Add(_appGlassShadow);
         _backgroundEditor = Card(T("settings.backgrounds.everyApp"), false,
             [_ownBackground, .. _backgroundRows, Note(T("settings.backgrounds.soundHelp")), _ownGlass, Note(T("settings.apps.glassHelp")), .. _appGlassRows]);
 
@@ -121,7 +127,9 @@ public sealed partial class SettingsWindow
         // Glass's own settings decide how much of the background shows, so they come first.
         page.Controls.Add(Card(T("settings.glass.title"), true, _layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
-            SettingRow(T("settings.effects.fade"), _glassFade), Note(T("settings.effects.fadeHelp")), Note(T("settings.effects.help"))));
+            SettingRow(T("settings.effects.fade"), _glassFade), Note(T("settings.effects.fadeHelp")),
+            SettingRow(T("settings.effects.textColor"), _glassTextColor), Note(T("settings.effects.textColorHelp")), _glassShadow,
+            Note(T("settings.effects.help"))));
         page.Controls.Add(Card(T("settings.backgrounds.title"), true, Note(T("settings.backgrounds.help")), _backgroundFrame, adding));
         page.Controls.Add(_backgroundEditor);
         page.Controls.Add(Card(T("settings.keptAreas.title"), true, Note(T("settings.keptAreas.help")), _keptFrame, keptButtons));
@@ -167,7 +175,18 @@ public sealed partial class SettingsWindow
     private AppGlassLevels MainGlass(string program) => new()
     {
         Program = program, BackgroundPercent = Typed(_glassBackground), TextPercent = Typed(_glassText), FadeRangePercent = Typed(_glassFade),
+        TextColor = TextColorOf(_glassTextColor), TextShadow = _glassShadow.Checked,
     };
+
+    private static ComboBox TextColorPicker()
+    {
+        var picker = new ThemedCombo { Width = 200 };
+        picker.Items.AddRange([T("settings.effects.textColor.asItIs"), T("settings.effects.textColor.light"), T("settings.effects.textColor.dark")]);
+        picker.SelectedIndex = 0;
+        return picker;
+    }
+
+    private static Glass.GlassText TextColorOf(ComboBox picker) => (Glass.GlassText)Math.Max(0, picker.SelectedIndex);
 
     private void ShowGlassApp(string? program)
     {
@@ -180,6 +199,8 @@ public sealed partial class SettingsWindow
             _appGlassBackground.Value = shown.BackgroundPercent;
             _appGlassText.Value = shown.TextPercent;
             _appGlassFade.Value = shown.FadeRangePercent;
+            _appGlassTextColor.SelectedIndex = (int)shown.TextColor;
+            _appGlassShadow.Checked = shown.TextShadow;
         }
         finally { _showingGlassApp = false; }
         foreach (Control row in _appGlassRows) row.Enabled = own is not null;
@@ -192,6 +213,7 @@ public sealed partial class SettingsWindow
         _glassApps[at] = app with
         {
             BackgroundPercent = Typed(_appGlassBackground), TextPercent = Typed(_appGlassText), FadeRangePercent = Typed(_appGlassFade),
+            TextColor = TextColorOf(_appGlassTextColor), TextShadow = _appGlassShadow.Checked,
         };
         QueueApplyRefresh();
     }

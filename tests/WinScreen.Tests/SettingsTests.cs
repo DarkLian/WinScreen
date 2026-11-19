@@ -501,6 +501,39 @@ public sealed class SettingsWindowTests : IDisposable
         });
     }
 
+    // An app's text color and shadow start as every app's, and its own choice leaves every app's alone.
+    [Fact]
+    public void An_apps_text_color_and_shadow_are_its_own()
+    {
+        OnUiThread(() =>
+        {
+            AppSettings? applied = null;
+            var settings = new AppSettings { Effects = new EffectPreferences { TextColor = Glass.GlassText.Light, TextShadow = false } };
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), chosen =>
+            {
+                applied = chosen;
+                return [];
+            });
+            _ = window.Handle;
+            window.AddApp("Notes.exe");
+            Assert.True(window.SaveChanges());
+            AppGlassLevels notes = applied!.Effects.OwnOf("Notes")!;
+            Assert.Equal((Glass.GlassText.Light, false), (notes.TextColor, notes.TextShadow));
+
+            string asItIs = Localization.UiText.T("settings.effects.textColor.asItIs");
+            ComboBox[] pickers = [.. Descendants(window).OfType<ComboBox>().Where(combo => combo.Items.Contains(asItIs))];
+            Assert.Equal(2, pickers.Length); // Every app's, then the app's own.
+            pickers[1].SelectedIndex = (int)Glass.GlassText.Dark;
+            Descendants(window).OfType<SwitchBox>().Last(box => box.Text == Localization.UiText.T("settings.effects.shadow")).Checked = true;
+            Assert.True(window.SaveChanges());
+            notes = applied.Effects.OwnOf("Notes")!;
+            Assert.Equal((Glass.GlassText.Dark, true), (notes.TextColor, notes.TextShadow));
+            Assert.Equal((Glass.GlassText.Light, false), (applied.Effects.TextColor, applied.Effects.TextShadow));
+            Assert.Equal(Glass.GlassText.Dark, applied.Effects.LevelsFor("notes").TextColor);
+            Assert.False(applied.Effects.LevelsFor("other").Shadow);
+        });
+    }
+
     [Fact]
     public void A_name_typed_but_not_added_waits_for_Add()
     {

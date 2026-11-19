@@ -7,6 +7,8 @@ public sealed record EffectPreferences
     public int BackgroundPercent { get; init; } = 15;
     public int TextPercent { get; init; } = 100;
     public int FadeRangePercent { get; init; } = 100;
+    public Glass.GlassText TextColor { get; init; }
+    public bool TextShadow { get; init; } = true;
     // Apps with their own levels; every other app uses the ones above.
     public List<AppGlassLevels> Apps { get; init; } = [];
 
@@ -22,11 +24,13 @@ public sealed record EffectPreferences
             BackgroundPercent = Math.Clamp(BackgroundPercent, 0, 100),
             TextPercent = Math.Clamp(TextPercent, 20, 100),
             FadeRangePercent = Math.Clamp(FadeRangePercent, 1, 100),
+            TextColor = Enum.IsDefined(TextColor) ? TextColor : Glass.GlassText.AsItIs,
             Apps = apps,
         };
     }
 
-    internal Glass.ContentLevels Levels => new(BackgroundPercent / 100f, TextPercent / 100f, FadeRangePercent / 100f);
+    internal Glass.ContentLevels Levels =>
+        new(BackgroundPercent / 100f, TextPercent / 100f, FadeRangePercent / 100f, TextColor: TextColor, Shadow: TextShadow);
 
     internal AppGlassLevels? OwnOf(string program)
     {
@@ -49,6 +53,7 @@ public sealed record EffectPreferences
     {
         Program = BackgroundPreferences.ProgramKey(program),
         BackgroundPercent = BackgroundPercent, TextPercent = TextPercent, FadeRangePercent = FadeRangePercent,
+        TextColor = TextColor, TextShadow = TextShadow,
     };
 }
 
@@ -58,6 +63,8 @@ public sealed record AppGlassLevels
     public int BackgroundPercent { get; init; } = 15;
     public int TextPercent { get; init; } = 100;
     public int FadeRangePercent { get; init; } = 100;
+    public Glass.GlassText TextColor { get; init; }
+    public bool TextShadow { get; init; } = true;
 
     internal AppGlassLevels Validated() => this with
     {
@@ -65,7 +72,9 @@ public sealed record AppGlassLevels
         BackgroundPercent = Math.Clamp(BackgroundPercent, 0, 100),
         TextPercent = Math.Clamp(TextPercent, 20, 100),
         FadeRangePercent = Math.Clamp(FadeRangePercent, 1, 100),
+        TextColor = Enum.IsDefined(TextColor) ? TextColor : Glass.GlassText.AsItIs,
     };
 
-    internal Glass.ContentLevels Levels => new(BackgroundPercent / 100f, TextPercent / 100f, FadeRangePercent / 100f);
+    internal Glass.ContentLevels Levels =>
+        new(BackgroundPercent / 100f, TextPercent / 100f, FadeRangePercent / 100f, TextColor: TextColor, Shadow: TextShadow);
 }

@@ -422,7 +422,13 @@ settings.effects.fade EE93D7FBF7CCFCB9
 settings.effects.fadeHelp C2955F42B63E6D58
 settings.effects.help 20A4D11004417111
 settings.effects.layeredGlass 89FFD556EA827C2F
+settings.effects.shadow F41167C9DD63C6A8
 settings.effects.text 2317E7A1901A6CD7
+settings.effects.textColor 59B269E4727E22A9
+settings.effects.textColor.asItIs 1DE795BB16AA9212
+settings.effects.textColor.dark A6B75D0680322A61
+settings.effects.textColor.light DEE60AEE2501C623
+settings.effects.textColorHelp 2AEAD8A2FEEF549E
 settings.effects.title 91626AFF4237C4DB
 settings.experimental 5B00B4A97282B8B8
 settings.experimental.enable 66B2EE3DE632FE86

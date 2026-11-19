@@ -223,6 +223,41 @@ public sealed class PageReaderTests
         Assert.False(reader.AlreadyDark);
     }
 
+    // Light or Dark text flips a page that is the other way round; a mid-grey page must not flip back and forth.
+    [Fact]
+    public void A_light_page_is_light_and_a_mid_grey_one_doesnt_switch_back_and_forth()
+    {
+        var reader = new PageReader();
+        reader.Read(Tiles(10, 90));
+        Assert.True(reader.Light);
+        reader.Read([.. Enumerable.Repeat(new TileStats(0.5f, 0.5f, 0.5f, 1, false), 100)]);
+        Assert.True(reader.Light);
+        reader.Read([.. Enumerable.Repeat(new TileStats(0.4f, 0.4f, 0.4f, 1, false), 100)]);
+        Assert.False(reader.Light);
+        reader.Read([.. Enumerable.Repeat(new TileStats(0.5f, 0.5f, 0.5f, 1, false), 100)]);
+        Assert.False(reader.Light);
+        reader.Reset();
+        Assert.False(reader.Light);
+    }
+
+    [Fact]
+    public void Text_stays_as_it_is_with_its_shadow_until_chosen_and_each_app_keeps_its_own()
+    {
+        EffectPreferences effects = AppSettings.Parse("{}").Effects;
+        Assert.Equal((GlassText.AsItIs, true), (effects.TextColor, effects.TextShadow));
+        Assert.Equal((GlassText.AsItIs, true), (effects.Levels.TextColor, effects.Levels.Shadow));
+        EffectPreferences chosen = AppSettings.Parse(
+            @"{""Effects"":{""TextColor"":9,""Apps"":[{""Program"":""Chrome"",""TextColor"":1,""TextShadow"":false},{""Program"":""Notes""}]}}").Effects;
+        Assert.Equal(GlassText.AsItIs, chosen.TextColor);
+        Assert.Equal((GlassText.Light, false), (chosen.LevelsFor("chrome").TextColor, chosen.LevelsFor("chrome").Shadow));
+        Assert.Equal((GlassText.AsItIs, true), (chosen.LevelsFor("notes").TextColor, chosen.LevelsFor("notes").Shadow));
+        // An app's own levels start from every app's, text color and shadow included.
+        AppGlassLevels fresh = (chosen with { TextColor = GlassText.Dark, TextShadow = false }).LevelsOf("paint");
+        Assert.Equal((GlassText.Dark, false), (fresh.TextColor, fresh.TextShadow));
+        string saved = System.Text.Json.JsonSerializer.Serialize(new AppSettings { Effects = chosen with { TextColor = GlassText.Dark } });
+        Assert.Equal(GlassText.Dark, AppSettings.Parse(saved).Effects.TextColor);
+    }
+
     [Fact]
     public void Settings_that_never_chose_get_layered_glass_and_a_choice_stays()
     {
@@ -361,6 +396,49 @@ public sealed class ContentEffectTests
                 Pump(() => Desktop.IsNear(Middle(bounds), expected, 24));
                 Assert.True(Desktop.IsNear(Middle(bounds), expected, 24), $"{Middle(bounds)} rather than {expected}");
                 Assert.Equal(128, windows.OpacityOf(target.Handle));
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
+    // Light text on a white page with a black band: the page turns dark and see-through, the band light; the shadow
+    // keeps a strip of the page solid beside the band, and without it that strip is as see-through as the rest.
+    [GraphicsCardFact]
+    public void Light_text_flips_a_light_page_and_the_shadow_can_be_turned_off()
+    {
+        using var behind = new TargetProcess(new Rectangle(250, 180, 520, 400), "1E64C8");
+        using var target = new TargetProcess(Spot, "FFFFFF,000000,FFFFFF");
+        User32.SetWindowPos(target.Handle, 0, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        int bandLeft = bounds.Left + bounds.Width / 3;
+        Rectangle page = new(bounds.Left + 20, bounds.Top + bounds.Height / 2 - 5, 30, 10);
+        Rectangle band = new(bandLeft + bounds.Width / 6 - 5, bounds.Top + bounds.Height / 2 - 5, 10, 10);
+        Rectangle beside = new(bandLeft - 3, bounds.Top + bounds.Height / 2 - 5, 2, 10);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            effects.SetLevels(new ContentLevels(0.15f, 1, TextColor: GlassText.Light));
+            try
+            {
+                Assert.True(effects.Toggle(target.Handle, ContentLook.Glass));
+                // The page flipped to #191919, 15% of it over the blue window behind.
+                Color expected = Color.FromArgb((int)(25 * 0.15 + 0x1E * 0.85), (int)(25 * 0.15 + 0x64 * 0.85), (int)(25 * 0.15 + 0xC8 * 0.85));
+                Pump(() => Desktop.IsNear(Desktop.ColorOnScreen(page), expected, 20));
+                Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(page), expected, 20), $"Page {Desktop.ColorOnScreen(page)} rather than {expected}");
+                Color text = Desktop.ColorOnScreen(band);
+                Assert.True(text.GetBrightness() > 0.8f, $"The black band stayed {text}.");
+                Color shadow = Desktop.ColorOnScreen(beside);
+                Assert.True(shadow.B < 120, $"Beside the band {shadow}: no shadow.");
+
+                effects.SetLevels(new ContentLevels(0.15f, 1, TextColor: GlassText.Light, Shadow: false));
+                Pump(() => Desktop.ColorOnScreen(beside).B > 140);
+                Color none = Desktop.ColorOnScreen(beside);
+                Assert.True(Desktop.IsNear(none, expected, 30), $"Beside the band {none} rather than {expected} with the shadow off.");
             }
             finally
             {

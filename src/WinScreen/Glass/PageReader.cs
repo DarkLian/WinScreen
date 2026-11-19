@@ -11,6 +11,10 @@ internal sealed class PageReader
 
     public bool AlreadyDark { get; private set; }
 
+    // Glass's text colour flips a light page for light text and a dark one for dark text. The margin keeps a mid-grey
+    // page from flipping back and forth.
+    public bool Light { get; private set; }
+
     public void Read(TileStats[] tiles)
     {
         if (tiles.Length == 0)
@@ -33,12 +37,14 @@ internal sealed class PageReader
         // The margin keeps a mid-grey page from switching between left alone and flipped.
         float light = 0.3f * Page.R + 0.59f * Page.G + 0.11f * Page.B;
         AlreadyDark = AlreadyDark ? light < 0.3f : light < 0.2f;
+        Light = Light ? light > 0.45f : light > 0.55f;
     }
 
     public void Reset()
     {
         _key = -1;
         AlreadyDark = false;
+        Light = false;
     }
 
     private static int Key(TileStats t) => (int)(t.R * 31) << 10 | (int)(t.G * 31) << 5 | (int)(t.B * 31);

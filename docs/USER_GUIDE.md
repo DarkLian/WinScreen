@@ -209,10 +209,19 @@ a little too. Two settings help:
   them. The list is at the bottom of **Settings → Backgrounds**, where you can remove an app's areas. Plain Glass
   keeps them too, on a PC with a graphics card.
 
+### Text over a busy background
+
+Glass keeps a soft shadow of the page's color around text, so it stays readable over what's behind. Two settings in
+the **Glass** card of **Settings → Backgrounds** change that:
+
+- **Text color**: **Light** or **Dark** turns the page the other way round when it needs to, as Dark mode does. You
+  get light text with a dark shadow, or dark text with a light one. Gray parts of pictures turn too.
+- **Shadow behind text**: turn it off for text with no shadow.
+
 ### Glass for each app or window
 
-Under **Apps** in **Settings → Backgrounds**, add an app to give it its own background and its own Background, Text
-and Fade range. Both start as every app has them, and either can be turned off for that app. To change just one window, choose **Glass levels** under **Effects** in its menu: the changes show at once and
+Under **Apps** in **Settings → Backgrounds**, add an app to give it its own background and its own Background, Text,
+Fade range, text color and shadow. Both start as every app has them, and either can be turned off for that app. To change just one window, choose **Glass levels** under **Effects** in its menu: the changes show at once and
 last until the window closes, and **Save for this app** keeps them for all its windows.
 
 ## Remember a program's setup

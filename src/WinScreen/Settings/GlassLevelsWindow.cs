@@ -8,6 +8,8 @@ internal sealed class GlassLevelsWindow : ThemedDialog
     private readonly NumericUpDown _background = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _text = new() { Minimum = 20, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _fade = new() { Minimum = 1, Maximum = 100, Width = 70 };
+    private readonly ComboBox _textColor = new ThemedCombo { Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly SwitchBox _shadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 500 };
     private bool _filling;
 
@@ -24,6 +26,13 @@ internal sealed class GlassLevelsWindow : ThemedDialog
             box.ValueChanged += (_, _) => { if (!_filling) changed(Current(program)); };
             Row(label, new NumberSlider(box) { AccessibleName = label.TrimEnd(':', '：', ' ') });
         }
+        _textColor.Items.AddRange([T("settings.effects.textColor.asItIs"), T("settings.effects.textColor.light"), T("settings.effects.textColor.dark")]);
+        _textColor.SelectedIndex = (int)levels.TextColor;
+        _shadow.Checked = levels.TextShadow;
+        _textColor.SelectedIndexChanged += (_, _) => { if (!_filling) changed(Current(program)); };
+        _shadow.CheckedChanged += (_, _) => { if (!_filling) changed(Current(program)); };
+        Row(T("settings.effects.textColor"), _textColor);
+        Whole(_shadow);
         Note(string.Format(T("glassLevels.help"), program));
         CancelButton = AddAction(T("common.close"), false, Close);
         AddAction(T("glassLevels.reset"), false, () => Fill(reset()));
@@ -57,6 +66,8 @@ internal sealed class GlassLevelsWindow : ThemedDialog
             _background.Value = Math.Clamp(levels.BackgroundPercent, 0, 100);
             _text.Value = Math.Clamp(levels.TextPercent, 20, 100);
             _fade.Value = Math.Clamp(levels.FadeRangePercent, 1, 100);
+            if (_textColor.Items.Count > 0) _textColor.SelectedIndex = (int)levels.TextColor;
+            _shadow.Checked = levels.TextShadow;
         }
         finally { _filling = false; }
     }
@@ -64,6 +75,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
     private AppGlassLevels Current(string program) => new()
     {
         Program = program, BackgroundPercent = (int)_background.Value, TextPercent = (int)_text.Value, FadeRangePercent = (int)_fade.Value,
+        TextColor = (Glass.GlassText)Math.Max(0, _textColor.SelectedIndex), TextShadow = _shadow.Checked,
     };
 
     protected override void OnFormClosed(FormClosedEventArgs e)

@@ -20,6 +20,8 @@ public sealed partial class SettingsWindow : Form
     private readonly NumericUpDown _glassBackground = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _glassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _glassFade = new() { Minimum = 1, Maximum = 100, Width = 70 };
+    private readonly ComboBox _glassTextColor = TextColorPicker();
+    private readonly SwitchBox _glassShadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
     private readonly CheckBox _detectDark = new SwitchBox { Text = T("settings.dark.detect"), AutoSize = true };
     private readonly TextBox _borderColor = new() { Width = 90 };
     private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
@@ -338,7 +340,8 @@ private readonly ErrorProvider _errors = new();
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
             [_glassText] = '\uE8D2', [_glassFade] = '\uE790', [_appGlassBackground] = '\uE706', [_appGlassText] = '\uE8D2',
-            [_appGlassFade] = '\uE790', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767',
+            [_appGlassFade] = '\uE790', [_glassTextColor] = '\uE8D3', [_appGlassTextColor] = '\uE8D3', [_glassShadow] = '\uE81E',
+            [_appGlassShadow] = '\uE81E', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767',
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
             [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
             [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',
@@ -829,6 +832,7 @@ private readonly ErrorProvider _errors = new();
         {
             LayeredGlass = _layeredGlass.Checked,
             BackgroundPercent = Number(_glassBackground), TextPercent = Number(_glassText), FadeRangePercent = Number(_glassFade),
+            TextColor = TextColorOf(_glassTextColor), TextShadow = _glassShadow.Checked,
             Apps = [.. _glassApps],
         }.Validated();
         draft.Backgrounds = _backgroundEdit.Validated();
@@ -1281,6 +1285,8 @@ private readonly ErrorProvider _errors = new();
         _glassBackground.Value = effects.BackgroundPercent;
         _glassText.Value = effects.TextPercent;
         _glassFade.Value = effects.FadeRangePercent;
+        _glassTextColor.SelectedIndex = (int)effects.TextColor;
+        _glassShadow.Checked = effects.TextShadow;
         FillGlassApps(effects);
         FillBackgrounds(values.Backgrounds);
         PinBorderPreferences border = values.PinBorder.Validated();

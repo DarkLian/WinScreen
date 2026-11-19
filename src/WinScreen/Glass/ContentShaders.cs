@@ -2,6 +2,21 @@ namespace WinScreen.Glass;
 
 internal static class ContentShaders
 {
+    // Each channel flips, which turns ClearType's coloured fringes into the right ones for light text on dark. Then the
+    // colour of the few pixels across is put back: grey text's fringes cancel there, so it stays crisp; coloured parts
+    // flip their brightness and keep their colour. A white page becomes #191919 rather than black, as the filter kind
+    // does; the rest is lifted in step.
+    private const string Flip = """
+        float3 Flipped(float3 c, float3 across) {
+            float3 hue = across - dot(across, float3(0.3,0.59,0.11));
+            float light = dot(c, float3(0.3,0.59,0.11));
+            float coloured = smoothstep(0.04, 0.12, length(hue));
+            float3 flipped = saturate(lerp(1 - c + 2 * hue, c + (1 - 2 * light), coloured));
+            return 25.0 / 255 + flipped * (1 - 25.0 / 255);
+        }
+
+        """;
+
     public const string Stats = """
         Texture2D<float4> source : register(t0);
         RWTexture2D<float4> tiles : register(u0);
@@ -36,7 +51,7 @@ internal static class ContentShaders
         """;
 
     // The window as Glass draws it, over a picture or video frame. Outside the picture, the page colour.
-    public const string Backdrop = """
+    public const string Backdrop = Flip + """
         Texture2D<float4> layer : register(t0);
         Texture2D<float4> picture : register(t1);
         SamplerState edge : register(s0);
@@ -49,17 +64,23 @@ internal static class ContentShaders
             if (id.x >= ow || id.y >= oh) return;
             float4 l = layer.Load(int3(id.xy,0));
             float2 uv = (float2(id.xy) + 0.5 - place.xy) / place.zw;
-            float3 p = page.rgb;
+            // Light or dark text flipped the page, so the colour around the picture is the flipped one too.
+            float3 p = page.w > 0.5 ? Flipped(page.rgb, page.rgb) : page.rgb;
             if (how.x > 0.5) p = picture.SampleLevel(repeat, uv, 0).rgb;
             else if (all(uv >= 0) && all(uv <= 1)) p = picture.SampleLevel(edge, uv, how.y).rgb;
             output[id.xy] = float4(l.rgb + p * (1 - l.a), 1);
         }
         """;
 
-    public const string Composite = """
+    public const string Composite = Flip + """
         Texture2D<float4> source : register(t0);
         RWTexture2D<float4> output : register(u0);
         cbuffer Options : register(b0) { float4 levels; float4 mode; float4 page; float4 areas[8]; };
+        float3 Across(int2 at, uint ow, uint oh) {
+            float3 across = 0;
+            for (int k = -2; k <= 2; k++) across += source.Load(int3(clamp(int2(at.x + k, at.y), int2(0,0), int2(ow - 1, oh - 1)), 0)).rgb;
+            return across / 5;
+        }
         [numthreads(16,16,1)]
         void Composite(uint3 id : SV_DispatchThreadID) {
             uint ow, oh; output.GetDimensions(ow, oh);
@@ -76,18 +97,7 @@ internal static class ContentShaders
             if (mode.x == 2 && mode.y == 1) {
                 result = float4(c, 1);
             } else if (mode.x == 2) {
-                // Each channel flips, which turns ClearType's coloured fringes into the right ones for light text on
-                // dark. Then the colour of the few pixels across is put back: grey text's fringes cancel there, so it
-                // stays crisp; coloured parts flip their brightness and keep their colour.
-                float3 across = 0;
-                for (int k = -2; k <= 2; k++) across += source.Load(int3(clamp(int2(id.x + k, id.y), int2(0,0), int2(ow - 1, oh - 1)), 0)).rgb;
-                across /= 5;
-                float3 hue = across - dot(across, float3(0.3,0.59,0.11));
-                float light = dot(c, float3(0.3,0.59,0.11));
-                float coloured = smoothstep(0.04, 0.12, length(hue));
-                float3 flipped = saturate(lerp(1 - c + 2 * hue, c + (1 - 2 * light), coloured));
-                // A white page becomes #191919 rather than black, as the filter kind does; the rest is lifted in step.
-                result = float4(25.0 / 255 + flipped * (1 - 25.0 / 255), 1);
+                result = float4(Flipped(c, Across(int2(id.xy), ow, oh)), 1);
             } else if (mode.x == 1) {
                 // Plain Glass: only the page colour itself is see-through, as the colour-key kind does it. The page
                 // colour here is an average, so it is matched to within about 2/255.
@@ -98,19 +108,27 @@ internal static class ContentShaders
                 // Below 0.1 the fully faded part narrows too, so at 0.01 only the page colour itself fades.
                 float start = 0.03 * min(1, levels.z * 10);
                 float d = smoothstep(start, start + 0.27 * levels.z, away);
-                float3 ink = d > 0.001 ? saturate((c - (1 - d) * page.rgb) / d) : c;
+                // Flipping keeps each colour's distance from the page, so what fades and the halo are worked out
+                // before it.
+                float3 shownPage = page.rgb, shown = c;
+                if (page.w > 0.5) {
+                    shownPage = Flipped(page.rgb, page.rgb);
+                    shown = Flipped(c, Across(int2(id.xy), ow, oh));
+                }
+                float3 ink = d > 0.001 ? saturate((shown - (1 - d) * shownPage) / d) : shown;
                 // Text keeps a thin halo of the page colour, a few pixels wide: dark text on a light page sat right on
-                // whatever was behind, often dark, and couldn't be read.
+                // whatever was behind, often dark, and couldn't be read. It can be turned off.
                 float halo = 0;
                 // Only strong contrast, as text has, makes a halo: a panel's faint border doesn't.
-                for (int py = -3; py <= 3; py++) for (int px = -3; px <= 3; px++) {
-                    float3 n = source.Load(int3(clamp(int2(id.xy) + int2(px, py), int2(0,0), int2(ow - 1, oh - 1)), 0)).rgb;
-                    float nd = smoothstep(0.18, 0.45, length(n - page.rgb));
-                    halo = max(halo, nd * saturate(1 - length(float2(px, py)) / 4.0));
-                }
+                if (levels.w > 0.5)
+                    for (int py = -3; py <= 3; py++) for (int px = -3; px <= 3; px++) {
+                        float3 n = source.Load(int3(clamp(int2(id.xy) + int2(px, py), int2(0,0), int2(ow - 1, oh - 1)), 0)).rgb;
+                        float nd = smoothstep(0.18, 0.45, length(n - page.rgb));
+                        halo = max(halo, nd * saturate(1 - length(float2(px, py)) / 4.0));
+                    }
                 float under = lerp(levels.x, max(levels.x, 0.9), smoothstep(0.0, 0.45, halo));
                 float alpha = lerp(under, levels.y, d);
-                result = float4(lerp(page.rgb * under, ink * levels.y, d), alpha);
+                result = float4(lerp(shownPage * under, ink * levels.y, d), alpha);
             }
             output[id.xy] = result;
         }

@@ -16,7 +16,11 @@ namespace WinScreen.Glass;
 
 internal enum ContentLook { Glass, Dark }
 
-internal readonly record struct ContentLevels(float Background, float Text, float FadeRange = 1, bool Plain = false);
+internal readonly record struct ContentLevels(float Background, float Text, float FadeRange = 1, bool Plain = false,
+    GlassText TextColor = GlassText.AsItIs, bool Shadow = true);
+
+// Light or Dark flips a page that is the other way, as Dark mode does, before Glass.
+public enum GlassText { AsItIs, Light, Dark }
 
 internal sealed unsafe class ContentOverlay : Form
 {
@@ -499,6 +503,7 @@ internal sealed unsafe class ContentOverlay : Form
             {
                 X = place.X, Y = place.Y, Width = place.Width, Height = place.Height,
                 Tile = choice.Fit == BackdropFit.Tile ? 1 : 0, Detail = detail, PageR = pr, PageG = pg, PageB = pb,
+                Flip = Flips(_levels.Value) ? 1 : 0,
             };
             context.UpdateSubresource(in where, _place!);
             context.CSSetShader(_backdropShader);
@@ -539,9 +544,9 @@ internal sealed unsafe class ContentOverlay : Form
         ContentLevels levels = _levels.Value;
         var options = new Options
         {
-            Background = levels.Background, Text = levels.Text, FadeRange = levels.FadeRange,
+            Background = levels.Background, Text = levels.Text, FadeRange = levels.FadeRange, Shadow = levels.Shadow ? 1 : 0,
             Mode = _look == ContentLook.Dark ? 2 : levels.Plain ? 1 : 0, AlreadyDark = _leaveAlreadyDark && _page.AlreadyDark ? 1 : 0,
-            PageR = pr, PageG = pg, PageB = pb,
+            PageR = pr, PageG = pg, PageB = pb, Flip = Flips(levels) ? 1 : 0,
         };
         Settings.KeptArea[] kept = _kept;
         float scale = User32.GetDpiForWindow(_source) is var dpi and > 0 ? dpi / 96f : 1;
@@ -593,21 +598,28 @@ internal sealed unsafe class ContentOverlay : Form
         _page.Read(stats);
     }
 
+    private bool Flips(ContentLevels levels) => _look == ContentLook.Glass && !levels.Plain && levels.TextColor switch
+    {
+        GlassText.Light => _page.Light,
+        GlassText.Dark => !_page.Light,
+        _ => false,
+    };
+
     [StructLayout(LayoutKind.Sequential)]
     private struct Place
     {
         public float X, Y, Width, Height;
         public float Tile, Detail, Unused1, Unused2;
-        public float PageR, PageG, PageB, Unused3;
+        public float PageR, PageG, PageB, Flip;
     }
 
     [StructLayout(LayoutKind.Sequential)]
     private unsafe struct Options
     {
-        public float Background, Text, FadeRange, Unused2;
+        public float Background, Text, FadeRange, Shadow;
         public const int MostAreas = 8;
         public float Mode, AlreadyDark, KeptCount, Unused4;
-        public float PageR, PageG, PageB, Unused5;
+        public float PageR, PageG, PageB, Flip;
         public fixed float Areas[MostAreas * 4];
     }
 
