@@ -91,7 +91,9 @@ internal static class ContentShaders
             } else {
                 float away = length(c - page.rgb);
                 // levels.z narrows the colours that fade: at 1, the band reaches 0.30; lower keeps pictures solid.
-                float d = smoothstep(0.03, 0.03 + 0.27 * levels.z, away);
+                // Below 0.1 the fully faded part narrows too, so at 0.01 only the page colour itself fades.
+                float start = 0.03 * min(1, levels.z * 10);
+                float d = smoothstep(start, start + 0.27 * levels.z, away);
                 float3 ink = d > 0.001 ? saturate((c - (1 - d) * page.rgb) / d) : c;
                 // Text keeps a thin halo of the page colour, a few pixels wide: dark text on a light page sat right on
                 // whatever was behind, often dark, and couldn't be read.

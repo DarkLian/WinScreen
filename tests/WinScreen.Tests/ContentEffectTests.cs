@@ -236,7 +236,7 @@ public sealed class PageReaderTests
         // The full range is the band Glass always had, so nobody's Glass changes on update.
         Assert.Equal(100, effects.FadeRangePercent);
         Assert.Equal(1f, effects.Levels.FadeRange);
-        Assert.Equal(10, AppSettings.Parse("""{"Effects":{"FadeRangePercent":0}}""").Effects.FadeRangePercent);
+        Assert.Equal(1, AppSettings.Parse("""{"Effects":{"FadeRangePercent":0}}""").Effects.FadeRangePercent);
         Assert.Equal(100, AppSettings.Parse("""{"Effects":{"FadeRangePercent":500}}""").Effects.FadeRangePercent);
         // Settings saved before Dark and Glass went pixel by pixel still load.
         Assert.True(AppSettings.Parse("""{"Effects":{"PictureSafeDark":false,"PicturePercent":50}}""").Effects.LayeredGlass);

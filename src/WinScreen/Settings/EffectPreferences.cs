@@ -12,7 +12,7 @@ public sealed record EffectPreferences
     {
         BackgroundPercent = Math.Clamp(BackgroundPercent, 0, 100),
         TextPercent = Math.Clamp(TextPercent, 20, 100),
-        FadeRangePercent = Math.Clamp(FadeRangePercent, 10, 100),
+        FadeRangePercent = Math.Clamp(FadeRangePercent, 1, 100),
     };
 
     internal Glass.ContentLevels Levels => new(BackgroundPercent / 100f, TextPercent / 100f, FadeRangePercent / 100f);
