@@ -471,6 +471,36 @@ public sealed class SettingsWindowTests : IDisposable
     }
 
     /// <summary>A program name still in its box is left there, not saved half typed; Add puts it in the list.</summary>
+    // One app in the list has its own background and Glass levels, each starting as every app has them.
+    [Fact]
+    public void An_added_app_gets_its_own_background_and_glass_levels_and_either_can_go()
+    {
+        OnUiThread(() =>
+        {
+            AppSettings? applied = null;
+            var settings = new AppSettings
+            {
+                Effects = new EffectPreferences { BackgroundPercent = 30 },
+                Backgrounds = new BackgroundPreferences { Everywhere = new BackgroundChoice { File = @"C:\pictures\sky.png" } },
+            };
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), chosen =>
+            {
+                applied = chosen;
+                return [];
+            });
+            _ = window.Handle;
+            window.AddApp("Notes.exe");
+            Assert.True(window.SaveChanges());
+            Assert.Equal(@"C:\pictures\sky.png", applied!.Backgrounds.OwnOf("Notes")!.File);
+            Assert.Equal(30, applied.Effects.OwnOf("Notes")!.BackgroundPercent);
+            SwitchBox own = Descendants(window).OfType<SwitchBox>().Single(box => box.Text == Localization.UiText.T("settings.apps.ownBackground"));
+            own.Checked = false;
+            Assert.True(window.SaveChanges());
+            Assert.Null(applied.Backgrounds.OwnOf("Notes"));
+            Assert.NotNull(applied.Effects.OwnOf("Notes"));
+        });
+    }
+
     [Fact]
     public void A_name_typed_but_not_added_waits_for_Add()
     {

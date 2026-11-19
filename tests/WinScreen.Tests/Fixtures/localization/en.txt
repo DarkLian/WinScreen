@@ -386,6 +386,10 @@ settings.admin.declined 64D748185676BE10
 settings.admin.help B606F0DF8E9E0130
 settings.admin.helperFailed E65C365084B9FB24
 settings.admin.unavailable 9F6E6B9878747B53
+settings.apps.everyBackground B23C7B2B3DBFC902
+settings.apps.glassHelp 88AA83A4F9698E5B
+settings.apps.ownBackground 0B109C8814C70E49
+settings.apps.ownGlass 0CBD2EFC2D6D61A5
 settings.backgrounds 16A0B5FABBAF4030
 settings.backgrounds.appNone 2DB7E0C9D5E182A3
 settings.backgrounds.center D946067427E930A1
@@ -398,7 +402,7 @@ settings.backgrounds.files 4C9C537CD5728475
 settings.backgrounds.fill 033955D469B620D6
 settings.backgrounds.fit 9F872ED43D00D8BD
 settings.backgrounds.fitWhole 9F872ED43D00D8BD
-settings.backgrounds.help 9CDF7BC4FA8465D3
+settings.backgrounds.help D50D4E32CA0A9F88
 settings.backgrounds.list 16A0B5FABBAF4030
 settings.backgrounds.none DC937B59892604F5
 settings.backgrounds.pictures 1E6245009D677035
@@ -426,10 +430,6 @@ settings.fullScreen.allowPip EEA9FF42701ADE36
 settings.fullScreen.pause 97DF462EEBEEA7CB
 settings.general C910D474DCD724BF
 settings.glass.title 82C268188CD66576
-settings.glassApps.empty B025877D5D323690
-settings.glassApps.help A03AAF99141A27B4
-settings.glassApps.list E8F3547982938962
-settings.glassApps.title DCCCB7DC099384B3
 settings.hotkeys.captureHelp 9A33394E0D7D91A5
 settings.keptAreas.empty 98924C091F6D008C
 settings.keptAreas.help 77DF7AE6775F7C56

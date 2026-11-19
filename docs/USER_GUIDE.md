@@ -211,8 +211,8 @@ a little too. Two settings help:
 
 ### Glass for each app or window
 
-Under **Glass for each app** in **Settings → Backgrounds**, add an app to give it its own Background, Text and Fade
-range. To change just one window, choose **Glass levels** under **Effects** in its menu: the changes show at once and
+Under **Apps** in **Settings → Backgrounds**, add an app to give it its own background and its own Background, Text
+and Fade range. Both start as every app has them, and either can be turned off for that app. To change just one window, choose **Glass levels** under **Effects** in its menu: the changes show at once and
 last until the window closes, and **Save for this app** keeps them for all its windows.
 
 ## Remember a program's setup

@@ -3,20 +3,21 @@ using WinScreen.Glass;
 
 namespace WinScreen.Settings;
 
-// The list holds the backgrounds being edited; the card under it edits the one chosen in the list.
+// The list holds Every app and the apps with their own background or Glass levels; the card under it edits the one
+// chosen in the list.
 public sealed partial class SettingsWindow
 {
     private const int MostBackgroundRows = 5;
     private const int MostKeptRows = 4;
-    private const int MostGlassAppRows = 4;
-    private readonly ThemedList _glassAppList = new() { AccessibleName = T("settings.glassApps.list"), EmptyText = T("settings.glassApps.empty") };
-    private readonly ComboBox _newGlassApp = ProgramPicker();
-    private readonly PlainButton _glassAppRemove = new() { Text = T("common.remove"), Enabled = false };
+    private readonly SwitchBox _ownBackground = new() { Text = T("settings.apps.ownBackground"), AutoSize = true };
+    private readonly SwitchBox _ownGlass = new() { Text = T("settings.apps.ownGlass"), AutoSize = true };
+    private readonly List<Control> _backgroundRows = [];
+    // Added here and not yet given anything of their own: they stay in the list until it is filled again.
+    private readonly List<string> _listedApps = [];
     private readonly NumericUpDown _appGlassBackground = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _appGlassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _appGlassFade = new() { Minimum = 1, Maximum = 100, Width = 70 };
     private readonly List<Control> _appGlassRows = [];
-    private InputFrame? _glassAppFrame;
     private List<AppGlassLevels> _glassApps = [];
     private bool _showingGlassApp;
     private readonly ThemedList _keptList = new() { AccessibleName = T("settings.keptAreas.list"), EmptyText = T("settings.keptAreas.empty") };
@@ -88,9 +89,10 @@ public sealed partial class SettingsWindow
         buttons.Controls.Add(_backgroundChoose);
         buttons.Controls.Add(_backgroundClear);
         _backgroundFileRow = (SettingRowPanel)SettingRow(T("settings.backgrounds.file"), buttons);
-        _backgroundEditor = Card(T("settings.backgrounds.everyApp"), false, _backgroundPreview, _backgroundFileRow,
-            SettingRow(T("settings.backgrounds.fit"), _backgroundFit), SettingRow(T("settings.backgrounds.sound"), _backgroundVolume),
-            Note(T("settings.backgrounds.soundHelp")));
+        _backgroundRows.AddRange([_backgroundPreview, _backgroundFileRow, SettingRow(T("settings.backgrounds.fit"), _backgroundFit),
+            SettingRow(T("settings.backgrounds.sound"), _backgroundVolume)]);
+        _ownBackground.CheckedChanged += (_, _) => SetOwnBackground(_ownBackground.Checked);
+        _ownGlass.CheckedChanged += (_, _) => SetOwnGlass(_ownGlass.Checked);
 
         _keptFrame = new InputFrame(_keptList, InputFrame.Look.List) { Width = SwitchBox.RowWidth, Margin = new Padding(3, 6, 3, 4) };
         _keptList.FontChanged += (_, _) => FitKeptList();
@@ -107,55 +109,24 @@ public sealed partial class SettingsWindow
         var keptButtons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(4, 8, 3, 6), BackColor = SettingsStyle.Card };
         keptButtons.Controls.Add(_keptRemove);
 
-        _glassAppFrame = new InputFrame(_glassAppList, InputFrame.Look.List) { Width = SwitchBox.RowWidth, Margin = new Padding(3, 6, 3, 4) };
-        _glassAppList.FontChanged += (_, _) => FitGlassAppList();
-        _glassAppFrame.DpiChangedAfterParent += (_, _) => FitGlassAppList();
-        _glassAppList.SelectedIndexChanged += (_, _) => ShowGlassApp();
-        _glassAppList.KeyDown += (_, e) =>
-        {
-            if (e.KeyCode != Keys.Delete || _glassAppList.SelectedItem is null) return;
-            e.Handled = true;
-            RemoveGlassApp();
-        };
-        _newGlassApp.Dock = DockStyle.None;
-        _newGlassApp.Width = 300;
-        var addGlassApp = new PlainButton { Text = T("common.add"), Enabled = false };
-        _newGlassApp.TextChanged += (_, _) => addGlassApp.Enabled = _newGlassApp.Text.Trim().Length > 0;
-        addGlassApp.Click += (_, _) => AddGlassApp();
-        _newGlassApp.KeyDown += (_, e) =>
-        {
-            if (e.KeyCode != Keys.Enter) return;
-            e.SuppressKeyPress = true;
-            if (_newGlassApp.DroppedDown) _newGlassApp.DroppedDown = false;
-            AddGlassApp();
-        };
-        _glassAppRemove.Click += (_, _) => RemoveGlassApp();
-        _newGlassApp.Margin = new Padding(0, 0, 8, 0);
-        addGlassApp.Margin = new Padding(0, 0, 8, 0);
-        _glassAppRemove.Margin = Padding.Empty;
-        _newGlassApp.Anchor = addGlassApp.Anchor = _glassAppRemove.Anchor = AnchorStyles.Left;
-        var glassAdding = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(4, 8, 3, 6), BackColor = SettingsStyle.Card };
-        glassAdding.Controls.Add(_newGlassApp);
-        glassAdding.Controls.Add(addGlassApp);
-        glassAdding.Controls.Add(_glassAppRemove);
         foreach (NumericUpDown box in new[] { _appGlassBackground, _appGlassText, _appGlassFade })
             box.TextChanged += (_, _) => ChangeGlassApp();
         _appGlassRows.Add(SettingRow(T("settings.effects.background"), _appGlassBackground));
         _appGlassRows.Add(SettingRow(T("settings.effects.text"), _appGlassText));
         _appGlassRows.Add(SettingRow(T("settings.effects.fade"), _appGlassFade));
+        _backgroundEditor = Card(T("settings.backgrounds.everyApp"), false,
+            [_ownBackground, .. _backgroundRows, Note(T("settings.backgrounds.soundHelp")), _ownGlass, Note(T("settings.apps.glassHelp")), .. _appGlassRows]);
 
         FlowLayoutPanel page = ScrollingPage();
         // Glass's own settings decide how much of the background shows, so they come first.
         page.Controls.Add(Card(T("settings.glass.title"), true, _layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.fade"), _glassFade), Note(T("settings.effects.fadeHelp")), Note(T("settings.effects.help"))));
-        page.Controls.Add(Card(T("settings.glassApps.title"), true, [Note(T("settings.glassApps.help")), _glassAppFrame, glassAdding, .. _appGlassRows]));
         page.Controls.Add(Card(T("settings.backgrounds.title"), true, Note(T("settings.backgrounds.help")), _backgroundFrame, adding));
         page.Controls.Add(_backgroundEditor);
         page.Controls.Add(Card(T("settings.keptAreas.title"), true, Note(T("settings.keptAreas.help")), _keptFrame, keptButtons));
         ListBackgrounds(null);
         ListKept();
-        ListGlassApps(null);
         return page;
     }
 
@@ -164,11 +135,11 @@ public sealed partial class SettingsWindow
     {
         bool wasPending = _pending;
         AppGlassLevels? saved = _settings.Effects.OwnOf(program);
-        int at = _glassApps.FindIndex(app => string.Equals(app.Program, BackgroundPreferences.ProgramKey(program), StringComparison.OrdinalIgnoreCase));
+        int at = _glassApps.FindIndex(app => SameApp(app.Program, program));
         if (saved is null) { if (at >= 0) _glassApps.RemoveAt(at); }
         else if (at >= 0) _glassApps[at] = saved;
         else _glassApps.Add(saved);
-        ListGlassApps(saved?.Program ?? (_glassAppList.SelectedItem as AppGlassEntry)?.Program);
+        ListBackgrounds(ShownApp);
         if (!wasPending) MarkSaved();
         else RefreshApply();
     }
@@ -176,51 +147,47 @@ public sealed partial class SettingsWindow
     private void FillGlassApps(EffectPreferences effects)
     {
         _glassApps = [.. effects.Apps];
-        ListGlassApps((_glassAppList.SelectedItem as AppGlassEntry)?.Program);
+        ListBackgrounds(ShownApp);
     }
 
-    private void ListGlassApps(string? select)
+    private static bool SameApp(string a, string b) =>
+        string.Equals(BackgroundPreferences.ProgramKey(a), BackgroundPreferences.ProgramKey(b), StringComparison.OrdinalIgnoreCase);
+
+    private List<string> ListedApps()
     {
-        _glassAppList.BeginUpdate();
-        _glassAppList.Items.Clear();
-        foreach (AppGlassLevels app in _glassApps) _glassAppList.Items.Add(new AppGlassEntry(app.Program));
-        _glassAppList.EndUpdate();
-        int at = _glassApps.FindIndex(app => string.Equals(app.Program, select, StringComparison.OrdinalIgnoreCase));
-        if (at >= 0) _glassAppList.SelectedIndex = at;
-        else if (_glassAppList.Items.Count > 0) _glassAppList.SelectedIndex = 0;
-        FitGlassAppList();
-        ShowGlassApp();
+        var apps = new List<string>();
+        foreach (string program in _backgroundEdit.Apps.Select(app => app.Program).Concat(_glassApps.Select(app => app.Program)).Concat(_listedApps))
+            if (!apps.Any(listed => SameApp(listed, program))) apps.Add(program);
+        return apps;
     }
 
-    private void FitGlassAppList()
-    {
-        if (_glassAppFrame is null) return;
-        int rows = Math.Clamp(_glassAppList.Items.Count, 1, MostGlassAppRows);
-        _glassAppFrame.Height = _glassAppList.ItemHeight * rows + SettingsStyle.Unit(_glassAppFrame, 8);
-    }
+    private AppGlassLevels? GlassOf(string? program) => program is null ? null : _glassApps.Find(app => SameApp(app.Program, program));
 
-    private AppGlassLevels? ShownGlassApp => _glassAppList.SelectedItem is AppGlassEntry entry
-        ? _glassApps.Find(app => string.Equals(app.Program, entry.Program, StringComparison.OrdinalIgnoreCase)) : null;
-
-    private void ShowGlassApp()
+    // An app's own levels start from the ones every app has, as they are set above.
+    private AppGlassLevels MainGlass(string program) => new()
     {
-        AppGlassLevels? app = ShownGlassApp;
-        _glassAppRemove.Enabled = app is not null;
-        foreach (Control row in _appGlassRows) row.Enabled = app is not null;
-        if (app is null) return;
+        Program = program, BackgroundPercent = Typed(_glassBackground), TextPercent = Typed(_glassText), FadeRangePercent = Typed(_glassFade),
+    };
+
+    private void ShowGlassApp(string? program)
+    {
+        AppGlassLevels? own = GlassOf(program);
+        AppGlassLevels shown = own ?? MainGlass(program ?? "");
         _showingGlassApp = true;
         try
         {
-            _appGlassBackground.Value = app.BackgroundPercent;
-            _appGlassText.Value = app.TextPercent;
-            _appGlassFade.Value = app.FadeRangePercent;
+            _ownGlass.Checked = own is not null;
+            _appGlassBackground.Value = shown.BackgroundPercent;
+            _appGlassText.Value = shown.TextPercent;
+            _appGlassFade.Value = shown.FadeRangePercent;
         }
         finally { _showingGlassApp = false; }
+        foreach (Control row in _appGlassRows) row.Enabled = own is not null;
     }
 
     private void ChangeGlassApp()
     {
-        if (_showingGlassApp || _loading || ShownGlassApp is not { } app) return;
+        if (_showingGlassApp || _loading || GlassOf(ShownApp) is not { } app) return;
         int at = _glassApps.IndexOf(app);
         _glassApps[at] = app with
         {
@@ -229,35 +196,30 @@ public sealed partial class SettingsWindow
         QueueApplyRefresh();
     }
 
-    private void AddGlassApp()
+    private void SetOwnGlass(bool on)
     {
-        string name = BackgroundPreferences.ProgramKey(_newGlassApp.Text);
-        _newGlassApp.Text = "";
-        if (name.Length == 0) return;
-        // A new app starts from the levels every app has, as they are set above.
-        if (!_glassApps.Any(app => string.Equals(app.Program, name, StringComparison.OrdinalIgnoreCase)))
-            _glassApps.Add(new AppGlassLevels
-            {
-                Program = name, BackgroundPercent = Typed(_glassBackground), TextPercent = Typed(_glassText), FadeRangePercent = Typed(_glassFade),
-            });
-        ListGlassApps(name);
+        if (_showingGlassApp || _showingBackground || _loading || ShownApp is not { } program) return;
+        AppGlassLevels? own = GlassOf(program);
+        if (on == own is not null) return;
+        if (on) _glassApps.Add(MainGlass(program));
+        else _glassApps.Remove(own!);
+        if (!_listedApps.Any(listed => SameApp(listed, program))) _listedApps.Add(program);
+        ShowGlassApp(program);
         QueueApplyRefresh();
     }
 
-    private void RemoveGlassApp()
+    // Its own starts as Every app's, so nothing changes until it is changed.
+    private void SetOwnBackground(bool on)
     {
-        if (ShownGlassApp is not { } app) return;
-        int at = _glassAppList.SelectedIndex;
-        bool hadKeyboard = _glassAppRemove.Focused;
-        _glassApps.Remove(app);
-        ListGlassApps(at - 1 >= 0 && at - 1 < _glassApps.Count ? _glassApps[at - 1].Program : null);
-        if (hadKeyboard && !_glassAppRemove.Enabled) _glassAppList.Focus();
+        if (_showingBackground || _loading || ShownApp is not { } program) return;
+        bool has = _backgroundEdit.OwnOf(program) is not null;
+        if (on == has) return;
+        _backgroundEdit = on
+            ? _backgroundEdit with { Apps = [.. _backgroundEdit.Apps, new AppBackground { Program = program, Background = _backgroundEdit.Everywhere }] }
+            : _backgroundEdit with { Apps = _backgroundEdit.Apps.Where(app => !SameApp(app.Program, program)).ToList() };
+        if (!_listedApps.Any(listed => SameApp(listed, program))) _listedApps.Add(program);
+        ShowBackground(controls: true);
         QueueApplyRefresh();
-    }
-
-    private sealed record AppGlassEntry(string Program)
-    {
-        public override string ToString() => Program;
     }
 
     internal void KeptAreasChanged()
@@ -308,12 +270,13 @@ public sealed partial class SettingsWindow
 
     private string? ShownApp => (_backgroundList.SelectedItem as BackgroundEntry)?.Program;
 
-    private BackgroundChoice ChoiceOf(string? program) => program is null ? _backgroundEdit.Everywhere : _backgroundEdit.OwnOf(program) ?? new();
+    private BackgroundChoice ChoiceOf(string? program) => program is null ? _backgroundEdit.Everywhere : _backgroundEdit.OwnOf(program) ?? _backgroundEdit.Everywhere;
 
     private static bool IsVideo(string file) => BackdropChoice.Videos.Contains(Path.GetExtension(file).ToLowerInvariant());
 
     private string DetailOf(string? program)
     {
+        if (program is not null && _backgroundEdit.OwnOf(program) is null) return T("settings.apps.everyBackground");
         BackgroundChoice choice = ChoiceOf(program);
         if (choice.File.Length == 0) return program is null ? T("settings.backgrounds.none") : T("settings.backgrounds.appNone");
         string name = Path.GetFileName(choice.File);
@@ -336,7 +299,7 @@ public sealed partial class SettingsWindow
         _backgroundList.BeginUpdate();
         _backgroundList.Items.Clear();
         _backgroundList.Items.Add(Entry(null));
-        foreach (AppBackground app in _backgroundEdit.Apps) _backgroundList.Items.Add(Entry(app.Program));
+        foreach (string program in ListedApps()) _backgroundList.Items.Add(Entry(program));
         _backgroundList.EndUpdate();
         int at = _backgroundList.Items.Cast<BackgroundEntry>().ToList()
             .FindIndex(entry => entry.Program is not null && string.Equals(entry.Program, select, StringComparison.OrdinalIgnoreCase));
@@ -368,7 +331,16 @@ public sealed partial class SettingsWindow
             }
             finally { _showingBackground = false; }
             _backgroundRemoveApp.Enabled = app is not null; // Every app stays.
+            // Every app's Glass levels are the ones above.
+            _ownBackground.Visible = _ownGlass.Visible = app is not null;
+            foreach (Control row in _appGlassRows) row.Visible = app is not null;
+            ShowGlassApp(app);
         }
+        bool own = app is null || _backgroundEdit.OwnOf(app) is not null;
+        _showingBackground = true;
+        try { _ownBackground.Checked = own; }
+        finally { _showingBackground = false; }
+        foreach (Control row in _backgroundRows) row.Enabled = own;
         bool chosen = choice.File.Length > 0;
         _backgroundClear.Enabled = chosen;
         _backgroundVolume.Enabled = chosen && IsVideo(choice.File);
@@ -385,7 +357,7 @@ public sealed partial class SettingsWindow
             ? _backgroundEdit with { Everywhere = change(_backgroundEdit.Everywhere).Validated() }
             : _backgroundEdit with
             {
-                Apps = _backgroundEdit.Apps.Select(entry => string.Equals(entry.Program, app, StringComparison.OrdinalIgnoreCase)
+                Apps = _backgroundEdit.Apps.Select(entry => SameApp(entry.Program, app)
                     ? entry with { Background = change(entry.Background).Validated() } : entry).ToList(),
             };
         ShowBackground(controls: false);
@@ -408,13 +380,19 @@ public sealed partial class SettingsWindow
         ChangeBackground(choice => choice with { File = dialog.FileName });
     }
 
+    // A new app gets its own background and Glass levels at once, both as every app has them, so nothing changes until
+    // they are changed.
     private void AddBackgroundApp()
     {
         string name = BackgroundPreferences.ProgramKey(_newBackgroundApp.Text);
         _newBackgroundApp.Text = "";
         if (name.Length == 0) return;
-        if (_backgroundEdit.OwnOf(name) is null)
-            _backgroundEdit = _backgroundEdit with { Apps = [.. _backgroundEdit.Apps, new AppBackground { Program = name }] };
+        if (!ListedApps().Any(listed => SameApp(listed, name)))
+        {
+            _backgroundEdit = _backgroundEdit with { Apps = [.. _backgroundEdit.Apps, new AppBackground { Program = name, Background = _backgroundEdit.Everywhere }] };
+            _glassApps.Add(MainGlass(name));
+            _listedApps.Add(name);
+        }
         ListBackgrounds(name);
         QueueApplyRefresh();
     }
@@ -424,11 +402,11 @@ public sealed partial class SettingsWindow
         if (ShownApp is not { } app) return;
         int at = _backgroundList.SelectedIndex;
         bool hadKeyboard = _backgroundRemoveApp.Focused;
-        _backgroundEdit = _backgroundEdit with
-        {
-            Apps = _backgroundEdit.Apps.Where(entry => !string.Equals(entry.Program, app, StringComparison.OrdinalIgnoreCase)).ToList(),
-        };
-        string? next = at - 1 >= 1 ? _backgroundEdit.Apps[at - 2].Program : null;
+        _backgroundEdit = _backgroundEdit with { Apps = _backgroundEdit.Apps.Where(entry => !SameApp(entry.Program, app)).ToList() };
+        _glassApps.RemoveAll(entry => SameApp(entry.Program, app));
+        _listedApps.RemoveAll(entry => SameApp(entry, app));
+        List<string> apps = ListedApps();
+        string? next = at - 2 >= 0 && at - 2 < apps.Count ? apps[at - 2] : null;
         ListBackgrounds(next);
         if (hadKeyboard && !_backgroundRemoveApp.Enabled) _backgroundList.Focus(); // Back at Every app, which stays.
         QueueApplyRefresh();

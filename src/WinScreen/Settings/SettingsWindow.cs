@@ -338,7 +338,7 @@ private readonly ErrorProvider _errors = new();
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
             [_glassText] = '\uE8D2', [_glassFade] = '\uE790', [_appGlassBackground] = '\uE706', [_appGlassText] = '\uE8D2',
-            [_appGlassFade] = '\uE790', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767',
+            [_appGlassFade] = '\uE790', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767',
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
             [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
             [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',
@@ -878,6 +878,12 @@ private readonly ErrorProvider _errors = new();
     internal void AddIncluded(string program) { AddProgram(_included, program); QueueApplyRefresh(); }
 
     internal void SetDefaultOpacity(int percent) => _defaultOpacity.Value = percent;
+
+    internal void AddApp(string program)
+    {
+        _newBackgroundApp.Text = program;
+        AddBackgroundApp();
+    }
 
     internal void ChangeSetup(ProgramSetup setup)
     {
