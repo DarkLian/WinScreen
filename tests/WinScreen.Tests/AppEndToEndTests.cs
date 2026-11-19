@@ -1407,6 +1407,47 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle));
     }
 
+    // Owner, beta 4: after a click outside closed the menu, the next gesture's menu closed again at once (the log said
+    // AppFocusChange after 16 ms), so it took two tries every time.
+    [Fact]
+    public void After_a_click_outside_closes_the_window_menu_the_next_gesture_keeps_it_open()
+    {
+        RestartWith(new AppSettings { WindowMenu = true });
+        using var target = new TargetProcess(Spot);
+        Focus(target);
+        Thread.Sleep(350);
+        for (int round = 0; round < 3; round++)
+        {
+            try
+            {
+                Desktop.Key(Keys.ControlKey, true);
+                Desktop.RightClickOn(target.Center, target.Handle);
+            }
+            finally { Desktop.Key(Keys.ControlKey, false); }
+            nint host = 0;
+            if (!Desktop.WaitFor(() =>
+                {
+                    host = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen.WindowMenu");
+                    return host != 0 && User32.GetForegroundWindow() == host;
+                }, 1000))
+                Fail($"Round {round}: the menu didn't open.");
+            Thread.Sleep(400);
+            if (!User32.IsWindow(host) || !User32.IsWindowVisible(host)) Fail($"Round {round}: the menu closed by itself.");
+            // Away from the menu, which opens down and right of the pointer.
+            Desktop.ClickOn(new Point(Spot.Left + 30, Spot.Top + 30), target.Handle);
+            Assert.True(Desktop.WaitFor(() => !User32.IsWindow(host) || !User32.IsWindowVisible(host), 1000), $"Round {round}: a click outside left the menu open.");
+            while (target.NextReport(300) is not null) { }
+            Thread.Sleep(300);
+        }
+
+        void Fail(string what)
+        {
+            Thread.Sleep(1500); // The log is written behind.
+            string log = File.Exists(Path.Combine(_data, "winscreen.log")) ? File.ReadAllText(Path.Combine(_data, "winscreen.log")) : "(no log)";
+            Assert.Fail(what + "\n" + string.Join("\n", log.Split('\n').Where(line => line.Contains("menu.") || line.Contains("hook."))));
+        }
+    }
+
     [Fact]
     public void Starting_after_a_forced_kill_restores_a_source_taken_off_the_taskbar()
     {

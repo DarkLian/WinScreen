@@ -12,6 +12,7 @@ internal sealed class WindowMenuHost : Form
     private readonly Point _point;
     private readonly List<int> _claimed = [];
     private readonly System.Windows.Forms.Timer _deadline = new() { Interval = 150 };
+    private readonly System.Windows.Forms.Timer _outside = new() { Interval = 250 };
     private readonly long _made = Environment.TickCount64;
     private long _shownAt;
     private bool _shown, _closing;
@@ -34,10 +35,17 @@ internal sealed class WindowMenuHost : Form
         Text = "WinScreen.WindowMenu";
         _menu.Closed += (_, e) =>
         {
-            Diagnostics.Log.Event("menu.closed", ("reason", e.CloseReason), ("openMs", Environment.TickCount64 - _shownAt));
+            nint foreground = User32.GetForegroundWindow();
+            Diagnostics.Log.Event("menu.closed", ("reason", e.CloseReason), ("openMs", Environment.TickCount64 - _shownAt),
+                ("foreground", Diagnostics.LogValue.ClassOf(foreground)), ("foregroundProgram", Diagnostics.LogValue.ProgramOf(foreground)));
             Finish();
         };
         _deadline.Tick += (_, _) => ShowMenu(false);
+        _outside.Tick += (_, _) =>
+        {
+            _outside.Stop();
+            if (_menu.Visible) _menu.Close(ToolStripDropDownCloseReason.AppClicked);
+        };
     }
 
     protected override bool ShowWithoutActivation => true;
@@ -99,6 +107,9 @@ internal sealed class WindowMenuHost : Form
     internal void OutsidePress(Point point)
     {
         if (!_shown || ContainsPoint(_menu, point)) return;
+        // A menu with the focus closes by itself when the press takes the focus elsewhere. Closing it here too, as the
+        // focus left, made the next menu close the moment it opened, so this is only for a press that took no focus.
+        if (!NeedsHook) { _outside.Start(); return; }
         _menu.Close(ToolStripDropDownCloseReason.AppClicked);
     }
 
@@ -122,8 +133,10 @@ internal sealed class WindowMenuHost : Form
         if (_closing) return;
         _closing = true;
         _deadline.Stop();
+        _outside.Stop();
         nint foreground = User32.GetForegroundWindow();
         bool returnFocus = foreground == Handle || foreground == _menu.Handle;
+        Diagnostics.Log.Event("menu.finished", ("returnFocus", returnFocus));
         ReleaseKeys();
         User32.UnregisterHotKey(Handle, EscapeHotkey);
         Hide();
@@ -149,6 +162,7 @@ internal sealed class WindowMenuHost : Form
         {
             _closing = true;
             _deadline.Dispose();
+            _outside.Dispose();
             if (IsHandleCreated) { ReleaseKeys(); User32.UnregisterHotKey(Handle, EscapeHotkey); }
             _menu.Dispose();
         }
