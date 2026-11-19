@@ -101,9 +101,9 @@ public sealed partial class SettingsWindow
         page.Controls.Add(Card(T("settings.glass.title"), true, _layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.fade"), _glassFade), Note(T("settings.effects.fadeHelp")), Note(T("settings.effects.help"))));
-        page.Controls.Add(Card(T("settings.keptAreas.title"), true, Note(T("settings.keptAreas.help")), _keptFrame, keptButtons));
         page.Controls.Add(Card(T("settings.backgrounds.title"), true, Note(T("settings.backgrounds.help")), _backgroundFrame, adding));
         page.Controls.Add(_backgroundEditor);
+        page.Controls.Add(Card(T("settings.keptAreas.title"), true, Note(T("settings.keptAreas.help")), _keptFrame, keptButtons));
         ListBackgrounds(null);
         ListKept();
         return page;

@@ -205,9 +205,8 @@ a little too. Two settings help:
   pictures and videos stay solid. Text edges look a little sharper.
 - **Keep areas as they are**, under **Effects** in a window's menu: drag over a video or picture, or click a
   highlighted part, and Glass and Dark mode leave it as it is. Click a marked area to remove it, and press Enter when
-  you're done. An app can have up to eight, and they're kept for all its windows. Each edge stays the same distance
-  from the side of the window it's nearest, so a video player's picture stays covered when you resize it. The list
-  is in **Settings → Backgrounds**, where you can remove an app's areas.
+  you're done. An app can have up to eight, and they're kept for all its windows and follow them when you resize
+  them. The list is at the bottom of **Settings → Backgrounds**, where you can remove an app's areas.
 
 ## Remember a program's setup
 
