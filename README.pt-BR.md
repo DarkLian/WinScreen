@@ -98,6 +98,7 @@ e pausa enquanto a janela está minimizada ou em outra área de trabalho.
 **Picture-in-picture**
 - Visualizações ao vivo de uma janela, de uma tela inteira ou de parte da tela
 - Cortar, ampliar, redimensionar, tamanhos fixos, predefinições e fontes salvas
+- Girar uma visualização 90° por vez, ou espelhá-la, e continuar usando os apps por ela
 - Cortar na parte de uma janela em que você clica, e manter o corte quando a janela é redimensionada
 - Manter o original escondido e a visualização atualizada
 - Silenciar o som do original pela visualização

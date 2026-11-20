@@ -98,6 +98,7 @@ vídeo puede sonar, y se pausa mientras su ventana está minimizada o en otro es
 **Pantalla en pantalla**
 - Vistas en vivo de una ventana, de una pantalla entera o de parte de la pantalla
 - Recortar, ampliar, cambiar el tamaño, tamaños fijos, ajustes guardados y fuentes guardadas
+- Girar una vista 90° cada vez, o reflejarla, y seguir usando las apps a través de ella
 - Recortar a la parte de una ventana en la que haces clic, y mantenerlo aunque la ventana cambie de tamaño
 - Mantener oculta la original y la vista actualizándose
 - Silenciar el sonido de la original desde la vista

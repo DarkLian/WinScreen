@@ -94,6 +94,7 @@ while its window is minimized or on another desktop.
 **Picture-in-Picture**
 - Live views of a window, a whole display or part of the screen
 - Crop, zoom, resize, preset sizes, presets and saved sources
+- Rotate a view a quarter turn at a time, or mirror it, and still use apps through it
 - Crop to a part of a window you click, and keep it when the window is resized
 - Keep the original hidden and the view updating
 - Mute the original's sound from the view

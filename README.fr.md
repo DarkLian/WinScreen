@@ -100,6 +100,7 @@ autre bureau.
 **Image dans l'image**
 - Vues en direct d'une fenêtre, d'un écran entier ou d'une partie de l'écran
 - Rogner, zoomer, redimensionner, tailles prédéfinies, préréglages et sources enregistrées
+- Faire pivoter une vue de 90° à la fois, ou l'inverser en miroir, et continuer à utiliser les applications à travers elle
 - Rogner sur la partie d'une fenêtre sur laquelle vous cliquez, et la garder quand la fenêtre est redimensionnée
 - Garder l'original caché et la vue à jour
 - Couper le son de l'original depuis la vue

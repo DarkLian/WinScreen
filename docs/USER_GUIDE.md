@@ -86,6 +86,9 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 - **Presets:** save the crop, size and place under a name and use it again later.
 - **Freeze**, under **Picture:** the view keeps showing what it shows now while the window goes on changing. You can
   still move, resize, crop and zoom it, but not use the app through it. Choose it again to go back to live.
+- **Rotate or mirror**, under **Picture:** turn the view a quarter at a time, or mirror it. You can still use the app
+  through it: clicks, drags and typing land where you see them. The app's own menus stay upright, and **Upright**
+  puts the view back. Saved with a preset.
 - **Interactive** lets you point, click, select text, drag and scroll in the picture. Ready for Chrome, Edge, Brave,
   Vivaldi, Firefox, Electron apps and File Explorer; *experimental* for other apps.
   **Keep hidden** stays checked and locked while this is on. Turning it off restores your previous hiding choice.

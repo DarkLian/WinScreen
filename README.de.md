@@ -98,6 +98,7 @@ Video kann mit Ton laufen und pausiert, solange sein Fenster minimiert oder auf 
 **Bild im Bild**
 - Live-Ansichten eines Fensters, eines ganzen Bildschirms oder eines Bildschirmausschnitts
 - Zuschneiden, zoomen, Größe ändern, feste Größen, Vorlagen und gespeicherte Quellen
+- Eine Ansicht in Vierteldrehungen drehen oder spiegeln und Apps weiter darin benutzen
 - Auf einen angeklickten Teil eines Fensters zuschneiden, auch wenn das Fenster seine Größe ändert
 - Das Original versteckt halten und die Ansicht trotzdem aktualisieren
 - Den Ton des Originals aus der Ansicht stummschalten
