@@ -34,6 +34,7 @@ internal sealed class D3D11Renderer : IDisposable
     private Size _bufferSize;
     internal Size SourceSize { get; private set; }
     internal PipScaling ViewScaling { get; set; }
+    internal ViewTurn Turn { get; set; }
     private readonly PipPreferences _preferences;
     private readonly PipDiagnostics _diagnostics;
     private bool _disposed;
@@ -47,7 +48,7 @@ internal sealed class D3D11Renderer : IDisposable
     [StructLayout(LayoutKind.Sequential)]
     private struct Constants
     {
-        public Vector4 Crop, Viewport, Surface, Selection, Options;
+        public Vector4 Crop, Viewport, Surface, Selection, Options, Orient;
     }
 
     internal D3D11Renderer(nint hwnd, nint monitor, PipPreferences preferences, PipDiagnostics diagnostics, bool software,
@@ -106,7 +107,7 @@ internal sealed class D3D11Renderer : IDisposable
             }
             _sampler = Device.CreateSamplerState(new SamplerDescription(Filter.MinMagMipLinear,
                 TextureAddressMode.Clamp, TextureAddressMode.Clamp, TextureAddressMode.Clamp));
-            _constants = Device.CreateBuffer(new BufferDescription(80, BindFlags.ConstantBuffer, ResourceUsage.Default));
+            _constants = Device.CreateBuffer(new BufferDescription((uint)Marshal.SizeOf<Constants>(), BindFlags.ConstantBuffer, ResourceUsage.Default));
             _fence = Device.CreateQuery(new QueryDescription(QueryType.Event));
             var swap = new SwapChainDescription1
             {
@@ -216,6 +217,8 @@ internal sealed class D3D11Renderer : IDisposable
             _diagnostics.Resizes++;
         }
         Rectangle crop = PipRenderGeometry.Crop(requestedCrop, SourceSize);
+        // Scaling is worked out on the upright picture; the shader turns it as it draws.
+        Size upright = Turn.Oriented(destination.Size);
         var constants = new Constants
         {
             Crop = new(crop.X, crop.Y, crop.Width, crop.Height),
@@ -223,22 +226,23 @@ internal sealed class D3D11Renderer : IDisposable
             Surface = new(SourceSize.Width, SourceSize.Height, client.Width, client.Height),
             Selection = selection is { } s ? new(s.X, s.Y, s.Width, s.Height) : Vector4.Zero,
             Options = new(opacity / 255f, ViewScaling == PipScaling.Auto && _software ? 3 : (int)ViewScaling, 0, selection.HasValue ? 1 : 0),
+            Orient = new(Turn.Turns, Turn.Mirrored ? 1 : 0, upright.Width, upright.Height),
         };
         bool compute = _compute is not null && ViewScaling == PipScaling.Auto &&
-            crop.Width >= destination.Width && crop.Height >= destination.Height;
-        bool enlarging = crop.Width < destination.Width || crop.Height < destination.Height;
+            crop.Width >= upright.Width && crop.Height >= upright.Height;
+        bool enlarging = crop.Width < upright.Width || crop.Height < upright.Height;
         _diagnostics.FilterMode = ViewScaling == PipScaling.Crisp ? "Nearest texel" :
             enlarging && ViewScaling == PipScaling.Auto && !_software ? "Edge-aware enlarge" :
             ViewScaling == PipScaling.Smooth || enlarging ? "Linear" :
-            crop.Size == destination.Size ? "Exact texel" : compute ? "Compute area (16x16)" : "Raster area (PS4)";
+            crop.Size == upright ? "Exact texel" : compute ? "Compute area (16x16)" : "Raster area (PS4)";
         _context.UpdateSubresource(in constants, _constants!);
         if (compute)
         {
-            if (_scaled is null || _scaled.Description.Width != destination.Width || _scaled.Description.Height != destination.Height)
+            if (_scaled is null || _scaled.Description.Width != upright.Width || _scaled.Description.Height != upright.Height)
             {
                 _scaledOutput?.Dispose(); _scaledView?.Dispose(); _scaled?.Dispose();
                 _scaled = Device.CreateTexture2D(new Texture2DDescription(Format.R8G8B8A8_UNorm,
-                    (uint)destination.Width, (uint)destination.Height, 1, 1, BindFlags.ShaderResource | BindFlags.UnorderedAccess));
+                    (uint)upright.Width, (uint)upright.Height, 1, 1, BindFlags.ShaderResource | BindFlags.UnorderedAccess));
                 _scaledOutput = Device.CreateUnorderedAccessView(_scaled);
                 _scaledView = Device.CreateShaderResourceView(_scaled);
             }
@@ -247,7 +251,7 @@ internal sealed class D3D11Renderer : IDisposable
             _context.CSSetShaderResource(0, _sourceView);
             _context.CSSetSampler(0, _sampler);
             _context.CSSetUnorderedAccessView(0, _scaledOutput);
-            _context.Dispatch((uint)(destination.Width + 15) / 16, (uint)(destination.Height + 15) / 16, 1);
+            _context.Dispatch((uint)(upright.Width + 15) / 16, (uint)(upright.Height + 15) / 16, 1);
             _context.CSSetUnorderedAccessView(0, null);
             _context.CSSetShaderResource(0, null);
             constants.Options.Z = 1;

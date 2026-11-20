@@ -25,6 +25,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     private Rectangle? _selection;
     private byte _opacity;
     private bool _visible = true, _frozen;
+    private ViewTurn _turn;
     private nint _monitor;
     private int _sourceHz, _targetHz;
     private long _lastDisplayCheck;
@@ -99,6 +100,13 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     {
         _frozen = frozen;
         _advanced?.SetFrozen(frozen);
+    }
+
+    // Only capture can turn the picture; the compositor's thumbnail stays upright.
+    public void SetTurn(ViewTurn turn)
+    {
+        _turn = turn;
+        _advanced?.SetTurn(turn);
     }
 
     public void SetSelection(Rectangle? selection)
@@ -258,6 +266,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         advanced.SetSelection(_selection);
         advanced.SetVisible(_visible);
         advanced.SetFrozen(_frozen);
+        advanced.SetTurn(_turn);
         // WGC starts at the extended frame bounds; DWM's surface can include invisible resize borders.
         // Translate the shared DWM crop once, so click and crop geometry remain in their existing coordinate space.
         if (_visibleSource.IsEmpty || !_source.IsMinimized)

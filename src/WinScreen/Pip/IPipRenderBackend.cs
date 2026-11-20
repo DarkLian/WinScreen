@@ -32,4 +32,6 @@ internal interface IPipCaptureBackend : IPipRenderBackend
 
     // Frozen, the last frame stays and new ones are let go; the picture is still drawn again as the view changes.
     void SetFrozen(bool frozen) { }
+
+    void SetTurn(ViewTurn turn) { }
 }

@@ -11,6 +11,8 @@ internal static class PipShaders
         cbuffer Geometry : register(b0) {
             float4 crop; float4 viewport; float4 surface;
             float4 selection; float4 options;
+            // orient: quarter turns clockwise, mirrored left to right (1), and the upright picture's size.
+            float4 orient;
         };
         float4 texel(int2 p) { return sourceTexture.Load(int3(clamp(p, int2(0,0), int2(surface.xy) - 1), 0)); }
         float4 linearAt(float2 p) { return sourceTexture.SampleLevel(linearSampler, p / surface.xy, 0); }
@@ -92,9 +94,14 @@ internal static class PipShaders
             float2 p = position.xy;
             if (any(p < viewport.xy) || any(p >= viewport.xy + viewport.zw)) return float4(79.0/255,140.0/255,1,1);
             float2 relative = p - viewport.xy - 0.5;
+            // The upright picture's pixel shown here, as ViewTurn.ToUpright works it out: whole pixels, so a turned
+            // picture keeps every edge.
+            float2 upright = relative, size = viewport.zw;
+            if (orient.y == 1) upright.x = size.x - 1 - upright.x;
+            [loop] for (int turn = 0; turn < (int)orient.x; turn++) { upright = float2(upright.y, size.x - 1 - upright.x); size = size.yx; }
             float4 color;
-            if (options.z == 1) color = sourceTexture.Load(int3(int2(relative),0));
-            else color = area(relative, viewport.zw);
+            if (options.z == 1) color = sourceTexture.Load(int3(int2(upright),0));
+            else color = area(upright, orient.zw);
             float alpha = options.x;
             if (options.w == 1 && (any(p < selection.xy) || any(p >= selection.xy+selection.zw))) alpha *= 90.0/255;
             return float4(color.rgb * alpha,1);
@@ -103,7 +110,7 @@ internal static class PipShaders
         RWTexture2D<float4> outputTexture : register(u0);
         [numthreads(16,16,1)]
         void CS(uint3 id : SV_DispatchThreadID) {
-            if (all(id.xy < (uint2)viewport.zw)) outputTexture[id.xy] = area(id.xy, viewport.zw);
+            if (all(id.xy < (uint2)orient.zw)) outputTexture[id.xy] = area(id.xy, orient.zw);
         }
         #endif
         """;

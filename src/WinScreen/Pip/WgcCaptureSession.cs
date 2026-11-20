@@ -21,7 +21,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         public void Dispose() => Interlocked.Exchange(ref _value, null)?.Dispose();
     }
     private sealed record View(Size Client, Rectangle Destination, Rectangle Crop, byte Opacity,
-        Rectangle? Selection, bool Visible, int SourceHz, int TargetHz, int FrameRate, PipScaling Scaling);
+        Rectangle? Selection, bool Visible, int SourceHz, int TargetHz, int FrameRate, PipScaling Scaling, ViewTurn Turn = default);
     private readonly object _captureGate = new(), _viewGate = new();
     private readonly LatestFrame<Frame> _frames = new();
     private readonly PipWorkerSignal _wake = new();
@@ -86,6 +86,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     public void SetOpacity(byte opacity) => Change(v => v with { Opacity = opacity });
     public void SetVisible(bool visible) => Change(v => v with { Visible = visible });
     public void SetSelection(Rectangle? selection) => Change(v => v with { Selection = selection });
+    public void SetTurn(ViewTurn turn) => Change(v => v with { Turn = turn });
 
     // The view goes on passing its state after the capture ends, as when the PC is locked; the worker's signal is
     // gone by then (1.3.0-beta.11 crashed on it).
@@ -196,6 +197,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                 lock (_viewGate) { view = _view; dirty = _dirty; _dirty = false; }
                 int rate = view.FrameRate == 0 ? view.TargetHz : view.FrameRate;
                 renderer.ViewScaling = view.Scaling;
+                renderer.Turn = view.Turn;
                 if (_software) rate = Math.Min(rate, 30);
                 if (rate != previousRate || view.SourceHz != previousSourceHz)
                 {
