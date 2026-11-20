@@ -80,7 +80,10 @@ public sealed class SourceConcealmentTests
     {
         Rectangle outer = Rectangle.Inflate(window, Ring, Ring), inner = Rectangle.Inflate(window, -Ring, -Ring);
         Rectangle keepOut = Rectangle.Inflate(view, 24, 24); // The view's own frame and shadow.
-        outer.Intersect(Screen.PrimaryScreen!.Bounds);
+        // Not the taskbar, which is above a parked window and changes by itself: its marker under the app in front
+        // moved when the focus left another window (20 Nov 2026).
+        outer.Intersect(Screen.PrimaryScreen!.WorkingArea);
+        if (outer.Width <= 0 || outer.Height <= 0) return null;
         using var bitmap = new Bitmap(outer.Width, outer.Height);
         using (Graphics graphics = Graphics.FromImage(bitmap))
             graphics.CopyFromScreen(outer.Location, Point.Empty, outer.Size);
