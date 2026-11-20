@@ -539,7 +539,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     // person is told.
     private string? StillPinned(nint window, ChangedWindow state)
     {
-        if (!state.Pinned || state.PinPaused || User32.IsIconic(window) || IsTopmost(window)) return null;
+        if (!state.Pinned || state.PinPaused || User32.IsIconic(window) || IsTopmost(window) || TopLayer.IsUnpinnedForNow(window)) return null;
         if (CoversItsDisplay(window) && !state.BorderlessFilled || !AnswersQuickly(window)) return null;
         long now = Environment.TickCount64;
         if (state.PinTakenSince == 0 || now - state.PinTakenSince > PinTakingSpan)
@@ -1658,6 +1658,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         if (IsTopmost(window) != topmost)
             throw new WindowOperationException(string.Format(T("errors.window.changeIgnored"),
                 topmost ? T("actions.pin") : T("actions.unpin"), WindowInfo.Title(window)));
+        TopLayer.PinChanged(window, topmost);
     }
 
     private static long ReadExStyle(nint window)

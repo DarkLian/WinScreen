@@ -1448,6 +1448,52 @@ public sealed class AppEndToEndTests : IDisposable
         }
     }
 
+    // Owner, 1.3.0: Ctrl+right-click on a pinned window, an administrator app, opened the menu, but it closed again at
+    // once each time, the log saying the window took the focus back.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void The_window_menu_stays_open_on_a_pinned_window(bool border)
+    {
+        RestartWith(new AppSettings { WindowMenu = true, HighlightPinned = border });
+        using var target = new TargetProcess(Spot);
+        Focus(target);
+        Hotkey(Keys.T, target);
+        Assert.True(Desktop.WaitFor(() => (Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST) != 0));
+        Thread.Sleep(350);
+        for (int round = 0; round < 2; round++)
+        {
+            try
+            {
+                Desktop.Key(Keys.ControlKey, true);
+                Desktop.RightClickOn(target.Center, target.Handle);
+            }
+            finally { Desktop.Key(Keys.ControlKey, false); }
+            nint host = 0;
+            if (!Desktop.WaitFor(() =>
+                {
+                    host = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen.WindowMenu");
+                    return host != 0 && User32.GetForegroundWindow() == host;
+                }, 1000))
+                Fail($"Round {round}: the menu didn't open.");
+            Thread.Sleep(1000);
+            if (!User32.IsWindow(host) || !User32.IsWindowVisible(host)) Fail($"Round {round}: the menu closed by itself.");
+            var below = new Point(target.Center.X + 20, target.Center.Y + 12);
+            if (User32.GetWindowThreadProcessId(Desktop.TopWindowAt(below), out uint shown) != 0 && shown != (uint)_app.Id)
+                Fail($"Round {round}: the menu is behind the window.");
+            Desktop.Press(Keys.Escape);
+            Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle), $"Round {round}: the focus didn't come back.");
+            while (target.NextReport(300) is not null) { }
+        }
+
+        void Fail(string what)
+        {
+            Thread.Sleep(1500); // The log is written behind.
+            string log = File.Exists(Path.Combine(_data, "winscreen.log")) ? File.ReadAllText(Path.Combine(_data, "winscreen.log")) : "(no log)";
+            Assert.Fail(what + "\n" + string.Join("\n", log.Split('\n').Where(line => line.Contains("menu.") || line.Contains("pin") || line.Contains("command"))));
+        }
+    }
+
     [Fact]
     public void Starting_after_a_forced_kill_restores_a_source_taken_off_the_taskbar()
     {

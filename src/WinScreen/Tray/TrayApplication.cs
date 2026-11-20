@@ -202,7 +202,11 @@ public sealed partial class TrayApplication : ApplicationContext
         // A backstop for anything lifted to the top while the menu is open, by WinScreen or anyone else.
         _menuGuard.Tick += (_, _) => WinScreen.Windows.TopLayer.KeepAbove();
         _tray.ContextMenuStrip.Opened += (_, _) => _menuGuard.Start();
-        _tray.ContextMenuStrip.Closed += (_, _) => _menuGuard.Stop();
+        _tray.ContextMenuStrip.Closed += (_, _) =>
+        {
+            if (_windowMenu is not { IsDisposed: false }) _menuGuard.Stop();
+            WinScreen.Windows.TopLayer.KeepAbove();
+        };
         _tray.MouseClick += (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
@@ -388,7 +392,14 @@ public sealed partial class TrayApplication : ApplicationContext
             // borrow the same shared hook only until that fallback menu closes.
             host.FallbackOpened = () => FollowModifierHook(User32.GetForegroundWindow());
             _modifierDrag.MenuVisible = true;
-            host.FormClosed += (_, _) => { _windowMenu = null; _modifierDrag.MenuVisible = false; };
+            host.FormClosed += (_, _) =>
+            {
+                _windowMenu = null;
+                _modifierDrag.MenuVisible = false;
+                if (_tray.ContextMenuStrip?.Visible != true) _menuGuard.Stop();
+                WinScreen.Windows.TopLayer.KeepAbove(); // Pins again at once what the menu needed unpinned.
+            };
+            host.Popup.Opened += (_, _) => { WinScreen.Windows.TopLayer.KeepAbove(); _menuGuard.Start(); };
             host.Open();
         });
     }
@@ -886,6 +897,8 @@ public sealed partial class TrayApplication : ApplicationContext
         FollowModifierHook(foreground);
         FollowCropControls();
         _windows.Refresh(Cursor.Position, _settings.OpaqueOnHover, _settings.PausePinWhenMaximized);
+        // Dialogs and Settings have no guard of their own, and a window unpinned while they were open is pinned again here.
+        if (WinScreen.Windows.TopLayer.AnyUnpinnedForNow || AppWindowsAbove().Any()) WinScreen.Windows.TopLayer.KeepAbove();
         FollowLookPresses();
         _borders.Show(_settings.HighlightPinned ? _windows.VisiblePinnedWindows() : []);
     }
@@ -1384,6 +1397,9 @@ public sealed partial class TrayApplication : ApplicationContext
             foreach (Form owned in settings.OwnedForms)
                 if (owned.Visible && owned.IsHandleCreated) yield return owned.Handle;
         }
+        foreach (Form dialog in Application.OpenForms.Cast<Form>().ToArray())
+            if (dialog is ThemedDialog or InfoWindow && dialog is { IsDisposed: false, Visible: true, IsHandleCreated: true })
+                yield return dialog.Handle;
         foreach (PipWindow view in _viewsInOrder)
             if (!view.IsDisposed)
                 foreach (nint window in WinScreen.Windows.TopLayer.OpenDropDowns(view.ContextMenuStrip))

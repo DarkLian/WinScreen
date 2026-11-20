@@ -2,9 +2,10 @@ using WinScreen.Native;
 
 namespace WinScreen.Windows;
 
-// Highest first: Windows' own passing surfaces (snip, Start, search, taskbar flyouts, task switching, notifications),
-// which nothing is lifted over or the two flicker taking turns; WinScreen's hover tips; its open menus and Settings;
-// the taskbar; then always-on-top windows.
+// Highest first (agreed with the owner, 20 Nov 2026): Windows' own passing surfaces (snip, Start, search, taskbar
+// flyouts, task switching, notifications), which nothing is lifted over or the two flicker taking turns; WinScreen's
+// hover tips; its open menus, each submenu over its menu; its dialogs; Settings, unless maximized; the taskbar; the
+// toolbar, just above its window; views; pinned windows; then ordinary windows.
 // Anything WinScreen lifts to the top goes through here.
 internal static class TopLayer
 {
@@ -115,6 +116,15 @@ internal static class TopLayer
     }
 
     // Without resetting an already correct z-order.
+    internal static void KeepAbove(Func<nint, bool>? refusedForTest)
+    {
+        _refused = refusedForTest;
+        try { KeepAbove(); }
+        finally { _refused = null; }
+    }
+
+    private static Func<nint, bool>? _refused; // A move Windows or the app ignores, as a pinned app in front can.
+
     internal static void KeepAbove()
     {
         var state = Survey();
@@ -125,14 +135,15 @@ internal static class TopLayer
 
     private static void RepairProtected(nint[] above, LayerState state)
     {
-        if (LiftCovered(above, state.Tips, state)) state = Survey();
+        if (above.Length == 0) PinAgain();
+        if (LiftCovered(above, state.Tips, state, pushOthersUnder: true)) state = Survey();
         LiftCovered(state.Tips, [], state);
     }
 
     private static nint[] ProtectedWindows(LayerState state) => (Above?.Invoke() ?? []).Concat(state.Menus.AsEnumerable().Reverse())
         .Where(window => window != 0 && User32.IsWindowVisible(window)).Distinct().ToArray();
 
-    private static bool LiftCovered(IEnumerable<nint> group, IEnumerable<nint> higher, LayerState state)
+    private static bool LiftCovered(IEnumerable<nint> group, IEnumerable<nint> higher, LayerState state, bool pushOthersUnder = false)
     {
         List<nint> order = state.Order;
         nint[] windows = group.Where(window => window != 0 && User32.IsWindowVisible(window)).Distinct().ToArray();
@@ -150,12 +161,117 @@ internal static class TopLayer
         // The group is listed lowest first; from its highest down, each goes just under the one placed before it.
         nint after = state.InsertAfter(own);
         for (int index = windows.Length - 1; index >= 0; index--) after = Lift(windows[index], after);
+        if (pushOthersUnder) PushUnder(own, allowed, Survey());
         return true;
     }
 
+    // Only for WinScreen's menus, dialogs and Settings: Windows can keep another app's window over them (the app in
+    // front, pinned). Going lower is usually allowed, so that window goes just under them instead, still pinned. A
+    // window WinScreen pinned that won't go under, or keeps climbing back, is unpinned until they close (agreed with the
+    // owner, 21 Nov 2026, for ExitLag); any other is left alone.
+    private static void PushUnder(ICollection<nint> own, ICollection<nint> allowed, LayerState state)
+    {
+        nint lowest = state.Order.LastOrDefault(own.Contains);
+        if (lowest == 0) return;
+        lock (Pushed) PushUnder(own, allowed, state, lowest);
+    }
+
+    private static void PushUnder(ICollection<nint> own, ICollection<nint> allowed, LayerState state, nint lowest)
+    {
+        long now = Environment.TickCount64;
+        foreach (nint gone in Pushed.Keys.Where(window => now - Pushed[window].Since > PushWindowMilliseconds).ToArray())
+            Pushed.Remove(gone);
+        foreach (nint window in state.Order)
+        {
+            if (window == lowest) break;
+            if (own.Contains(window) || allowed.Contains(window) || own.Any(member => WindowInfo.IsOwnedBy(window, member)) ||
+                User32.GetWindowThreadProcessId(window, out uint process) == 0 || process == (uint)Environment.ProcessId)
+                continue;
+            var tries = Pushed.TryGetValue(window, out var known) ? known : (Count: 0, Since: now);
+            if (tries.Count >= MostPushes) continue;
+            Pushed[window] = (tries.Count + 1, tries.Since);
+            // Under a window that isn't always on top, it would lose its pin.
+            if (!IsTopmost(lowest)) continue;
+            bool stays = tries.Count + 1 == MostPushes;
+            if (!stays && _refused?.Invoke(window) != true && User32.SetWindowPos(window, lowest, 0, 0, 0, 0, Flags))
+            {
+                if (!IsTopmost(window)) User32.SetWindowPos(window, User32.HWND_TOPMOST, 0, 0, 0, 0, Flags);
+                Interlocked.Increment(ref _pushes);
+                stays = IsAbove(window, lowest);
+                Diagnostics.Log.Event("layer.pushedUnder", ("program", Diagnostics.LogValue.ProgramOf(window)), ("pinKept", IsTopmost(window)),
+                    ("stayedOver", stays));
+            }
+            else stays = true;
+            if (stays) Unpin(window);
+        }
+    }
+
+    private static bool IsAbove(nint upper, nint lower)
+    {
+        nint window = lower;
+        for (int seen = 0; seen < 4096 && (window = User32.GetWindow(window, GW_HWNDPREV)) != 0; seen++)
+            if (window == upper) return true;
+        return false;
+    }
+
+    private const uint GW_HWNDPREV = 3;
+    private static readonly HashSet<nint> PinnedByWinScreen = [], Unpinned = [];
+
+    // Told by every pin and unpin WinScreen makes, which also ends any unpinning here.
+    internal static void PinChanged(nint window, bool pinned)
+    {
+        lock (Unpinned)
+        {
+            if (pinned) PinnedByWinScreen.Add(window);
+            else PinnedByWinScreen.Remove(window);
+            Unpinned.Remove(window);
+        }
+    }
+
+    internal static bool IsUnpinnedForNow(nint window) { lock (Unpinned) return Unpinned.Contains(window); }
+
+    internal static bool AnyUnpinnedForNow { get { lock (Unpinned) return Unpinned.Count != 0; } }
+
+    private static void Unpin(nint window)
+    {
+        lock (Unpinned)
+        {
+            if (!PinnedByWinScreen.Contains(window) || Unpinned.Contains(window)) return;
+            User32.SetWindowPos(window, User32.HWND_NOTOPMOST, 0, 0, 0, 0, Flags);
+            if (IsTopmost(window)) return;
+            Unpinned.Add(window);
+        }
+        Diagnostics.Log.Event("layer.unpinnedForNow", ("program", Diagnostics.LogValue.ProgramOf(window)));
+    }
+
+    // Once no menu, dialog or Settings is open.
+    private static void PinAgain()
+    {
+        nint[] windows;
+        lock (Unpinned)
+        {
+            if (Unpinned.Count == 0) return;
+            windows = Unpinned.ToArray();
+            Unpinned.Clear();
+        }
+        foreach (nint window in windows.Where(User32.IsWindow))
+        {
+            User32.SetWindowPos(window, User32.HWND_TOPMOST, 0, 0, 0, 0, Flags);
+            Diagnostics.Log.Event("layer.pinnedAgain", ("program", Diagnostics.LogValue.ProgramOf(window)), ("pinned", IsTopmost(window)));
+        }
+    }
+
+    private const int MostPushes = 3, PushWindowMilliseconds = 1000;
+    private static readonly Dictionary<nint, (int Count, long Since)> Pushed = [];
+
+    private static bool IsTopmost(nint window) => (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0;
+
+    private static long _pushes;
+    internal static long PushCount => Interlocked.Read(ref _pushes);
+
     private static nint Lift(nint window, nint after)
     {
-        if (after == window) return window;
+        if (after == window || _refused?.Invoke(window) == true) return window;
         Interlocked.Increment(ref _lifts);
         // Under a window means above everything else; HWND_TOPMOST alone would put it over Windows' own surfaces.
         bool topmost = (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0;

@@ -135,6 +135,58 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(adminTarget) is null or 255, 5000), "The helper didn't bring its window back as it went.");
     }
 
+    // Owner, 1.3.0: Ctrl+right-click on a pinned administrator app opened the helper's menu, which closed again at once
+    // each time, the log saying the app took the focus back.
+    [Fact]
+    public void The_helpers_window_menu_stays_open_on_a_pinned_administrator_window()
+    {
+        if (!ElevatesWithoutAsking) { Skipped.Because("Windows asks before running as administrator here, and a test can't answer."); return; }
+        if (ProcessInfo.SelfElevated || !ProcessInfo.CanElevate) { Skipped.Because("Needs an administrator account and a test run that isn't elevated."); return; }
+        Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0 && HelperProcess() == 0, "Close the running WinScreen before these tests.");
+        new AppSettings { WelcomeShown = true, ShowToolbar = false, RunAsAdministrator = true, WindowMenu = true, HighlightPinned = true }
+            .Save(Path.Combine(_data, "settings.json"));
+        var bounds = new Rectangle(300, 160, 520, 380);
+        nint target = ElevatedTarget("WinScreen helper menu test", bounds);
+        _app = Start();
+        uint helper = 0;
+        Assert.True(Desktop.WaitFor(() => (helper = HelperProcess()) != 0, 20000), "No helper started.");
+        Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("helper.connected"), 15000), "The helper didn't connect.");
+        Assert.Equal(0, Run("TogglePin", "title:WinScreen helper menu test"));
+        Assert.True(Desktop.WaitFor(() => Topmost(target), 3000), "The helper didn't pin the window.");
+        Thread.Sleep(500);
+
+        var point = new Point(bounds.Left + 120, bounds.Top + 120);
+        for (int round = 0; round < 2; round++)
+        {
+            ElevatedGesture(point);
+            nint host = 0;
+            Assert.True(Desktop.WaitFor(() => (host = Desktop.FindWindow(null, "WinScreen.WindowMenu")) != 0 && User32.IsWindowVisible(host), 3000),
+                $"Round {round}: the menu didn't open.\n" + Log("winscreen-administrator.log"));
+            Thread.Sleep(1200);
+            Assert.True(User32.IsWindow(host) && User32.IsWindowVisible(host), $"Round {round}: the menu closed by itself.\n" + Log("winscreen-administrator.log"));
+            User32.GetWindowThreadProcessId(Desktop.TopWindowAt(new Point(point.X + 30, point.Y + 14)), out uint shown);
+            Assert.True(shown == helper, $"Round {round}: the menu is behind the window.");
+            Elevated("powershell.exe", "-NoProfile -Command \"(New-Object -ComObject WScript.Shell).SendKeys('{ESC}')\"");
+            Assert.True(Desktop.WaitFor(() => !User32.IsWindow(host) || !User32.IsWindowVisible(host), 5000), $"Round {round}: Escape left the menu open.");
+            Thread.Sleep(500);
+        }
+    }
+
+    // Input into an administrator app's window has to come from a program running as administrator too.
+    private static void ElevatedGesture(Point point)
+    {
+        string script = $$"""
+            $k = Add-Type -Name G -PassThru -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, UIntPtr e); [DllImport("user32.dll")] public static extern void mouse_event(uint f, int x, int y, uint d, UIntPtr e); [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);'
+            [void]$k::SetCursorPos({{point.X}}, {{point.Y}}); Start-Sleep -Milliseconds 150
+            $k::keybd_event(0x11, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60
+            $k::mouse_event(8, 0, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60
+            $k::mouse_event(16, 0, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60
+            $k::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)
+            """;
+        string encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
+        Elevated("powershell.exe", "-NoProfile -EncodedCommand " + encoded);
+    }
+
     /// <summary>
     /// At sign-in the task starts the helper first (an install from before 10-2 too, whose task gives no argument): it
     /// starts WinScreen as the person through the shell, they connect, and it goes when WinScreen is closed.

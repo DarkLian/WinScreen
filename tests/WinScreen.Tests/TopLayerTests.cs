@@ -89,6 +89,77 @@ public sealed class TopLayerTests
         });
     }
 
+    // Owner, 1.3.0: the window menu opened behind pinned ExitLag, which Windows kept above it; even WinScreen's pin
+    // border, lifted every 33 ms, stayed under it, and ExitLag wouldn't go under either. Agreed with the owner: a window
+    // that goes under keeps its pin; one that won't is unpinned while the menu is open, and pinned again after.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_pinned_app_over_an_open_menu_goes_under_it_or_is_unpinned_until_it_closes(bool refusesToGoUnder)
+    {
+        Func<IEnumerable<nint>>? before = TopLayer.Above;
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Rectangle screen = Screen.PrimaryScreen!.WorkingArea;
+            // Standing in for an open WinScreen menu: always on top, and one TopLayer keeps above.
+            using var menu = new Form
+            {
+                FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.Manual, ShowInTaskbar = false, TopMost = true,
+                Bounds = new Rectangle(screen.Left + 240, screen.Top + 240, 160, 120), BackColor = Color.Magenta,
+            };
+            menu.Show();
+            Pump(200);
+            Rectangle outer = menu.Bounds;
+            using var pinned = new TargetProcess(Rectangle.Inflate(outer, 60, 60), title: "WinScreen layer test pinned");
+            var inMenu = new Point(outer.Left + outer.Width / 2, outer.Bottom - 6);
+            try
+            {
+                // Pinned as WinScreen pins, and over the menu, as the owner's app was.
+                Desktop.GainForegroundRights();
+                WindowController.Pin(pinned.Handle);
+                User32.SetWindowPos(menu.Handle, pinned.Handle, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+                Assert.True(Desktop.WaitFor(() => RootAt(inMenu) == pinned.Handle, 2000, () => Pump(20)),
+                    "The pinned window never came over the menu.\n" + Order());
+                Assert.True((Desktop.ExStyle(pinned.Handle) & User32.WS_EX_TOPMOST) != 0 && (Desktop.ExStyle(menu.Handle) & User32.WS_EX_TOPMOST) != 0,
+                    $"The pinned window and the menu aren't both always on top: menu visible {User32.IsWindowVisible(menu.Handle)}, " +
+                    $"ex {Desktop.ExStyle(menu.Handle):X}.\n" + Order());
+
+                // Windows ignores the menu's lift, as it did with the owner's app.
+                Func<nint, bool> refused = window => window == menu.Handle || refusesToGoUnder && window == pinned.Handle;
+                TopLayer.Above = () => [menu.Handle];
+                long lifts = TopLayer.LiftCount, pushes = TopLayer.PushCount;
+                string order = Order();
+                TopLayer.KeepAbove(refused);
+                Pump(50);
+                string Report() => $"Menu {menu.Handle:X}, pinned {pinned.Handle:X}; {TopLayer.LiftCount - lifts} lifts, " +
+                                   $"{TopLayer.PushCount - pushes} pushes.\nBefore:\n{order}\nAfter:\n{Order()}";
+                bool topmost = (Desktop.ExStyle(pinned.Handle) & User32.WS_EX_TOPMOST) != 0;
+                Assert.True(topmost != refusesToGoUnder, (refusesToGoUnder ? "It wasn't unpinned. " : "It lost its pin. ") + Report());
+                Assert.Equal(refusesToGoUnder, TopLayer.IsUnpinnedForNow(pinned.Handle));
+                Assert.True(RootAt(inMenu) == menu.Handle, "The menu is still covered. " + Report());
+
+                // Once in order, it's left alone.
+                lifts = TopLayer.LiftCount;
+                pushes = TopLayer.PushCount;
+                order = Order();
+                TopLayer.KeepAbove(refused);
+                Assert.True(TopLayer.LiftCount == lifts && TopLayer.PushCount == pushes, "Something moved again. " + Report());
+
+                // The menu closed: pinned again.
+                menu.Hide();
+                TopLayer.KeepAbove();
+                Assert.True((Desktop.ExStyle(pinned.Handle) & User32.WS_EX_TOPMOST) != 0, "It wasn't pinned again. " + Report());
+                Assert.False(TopLayer.IsUnpinnedForNow(pinned.Handle));
+            }
+            finally
+            {
+                TopLayer.Above = before;
+                TopLayer.PinChanged(pinned.Handle, false);
+                menu.Close();
+            }
+        });
+    }
+
     [Fact]
     public void A_view_lifted_to_the_top_stays_under_the_taskbar_and_tips_stay_over_menus()
     {
@@ -280,6 +351,23 @@ public sealed class TopLayerTests
     }
 
     private static nint RootAt(Point point) => User32.GetAncestor(Desktop.TopWindowAt(point), User32.GA_ROOT);
+
+    // The always-on-top windows from the top, for a failure message.
+    private static string Order()
+    {
+        var lines = new List<string>();
+        nint window = User32.GetWindow(User32.GetDesktopWindow(), 5);
+        for (int seen = 0; window != 0 && seen < 4096 && lines.Count < 15; seen++, window = User32.GetWindow(window, 2))
+        {
+            if (!User32.IsWindowVisible(window)) continue;
+            long style = User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE);
+            if ((style & User32.WS_EX_TOPMOST) == 0) break;
+            User32.GetWindowThreadProcessId(window, out uint process);
+            User32.GetWindowRect(window, out Rect r);
+            lines.Add($"  {window:X} {WindowInfo.ClassName(window)} process={process} ex={style:X} {r.Left},{r.Top},{r.Right},{r.Bottom}");
+        }
+        return string.Join("\n", lines);
+    }
 
     private static void Pump(int milliseconds)
     {
