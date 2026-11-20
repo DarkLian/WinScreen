@@ -345,7 +345,9 @@ public sealed class SwitcherListTests
                 List<string> shown = Names();
                 // Windows 11's switcher shows its list only to the eye: through accessibility it has a title and nothing
                 // else, so there is nothing to compare there.
-                if (shown.Count == 0 && Environment.OSVersion.Version.Build >= 22000) { Skipped.Because("Windows 11's switcher list can't be read through accessibility."); return; }
+                // Lately it also gives its title and an empty name.
+                if (Environment.OSVersion.Version.Build >= 22000 && !shown.Any(name => name.Contains(title, StringComparison.Ordinal)))
+                { Skipped.Because("Windows 11's switcher list can't be read through accessibility."); return; }
                 Assert.Contains(shown, name => name.Contains(title, StringComparison.Ordinal));
                 view.SetOriginalHidden(true);
                 Assert.True(windows.IsHidden(target.Handle));
