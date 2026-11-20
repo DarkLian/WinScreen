@@ -306,7 +306,8 @@ public sealed class WindowPlacementTests
         var facts = WindowInfo.Facts(target.Handle).ToDictionary(fact => fact.Label, fact => fact.Value);
         Assert.Equal("Facts target", facts["Title"]);
         Assert.Equal("WinScreen.TestTarget", facts["Program"]);
-        Assert.Equal("No", facts["Runs as administrator"]);
+        // The target runs as the tests do, which the test VM can make administrator.
+        Assert.Equal(Native.ProcessInfo.SelfElevated ? "Yes" : "No", facts["Runs as administrator"]);
     }
 
     // Between displays. These run where there is more than one display: in the test VM, its "two-displays" checkpoint

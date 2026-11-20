@@ -69,7 +69,8 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             try { using Process p = Process.GetProcessById(id); p.Kill(); p.WaitForExit(3000); }
             catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { }
         }
-        try { Directory.Delete(root, true); } catch (IOException) { }
+        // A browser process can hold a profile file a moment after it is gone; the folder is in the temporary folder.
+        try { Directory.Delete(root, true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     /// <param name="experimental">Experimental features on. Off, only kinds of app verified for direct use (Chrome and

@@ -160,7 +160,8 @@ public sealed class ModifierHookLifetimeTests
     [Fact]
     public void A_process_Windows_wont_let_us_inspect_counts_as_elevated()
     {
-        Assert.False(ProcessInfo.IsElevated((uint)Environment.ProcessId));
+        // The test VM can run the tests as administrator, and then this process is elevated too.
+        Assert.Equal(ProcessInfo.SelfElevated, ProcessInfo.IsElevated((uint)Environment.ProcessId));
         using Process system = Process.GetProcessesByName("winlogon")[0];
         Assert.True(ProcessInfo.IsElevated((uint)system.Id));
         Assert.True(ProcessInfo.IsElevated(uint.MaxValue));
