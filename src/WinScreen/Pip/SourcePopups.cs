@@ -19,6 +19,9 @@ internal sealed class SourcePopups
     private readonly nint _source;
     private readonly Dictionary<nint, Placement> _placed = [];
     private readonly Dictionary<nint, Point> _hidden = []; // Popup, and where it was.
+    // A newer menu's popup that may still move itself: when it was first seen, where it is, and since when it has been there.
+    private readonly Dictionary<nint, (long Seen, Point At, long Since)> _settling = [];
+    private const int StillMilliseconds = 100, LongestSettle = 400;
     private long _opened;
     public SourcePopups(nint source) => _source = source;
 
@@ -68,6 +71,25 @@ internal sealed class SourcePopups
                     Point current = new(r.Left, r.Top);
                     if (!_placed.TryGetValue(popup, out var previous))
                     {
+                        // A newer menu's submenu starts where its parent started, then slides beside it: placed at
+                        // once, it went onto its parent and was held there. One that starts there waits until it has
+                        // moved and kept still, or a little while in any case: a menu's strip of buttons starts there
+                        // too and never moves, and then goes with its menu as before.
+                        if (Windows.WindowInfo.ClassName(popup) == WinUiPopup)
+                        {
+                            bool waiting = _settling.TryGetValue(popup, out var settling);
+                            bool onAnother = _placed.Values.Any(other => other.Original == current);
+                            if (waiting || onAnother)
+                            {
+                                long now = Environment.TickCount64;
+                                if (!waiting) settling = (now, current, now);
+                                else if (settling.At != current) settling = (settling.Seen, current, now);
+                                _settling[popup] = settling;
+                                bool moving = !onAnother && now - settling.Since < StillMilliseconds;
+                                if (now - settling.Seen < LongestSettle && (onAnother || moving)) continue;
+                            }
+                        }
+                        _settling.Remove(popup);
                         Rectangle native = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
                         Point place = PlaceNew(native, at, sourcePoint);
                         _placed[popup] = new Placement(current, place, native.Size, ++_opened);
@@ -94,6 +116,7 @@ internal sealed class SourcePopups
                 else if (!away && _hidden.ContainsKey(popup)) Show(popup);
             }
             foreach (nint gone in _placed.Keys.Where(popup => !seen.ContainsKey(popup)).ToArray()) _placed.Remove(gone);
+            foreach (nint gone in _settling.Keys.Where(popup => !seen.ContainsKey(popup)).ToArray()) _settling.Remove(gone);
             foreach (nint gone in _hidden.Keys.Where(popup => !seen.ContainsKey(popup)).ToArray())
                 Show(gone); // Closed, or hidden by its app: put back as it was for next time.
             if (_placed.Count != 0 && (opened || OutOfOrder(seen, viewDepth)))

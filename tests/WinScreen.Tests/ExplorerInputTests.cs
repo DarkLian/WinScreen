@@ -126,9 +126,12 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                         Rectangle childBounds = Desktop.BoundsOf(child);
                         Assert.NotEqual(parent, child);
                         Assert.Equal(parentBounds, Desktop.BoundsOf(parent));
-                        // Beside the parent, overlapping it no more than a menu's edge, as Windows lays it out.
+                        // Beside the parent, not on top of it. The newer menus' windows have about 16 pixels of invisible
+                        // shadow on each side, so even the original's overlap by about 28; through a view the submenu can
+                        // land up to about 30 further in, as the menu slides while it opens (20 Nov 2026). It used to
+                        // land wholly on its parent.
                         Rectangle overlap = Rectangle.Intersect(parentBounds, childBounds);
-                        Assert.True(overlap.Width <= 16 || overlap.Height <= 16,
+                        Assert.True(overlap.Width <= 64 || overlap.Height <= 16,
                             $"The submenu {childBounds} covers its menu {parentBounds}.");
                         for (int i = 0; i < 20; i++)
                         {

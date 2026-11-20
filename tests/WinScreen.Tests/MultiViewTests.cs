@@ -409,15 +409,20 @@ public sealed class SwitcherListTests
         var owner = new object();
         try
         {
-            Assert.Contains(word, SwitcherText());
+            // Any word of the title: the recognizer can miss one, as it did on the highlighted entry (20 Nov 2026).
+            string[] words = ["Kettle", word, "Meadow"];
+            string text = SwitcherText();
+            Assert.True(words.Any(text.Contains), "Not listed: " + text);
             windows.HideOwned(target.Handle, owner);
             windows.RemoveTaskbarButton(target.Handle);
             windows.Park(target.Handle);
             Thread.Sleep(500);
-            Assert.DoesNotContain(word, SwitcherText());
+            text = SwitcherText();
+            Assert.False(words.Any(text.Contains), "Still listed: " + text);
             windows.ShowOwned(target.Handle, owner);
             Thread.Sleep(500);
-            Assert.Contains(word, SwitcherText());
+            text = SwitcherText();
+            Assert.True(words.Any(text.Contains), "Not listed again: " + text);
         }
         finally { windows.RestoreAll(); }
 
@@ -445,8 +450,18 @@ public sealed class SwitcherListTests
         Rectangle area = Screen.PrimaryScreen!.Bounds;
         using var picture = new Bitmap(area.Width, area.Height);
         using (var graphics = Graphics.FromImage(picture)) graphics.CopyFromScreen(area.Location, Point.Empty, area.Size);
+        // The switcher's titles are small; over a busy page behind it the recognizer missed them (20 Nov 2026). The
+        // middle of the screen, where the switcher is, is enlarged as far as the recognizer takes.
+        var middle = Rectangle.FromLTRB(picture.Width / 10, picture.Height * 15 / 100, picture.Width * 9 / 10, picture.Height * 85 / 100);
+        double scale = Math.Min(2, global::Windows.Media.Ocr.OcrEngine.MaxImageDimension / (double)Math.Max(middle.Width, middle.Height));
+        using var larger = new Bitmap((int)(middle.Width * scale), (int)(middle.Height * scale));
+        using (var graphics = Graphics.FromImage(larger))
+        {
+            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            graphics.DrawImage(picture, new Rectangle(0, 0, larger.Width, larger.Height), middle, GraphicsUnit.Pixel);
+        }
         using var png = new MemoryStream();
-        picture.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+        larger.Save(png, System.Drawing.Imaging.ImageFormat.Png);
         using var stream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream();
         using (var writer = new global::Windows.Storage.Streams.DataWriter(stream))
         {
