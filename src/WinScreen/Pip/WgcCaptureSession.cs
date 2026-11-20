@@ -33,6 +33,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     private View _view;
     private bool _dirty = true;
     private volatile bool _stopping, _frozen;
+    private bool _signalGone;
     private volatile PipSessionState _state = PipSessionState.Starting;
     private int _generation;
     private Size _sourceSize;
@@ -73,7 +74,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         lock (_viewGate)
         {
             View changed = update(_view);
-            if (changed == _view || _stopping) return;
+            if (changed == _view || _stopping || _signalGone) return;
             _view = changed; _dirty = true;
             _wake.Set();
         }
@@ -86,10 +87,16 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     public void SetVisible(bool visible) => Change(v => v with { Visible = visible });
     public void SetSelection(Rectangle? selection) => Change(v => v with { Selection = selection });
 
+    // The view goes on passing its state after the capture ends, as when the PC is locked; the worker's signal is
+    // gone by then (1.3.0-beta.11 crashed on it).
     public void SetFrozen(bool frozen)
     {
-        _frozen = frozen;
-        _wake.Set();
+        lock (_viewGate)
+        {
+            if (_frozen == frozen) return;
+            _frozen = frozen;
+            if (!_stopping && !_signalGone) _wake.Set();
+        }
     }
 
     private void Run()
@@ -304,7 +311,11 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
             Release(() => winrtDevice?.Dispose());
             Release(() => renderer?.Dispose());
             if (_state != PipSessionState.Failed) _state = PipSessionState.Stopped;
-            lock (_viewGate) _wake.Dispose();
+            lock (_viewGate)
+            {
+                _signalGone = true;
+                _wake.Dispose();
+            }
             _completion.TrySetResult();
         }
     }
@@ -315,7 +326,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         {
             if (_stopping) return;
             _stopping = true;
-            _wake.Set();
+            if (!_signalGone) _wake.Set();
         }
         // The HWND owner never waits on capture callbacks, GPU submission, or a driver.
     }

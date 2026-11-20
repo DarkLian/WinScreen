@@ -273,6 +273,32 @@ public sealed class WgcPipTests(ITestOutputHelper output)
         });
     }
 
+    // A view goes on passing its state to a capture that has ended, as when its window closes or the PC is locked:
+    // 1.3.0-beta.11 crashed when Freeze reached a finished capture's signal (the owner, 20 Nov 2026).
+    [WgcFact]
+    public void A_capture_that_has_ended_takes_freeze_and_view_changes_quietly()
+    {
+        var source = new TargetProcess(new(200, 160, 400, 300));
+        OnUiThread(pump =>
+        {
+            using var destination = new Form { ClientSize = new(480, 320), Location = new(900, 150),
+                StartPosition = FormStartPosition.Manual, ShowInTaskbar = false };
+            destination.Show();
+            using var capture = new WgcCaptureSession(WindowIdentity.Capture(source.Handle), destination.Handle,
+                destination.ClientSize, PipDisplay.MonitorFromWindow(destination.Handle), new(), 60, 60, false);
+            capture.SetViewport(destination.ClientRectangle, new(0, 0, 400, 300));
+            Assert.True(Desktop.WaitFor(() => capture.State == PipSessionState.Live, 10000, () => pump(10)));
+            source.Dispose();
+            Assert.True(Desktop.WaitFor(() => capture.Completion.IsCompleted, 10000, () => pump(10)), capture.State.ToString());
+            capture.SetFrozen(true);
+            capture.SetViewport(new(0, 0, 200, 150), new(0, 0, 400, 300));
+            capture.SetFrozen(false);
+            capture.SetOpacity(128);
+            capture.Dispose();
+            capture.SetFrozen(true);
+        });
+    }
+
     // Frozen, the view keeps its last picture while the window changes, still draws it when the view is resized, and
     // starts no visit; unfrozen, it shows the window as it is now.
     [WgcFact]
