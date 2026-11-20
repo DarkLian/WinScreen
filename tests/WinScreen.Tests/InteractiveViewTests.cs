@@ -316,6 +316,8 @@ public sealed class InteractiveViewTests
     [InlineData(3, true)]
     public void In_a_turned_view_a_press_lands_on_the_point_the_view_shows(int turns, bool mirrored)
     {
+        // Without a way to hide the capture border, a hidden original's view keeps Windows' thumbnail, which can't turn.
+        if (!CaptureBorder.Supported()) { Skipped.Because("Windows can't hide the capture border here (Windows 10)."); return; }
         using var source = new TargetProcess(SourceSpot);
         source.UseFrame();
         var turn = new ViewTurn(turns, mirrored);
