@@ -19,7 +19,7 @@ internal sealed class InputMethodWindows : IDisposable
 
     private readonly nint _source;
     private readonly uint _sourceThread, _sourceProcess;
-    private readonly Func<(Rectangle View, Rectangle Shown)> _geometry;
+    private readonly Func<PipMapping> _geometry;
     private readonly Func<Point?> _lastPress;
     private readonly object _gate = new();
     private readonly Thread _thread;
@@ -36,7 +36,7 @@ internal sealed class InputMethodWindows : IDisposable
     private static readonly unsafe nint Callback = (nint)(delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void>)&OnEvent;
 
     // lastPress stands in for the caret when the app reports none.
-    public InputMethodWindows(nint source, Func<(Rectangle View, Rectangle Shown)> geometry, Func<Point?> lastPress)
+    public InputMethodWindows(nint source, Func<PipMapping> geometry, Func<Point?> lastPress)
     {
         _source = source;
         _sourceThread = User32.GetWindowThreadProcessId(source, out _sourceProcess);
@@ -223,16 +223,20 @@ internal sealed class InputMethodWindows : IDisposable
 
     private Point? Place(Size list, Rectangle? caret)
     {
-        var (view, shown) = _geometry();
-        if (view.Width <= 0 || view.Height <= 0 || shown.Width <= 0 || shown.Height <= 0) return null;
+        PipMapping map = _geometry();
+        if (map.View.Width <= 0 || map.View.Height <= 0 || map.Shown.Width <= 0 || map.Shown.Height <= 0) return null;
         Rectangle line;
         if (caret is { } c && User32.GetWindowRect(_source, out Rect source))
-            line = Mapped(new Rectangle(c.Left - source.Left, c.Top - source.Top, c.Width, c.Height), view, shown);
+            line = Mapped(new Rectangle(c.Left - source.Left, c.Top - source.Top, c.Width, c.Height), map);
         else if (_lastPress() is { } press)
             line = new Rectangle(press.X, press.Y - 8, 1, 16);
         else return null;
         return Below(line, list, Screen.FromPoint(line.Location).WorkingArea);
     }
+
+    // Turned, the caret may lie across: the list goes under the rectangle around it.
+    internal static Rectangle Mapped(Rectangle inOriginal, PipMapping map) =>
+        map.Turn.IsUpright ? Mapped(inOriginal, map.View, map.Shown) : map.ToView(inOriginal);
 
     internal static Rectangle Mapped(Rectangle inOriginal, Rectangle view, Rectangle shown)
     {

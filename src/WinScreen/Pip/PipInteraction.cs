@@ -83,8 +83,7 @@ internal sealed class PipInteraction : IDisposable
     private volatile bool _inPopup;
     private long _pointer;
     private long _observedPointer;
-    private Rectangle _view;
-    private Rectangle _shown;
+    private PipMapping _map;
     private readonly SourcePopups _popups;
     private readonly nint _viewWindow;
     private readonly PipMessageInput _messages;
@@ -155,12 +154,11 @@ internal sealed class PipInteraction : IDisposable
 
     internal bool SharesInput => Volatile.Read(ref _sharing) == 1;
 
-    public PipInteraction(nint source, Rectangle view, Rectangle shown, nint viewWindow = 0, SourcePopups? popups = null)
+    public PipInteraction(nint source, PipMapping map, nint viewWindow = 0, SourcePopups? popups = null)
     {
         _source = source;
         _identity = Windows.WindowIdentity.Capture(source);
-        _view = view;
-        _shown = shown;
+        _map = map;
         _hook = Callback;
         _viewWindow = viewWindow;
         _messages = new PipMessageInput(source, _identity);
@@ -243,29 +241,26 @@ internal sealed class PipInteraction : IDisposable
     }
 
     internal bool InPopup => _inPopup;
-    internal (Rectangle View, Rectangle Shown) CurrentGeometry => Geometry();
+    internal (Rectangle View, Rectangle Shown) CurrentGeometry => (Geometry().View, Geometry().Shown);
+    internal PipMapping CurrentMapping => Geometry();
     internal bool ObservedPointer(Point point) => Interlocked.Read(ref _observedPointer) == Pack(point);
     private static long Pack(Point point) => ((long)point.X << 32) | (uint)point.Y;
 
     internal PipHookTiming Timing { get; } = new();
 
-    public void Update(Rectangle view, Rectangle shown)
+    public void Update(PipMapping map)
     {
-        lock (_moved)
-        {
-            _view = view;
-            _shown = shown;
-        }
+        lock (_moved) _map = map;
     }
 
-    private (Rectangle View, Rectangle Shown) Geometry()
+    private PipMapping Geometry()
     {
-        lock (_moved) return (_view, _shown);
+        lock (_moved) return _map;
     }
 
     private bool InView(Point pointer)
     {
-        lock (_moved) return _view.Contains(pointer);
+        lock (_moved) return _map.View.Contains(pointer);
     }
 
     public void Start(Point pointer)
@@ -273,9 +268,9 @@ internal sealed class PipInteraction : IDisposable
         _identity.Require(); // The full check, process included, once; moves use the quick one.
         Interlocked.Exchange(ref _observedPointer, Pack(pointer));
         Publish(pointer);
-        var (view, shown) = Geometry();
+        PipMapping map = Geometry();
         _messages.EnhancedHover = EnhancedHover;
-        _messages.Move(pointer, view, shown);
+        _messages.Move(pointer, map);
         _worker = new Thread(Work) { IsBackground = true, Name = "WinScreen interaction input", Priority = ThreadPriority.AboveNormal };
         _worker.Start();
         using var ready = new ManualResetEventSlim();
@@ -334,10 +329,10 @@ internal sealed class PipInteraction : IDisposable
             {
                 _moved.WaitOne(30);
                 if (_stopping || !_identity.StillThere()) return;
-                var (view, shown) = Geometry();
+                PipMapping map = Geometry();
                 long packed = Interlocked.Read(ref _pointer);
                 var pointer = new Point((int)(packed >> 32), (int)packed);
-                if (_popups.SweepMapped(view, pointer, _messages.MappedScreen(pointer, view, shown), _viewWindow))
+                if (_popups.SweepMapped(map.View, pointer, _messages.MappedScreen(pointer, map), _viewWindow))
                 {
                     QuestionShown?.Invoke();
                     return;
@@ -590,8 +585,8 @@ internal sealed class PipInteraction : IDisposable
             case EventKind.Release: ReleaseArrived(input.At, input.Button); break;
             case EventKind.Wheel:
                 StopScroll();
-                var (view, shown) = Geometry();
-                _messages.Wheel(input.At, input.Horizontal, input.Data, view, shown);
+                PipMapping map = Geometry();
+                _messages.Wheel(input.At, input.Horizontal, input.Data, map);
                 break;
             case EventKind.CancelScroll:
                 StopScroll();
@@ -624,20 +619,19 @@ internal sealed class PipInteraction : IDisposable
                 return;
             }
             // Not on an item (empty space selects what it crosses): the press goes as messages after all, and the move.
-            var (pressView, pressShown) = Geometry();
-            Delivery late = _messages.Press(_pressAt, MouseButtons.Left, pressView, pressShown, menuBar: false);
+            Delivery late = _messages.Press(_pressAt, MouseButtons.Left, Geometry(), menuBar: false);
             if (late == Delivery.Posted) _heldDelivered |= MouseButtons.Left;
             if (late == Delivery.Deferred) _pendingClick |= MouseButtons.Left;
             else Record(Outcome(late), _pressAt, 1, _messages.PressTarget, late == Delivery.Posted, _messages.Why);
         }
-        var (view, shown) = Geometry();
+        PipMapping map = Geometry();
         Publish(point);
         if (_scrolling) { _scrollPoint = point; return; }
         // Held presses keep going everywhere; otherwise the view's own sizing border isn't the app's.
         if (_heldDelivered == MouseButtons.None && (_pendingClick != MouseButtons.None || AtViewBorder(point))) return;
-        if (_heldDelivered == MouseButtons.None && !view.Contains(point)) return;
+        if (_heldDelivered == MouseButtons.None && !map.View.Contains(point)) return;
         _messages.EnhancedHover = EnhancedHover && !_outside && !_inPopup && !_appBusy;
-        _messages.Move(point, view, shown);
+        _messages.Move(point, map);
         // Sharing input with a thread that has stopped reading it would hold up WinScreen's own input too. The
         // cursor question doubles as the check: no answer within 20 ms stops sharing until the app answers again.
         if (SharesInput || _appBusy)
@@ -665,8 +659,8 @@ internal sealed class PipInteraction : IDisposable
         long waited = Stopwatch.GetTimestamp();
         _rechecked.Wait(MaxRecheckWait);
         LastRecheckWait = Stopwatch.GetElapsedTime(waited).TotalMilliseconds;
-        var (view, shown) = Geometry();
-        nint hit = _messages.Hit(point, view, shown);
+        PipMapping map = Geometry();
+        nint hit = _messages.Hit(point, map);
         if (!alt && PressRules.CaptionActionFor(hit, button) is { } action)
         {
             Record(PressOutcome.CaptionButton, point, hit);
@@ -691,7 +685,7 @@ internal sealed class PipInteraction : IDisposable
             return;
         }
         if (!alt && button == MouseButtons.Middle && MiddleClickScroll && !(AppScrollsWithHover && _messages.Hover.Installed) &&
-            _heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None && _messages.CanScroll(point, view, shown))
+            _heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None && _messages.CanScroll(point, map))
         {
             _scrollAnchor = _scrollPoint = point;
             _scrollX = _scrollY = 0;
@@ -722,7 +716,7 @@ internal sealed class PipInteraction : IDisposable
             _pressOnItem = -1;
             int query = Interlocked.Increment(ref _itemQuery);
             long asked = Environment.TickCount64;
-            Point mapped = _messages.MappedScreen(point, view, shown);
+            Point mapped = _messages.MappedScreen(point, map);
             if (!PipControlInput.Shared.Submit(_identity, _messages.TargetAt(mapped), mapped, PipControlInput.Request.IsItem,
                     result =>
                     {
@@ -735,7 +729,7 @@ internal sealed class PipInteraction : IDisposable
                 _pressOnItem = 0;
             return;
         }
-        Delivery delivery = _messages.Press(point, button, view, shown, menuBar: hit == 5);
+        Delivery delivery = _messages.Press(point, button, map, menuBar: hit == 5);
         if (delivery == Delivery.Posted) _heldDelivered |= button;
         if (delivery == Delivery.Deferred) { _pendingClick |= button; return; } // Its outcome comes with the release.
         Record(Outcome(delivery), point, hit, _messages.PressTarget, delivery == Delivery.Posted, _messages.Why);
@@ -747,17 +741,17 @@ internal sealed class PipInteraction : IDisposable
             (Math.Abs(point.X - _scrollAnchor.X) > SystemInformation.DragSize.Width ||
              Math.Abs(point.Y - _scrollAnchor.Y) > SystemInformation.DragSize.Height)) _scrolling = false;
         if (button == MouseButtons.Left) _dragging = false;
-        var (view, shown) = Geometry();
+        PipMapping map = Geometry();
         if (button == MouseButtons.Left && _leftWaitsForDrag)
         {
             // Let go without dragging: the click, where it was pressed and where it was let go.
             _leftWaitsForDrag = false;
-            Delivery pressed = _messages.Press(_pressAt, button, view, shown, menuBar: false);
-            if (pressed == Delivery.Posted) _messages.Release(point, button, view, shown, null, out _);
+            Delivery pressed = _messages.Press(_pressAt, button, map, menuBar: false);
+            if (pressed == Delivery.Posted) _messages.Release(point, button, map, null, out _);
             else if (pressed == Delivery.Deferred)
             {
                 nint target = _messages.PressTarget;
-                _messages.Release(point, button, view, shown, result =>
+                _messages.Release(point, button, map, result =>
                     Record(result.Done ? PressOutcome.Delivered : result.Unsupported ? PressOutcome.Unsupported : PressOutcome.Unconfirmed,
                         point, 1, target, result.Done, result.What), out _);
             }
@@ -767,18 +761,18 @@ internal sealed class PipInteraction : IDisposable
         {
             _pendingClick &= ~button;
             nint target = _messages.PressTarget;
-            Delivery delivery = _messages.Release(point, button, view, shown, result =>
+            Delivery delivery = _messages.Release(point, button, map, result =>
                 Record(result.Done ? PressOutcome.Delivered : result.Unsupported ? PressOutcome.Unsupported : PressOutcome.Unconfirmed,
                     point, 1, target, result.Done, result.What), out string why);
             if (delivery != Delivery.Deferred) Record(Outcome(delivery), point, 1, target, false, why);
         }
         else if ((_heldDelivered & button) != 0)
         {
-            _messages.Release(point, button, view, shown, null, out _);
+            _messages.Release(point, button, map, null, out _);
         }
         _heldDelivered &= ~button;
         // Not if the hook has already taken a newer press: it stopped sharing for that one.
-        if (!_scrolling && _heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None && view.Contains(point) &&
+        if (!_scrolling && _heldDelivered == MouseButtons.None && _pendingClick == MouseButtons.None && map.View.Contains(point) &&
             Volatile.Read(ref _swallowedBits) == 0) Share(true);
     }
 
@@ -788,7 +782,7 @@ internal sealed class PipInteraction : IDisposable
         long now = Stopwatch.GetTimestamp();
         double elapsed = Math.Min(.05, Stopwatch.GetElapsedTime(_scrollTick, now).TotalSeconds);
         _scrollTick = now;
-        var (view, shown) = Geometry();
+        PipMapping map = Geometry();
         ScrollAxis(_scrollPoint.X - _scrollAnchor.X, true, ref _scrollX);
         ScrollAxis(_scrollPoint.Y - _scrollAnchor.Y, false, ref _scrollY);
         void ScrollAxis(int displacement, bool horizontal, ref double remainder)
@@ -800,7 +794,7 @@ internal sealed class PipInteraction : IDisposable
             if (delta == 0) return;
             remainder -= delta;
             if (!horizontal) delta = -delta; // A downward wheel displacement scrolls down.
-            _messages.Wheel(_scrollAnchor, horizontal, unchecked((uint)(delta << 16)), view, shown);
+            _messages.Wheel(_scrollAnchor, horizontal, unchecked((uint)(delta << 16)), map);
         }
     }
 
@@ -840,14 +834,14 @@ internal sealed class PipInteraction : IDisposable
         {
             try
             {
-                var (view, shown) = Geometry();
-                Point mapped = _messages.MappedScreen(at, view, shown);
+                PipMapping map = Geometry();
+                Point mapped = _messages.MappedScreen(at, map);
                 nint target = queuedTarget != 0 ? queuedTarget : _messages.TargetAt(mapped), root = RootAt(at);
                 User32.GetWindowRect(_source, out Rect sourceBounds);
                 User32.GetWindowRect(target, out Rect targetBounds);
                 User32.GetWindowRect(_viewWindow, out Rect viewBounds);
                 string entry = $"time={Environment.TickCount64} viewBounds={viewBounds.Left},{viewBounds.Top},{viewBounds.Right},{viewBounds.Bottom} " +
-                    $"physical={at} image={view} shown={shown} source={sourceBounds.Left},{sourceBounds.Top},{sourceBounds.Right},{sourceBounds.Bottom} " +
+                    $"physical={at} image={map.View} shown={map.Shown} turn={map.Turn} source={sourceBounds.Left},{sourceBounds.Top},{sourceBounds.Right},{sourceBounds.Bottom} " +
                     $"mapped={mapped} hit={hit}({HitName(hit)}) viewHwnd=0x{_viewWindow:X} sourceHwnd=0x{_source:X} target=0x{target:X} " +
                     $"class={Windows.WindowInfo.ClassName(target)} targetBounds={targetBounds.Left},{targetBounds.Top},{targetBounds.Right},{targetBounds.Bottom} " +
                     $"visible={User32.IsWindowVisible(target)} pid={ProcessOf(target)} physicalRoot=0x{root:X} physicalClass={Windows.WindowInfo.ClassName(root)} " +
@@ -923,10 +917,10 @@ internal sealed class PipInteraction : IDisposable
         _watcher?.Join(2000);
         if (workerDone)
         {
-            var (view, shown) = Geometry();
+            PipMapping map = Geometry();
             // A press whose release never came must not leave the button held down in the app.
             MouseButtons cancelled = MouseButtons.None;
-            try { cancelled = _messages.ReleaseAll(view, shown); } catch (Windows.WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
+            try { cancelled = _messages.ReleaseAll(map); } catch (Windows.WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
             if ((cancelled | _pendingClick) != MouseButtons.None)
             {
                 long packed = Interlocked.Read(ref _pointer);

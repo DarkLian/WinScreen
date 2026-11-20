@@ -1682,7 +1682,7 @@ public sealed partial class PipWindow : Form
         _liveSawSourceFocus = false;
         _unobservedSince = 0;
         _popups ??= CreateSourcePopups();
-        var live = new PipInteraction(_source, RectangleToScreen(area), ShownPart(_thumbnail.SourceSize), Handle, _popups);
+        var live = new PipInteraction(_source, new PipMapping(RectangleToScreen(area), ShownPart(_thumbnail.SourceSize)), Handle, _popups);
         // Both stay experimental, also where the view itself may be used without the switch.
         live.MiddleClickScroll = MiddleScrollOn;
         live.AppScrollsWithHover = AppScrollsWithHover;
@@ -1731,7 +1731,7 @@ public sealed partial class PipWindow : Form
             return;
         Location += moved;
         if (_thumbnail is not null)
-            _live.Update(RectangleToScreen(PictureArea), ShownPart(_thumbnail.SourceSize));
+            _live.Update(new PipMapping(RectangleToScreen(PictureArea), ShownPart(_thumbnail.SourceSize)));
     }
 
     // In this order: the source stops taking clicks, goes home, the hook goes, the view takes input, keys come back.
@@ -2202,7 +2202,7 @@ public sealed partial class PipWindow : Form
 
         if (_live is not null && _thumbnail is not null)
         {
-            _live.Update(RectangleToScreen(PictureArea), ShownPart(_thumbnail.SourceSize));
+            _live.Update(new PipMapping(RectangleToScreen(PictureArea), ShownPart(_thumbnail.SourceSize)));
             nint foreground = User32.GetForegroundWindow();
             User32.GetWindowThreadProcessId(foreground, out uint foregroundProcess);
             User32.GetWindowThreadProcessId(_source, out uint sourceProcess);

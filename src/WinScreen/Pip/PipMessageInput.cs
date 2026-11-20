@@ -56,18 +56,18 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
 
     private InputRoute RouteOf(nint target) => PipInputRoutes.RouteFor(target, source, identity.ProcessId);
 
-    internal Point MappedScreen(Point pointer, Rectangle view, Rectangle shown)
+    internal Point MappedScreen(Point pointer, PipMapping map)
     {
         // The quick check: this runs for every move. The visit checked the process fully when it began.
         if (!identity.StillThere()) throw new WindowOperationException(T("errors.identity.originalGone"));
         if (!User32.GetWindowRect(source, out Rect bounds)) throw new WindowOperationException(T("errors.pip.windowUnavailable"));
-        Point spot = PipGeometry.PointToSource(pointer, view, shown);
+        Point spot = map.ToSource(pointer);
         return new Point(bounds.Left + spot.X, bounds.Top + spot.Y);
     }
 
-    internal nint Hit(Point pointer, Rectangle view, Rectangle shown)
+    internal nint Hit(Point pointer, PipMapping map)
     {
-        Point mapped = MappedScreen(pointer, view, shown);
+        Point mapped = MappedScreen(pointer, map);
         if (User32.SendMessageTimeout(source, User32.WM_NCHITTEST, 0, Pack(mapped), 2, 30, out nint hit) != 0) return hit;
         // Busy for a moment, as Word is just after the first click of a double-click: ask once more and wait a little
         // longer. An app that still doesn't answer isn't responding, and its press isn't sent (it could act later).
@@ -176,10 +176,10 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         return key == '\0' ? null : char.ToLowerInvariant(key);
     }
 
-    internal bool Move(Point pointer, Rectangle view, Rectangle shown)
+    internal bool Move(Point pointer, PipMapping map)
     {
         _lastPointer = pointer;
-        Point mapped = MappedScreen(pointer, view, shown);
+        Point mapped = MappedScreen(pointer, map);
         if (_controlPress is not null) return true;
         // Within the double-click time of a left press, a move that stays inside the double-click rectangle isn't a
         // move, as Windows treats it. In a view shown smaller, one pixel of hand jitter is several in the app, which
@@ -213,10 +213,10 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         return User32.SendMessageTimeout(target, 0x0020 /* WM_SETCURSOR */, target, (nint)(1 | (0x0200 << 16)), 0x2, 20, out _) != 0;
     }
 
-    internal Delivery Press(Point pointer, MouseButtons button, Rectangle view, Rectangle shown, bool menuBar = false)
+    internal Delivery Press(Point pointer, MouseButtons button, PipMapping map, bool menuBar = false)
     {
         _lastPointer = pointer;
-        Point mapped = MappedScreen(pointer, view, shown);
+        Point mapped = MappedScreen(pointer, map);
         // A standard menu bar only follows a press while the button is really down over it, which it isn't. Its menus
         // also open from the keyboard, so the menu under the pointer is opened by its access key instead. A bar the
         // app draws itself takes the press as any other.
@@ -291,7 +291,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
 
     // activated is called from another thread. Failed when a deferred press can't become a click (it was a drag, or the
     // queue was full).
-    internal Delivery Release(Point pointer, MouseButtons button, Rectangle view, Rectangle shown,
+    internal Delivery Release(Point pointer, MouseButtons button, PipMapping map,
         Action<PipControlInput.Result>? activated, out string why)
     {
         why = "";
@@ -306,7 +306,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         if (_controlPress is { } press)
         {
             _controlPress = null;
-            Point release = MappedScreen(pointer, view, shown);
+            Point release = MappedScreen(pointer, map);
             if (Math.Abs(release.X - press.X) > SystemInformation.DragSize.Width ||
                 Math.Abs(release.Y - press.Y) > SystemInformation.DragSize.Height)
             {
@@ -320,15 +320,15 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
             }
             return Delivery.Deferred;
         }
-        Point at = MappedScreen(pointer, view, shown);
+        Point at = MappedScreen(pointer, map);
         if (WithinDoubleClick(pointer, _pressAt)) at = _pressMapped; // It didn't really move.
         return Post(_dragTarget, DownMessage(button) + 1, ButtonKeys(button, _held), at, evenIfBusy: true)
             ? Delivery.Posted : Delivery.Failed;
     }
 
-    internal bool Wheel(Point pointer, bool horizontal, uint data, Rectangle view, Rectangle shown)
+    internal bool Wheel(Point pointer, bool horizontal, uint data, PipMapping map)
     {
-        Point mapped = MappedScreen(pointer, view, shown);
+        Point mapped = MappedScreen(pointer, map);
         nint target = TargetAt(mapped);
         InputRoute route = RouteOf(target);
         if (!PipInputRoutes.Supports(route, InputOperation.Wheel)) return false;
@@ -346,16 +346,16 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
             (nint)((long)(data & 0xffff0000u) | (long)Keys(_held)), mapped, true);
     }
 
-    internal bool CanScroll(Point pointer, Rectangle view, Rectangle shown) =>
-        PipInputRoutes.Supports(RouteOf(TargetAt(MappedScreen(pointer, view, shown))), InputOperation.Wheel);
+    internal bool CanScroll(Point pointer, PipMapping map) =>
+        PipInputRoutes.Supports(RouteOf(TargetAt(MappedScreen(pointer, map))), InputOperation.Wheel);
 
-    internal MouseButtons ReleaseAll(Rectangle view, Rectangle shown)
+    internal MouseButtons ReleaseAll(PipMapping map)
     {
         MouseButtons cancelled = MouseButtons.None;
         if (_controlPress is not null) { _controlPress = null; cancelled = _held; _held = MouseButtons.None; }
         foreach (MouseButtons button in new[] { MouseButtons.Left, MouseButtons.Right, MouseButtons.Middle, MouseButtons.XButton1, MouseButtons.XButton2 })
             if ((_held & button) != 0 && identity.StillThere())
-                try { Release(_lastPointer, button, view, shown, null, out _); } catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
+                try { Release(_lastPointer, button, map, null, out _); } catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
         _held = MouseButtons.None;
         return cancelled;
     }
