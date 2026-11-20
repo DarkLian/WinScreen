@@ -106,6 +106,9 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         Direct3D11CaptureFramePool? pool = null;
         GraphicsCaptureSession? session = null;
         D3D11Renderer? renderer = null;
+        // The newest frame let go while frozen: Windows sends one only when the window changes, so a window that
+        // changed while frozen and then kept still would otherwise stay old in the view after it is unfrozen.
+        Frame? held = null;
         int closed = 0;
         void Closed(GraphicsCaptureItem _, object __)
         {
@@ -204,9 +207,20 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                 bool sourcePaused = _source.IsMinimized;
                 bool ready = renderer.ReadyForWork(), submitted = false;
                 // Retain the capture buffer until EndWork has flushed its copy commands.
-                using Frame? owned = ready ? _frames.Take() : null;
+                Frame? taken = ready ? _frames.Take() : null;
                 // A session started while frozen still takes its first frame, so there is a picture to keep.
-                if (owned is not null && owned.Generation == _generation && !(_frozen && renderer.HasFrame))
+                if (_frozen && renderer.HasFrame)
+                {
+                    if (taken is not null) { held?.Dispose(); held = taken; }
+                    taken = null;
+                }
+                else if (taken is null)
+                {
+                    if (ready) { taken = held; held = null; }
+                }
+                else { held?.Dispose(); held = null; }
+                using Frame? owned = taken;
+                if (owned is not null && owned.Generation == _generation)
                 {
                     var frame = owned.Value;
                     SizeInt32 content = frame.ContentSize;
@@ -307,6 +321,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
             if (item is not null) Release(() => item.Closed -= Closed);
             Release(() => session?.Dispose());
             Release(_frames.Dispose);
+            Release(() => held?.Dispose());
             Release(() => pool?.Dispose());
             Release(() => winrtDevice?.Dispose());
             Release(() => renderer?.Dispose());
