@@ -273,6 +273,38 @@ public sealed class WgcPipTests(ITestOutputHelper output)
         });
     }
 
+    // Frozen, the view keeps its last picture while the window changes, still draws it when the view is resized, and
+    // starts no visit; unfrozen, it shows the window as it is now.
+    [WgcFact]
+    public void A_frozen_view_keeps_its_picture_until_unfrozen()
+    {
+        using var source = new TargetProcess(new(200, 160, 400, 300));
+        OnUiThread(pump =>
+        {
+            using var pip = new PipWindow(source.Handle, new WindowController([]));
+            pip.ApplyPipPreferences(new() { Backend = PipBackendPreference.Wgc });
+            pip.ShowOnTop(); pip.Location = new(800, 120);
+            Assert.True(Desktop.WaitFor(() => pip.BackendKind != PipBackendKind.DwmThumbnail, 15000, () => pump(20)), pip.DiagnosticSnapshot);
+            Rectangle Middle() => new(pip.Left + pip.Width / 2 - 10, pip.Top + pip.Height / 2 - 10, 20, 20);
+            Color red = Color.FromArgb(0xC8, 0x1E, 0x1E), green = Color.FromArgb(0x1E, 0xB4, 0x46);
+            Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Middle()), red), 4000, () => pump(20)), pip.DiagnosticSnapshot);
+
+            pip.SetFrozen(true);
+            Assert.True(pip.Frozen);
+            source.SetColors("1EB446");
+            pump(800);
+            Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(Middle()), red), $"The frozen view showed {Desktop.ColorOnScreen(Middle())}.");
+            pip.Size = new Size(pip.Width + 80, pip.Height + 60);
+            pump(500);
+            Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(Middle()), red), $"Resized, the frozen view showed {Desktop.ColorOnScreen(Middle())}.");
+
+            pip.SetFrozen(false);
+            Assert.False(pip.Frozen);
+            Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Middle()), green), 4000, () => pump(20)),
+                $"Unfrozen, the view showed {Desktop.ColorOnScreen(Middle())}.");
+        });
+    }
+
     [WgcFact]
     public void Minimized_source_keeps_cached_pixels_and_resumes_without_changing_backend()
     {

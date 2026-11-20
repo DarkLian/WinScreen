@@ -24,7 +24,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     private Size _client;
     private Rectangle? _selection;
     private byte _opacity;
-    private bool _visible = true;
+    private bool _visible = true, _frozen;
     private nint _monitor;
     private int _sourceHz, _targetHz;
     private long _lastDisplayCheck;
@@ -93,6 +93,14 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     }
     public void SetOpacity(byte opacity) { _opacity = opacity; _dwm?.SetOpacity(opacity); _advanced?.SetOpacity(opacity); }
     public void SetVisible(bool visible) { _visible = visible; _dwm?.SetVisible(visible && !_active); _advanced?.SetVisible(visible); }
+    internal bool CanFreeze => _active;
+
+    public void SetFrozen(bool frozen)
+    {
+        _frozen = frozen;
+        _advanced?.SetFrozen(frozen);
+    }
+
     public void SetSelection(Rectangle? selection)
     {
         _selection = selection;
@@ -249,6 +257,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         advanced.SetOpacity(_opacity);
         advanced.SetSelection(_selection);
         advanced.SetVisible(_visible);
+        advanced.SetFrozen(_frozen);
         // WGC starts at the extended frame bounds; DWM's surface can include invisible resize borders.
         // Translate the shared DWM crop once, so click and crop geometry remain in their existing coordinate space.
         if (_visibleSource.IsEmpty || !_source.IsMinimized)

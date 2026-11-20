@@ -32,7 +32,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     private readonly Thread _worker;
     private View _view;
     private bool _dirty = true;
-    private volatile bool _stopping;
+    private volatile bool _stopping, _frozen;
     private volatile PipSessionState _state = PipSessionState.Starting;
     private int _generation;
     private Size _sourceSize;
@@ -85,6 +85,12 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     public void SetOpacity(byte opacity) => Change(v => v with { Opacity = opacity });
     public void SetVisible(bool visible) => Change(v => v with { Visible = visible });
     public void SetSelection(Rectangle? selection) => Change(v => v with { Selection = selection });
+
+    public void SetFrozen(bool frozen)
+    {
+        _frozen = frozen;
+        _wake.Set();
+    }
 
     private void Run()
     {
@@ -192,7 +198,8 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                 bool ready = renderer.ReadyForWork(), submitted = false;
                 // Retain the capture buffer until EndWork has flushed its copy commands.
                 using Frame? owned = ready ? _frames.Take() : null;
-                if (owned is not null && owned.Generation == _generation)
+                // A session started while frozen still takes its first frame, so there is a picture to keep.
+                if (owned is not null && owned.Generation == _generation && !(_frozen && renderer.HasFrame))
                 {
                     var frame = owned.Value;
                     SizeInt32 content = frame.ContentSize;

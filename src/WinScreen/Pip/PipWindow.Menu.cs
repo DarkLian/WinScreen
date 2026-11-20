@@ -11,7 +11,7 @@ public sealed partial class PipWindow
 {
     [MemberNotNull(nameof(_hideItem), nameof(_awayItem), nameof(_goToItem), nameof(_muteItem), nameof(_useOriginalItem), nameof(_autoMoveItem), nameof(_removeCropItem), nameof(_viewOnlyItem),
         nameof(_helpItem), nameof(_useHeader), nameof(_originalHeader), nameof(_interactiveItem), nameof(_middleScrollItem),
-        nameof(_enhancedHoverItem))]
+        nameof(_enhancedHoverItem), nameof(_freezeItem))]
     private void BuildMenu()
     {
         _hideItem = new ToolStripMenuItem(T("menu.original.keepHidden"), null,
@@ -62,6 +62,8 @@ public sealed partial class PipWindow
         _removeCropItem = new ToolStripMenuItem(T("pip.zoom.reset"), MenuParts.Icon(MenuParts.Crop),
             (_, _) => { ResetZoom(); SetCrop(Rectangle.Empty); });
         _menu.Items.Add(_removeCropItem);
+        _freezeItem = new ToolStripMenuItem(T("pip.freeze"), null, (_, _) => SetFrozen(!Frozen));
+        _menu.Items.Add(_freezeItem);
         _menu.Items.Add(options);
         _menu.Items.Add(presets);
 
@@ -84,7 +86,7 @@ public sealed partial class PipWindow
             User32.SetForegroundWindow(Handle);
         };
         MenuRenderer.Apply(_menu);
-        foreach (ToolStripItem item in new ToolStripItem[] { _hideItem, _muteItem, _autoMoveItem, _interactiveItem, _viewOnlyItem, _middleScrollItem, _enhancedHoverItem })
+        foreach (ToolStripItem item in new ToolStripItem[] { _hideItem, _muteItem, _autoMoveItem, _interactiveItem, _viewOnlyItem, _middleScrollItem, _enhancedHoverItem, _freezeItem })
             StayingOpen.Keep(item);
         StayingOpen.Follow(_menu, RefreshMenuItems);
         _menu.Closed += (_, _) => { ReturnFocusAfterMenu(); PauseInput(TopLayer.InputBlocked); };
@@ -123,6 +125,9 @@ public sealed partial class PipWindow
         _goToItem.Enabled = _useOriginalItem.Enabled = _interactiveItem.Enabled = there;
         if (!there) _hideItem.Enabled = false;
         _removeCropItem.Enabled = !_crop.IsEmpty || _zoom != PipGeometry.WholeView;
+        // The compositor's picture can't be held, only a captured one.
+        _freezeItem.Checked = Frozen;
+        _freezeItem.Enabled = Frozen || _thumbnail?.CanFreeze == true;
     }
 
     private void ChooseMute(bool on)

@@ -266,6 +266,7 @@ pip.diagnostics.title 6B9EA6B6615468AF
 pip.enhancedHover.description 0B6444F94AC22F91
 pip.frameRate 669531A802D43858
 pip.frameRate.matchMonitor 06C50459D43306DD
+pip.freeze BAA5CD1C4B6F1F7A
 pip.goToOriginal 3D016B7E420E57E8
 pip.hover.lens EFD9EE833CB6BF2D
 pip.hover.mode 9554C5614FED347D
@@ -326,6 +327,7 @@ pip.sources.window 0A66D7740C1FC498
 pip.state.awayHidden 0C02BE009EBAD217
 pip.state.clickThrough 2AD05E44417976AA
 pip.state.fallback 176E999A37470916
+pip.state.frozen 92B614487D770B58
 pip.state.live 09AA295AFC090547
 pip.state.noNewPicture A4DCD861E5E1F887
 pip.state.originalHidden B193716F935EC38C

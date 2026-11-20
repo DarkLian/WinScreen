@@ -64,6 +64,8 @@ public sealed partial class PipWindow : Form
     private const long UseOriginalGrace = 400;
     private ToolStripMenuItem _autoMoveItem;
     private ToolStripMenuItem _removeCropItem;
+    private ToolStripMenuItem _freezeItem;
+    private bool _frozen;
     private ToolStripMenuItem _viewOnlyItem;
     private ToolStripMenuItem _helpItem;
     private ToolStripItem _useHeader, _originalHeader;
@@ -270,13 +272,15 @@ public sealed partial class PipWindow : Form
         {
             string title = _origin.Title.ReplaceLineEndings(" ");
             if (title.Length > 40) title = title[..(char.IsHighSurrogate(title[39]) ? 39 : 40)] + "…";
-            return title.Replace("&", "&&") + " - " + (_suspended ? T("pip.state.suspended") : _thumbnail?.StatusText ?? T("common.unavailable"));
+            return title.Replace("&", "&&") + " - " + (_suspended ? T("pip.state.suspended") : Frozen ? T("pip.state.frozen")
+                : _thumbnail?.StatusText ?? T("common.unavailable"));
         }
     }
 
     internal string StateDescription => string.Join(", ", new[]
     {
         _suspended ? T("pip.state.suspended") : _thumbnail?.StatusText ?? T("common.unavailable"),
+        Frozen ? T("pip.state.frozen") : "",
         InputDescription,
         _hideItem.Checked ? T("pip.state.originalHidden") : "",
         _awayFrom != Guid.Empty ? T("pip.state.awayHidden") : "",
@@ -309,6 +313,8 @@ public sealed partial class PipWindow : Form
         _thumbnail?.Dispose();
         _retiringCapture = _thumbnail?.Retirement ?? Task.CompletedTask;
         _thumbnail = null;
+        // Its frame goes with the capture, so the view comes back live.
+        _frozen = false;
         Hide();
         if (_viewPreferences.MinimizeToTaskbar && _sourceIcon is not null)
             TaskbarProxy = new PipTaskbarProxy(_origin.Title, _sourceIcon, Bounds, TaskbarPreview, ResumeView, Close);
@@ -1647,14 +1653,27 @@ public sealed partial class PipWindow : Form
         }),
     };
 
+    internal bool Frozen => _frozen && _thumbnail?.CanFreeze == true;
+
+    internal void SetFrozen(bool on)
+    {
+        if (on && _thumbnail?.CanFreeze != true) return;
+        _frozen = on;
+        _thumbnail?.SetFrozen(on);
+        if (on) EndLive();
+        Diagnostics.Log.Event("view.frozen", ("on", on));
+        CheckState();
+    }
+
     private void BeginLive(Point pointer)
     {
         // The table first: used directly, hidden, on the screen, not paused, no visit already (and experimental help
         // only with the switch). Then what only the view knows: a picture, the window there, no menu or block.
         ViewState.Modes before = CurrentModes() with { VisitUsesExperimental = HoverOn || MiddleScrollOn };
         if (ViewState.Apply(before, ViewState.Request.VisitStarts) == before) return;
+        // A frozen picture isn't what the window shows now, so presses on it would land somewhere else.
         if (_thumbnail is null || !_origin.IsAvailable || !_windows.IsHidden(_source) ||
-            _menu.Visible || TopLayer.InputBlocked || ShowsOriginalOnly)
+            _menu.Visible || TopLayer.InputBlocked || ShowsOriginalOnly || Frozen)
             return;
         Rectangle area = PictureArea;
         if (!area.Contains(pointer))

@@ -29,4 +29,7 @@ internal interface IPipCaptureBackend : IPipRenderBackend
     void SetRefresh(int source, int target);
 
     void SetPacing(int frameRate, Settings.PipScaling scaling) { }
+
+    // Frozen, the last frame stays and new ones are let go; the picture is still drawn again as the view changes.
+    void SetFrozen(bool frozen) { }
 }
