@@ -66,6 +66,8 @@ public sealed partial class PipWindow : Form
     private ToolStripMenuItem _removeCropItem;
     private ToolStripMenuItem _freezeItem;
     private bool _frozen;
+    private ToolStripMenuItem _turnItem, _uprightItem;
+    private ViewTurn _turn, _appliedTurn;
     private ToolStripMenuItem _viewOnlyItem;
     private ToolStripMenuItem _helpItem;
     private ToolStripItem _useHeader, _originalHeader;
@@ -376,6 +378,12 @@ public sealed partial class PipWindow : Form
         {
             _thumbnail = new PipBackendSelector(_origin, Handle, BackendPreferences());
             _thumbnail.Problem += text => Problem?.Invoke(text);
+            // A new capture starts on Windows' thumbnail, which shows upright; the turn comes back once capture draws.
+            if (!_appliedTurn.IsUpright)
+            {
+                _appliedTurn = ViewTurn.Upright;
+                Attempt(() => FitToSource());
+            }
             _thumbnail.SetViewport(PictureArea, _lastShown);
             _suspended = false;
             DropTaskbarProxy();
@@ -502,6 +510,7 @@ public sealed partial class PipWindow : Form
             FrameRate = _overrides.FrameRate, OpacityPercent = _overrides.OpacityPercent, Scaling = _overrides.Scaling,
             CropShares = PipCropShares.Of(_crop, whole), PositionLocked = _overrides.PositionLocked,
             TitleBarAlways = _overrides.TitleBarAlways,
+            Turns = _turn.Turns == 0 ? null : _turn.Turns, Mirrored = _turn.Mirrored ? true : null,
         };
     }
 
@@ -519,6 +528,7 @@ public sealed partial class PipWindow : Form
         };
         _crop = preset.CropFor(WholeSize());
         _zoom = PipGeometry.WholeView;
+        SetTurn(preset.Turn);
         if (preset.LongSide > 0)
             _longSide = preset.LongSide;
         Attempt(() => FitToSource());
@@ -755,7 +765,7 @@ public sealed partial class PipWindow : Form
         {
             Rect native = Marshal.PtrToStructure<Rect>(m.LParam);
             Rectangle bounds = PipGeometry.SizeWithAspect(Rectangle.FromLTRB(native.Left, native.Top, native.Right, native.Bottom),
-                (int)m.WParam, _lastShown);
+                (int)m.WParam, _appliedTurn.Oriented(_lastShown));
             Marshal.StructureToPtr(new Rect(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom), m.LParam, false);
             m.Result = 1;
             return;
@@ -857,7 +867,7 @@ public sealed partial class PipWindow : Form
         if ((ModifierKeys & Keys.Control) != 0)
         {
             Rectangle shown = PictureArea;
-            ZoomAt(new PointF((e.X - shown.Left) / (float)shown.Width, (e.Y - shown.Top) / (float)shown.Height),
+            ZoomAt(_appliedTurn.ToUpright(new PointF((e.X - shown.Left) / (float)shown.Width, (e.Y - shown.Top) / (float)shown.Height)),
                 Math.Pow(ZoomStep, e.Delta / (double)WheelNotch));
             return;
         }
@@ -870,7 +880,7 @@ public sealed partial class PipWindow : Form
         Rectangle area = Screen.FromControl(this).WorkingArea;
         int longSide = Math.Clamp(_longSide + step, Dpi.Scale(PipGeometry.MinimumWidth, DeviceDpi),
             Math.Max(area.Width, area.Height));
-        Size size = PipGeometry.FitLongSide(longSide, _lastShown, area.Size);
+        Size size = PipGeometry.FitLongSide(longSide, _appliedTurn.Oriented(_lastShown), area.Size);
         if (step < 0 && Math.Min(size.Width, size.Height) < Dpi.Scale(PipGeometry.MinimumHeight, DeviceDpi))
             return; // Any smaller and there would be nothing left to grab.
 
@@ -909,8 +919,8 @@ public sealed partial class PipWindow : Form
         if (_panning && e.Button == MouseButtons.Middle)
         {
             Rectangle area = PictureArea;
-            _zoom = PipGeometry.Pan(_zoom, (_panFrom.X - e.X) * _zoom.Width / area.Width,
-                (_panFrom.Y - e.Y) * _zoom.Height / area.Height);
+            SizeF moved = _appliedTurn.ToUpright(new SizeF((_panFrom.X - e.X) / (float)area.Width, (_panFrom.Y - e.Y) / (float)area.Height));
+            _zoom = PipGeometry.Pan(_zoom, moved.Width * _zoom.Width, moved.Height * _zoom.Height);
             _panFrom = e.Location;
             Attempt(() => FitToSource());
             return;
@@ -960,8 +970,7 @@ public sealed partial class PipWindow : Form
             }
             else
             {
-                Rectangle part = PipGeometry.SelectionToSource(_selection, PictureArea,
-                    ShownPart(_thumbnail.SourceSize));
+                Rectangle part = new PipMapping(PictureArea, ShownPart(_thumbnail.SourceSize), _appliedTurn).SelectionToSource(_selection);
                 part.Offset(-_whole.X, -_whole.Y);
                 SetCrop(part);
             }
@@ -1386,6 +1395,8 @@ public sealed partial class PipWindow : Form
     private void StartGrowing()
     {
         StopGrowing();
+        // It would grow a turned picture into an upright window.
+        if (!_appliedTurn.IsUpright) return;
         // Only a softening: whatever goes wrong taking the picture, the window comes up as before, at once.
         try { _growing = GrowingPicture.Start(RectangleToScreen(PictureArea), ShownForDropBounds, RevealForDrop); }
         catch (Exception failure) when (failure is ArgumentException or OutOfMemoryException or System.Runtime.InteropServices.ExternalException or ThreadStateException)
@@ -1443,7 +1454,7 @@ public sealed partial class PipWindow : Form
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
 
-    internal Point SourceSpotAt(Point screen) => PipGeometry.PointToSource(PointToClient(screen), PictureArea, _lastShown);
+    internal Point SourceSpotAt(Point screen) => new PipMapping(PictureArea, _lastShown, _appliedTurn).ToSource(PointToClient(screen));
 
     internal static Rectangle DropPlace(Point pointer, Point spot, Size size, Rectangle area)
     {
@@ -1665,6 +1676,32 @@ public sealed partial class PipWindow : Form
         CheckState();
     }
 
+    // What was asked for; capture draws it, Windows' thumbnail can't, so the view shows upright meanwhile.
+    internal ViewTurn RequestedTurn => _turn;
+    internal ViewTurn Turn => _appliedTurn;
+    internal bool CanTurn => _thumbnail?.CanFreeze == true;
+
+    internal void SetTurn(ViewTurn turn)
+    {
+        if (turn == _turn) return;
+        _turn = turn;
+        Diagnostics.Log.Event("view.turned", ("turns", turn.Turns), ("mirrored", turn.Mirrored));
+        FollowTurn();
+    }
+
+    private void FollowTurn()
+    {
+        if (_thumbnail is null) return;
+        ViewTurn turn = CanTurn ? _turn : ViewTurn.Upright;
+        if (turn == _appliedTurn) return;
+        EndLive(); // Its mapping was for the old turn; the next move starts a new visit.
+        _appliedTurn = turn;
+        _thumbnail.SetTurn(turn);
+        // Turned a quarter, the view swaps its sides about its middle.
+        Point? middle = _overrides.PositionLocked ? null : new Point(Left + Width / 2, Top + Height / 2);
+        Attempt(() => FitToSource(middle));
+    }
+
     private void BeginLive(Point pointer)
     {
         // The table first: used directly, hidden, on the screen, not paused, no visit already (and experimental help
@@ -1682,7 +1719,7 @@ public sealed partial class PipWindow : Form
         _liveSawSourceFocus = false;
         _unobservedSince = 0;
         _popups ??= CreateSourcePopups();
-        var live = new PipInteraction(_source, new PipMapping(RectangleToScreen(area), ShownPart(_thumbnail.SourceSize)), Handle, _popups);
+        var live = new PipInteraction(_source, LiveMapping(area), Handle, _popups);
         // Both stay experimental, also where the view itself may be used without the switch.
         live.MiddleClickScroll = MiddleScrollOn;
         live.AppScrollsWithHover = AppScrollsWithHover;
@@ -1731,7 +1768,7 @@ public sealed partial class PipWindow : Form
             return;
         Location += moved;
         if (_thumbnail is not null)
-            _live.Update(new PipMapping(RectangleToScreen(PictureArea), ShownPart(_thumbnail.SourceSize)));
+            _live.Update(LiveMapping(PictureArea));
     }
 
     // In this order: the source stops taking clicks, goes home, the hook goes, the view takes input, keys come back.
@@ -1951,7 +1988,7 @@ public sealed partial class PipWindow : Form
 
         Rectangle area = _origin.Screen.WorkingArea;
         int margin = Dpi.Scale(ScreenMargin, _origin.Dpi);
-        Size size = PipGeometry.FitLongSide(_longSide, shown, area.Size);
+        Size size = PipGeometry.FitLongSide(_longSide, _appliedTurn.Oriented(shown), area.Size);
         var wanted = new Rectangle(area.Right - size.Width - margin, area.Bottom - size.Height - margin,
             size.Width, size.Height);
         var others = Application.OpenForms.OfType<PipWindow>().Where(other => other != this && other.Visible)
@@ -1971,7 +2008,7 @@ public sealed partial class PipWindow : Form
             throw new WindowOperationException(T("errors.pip.noSurface"));
 
         Rectangle area = Screen.FromControl(this).WorkingArea;
-        Size size = PipGeometry.FitLongSide(_longSide, CroppedPart(_thumbnail.SourceSize), area.Size);
+        Size size = PipGeometry.FitLongSide(_longSide, _appliedTurn.Oriented(CroppedPart(_thumbnail.SourceSize)), area.Size);
         Point place = pointer is { } spot
             ? PipGeometry.KeepUnderPointer(Bounds, size, spot)
             : PipGeometry.KeepCorner(Bounds, size, area);
@@ -2167,6 +2204,7 @@ public sealed partial class PipWindow : Form
         try
         {
             _thumbnail?.Poll(ClientSize);
+            FollowTurn();
             if (!_parkedCaptureFallback && _origin.IsWindow && _windows.IsParked(_source) && _thumbnail?.CaptureBorderVisible == true)
                 ConfigureParkedCapture();
         }
@@ -2202,7 +2240,7 @@ public sealed partial class PipWindow : Form
 
         if (_live is not null && _thumbnail is not null)
         {
-            _live.Update(new PipMapping(RectangleToScreen(PictureArea), ShownPart(_thumbnail.SourceSize)));
+            _live.Update(LiveMapping(PictureArea));
             nint foreground = User32.GetForegroundWindow();
             User32.GetWindowThreadProcessId(foreground, out uint foregroundProcess);
             User32.GetWindowThreadProcessId(_source, out uint sourceProcess);
@@ -2274,7 +2312,10 @@ public sealed partial class PipWindow : Form
 
     internal bool TitleBarAlways => _overrides.TitleBarAlways ?? _viewPreferences.AlwaysShowTitleBar;
 
-    private Rectangle PictureArea => PipGeometry.FitPicture(PipGeometry.ViewArea(ClientSize), _lastShown);
+    private Rectangle PictureArea => PipGeometry.FitPicture(PipGeometry.ViewArea(ClientSize), _appliedTurn.Oriented(_lastShown));
+
+    private PipMapping LiveMapping(Rectangle area) =>
+        new(RectangleToScreen(area), ShownPart(_thumbnail!.SourceSize), _appliedTurn);
 
     private void PositionTitleBar()
     {
@@ -2314,7 +2355,7 @@ public sealed partial class PipWindow : Form
     {
         if (_viewPreferences.HoverPreview == Settings.PipHoverPreview.Off ||
             (_viewPreferences.HoverPreview == Settings.PipHoverPreview.WholeView &&
-             !PipGeometry.NeedsWholePreview(PictureArea.Width, _lastShown.Width)) || !_origin.IsWindow || _lastShown.IsEmpty ||
+             !PipGeometry.NeedsWholePreview(PictureArea.Width, _appliedTurn.Oriented(_lastShown).Width)) || !_origin.IsWindow || _lastShown.IsEmpty ||
             _titleBar?.Dragging == true || _titleBar?.Bounds.Contains(pointer) == true)
         {
             DropHoverPreview();
@@ -2332,7 +2373,7 @@ public sealed partial class PipWindow : Form
         bool lens = _viewPreferences.HoverPreview == Settings.PipHoverPreview.Lens;
         if (lens)
         {
-            Point mapped = PipGeometry.PointToSource(PointToClient(pointer), PictureArea, shown);
+            Point mapped = new PipMapping(PictureArea, shown, _appliedTurn).ToSource(PointToClient(pointer));
             shown = PipPreviewGeometry.Lens(shown, mapped, new Size(240, 160));
         }
         Size size = PipGeometry.FitLongSide(lens ? Dpi.Scale(400, DeviceDpi) : Math.Min(960, Math.Max(Width, Height) * 2), shown, area.Size);

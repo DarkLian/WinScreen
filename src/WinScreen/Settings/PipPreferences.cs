@@ -86,6 +86,12 @@ public sealed class PipPreset
     public PipCropShares? CropShares { get; set; }
     public bool? PositionLocked { get; set; }
     public bool? TitleBarAlways { get; set; }
+    // Quarter turns clockwise, then mirrored; left out (null) when upright.
+    public int? Turns { get; set; }
+    public bool? Mirrored { get; set; }
+
+    [JsonIgnore]
+    internal Pip.ViewTurn Turn => new(Turns ?? 0, Mirrored == true);
 
     [JsonIgnore]
     public Rectangle Crop => CropWidth > 0 && CropHeight > 0
@@ -113,6 +119,8 @@ public sealed class PipPreset
             CropShares = CropShares?.Validated(),
             PositionLocked = PositionLocked,
             TitleBarAlways = TitleBarAlways,
+            Turns = Turn.Turns == 0 ? null : Turn.Turns,
+            Mirrored = Turn.Mirrored ? true : null,
         };
     }
 }

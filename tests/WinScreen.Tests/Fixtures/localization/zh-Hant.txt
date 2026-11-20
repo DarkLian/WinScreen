@@ -340,6 +340,12 @@ pip.taskbar.enable ED4F76916A7B64E2
 pip.titleBarAlways CB76705368DCCE44
 pip.titleBarAlways.default 675C78939EFE2416
 pip.titlePrefix FDF6F0886C4E04DF
+pip.turn 9728D25FFDDC0BFB
+pip.turn.across 299E169C15F9FDFD
+pip.turn.down 898EB22217DBB26A
+pip.turn.left 28485DB47790F9D0
+pip.turn.right B60D1CEDE5F6B8D4
+pip.turn.upright 65FFC3FCAC7CEC46
 pip.useSettings 93F68EDC1766DFC1
 pip.views.empty AE4D3A6EAF1AA1B5
 pip.zoom.reset ACFA6ED837EDB412

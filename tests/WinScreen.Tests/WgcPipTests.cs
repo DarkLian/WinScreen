@@ -329,6 +329,67 @@ public sealed class WgcPipTests(ITestOutputHelper output)
         });
     }
 
+    // A quarter turn swaps the view's sides about its middle; a preset keeps the turn; on Windows' thumbnail the view
+    // shows upright and the turn comes back with capture. The left half of a red and green window turned clockwise
+    // is the view's top half.
+    [WgcFact]
+    public void A_turned_view_swaps_its_sides_keeps_its_turn_in_a_preset_and_waits_for_capture()
+    {
+        using var source = new TargetProcess(new(200, 160, 400, 300));
+        OnUiThread(pump =>
+        {
+            using var pip = new PipWindow(source.Handle, new WindowController([]));
+            pip.ApplyPipPreferences(new() { Backend = PipBackendPreference.Wgc });
+            pip.ShowOnTop(); pip.Location = new(800, 120);
+            Assert.True(Desktop.WaitFor(() => pip.CanTurn, 15000, () => pump(20)), pip.DiagnosticSnapshot);
+            pump(300);
+            Rectangle upright = pip.Bounds;
+            Assert.True(upright.Width > upright.Height);
+            var quarter = new ViewTurn(1, false);
+            pip.SetTurn(quarter);
+            pump(300);
+            Assert.Equal(quarter, pip.Turn);
+            Rectangle turned = pip.Bounds;
+            Assert.True(Math.Abs(turned.Width - upright.Height) <= 2 && Math.Abs(turned.Height - upright.Width) <= 2, $"{upright} turned is {turned}.");
+            Point middle(Rectangle r) => new(r.Left + r.Width / 2, r.Top + r.Height / 2);
+            Assert.True(Math.Abs(middle(turned).X - middle(upright).X) <= 2 && Math.Abs(middle(turned).Y - middle(upright).Y) <= 2);
+
+            source.SetColors("C81E1E,1EB446"); // Left red, right green.
+            Rectangle Spot(double x, double y) => new(pip.Left + (int)(pip.Width * x) - 5, pip.Top + (int)(pip.Height * y) - 5, 10, 10);
+            Color red = Color.FromArgb(0xC8, 0x1E, 0x1E), green = Color.FromArgb(0x1E, 0xB4, 0x46);
+            Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Spot(.5, .2)), red) &&
+                Desktop.IsNear(Desktop.ColorOnScreen(Spot(.5, .8)), green), 4000, () => pump(20)),
+                $"Turned clockwise: top {Desktop.ColorOnScreen(Spot(.5, .2))}, bottom {Desktop.ColorOnScreen(Spot(.5, .8))}.");
+            pip.SetTurn(new ViewTurn(1, true)); // Mirrored too: red stays on top.
+            pump(300);
+            Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Spot(.5, .2)), red), 4000, () => pump(20)));
+            pip.SetTurn(new ViewTurn(3, false)); // Counter-clockwise: red at the bottom.
+            pump(300);
+            Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Spot(.5, .8)), red), 4000, () => pump(20)),
+                $"Turned counter-clockwise: bottom {Desktop.ColorOnScreen(Spot(.5, .8))}.");
+
+            PipPreset preset = pip.CurrentPreset("turned");
+            Assert.Equal(3, preset.Turns);
+            Assert.Null(preset.Mirrored);
+            pip.SetTurn(ViewTurn.Upright);
+            pump(300);
+            Assert.True(pip.Width > pip.Height);
+            Assert.Null(pip.CurrentPreset("upright").Turns);
+            pip.ApplyPreset(preset);
+            pump(300);
+            Assert.Equal(new ViewTurn(3, false), pip.Turn);
+            Assert.True(pip.Height > pip.Width);
+
+            pip.ApplyPipPreferences(new() { Backend = PipBackendPreference.Dwm });
+            Assert.True(Desktop.WaitFor(() => !pip.CanTurn && pip.Turn.IsUpright, 4000, () => pump(20)), pip.DiagnosticSnapshot);
+            Assert.Equal(new ViewTurn(3, false), pip.RequestedTurn);
+            Assert.True(pip.Width > pip.Height);
+            pip.ApplyPipPreferences(new() { Backend = PipBackendPreference.Wgc });
+            Assert.True(Desktop.WaitFor(() => pip.Turn == new ViewTurn(3, false), 15000, () => pump(20)), pip.DiagnosticSnapshot);
+            pip.Close(); pump(150);
+        });
+    }
+
     [WgcFact]
     public void Minimized_source_keeps_cached_pixels_and_resumes_without_changing_backend()
     {

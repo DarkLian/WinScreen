@@ -305,6 +305,50 @@ public sealed class InteractiveViewTests
         Assert.Equal(home, Desktop.BoundsOf(source.Handle)); // Closing the view puts it back.
     }
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ScreenToClient(nint window, ref Point point);
+
+    // A view turned or mirrored: a press lands on the spot of the window the view shows there, worked out from
+    // shares of the window, not from WinScreen's own mapping.
+    [WgcTheory]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    [InlineData(3, true)]
+    public void In_a_turned_view_a_press_lands_on_the_point_the_view_shows(int turns, bool mirrored)
+    {
+        using var source = new TargetProcess(SourceSpot);
+        source.UseFrame();
+        var turn = new ViewTurn(turns, mirrored);
+        Drive(source, (view, ui) =>
+        {
+            ui(() => view.ApplyPipPreferences(new() { Backend = PipBackendPreference.Wgc }));
+            Assert.True(Desktop.WaitFor(() => view.CanTurn, 15000), view.DiagnosticSnapshot);
+            ui(() => view.SetTurn(turn));
+            Assert.True(Desktop.WaitFor(() => view.Turn == turn, 3000), $"The view stayed {view.Turn}.");
+            Thread.Sleep(300);
+            Rectangle frame = view.Bounds;
+            Assert.Equal(turn.Swaps, frame.Height > frame.Width);
+            foreach (PointF share in new[] { new PointF(.2f, .3f), new PointF(.75f, .8f) })
+            {
+                var at = new Point(frame.Left + (int)(frame.Width * share.X), frame.Top + (int)(frame.Height * share.Y));
+                Hover(at, view);
+                Desktop.MouseButton(true);
+                Desktop.MouseButton(false);
+                string? report = source.NextReport();
+                Assert.NotNull(report);
+                Rectangle window = Desktop.BoundsOf(source.Handle);
+                PointF upright = turn.ToUpright(share);
+                var expected = new Point(window.Left + (int)(window.Width * upright.X), window.Top + (int)(window.Height * upright.Y));
+                ScreenToClient(source.Handle, ref expected);
+                int reportedX = int.Parse(report.Split(' ')[1]), reportedY = int.Parse(report.Split(' ')[2]);
+                Assert.True(Math.Abs(reportedX - expected.X) <= 25 && Math.Abs(reportedY - expected.Y) <= 25,
+                    $"{turn}: a press at {share} of the view reached {reportedX},{reportedY}; expected near {expected}.");
+                Desktop.MoveMouse(new Point(frame.Left - 40, frame.Top - 40));
+                Assert.True(Desktop.WaitFor(() => view.LiveInteraction is null, 2000), "The visit didn't end.");
+            }
+        });
+    }
+
     [Fact]
     public void Used_directly_the_title_bar_sits_outside_the_view_so_the_top_of_the_picture_can_be_clicked()
     {

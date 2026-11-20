@@ -121,4 +121,24 @@ public sealed class SavedViewTests
         }
         finally { Directory.Delete(folder, true); }
     }
+
+    [Fact]
+    public void A_saved_view_keeps_its_turn_and_an_upright_one_writes_none()
+    {
+        PipPreset Load(string json) => System.Text.Json.JsonSerializer.Deserialize<PipPreset>(json)!.Validated()!;
+        PipPreset turned = Load("""{"Name":"a","Turns":7,"Mirrored":true}""");
+        Assert.Equal(3, turned.Turns);
+        Assert.True(turned.Mirrored);
+        Assert.Equal(new Pip.ViewTurn(3, true), turned.Turn);
+        PipPreset back = Load(System.Text.Json.JsonSerializer.Serialize(turned));
+        Assert.Equal(turned.Turn, back.Turn);
+
+        PipPreset upright = Load("""{"Name":"b","Turns":4,"Mirrored":false}""");
+        Assert.Null(upright.Turns);
+        Assert.Null(upright.Mirrored);
+        Assert.True(upright.Turn.IsUpright);
+        // Older files have neither field.
+        Assert.True(Load("""{"Name":"c","LongSide":500}""").Turn.IsUpright);
+        Assert.Equal(new Pip.ViewTurn(3, false), Load("""{"Name":"d","Turns":-1}""").Turn);
+    }
 }

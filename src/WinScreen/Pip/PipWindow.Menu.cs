@@ -11,7 +11,7 @@ public sealed partial class PipWindow
 {
     [MemberNotNull(nameof(_hideItem), nameof(_awayItem), nameof(_goToItem), nameof(_muteItem), nameof(_useOriginalItem), nameof(_autoMoveItem), nameof(_removeCropItem), nameof(_viewOnlyItem),
         nameof(_helpItem), nameof(_useHeader), nameof(_originalHeader), nameof(_interactiveItem), nameof(_middleScrollItem),
-        nameof(_enhancedHoverItem), nameof(_freezeItem))]
+        nameof(_enhancedHoverItem), nameof(_freezeItem), nameof(_turnItem), nameof(_uprightItem))]
     private void BuildMenu()
     {
         _hideItem = new ToolStripMenuItem(T("menu.original.keepHidden"), null,
@@ -64,6 +64,17 @@ public sealed partial class PipWindow
         _menu.Items.Add(_removeCropItem);
         _freezeItem = new ToolStripMenuItem(T("pip.freeze"), null, (_, _) => SetFrozen(!Frozen));
         _menu.Items.Add(_freezeItem);
+        _turnItem = new ToolStripMenuItem(T("pip.turn"));
+        foreach ((string text, Func<ViewTurn, ViewTurn> next) in new (string, Func<ViewTurn, ViewTurn>)[]
+        {
+            (T("pip.turn.right"), turn => turn.RotatedRight), (T("pip.turn.left"), turn => turn.RotatedLeft),
+            (T("pip.turn.across"), turn => turn.FlippedAcross), (T("pip.turn.down"), turn => turn.FlippedDown),
+        })
+            _turnItem.DropDownItems.Add(StayingOpen.Keep(new ToolStripMenuItem(text, null, (_, _) => SetTurn(next(_turn)))));
+        _uprightItem = StayingOpen.Keep(new ToolStripMenuItem(T("pip.turn.upright"), null, (_, _) => SetTurn(ViewTurn.Upright)));
+        _turnItem.DropDownItems.Add(_uprightItem);
+        _turnItem.DropDownOpening += (_, _) => RefreshTurnItems();
+        _menu.Items.Add(_turnItem);
         _menu.Items.Add(options);
         _menu.Items.Add(presets);
 
@@ -128,6 +139,15 @@ public sealed partial class PipWindow
         // The compositor's picture can't be held, only a captured one.
         _freezeItem.Checked = Frozen;
         _freezeItem.Enabled = Frozen || _thumbnail?.CanFreeze == true;
+        // Only a captured picture can be turned.
+        _turnItem.Enabled = CanTurn || !_turn.IsUpright;
+        RefreshTurnItems();
+    }
+
+    private void RefreshTurnItems()
+    {
+        foreach (ToolStripItem item in _turnItem.DropDownItems)
+            item.Enabled = item == _uprightItem ? !_turn.IsUpright : CanTurn;
     }
 
     private void ChooseMute(bool on)
@@ -238,7 +258,8 @@ public sealed partial class PipWindow
                 DisplayX = display.X, DisplayY = display.Y, DisplayWidth = display.Width, DisplayHeight = display.Height,
                 Region = source.Region is { } region ? PipCropShares.Of(region, display.Size) : null,
                 View = layout.Checked ? new PipPreset { Name = current.Name, LongSide = current.LongSide,
-                    Device = current.Device, Left = current.Left, Top = current.Top, PositionLocked = current.PositionLocked } : null,
+                    Device = current.Device, Left = current.Left, Top = current.Top, PositionLocked = current.PositionLocked,
+                    Turns = current.Turns, Mirrored = current.Mirrored } : null,
             };
             SourceBookmarkSaved?.Invoke(bookmark);
         });
@@ -257,6 +278,7 @@ public sealed partial class PipWindow
         if (preset.Scaling != current.Scaling) changes.Add(T("pip.scaling"));
         if (preset.PositionLocked is { } locked && locked != current.PositionLocked) changes.Add(T("pip.lockPosition") + ": " + (locked ? T("common.yes") : T("common.no")));
         if (preset.TitleBarAlways is { } always && always != TitleBarAlways) changes.Add(T("pip.titleBarAlways") + ": " + (always ? T("common.yes") : T("common.no")));
+        if (preset.Turn != _turn) changes.Add(T("pip.turn"));
         return changes.Count == 0 ? T("pip.presets.noChanges") : string.Join("; ", changes);
     }
 

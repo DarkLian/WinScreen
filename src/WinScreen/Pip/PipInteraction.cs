@@ -783,8 +783,10 @@ internal sealed class PipInteraction : IDisposable
         double elapsed = Math.Min(.05, Stopwatch.GetElapsedTime(_scrollTick, now).TotalSeconds);
         _scrollTick = now;
         PipMapping map = Geometry();
-        ScrollAxis(_scrollPoint.X - _scrollAnchor.X, true, ref _scrollX);
-        ScrollAxis(_scrollPoint.Y - _scrollAnchor.Y, false, ref _scrollY);
+        // In a turned view, a pull down the screen scrolls the way the content looks like it should go.
+        Size pulled = map.DirectionToSource(new Size(_scrollPoint.X - _scrollAnchor.X, _scrollPoint.Y - _scrollAnchor.Y));
+        ScrollAxis(pulled.Width, true, ref _scrollX);
+        ScrollAxis(pulled.Height, false, ref _scrollY);
         void ScrollAxis(int displacement, bool horizontal, ref double remainder)
         {
             // Wheel units per second: a quiet centre, linear speed outside it, bounded after a stalled worker.
