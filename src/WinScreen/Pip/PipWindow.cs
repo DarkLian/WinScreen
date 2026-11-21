@@ -1328,6 +1328,9 @@ public sealed partial class PipWindow : Form
         // The press was the hook's, so Windows doesn't know the button is down: let go meanwhile, there is nothing to
         // hand on.
         if (live.HandedOverReleased) { StopGrowing(); return; }
+        // Out of sight now that its picture is taken: the original is resized below, and the view would show that.
+        _pickingUp = true;
+        StepAside(true);
         bool hold = _growing is not null;
         Point pointer = Cursor.Position;
         Rectangle area = Screen.FromPoint(pointer).WorkingArea;
@@ -1351,7 +1354,8 @@ public sealed partial class PipWindow : Form
                         new Point(found.Left + Math.Min(28, found.Width / 2), found.Top + found.Height / 2) is var onName &&
                         place.Contains(onName))
                     {
-                        Rectangle moved = DropPlace(pointer, new Point(onName.X - place.Left, onName.Y - place.Top), place.Size, area);
+                        // Under the hand as it is now: it goes on moving while the item is found.
+                        Rectangle moved = DropPlace(Cursor.Position, new Point(onName.X - place.Left, onName.Y - place.Top), place.Size, area);
                         if (moved.Location != place.Location) _windows.ShowParkedForDrop(_source, moved.Location, place.Size, hold);
                         press = onName + new Size(moved.Left - place.Left, moved.Top - place.Top);
                     }
@@ -1364,7 +1368,7 @@ public sealed partial class PipWindow : Form
                 // pressed spot under the pointer.
                 // A window as big as the screen can't be moved to put it there: the press goes where the spot really
                 // is, the pointer going there and back below, or the press misses the link.
-                Rectangle at = DropPlace(pointer, spot, new Size(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top), area);
+                Rectangle at = DropPlace(Cursor.Position, spot, new Size(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top), area);
                 _windows.ShowParkedForDrop(_source, at.Location, holdReveal: hold);
                 press = User32.GetWindowRect(_source, out Rect shownAt) ? new Point(shownAt.Left + spot.X, shownAt.Top + spot.Y) : pointer;
             }
@@ -1373,17 +1377,17 @@ public sealed partial class PipWindow : Form
         {
             Diagnostics.Log.Swallowed(failure);
             StopGrowing();
+            _pickingUp = false;
+            StepAside(false);
             return;
         }
         LastPickup = item.Length == 0 ? "at its own size" : $"{(itemFound ? "item found" : "item not found")} after {Environment.TickCount64 - pickupStarted} ms";
         LastPickupPress = press.Value;
-        // The pressed item is under the press now: the real window gets it, and the drag is its own from here. The
-        // pointer
-        // goes to the item for the press and straight back, so the drag starts from the item and follows the hand.
-        Point hand = Cursor.Position;
-        if (press != hand) SetCursorPos(press.Value.X, press.Value.Y);
-        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-        if (press != hand) SetCursorPos(hand.X, hand.Y);
+        // The pressed item is under the press now: the real window gets it, and the drag is its own from here. The press
+        // is made at the item and the pointer goes straight back to the hand, in one batch of input: set apart, the
+        // press could land where the hand had moved to by then (a quick hand once picked up a folder beside the file).
+        PressThenBack(press.Value, Cursor.Position);
+        _pickingUp = false;
         _dropSince = Environment.TickCount64;
         _dropReleasedAt = 0;
         _dropOutsideSince = 0;
@@ -1451,13 +1455,40 @@ public sealed partial class PipWindow : Form
 
     internal int DragsPickedUp { get; private set; }
 
-    private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    private bool _pickingUp;
+
+    private static void PressThenBack(Point press, Point hand)
+    {
+        const uint Move = 0x0001, LeftDown = 0x0002, Absolute = 0x8000, VirtualDesk = 0x4000;
+        Rectangle screen = SystemInformation.VirtualScreen;
+        MouseInput At(Point p, uint flags) => new()
+        {
+            X = (int)((p.X - screen.Left + 0.5) * 65536 / screen.Width),
+            Y = (int)((p.Y - screen.Top + 0.5) * 65536 / screen.Height),
+            Flags = flags | Move | Absolute | VirtualDesk,
+        };
+        Input[] inputs = press == hand ? [new() { Type = 0, Mouse = At(press, LeftDown) }]
+            : [new() { Type = 0, Mouse = At(press, LeftDown) }, new() { Type = 0, Mouse = At(hand, 0) }];
+        SendInput((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf<Input>());
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct Input
+    {
+        public int Type;
+        public MouseInput Mouse;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MouseInput
+    {
+        public int X, Y;
+        public uint Data, Flags, Time;
+        public nuint Extra;
+    }
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern void mouse_event(uint flags, int dx, int dy, uint data, nuint extra);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool SetCursorPos(int x, int y);
+    private static extern uint SendInput(uint count, Input[] inputs, int size);
 
     internal Point SourceSpotAt(Point screen) => new PipMapping(PictureArea, _lastShown, _appliedTurn).ToSource(PointToClient(screen));
 
@@ -2265,7 +2296,9 @@ public sealed partial class PipWindow : Form
             }
         }
 
-        if (_pressed || _thumbnail is null)
+        // While a drag is handed over the original is shown at another size, and the view is out of sight: it fits
+        // again once back, so it comes back where it was.
+        if (_pressed || _thumbnail is null || _pickingUp || _dropSince != 0 || SteppedAside)
             return;
 
         try

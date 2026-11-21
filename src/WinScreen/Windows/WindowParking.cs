@@ -152,12 +152,13 @@ public sealed partial class WindowController
             state.RevealHeld = false;
             if (!User32.IsWindow(window) || !state.Parked) return;
             state.Identity.Require();
+            // Hidden first: given its own size back while still on the screen, it showed at that size for a moment.
+            Conceal(window, state);
             if (state.SizeBeforeDrop is { } own)
             {
                 state.SizeBeforeDrop = null;
                 User32.SetWindowPos(window, 0, 0, 0, own.Width, own.Height, User32.SWP_NOMOVE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
             }
-            Conceal(window, state);
             Repark(window);
             if (state.HoverParking) SetParkedHoverSurface(window, true);
         }
