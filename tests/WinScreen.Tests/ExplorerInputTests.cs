@@ -514,19 +514,23 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
 
     /// <summary>
     /// A file dragged out of a view: Windows' drag and drop follows the real pointer and can't be passed on as
-    /// messages, so the press waits, and once it moves past the drag distance the real window comes up under the
-    /// pointer with the pressed file there, and the drag is its own (owner, 17 Nov). Onto a folder in the view, to
-    /// another window, and onto another view, which hands its own window over. Both originals stay hidden after, and
-    /// the view stays out of the way until the drag is let go.
+    /// messages, so the press waits, and once it moves past the drag distance the real window, nearly see-through,
+    /// takes a press on the file under the pointer, and the drag is its own (owner, 17 Nov). Once Windows carries it the
+    /// window goes back out of sight: shown at its own size around the hand, it covered where a quick hand let go, and
+    /// a press could land beside the file (owner, 21 Nov). To another window, onto another view, which hands its own
+    /// window over, and to the desktop. Both originals stay hidden after, and the view stays out of the way until the
+    /// drag is let go.
     /// </summary>
     [Theory]
     [InlineData("to another window")]
-    [InlineData("to a folder in the view")]
+    [InlineData("to another window, quickly")] // 200 ms from the press to letting go, without a pause.
     [InlineData("to another view")]
-    // To the desktop: runs where the desktop can be reached (the VM); it passes since 21 Nov.
+    // To the desktop: runs where the desktop can be reached (the VM).
     [InlineData("to the desktop")]
-    public void A_file_is_dragged_out_of_a_view(string where)
+    public void A_file_is_dragged_out_of_a_view(string how)
     {
+        bool quickly = how.EndsWith(", quickly", StringComparison.Ordinal);
+        string where = quickly ? how[..^", quickly".Length] : how;
         // The desktop: the file lands where it is let go (it once landed offset by the original's parked place), and
         // no other icon is selected on the way (the owner saw a drag select icons there).
         nint desktopList = DesktopList();
@@ -541,7 +545,6 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
         string root = Directory.CreateTempSubdirectory("WinScreenExplorer-").FullName;
         string other = Directory.CreateTempSubdirectory("WinScreenTarget-").FullName;
         File.WriteAllText(Path.Combine(root, "drag-me"), "x");
-        Directory.CreateDirectory(Path.Combine(root, "into"));
         nint target = 0;
         PipWindow? second = null;
         var shared = new WindowController([]);
@@ -572,12 +575,30 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                     "to another window" => new Point(Desktop.BoundsOf(target).Left + Desktop.BoundsOf(target).Width * 7 / 10, Desktop.BoundsOf(target).Bottom - 80),
                     "to another view" => new Point(second!.Bounds.Left + second.Bounds.Width * 7 / 10, second.Bounds.Top + second.Bounds.Height * 6 / 10),
                     "to the desktop" => desktopSpot,
-                    _ => toView(Middle(Item(window, "into").Bounds)),
+                    _ => throw new ArgumentException(where),
                 };
                 var log = new System.Text.StringBuilder($"start {start} end {end}; ");
                 Desktop.SlideMouse(start);
                 Thread.Sleep(250);
                 Desktop.MouseButton(true);
+                if (quickly)
+                {
+                    Thread.Sleep(60);
+                    for (int step = 1; step <= 25; step++)
+                    {
+                        Desktop.SlideMouse(new Point(start.X + (end.X - start.X) * step / 25, start.Y + (end.Y - start.Y) * step / 25));
+                        Thread.Sleep(8);
+                    }
+                    Thread.Sleep(400);
+                    Desktop.MouseButton(false);
+                    Thread.Sleep(2500);
+                    string[] landed = Directory.GetFileSystemEntries(other).Select(Path.GetFileName).OfType<string>().ToArray();
+                    log.Append($"picked {view.DragsPickedUp} ({view.LastPickup}) press {view.LastPickupPress}; arrived [{string.Join(",", landed)}]; aside {view.SteppedAside}; concealed {WindowInfo.IsConcealed(window)}");
+                    output.WriteLine(log.ToString());
+                    Assert.True(landed.SequenceEqual(["drag-me"]), "The file didn't arrive: " + log);
+                    Assert.True(!view.SteppedAside && view.KeepsUpdating && WindowInfo.IsConcealed(window), "The view or its original didn't go back: " + log);
+                    return;
+                }
                 Thread.Sleep(150);
                 Desktop.SlideMouse(new Point(start.X + 8, start.Y + 3)); // Past the drag distance: picked up.
                 Assert.True(Desktop.WaitFor(() => view.DragsPickedUp == 1, 2000), "Not picked up.");
@@ -585,24 +606,13 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 Point onward = Desktop.CursorPosition();
                 Desktop.SlideMouse(new Point(onward.X + 6, onward.Y + 4));
                 Thread.Sleep(300);
-                if (where == "to a folder in the view")
-                {
-                    // The real window is up now, moved to bring the file under the pointer: aim at the folder where it is now, found as WinScreen
-                    // finds the pressed file (Explorer's own answer can still give the place from before the resize).
-                    Rectangle? into = WinScreen.Pip.PipControlInput.Shared.ItemBounds(WindowIdentity.Capture(window), "into", 3000);
-                    // Windows 10's Explorer may not answer during a drag: folders come first, so it is the row above.
-                    end = into is { } found ? Middle(found) : new Point(view.LastPickupPress.X, view.LastPickupPress.Y - file.Height);
-                    Assert.True(Desktop.BoundsOf(window).Contains(end), $"The folder isn't in the window: {end} in {Desktop.BoundsOf(window)}"); // Never aim elsewhere.
-                }
-                Rectangle picked = Desktop.BoundsOf(window);
-                log.Append($"picked {view.DragsPickedUp} ({view.LastPickup}) original at {picked} (view {view.Bounds}) end {end}; ");
-                // At its own 900 by 640, so it lays itself out as it always does, with the file pressed where it is now.
-                Assert.True(Math.Abs(picked.Width - 900) <= 16 && Math.Abs(picked.Height - 640) <= 16 && picked.Contains(view.LastPickupPress),
-                    "The window didn't come up at its own size: " + log);
-                // A picture of the view grew into its place first, and by now the window is in plain sight (12.6).
-                log.Append($"grew {view.GrowsStarted}, held {shared.RevealIsHeld(window)}; ");
-                Assert.True(view.GrowsStarted == (WindowsAnimations.On ? 1 : 0), "No picture grew into the window's place: " + log);
-                Assert.True(Desktop.WaitFor(() => !shared.RevealIsHeld(window), 1000), "The window stayed see-through: " + log);
+                log.Append($"picked {view.DragsPickedUp} ({view.LastPickup}) press {view.LastPickupPress} (view {view.Bounds}) end {end}; ");
+                // Found by name at the original's own size, and pressed there.
+                Assert.StartsWith("item found", view.LastPickup);
+                // Never shown: no picture grows into its place, and with Windows carrying the drag it is out of sight.
+                Assert.Equal(0, view.GrowsStarted);
+                Assert.True(Desktop.WaitFor(() => !view.HandingOverDrop && WindowInfo.IsConcealed(window), 1000),
+                    "The original stayed up while Windows carried the drag: " + log);
                 Point from = Desktop.CursorPosition();
                 for (int step = 1; step <= 30; step++)
                 {
@@ -622,7 +632,6 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                 Assert.False(view.SteppedAside, "The view didn't come back after the drag: " + log);
                 string[] arrived = where switch
                 {
-                    "to a folder in the view" => Directory.GetFileSystemEntries(Path.Combine(root, "into")).Select(Path.GetFileName).OfType<string>().ToArray(),
                     "to the desktop" => File.Exists(onDesktop) ? ["drag-me"] : [],
                     _ => Directory.GetFileSystemEntries(other).Select(Path.GetFileName).OfType<string>().ToArray(),
                 };

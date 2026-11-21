@@ -1321,17 +1321,17 @@ public sealed partial class PipWindow : Form
         Point spot = SourceSpotAt(pressed);
         if (!User32.GetWindowRect(_source, out Rect bounds)) return;
         string item = live.PressedItem;
-        _pickedUpFromPage = live.HandsOverDrags == Compatibility.DragHandOver.Links;
         nint before = _foregroundBeforeLive;
-        StartGrowing(); // The picture as the visit shows it.
         EndLive(keepFocus: true); // The hook goes first: the press given below must reach the window.
         // The press was the hook's, so Windows doesn't know the button is down: let go meanwhile, there is nothing to
         // hand on.
-        if (live.HandedOverReleased) { StopGrowing(); return; }
-        // Out of sight now that its picture is taken: the original is resized below, and the view would show that.
+        if (live.HandedOverReleased) return;
+        // The original is resized below, and the view would show that.
         _pickingUp = true;
         StepAside(true);
-        bool hold = _growing is not null;
+        // Never shown: nearly see-through, it takes the press, and goes back out of sight once Windows carries the drag
+        // (FollowDrop). Shown at its own size around the hand, it covered where a quick hand let go (owner, 21 Nov).
+        const bool hold = true;
         Point pointer = Cursor.Position;
         Rectangle area = Screen.FromPoint(pointer).WorkingArea;
         Point? press = null;
@@ -1376,7 +1376,6 @@ public sealed partial class PipWindow : Form
         catch (WindowOperationException failure)
         {
             Diagnostics.Log.Swallowed(failure);
-            StopGrowing();
             _pickingUp = false;
             StepAside(false);
             return;
@@ -1512,10 +1511,10 @@ public sealed partial class PipWindow : Form
         long now = Environment.TickCount64;
         if (DragButtonsDown())
         {
-            // A link taken from a page: once Windows carries the drag, the page goes back out of sight at
-            // once, at whatever size it is: it may cover where the drag is going. (So it can't be dropped back into the
-            // same page; the view, too, stays out of the way until the drag ends.)
-            if (_dropFromView && _pickedUpFromPage && DragAndDropRunning(User32.GetWindowThreadProcessId(_source, out _)))
+            // Taken from the view: once Windows carries the drag, the original goes back out of sight at once, so it
+            // never covers where the drag is going. (So it can't be dropped back into the same window; the view, too,
+            // stays out of the way until the drag ends.)
+            if (_dropFromView && DragAndDropRunning(User32.GetWindowThreadProcessId(_source, out _)))
             {
                 EndDrop(keepFocus: true);
                 return;
@@ -1583,7 +1582,7 @@ public sealed partial class PipWindow : Form
         (User32.GetAsyncKeyState(0x01) & 0x8000) != 0 || (User32.GetAsyncKeyState(0x02) & 0x8000) != 0;
 
     private long _dropSince, _dropReleasedAt, _dropOutsideSince;
-    private bool _dropTookFocus, _dropFromView, _focusBackAfterDrag, _backAfterRelease, _pickedUpFromPage;
+    private bool _dropTookFocus, _dropFromView, _focusBackAfterDrag, _backAfterRelease;
 
     private void FollowReleaseAfterDrag()
     {

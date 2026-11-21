@@ -113,11 +113,10 @@ turn on **Always show title bar** in **Size and options**, or for every new view
   If it keeps happening with an app, the note offers to turn on **Show original** for it.
 - **Drag something onto a view**, such as a file, a picture or some text, and the original window comes up under the
   pointer so you can drop it there. It hides again when you let go.
-- **Drag a file out of a File Explorer view** onto a folder in it, another window, the desktop or another view. When
-  you start dragging, the real window comes up at its usual size with your file under the pointer, and hides again
-  afterwards. A maximized window comes up smaller, so there is room to drag to.
+- **Drag a file out of a File Explorer view** onto another window, the desktop or another view. The view steps
+  aside while you drag and comes back when you let go. A file can't be dropped back into the same view.
 - **Drag a link out of a browser view** (Chrome, Edge, Brave, Vivaldi) onto another window, the desktop or another
-  view. The page comes up for a moment as you start, then goes back out of the way while you drag.
+  view, in the same way.
 
 Views pause direct use while a WinScreen menu or the tray overflow panel is open.
 
