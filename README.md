@@ -190,7 +190,7 @@ The **[User Guide](docs/USER_GUIDE.md)** explains every feature.
 WinScreen started out of passion, to solve problems I actually had, and it's built with a lot of help from AI agents.
 I'd rather say that up front.
 
-What I can do is check the work: each release is tested on Windows 10 and Windows 11, features that aren't reliable
+What I can do is check the work: changes are tested on Windows 10 and Windows 11, features that aren't reliable
 yet are marked *experimental*, and reported bugs get fixed rather than left open. What I can't do alone is cover every
 Windows version, PC and app. That's where your reports help most: if something doesn't work for you, please
 [open an issue](https://github.com/DarkLian/WinScreen/issues).

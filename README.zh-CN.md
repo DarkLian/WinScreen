@@ -187,7 +187,7 @@ scoop install winscreen
 
 兼容性和可靠性或许还有待检验，但这也正是我最需要社区帮忙的地方。光靠我自己使用，加上 AI 生成的测试，肯定还是会漏掉很多问题。毕竟我不可能测试所有的 Windows 版本、硬件配置和应用程序。如果没有人反馈问题，就算 AI 再擅长修 Bug，也根本不知道哪里需要修。
 
-我能做的是认真把关：每个版本都会在 Windows 10 和 Windows 11 上测试，还不够稳定的功能会标为*实验性*，收到的问题会去修，而不是放着不管。如果你遇到不好用的地方，欢迎[提交 Issue](https://github.com/DarkLian/WinScreen/issues)。
+我能做的是认真把关：改动都会在 Windows 10 和 Windows 11 上测试，还不够稳定的功能会标为*实验性*，收到的问题会去修，而不是放着不管。如果你遇到不好用的地方，欢迎[提交 Issue](https://github.com/DarkLian/WinScreen/issues)。
 
 ### 为什么不直接用现有的成熟工具？
 

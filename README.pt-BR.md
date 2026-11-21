@@ -195,7 +195,7 @@ O **[guia do usuário](docs/USER_GUIDE.md)** (em inglês) explica todos os recur
 O WinScreen nasceu da paixão, para resolver problemas que eu realmente tinha, e é feito com muita ajuda de agentes de
 IA. Prefiro dizer isso logo de cara.
 
-O que eu posso fazer é conferir o trabalho: cada versão é testada no Windows 10 e no Windows 11, os recursos que ainda
+O que eu posso fazer é conferir o trabalho: as mudanças são testadas no Windows 10 e no Windows 11, os recursos que ainda
 não são confiáveis são marcados como *experimentais*, e os bugs relatados são corrigidos em vez de ficarem abertos. O
 que eu não consigo fazer sozinho é cobrir cada versão do Windows, cada PC e cada aplicativo. É aí que os seus relatos
 mais ajudam: se algo não funcionar para você, [abra uma issue](https://github.com/DarkLian/WinScreen/issues).

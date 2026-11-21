@@ -196,7 +196,7 @@ Die **[Anleitung](docs/USER_GUIDE.md)** (auf Englisch) erklärt jede Funktion.
 WinScreen ist aus Leidenschaft entstanden, um Probleme zu lösen, die ich selbst hatte, und es wird mit viel Hilfe von
 KI-Agenten gebaut. Das sage ich lieber gleich vorneweg.
 
-Was ich tun kann, ist die Arbeit zu prüfen: Jede Version wird unter Windows 10 und Windows 11 getestet, Funktionen, die
+Was ich tun kann, ist die Arbeit zu prüfen: Änderungen werden unter Windows 10 und Windows 11 getestet, Funktionen, die
 noch nicht zuverlässig sind, sind als *experimentell* markiert, und gemeldete Fehler werden behoben statt liegen
 gelassen. Was ich allein nicht schaffe, ist jede Windows-Version, jeden PC und jede App abzudecken. Genau da helfen deine
 Meldungen am meisten: Wenn etwas bei dir nicht funktioniert, [eröffne bitte ein Issue](https://github.com/DarkLian/WinScreen/issues).
