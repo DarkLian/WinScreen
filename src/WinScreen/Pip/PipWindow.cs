@@ -302,6 +302,7 @@ public sealed partial class PipWindow : Form
         ViewState.Modes before = CurrentModes();
         if (ViewState.Apply(before, ViewState.Request.Minimize) == before) return;
         _usingOriginal = false;
+        EndLift(CoverEnd.ViewMinimized);
         EndDrop();
         StepAside(false);
         CancelPress();
@@ -635,6 +636,7 @@ public sealed partial class PipWindow : Form
     private void ChangeInteractionMode(bool interactive, bool hidden, bool quiet = false)
     {
         _usingOriginal = false; // Any other choice about the original replaces "use it, then hide it again".
+        EndLift(CoverEnd.Mode);
         EndDrop();
         _awayFrom = Guid.Empty; // And any choice replaces "hidden while you're on another desktop".
         StepAside(false);
@@ -1048,6 +1050,7 @@ public sealed partial class PipWindow : Form
         _growing?.Dispose();
         // Teardown must never submit another draw: the source or destination HWND may already be gone.
         _selecting = false;
+        EndLift(CoverEnd.ViewClosed);
         _thumbnail?.Dispose();
         _thumbnail = null;
         if ((_hideItem.Checked || _awayFrom != Guid.Empty) && _origin.IsAvailable)
@@ -2100,6 +2103,11 @@ public sealed partial class PipWindow : Form
         if (!focused) _foregroundBefore = foreground;
         long now = Environment.TickCount64;
         if (!arrived) return;
+        if (_over is not null)
+        {
+            LiftedArrived(before);
+            return;
+        }
         var facts = new ViewState.Facts(Hidden: _hideItem.Checked, Away: _awayFrom != Guid.Empty, Visiting: _live is not null,
             // The focus coming back from a visit, not the hand-off of this view being minimized since (that came within
             // half a second of the visit ending in a Windows 10 VM).
@@ -2289,6 +2297,7 @@ public sealed partial class PipWindow : Form
         FollowOriginalState();
         FollowOriginalMinimized();
         if (_suspended || IsDisposed) return;
+        FollowCover();
         // A hidden original's link text, tooltips and anything it keeps open after a visit would show where it really is;
         // every fifth tick is enough.
         if (_live is null && _hideItem.Checked && _dropSince == 0 && _windows.IsHidden(_source) && ++_popupTick % 5 == 0)

@@ -38,6 +38,31 @@ internal static class WindowStack
         return new StackedWindow(window, bounds, IsSolid(window), true);
     }
 
+    // The windows above this one that hide something of what's under them, highest first; empty when it isn't found.
+    public static List<nint> Over(nint target)
+    {
+        const uint GW_CHILD = 5, GW_HWNDNEXT = 2;
+        var over = new List<nint>();
+        nint window = User32.GetWindow(User32.GetDesktopWindow(), GW_CHILD);
+        for (int seen = 0; window != 0 && seen < 4096; seen++, window = User32.GetWindow(window, GW_HWNDNEXT))
+        {
+            if (window == target) return over;
+            if (CoverBounds(window) is not null) over.Add(window);
+        }
+        return [];
+    }
+
+    // The taskbar counts, as browsers count it; the desktop and WinScreen's own windows don't.
+    public static Rectangle? CoverBounds(nint window)
+    {
+        if (!User32.IsWindow(window) || !User32.IsWindowVisible(window) || User32.IsIconic(window) || IsCloaked(window) || !IsSolid(window) ||
+            window == User32.GetShellWindow() || WindowInfo.ClassName(window) is "Progman" or "WorkerW")
+            return null;
+        User32.GetWindowThreadProcessId(window, out uint process);
+        if (process == Environment.ProcessId) return null;
+        return WindowInfo.TryGetFrameBounds(window, out Rectangle bounds, out _) && !bounds.IsEmpty ? bounds : null;
+    }
+
     private static bool IsCloaked(nint window) =>
         Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0;
 

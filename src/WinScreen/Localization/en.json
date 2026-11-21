@@ -275,6 +275,7 @@
   "pip.input.viewOnly": "View only",
   "pip.interactive": "Interactive PiP",
   "pip.keepAspectRatio": "Keep aspect ratio",
+  "pip.keepHidden.default": "Turn on Keep hidden for new views",
   "pip.lockPosition": "Lock position",
   "pip.minimize": "Minimize view",
   "pip.opacity": "Opacity",

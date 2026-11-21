@@ -37,6 +37,24 @@ public sealed class CoverTrackerTests
         Assert.Equal([(nint)2], CoverTracker.FullyCovered([Window(1, 0, 0, 800, 600), Window(2, 100, 100, 200, 200, covers: false)]));
     }
 
+    /// <summary>
+    /// A view's original is lifted see-through while it is wholly covered: only what lies on a screen can show, and a
+    /// window that is all off the screens isn't one a browser stops drawing for being covered.
+    /// </summary>
+    [Fact]
+    public void Only_the_part_on_a_screen_needs_covering_and_a_window_off_every_screen_isnt_covered()
+    {
+        Rectangle[] screens = [new(0, 0, 1920, 1080), new(1920, 0, 1920, 1080)];
+        Rectangle window = new(-200, 100, 800, 600);
+        Assert.True(CoverTracker.IsCovered(window, [new Rectangle(0, 50, 700, 700)], screens));
+        Assert.False(CoverTracker.IsCovered(window, [new Rectangle(10, 50, 700, 700)], screens));
+        Assert.True(CoverTracker.IsCovered(new Rectangle(1800, 100, 300, 300),
+            [new Rectangle(1700, 0, 220, 600), new Rectangle(1920, 0, 400, 600)], screens));
+        Assert.False(CoverTracker.IsCovered(new Rectangle(1800, 100, 300, 300), [new Rectangle(1700, 0, 220, 600)], screens));
+        Assert.False(CoverTracker.IsCovered(new Rectangle(-900, -900, 300, 300), [], screens));
+        Assert.False(CoverTracker.IsCovered(new Rectangle(100, 100, 300, 300), [], screens));
+    }
+
     [Fact]
     public void Results_keep_the_stacking_order_and_a_pass_stays_quick()
     {

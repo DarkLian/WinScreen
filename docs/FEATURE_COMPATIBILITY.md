@@ -15,8 +15,9 @@ Paths are relative to `src/WinScreen/` unless they start with `tests/`.
 - **Games and full-screen apps:** commands pause while one is in front, and views can't appear over games in
   exclusive full screen.
 - **Views:** minimizing a window that has a view hides it behind the view instead, so the view keeps updating; a
-  window that can't be hidden stops drawing when minimized, and its view shows the last picture. Protected video may
-  show as black.
+  window that can't be hidden stops drawing when minimized, and its view shows the last picture. With Keep hidden off,
+  a fully covered window is kept drawing too; one that can't be made see-through still stops, as browsers do when
+  covered. Protected video may show as black.
 - **Smooth mode** shows Windows' yellow capture border on Windows 10; on Windows 11 WinScreen asks to leave it off.
 - **Screenshots and screen sharing** don't show views of a display or region, or Anchors that move off content.
 - **Dark, Glass and Crop** depend on how each app draws itself.
@@ -93,7 +94,7 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **Borderless** | WinScreen's own Borderless or Fill display is on for it (`PlacementBeforeBorderless`). |
 | **Fills the screen** | Covers the whole monitor and has no standard title bar: a game or a full-screen app (`WindowInfo.FillsMonitor`, `Windows/WindowController.cs`). A normal maximized window doesn't count because it has a title bar. |
 | **Pinned** | Kept on top by WinScreen (`TogglePin`). Windows that pin themselves are "topmost" but not pinned by WinScreen. |
-| **Hidden** | Hidden by WinScreen behind a view, a tile or Keep updating (`state.Hidden`). A view's menu shows Keep updating as **Keep hidden**, under **Original window**. A view the person opens starts with it on, since many apps stop drawing while covered; a saved view keeps its saved choice, and a window that can't be hidden (Fill display, one that refuses to be see-through) keeps its view without a message (`PipWindow.HideOriginalByDefault`, `NewViewHidingTests`). |
+| **Hidden** | Hidden by WinScreen behind a view, a tile or Keep updating (`state.Hidden`). A view's menu shows Keep updating as **Keep hidden**, under **Original window**. A view the person opens starts with it on unless **Settings → Picture-in-Picture → Turn on Keep hidden for new views** is off (`PipViewPreferences.KeepHiddenOnNewViews`); a saved view keeps its saved choice, and a window that can't be hidden (Fill display, one that refuses to be see-through) keeps its view without a message (`PipWindow.HideOriginalByDefault`, `NewViewHidingTests`). |
 | **Click-through** | WinScreen's Click-through is on. |
 | **Custom shape** | The app gives its window a region of its own (`WindowInfo.ShapeOf`). |
 | **Own transparency** | The app made itself layered without WinScreen (`EnsureLayeringSafe`). |
@@ -234,6 +235,7 @@ something away, so they also work while a full-screen app runs (`CommandCatalog.
 | Maximized | ✅ | The view shows the maximized window. **Go to it** brings it forward still maximized and in its place, whether it was shown or hidden. |
 | Minimized | ⚠️ | WinScreen asks first, then restores it, because Windows doesn't draw minimized windows (`TrayApplication.OpenViewOf`). |
 | Hidden by WinScreen (Keep updating) | ✅ | That's how Keep updating works: the original is invisible but still drawn. |
+| Shown (Keep hidden off) and fully covered | ✅ / ⚠️ | Browsers and Electron apps stop drawing once nothing of their window shows. While another window covers all of it, the original is made see-through and click-through and put above the rest, where it can't be seen either, so it goes on drawing; it keeps its place, its taskbar button and Alt+Tab, and Keep hidden stays off. As soon as a part of it would show, it goes back under the windows still over it. Picked or brought forward by its app, it comes to the front as usual. When the window in front is minimized and Windows passes the see-through original over for a window below it, the original gets the focus, as it would have; while another window still covers it, the focus goes to that one. A popup of its own appearing (it would go up with it) puts it back. It isn't done for a window WinScreen pinned, filled, cropped, rolled up or drew with Glass, one that refuses to be see-through, or one Windows won't put on top because it was never used; those stop drawing while covered as before, and nothing is said. Recorded first, so a crash puts the window back (`WindowController.LiftWhileCovered`, `PipWindow.Cover.cs`, `CoverLiftTests`: a covered Chrome keeps drawing, measured against the same Chrome freezing without it). |
 | Shrunk, Dark or Glass | ⚠️ | Those are turned off first; if one can't be, "Show this window first". |
 | Elevated | ❌ | Refused with a message saying to start WinScreen as administrator, unless it already runs that way (`WindowIdentity.Capture`). |
 | Game in exclusive full screen | ❌ | "Views can't appear over a game in exclusive full screen." |

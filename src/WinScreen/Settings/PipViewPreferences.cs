@@ -8,6 +8,7 @@ public sealed record PipViewPreferences
     public int HoverDelayMilliseconds { get; init; } = 600;
     public bool MinimizeToTaskbar { get; init; }
     public bool AlwaysShowTitleBar { get; init; }
+    public bool KeepHiddenOnNewViews { get; init; } = true;
 
     internal PipViewPreferences Validated() => this with
     {

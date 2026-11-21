@@ -76,9 +76,12 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 
 **Useful options in the view's menu**
 
-- **Keep hidden:** on for every new view. Some apps, such as browsers, stop drawing when they're covered, so this
-  hides the original and the view stays live. It also removes the original from the taskbar and Alt+Tab where supported.
-  Turn it off to show the original; closing the view brings it back too.
+- **Keep hidden:** on for every new view, unless you turn off **Turn on Keep hidden for new views** in Settings →
+  Picture-in-Picture. It hides the original and removes it from the taskbar and Alt+Tab where supported. Turn it off to
+  show the original; closing the view brings it back too.
+  Some apps, such as browsers, stop drawing when they're fully covered. With Keep hidden off, WinScreen keeps them
+  drawing: while nothing of the window shows, it's moved out of the way where it stays out of sight, and it's back in
+  its place as soon as part of it would show or you switch to it.
 - **Mute the original:** silences the app's sound, and nothing else. For a browser it mutes the whole browser,
   so the item says **Mute the browser**. The sound comes back when you turn it off, restore the window, close the
   view or exit WinScreen. An app you had muted yourself stays muted.

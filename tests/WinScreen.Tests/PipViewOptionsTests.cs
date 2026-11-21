@@ -102,6 +102,22 @@ public sealed class PipPresetTests : IDisposable
         Assert.Equal(900, loaded.PipViews.HoverDelayMilliseconds);
     }
 
+    /// <summary>
+    /// Owner, 22 Nov: with a covered original kept drawing either way, whether a new view starts with Keep hidden on
+    /// is a setting for everyone, on unless turned off.
+    /// </summary>
+    [Fact]
+    public void New_views_keep_their_original_hidden_unless_the_setting_is_turned_off()
+    {
+        Assert.True(AppSettings.Parse("{}").PipViews.KeepHiddenOnNewViews);
+        Assert.True(AppSettings.Parse("""{"PipViews":{"MinimizeToTaskbar":true}}""").PipViews.KeepHiddenOnNewViews);
+        string path = Path.Combine(_folder, "settings.json");
+        AppSettings settings = AppSettings.Parse("{}");
+        settings.PipViews = settings.PipViews with { KeepHiddenOnNewViews = false };
+        settings.Save(path);
+        Assert.False(AppSettings.Load(path).PipViews.KeepHiddenOnNewViews);
+    }
+
     [Fact]
     public void Older_settings_load_with_no_presets()
     {

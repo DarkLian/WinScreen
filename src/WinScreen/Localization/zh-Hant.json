@@ -275,6 +275,7 @@
   "pip.input.viewOnly": "僅檢視",
   "pip.interactive": "互動式子母畫面",
   "pip.keepAspectRatio": "保持長寬比",
+  "pip.keepHidden.default": "為新檢視開啟「保持隱藏」",
   "pip.lockPosition": "鎖定位置",
   "pip.minimize": "最小化檢視",
   "pip.opacity": "不透明度",

@@ -21,9 +21,17 @@ internal static class CoverTracker
         return covered;
     }
 
-    private static bool IsHidden(Rectangle window, List<Rectangle> above)
+    // Only what is on a screen can show; a window wholly off every screen doesn't count as covered.
+    public static bool IsCovered(Rectangle window, IEnumerable<Rectangle> above, IEnumerable<Rectangle> screens)
     {
-        var showing = new List<Rectangle> { window };
+        var showing = screens.Select(screen => Rectangle.Intersect(screen, window)).Where(part => part.Width > 0 && part.Height > 0).ToList();
+        return showing.Count > 0 && IsHidden(showing, above.ToList());
+    }
+
+    private static bool IsHidden(Rectangle window, List<Rectangle> above) => IsHidden([window], above);
+
+    private static bool IsHidden(List<Rectangle> showing, List<Rectangle> above)
+    {
         foreach (Rectangle cover in above)
         {
             var left = new List<Rectangle>();

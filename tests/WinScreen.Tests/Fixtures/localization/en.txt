@@ -277,6 +277,7 @@ pip.hover.windowsOnly E07BED3E0722A13D
 pip.input.viewOnly 9B4C6C8590E918ED
 pip.interactive 72ECCCC07833C097
 pip.keepAspectRatio 7E8913018537C262
+pip.keepHidden.default 9D92ADDC95FD6308
 pip.lockPosition 20CD3751F574E232
 pip.minimize 8D074C6B563CF245
 pip.opacity 6062652E10DD84C6

@@ -138,7 +138,8 @@ public sealed partial class TrayApplication : ApplicationContext
         _content.Problem += text => Alert(T("errors.operation.title"), text);
         _windows.ChangeUndone += (_, text) => Alert(T("errors.operation.title"), text, ToolTipIcon.Info);
         _content.Created += handle => _dark.Ignore(handle);
-        _automaticAnchors = new AutomaticAnchors(_anchors, CanHaveAutomaticAnchor, () => Paused || FullScreenNow() != FullScreenState.None);
+        _automaticAnchors = new AutomaticAnchors(_anchors, CanHaveAutomaticAnchor, () => Paused || FullScreenNow() != FullScreenState.None,
+            _windows.LiftedWhileCovered);
         _anchors.Created += _dark.Ignore;
         _anchors.HasView = _pips.ContainsKey;
         _anchors.SetOffTaskbar = (window, off) =>
@@ -812,7 +813,7 @@ public sealed partial class TrayApplication : ApplicationContext
         string.Join(Environment.NewLine, problems.Select(problem => problem.Message));
 
     private bool CanHaveAutomaticAnchor(nint window) =>
-        WindowInfo.IsMainWindow(window) && _windows.CanControl(window) && !WindowInfo.IsHiddenForView(window) &&
+        WindowInfo.IsMainWindow(window) && _windows.CanControl(window) && (!WindowInfo.IsHiddenForView(window) || _windows.IsLiftedWhileCovered(window)) &&
         (!_windows.IsHidden(window) || _windows.IsDrawnByEffect(window)) && _settings.Anchors.Allows(WindowInfo.ProgramOf(window)) &&
         CanReach(window);
 
@@ -1767,7 +1768,7 @@ public sealed partial class TrayApplication : ApplicationContext
         pip.SoundState = () => _sound.State(window);
         pip.SetSound = on => on ? _sound.Mute(window) : _sound.Unmute(window);
         OpenView(pip);
-        if (hideOriginal && !pip.IsDisposed) pip.HideOriginalByDefault();
+        if (hideOriginal && _settings.PipViews.KeepHiddenOnNewViews && !pip.IsDisposed) pip.HideOriginalByDefault();
         return pip;
     }
 

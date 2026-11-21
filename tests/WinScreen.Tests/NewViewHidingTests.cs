@@ -69,6 +69,7 @@ public sealed class NewViewHidingTests
                 if (User32.IsZoomed(window)) User32.ShowWindow(window, User32.SW_RESTORE);
                 User32.SetWindowPos(window, 0, Spot.Left, Spot.Top, Spot.Width, Spot.Height, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
                 using var view = OpenView(window, windows);
+                view.LiftsWhenCovered = false; // Since 22 Nov a covered original is lifted instead (CoverLiftTests).
                 try
                 {
                     TestDesktop.Pump(1500);

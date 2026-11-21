@@ -68,6 +68,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public bool SolidWhileHovered { get; set; }
         [NotJournalled("How a hidden window is hidden, gone with it: recovery puts back OriginalAlpha.")]
         public bool HiddenButUsable { get; set; }
+        [NotJournalled("Recovery puts back OriginalAlpha and OwnedStyles, recorded before the lift, and a see-through window counts as concealed.")]
+        public bool LiftedWhileCovered { get; set; }
         [NotJournalled("The colour key now set: recovery puts back OriginalColorKey and OriginalLayeredFlags, and OwnedStyles.")]
         public Color? GlassColor { get; set; }
         [NotJournalled(CurrentState)] public bool PinPaused { get; set; }
@@ -139,7 +141,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
 
     internal bool NeedsRecoveryWatcher
     {
-        get { lock (_gate) return _changed.Values.Any(state => state.Hidden || state.PlacementBeforePeek is not null); }
+        get { lock (_gate) return _changed.Values.Any(state => state.Hidden || state.LiftedWhileCovered || state.PlacementBeforePeek is not null); }
     }
 
     internal void HideOwned(nint window, object owner, bool solid = false)
@@ -895,7 +897,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             if (state.PlacementBeforeBorderless is not null)
                 throw new WindowOperationException(T("errors.borderless.disableFirst"));
             EnsureLayeringSafe(state);
-            state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
+            // Lifted while covered, it is see-through and on top already: it stays so, now hidden.
+            if (!TakeOverLift(state)) state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
             state.Hidden = true;
             Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT | User32.WS_EX_TOPMOST);
             try { Conceal(window, state); }
@@ -929,7 +932,9 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             if (state.PlacementBeforeBorderless is not null)
                 throw new WindowOperationException(T("errors.borderless.disableFirst"));
             EnsureLayeringSafe(state);
-            state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
+            if (TakeOverLift(state))
+                User32.SetWindowPos(window, User32.HWND_NOTOPMOST, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+            else state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
             state.Hidden = true;
             state.HiddenButUsable = true;
             Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT);
@@ -1439,6 +1444,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             throw new WindowOperationException(string.Join(Environment.NewLine, failures));
         state.Hidden = false;
         state.HiddenButUsable = false;
+        state.LiftedWhileCovered = false;
         state.ConcealmentOwner = null;
 
         void Attempt(string step, Action action)

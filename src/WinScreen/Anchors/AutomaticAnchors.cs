@@ -3,7 +3,9 @@ using WinScreen.Windows;
 
 namespace WinScreen.Anchors;
 
-internal sealed class AutomaticAnchors(AnchorSet anchors, Func<nint, bool> canAnchor, Func<bool> paused) : IDisposable
+// alsoCovered: windows that are covered though lifted over the rest, see-through, so their view keeps drawing.
+internal sealed class AutomaticAnchors(AnchorSet anchors, Func<nint, bool> canAnchor, Func<bool> paused,
+    Func<IEnumerable<nint>>? alsoCovered = null) : IDisposable
 {
     private const int ContentCheckMilliseconds = 3000;
 
@@ -39,7 +41,8 @@ internal sealed class AutomaticAnchors(AnchorSet anchors, Func<nint, bool> canAn
     internal void Pass()
     {
         bool stopped = paused();
-        anchors.SyncAutomatic(stopped ? [] : CoverTracker.FullyCovered(WindowStack.Read()).Where(canAnchor).ToList());
+        anchors.SyncAutomatic(stopped ? [] : CoverTracker.FullyCovered(WindowStack.Read()).Concat(alsoCovered?.Invoke() ?? [])
+            .Distinct().Where(canAnchor).ToList());
         if (stopped || !_avoidContent || Environment.TickCount64 < _nextContentCheck || anchors.Automatic.Count == 0)
             return;
         _nextContentCheck = Environment.TickCount64 + ContentCheckMilliseconds;
