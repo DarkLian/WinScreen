@@ -293,9 +293,10 @@ pip.rendering.captureIndicatorHelp 9B200184708350C8
 pip.rendering.compatibilityHelp 37A0B59D61E34F00
 pip.restoreView 2D53B2575841ED5F
 pip.scaling CF077BBE73868B44
-pip.scaling.auto 36147B7E34DF7AC8
-pip.scaling.crisp 12081A926197B818
-pip.scaling.smooth B3275D61C8F82F90
+pip.scaling.auto CF9BC50F13C4C2D8
+pip.scaling.crisp D34D1D9BA175FA56
+pip.scaling.help 63DDAD91FED305BD
+pip.scaling.smooth 37E717D5998D0F31
 pip.size 50DB7447B966F5EF
 pip.size.fitSource 98D846945D6796B7
 pip.size.large 7D4CA7F48EFFD602

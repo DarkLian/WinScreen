@@ -71,7 +71,7 @@ You can save a display or area there and open it again later from **Picture-in-P
 | Ctrl+drag | Crop to the part you want; Ctrl+double-click to remove the crop |
 | Right-click | Open the view's menu, with **Go to it** under **Original window** |
 
-Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. Drag an edge or corner to resize. **Keep aspect ratio** in **Size and options** is on by default. The bar fades away after you leave. To keep it showing,
+Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. Drag an edge or corner to resize; close to the window's own size it stops there, and the view shows the window exactly as it is. **Keep aspect ratio** in **Size and options** is on by default. The bar fades away after you leave. To keep it showing,
 turn on **Always show title bar** in **Size and options**, or for every new view in **Settings → Picture-in-Picture**.
 
 **Useful options in the view's menu**
@@ -82,7 +82,8 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 - **Mute the original:** silences the app's sound, and nothing else. For a browser it mutes the whole browser,
   so the item says **Mute the browser**. The sound comes back when you turn it off, restore the window, close the
   view or exit WinScreen. An app you had muted yourself stays muted.
-- **Size and options:** frame limit, opacity, size, position lock and click-through, just for this view.
+- **Size and options:** frame limit, scaling, opacity, size, position lock and click-through, just for this view.
+  For scaling, **Best** suits almost everything; **Pixelated** is for pixel art and **Soft** for video.
 - **Presets:** save the crop, size and place under a name and use it again later.
 - **Freeze**, under **Picture:** the view keeps showing what it shows now while the window goes on changing. You can
   still move, resize, crop and zoom it, but not use the app through it. Choose it again to go back to live.
