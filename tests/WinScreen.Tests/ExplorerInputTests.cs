@@ -523,7 +523,8 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
     [InlineData("to another window")]
     [InlineData("to a folder in the view")]
     [InlineData("to another view")]
-    // "to the desktop": the file didn't arrive in the one run that could reach it (17 Nov); kept out until it does.
+    // To the desktop: runs where the desktop can be reached (the VM); it passes since 21 Nov.
+    [InlineData("to the desktop")]
     public void A_file_is_dragged_out_of_a_view(string where)
     {
         // The desktop: the file lands where it is let go (it once landed offset by the original's parked place), and
