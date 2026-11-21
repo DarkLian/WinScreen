@@ -3,8 +3,8 @@ namespace WinScreen.Pip;
 internal static class PipShaders
 {
     // Same coverage integration in CS5 and PS4. Integer loads give exact edges at 1:1.
-    // options.y is the scaling: 0 Auto, 1 Sharp (nearest texel), 2 Smooth (linear), 3 Auto without the cubic
-    // filters (Windows' software renderer, where every extra texel read is the processor's).
+    // options.y is the scaling: 0 Auto, 1 Sharp (nearest texel when enlarging), 2 Smooth (linear), 3 Auto without
+    // the cubic filters (Windows' software renderer, where every extra texel read is the processor's).
     internal const string Source = """
         Texture2D<float4> sourceTexture : register(t0);
         SamplerState linearSampler : register(s0);
@@ -64,15 +64,16 @@ internal static class PipShaders
             float2 step = crop.zw / outputSize;
             float2 lo = crop.xy + pixel * step;
             float2 hi = min(crop.xy + crop.zw, lo + step);
-            if (options.y == 1) return texel(int2(floor((lo + hi) * 0.5)));
             // A graphics card divides through a reciprocal, so 113/113 can come out a hair under 1: that is 1:1.
             if (all(abs(step - 1) < 0.0001)) return texel(int2(floor((lo + hi) * 0.5)));
             if (any(step < 1)) {
                 float2 middle = (lo + hi) * 0.5;
                 if (options.y == 0) return enlarge(middle);
+                if (options.y == 1) return texel(int2(floor(middle)));
                 return linearAt(middle);
             }
-            // One linear read per pixel would skip whole texels below half size: there Smooth averages them too.
+            // Shrinking, one texel a pixel would skip whole rows and columns, more the smaller the view: Sharp averages
+            // them, and so does Smooth below half size (one linear read covers only two texels across).
             if (options.y == 2 && all(step < 2)) return linearAt((lo + hi) * 0.5);
             float4 sum = 0;
             [loop] for (int y = (int)floor(lo.y); y < (int)ceil(hi.y); y++) {

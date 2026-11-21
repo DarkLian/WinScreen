@@ -242,9 +242,9 @@ internal sealed class D3D11Renderer : IDisposable
         bool enlarging = crop.Width < upright.Width || crop.Height < upright.Height;
         bool cubic = compute && _computeCubic is not null && crop.Size != upright &&
             crop.Width * 2 < upright.Width * 3 && crop.Height * 2 < upright.Height * 3;
-        _diagnostics.FilterMode = ViewScaling == PipScaling.Crisp ? "Nearest texel" :
-            crop.Size == upright ? "Exact texel" :
-            enlarging ? (ViewScaling == PipScaling.Auto && !_software ? "Edge-aware enlarge" : "Linear") :
+        _diagnostics.FilterMode = crop.Size == upright ? "Exact texel" :
+            enlarging ? (ViewScaling == PipScaling.Crisp ? "Nearest texel" :
+                ViewScaling == PipScaling.Auto && !_software ? "Edge-aware enlarge" : "Linear") :
             ViewScaling == PipScaling.Smooth && crop.Width < 2 * upright.Width && crop.Height < 2 * upright.Height ? "Linear" :
             cubic ? "Cubic shrink (compute 16x16)" : compute ? "Area (compute 16x16)" : "Area (raster PS4)";
         _context.UpdateSubresource(in constants, _constants!);

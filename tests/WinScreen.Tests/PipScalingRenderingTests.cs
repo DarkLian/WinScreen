@@ -11,7 +11,7 @@ namespace WinScreen.Tests;
 /// - Auto shrinking a little, where compute shaders run, uses a cubic kept within the texels each pixel covers, so no pixel is brighter or darker
 ///   than those texels (no halo).
 /// - Auto shrinking below two thirds averages the covered texels, and so does Smooth below half size, which would
-///   otherwise skip whole texels.
+///   otherwise skip whole texels. Sharp averages whenever it shrinks, for the same reason.
 /// - 1:1 copies the texels.
 /// The source is a busy pattern, the hardest case for a slip by half a pixel.
 /// </summary>
@@ -24,6 +24,8 @@ public sealed class PipScalingRenderingTests(ITestOutputHelper output)
     [InlineData(true, PipScaling.Auto, 257, 193, 250, 190)] // Just under 1:1.
     [InlineData(true, PipScaling.Auto, 257, 193, 140, 105)] // About 0.54: the average.
     [InlineData(false, PipScaling.Smooth, 257, 193, 100, 75)] // Under half size: the average.
+    [InlineData(true, PipScaling.Crisp, 257, 193, 211, 158)] // Sharp shrinking: the average, not one texel a pixel.
+    [InlineData(true, PipScaling.Crisp, 257, 193, 100, 75)]
     [InlineData(true, PipScaling.Auto, 257, 193, 257, 193)] // 1:1.
     [InlineData(false, PipScaling.Smooth, 257, 193, 257, 193)]
     public void The_view_draws_what_the_filter_says(bool compute, PipScaling scaling, int width, int height,
