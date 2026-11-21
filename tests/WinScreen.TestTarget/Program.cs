@@ -86,6 +86,13 @@ internal static class Program
                         window.BeginInvoke(window.CreateUnattributedLayeredWindow);
                     if (parts[0] == "plain")
                         window.BeginInvoke(() => window.CreatePlainWindow(parts[1]));
+                    if (parts[0] == "refuselayered")
+                        window.BeginInvoke(() =>
+                        {
+                            window.RefusesLayered = true;
+                            Console.WriteLine("refusing");
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "frame")
                         window.BeginInvoke(() =>
                         {
@@ -475,8 +482,21 @@ internal sealed partial class TargetForm : Form
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public int SlowMilliseconds { get; set; }
 
+    // As a WPF window does: it drops the style that makes a window see-through, so it can't be hidden.
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool RefusesLayered { get; set; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct StyleChange { public uint Old, New; }
+
     protected override void WndProc(ref Message m)
     {
+        if (RefusesLayered && m.Msg == 0x7C && m.WParam.ToInt64() == -20) // WM_STYLECHANGING, GWL_EXSTYLE
+        {
+            var change = Marshal.PtrToStructure<StyleChange>(m.LParam);
+            change.New &= ~0x80000u;
+            Marshal.StructureToPtr(change, m.LParam, false);
+        }
         if (_recordMessages && m.Msg is >= 0x200 and <= 0x20e)
             Report($"mouse {m.Msg:X} {(short)m.LParam.ToInt64()} {(short)(m.LParam.ToInt64() >> 16)} {m.WParam.ToInt64()}");
         if (_browserLike)

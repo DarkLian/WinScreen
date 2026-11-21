@@ -301,7 +301,8 @@ Nothing leaves your PC unless you send it yourself.
   **Settings → General**. WinScreen keeps running as you and starts a small helper with those rights just for those apps
   (Windows may ask first). The helper starts again whenever WinScreen does, and closes with it.
 - Commands pause while a game or full-screen app is in front. Views can't appear over games in exclusive full screen.
-- A minimized app stops drawing, so its view shows the last picture.
+- Minimizing a window that has a view hides it behind the view instead, so the view keeps updating. A window that
+  can't be hidden stops drawing when minimized, and its view shows the last picture.
 - Protected video may show as black in a view.
 - Views show on every virtual desktop and keep updating while you're on another one. To keep it updating, the view
   hides its window while you're away, and its menu says **Hidden while you're on another desktop**. On Windows 10

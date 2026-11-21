@@ -86,6 +86,43 @@ public sealed class SourcePopupPlacementTests
     }
 
     /// <summary>
+    /// Owner, 22 Nov: Chrome's tab card stayed in sight after the pointer left a view, by the view and then in the
+    /// screen's corner, where Chrome keeps it beside its hidden window. Between visits a popup the app keeps open goes off
+    /// the screen; the next visit puts it back where it was placed, and once closed it is put back where the app had it.
+    /// </summary>
+    [Fact]
+    public void A_popup_the_app_keeps_open_after_a_visit_goes_off_the_screen_until_the_next()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            using var owner = new Form { Location = new(100, 100), StartPosition = FormStartPosition.Manual };
+            using var card = new Form { FormBorderStyle = FormBorderStyle.FixedToolWindow,
+                ShowInTaskbar = false, Location = new(150, 150), StartPosition = FormStartPosition.Manual, Size = new(180, 100) };
+            owner.Show(); card.Show(owner);
+            Point native = card.Location;
+            var popups = new SourcePopups(owner.Handle) { RaisePopups = _ => { } };
+            Rectangle view = new(800, 200, 480, 300);
+            popups.SweepMapped(view, new(900, 250), native, 0);
+            Point placed = card.Location;
+            Assert.True(view.Contains(placed), $"Not placed by the view: {placed}");
+            // The visit ends with the card still open, and the app puts it back beside its window.
+            popups.Sweep(null);
+            Pump(100);
+            Assert.True(card.Right <= SystemInformation.VirtualScreen.Left, $"Still on the screen by the view: {card.Bounds}");
+            card.Location = native;
+            popups.Sweep(null);
+            Pump(100);
+            Assert.True(card.Right <= SystemInformation.VirtualScreen.Left, $"Still on the screen where the app keeps it: {card.Bounds}");
+            // The next visit puts it back by the view.
+            popups.SweepMapped(view, new(900, 250), native, 0);
+            Pump(100);
+            Assert.Equal(placed, card.Location);
+            popups.ShowAll();
+            Assert.Equal(native, card.Location);
+        });
+    }
+
+    /// <summary>
     /// Windows lays a submenu out beside where its parent menu really is, which is next to the view once the parent
     /// was moved. The pointer is over the menu, not the view, so the last pointer seen in the view is where the
     /// parent went: moving the submenu there would put it right on top of its parent.

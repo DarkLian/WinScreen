@@ -99,6 +99,7 @@ public sealed partial class PipWindow : Form
     private Rectangle _whole = Rectangle.Empty;
     private Rectangle _lastShown = Rectangle.Empty;
     private int _longSide;
+    private bool _fitting;
     private nint _foregroundBeforeMenu;
     private bool _escapeClaimed;
     private Point _dragStart;
@@ -679,6 +680,10 @@ public sealed partial class PipWindow : Form
                 // Only its taskbar entry goes, which Windows 11 also leaves out of Alt+Tab; a tool window's frame
                 // would replace the original's own caption buttons in the view.
                 else if (!WindowController.TaskbarButtonOwnedByWindows(_source)) _windows.RemoveTaskbarButton(_source);
+                // A minimized one has no picture, and restored once parked it went back to its own place on the screen,
+                // unseen, where it isn't the window under the pointer that a browser looks for before it scrolls
+                // (owner, 22 Nov: minimized while used, then hidden again). Restored now, while it can't be seen.
+                if (User32.IsIconic(_source)) User32.ShowWindow(_source, User32.SW_SHOWNOACTIVATE);
                 _windows.Park(_source);
                 PlaceForHover();
                 ConfigureParkedCapture();
@@ -1645,9 +1650,7 @@ public sealed partial class PipWindow : Form
         if (_originalLeftAt == 0) _originalLeftAt = now;
         if (now - _originalLeftAt < UseOriginalGrace) return;
         bool interactive = _usingFromInteractive && CanInteract;
-        ChangeInteractionMode(interactive, true);
-        if (_hideItem.Checked && User32.IsIconic(_source))
-            User32.ShowWindow(_source, User32.SW_SHOWNOACTIVATE); // Minimized while in use: it has no picture until restored.
+        ChangeInteractionMode(interactive, true); // Minimized while in use, it is restored as it is hidden.
         StayOnTop();
     }
 
@@ -1983,6 +1986,27 @@ public sealed partial class PipWindow : Form
         }
     }
 
+    // Minimized while shown, an original stopped drawing and its view stayed on the last picture (owner, 22 Nov): it
+    // goes behind its view instead, as Keep hidden puts it, and goes on drawing. One that can't be hidden stays minimized.
+    private void FollowOriginalMinimized()
+    {
+        bool minimized = _origin.IsWindow && User32.IsIconic(_source);
+        bool justMinimized = minimized && !_sourceWasMinimized;
+        _sourceWasMinimized = minimized;
+        if (!justMinimized || _hideItem.Checked || _suspended || _usingOriginal || _awayFrom != Guid.Empty ||
+            _dropSince != 0 || !_origin.IsAvailable) return;
+        ViewState.Modes before = CurrentModes();
+        // Used directly before it was shown, it is again.
+        ViewState.Request request = _interactiveBeforeShown && CanInteract ? ViewState.Request.InteractiveOn : ViewState.Request.KeepHiddenOn;
+        ViewState.Modes target = ViewState.Apply(before, request);
+        ChangeInteractionMode(target.Interactive, target.Hidden, quiet: true);
+        CheckRequest(before, request);
+        Diagnostics.Log.Event("view.minimizedOriginalHidden", ("program", Diagnostics.LogValue.ProgramOf(_source)), ("hidden", _hideItem.Checked));
+    }
+
+    // Already minimized when the view opens counts as nothing new.
+    private bool _sourceWasMinimized = true, _interactiveBeforeShown;
+
     private static bool CoversAMonitor(nint window) =>
         User32.GetWindowRect(window, out Rect r) &&
         WindowController.FillsAMonitor(Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom), [.. Screen.AllScreens.Select(s => s.Bounds)]);
@@ -2047,7 +2071,11 @@ public sealed partial class PipWindow : Form
         Point place = pointer is { } spot
             ? PipGeometry.KeepUnderPointer(Bounds, size, spot)
             : PipGeometry.KeepCorner(Bounds, size, area);
-        Bounds = new Rectangle(PipGeometry.KeepInside(new Rectangle(place, size), area), size);
+        // Made smaller only to fit the screen (a quarter turn of a wide view), it keeps the size it was given, so it
+        // has it again once it fits (owner, 22 Nov).
+        _fitting = true;
+        try { Bounds = new Rectangle(PipGeometry.KeepInside(new Rectangle(place, size), area), size); }
+        finally { _fitting = false; }
         _lastShown = shown;
         _thumbnail.SetViewport(PictureArea, shown);
     }
@@ -2259,9 +2287,11 @@ public sealed partial class PipWindow : Form
         bool passToShell = _inputPaused && TopLayer.OverflowOpen;
         if (passToShell != _passToShell) { _passToShell = passToShell; ApplyClickThrough(); }
         FollowOriginalState();
+        FollowOriginalMinimized();
         if (_suspended || IsDisposed) return;
-        // A hidden original's link text and tooltips would show where it really is; every fifth tick is enough.
-        if (_live is null && _hideItem.Checked && ++_popupTick % 5 == 0)
+        // A hidden original's link text, tooltips and anything it keeps open after a visit would show where it really is;
+        // every fifth tick is enough.
+        if (_live is null && _hideItem.Checked && _dropSince == 0 && _windows.IsHidden(_source) && ++_popupTick % 5 == 0)
             (_popups ??= CreateSourcePopups()).Sweep(null);
         if (_pressed && MouseButtons == MouseButtons.None)
             CancelPress();
@@ -2376,7 +2406,7 @@ public sealed partial class PipWindow : Form
         PositionTitleBar();
         if (_thumbnail is not null && !_lastShown.IsEmpty && ClientSize.Width > 4 && ClientSize.Height > 4)
         {
-            _longSide = Math.Max(Width, Height);
+            if (!_fitting) _longSide = Math.Max(Width, Height);
             Attempt(() => _thumbnail.SetViewport(PictureArea, _lastShown));
         }
     }
@@ -2501,6 +2531,7 @@ public sealed partial class PipWindow : Form
         }
 
         ViewState.Modes before = CurrentModes();
+        if (_hideItem.Checked) _interactiveBeforeShown = _interactiveItem.Checked;
         ChangeInteractionMode(false, false);
         CheckRequest(before, ViewState.Request.ShowOriginal);
         if (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source))

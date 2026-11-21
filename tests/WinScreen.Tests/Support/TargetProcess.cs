@@ -54,6 +54,14 @@ internal sealed class TargetProcess : IDisposable
         _process.StandardInput.Flush();
     }
 
+    /// <summary>Drops the style that makes a window see-through whenever it is set, as WPF windows do: it can't be hidden.</summary>
+    internal void RefuseToBeSeeThrough()
+    {
+        _process.StandardInput.WriteLine("refuselayered");
+        _process.StandardInput.Flush();
+        if (NextReport() != "refusing") throw new InvalidOperationException("The target didn't take refuselayered.");
+    }
+
     /// <summary>Gives the window a real title bar and borders, which the plain target doesn't have.</summary>
     internal void UseFrame()
     {

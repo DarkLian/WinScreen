@@ -1804,4 +1804,83 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         if (!log.ToString().Contains("drop not checked", StringComparison.Ordinal))
             Assert.Contains("drop https://example.com/dragged", log.ToString());
     }
+
+    /// <summary>
+    /// Owner, 22 Nov: after "Use it, then hide again", with the page minimized while in use, the wheel no longer scrolled
+    /// it through the view (a middle-click still did). Hidden again, it was restored where it was, unseen, instead of
+    /// at its parking place, and a browser scrolls only when it is the window under the point it is told about.
+    /// </summary>
+    [Fact]
+    public void A_page_minimized_while_used_scrolls_through_its_view_once_hidden_again()
+    {
+        string path = (string)BrowserCases().First()[0];
+        const string html = """
+            <!doctype html><title>WheelPage w=0 y=0</title>
+            <style>body{margin:0}div{height:6000px;background:linear-gradient(#fff,#08f)}</style><div></div>
+            <script>let w=0;function r(){document.title=`WheelPage w=${w} y=${Math.round(scrollY)}`};addEventListener('wheel',()=>{w++;r()},{passive:true});addEventListener('scroll',r);</script>
+            """;
+        var (browser, window, root) = Open(html, "WheelPage", app: true, path);
+        var log = new StringBuilder();
+        string State() => $"'{WindowInfo.Title(window)}' at {Desktop.BoundsOf(window)}, minimized {User32.IsIconic(window)}";
+        int Scrolled() => int.Parse(System.Text.RegularExpressions.Regex.Match(WindowInfo.Title(window), @"y=(\d+)").Groups[1].Value);
+        try
+        {
+            User32.ShowWindow(window, 3); // Maximized, as it was: a window filling the screen isn't parked again by itself.
+            Thread.Sleep(1200);
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                using var other = new Form { StartPosition = FormStartPosition.Manual, Bounds = new Rectangle(60, 600, 400, 300), Text = "Somewhere else" };
+                other.Show();
+                using var view = new PipWindow(window, new WindowController([])) { AllowInteractive = true };
+                view.ShowOnTop();
+                view.Location = new Point(1000, 250);
+                view.SetInteractive(true);
+                Exception? failure = null;
+                var driver = new Thread(() =>
+                {
+                    try
+                    {
+                        Point middle = new(view.Left + view.Width / 2, view.Top + view.Height / 2);
+                        bool Wheel()
+                        {
+                            Desktop.SlideMouse(middle);
+                            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null, 2000), "No visit.");
+                            Thread.Sleep(400);
+                            int before = Scrolled();
+                            WheelDown();
+                            return Desktop.WaitFor(() => Scrolled() > before, 1500);
+                        }
+                        Assert.True(Wheel(), "The wheel didn't scroll before: " + State());
+                        Desktop.SlideMouse(new Point(200, 750));
+                        Thread.Sleep(500);
+                        view.Invoke(() => view.UseOriginal());
+                        Thread.Sleep(1500);
+                        User32.ShowWindow(window, 6); // Minimized, as its button does.
+                        Thread.Sleep(500);
+                        Desktop.Activate(other.Handle);
+                        Assert.True(Desktop.WaitFor(() => view.KeepsUpdating && !view.SteppedAside, 5000), "Not hidden again: " + State());
+                        Thread.Sleep(500);
+                        Rectangle parked = Desktop.BoundsOf(window);
+                        log.AppendLine("hidden again: " + State());
+                        Assert.False(Screen.AllScreens.Any(s => Rectangle.Intersect(s.Bounds, parked) is { Width: > 2, Height: > 2 }),
+                            "Hidden again on the screen, not at its parking place: " + State());
+                        Assert.True(Wheel(), "The wheel didn't scroll after: " + State());
+                    }
+                    catch (Exception e) { failure = e; }
+                });
+                driver.Start();
+                while (driver.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
+                view.Close();
+                if (failure is not null) throw new Xunit.Sdk.XunitException(failure.ToString());
+            });
+        }
+        finally
+        {
+            output.WriteLine(log.ToString());
+            Close(browser, root);
+        }
+    }
+
+    private static void WheelDown() => mouse_event(0x800, 0, 0, unchecked((uint)-360), 0);
+
 }

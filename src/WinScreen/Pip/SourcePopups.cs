@@ -4,8 +4,8 @@ using WinScreen.Native;
 namespace WinScreen.Pip;
 
 // The original's popups appear where it really is, not where its view is. Display-only ones (click-through) go off the
-// screen while it is hidden; message input moves menus and lists to the view's pointer; compatible input keeps those
-// already by the pointer and conceals ones wholly away.
+// screen while it is hidden; message input moves menus and lists to the view's pointer; between visits every one goes
+// off the screen.
 // Dialogs are never moved: one showing, or the original disabled, is reported so the visit ends and the question is
 // seen. Everything moved is put back. Safe from any thread.
 internal sealed class SourcePopups
@@ -34,7 +34,7 @@ internal sealed class SourcePopups
         internal Rectangle OriginalBounds => new(Original, Size);
     }
 
-    // view is null at rest, when only display-only popups are moved. True if the original is asking something.
+    // view is null at rest, between visits. True if the original is asking something.
     public bool Sweep(Rectangle? view) => SweepCore(view, null, null);
 
     internal bool SweepMapped(Rectangle view, Point pointer, Point mapped, nint viewWindow) => SweepCore(view, pointer, mapped, viewWindow);
@@ -109,8 +109,11 @@ internal sealed class SourcePopups
                     }
                     continue;
                 }
-                bool away = kind == Kind.DisplayOnly ||
-                            view is { } area && !Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).IntersectsWith(area);
+                // At rest every popup goes: one the app keeps open after a visit (Chrome's tab card, which it shows while
+                // it thinks the pointer is on a tab) stayed where it was put by the view, or went where the app keeps it,
+                // beside the hidden original: on the screen's edge (owner, 22 Nov).
+                bool away = kind == Kind.DisplayOnly || view is not { } area ||
+                            !Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).IntersectsWith(area);
                 // Sent off before but put back by its app: send it off again.
                 if (away && (!_hidden.ContainsKey(popup) || r.Right > SystemInformation.VirtualScreen.Left)) Hide(popup, r);
                 else if (!away && _hidden.ContainsKey(popup)) Show(popup);

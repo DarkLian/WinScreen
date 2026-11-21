@@ -329,6 +329,72 @@ public sealed class WgcPipTests(ITestOutputHelper output)
         });
     }
 
+    // Owner, 22 Nov: an original shown from its view and then minimized stopped drawing, and the view stayed on its last
+    // picture. It goes behind its view instead, off the screen and not minimized, and the view goes on updating.
+    [WgcFact]
+    public void An_original_minimized_while_shown_goes_behind_its_view_and_keeps_drawing()
+    {
+        using var source = new TargetProcess(new(200, 160, 400, 300));
+        OnUiThread(pump =>
+        {
+            Desktop.GainForegroundRights();
+            var windows = new WindowController([]);
+            using var pip = new PipWindow(source.Handle, windows);
+            pip.ApplyPipPreferences(new() { Backend = PipBackendPreference.Wgc });
+            pip.ShowOnTop(); pip.Location = new(800, 120);
+            try
+            {
+                Assert.True(Desktop.WaitFor(() => pip.BackendKind != PipBackendKind.DwmThumbnail, 15000, () => pump(20)), pip.DiagnosticSnapshot);
+                pip.HideOriginalByDefault();
+                pump(300);
+                pip.GoToSource();
+                pump(500);
+                Assert.False(windows.IsHidden(source.Handle), "Not shown.");
+                User32.ShowWindow(source.Handle, 6); // Its minimize button.
+                Assert.True(Desktop.WaitFor(() => windows.IsHidden(source.Handle) && !User32.IsIconic(source.Handle), 3000, () => pump(20)),
+                    $"Minimized: hidden {windows.IsHidden(source.Handle)}, minimized {User32.IsIconic(source.Handle)}.");
+                Rectangle at = Desktop.BoundsOf(source.Handle);
+                Assert.False(Screen.AllScreens.Any(s => Rectangle.Intersect(s.Bounds, at) is { Width: > 2, Height: > 2 }), $"Hidden on the screen at {at}.");
+                Assert.True(pip.KeepsUpdating, pip.StateDescription);
+                Rectangle middle = new(pip.Left + pip.Width / 2 - 10, pip.Top + pip.Height / 2 - 10, 20, 20);
+                source.SetColors("1E64C8");
+                Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(middle), Color.FromArgb(0x1E, 0x64, 0xC8)), 4000, () => pump(20)),
+                    "The view didn't update: " + pip.DiagnosticSnapshot);
+            }
+            finally { pip.Close(); pump(200); }
+            Assert.False(windows.IsHidden(source.Handle));
+        });
+    }
+
+    // Owner, 22 Nov: a wide view turned a quarter is made smaller to fit the screen; turned back, it had kept that
+    // smaller size. It comes back at the size it was given.
+    [WgcFact]
+    public void A_view_made_smaller_to_fit_when_turned_has_its_size_again_turned_back()
+    {
+        using var source = new TargetProcess(new(200, 160, 900, 300));
+        OnUiThread(pump =>
+        {
+            using var pip = new PipWindow(source.Handle, new WindowController([]));
+            pip.ApplyPipPreferences(new() { Backend = PipBackendPreference.Wgc });
+            pip.ShowOnTop(); pip.Location = new(100, 120);
+            Assert.True(Desktop.WaitFor(() => pip.CanTurn, 15000, () => pump(20)), pip.DiagnosticSnapshot);
+            pump(300);
+            Rectangle area = Screen.FromControl(pip).WorkingArea;
+            // Resized by hand to wider than the screen is tall.
+            pip.Size = new Size(Math.Min(area.Width - 40, area.Height * 3 / 2), Math.Min(area.Width - 40, area.Height * 3 / 2) / 3);
+            pump(500);
+            Rectangle upright = pip.Bounds;
+            Assert.True(upright.Width > area.Height, $"Not wide enough to test: {upright} in {area}");
+            pip.SetTurn(new ViewTurn(1, false));
+            pump(500);
+            Assert.True(pip.Height <= area.Height && pip.Height < upright.Width, $"Turned, it wasn't fitted to the screen: {pip.Bounds} in {area}");
+            pip.SetTurn(ViewTurn.Upright);
+            pump(500);
+            Assert.True(Math.Abs(pip.Width - upright.Width) <= 2 && Math.Abs(pip.Height - upright.Height) <= 2,
+                $"Turned back, {pip.Bounds}; before {upright}");
+        });
+    }
+
     // A quarter turn swaps the view's sides about its middle; a preset keeps the turn; on Windows' thumbnail the view
     // shows upright and the turn comes back with capture. The left half of a red and green window turned clockwise
     // is the view's top half.
@@ -400,8 +466,11 @@ public sealed class WgcPipTests(ITestOutputHelper output)
             pip.ApplyPipPreferences(new() { Backend = PipBackendPreference.Wgc });
             pip.ShowOnTop(); pip.Location = new(800, 120);
             Assert.True(Desktop.WaitFor(() => pip.BackendKind == PipBackendKind.WgcHardware, 15000, () => pump(20)), pip.DiagnosticSnapshot);
+            // One that can't be hidden: others go behind their view when minimized (owner, 22 Nov).
+            source.RefuseToBeSeeThrough();
             User32.ShowWindow(source.Handle, 6); // SW_MINIMIZE
             pump(2200);
+            Assert.True(User32.IsIconic(source.Handle), "Not left minimized.");
             Assert.Equal(PipSessionState.SourcePaused, pip.BackendState);
             pip.SetCrop(new(0, 0, 180, 300)); pump(200);
             var middle = new Rectangle(pip.Left + pip.Width / 2 - 10, pip.Top + pip.Height / 2 - 10, 20, 20);
