@@ -7,6 +7,7 @@ using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Vortice.Mathematics;
 using Size = System.Drawing.Size;
+using WinScreen.Diagnostics;
 using WinScreen.Settings;
 using static Vortice.Direct3D11.D3D11;
 using static Vortice.DXGI.DXGI;
@@ -25,7 +26,7 @@ internal sealed class D3D11Renderer : IDisposable
     private ID3D11UnorderedAccessView? _scaledOutput;
     private ID3D11VertexShader? _vertex;
     private ID3D11PixelShader? _pixel;
-    private ID3D11ComputeShader? _compute;
+    private ID3D11ComputeShader? _compute, _computeCubic;
     private ID3D11SamplerState? _sampler;
     private ID3D11Buffer? _constants;
     private ID3D11Query? _fence;
@@ -104,6 +105,14 @@ internal sealed class D3D11Renderer : IDisposable
                     Capabilities = Capabilities with { ComputeAreaSupported = false };
                     _diagnostics.Capabilities = Capabilities;
                 }
+                // Without it, shrinking a little averages as it does further down.
+                if (_compute is not null && !software)
+                    try
+                    {
+                        _computeCubic = Device.CreateComputeShader(Compiler.Compile("#define COMPUTE\n" + PipShaders.Source,
+                            "CSCubic", "PipShaders", "cs_5_0").Span);
+                    }
+                    catch (Exception e) when (e is SharpGen.Runtime.SharpGenException or ExternalException) { Log.Swallowed(e); }
             }
             _sampler = Device.CreateSamplerState(new SamplerDescription(Filter.MinMagMipLinear,
                 TextureAddressMode.Clamp, TextureAddressMode.Clamp, TextureAddressMode.Clamp));
@@ -231,10 +240,13 @@ internal sealed class D3D11Renderer : IDisposable
         bool compute = _compute is not null && ViewScaling == PipScaling.Auto &&
             crop.Width >= upright.Width && crop.Height >= upright.Height;
         bool enlarging = crop.Width < upright.Width || crop.Height < upright.Height;
+        bool cubic = compute && _computeCubic is not null && crop.Size != upright &&
+            crop.Width * 2 < upright.Width * 3 && crop.Height * 2 < upright.Height * 3;
         _diagnostics.FilterMode = ViewScaling == PipScaling.Crisp ? "Nearest texel" :
-            enlarging && ViewScaling == PipScaling.Auto && !_software ? "Edge-aware enlarge" :
-            ViewScaling == PipScaling.Smooth || enlarging ? "Linear" :
-            crop.Size == upright ? "Exact texel" : compute ? "Compute area (16x16)" : "Raster area (PS4)";
+            crop.Size == upright ? "Exact texel" :
+            enlarging ? (ViewScaling == PipScaling.Auto && !_software ? "Edge-aware enlarge" : "Linear") :
+            ViewScaling == PipScaling.Smooth && crop.Width < 2 * upright.Width && crop.Height < 2 * upright.Height ? "Linear" :
+            cubic ? "Cubic shrink (compute 16x16)" : compute ? "Area (compute 16x16)" : "Area (raster PS4)";
         _context.UpdateSubresource(in constants, _constants!);
         if (compute)
         {
@@ -246,7 +258,7 @@ internal sealed class D3D11Renderer : IDisposable
                 _scaledOutput = Device.CreateUnorderedAccessView(_scaled);
                 _scaledView = Device.CreateShaderResourceView(_scaled);
             }
-            _context.CSSetShader(_compute);
+            _context.CSSetShader(cubic ? _computeCubic : _compute);
             _context.CSSetConstantBuffer(0, _constants);
             _context.CSSetShaderResource(0, _sourceView);
             _context.CSSetSampler(0, _sampler);
@@ -287,7 +299,7 @@ internal sealed class D3D11Renderer : IDisposable
         _sourceView?.Dispose(); _cache?.Dispose();
         _scaledOutput?.Dispose(); _scaledView?.Dispose(); _scaled?.Dispose();
         _renderTarget?.Dispose(); _swapChain?.Dispose();
-        _constants?.Dispose(); _sampler?.Dispose(); _compute?.Dispose(); _pixel?.Dispose(); _vertex?.Dispose();
+        _constants?.Dispose(); _sampler?.Dispose(); _compute?.Dispose(); _computeCubic?.Dispose(); _pixel?.Dispose(); _vertex?.Dispose();
         _fence?.Dispose();
         // DXGI permits only one flip-model chain per HWND. Flush deferred destruction before a recovery creates
         // another.

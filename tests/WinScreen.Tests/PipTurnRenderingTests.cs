@@ -18,7 +18,7 @@ namespace WinScreen.Tests;
 [Trait("Category", "RealWindows")]
 public sealed class PipTurnRenderingTests(ITestOutputHelper output)
 {
-    private static int Pattern(int x, int y) => unchecked((int)0xFF000000) |
+    internal static int Pattern(int x, int y) => unchecked((int)0xFF000000) |
         ((x * 31 + y * 7) % 256 << 16) | ((x * 3 + y * 23) % 256 << 8) | ((x * 11 + y * 5) % 256);
 
     [WgcTheory]
@@ -26,6 +26,8 @@ public sealed class PipTurnRenderingTests(ITestOutputHelper output)
     [InlineData(false, PipScaling.Auto, 257, 193, 109, 79)]
     [InlineData(true, PipScaling.Smooth, 257, 193, 109, 79)]
     [InlineData(true, PipScaling.Crisp, 257, 193, 109, 79)]
+    [InlineData(true, PipScaling.Auto, 257, 193, 211, 158)]
+    [InlineData(false, PipScaling.Auto, 257, 193, 211, 158)]
     [InlineData(true, PipScaling.Auto, 113, 83, 113, 83)]
     [InlineData(true, PipScaling.Auto, 61, 47, 150, 113)]
     [InlineData(true, PipScaling.Smooth, 61, 47, 150, 113)]
@@ -78,7 +80,7 @@ public sealed class PipTurnRenderingTests(ITestOutputHelper output)
         if (failure is not null) throw new Xunit.Sdk.XunitException(failure.ToString());
     }
 
-    private static unsafe void Load(D3D11Renderer renderer, int width, int height)
+    internal static unsafe void Load(D3D11Renderer renderer, int width, int height)
     {
         int[] pixels = new int[width * height];
         for (int y = 0; y < height; y++)
@@ -91,7 +93,7 @@ public sealed class PipTurnRenderingTests(ITestOutputHelper output)
         }
     }
 
-    private static int[,] Draw(D3D11Renderer renderer, Form destination, ViewTurn turn, Rectangle crop, Size upright)
+    internal static int[,] Draw(D3D11Renderer renderer, Form destination, ViewTurn turn, Rectangle crop, Size upright)
     {
         renderer.Turn = turn;
         var viewport = new Rectangle(new Point(2, 2), turn.Oriented(upright));

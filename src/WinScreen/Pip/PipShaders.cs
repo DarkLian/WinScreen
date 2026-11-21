@@ -3,8 +3,8 @@ namespace WinScreen.Pip;
 internal static class PipShaders
 {
     // Same coverage integration in CS5 and PS4. Integer loads give exact edges at 1:1.
-    // options.y is the scaling: 0 Auto, 1 Sharp (nearest texel), 2 Smooth (linear), 3 Auto without the enlarging
-    // filter (Windows' software renderer, where every extra texel read is the processor's).
+    // options.y is the scaling: 0 Auto, 1 Sharp (nearest texel), 2 Smooth (linear), 3 Auto without the cubic
+    // filters (Windows' software renderer, where every extra texel read is the processor's).
     internal const string Source = """
         Texture2D<float4> sourceTexture : register(t0);
         SamplerState linearSampler : register(s0);
@@ -72,7 +72,8 @@ internal static class PipShaders
                 if (options.y == 0) return enlarge(middle);
                 return linearAt(middle);
             }
-            if (options.y == 2) return linearAt((lo + hi) * 0.5);
+            // One linear read per pixel would skip whole texels below half size: there Smooth averages them too.
+            if (options.y == 2 && all(step < 2)) return linearAt((lo + hi) * 0.5);
             float4 sum = 0;
             [loop] for (int y = (int)floor(lo.y); y < (int)ceil(hi.y); y++) {
                 float wy = max(0, min(hi.y, y+1.0) - max(lo.y, (float)y));
@@ -111,6 +112,50 @@ internal static class PipShaders
         [numthreads(16,16,1)]
         void CS(uint3 id : SV_DispatchThreadID) {
             if (all(id.xy < (uint2)orient.zw)) outputTexture[id.xy] = area(id.xy, orient.zw);
+        }
+        // Auto shrinking a little (steps 1 to 1.5; below that the even average does as well): the cubic of enlarge(),
+        // stretched over the step, keeps strokes crisper than an even average, and is kept within the texels the pixel
+        // covers, so no halo. Taps stay inside the crop. Two passes through the group's memory, across then down, read
+        // each texel about twice instead of some thirty times: 16 rows of pixels need at most 31 rows of texels.
+        float catrom(float t) { return t < 1 ? (1.5*t - 2.5)*t*t + 1 : t < 2 ? ((-0.5*t + 2.5)*t - 4)*t + 2 : 0; }
+        groupshared float4 across[32][16];
+        [numthreads(16,16,1)]
+        void CSCubic(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint3 local : SV_GroupThreadID) {
+            float2 step = crop.zw / orient.zw;
+            int2 start = int2(crop.xy), end = int2(crop.xy + crop.zw);
+            float2 c = crop.xy + (id.xy + 0.5) * step;
+            int firstX = max((int)floor(c.x - 2 * step.x), start.x), lastX = min((int)ceil(c.x + 2 * step.x), end.x);
+            int rows = max((int)floor(crop.y + (group.y * 16 + 0.5) * step.y - 2 * step.y), start.y);
+            int rowsEnd = min(min((int)ceil(crop.y + (group.y * 16 + 15.5) * step.y + 2 * step.y), end.y), rows + 32);
+            [loop] for (int r = rows + (int)local.y; r < rowsEnd; r += 16) {
+                float4 sum = 0;
+                float total = 0;
+                [loop] for (int x = firstX; x < lastX; x++) {
+                    float w = catrom(abs(x + 0.5 - c.x) / step.x);
+                    sum += sourceTexture.Load(int3(x, r, 0)) * w;
+                    total += w;
+                }
+                across[r - rows][local.x] = sum / max(total, 0.000001);
+            }
+            GroupMemoryBarrierWithGroupSync();
+            if (any(id.xy >= (uint2)orient.zw)) return;
+            int firstY = max((int)floor(c.y - 2 * step.y), rows), lastY = min((int)ceil(c.y + 2 * step.y), rowsEnd);
+            float4 sum = 0;
+            float total = 0;
+            [loop] for (int y = firstY; y < lastY; y++) {
+                float w = catrom(abs(y + 0.5 - c.y) / step.y);
+                sum += across[y - rows][local.x] * w;
+                total += w;
+            }
+            float2 lo = crop.xy + id.xy * step, hi = min(crop.xy + crop.zw, lo + step);
+            float4 low = 1, high = 0;
+            [loop] for (int ty = (int)floor(lo.y); ty < (int)ceil(hi.y); ty++)
+                [loop] for (int tx = (int)floor(lo.x); tx < (int)ceil(hi.x); tx++) {
+                    float4 t = sourceTexture.Load(int3(tx, ty, 0));
+                    low = min(low, t);
+                    high = max(high, t);
+                }
+            outputTexture[id.xy] = clamp(sum / total, low, high);
         }
         #endif
         """;
