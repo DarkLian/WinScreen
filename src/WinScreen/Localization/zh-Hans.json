@@ -153,7 +153,7 @@
   "errors.settings.saveFailed": "WinScreen 无法保存设置",
   "errors.shrink.unavailable": "无法缩小此窗口。",
   "errors.sound.failed": "WinScreen 无法更改该程序的声音。",
-  "errors.switcher.hideOriginalFirst": "请先用“保持更新”隐藏原窗口。",
+  "errors.switcher.hideOriginalFirst": "请先在视图菜单中开启“保持隐藏”。",
   "errors.switcher.windows10": "在 Windows 10 上，这会让视图停止更新。如需使用，请在 设置 → 画中画 中将“画中画绘制方式”设为“标准”。",
   "errors.switcher.windowsManaged": "此应用的任务栏按钮由 Windows 管理，无法隐藏。",
   "errors.window.changeIgnored": "Windows 忽略了「{0}」请求，窗口「{1}」。",

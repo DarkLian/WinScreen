@@ -153,7 +153,7 @@
   "errors.settings.saveFailed": "WinScreen couldn't save its settings",
   "errors.shrink.unavailable": "This window can't be shrunk.",
   "errors.sound.failed": "WinScreen couldn't change the program's sound.",
-  "errors.switcher.hideOriginalFirst": "Hide the original with Keep updating first.",
+  "errors.switcher.hideOriginalFirst": "Turn on Keep hidden in the view's menu first.",
   "errors.switcher.windows10": "On Windows 10, this would stop the view updating. To use it, choose Standard under How views are drawn in Settings → Picture-in-Picture.",
   "errors.switcher.windowsManaged": "Windows controls this app's taskbar button, so it can't be hidden.",
   "errors.window.changeIgnored": "Windows ignored the request to {0} \"{1}\".",

@@ -155,7 +155,7 @@ errors.rollUp.noCaption AF2CC136FF68D25D
 errors.settings.saveFailed 0C227CC97BD00D07
 errors.shrink.unavailable 55A3A8ED9A2B51D7
 errors.sound.failed C3D73A5D1F853C2A
-errors.switcher.hideOriginalFirst F492F10DDD5AB172
+errors.switcher.hideOriginalFirst AEE62661B668C8B4
 errors.switcher.windows10 0E397DCE0D52ABEE
 errors.switcher.windowsManaged 5FBDC9C89FD040D1
 errors.window.changeIgnored 033C29E03F05610E

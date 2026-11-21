@@ -294,8 +294,8 @@ public sealed partial class WindowController
         }
     }
 
-    // Through the shell's task list, changing nothing about the window, so it keeps its own caption buttons. Windows 11
-    // also leaves it out of Alt+Tab.
+    // Through the shell's task list, changing nothing about the window, so it keeps its own caption buttons. Windows 10
+    // and 11 also leave it out of Alt+Tab (SwitcherListTests reads Windows 10's switcher).
     public void RemoveTaskbarButton(nint window)
     {
         lock (_gate)

@@ -2083,9 +2083,9 @@ public sealed partial class PipWindow : Form
         _thumbnail.SetViewport(PictureArea, shown);
     }
 
-    // A hidden original brought to the front by something else (taskbar, Alt+Tab, a notification, the app itself) is
-    // shown, so nobody types into a window they can't see. A visit's own press doesn't count, nor the moment after a
-    // visit ends while the focus goes back.
+    // A hidden original that comes to the front is shown only when the person picked it (its taskbar button or
+    // thumbnail, the switcher); anything else passes the focus on and keeps it hidden. The answers are one table,
+    // ViewState.OriginalArrived (INV-20). A lifted original (Keep hidden off, covered) goes to LiftedArrived (INV-22).
     private void RevealIfActivatedElsewhere()
     {
         Guid? desktop = VirtualDesktops.CurrentDesktop();
@@ -2129,8 +2129,7 @@ public sealed partial class PipWindow : Form
                 break;
             case ViewState.Arrival.ViewTakesFocus:
                 // A hidden original is on every desktop, so on switching to one with nothing else on it Windows hands
-                // it
-                // the focus. Keep hidden, Interactive and "hidden while away" stay as they were.
+                // it the focus. Keep hidden, Interactive and "hidden while away" stay as they were.
                 User32.SetForegroundWindow(Handle);
                 Diagnostics.Log.Event("view.switchFocusKept", ("program", Diagnostics.LogValue.ProgramOf(_source)));
                 break;
