@@ -117,7 +117,7 @@ while its window is minimized or on another desktop.
 - Roll up to the title bar *(experimental)*, send to the back
 
 **Effects** *(experimental)*
-- Dark mode that keeps pictures and video as they are, or a simple filter
+- Dark mode that keeps pictures and video as they are (a simple filter on a PC without a graphics card)
 - Glass that fades only the background
 - How much Glass fades, for each app or for a single window
 - Light or dark text over Glass, with or without a soft shadow
@@ -241,7 +241,7 @@ If WinScreen is useful to you, you can [support it on Ko-fi](https://ko-fi.com/d
 
 ## Build it yourself
 
-You need the .NET 10 SDK named in `global.json`. Run `.\build.ps1 -SkipInteractive`, and the installer appears in `dist\release`.
+You need the .NET 10 SDK named in `global.json`. Run `.\build.ps1 -SkipInteractive`, and the installer appears in `dist\local`.
 
 How each feature behaves with every kind of window, and where the code decides it, is in
 [Feature compatibility](docs/FEATURE_COMPATIBILITY.md).

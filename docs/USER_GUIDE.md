@@ -61,7 +61,7 @@ The window itself is hidden while its view is open, so the view keeps going even
 To see the window again, turn off **Keep hidden** in the view's menu.
 To show a whole display or part of the screen, right-click the tray icon and choose **New view**. For part of the
 screen, choose **Region** and drag over the area.
-You can save a display or area there and open it again later from **Picture-in-Picture views → Saved sources**.
+You can save a display or area there and open it again later from **Saved sources** in the tray menu.
 
 | On a view | What happens |
 | --- | --- |

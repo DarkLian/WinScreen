@@ -113,7 +113,7 @@
 - 收起到標題列 *（實驗性）*、移到最底層
 
 **效果** *（實驗性）*
-- 保持圖片與影片原樣的深色模式，或簡單的濾鏡版本
+- 保持圖片與影片原樣的深色模式（沒有顯示卡的電腦上為簡單的濾鏡）
 - 只淡化背景的玻璃效果
 - 為每個應用程式或單一視窗設定玻璃的淡化程度
 - 玻璃上的文字可設為淺色或深色，柔和陰影可開可關
@@ -235,7 +235,7 @@ WinScreen 由 DarkLian 在 AI 助手的協助下開發。最好的幫助就是�
 
 ## 自行建置
 
-需要 `global.json` 中指定的 .NET 10 SDK。執行 `.\build.ps1 -SkipInteractive`，安裝程式會出現在 `dist\release`。
+需要 `global.json` 中指定的 .NET 10 SDK。執行 `.\build.ps1 -SkipInteractive`，安裝程式會出現在 `dist\local`。
 
 每個功能在各種視窗上的表現，以及程式碼中在哪裡決定，請見[功能相容性](docs/FEATURE_COMPATIBILITY.md)（英文）。
 

@@ -121,7 +121,7 @@ Video kann mit Ton laufen und pausiert, solange sein Fenster minimiert oder auf 
 - Bis zur Titelleiste aufrollen *(experimentell)*, nach hinten schicken
 
 **Effekte** *(experimentell)*
-- Dunkelmodus, der Bilder und Videos lässt, wie sie sind, oder ein einfacher Filter
+- Dunkelmodus, der Bilder und Videos lässt, wie sie sind (auf einem PC ohne Grafikkarte ein einfacher Filter)
 - Glas, das nur den Hintergrund ausblendet
 - Wie stark Glas ausblendet, für jede App oder für ein einzelnes Fenster
 - Helle oder dunkle Schrift über Glas, mit oder ohne weichen Schatten
@@ -252,7 +252,7 @@ Wenn dir WinScreen nützt, kannst du es [auf Ko-fi unterstützen](https://ko-fi.
 ## Selbst bauen
 
 Du brauchst das .NET 10 SDK, das in `global.json` steht. Führe `.\build.ps1 -SkipInteractive` aus, und das
-Installationsprogramm erscheint in `dist\release`.
+Installationsprogramm erscheint in `dist\local`.
 
 Wie sich jede Funktion bei jeder Art von Fenster verhält und wo der Code das entscheidet, steht in
 [Funktionskompatibilität](docs/FEATURE_COMPATIBILITY.md) (auf Englisch).

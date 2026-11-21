@@ -121,7 +121,7 @@ e pausa enquanto a janela está minimizada ou em outra área de trabalho.
 - Enrolar até a barra de título *(experimental)*, mandar para trás
 
 **Efeitos** *(experimental)*
-- Modo escuro que mantém imagens e vídeos como estão, ou um filtro simples
+- Modo escuro que mantém imagens e vídeos como estão (em PCs sem placa de vídeo, um filtro simples)
 - Vidro que esmaece só o fundo
 - Quanto o Vidro esmaece, para cada app ou para uma só janela
 - Texto claro ou escuro sobre o Vidro, com ou sem uma sombra suave
@@ -249,7 +249,7 @@ Se o WinScreen for útil para você, você pode [apoiá-lo no Ko-fi](https://ko-
 ## Compile você mesmo
 
 Você precisa do SDK do .NET 10 indicado em `global.json`. Execute `.\build.ps1 -SkipInteractive` e o instalador
-aparece em `dist\release`.
+aparece em `dist\local`.
 
 Como cada recurso se comporta com cada tipo de janela, e em que parte do código isso é decidido, está em
 [Compatibilidade dos recursos](docs/FEATURE_COMPATIBILITY.md) (em inglês).

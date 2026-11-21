@@ -31,10 +31,10 @@ Por ahora, la aplicación y la guía solo están en inglés y chino.
 
 <p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Ver la demostración de 5 minutos en YouTube</strong></a></p>
 
-Dos vistas sobre un editor de código: una reproduce un video y la otra se usa dentro de la propia vista. Te acompañan en otro escritorio virtual.
+Dos vistas sobre un editor de código: una reproduce un vídeo y la otra se usa dentro de la propia vista. Te acompañan en otro escritorio virtual.
 
 <p align="center">
-  <img src="docs/assets/demos/views.gif" width="880" alt="Dos vistas sobre un editor de código: una reproduce un video y la otra se usa dentro de la propia vista. Te acompañan en otro escritorio virtual.">
+  <img src="docs/assets/demos/views.gif" width="880" alt="Dos vistas sobre un editor de código: una reproduce un vídeo y la otra se usa dentro de la propia vista. Te acompañan en otro escritorio virtual.">
 </p>
 
 La barra de herramientas en la barra de título de una ventana: los comandos de la ventana, a un clic.
@@ -121,7 +121,7 @@ vídeo puede sonar, y se pausa mientras su ventana está minimizada o en otro es
 - Enrollar hasta la barra de título *(experimental)*, enviar al fondo
 
 **Efectos** *(experimental)*
-- Modo oscuro que deja las imágenes y los vídeos como están, o un filtro sencillo
+- Modo oscuro que deja las imágenes y los vídeos como están (en un PC sin tarjeta gráfica, un filtro sencillo)
 - Cristal que difumina solo el fondo
 - Cuánto difumina Cristal, para cada aplicación o para una sola ventana
 - Texto claro u oscuro sobre Cristal, con o sin una sombra suave
@@ -250,7 +250,7 @@ Si WinScreen te resulta útil, puedes [apoyarlo en Ko-fi](https://ko-fi.com/dark
 ## Compílalo tú mismo
 
 Necesitas el SDK de .NET 10 indicado en `global.json`. Ejecuta `.\build.ps1 -SkipInteractive` y el instalador
-aparecerá en `dist\release`.
+aparecerá en `dist\local`.
 
 Cómo se comporta cada función con cada tipo de ventana, y en qué parte del código se decide, está en
 [Compatibilidad de funciones](docs/FEATURE_COMPATIBILITY.md) (en inglés).

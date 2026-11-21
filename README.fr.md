@@ -123,7 +123,7 @@ autre bureau.
 - Enrouler jusqu'à la barre de titre *(expérimental)*, envoyer à l'arrière-plan
 
 **Effets** *(expérimental)*
-- Un mode sombre qui laisse les images et les vidéos telles quelles, ou un simple filtre
+- Un mode sombre qui laisse les images et les vidéos telles quelles (un simple filtre sur un PC sans carte graphique)
 - Un effet verre qui n'atténue que l'arrière-plan
 - L'intensité de l'effet verre, pour chaque application ou pour une seule fenêtre
 - Un texte clair ou foncé avec l'effet verre, avec ou sans ombre douce
@@ -255,7 +255,7 @@ Si WinScreen vous est utile, vous pouvez [le soutenir sur Ko-fi](https://ko-fi.c
 ## Le compiler vous-même
 
 Il vous faut le SDK .NET 10 indiqué dans `global.json`. Lancez `.\build.ps1 -SkipInteractive`, et le programme
-d'installation apparaît dans `dist\release`.
+d'installation apparaît dans `dist\local`.
 
 Le comportement de chaque fonction avec chaque type de fenêtre, et l'endroit du code qui en décide, sont décrits
 dans [Compatibilité des fonctions](docs/FEATURE_COMPATIBILITY.md) (en anglais).
