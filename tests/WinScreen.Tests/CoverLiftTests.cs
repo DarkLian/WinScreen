@@ -3,6 +3,7 @@ using WinScreen.Pip;
 using WinScreen.Tests.Support;
 using WinScreen.Windows;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace WinScreen.Tests;
 
@@ -13,7 +14,7 @@ namespace WinScreen.Tests;
 /// Keep hidden stays off throughout, and the window keeps its place, taskbar button and Alt+Tab entry.
 /// </summary>
 [Trait("Category", "RealWindows")]
-public sealed class CoverLiftTests
+public sealed class CoverLiftTests(ITestOutputHelper output)
 {
     private static readonly Rectangle Spot = new(200, 160, 520, 380);
 
@@ -320,6 +321,179 @@ public sealed class CoverLiftTests
                 Assert.Empty(problems);
                 AssertSettled(source.Handle, "Refused");
                 Assert.True(Desktop.IsAbove(cover.Handle, source.Handle));
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
+
+    /// <summary>
+    /// People mostly minimize the window in front from its taskbar button, which puts the taskbar in front first: the
+    /// window that was in use is still the one that counts, and the uncovered original is itself again.
+    /// </summary>
+    [Fact]
+    public void Minimizing_the_cover_from_its_taskbar_button_brings_the_original_back()
+    {
+        string chrome = Path.Combine(AppContext.BaseDirectory, "chrome-win64", "chrome.exe");
+        if (!File.Exists(chrome)) { Skipped.Because("The portable Chrome isn't in the test output."); return; }
+        using var source = new TargetProcess(Spot, "C81E1E", "Covered source");
+        // A window of another program covers it, with a taskbar button of its own: test targets share one.
+        var (browser, cover, root) = BrowserInputTests.Open("<!doctype html><title>CoverPage</title><body style='background:#1e64c8'>", "CoverPage", app: true, chrome);
+        try
+        {
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                Desktop.GainForegroundRights();
+                var windows = new WindowController([]);
+                Point home = Desktop.CursorPosition();
+                try
+                {
+                    Rectangle over = Spot;
+                    over.Inflate(40, 40);
+                    if (User32.IsZoomed(cover)) User32.ShowWindow(cover, User32.SW_RESTORE);
+                    User32.SetWindowPos(cover, 0, over.Left, over.Top, over.Width, over.Height, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+                    UsedOnce(source.Handle);
+                    using var view = OpenView(source.Handle, windows);
+                    Desktop.Activate(cover);
+                    Assert.True(Until(() => view.LiftedWhileCovered), "The covered original wasn't lifted.");
+
+                    nint taskbar = User32.FindWindowEx(0, 0, "Shell_TrayWnd", null);
+                    var buttons = BrowserAccessibility.Read(taskbar).Where(c => c.Bounds.Width > 0).ToList();
+                    BrowserAccessibility.Control? button = buttons.FirstOrDefault(c => c.Name.Contains("for Testing", StringComparison.Ordinal)) ??
+                        buttons.FirstOrDefault(c => c.Name.StartsWith("CoverPage", StringComparison.Ordinal));
+                    if (button is null) { Skipped.Because("No taskbar button of its own for the covering Chrome: " + string.Join(" | ", buttons.Select(c => c.Name))); return; }
+                    Desktop.MoveMouse(new Point(button.Bounds.Left + button.Bounds.Width / 2, button.Bounds.Top + button.Bounds.Height / 2));
+                    TestDesktop.Pump(200);
+                    Desktop.MouseButton(true);
+                    Thread.Sleep(60);
+                    Desktop.MouseButton(false);
+                    Assert.True(Until(() => User32.IsIconic(cover)), $"The click on '{button.Name}' didn't minimize the covering window.");
+                    Assert.True(Until(() => !view.LiftedWhileCovered), "Uncovered from the taskbar, the original stayed lifted: " + view.DescribeCover());
+                    AssertSettled(source.Handle, "Uncovered from the taskbar");
+                    output.WriteLine($"ended: {view.LastCoverEnd}, focus: {WindowInfo.Title(User32.GetForegroundWindow())}");
+                }
+                finally
+                {
+                    Desktop.MoveMouse(home);
+                    windows.RestoreAll();
+                }
+            });
+        }
+        finally { BrowserInputTests.Close(browser, root); }
+    }
+
+    /// <summary>
+    /// An original that stops answering can't be put back at once. It stays lifted and recorded, WinScreen goes on
+    /// working, and it is put back once it answers.
+    /// </summary>
+    [Fact]
+    public void An_original_that_stops_answering_is_put_back_once_it_answers_and_nothing_waits_for_it()
+    {
+        using var source = new TargetProcess(Spot, "C81E1E", "Covered source");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            var windows = new WindowController([]);
+            try
+            {
+                Rectangle over = Spot;
+                over.Inflate(30, 30);
+                using var cover = new TargetProcess(over, "1E64C8", "Covering window");
+                UsedOnce(source.Handle);
+                using var view = OpenView(source.Handle, windows);
+                Desktop.Activate(cover.Handle);
+                Assert.True(Until(() => view.LiftedWhileCovered), "The covered original wasn't lifted.");
+
+                source.Hang();
+                try
+                {
+                    User32.SetWindowPos(cover.Handle, 0, over.Left + 300, over.Top, 0, 0, User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+                    long longest = 0;
+                    for (int step = 0; step < 60; step++)
+                    {
+                        long before = Environment.TickCount64;
+                        Application.DoEvents();
+                        longest = Math.Max(longest, Environment.TickCount64 - before);
+                        Thread.Sleep(25);
+                    }
+                    Assert.True(longest < 700, $"Waiting on the original held WinScreen up for {longest} ms.");
+                    Assert.True(windows.IsLiftedWhileCovered(source.Handle) && windows.NeedsRecoveryWatcher,
+                        "An original that didn't answer was let go of while still see-through.");
+                }
+                finally { source.Unhang(); }
+                Assert.True(Until(() => !view.LiftedWhileCovered, 4000), "Answering again, the original stayed lifted.");
+                AssertSettled(source.Handle, "Answering again");
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
+
+    [Fact]
+    public void A_crash_while_lifted_leaves_the_window_as_it_was_after_recovery()
+    {
+        using var source = new TargetProcess(Spot, "C81E1E", "Covered source");
+        Rectangle over = Spot;
+        over.Inflate(30, 30);
+        using var cover = new TargetProcess(over, "1E64C8", "Covering window");
+        string path = Path.Combine(Path.GetTempPath(), $"winscreen-lift-{Guid.NewGuid():N}.json");
+        try
+        {
+            Desktop.GainForegroundRights();
+            UsedOnce(source.Handle);
+            Desktop.Activate(cover.Handle);
+            Assert.True(new WindowController([], new ChangeJournal(path)).LiftWhileCovered(source.Handle)); // Never put back: a crash.
+            Assert.True(Desktop.Alpha(source.Handle) == 0 && IsTopmost(source.Handle), "Lifted: " + Describe(source.Handle));
+
+            new WindowController([], new ChangeJournal(path)).RecoverFromJournal();
+            AssertSettled(source.Handle, "After recovery");
+        }
+        finally { File.Delete(path); }
+    }
+
+    /// <summary>
+    /// What shows where the original is while the window over it minimizes: a see-through original shows what's under
+    /// it until it is solid again. Measured with a magenta window under it.
+    /// </summary>
+    [Fact]
+    public void Minimizing_the_cover_shows_what_is_under_the_original_for_no_more_than_a_moment()
+    {
+        using var under = new TargetProcess(new Rectangle(Spot.Left - 60, Spot.Top - 60, Spot.Width + 120, Spot.Height + 120), "FF00FF", "Under it");
+        using var source = new TargetProcess(Spot, "C81E1E", "Covered source");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            var windows = new WindowController([]);
+            try
+            {
+                Rectangle over = Spot;
+                over.Inflate(30, 30);
+                using var cover = new TargetProcess(over, "1E64C8", "Covering window");
+                Desktop.Activate(under.Handle);
+                UsedOnce(source.Handle);
+                using var view = OpenView(source.Handle, windows);
+                Desktop.Activate(cover.Handle);
+                Assert.True(Until(() => view.LiftedWhileCovered), "The covered original wasn't lifted.");
+                TestDesktop.Pump(300);
+
+                Point middle = new(Spot.Left + Spot.Width / 2, Spot.Top + Spot.Height / 2);
+                Desktop.PostMessage(cover.Handle, WM_SYSCOMMAND, SC_MINIMIZE, 0);
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                long firstMagenta = -1, lastMagenta = -1;
+                int looks = 0, magenta = 0;
+                while (clock.ElapsedMilliseconds < 1000)
+                {
+                    Application.DoEvents();
+                    Color seen = Desktop.ColorOnScreen(new Rectangle(middle, new Size(1, 1)));
+                    looks++;
+                    if (Desktop.IsNear(seen, Color.Magenta, 40))
+                    {
+                        magenta++;
+                        if (firstMagenta < 0) firstMagenta = clock.ElapsedMilliseconds;
+                        lastMagenta = clock.ElapsedMilliseconds;
+                    }
+                }
+                output.WriteLine($"magenta in {magenta} of {looks} looks, from {firstMagenta} to {lastMagenta} ms; ended {view.LastCoverEnd}");
+                Assert.False(view.LiftedWhileCovered);
+                Assert.True(lastMagenta < 250, $"What was under the original showed through until {lastMagenta} ms ({magenta} of {looks} looks).");
             }
             finally { windows.RestoreAll(); }
         });

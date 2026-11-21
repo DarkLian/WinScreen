@@ -1050,7 +1050,7 @@ public sealed partial class PipWindow : Form
         _growing?.Dispose();
         // Teardown must never submit another draw: the source or destination HWND may already be gone.
         _selecting = false;
-        EndLift(CoverEnd.ViewClosed);
+        if (!EndLift(CoverEnd.ViewClosed)) SettleWhenItAnswers();
         _thumbnail?.Dispose();
         _thumbnail = null;
         if ((_hideItem.Checked || _awayFrom != Guid.Empty) && _origin.IsAvailable)
@@ -2268,6 +2268,7 @@ public sealed partial class PipWindow : Form
         FollowDrop();
         FollowOriginalInUse();
         FinishGoingTo();
+        if (_suspended && _over is not null) FollowLifted(); // A settle the original didn't answer, tried again.
         if (_suspended) return;
         if (++_desktopTick % 5 == 0) FollowDesktops();
         if (IsDisposed) return;

@@ -13,9 +13,11 @@ public sealed partial class PipWindow
     private HashSet<nint> _popupsAtLift = [];
     private CoverWatch? _coverWatch;
     private bool _coverCheckQueued;
-    private long _liftRefusedUntil;
-    private int _coverTick;
-    private const long LiftRetryMilliseconds = 5000;
+    private long _liftRefusedUntil, _settleRetryAt;
+    private int _coverTick, _liftFailures;
+    private nint _liftFront; // The last window in front while lifted, not counting the taskbar or switcher.
+    private const long LiftRetryMilliseconds = 5000, SettleRetryMilliseconds = 1000;
+    private const int MostLiftFailures = 3;
 
     internal bool LiftedWhileCovered => _over is not null;
     internal int CoverLifts { get; private set; }
@@ -36,12 +38,14 @@ public sealed partial class PipWindow
             FollowLifted();
             return;
         }
-        if (++_coverTick % 2 != 0 || !MayLift || Environment.TickCount64 < _liftRefusedUntil ||
+        if (User32.GetForegroundWindow() == _source) _liftFailures = 0; // Used again: Windows lets it go on top now.
+        if (++_coverTick % 2 != 0 || !MayLift || Environment.TickCount64 < _liftRefusedUntil || _liftFailures >= MostLiftFailures ||
             User32.GetForegroundWindow() == _source || User32.IsIconic(_source) || _windows.IsHidden(_source) ||
             _windows.IsLiftedWhileCovered(_source) || WindowInfo.IsConcealed(_source) ||
             (User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0)
             return;
-        if (!WindowInfo.TryGetFrameBounds(_source, out Rectangle bounds, out _)) return;
+        // A borderless game in front keeps the screen to itself only with nothing over it, a see-through window included.
+        if (FullScreen.IsActive() || !WindowInfo.TryGetFrameBounds(_source, out Rectangle bounds, out _)) return;
         List<nint> over = WindowStack.Over(_source);
         if (!CoverTracker.IsCovered(bounds, CoverRects(over), Screen.AllScreens.Select(screen => screen.Bounds)) ||
             !VirtualDesktops.OnCurrentDesktop(_source))
@@ -55,11 +59,15 @@ public sealed partial class PipWindow
         }
         catch (WindowOperationException failure)
         {
-            // It won't be see-through, or isn't WinScreen's to change: it freezes as before, unsaid.
+            // It won't be see-through, isn't WinScreen's to change, doesn't answer, or Windows won't put it on top (a
+            // window never used): it freezes as before, unsaid, and is tried again a few times.
             _liftRefusedUntil = Environment.TickCount64 + LiftRetryMilliseconds;
+            _liftFailures++;
             Diagnostics.Log.Swallowed(failure);
             return;
         }
+        _liftFailures = 0;
+        _liftFront = User32.GetForegroundWindow();
         _over = [.. over];
         _popupsAtLift = popups;
         _coverWatch = new CoverWatch(window => window == _source || _over?.Contains(window) == true, QueueCoverCheck);
@@ -88,6 +96,7 @@ public sealed partial class PipWindow
             return;
         }
         if (!MayLift) { EndLift(CoverEnd.View); return; }
+        if (FullScreen.IsActive()) { EndLift(CoverEnd.FullScreen); return; }
         if (User32.IsIconic(_source)) { EndLift(CoverEnd.Minimized); return; }
         nint foreground = User32.GetForegroundWindow();
         if (foreground == _source)
@@ -95,19 +104,22 @@ public sealed partial class PipWindow
             LiftedArrived(_foregroundBefore);
             return;
         }
-        nint before = _foregroundBefore;
         if (foreground != 0) _foregroundBefore = foreground;
-        if (foreground != 0 && foreground != before && foreground != Handle && !_over.Contains(foreground) &&
-            before != 0 && User32.IsWindow(before) && User32.IsIconic(before))
+        // A taskbar click puts the taskbar in front first; the window that was in use is the one that counts.
+        if (foreground != 0 && foreground != Handle && !IsPassing(foreground))
         {
-            // The window in front was minimized and Windows passed the see-through original over, for the next window
-            // down, one that was under it: without the lift the original would have had the focus, so it does. (A
-            // window closing hands the focus to the one used before it instead, wherever that is.)
-            EndLift(CoverEnd.Arrived, User32.HWND_NOTOPMOST);
-            User32.SetForegroundWindow(_source);
-            return;
+            nint before = _liftFront;
+            _liftFront = foreground;
+            if (foreground != before && !_over.Contains(foreground) && before != 0 && User32.IsWindow(before) && User32.IsIconic(before))
+            {
+                // The window in front was minimized and Windows passed the see-through original over, for the next
+                // window down, one that was under it: without the lift the original would have had the focus, so it
+                // does. (A window closing hands the focus to the one used before it instead, wherever that is.)
+                if (EndLift(CoverEnd.Arrived, User32.HWND_NOTOPMOST)) User32.SetForegroundWindow(_source);
+                return;
+            }
+            if (WindowStack.CoverBounds(foreground) is not null) _over.Add(foreground);
         }
-        if (foreground != 0 && foreground != Handle && WindowStack.CoverBounds(foreground) is not null) _over.Add(foreground);
         if (VisiblePopups().Any(popup => !_popupsAtLift.Contains(popup))) { EndLift(CoverEnd.Popup); return; }
         if (!StillCovered()) EndLift(CoverEnd.Uncovered);
     }
@@ -118,7 +130,8 @@ public sealed partial class PipWindow
     private void LiftedArrived(nint before)
     {
         _sourceWasFocused = true;
-        bool handOff = before != _source && GoneFromFront(before) && !PickedFromTaskbarOrSwitcher(before);
+        nint front = _liftFront != 0 ? _liftFront : before;
+        bool handOff = front != _source && GoneFromFront(front) && !PickedFromTaskbarOrSwitcher(before);
         if (!handOff)
         {
             EndLift(CoverEnd.Arrived, User32.HWND_NOTOPMOST);
@@ -133,7 +146,15 @@ public sealed partial class PipWindow
         User32.SetForegroundWindow(next != 0 ? next : User32.GetShellWindow());
         _sourceWasFocused = false;
         Diagnostics.Log.Event("view.coverHandOffKept", ("program", Diagnostics.LogValue.ProgramOf(_source)),
-            ("before", Diagnostics.LogValue.ClassOf(before)));
+            ("before", Diagnostics.LogValue.ClassOf(front)));
+    }
+
+    private bool IsPassing(nint window)
+    {
+        string name = WindowInfo.ClassName(window);
+        if (TaskbarClasses.Contains(name) || SwitcherClasses.Contains(name) || WindowController.IsShell(window)) return true;
+        User32.GetWindowThreadProcessId(window, out uint process);
+        return process == Environment.ProcessId;
     }
 
     // For tests and the log: what the lift counts as over the original.
@@ -169,41 +190,71 @@ public sealed partial class PipWindow
         return popups;
     }
 
-    // Under the lowest window still over it, or at the top of the ordinary windows when none is.
-    private void EndLift(CoverEnd why, nint? under = null)
+    // Under the lowest window still over it, or at the top of the ordinary windows when none is. An original that
+    // doesn't answer stays lifted and is tried again a second later.
+    private bool EndLift(CoverEnd why, nint? under = null)
     {
-        if (_over is null) return;
+        if (_over is null) return true;
+        if (Environment.TickCount64 < _settleRetryAt) return false;
         nint place = under ?? LowestOver();
         try { _windows.SettleAfterCover(_source, place); }
-        catch (WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
+        catch (WindowOperationException failure)
+        {
+            if (_settleRetryAt == 0) Diagnostics.Log.Swallowed(failure);
+            _settleRetryAt = Environment.TickCount64 + SettleRetryMilliseconds;
+            return false;
+        }
         ForgetLift(why);
+        return true;
     }
 
     private void ForgetLift(CoverEnd why)
     {
         _over = null;
         _popupsAtLift = [];
+        _liftFront = 0;
+        _settleRetryAt = 0;
         _coverWatch?.Dispose();
         _coverWatch = null;
         LastCoverEnd = why;
         Diagnostics.Log.Event("view.coverLiftEnded", ("program", Diagnostics.LogValue.ProgramOf(_source)), ("why", why));
     }
 
-    private nint LowestOver()
+    private nint LowestOver() => _over is null ? User32.HWND_NOTOPMOST : LowestOf(_over);
+
+    // A closed view can't try again itself: an original that didn't answer is put back once it does, for a minute.
+    private void SettleWhenItAnswers()
     {
-        if (_over is null) return User32.HWND_NOTOPMOST;
+        if (_over is null) return;
+        HashSet<nint> over = _over;
+        nint source = _source;
+        WindowController windows = _windows;
+        var retry = new System.Windows.Forms.Timer { Interval = (int)SettleRetryMilliseconds };
+        int tries = 0;
+        retry.Tick += (_, _) =>
+        {
+            try { windows.SettleAfterCover(source, LowestOf(over)); }
+            catch (WindowOperationException) { if (++tries < 60) return; }
+            retry.Dispose();
+        };
+        retry.Start();
+        ForgetLift(CoverEnd.ViewClosed);
+    }
+
+    private static nint LowestOf(HashSet<nint> over)
+    {
         nint lowest = User32.HWND_NOTOPMOST;
         const uint GW_CHILD = 5, GW_HWNDNEXT = 2;
         nint window = User32.GetWindow(User32.GetDesktopWindow(), GW_CHILD);
         for (int seen = 0; window != 0 && seen < 4096; seen++, window = User32.GetWindow(window, GW_HWNDNEXT))
-            if (_over.Contains(window) && User32.IsWindowVisible(window) && !User32.IsIconic(window) &&
+            if (over.Contains(window) && User32.IsWindowVisible(window) && !User32.IsIconic(window) &&
                 (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) == 0)
                 lowest = window;
         return lowest;
     }
 }
 
-internal enum CoverEnd { None, TakenOver, View, Minimized, Arrived, Popup, Uncovered, Mode, ViewMinimized, ViewClosed }
+internal enum CoverEnd { None, TakenOver, View, Minimized, Arrived, Popup, Uncovered, Mode, ViewMinimized, ViewClosed, FullScreen }
 
 // Changes that can uncover a lifted original, so it goes back at once rather than at the next tick.
 internal sealed class CoverWatch : IDisposable

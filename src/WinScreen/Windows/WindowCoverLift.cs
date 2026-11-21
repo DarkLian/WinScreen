@@ -63,17 +63,15 @@ public sealed partial class WindowController
     }
 
     // under: the lowest window that still goes over it; HWND_NOTOPMOST when none does; 0 leaves the stack alone.
+    // A window that doesn't answer stays lifted, and recorded, to be tried again.
     internal void SettleAfterCover(nint window, nint under)
     {
         lock (_gate)
         {
             if (!_changed.TryGetValue(window, out ChangedWindow? state) || !state.LiftedWhileCovered) return;
-            try { SettleAfterCover(window, state, under); }
-            finally
-            {
-                state.LiftedWhileCovered = false;
-                TrySaveJournal();
-            }
+            SettleAfterCover(window, state, under);
+            state.LiftedWhileCovered = false;
+            TrySaveJournal();
         }
     }
 
@@ -81,6 +79,7 @@ public sealed partial class WindowController
     private void SettleAfterCover(nint window, ChangedWindow state, nint under)
     {
         state.Identity.Require();
+        EnsureResponsive(window);
         if (under != 0)
         {
             if (under != User32.HWND_NOTOPMOST && under != User32.HWND_BOTTOM && (!User32.IsWindow(under) || IsTopmost(under)))
