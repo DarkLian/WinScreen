@@ -303,10 +303,9 @@ Nothing leaves your PC unless you send it yourself.
 - To change apps running as administrator, such as Task Manager, turn on **Run as administrator** in
   **Settings → General**. WinScreen keeps running as you and starts a small helper with those rights just for those apps
   (Windows may ask first). The helper starts again whenever WinScreen does, and closes with it.
-- Commands pause while a game or full-screen app is in front. Views can't appear over games in exclusive full screen.
+- Commands pause while a game or full-screen app is in front.
 - Minimizing a window that has a view hides it behind the view instead, so the view keeps updating. A window that
   can't be hidden stops drawing when minimized, and its view shows the last picture.
-- Protected video may show as black in a view.
 - Views show on every virtual desktop and keep updating while you're on another one. To keep it updating, the view
   hides its window while you're away, and its menu says **Hidden while you're on another desktop**. On Windows 10
   and on Windows 11 24H2 and later, a window kept hidden by a view goes back to its own desktop when it's shown again.
@@ -315,7 +314,5 @@ Nothing leaves your PC unless you send it yourself.
 - In smooth mode Windows draws a yellow border around the window being shown. On Windows 11 WinScreen asks to leave it
   off; you can change that in **Settings → Picture-in-Picture**. Windows 10 always shows it, so choose standard mode there if
   it bothers you.
-- Views of a display or region, and Anchors that move off content, don't show up in your own screenshots or screen sharing.
-- Results of Dark, Glass and Crop depend on how each app draws itself.
 
-See [Limitations at a glance](FEATURE_COMPATIBILITY.md#limitations-at-a-glance) for the full list.
+See [Limitations at a glance](FEATURE_COMPATIBILITY.md#limitations-at-a-glance) for what each feature can't do.
