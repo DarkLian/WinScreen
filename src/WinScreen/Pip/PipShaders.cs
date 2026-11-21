@@ -14,8 +14,12 @@ internal static class PipShaders
             // orient: quarter turns clockwise, mirrored left to right (1), and the upright picture's size.
             float4 orient;
         };
-        float4 texel(int2 p) { return sourceTexture.Load(int3(clamp(p, int2(0,0), int2(surface.xy) - 1), 0)); }
-        float4 linearAt(float2 p) { return sourceTexture.SampleLevel(linearSampler, p / surface.xy, 0); }
+        // Reads stay inside the crop, whose edge texels repeat beyond it as the frame's do: what lies outside a crop
+        // never bleeds into its edge.
+        float4 texel(int2 p) { return sourceTexture.Load(int3(clamp(p, int2(crop.xy), int2(crop.xy + crop.zw) - 1), 0)); }
+        float4 linearAt(float2 p) {
+            return sourceTexture.SampleLevel(linearSampler, clamp(p, crop.xy + 0.5, crop.xy + crop.zw - 0.5) / surface.xy, 0);
+        }
         float luma(float4 c) { return dot(c.rgb, float3(0.299, 0.587, 0.114)); }
         // Cubic convolution weights (a = -0.5) for the four texels around a fraction f.
         float4 cubic(float f) {

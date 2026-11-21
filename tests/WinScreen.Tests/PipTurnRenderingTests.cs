@@ -80,11 +80,13 @@ public sealed class PipTurnRenderingTests(ITestOutputHelper output)
         if (failure is not null) throw new Xunit.Sdk.XunitException(failure.ToString());
     }
 
-    internal static unsafe void Load(D3D11Renderer renderer, int width, int height)
+    internal static void Load(D3D11Renderer renderer, int width, int height) => Load(renderer, width, height, Pattern);
+
+    internal static unsafe void Load(D3D11Renderer renderer, int width, int height, Func<int, int, int> pattern)
     {
         int[] pixels = new int[width * height];
         for (int y = 0; y < height; y++)
-            for (int x = 0; x < width; x++) pixels[y * width + x] = Pattern(x, y);
+            for (int x = 0; x < width; x++) pixels[y * width + x] = pattern(x, y);
         fixed (int* data = pixels)
         {
             using var source = renderer.Device.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm,

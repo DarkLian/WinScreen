@@ -73,6 +73,54 @@ public sealed class PipScalingRenderingTests(ITestOutputHelper output)
         if (failure is not null) throw new Xunit.Sdk.XunitException(failure.ToString());
     }
 
+    // Review of 21 Nov 2026: enlarging read the texels around the crop, so a cropped view's edge took in up to a
+    // quarter of what lay just outside it. The same crop of two frames that differ only outside it must draw the same.
+    [WgcTheory]
+    [InlineData(true, PipScaling.Auto, 61, 47, 122, 94)] // 2x.
+    [InlineData(true, PipScaling.Auto, 61, 47, 84, 64)] // About 1.37x.
+    [InlineData(true, PipScaling.Smooth, 61, 47, 122, 94)]
+    [InlineData(true, PipScaling.Crisp, 61, 47, 84, 64)]
+    [InlineData(true, PipScaling.Auto, 257, 193, 211, 158)] // Shrinking: the cubic.
+    [InlineData(false, PipScaling.Auto, 257, 193, 140, 105)] // Shrinking: the average.
+    [InlineData(true, PipScaling.Smooth, 257, 193, 211, 158)]
+    public void Nothing_outside_the_crop_shows_in_the_view(bool compute, PipScaling scaling, int width, int height,
+        int targetWidth, int targetHeight)
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                using var destination = new Form { ClientSize = new(targetWidth + 4, targetHeight + 4), Location = new(900, 180),
+                    StartPosition = FormStartPosition.Manual, FormBorderStyle = FormBorderStyle.None, TopMost = true,
+                    ShowInTaskbar = false };
+                destination.Show();
+                Application.DoEvents();
+                using var renderer = new D3D11Renderer(destination.Handle, PipDisplay.MonitorFromWindow(destination.Handle),
+                    new(), new PipDiagnostics(), false, compute) { ViewScaling = scaling };
+                var crop = new Rectangle(5, 3, width, height);
+                var size = new Size(targetWidth, targetHeight);
+                PipTurnRenderingTests.Load(renderer, width + 12, height + 10);
+                int[,] plain = PipTurnRenderingTests.Draw(renderer, destination, ViewTurn.Upright, crop, size);
+                PipTurnRenderingTests.Load(renderer, width + 12, height + 10, (x, y) =>
+                    crop.Contains(x, y) ? PipTurnRenderingTests.Pattern(x, y) : ~PipTurnRenderingTests.Pattern(x, y) | unchecked((int)0xFF000000));
+                int[,] framed = PipTurnRenderingTests.Draw(renderer, destination, ViewTurn.Upright, crop, size);
+                int differ = 0;
+                string first = "";
+                for (int y = 0; y < targetHeight; y++)
+                    for (int x = 0; x < targetWidth; x++)
+                        if (plain[y + 2, x + 2] != framed[y + 2, x + 2] && differ++ == 0)
+                            first = $"({x},{y}): {plain[y + 2, x + 2]:X8} became {framed[y + 2, x + 2]:X8}";
+                output.WriteLine($"{width}x{height} -> {targetWidth}x{targetHeight}, {scaling}, compute {compute}: {differ} pixels differ {first}");
+                Assert.True(differ == 0, $"{differ} pixels changed with what lies outside the crop; first {first}");
+                destination.Close();
+            }
+            catch (Exception e) { failure = e; }
+        });
+        thread.SetApartmentState(ApartmentState.STA); thread.Start(); thread.Join();
+        if (failure is not null) throw new Xunit.Sdk.XunitException(failure.ToString());
+    }
+
     private static double Catrom(double t) => t < 1 ? (1.5 * t - 2.5) * t * t + 1 : t < 2 ? ((-0.5 * t + 2.5) * t - 4) * t + 2 : 0;
 
     // The pixel's value, and the range of the texels it covers.
