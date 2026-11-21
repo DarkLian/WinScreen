@@ -2,10 +2,10 @@ using WinScreen.Native;
 
 namespace WinScreen.Windows;
 
-// Highest first (agreed with the owner, 20 Nov 2026): Windows' own passing surfaces (snip, Start, search, taskbar
-// flyouts, task switching, notifications), which nothing is lifted over or the two flicker taking turns; WinScreen's
-// hover tips; its open menus, each submenu over its menu; its dialogs; Settings, unless maximized; the taskbar; the
-// toolbar, just above its window; views; pinned windows; then ordinary windows.
+// Highest first (docs/UI_ELEMENTS.md, "What stays above what"): Windows' own passing surfaces (snip, Start, search,
+// taskbar flyouts, task switching, notifications), which nothing is lifted over or the two flicker taking turns;
+// WinScreen's hover tips; its open menus, each submenu over its menu; its dialogs; Settings, unless maximized; the
+// taskbar; the toolbar, just above its window; views; pinned windows; then ordinary windows.
 // Anything WinScreen lifts to the top goes through here.
 internal static class TopLayer
 {
@@ -167,8 +167,8 @@ internal static class TopLayer
 
     // Only for WinScreen's menus, dialogs and Settings: Windows can keep another app's window over them (the app in
     // front, pinned). Going lower is usually allowed, so that window goes just under them instead, still pinned. A
-    // window WinScreen pinned that won't go under, or keeps climbing back, is unpinned until they close (agreed with the
-    // owner, 21 Nov 2026, for ExitLag); any other is left alone.
+    // window WinScreen pinned that won't go under, or keeps climbing back, is unpinned until they close (ExitLag keeps
+    // itself on top that way); any other is left alone.
     private static void PushUnder(ICollection<nint> own, ICollection<nint> allowed, LayerState state)
     {
         nint lowest = state.Order.LastOrDefault(own.Contains);

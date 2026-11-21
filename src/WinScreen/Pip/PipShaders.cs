@@ -3,7 +3,7 @@ namespace WinScreen.Pip;
 internal static class PipShaders
 {
     // Same coverage integration in CS5 and PS4. Integer loads give exact edges at 1:1.
-    // options.y is the scaling: 0 Auto, 1 Sharp (nearest texel when enlarging), 2 Smooth (linear), 3 Auto without
+    // options.y is the scaling (PipScaling): 0 Auto, 1 Crisp (nearest texel when enlarging), 2 Smooth (linear), 3 Auto without
     // the cubic filters (Windows' software renderer, where every extra texel read is the processor's).
     internal const string Source = """
         Texture2D<float4> sourceTexture : register(t0);
@@ -76,7 +76,7 @@ internal static class PipShaders
                 if (options.y == 1) return texel(int2(floor(middle)));
                 return linearAt(middle);
             }
-            // Shrinking, one texel a pixel would skip whole rows and columns, more the smaller the view: Sharp averages
+            // Shrinking, one texel a pixel would skip whole rows and columns, more the smaller the view: Crisp averages
             // them, and so does Smooth below half size (one linear read covers only two texels across).
             if (options.y == 2 && all(step < 2)) return linearAt((lo + hi) * 0.5);
             float4 sum = 0;

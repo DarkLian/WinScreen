@@ -3,9 +3,9 @@ using WinScreen.Windows;
 
 namespace WinScreen.Pip;
 
-// Owner, 22 Nov: with Keep hidden off, a view froze once another window covered its original, as browsers stop
-// drawing then. While no part of it shows, the original goes see-through above the rest (WindowController
-// .LiftWhileCovered), and goes back under whatever is still over it once a part would show again.
+// With Keep hidden off, a view froze once another window covered its original, as browsers stop drawing then.
+// While no part of it shows, the original goes see-through above the rest (WindowController.LiftWhileCovered),
+// and goes back under whatever is still over it once a part would show again.
 public sealed partial class PipWindow
 {
     // Over it when lifted, and every window brought to the front since; null while it isn't lifted.

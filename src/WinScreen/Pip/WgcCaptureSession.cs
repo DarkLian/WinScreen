@@ -89,7 +89,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     public void SetTurn(ViewTurn turn) => Change(v => v with { Turn = turn });
 
     // The view goes on passing its state after the capture ends, as when the PC is locked; the worker's signal is
-    // gone by then (1.3.0-beta.11 crashed on it).
+    // gone by then, and using it throws.
     public void SetFrozen(bool frozen)
     {
         lock (_viewGate)

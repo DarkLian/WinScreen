@@ -683,8 +683,8 @@ public sealed partial class PipWindow : Form
                 // would replace the original's own caption buttons in the view.
                 else if (!WindowController.TaskbarButtonOwnedByWindows(_source)) _windows.RemoveTaskbarButton(_source);
                 // A minimized one has no picture, and restored once parked it went back to its own place on the screen,
-                // unseen, where it isn't the window under the pointer that a browser looks for before it scrolls
-                // (owner, 22 Nov: minimized while used, then hidden again). Restored now, while it can't be seen.
+                // unseen, where it isn't the window under the pointer that a browser looks for before it scrolls.
+                // Restored now, while it can't be seen.
                 if (User32.IsIconic(_source)) User32.ShowWindow(_source, User32.SW_SHOWNOACTIVATE);
                 _windows.Park(_source);
                 PlaceForHover();
@@ -1338,7 +1338,7 @@ public sealed partial class PipWindow : Form
         _pickingUp = true;
         StepAside(true);
         // Never shown: nearly see-through, it takes the press, and goes back out of sight once Windows carries the drag
-        // (FollowDrop). Shown at its own size around the hand, it covered where a quick hand let go (owner, 21 Nov).
+        // (FollowDrop). Shown at its own size around the hand, it covered where a quick hand let go.
         const bool hold = true;
         Point pointer = Cursor.Position;
         Rectangle area = Screen.FromPoint(pointer).WorkingArea;
@@ -1989,7 +1989,7 @@ public sealed partial class PipWindow : Form
         }
     }
 
-    // Minimized while shown, an original stopped drawing and its view stayed on the last picture (owner, 22 Nov): it
+    // Minimized while shown, an original stopped drawing and its view stayed on the last picture: it
     // goes behind its view instead, as Keep hidden puts it, and goes on drawing. One that can't be hidden stays minimized.
     private void FollowOriginalMinimized()
     {
@@ -2075,7 +2075,7 @@ public sealed partial class PipWindow : Form
             ? PipGeometry.KeepUnderPointer(Bounds, size, spot)
             : PipGeometry.KeepCorner(Bounds, size, area);
         // Made smaller only to fit the screen (a quarter turn of a wide view), it keeps the size it was given, so it
-        // has it again once it fits (owner, 22 Nov).
+        // has it again once it fits.
         _fitting = true;
         try { Bounds = new Rectangle(PipGeometry.KeepInside(new Rectangle(place, size), area), size); }
         finally { _fitting = false; }

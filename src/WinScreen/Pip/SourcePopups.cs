@@ -111,7 +111,7 @@ internal sealed class SourcePopups
                 }
                 // At rest every popup goes: one the app keeps open after a visit (Chrome's tab card, which it shows while
                 // it thinks the pointer is on a tab) stayed where it was put by the view, or went where the app keeps it,
-                // beside the hidden original: on the screen's edge (owner, 22 Nov).
+                // beside the hidden original: on the screen's edge.
                 bool away = kind == Kind.DisplayOnly || view is not { } area ||
                             !Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).IntersectsWith(area);
                 // Sent off before but put back by its app: send it off again.

@@ -65,7 +65,6 @@ public static class PipGeometry
         return new Rectangle(left, top, width, height);
     }
 
-    // A wheel step that would pass the picture's own size stops on it.
     internal static int StopAtActualSize(int from, int to, int actual) =>
         (from < actual && to > actual) || (from > actual && to < actual) ? actual : to;
 
