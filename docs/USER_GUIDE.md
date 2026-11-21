@@ -76,7 +76,7 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 
 **Useful options in the view's menu**
 
-- **Keep hidden:** on for every new view, unless you turn off **Turn on Keep hidden for new views** in Settings →
+- **Keep hidden:** on for every new view, unless you turn off **Hide the original window for new views** in Settings →
   Picture-in-Picture. It hides the original and removes it from the taskbar and Alt+Tab where supported. Turn it off to
   show the original; closing the view brings it back too.
   Some apps, such as browsers, stop drawing when they're fully covered. With Keep hidden off, WinScreen keeps them

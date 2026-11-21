@@ -311,7 +311,8 @@ internal static class TopLayer
             if (IsSystemSurface(window)) { system.Add(window); continue; }
             if (User32.GetWindowThreadProcessId(window, out uint process) == 0 || process != self) continue;
             if (IsTip(window)) tips.Add(window);
-            if (Control.FromHandle(window) is ToolStripDropDown || name == "#32768") menus.Add(window);
+            // A combo box's open list too: counted as a window over its dialog, the dialog went over it.
+            if (Control.FromHandle(window) is ToolStripDropDown || name is "#32768" or "ComboLBox") menus.Add(window);
         }
         // Shell overflow panels need not be topmost before WinScreen raises something.
         foreach (string name in new[] { "NotifyIconOverflowWindow", "TopLevelWindowForOverflowXamlIsland" })

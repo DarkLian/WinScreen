@@ -275,7 +275,7 @@
   "pip.input.viewOnly": "仅查看",
   "pip.interactive": "交互式画中画",
   "pip.keepAspectRatio": "保持宽高比",
-  "pip.keepHidden.default": "为新视图开启“保持隐藏”",
+  "pip.keepHidden.default": "为新视图隐藏原窗口",
   "pip.lockPosition": "锁定位置",
   "pip.minimize": "最小化视图",
   "pip.opacity": "不透明度",

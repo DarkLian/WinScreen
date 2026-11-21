@@ -350,6 +350,56 @@ public sealed class TopLayerTests
         });
     }
 
+    /// <summary>
+    /// A list dropped down from a dialog, such as Text color in Glass levels, stays open over its dialog while the
+    /// dialog is kept on top. Counted as a window over the dialog, it put the dialog over it and the list closed.
+    /// </summary>
+    [Fact]
+    public void A_list_dropped_down_from_a_dialog_stays_open_over_it()
+    {
+        Func<IEnumerable<nint>>? before = TopLayer.Above;
+        Desktop.GainForegroundRights();
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Rectangle screen = Screen.PrimaryScreen!.WorkingArea;
+            using var dialog = new GlassLevelsWindow("test", new AppGlassLevels { Program = "test" }, _ => { }, _ => { },
+                () => new AppGlassLevels { Program = "test" }, () => true);
+            try
+            {
+                dialog.ShowAt(new Point(screen.Left + 200, screen.Top + 200));
+                Pump(200);
+                ComboBox list = Every(dialog).OfType<ComboBox>().Single();
+                TopLayer.Above = () => [dialog.Handle];
+                Point home = Desktop.CursorPosition();
+                Rectangle box = list.RectangleToScreen(list.ClientRectangle);
+                Desktop.MoveMouse(new Point(box.Left + box.Width / 2, box.Top + box.Height / 2));
+                Pump(50);
+                Desktop.MouseButton(true);
+                Thread.Sleep(50);
+                Desktop.MouseButton(false);
+                Desktop.MoveMouse(home);
+                Pump(150);
+                Assert.True(list.DroppedDown, "The click didn't open the list.");
+                nint dropped = User32.FindWindow("ComboLBox", null);
+                Rectangle shown = Desktop.BoundsOf(dropped);
+                var inList = new Point(shown.Left + shown.Width / 2, shown.Bottom - 6);
+                Assert.Equal(dropped, RootAt(inList));
+
+                for (int tick = 0; tick < 10; tick++) { TopLayer.KeepAbove(); Pump(30); }
+                Assert.True(list.DroppedDown, "The list closed: " + TopOrder(dialog.Handle, dropped, 0, 0));
+                Assert.True(RootAt(inList) == dropped, "The dialog went over its list: " + TopOrder(dialog.Handle, dropped, 0, 0));
+            }
+            finally
+            {
+                TopLayer.Above = before;
+                dialog.Close();
+            }
+        });
+
+        static IEnumerable<Control> Every(Control parent) =>
+            parent.Controls.Cast<Control>().SelectMany(child => Every(child).Prepend(child));
+    }
+
     private static nint RootAt(Point point) => User32.GetAncestor(Desktop.TopWindowAt(point), User32.GA_ROOT);
 
     // The always-on-top windows from the top, for a failure message.
