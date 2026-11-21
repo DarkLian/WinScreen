@@ -22,7 +22,9 @@ public sealed class PipNativeRenderingTests(ITestOutputHelper output)
     [InlineData(false, 257, 193, 109, 79)]
     [InlineData(true, 113, 83, 113, 83)]
     [InlineData(false, 113, 83, 113, 83)]
-    [InlineData(true, 113, 83, 109, 79)]
+    // Between 1:1 and two thirds, Best's compute path draws the clamped cubic, checked in PipScalingRenderingTests;
+    // just below two thirds it averages again.
+    [InlineData(true, 113, 83, 74, 54)]
     [InlineData(false, 113, 83, 109, 79)]
     [InlineData(true, 193, 257, 31, 79)]
     [InlineData(true, 1920, 1080, 576, 324)]
