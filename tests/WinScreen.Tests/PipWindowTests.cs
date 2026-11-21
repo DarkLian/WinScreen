@@ -500,6 +500,32 @@ public class PipWindowTests
         });
     }
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern nint SendMessage(nint window, int message, nint wParam, ref Rect rect);
+
+    /// <summary>
+    /// Dragging a corner to within a few pixels of what the view shows lands exactly on it, so the view copies the
+    /// original's pixels; further off, the drag is left alone apart from keeping the shape.
+    /// </summary>
+    [Fact]
+    public void Dragging_a_corner_close_to_the_original_size_lands_on_it()
+    {
+        using var source = new TargetProcess(SourceSpot);
+        OnUiThread(pump =>
+        {
+            using PipWindow pip = OpenAwayFromToasts(source.Handle);
+            pump(200);
+            pip.SetCrop(new Rectangle(50, 50, 300, 200));
+            pump(150);
+            var near = new Rect(700, 120, 700 + 305, 120 + 196);
+            SendMessage(pip.Handle, 0x0214 /* WM_SIZING */, 8 /* bottom right */, ref near);
+            Assert.Equal(new Rectangle(700, 120, 300, 200), Rectangle.FromLTRB(near.Left, near.Top, near.Right, near.Bottom));
+            var far = new Rect(700, 120, 700 + 330, 120 + 196);
+            SendMessage(pip.Handle, 0x0214, 8, ref far);
+            Assert.Equal(new Rectangle(700, 120, 330, 220), Rectangle.FromLTRB(far.Left, far.Top, far.Right, far.Bottom));
+        });
+    }
+
     [Fact]
     public void A_crop_survives_the_source_shrinking_and_growing_back()
     {

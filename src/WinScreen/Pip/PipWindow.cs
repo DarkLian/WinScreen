@@ -27,6 +27,7 @@ internal enum PipStateProblem
 public sealed partial class PipWindow : Form
 {
     private const int WheelStep = 40;
+    private const int SnapReach = 8;
     private const int DragThreshold = 4;
     private const int WheelNotch = 120;
     private const int StartLongSide = 480;
@@ -761,11 +762,13 @@ public sealed partial class PipWindow : Form
                 : PipGeometry.SizingHit(point, Bounds, Dpi.Scale(PipGeometry.EdgeBand, DeviceDpi));
             if (hit != 0) { m.Result = hit; return; }
         }
-        if (m.Msg == 0x0214 && _overrides.KeepAspectRatio && !_lastShown.IsEmpty)
+        if (m.Msg == 0x0214 && !_lastShown.IsEmpty)
         {
             Rect native = Marshal.PtrToStructure<Rect>(m.LParam);
-            Rectangle bounds = PipGeometry.SizeWithAspect(Rectangle.FromLTRB(native.Left, native.Top, native.Right, native.Bottom),
-                (int)m.WParam, _appliedTurn.Oriented(_lastShown));
+            Rectangle picture = _appliedTurn.Oriented(_lastShown);
+            Rectangle bounds = PipGeometry.SnapToActualSize(Rectangle.FromLTRB(native.Left, native.Top, native.Right, native.Bottom),
+                (int)m.WParam, picture.Size, Dpi.Scale(SnapReach, DeviceDpi));
+            if (_overrides.KeepAspectRatio) bounds = PipGeometry.SizeWithAspect(bounds, (int)m.WParam, picture);
             Marshal.StructureToPtr(new Rect(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom), m.LParam, false);
             m.Result = 1;
             return;
@@ -880,7 +883,9 @@ public sealed partial class PipWindow : Form
         Rectangle area = Screen.FromControl(this).WorkingArea;
         int longSide = Math.Clamp(_longSide + step, Dpi.Scale(PipGeometry.MinimumWidth, DeviceDpi),
             Math.Max(area.Width, area.Height));
-        Size size = PipGeometry.FitLongSide(longSide, _appliedTurn.Oriented(_lastShown), area.Size);
+        Rectangle picture = _appliedTurn.Oriented(_lastShown);
+        longSide = PipGeometry.StopAtActualSize(_longSide, longSide, Math.Max(picture.Width, picture.Height) + 2 * PipGeometry.Border);
+        Size size = PipGeometry.FitLongSide(longSide, picture, area.Size);
         if (step < 0 && Math.Min(size.Width, size.Height) < Dpi.Scale(PipGeometry.MinimumHeight, DeviceDpi))
             return; // Any smaller and there would be nothing left to grab.
 

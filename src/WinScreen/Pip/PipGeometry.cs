@@ -53,6 +53,22 @@ public static class PipGeometry
         return new Rectangle(left, top, width, height);
     }
 
+    // A dragged side within reach of the picture's own size stops there, where the view copies the original's pixels
+    // instead of blending them. edge is the WMSZ_* side Windows reports.
+    internal static Rectangle SnapToActualSize(Rectangle proposed, int edge, Size picture, int reach)
+    {
+        bool across = edge is 1 or 2 or 4 or 5 or 7 or 8, down = edge is 3 or 4 or 5 or 6 or 7 or 8;
+        int width = across && Math.Abs(proposed.Width - picture.Width - 2 * Border) <= reach ? picture.Width + 2 * Border : proposed.Width;
+        int height = down && Math.Abs(proposed.Height - picture.Height - 2 * Border) <= reach ? picture.Height + 2 * Border : proposed.Height;
+        int left = edge is 1 or 4 or 7 ? proposed.Right - width : proposed.Left;
+        int top = edge is 3 or 4 or 5 ? proposed.Bottom - height : proposed.Top;
+        return new Rectangle(left, top, width, height);
+    }
+
+    // A wheel step that would pass the picture's own size stops on it.
+    internal static int StopAtActualSize(int from, int to, int actual) =>
+        (from < actual && to > actual) || (from > actual && to < actual) ? actual : to;
+
     public const int Border = 0;
     public const int MinimumWidth = 160;
     public const int MinimumHeight = 60;

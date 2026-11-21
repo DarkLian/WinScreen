@@ -199,6 +199,38 @@ public class PipGeometryTests
             Assert.Equal(first, PipGeometry.FitLongSide(first.Width, source, new Size(1920, 1040)));
     }
 
+    // Dragging close to the original's own size lands exactly on it, so the view copies pixels instead of blending
+    // them. The side being dragged moves; the other one stays put.
+    [Theory]
+    [InlineData(8, 100, 100, 805, 497, 100, 100, 800, 500)] // Bottom right, a few pixels off on both sides.
+    [InlineData(4, 100, 100, 795, 603, 95, 100, 800, 603)] // Top left: the left side snaps, the top was too far.
+    [InlineData(2, 100, 100, 797, 497, 100, 100, 800, 497)] // Right side only: the height isn't being dragged.
+    [InlineData(8, 100, 100, 820, 520, 100, 100, 820, 520)] // Too far off: left alone.
+    public void A_side_dragged_close_to_the_original_size_stops_on_it(int edge, int left, int top, int width, int height,
+        int expectedLeft, int expectedTop, int expectedWidth, int expectedHeight)
+    {
+        Rectangle snapped = PipGeometry.SnapToActualSize(new Rectangle(left, top, width, height), edge, new Size(800, 500), 8);
+        Assert.Equal(new Rectangle(expectedLeft, expectedTop, expectedWidth, expectedHeight), snapped);
+    }
+
+    [Fact]
+    public void Keeping_the_shape_after_snapping_gives_exactly_the_original_size()
+    {
+        var picture = new Rectangle(0, 0, 1366, 705);
+        Rectangle snapped = PipGeometry.SnapToActualSize(new Rectangle(50, 50, 1361, 690), 8, picture.Size, 8);
+        Assert.Equal(new Size(1366, 705), PipGeometry.SizeWithAspect(snapped, 8, picture).Size);
+    }
+
+    [Theory]
+    [InlineData(760, 800, 780, 780)] // Passing the original's size stops on it.
+    [InlineData(800, 760, 780, 780)]
+    [InlineData(780, 820, 780, 820)] // Starting on it, the next step moves on.
+    [InlineData(700, 740, 780, 740)] // Not reaching it: unchanged.
+    public void A_wheel_step_past_the_original_size_stops_on_it(int from, int to, int actual, int expected)
+    {
+        Assert.Equal(expected, PipGeometry.StopAtActualSize(from, to, actual));
+    }
+
     [Theory]
     [InlineData(1400, 700, 1500, 660)] // Bottom right: the far corner stays.
     [InlineData(100, 100, 100, 100)] // Top left: the near corner stays.
