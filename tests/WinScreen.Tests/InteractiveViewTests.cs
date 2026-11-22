@@ -119,7 +119,7 @@ public sealed class InteractiveViewTests
         Desktop.MoveMouse(point);
         Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null, 2000),
             $"The visit didn't start: pointer={Desktop.CursorPosition()}; view={view.Bounds}; visible={view.Visible}; {view.StateDescription}; " +
-            $"in front {FrontDescription()}; last visit ended: {view.LastVisitEnd}; {view.DiagnosticSnapshot}");
+            $"in front {Desktop.FrontDescription()}; last visit ended: {view.LastVisitEnd}; {view.DiagnosticSnapshot}");
         Thread.Sleep(100);
     }
 
@@ -712,14 +712,6 @@ public sealed class InteractiveViewTests
         Assert.True(Desktop.WaitFor(() => (front = User32.GetForegroundWindow()) == window, 4000),
             $"The administrator window didn't come to the front: {WindowInfo.ClassName(front)} of {WindowInfo.ProgramOf(front)} is; " +
             $"it is at {bounds}, visible {User32.IsWindowVisible(window)}, under the click {WindowInfo.ClassName(Desktop.TopWindowAt(new Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2)))}.");
-    }
-
-    private static string FrontDescription()
-    {
-        nint front = User32.GetForegroundWindow();
-        User32.GetWindowThreadProcessId(front, out uint process);
-        return $"0x{front:X} {WindowInfo.ClassName(front)} of {WindowInfo.ProgramOf(front)}, administrator {process != 0 && ProcessInfo.IsElevated(process)}, " +
-               $"minimized {User32.IsIconic(front)}";
     }
 
     private static bool OrdinaryInFront()

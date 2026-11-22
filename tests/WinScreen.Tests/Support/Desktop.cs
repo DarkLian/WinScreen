@@ -411,6 +411,15 @@ internal static partial class Desktop
         MouseButton(false);
     }
 
+    /// <summary>The window in front, for failure messages: whose it is, and whether it runs as administrator.</summary>
+    public static string FrontDescription()
+    {
+        nint front = User32.GetForegroundWindow();
+        User32.GetWindowThreadProcessId(front, out uint process);
+        return $"0x{front:X} {Windows.WindowInfo.ClassName(front)} of {Windows.WindowInfo.ProgramOf(front)}, administrator {process != 0 && ProcessInfo.IsElevated(process)}, " +
+               $"minimized {User32.IsIconic(front)}";
+    }
+
     public static Point CursorPosition()
     {
         GetCursorPos(out NativePoint point);

@@ -50,7 +50,7 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
     {
         var pointer = new Point(view.Left + view.Width / 3, view.Top + view.Height / 3);
         Desktop.SlideMouse(pointer);
-        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "The message visit did not start.");
+        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "The message visit did not start; in front " + Desktop.FrontDescription());
         Thread.Sleep(100);
         return pointer;
     }
@@ -282,7 +282,7 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
         {
             Point now = new(view.Left + view.Width / 3, view.Top + view.Height / 3);
             Desktop.MoveMouse(now); // At once, while the visit is still starting.
-            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No visit.");
+            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No visit; in front " + Desktop.FrontDescription());
             Thread.Sleep(300);
             Rectangle parked = Desktop.BoundsOf(source.Handle);
             var (area, shown) = view.LiveInteraction!.CurrentGeometry;
@@ -354,7 +354,7 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
             Point pointer = new(view.Left + picture.Left + 60 * picture.Width / 400,
                 view.Top + picture.Top + 50 * picture.Height / 300);
             Desktop.SlideMouse(pointer);
-            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null));
+            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No visit; in front " + Desktop.FrontDescription());
             Thread.Sleep(100);
             Desktop.MouseButton(true);
             Thread.Sleep(40);
