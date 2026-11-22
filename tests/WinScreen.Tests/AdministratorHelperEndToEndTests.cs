@@ -135,6 +135,40 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
         Assert.True(Desktop.WaitFor(() => Desktop.Alpha(adminTarget) is null or 255, 5000), "The helper didn't bring its window back as it went.");
     }
 
+    private static bool ClickThrough(nint window) => ((long)User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TRANSPARENT) != 0;
+
+    // Owner, 22 Nov: an administrator app made click-through (the helper's), then Ctrl+Alt+R: Restore all put back only
+    // the ordinary copy's windows, and the app stayed click-through.
+    [Fact]
+    public void Restore_all_and_Restore_window_reach_the_helpers_windows()
+    {
+        if (!ElevatesWithoutAsking) { Skipped.Because("Windows asks before running as administrator here, and a test can't answer."); return; }
+        if (ProcessInfo.SelfElevated || !ProcessInfo.CanElevate) { Skipped.Because("Needs an administrator account and a test run that isn't elevated."); return; }
+        Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0 && HelperProcess() == 0, "Close the running WinScreen before these tests.");
+        new AppSettings { WelcomeShown = true, ShowToolbar = false, RunAsAdministrator = true }.Save(Path.Combine(_data, "settings.json"));
+        using var ordinaryTarget = new TargetProcess(new Rectangle(140, 160, 420, 300), title: "WinScreen helper restore ordinary");
+        nint adminTarget = ElevatedTarget("WinScreen helper restore admin", new Rectangle(620, 160, 420, 300));
+        _app = Start();
+        Assert.True(Desktop.WaitFor(() => HelperProcess() != 0, 20000), "No helper started.");
+        Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("helper.connected"), 15000), "The helper didn't connect.");
+
+        Assert.Equal(0, Run("TogglePin", "title:WinScreen helper restore ordinary"));
+        Assert.Equal(0, Run("TogglePin", "title:WinScreen helper restore admin"));
+        Assert.Equal(0, Run("ToggleClickThrough", "title:WinScreen helper restore admin"));
+        Assert.True(Desktop.WaitFor(() => Topmost(ordinaryTarget.Handle) && Topmost(adminTarget) && ClickThrough(adminTarget), 3000),
+            "The windows weren't changed:\n" + Log("winscreen-administrator.log"));
+
+        Assert.Equal(0, Run("RestoreAll", "active"));
+        Assert.True(Desktop.WaitFor(() => !Topmost(ordinaryTarget.Handle), 3000), "Restore all left the ordinary copy's window pinned.");
+        Assert.True(Desktop.WaitFor(() => !Topmost(adminTarget) && !ClickThrough(adminTarget), 3000),
+            "Restore all didn't reach the helper's window:\n" + Log("winscreen-administrator.log"));
+
+        Assert.Equal(0, Run("ToggleClickThrough", "title:WinScreen helper restore admin"));
+        Assert.True(Desktop.WaitFor(() => ClickThrough(adminTarget), 3000), "The window wasn't made click-through again.");
+        Assert.Equal(0, Run("RestoreWindow", "title:WinScreen helper restore admin"));
+        Assert.True(Desktop.WaitFor(() => !ClickThrough(adminTarget), 3000), "Restore window didn't reach the helper's window.");
+    }
+
     // Owner, 1.3.0: Ctrl+right-click on a pinned administrator app opened the helper's menu, which closed again at once
     // each time, the log saying the app took the focus back.
     [Fact]

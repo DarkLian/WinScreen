@@ -19,6 +19,8 @@ public sealed partial class TrayApplication
 
     internal uint HelperProcess => _helper?.Peer ?? 0;
 
+    private bool _forOrdinaryCopy;
+
     // Started through the sign-in task, this copy may already have a helper. Followed every two seconds: a helper that
     // went is started again, a few times.
     private void StartHelper()
@@ -91,6 +93,9 @@ public sealed partial class TrayApplication
                 break;
             case HelperLink.OpenSettings:
                 OpenSettings();
+                break;
+            case HelperLink.Run when message.Command == (int)AppCommand.RestoreAll:
+                Run(AppCommand.RestoreAll, 0);
                 break;
             case HelperLink.Save when message.Text is { } json:
                 try
@@ -174,7 +179,9 @@ public sealed partial class TrayApplication
                 // Only a window this copy may act on: an administrator app's, or none for the commands for every
                 // window.
                 if (window != 0 && (!User32.IsWindow(window) || !CanReach(window))) return;
-                RunOnDisplay((AppCommand)message.Command, window, message.DisplayBounds);
+                _forOrdinaryCopy = true;
+                try { RunOnDisplay((AppCommand)message.Command, window, message.DisplayBounds); }
+                finally { _forOrdinaryCopy = false; }
                 break;
             case HelperLink.SettingsSaved:
                 ReloadSettings();

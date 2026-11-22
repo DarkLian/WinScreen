@@ -249,6 +249,14 @@ public sealed partial class TrayApplication
 
     private void PutEveryWindowBack()
     {
+        // Administrator apps' windows are the helper's. The ordinary copy asks it to put them back too; asked from the
+        // helper's own menu, the ordinary copy is told, and it does both.
+        if (_role == AppRole.Helper)
+        {
+            if (!_forOrdinaryCopy && _ordinary?.Send(new HelperLink.Message(HelperLink.Run, (int)AppCommand.RestoreAll)) == true) return;
+        }
+        else _helper?.Send(new HelperLink.Message(HelperLink.Run, (int)AppCommand.RestoreAll));
+
         int failed = 0;
         foreach (WindowPart part in PutBackOrder.PutBack)
             failed += TakeAwayEverywhere(part);
@@ -258,7 +266,7 @@ public sealed partial class TrayApplication
                 string.Join(Environment.NewLine, _windows.RestoreFailures));
         else if (_windows.RecoveryBlocked)
             Alert(T("recovery.attention"), _windows.RecoveryWarning!);
-        else
+        else if (_role != AppRole.Helper) // The ordinary copy says it went well, once.
             Confirm(T("window.restoreAll"), T("recovery.restored"));
     }
 
