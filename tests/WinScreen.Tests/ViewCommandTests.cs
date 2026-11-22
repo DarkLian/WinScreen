@@ -38,6 +38,58 @@ public sealed class ViewCommandTests(Xunit.Abstractions.ITestOutputHelper output
     private static T Field<T>(TrayApplication app, string name) =>
         (T)typeof(TrayApplication).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(app)!;
 
+    // Owner, 22 Nov: Claude, an administrator app, made click-through by the helper; the tray of the ordinary copy is the
+    // way back, so it offers what the helper holds: its click-through and pinned windows, and its views.
+    [Fact]
+    public void The_tray_offers_what_the_helper_holds()
+    {
+        string folder = Directory.CreateTempSubdirectory("winscreen-helperstate-").FullName;
+        try
+        {
+            OnUiThread(pump =>
+            {
+                var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
+                var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true };
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                try
+                {
+                    ContextMenuStrip menu = Field<NotifyIcon>(app, "_tray").ContextMenuStrip!;
+                    string clickThroughOff = CommandCatalog.Name(AppCommand.ClickThroughOffEverywhere), unpin = CommandCatalog.Name(AppCommand.UnpinEverywhere);
+                    ToolStripItem Item(string text) => menu.Items.Cast<ToolStripItem>().Single(item => item.Text == text);
+                    void Open() { menu.Show(new Point(200, 200)); pump(100); }
+                    void Close() { menu.Close(); pump(50); }
+
+                    Open();
+                    Assert.False(Item(clickThroughOff).Available || Item(unpin).Available, "Offered with nothing changed.");
+                    Close();
+
+                    MethodInfo fromHelper = typeof(TrayApplication).GetMethod("FromHelper", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                    var view = new HelperLink.HelperView(0x1234, 0x5678, "PiP - Claude", Suspended: true, SourceIsWindow: true,
+                        ClickThrough: true, CanRetry: false, PointedAt: 1, SuspendedAt: 2);
+                    fromHelper.Invoke(app, [new HelperLink.Message(HelperLink.State, Counts: [1, 1], Views: [view])]);
+                    Open();
+                    Assert.True(Item(clickThroughOff).Available, "Turn off click-through everywhere isn't offered for the helper's window.");
+                    Assert.True(Item(unpin).Available, "Unpin everywhere isn't offered for the helper's window.");
+                    var listed = (ToolStripMenuItem)Item("PiP - Claude");
+                    string[] actions = listed.DropDownItems.Cast<ToolStripItem>().Select(item => item.Text ?? "").ToArray();
+                    Assert.Equal([Localization.UiText.T("pip.restoreView"), Localization.UiText.T("pip.goToOriginal"),
+                        Localization.UiText.T("pip.reenableClicks"), Localization.UiText.T("common.close")], actions);
+                    Close();
+
+                    // The window last in front is an administrator app's: its ticks are what the helper says.
+                    MethodInfo isOn = typeof(TrayApplication).GetMethod("IsOn", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                    fromHelper.Invoke(app, [new HelperLink.Message(HelperLink.State, Window: 0x9999, Counts: [1, 1], Views: [view],
+                        On: [(int)AppCommand.TogglePin, (int)AppCommand.ToggleClickThrough])]);
+                    Assert.True((bool)isOn.Invoke(app, [AppCommand.TogglePin, (nint)0x9999])!);
+                    Assert.True((bool)isOn.Invoke(app, [AppCommand.ToggleClickThrough, (nint)0x9999])!);
+                    Assert.False((bool)isOn.Invoke(app, [AppCommand.ToggleAnchor, (nint)0x9999])!);
+                }
+                finally { app.ExitThread(); pump(200); }
+            });
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
     [WgcFact]
     public void View_keys_reach_the_view_in_front_or_the_view_of_the_window_in_front()
     {

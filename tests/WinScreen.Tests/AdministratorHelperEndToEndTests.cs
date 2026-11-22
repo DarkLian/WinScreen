@@ -169,6 +169,108 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
         Assert.True(Desktop.WaitFor(() => !ClickThrough(adminTarget), 3000), "Restore window didn't reach the helper's window.");
     }
 
+    private static int Count(string text, string part) => text.Split(part).Length - 1;
+
+    // The ordinary copy has the keys, the helper has an administrator app's view, which never takes the focus: a key
+    // pressed with the pointer on that view, or last on it, is for it.
+    [Fact]
+    public void A_view_key_reaches_the_helpers_view_under_the_pointer_or_last_pointed_at()
+    {
+        if (!ElevatesWithoutAsking) { Skipped.Because("Windows asks before running as administrator here, and a test can't answer."); return; }
+        if (ProcessInfo.SelfElevated || !ProcessInfo.CanElevate) { Skipped.Because("Needs an administrator account and a test run that isn't elevated."); return; }
+        Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0 && HelperProcess() == 0, "Close the running WinScreen before these tests.");
+        Dictionary<AppCommand, string> keys = CommandCatalog.All.ToDictionary(command => command, _ => "");
+        keys[AppCommand.ViewFreeze] = "Ctrl+Alt+J";
+        new AppSettings { WelcomeShown = true, ShowToolbar = false, ShowNotifications = false, RunAsAdministrator = true, Hotkeys = keys }
+            .Save(Path.Combine(_data, "settings.json"));
+        using var ordinaryTarget = new TargetProcess(new Rectangle(140, 520, 420, 260), title: "WinScreen helper keys ordinary");
+        nint adminTarget = ElevatedTarget("WinScreen helper keys admin", new Rectangle(620, 160, 420, 300));
+        _app = Start();
+        uint helper = 0;
+        Assert.True(Desktop.WaitFor(() => (helper = HelperProcess()) != 0, 20000), "No helper started.");
+        Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("helper.connected"), 15000), "The helper didn't connect.");
+
+        Assert.Equal(0, Run("OpenPip", "title:WinScreen helper keys admin"));
+        nint view = 0;
+        Assert.True(Desktop.WaitFor(() => (view = Desktop.FindWindow(null, "PiP - WinScreen helper keys admin")) != 0 && User32.IsWindowVisible(view), 8000),
+            "The helper's view didn't open:\n" + Log("winscreen-administrator.log"));
+        User32.GetWindowThreadProcessId(view, out uint viewProcess);
+        Assert.Equal(helper, viewProcess);
+        Assert.True(User32.GetWindowRect(view, out var rect));
+        var onView = new Point((rect.Left + rect.Right) / 2, (rect.Top + rect.Bottom) / 2);
+        Thread.Sleep(1500);
+
+        // On the view, with the ordinary window in front.
+        Desktop.GainForegroundRights();
+        Desktop.Activate(ordinaryTarget.Handle);
+        Desktop.MoveMouse(onView);
+        Thread.Sleep(600);
+        Desktop.Press(Keys.J, Keys.ControlKey, Keys.Menu);
+        Assert.True(Desktop.WaitFor(() => Log("winscreen-administrator.log").Contains("view.frozen on=yes"), 4000),
+            "The key didn't reach the helper's view under the pointer:\n" + Log("winscreen.log"));
+
+        // Off every view now: the view the pointer was last on.
+        Desktop.MoveMouse(new Point(ordinaryTarget.Bounds.Left + 40, ordinaryTarget.Bounds.Top + 60));
+        Thread.Sleep(1500);
+        Desktop.Press(Keys.J, Keys.ControlKey, Keys.Menu);
+        Assert.True(Desktop.WaitFor(() => Log("winscreen-administrator.log").Contains("view.frozen on=no"), 4000),
+            "The key didn't reach the helper's view the pointer was last on:\n" + Log("winscreen.log"));
+        Assert.DoesNotContain("command.noView", Log("winscreen.log"));
+
+        // Restore all closes the helper's view too, and its original is back.
+        Assert.Equal(0, Run("RestoreAll", "active"));
+        Assert.True(Desktop.WaitFor(() => !User32.IsWindow(view) || !User32.IsWindowVisible(view), 4000), "Restore all left the helper's view open.");
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(adminTarget) is null or 255, 4000), "The administrator window stayed hidden.");
+    }
+
+    // Owner, 22 Nov: Claude, an administrator app, made click-through. The tray's "Turn off click-through everywhere"
+    // and "Unpin everywhere" come and go with the helper's windows too, and each says it's done once.
+    [Fact]
+    public void Everywhere_commands_reach_the_helpers_windows_and_say_so_once()
+    {
+        if (!ElevatesWithoutAsking) { Skipped.Because("Windows asks before running as administrator here, and a test can't answer."); return; }
+        if (ProcessInfo.SelfElevated || !ProcessInfo.CanElevate) { Skipped.Because("Needs an administrator account and a test run that isn't elevated."); return; }
+        Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0 && HelperProcess() == 0, "Close the running WinScreen before these tests.");
+        new AppSettings { WelcomeShown = true, ShowToolbar = false, RunAsAdministrator = true }.Save(Path.Combine(_data, "settings.json"));
+        nint adminTarget = ElevatedTarget("WinScreen helper everywhere admin", new Rectangle(620, 160, 420, 300));
+        _app = Start();
+        Assert.True(Desktop.WaitFor(() => HelperProcess() != 0, 20000), "No helper started.");
+        Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("helper.connected"), 15000), "The helper didn't connect.");
+
+        Assert.Equal(0, Run("TogglePin", "title:WinScreen helper everywhere admin"));
+        Assert.Equal(0, Run("ToggleClickThrough", "title:WinScreen helper everywhere admin"));
+        Assert.True(Desktop.WaitFor(() => Topmost(adminTarget) && ClickThrough(adminTarget), 3000), "The window wasn't changed.");
+        // The ordinary copy hears what the helper holds.
+        Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("helper.state clickThrough=1 pinned=1"), 4000),
+            "The ordinary copy doesn't know the helper's window is changed:\n" + Log("winscreen.log"));
+
+        Thread.Sleep(500);
+        int notices = Count(Log("winscreen-administrator.log"), "notice.forwarded");
+        Assert.Equal(0, Run("ClickThroughOffEverywhere", "active"));
+        Assert.True(Desktop.WaitFor(() => !ClickThrough(adminTarget), 3000), "Click-through stayed on the helper's window.");
+        Assert.Equal(0, Run("UnpinEverywhere", "active"));
+        Assert.True(Desktop.WaitFor(() => !Topmost(adminTarget), 3000), "The helper's window stayed pinned.");
+        Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("helper.state clickThrough=0 pinned=0"), 4000),
+            "The ordinary copy still thinks the helper's window is changed.");
+        Thread.Sleep(500);
+        Assert.Equal(notices, Count(Log("winscreen-administrator.log"), "notice.forwarded")); // The ordinary copy's notice only.
+
+        // Hide toolbar flips in both copies. A helper started after it was hidden hides it too, and the next press shows
+        // it in both: neither ends up the other way.
+        Assert.Equal(0, Run("HideToolbar", "active"));
+        uint first = HelperProcess();
+        KillElevated(first);
+        uint second = 0;
+        Assert.True(Desktop.WaitFor(() => (second = HelperProcess()) != 0 && second != first, 20000), "No new helper started.");
+        Assert.True(Desktop.WaitFor(() => Count(Log("winscreen.log"), "helper.connected") >= 2, 15000), "The new helper didn't connect.");
+        string NewHelpersLog() => Log("winscreen-administrator.log")[Log("winscreen-administrator.log").LastIndexOf("log.started", StringComparison.Ordinal)..];
+        Assert.True(Desktop.WaitFor(() => NewHelpersLog().Contains("command name=HideToolbar"), 4000), "The new helper wasn't told the toolbar is hidden.");
+        Assert.Equal(0, Run("HideToolbar", "active"));
+        Thread.Sleep(500);
+        Assert.Equal(0, Run("UnpinEverywhere", "active")); // The log writes a repeated line once another comes.
+        Assert.True(Desktop.WaitFor(() => Count(NewHelpersLog(), "command name=HideToolbar") == 2, 4000), "The new helper didn't show the toolbar again.");
+    }
+
     // Owner, 1.3.0: Ctrl+right-click on a pinned administrator app opened the helper's menu, which closed again at once
     // each time, the log saying the app took the focus back.
     [Fact]

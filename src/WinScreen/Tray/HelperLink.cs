@@ -17,9 +17,17 @@ internal static class HelperLink
     public const string OpenSettings = "openSettings";
     // The ordinary copy is the settings' one writer.
     public const string Save = "save";
+    // The helper's own windows and views, which the ordinary copy's tray and keys reach through it.
+    public const string State = "state";
+    public const string ViewAction = "view";
+    // The administrator app's window the ordinary copy's tray shows: the helper's state then says what is on for it.
+    public const string Watch = "watch";
+
+    internal sealed record HelperView(long Handle, long Source, string Title, bool Suspended, bool SourceIsWindow,
+        bool ClickThrough, bool CanRetry, long PointedAt, long SuspendedAt);
 
     internal sealed record Message(string Kind, int Command = 0, long Window = 0, int[]? Display = null, string? Title = null,
-        string? Text = null, int Icon = 0)
+        string? Text = null, int Icon = 0, int[]? Counts = null, HelperView[]? Views = null, int[]? On = null)
     {
         internal Rectangle? DisplayBounds => Display is [var x, var y, var width, var height] ? new Rectangle(x, y, width, height) : null;
 

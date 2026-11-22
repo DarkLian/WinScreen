@@ -295,8 +295,8 @@ public sealed partial class TrayApplication : ApplicationContext
         void Ticks()
         {
             builder.Refresh(_targetTitle.DropDownItems);
-            everywhere[AppCommand.ClickThroughOffEverywhere].Available = _windows.ClickThroughCount > 0 || ClickThroughViews().Any();
-            everywhere[AppCommand.UnpinEverywhere].Available = _windows.PinnedCount > 0;
+            everywhere[AppCommand.ClickThroughOffEverywhere].Available = AnyClickThrough;
+            everywhere[AppCommand.UnpinEverywhere].Available = _windows.PinnedCount > 0 || HelperCount(1) > 0;
             everywhere[AppCommand.HideAnchors].Checked = _anchors.Hidden;
             everywhere[AppCommand.HideToolbar].Checked = _toolbarHidden;
         }
@@ -316,8 +316,8 @@ public sealed partial class TrayApplication : ApplicationContext
             newView.ShortcutKeyDisplayString = MenuHotkey(AppCommand.PickPipSource);
             foreach ((AppCommand command, ToolStripMenuItem item) in everywhere)
                 item.ShortcutKeyDisplayString = MenuHotkey(command);
-            everywhere[AppCommand.ClickThroughOffEverywhere].Available = _windows.ClickThroughCount > 0 || ClickThroughViews().Any();
-            everywhere[AppCommand.UnpinEverywhere].Available = _windows.PinnedCount > 0;
+            everywhere[AppCommand.ClickThroughOffEverywhere].Available = AnyClickThrough;
+            everywhere[AppCommand.UnpinEverywhere].Available = _windows.PinnedCount > 0 || HelperCount(1) > 0;
             everywhere[AppCommand.HideAnchors].Checked = _anchors.Hidden;
             everywhere[AppCommand.HideToolbar].Checked = _toolbarHidden;
             _statusItem.Available = _lastStatus != T("tray.noActions");
@@ -436,6 +436,22 @@ public sealed partial class TrayApplication : ApplicationContext
             if (view.CanRetryCapture)
                 item.DropDownItems.Add(T("pip.backend.retry"), null, (_, _) => view.RetryCapture());
             item.DropDownItems.Add(T("common.close"), null, (_, _) => view.Close());
+            items.Add(item);
+        }
+        // Administrator apps' views are the helper's: what is done here, it does.
+        foreach (HelperLink.HelperView view in HelperViews)
+        {
+            var item = new ToolStripMenuItem(MenuText(view.Title)).WithIcon(MenuParts.Monitor);
+            nint handle = (nint)view.Handle;
+            if (view.Suspended)
+                item.DropDownItems.Add(T("pip.restoreView"), null, (_, _) => RunHelperViewAction(handle, "resume"));
+            if (view.SourceIsWindow)
+                item.DropDownItems.Add(T("pip.goToOriginal"), null, (_, _) => RunHelperViewAction(handle, "goTo"));
+            if (view.ClickThrough)
+                item.DropDownItems.Add(T("pip.reenableClicks"), null, (_, _) => RunHelperViewAction(handle, "clicks"));
+            if (view.CanRetry)
+                item.DropDownItems.Add(T("pip.backend.retry"), null, (_, _) => RunHelperViewAction(handle, "retry"));
+            item.DropDownItems.Add(T("common.close"), null, (_, _) => RunHelperViewAction(handle, "close"));
             items.Add(item);
         }
         foreach (var (source, tile) in _shrunk)
@@ -858,7 +874,7 @@ public sealed partial class TrayApplication : ApplicationContext
     private bool IsAvailable(AppCommand command) =>
         _settings.ExperimentalFeatures || !CommandCatalog.IsExperimental(command);
 
-    private bool IsOn(AppCommand command, nint window) => _commands.IsOn(command, window);
+    private bool IsOn(AppCommand command, nint window) => HelperSaysOn(command, window) ?? _commands.IsOn(command, window);
 
     private nint TargetOf(nint foreground)
     {
@@ -894,6 +910,7 @@ public sealed partial class TrayApplication : ApplicationContext
 
             ApplySavedSetup(foreground);
         }
+        if (_role != AppRole.Helper) WatchForHelper(_lastIdentity?.Window ?? 0);
 
         FollowModifierHook(foreground);
         FollowCropControls();
@@ -1593,13 +1610,34 @@ public sealed partial class TrayApplication : ApplicationContext
     // A view doesn't take the focus, so a key pressed for it usually finds another window in front, often one with no
     // view (its original is hidden): then the view under the pointer, its title bar included, or else the one the
     // pointer was last on. A minimized view is nowhere, so its key brings back the one minimized last.
-    private PipWindow? ViewFor(AppCommand command, nint window)
+    private PipWindow? ViewFor(AppCommand command, nint window) => ViewTarget(command, window).Own;
+
+    // An administrator app's view is the helper's, which the ordinary copy knows from what the helper last said: the
+    // same steps choose between its views and the helper's.
+    private (PipWindow? Own, nint Helpers) ViewTarget(AppCommand command, nint window)
     {
-        if (ViewOf(window) is { } view) return view;
-        if (ViewUnderPointer() is { } pointed) return pointed;
-        if (command == AppCommand.ViewMinimize && _viewsInOrder.Where(each => each.IsSuspended).MaxBy(each => each.SuspendedAt) is { } minimized)
-            return minimized;
-        return _viewsInOrder.Where(each => !each.IsSuspended && each.PointedAt > 0).MaxBy(each => each.PointedAt);
+        if (ViewOf(window) is { } view) return (view, 0);
+        HelperLink.HelperView[] helpers = HelperViews;
+        if (window != 0 && helpers.FirstOrDefault(each => each.Handle == window || each.Source == window) is { } ofWindow)
+            return (null, (nint)ofWindow.Handle);
+        if (ViewUnderPointer() is { } pointed) return (pointed, 0);
+        nint under = UnderPointer();
+        if (under != 0 && _helper is { Connected: true } link)
+        {
+            User32.GetWindowThreadProcessId(under, out uint process);
+            if (process == link.Peer && helpers.Any(each => each.Handle == under)) return (null, under);
+        }
+        if (command == AppCommand.ViewMinimize)
+        {
+            PipWindow? own = _viewsInOrder.Where(each => each.IsSuspended).MaxBy(each => each.SuspendedAt);
+            HelperLink.HelperView? helperMinimized = helpers.Where(each => each.Suspended).MaxBy(each => each.SuspendedAt);
+            if (own is not null || helperMinimized is not null)
+                return helperMinimized is null || own is not null && own.SuspendedAt >= helperMinimized.SuspendedAt
+                    ? (own, 0) : (null, (nint)helperMinimized.Handle);
+        }
+        PipWindow? last = _viewsInOrder.Where(each => !each.IsSuspended && each.PointedAt > 0).MaxBy(each => each.PointedAt);
+        HelperLink.HelperView? lastHelpers = helpers.Where(each => !each.Suspended && each.PointedAt > 0).MaxBy(each => each.PointedAt);
+        return lastHelpers is null || last is not null && last.PointedAt >= lastHelpers.PointedAt ? (last, 0) : (null, (nint)lastHelpers.Handle);
     }
 
     private PipWindow? ViewUnderPointer() => ViewOf(UnderPointer()) is { } view && view.Handle == UnderPointer() ? view : null;
@@ -1614,7 +1652,15 @@ public sealed partial class TrayApplication : ApplicationContext
     // as the view is what the key was for.
     private CommandOutcome RunOnView(AppCommand command, CommandDefinition definition, nint window)
     {
-        if (ViewFor(command, window) is null)
+        (PipWindow? own, nint helpers) = ViewTarget(command, window);
+        if (helpers != 0 && _helper is { Connected: true } link)
+        {
+            LogCommand(command, window, CommandOutcome.Started);
+            Diagnostics.Log.Event("command.forwarded", ("name", command));
+            User32.AllowSetForegroundWindow(link.Peer); // Go to the original, use it: the key's right to the front is passed on.
+            return link.Send(new HelperLink.Message(HelperLink.Run, (int)command, helpers)) ? CommandOutcome.Started : CommandOutcome.Failed;
+        }
+        if (own is null)
         {
             // An administrator app's view is its helper's.
             if (window != 0 && !CanReach(window) && _helper is { Connected: true } helper && User32.IsWindow(window))
@@ -1660,10 +1706,13 @@ public sealed partial class TrayApplication : ApplicationContext
         switch (definition.Target)
         {
             case CommandTarget.EveryWindow:
+                if (_role == AppRole.Helper && _wantedOn is { } wanted && IsHidden(command) is { } now && now == wanted)
+                    return CommandOutcome.Started; // Already as the ordinary copy has it.
                 LogCommand(command, 0, CommandOutcome.Started);
                 definition.Run(0, null);
-                // Administrator apps' windows are the helper's: it does the same for them.
-                _helper?.Send(new HelperLink.Message(HelperLink.Run, (int)command));
+                // Administrator apps' windows are the helper's: it does the same for them. A hide is sent as where it
+                // ended, so a helper started since then can't end up the other way.
+                _helper?.Send(new HelperLink.Message(HelperLink.Run, (int)command, Text: IsHidden(command) switch { true => "on", false => "off", _ => null }));
                 return CommandOutcome.Started;
             case CommandTarget.UnderPointer:
                 definition.Run(0, null);
@@ -1745,6 +1794,10 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private IEnumerable<PipWindow> ClickThroughViews() => _viewsInOrder.Where(view => view.Overrides.ClickThrough);
 
+    // The helper's windows and views count too: the ordinary copy's tray is the way back for both.
+    private bool AnyClickThrough => _windows.ClickThroughCount > 0 || ClickThroughViews().Any() || HelperCount(0) > 0 ||
+                                    HelperViews.Any(view => view.ClickThrough);
+
     // They only take things away, so they work at any time.
     private void RunEverywhere(AppCommand command)
     {
@@ -1761,12 +1814,12 @@ public sealed partial class TrayApplication : ApplicationContext
                 break;
             case AppCommand.HideAnchors:
                 _anchors.Hidden = !_anchors.Hidden;
-                Confirm(name, _anchors.Hidden ? T("everywhere.anchors.hidden") : T("everywhere.anchors.shown"));
+                Done(_anchors.Hidden ? T("everywhere.anchors.hidden") : T("everywhere.anchors.shown"));
                 break;
             case AppCommand.HideToolbar:
                 _toolbarHidden = !_toolbarHidden;
                 _toolbar.Enable(_settings.ShowToolbar && !_toolbarHidden);
-                Confirm(name, _toolbarHidden ? T("everywhere.toolbar.hidden") : T("everywhere.toolbar.shown"));
+                Done(_toolbarHidden ? T("everywhere.toolbar.hidden") : T("everywhere.toolbar.shown"));
                 break;
         }
 
@@ -1776,11 +1829,24 @@ public sealed partial class TrayApplication : ApplicationContext
                 Alert(T("errors.recovery.someFailed"), string.Format(T("errors.window.changeRefusedCount"), failed) +
                     Environment.NewLine + string.Join(Environment.NewLine, _windows.RestoreFailures));
             else
-                Confirm(name, done);
+                Done(done);
+        }
+
+        // Both copies run it: the ordinary copy says it's done, once.
+        void Done(string text)
+        {
+            if (_role != AppRole.Helper) Confirm(name, text);
         }
     }
 
     private bool _toolbarHidden;
+
+    private bool? IsHidden(AppCommand command) => command switch
+    {
+        AppCommand.HideAnchors => _anchors.Hidden,
+        AppCommand.HideToolbar => _toolbarHidden,
+        _ => null,
+    };
 
     private void Attempt(Action action)
     {
@@ -1969,7 +2035,8 @@ public sealed partial class TrayApplication : ApplicationContext
             return;
         }
 
-        var picker = new PipSourcePicker(window => _windows.CanControl(window) && !_pips.ContainsKey(window))
+        var picker = new PipSourcePicker(window => _windows.CanControl(window) && !_pips.ContainsKey(window) &&
+                                                   !HelperViews.Any(view => view.Source == window))
             { Bookmarks = () => _settings.PipBookmarks };
         picker.WindowChosen += window =>
         {
@@ -2188,6 +2255,8 @@ public sealed partial class TrayApplication : ApplicationContext
             // No icon of its own: the ordinary copy shows it.
             if (_ordinary?.Send(new HelperLink.Message(HelperLink.Alert, Title: title, Text: text, Icon: (int)icon)) != true)
                 Diagnostics.Log.Event("helper.alertLost");
+            else
+                Diagnostics.Log.Event("notice.forwarded");
             return;
         }
         _balloonAction = onClick;

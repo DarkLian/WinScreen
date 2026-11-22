@@ -20,6 +20,82 @@ public sealed partial class TrayApplication
     internal uint HelperProcess => _helper?.Peer ?? 0;
 
     private bool _forOrdinaryCopy;
+    private bool? _wantedOn; // A hide everywhere from the ordinary copy: where it ended there.
+
+    // The ordinary copy: what the helper last said it holds. The helper: what it last sent, and its timer.
+    private HelperLink.Message? _helperState;
+    private string? _stateSent;
+    private System.Windows.Forms.Timer? _stateTimer;
+    private const int StateMilliseconds = 300;
+
+    private nint _watched; // The helper: the window the ordinary copy's tray shows.
+    private nint _watchSent = -1; // The ordinary copy: what it last asked the helper to watch.
+
+    private HelperLink.HelperView[] HelperViews => _helperState?.Views ?? [];
+
+    // The ordinary copy's tray shows the window last in front; one of an administrator app is the helper's to say about.
+    private void WatchForHelper(nint last)
+    {
+        if (_helper is not { Connected: true } link) return;
+        nint wanted = last != 0 && User32.IsWindow(last) && !CanReach(last) ? last : 0;
+        if (wanted != _watchSent && link.Send(new HelperLink.Message(HelperLink.Watch, Window: wanted))) _watchSent = wanted;
+    }
+
+    private bool? HelperSaysOn(AppCommand command, nint window) =>
+        window != 0 && _helperState is { On: { } on } state && (nint)state.Window == window ? on.Contains((int)command) : null;
+
+    private int HelperCount(int index) => _helperState?.Counts is { } counts && counts.Length > index ? counts[index] : 0;
+
+    private void SendState()
+    {
+        if (_ordinary is not { Connected: true } ordinary)
+        {
+            _stateSent = null;
+            return;
+        }
+        HelperLink.HelperView[] views = _viewsInOrder.Where(view => view.IsHandleCreated && !view.IsDisposed)
+            .Select(view => new HelperLink.HelperView(view.Handle, _pips.FirstOrDefault(pair => pair.Value == view).Key, view.MenuTitle,
+                view.IsSuspended, view.SourceIsWindow, view.Overrides.ClickThrough, view.CanRetryCapture, view.PointedAt, view.SuspendedAt))
+            .ToArray();
+        nint watched = _watched != 0 && User32.IsWindow(_watched) ? _watched : 0;
+        int[]? on = watched == 0 ? null : CommandCatalog.All.Where(command => !CommandCatalog.ForView(command) && _commands.IsOn(command, watched))
+            .Select(command => (int)command).ToArray();
+        var state = new HelperLink.Message(HelperLink.State, Window: watched, Counts: [_windows.ClickThroughCount, _windows.PinnedCount],
+            Views: views, On: on);
+        string encoded = HelperLink.Encode(state);
+        if (encoded != _stateSent && ordinary.Send(state)) _stateSent = encoded;
+    }
+
+    private void FromHelperState(HelperLink.Message state)
+    {
+        int[] counts = state.Counts ?? [];
+        bool changed = _helperState is null || !(_helperState.Counts ?? []).SequenceEqual(counts) ||
+                       HelperViews.Length != (state.Views?.Length ?? 0);
+        _helperState = state;
+        if (changed)
+            Diagnostics.Log.Event("helper.state", ("clickThrough", HelperCount(0)), ("pinned", HelperCount(1)), ("views", HelperViews.Length));
+    }
+
+    private void RunHelperViewAction(nint view, string action)
+    {
+        if (_helper is not { Connected: true } link) return;
+        User32.AllowSetForegroundWindow(link.Peer); // Go to the original: the tray click's right to the front is passed on.
+        link.Send(new HelperLink.Message(HelperLink.ViewAction, Window: view, Text: action));
+    }
+
+    private void ViewActionFromOrdinaryCopy(nint handle, string? action)
+    {
+        if (_viewsInOrder.FirstOrDefault(each => each.IsHandleCreated && each.Handle == handle) is not { IsDisposed: false } view) return;
+        switch (action)
+        {
+            case "resume": view.ResumeView(); break;
+            case "goTo": view.GoToSource(); break;
+            case "clicks": view.Overrides = view.Overrides with { ClickThrough = false }; break;
+            case "retry": if (view.CanRetryCapture) view.RetryCapture(); break;
+            case "close": view.Close(); break;
+        }
+        SendState();
+    }
 
     // Started through the sign-in task, this copy may already have a helper. Followed every two seconds: a helper that
     // went is started again, a few times.
@@ -30,7 +106,15 @@ public sealed partial class TrayApplication
         {
             _helper = new HelperLink.OrdinaryEnd();
             _helper.Received += message => OnToolbar(() => FromHelper(message));
-            _helper.ConnectionChanged += connected => OnToolbar(() => Diagnostics.Log.Event("helper.link", ("connected", connected)));
+            _helper.ConnectionChanged += connected => OnToolbar(() =>
+            {
+                Diagnostics.Log.Event("helper.link", ("connected", connected));
+                _watchSent = -1;
+                if (!connected) _helperState = null;
+                // A helper started since anchors or the toolbar were hidden hides them too.
+                else foreach (AppCommand hide in new[] { AppCommand.HideAnchors, AppCommand.HideToolbar })
+                    if (IsHidden(hide) == true) _helper?.Send(new HelperLink.Message(HelperLink.Run, (int)hide, Text: "on"));
+            });
             _helper.Start();
         }
         _helperStarts = 0;
@@ -97,6 +181,9 @@ public sealed partial class TrayApplication
             case HelperLink.Run when message.Command == (int)AppCommand.RestoreAll:
                 Run(AppCommand.RestoreAll, 0);
                 break;
+            case HelperLink.State:
+                FromHelperState(message);
+                break;
             case HelperLink.Save when message.Text is { } json:
                 try
                 {
@@ -118,8 +205,15 @@ public sealed partial class TrayApplication
     {
         _ordinary = new HelperLink.HelperEnd(() => OnToolbar(LeaveAsHelper));
         _ordinary.Received += message => OnToolbar(() => FromOrdinaryCopy(message));
-        _ordinary.ConnectionChanged += connected => OnToolbar(() => Diagnostics.Log.Event("helper.link", ("connected", connected)));
+        _ordinary.ConnectionChanged += connected => OnToolbar(() =>
+        {
+            Diagnostics.Log.Event("helper.link", ("connected", connected));
+            _stateSent = null;
+        });
         _ordinary.Start(OrdinaryCopyWait);
+        _stateTimer = new System.Windows.Forms.Timer { Interval = StateMilliseconds };
+        _stateTimer.Tick += (_, _) => SendState();
+        _stateTimer.Start();
         if (HelperLink.FindCopy(Hotkeys.HotkeyHost.WindowTitle, elevated: false) != 0) return;
         // Started at sign-in: the ordinary copy is started as the person, through the shell, which may still be
         // starting.
@@ -180,8 +274,17 @@ public sealed partial class TrayApplication
                 // window.
                 if (window != 0 && (!User32.IsWindow(window) || !CanReach(window))) return;
                 _forOrdinaryCopy = true;
+                _wantedOn = message.Text switch { "on" => true, "off" => false, _ => null };
                 try { RunOnDisplay((AppCommand)message.Command, window, message.DisplayBounds); }
-                finally { _forOrdinaryCopy = false; }
+                finally { _forOrdinaryCopy = false; _wantedOn = null; }
+                SendState();
+                break;
+            case HelperLink.ViewAction:
+                ViewActionFromOrdinaryCopy((nint)message.Window, message.Text);
+                break;
+            case HelperLink.Watch:
+                _watched = (nint)message.Window;
+                SendState();
                 break;
             case HelperLink.SettingsSaved:
                 ReloadSettings();
