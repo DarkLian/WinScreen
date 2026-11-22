@@ -118,7 +118,8 @@ public sealed class InteractiveViewTests
         Thread.Sleep(30);
         Desktop.MoveMouse(point);
         Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null, 2000),
-            $"The visit didn't start: pointer={Desktop.CursorPosition()}; view={view.Bounds}; visible={view.Visible}; {view.StateDescription}; {view.DiagnosticSnapshot}");
+            $"The visit didn't start: pointer={Desktop.CursorPosition()}; view={view.Bounds}; visible={view.Visible}; {view.StateDescription}; " +
+            $"in front {FrontDescription()}; last visit ended: {view.LastVisitEnd}; {view.DiagnosticSnapshot}");
         Thread.Sleep(100);
     }
 
@@ -694,6 +695,133 @@ public sealed class InteractiveViewTests
             Assert.Equal(PressOutcome.CaptionButton, view.PressOutcomes.Last());
             Assert.False(User32.IsIconic(source.Handle));
             Assert.Null(source.NextReport(200));
+        });
+    }
+
+    // Owner, 1.4.1 beta 7: an interactive view of Chrome, minimized and brought back from the taskbar, could be dragged
+    // for a while and hover kept coming and going. The elevated Claude window had the focus again: while an
+    // administrator window is in front, Windows tells an ordinary program's hooks nothing about the pointer, so each
+    // visit saw no move and ended at once, and a press between visits moved the view.
+    private static readonly Rectangle AdminSpot = new(150, 600, 420, 260);
+
+    private static void AdminInFront(nint window)
+    {
+        Rectangle bounds = Desktop.BoundsOf(window);
+        AsAdministrator.Click(new Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2));
+        nint front = 0;
+        Assert.True(Desktop.WaitFor(() => (front = User32.GetForegroundWindow()) == window, 4000),
+            $"The administrator window didn't come to the front: {WindowInfo.ClassName(front)} of {WindowInfo.ProgramOf(front)} is; " +
+            $"it is at {bounds}, visible {User32.IsWindowVisible(window)}, under the click {WindowInfo.ClassName(Desktop.TopWindowAt(new Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2)))}.");
+    }
+
+    private static string FrontDescription()
+    {
+        nint front = User32.GetForegroundWindow();
+        User32.GetWindowThreadProcessId(front, out uint process);
+        return $"0x{front:X} {WindowInfo.ClassName(front)} of {WindowInfo.ProgramOf(front)}, administrator {process != 0 && ProcessInfo.IsElevated(process)}, " +
+               $"minimized {User32.IsIconic(front)}";
+    }
+
+    private static bool OrdinaryInFront()
+    {
+        User32.GetWindowThreadProcessId(User32.GetForegroundWindow(), out uint process);
+        return process != 0 && !ProcessInfo.IsElevated(process);
+    }
+
+    /// <summary>How many visits there were while watching, and why each one that ended did.</summary>
+    private static (int Visits, List<string> Ends) WatchVisits(PipWindow view, int milliseconds)
+    {
+        var ends = new List<string>();
+        int visits = 0;
+        PipInteraction? current = null;
+        long until = Environment.TickCount64 + milliseconds;
+        while (Environment.TickCount64 < until)
+        {
+            PipInteraction? live = view.LiveInteraction;
+            if (!ReferenceEquals(live, current))
+            {
+                if (current is not null) ends.Add(view.LastVisitEnd);
+                if (live is not null) visits++;
+                current = live;
+            }
+            Thread.Sleep(5);
+        }
+        return (visits, ends);
+    }
+
+    private const string HookBlind = "the hook stopped seeing the pointer";
+
+    [Fact]
+    public void With_an_administrator_window_in_front_hovering_a_view_never_starts_visits_that_end_at_once()
+    {
+        if (!AsAdministrator.Usable) { Skipped.Because("Needs Windows to run programs as administrator without asking, from a test run that isn't elevated."); return; }
+        using var admin = new AsAdministrator();
+        using var source = new TargetProcess(SourceSpot);
+        source.UseFrame();
+        nint front = admin.Target("WinScreen view admin hover", AdminSpot);
+        Drive(source, (view, _) =>
+        {
+            AdminInFront(front);
+            Rectangle frame = view.Bounds;
+            AsAdministrator.JiggleInBackground(new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2), 2500);
+            (int visits, List<string> ends) = WatchVisits(view, 4000);
+            Assert.True(User32.GetForegroundWindow() == front, "Something took the focus from the administrator window.");
+            Assert.True(visits <= 1 && !ends.Contains(HookBlind), $"{visits} visits; ended: {string.Join(", ", ends)}");
+        });
+    }
+
+    [Fact]
+    public void With_an_administrator_window_in_front_a_press_on_a_view_goes_to_the_app_and_the_view_stays()
+    {
+        if (!AsAdministrator.Usable) { Skipped.Because("Needs Windows to run programs as administrator without asking, from a test run that isn't elevated."); return; }
+        using var admin = new AsAdministrator();
+        using var source = new TargetProcess(SourceSpot);
+        source.UseFrame();
+        nint front = admin.Target("WinScreen view admin press", AdminSpot);
+        Drive(source, (view, _) =>
+        {
+            AdminInFront(front);
+            Rectangle frame = view.Bounds;
+            AsAdministrator.Click(new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2));
+            string? report = source.NextReport();
+            Assert.True(report is not null, $"The press didn't reach the app; view {frame} -> {view.Bounds}; visit ended: {view.LastVisitEnd}");
+            Assert.Equal(frame, view.Bounds);
+            Assert.True(Desktop.WaitFor(OrdinaryInFront, 2000), "The administrator window kept the focus.");
+            // From here the visit follows the pointer as with nothing else in front.
+            AsAdministrator.JiggleInBackground(new Point(frame.Left + frame.Width / 2 + 20, frame.Top + frame.Height / 2), 1500);
+            (int visits, List<string> ends) = WatchVisits(view, 2500);
+            Assert.True(visits is >= 1 and <= 2 && !ends.Contains(HookBlind), $"{visits} visits; ended: {string.Join(", ", ends)}");
+        });
+    }
+
+    [Fact]
+    public void Brought_back_from_the_taskbar_with_an_administrator_window_in_front_a_view_can_be_used_at_once()
+    {
+        if (!AsAdministrator.Usable) { Skipped.Because("Needs Windows to run programs as administrator without asking, from a test run that isn't elevated."); return; }
+        using var admin = new AsAdministrator();
+        using var source = new TargetProcess(SourceSpot);
+        source.UseFrame();
+        nint front = admin.Target("WinScreen view admin taskbar", AdminSpot);
+        Drive(source, (view, ui) =>
+        {
+            ui(() => view.ApplyViewPreferences(new PipViewPreferences { MinimizeToTaskbar = true }));
+            Rectangle frame = view.Bounds;
+            AdminInFront(front);
+            // The taskbar names a button after its program, not its window: the view's is the one that wasn't there.
+            nint taskbar = User32.FindWindow("Shell_TrayWnd", null);
+            List<BrowserAccessibility.Control> Running() => BrowserAccessibility.Read(taskbar, 24)
+                .Where(control => control.Type == 50000 && control.Name.Contains("running window", StringComparison.Ordinal) && !control.Bounds.IsEmpty).ToList();
+            HashSet<string> before = Running().Select(control => control.Name).ToHashSet();
+            ui(view.SuspendView);
+            BrowserAccessibility.Control? button = null;
+            Assert.True(Desktop.WaitFor(() => (button = Running().FirstOrDefault(control => !before.Contains(control.Name))) is not null, 6000),
+                $"No new taskbar button; there were {string.Join(", ", before)}.");
+            AsAdministrator.Click(new Point(button!.Bounds.Left + button.Bounds.Width / 2, button.Bounds.Top + button.Bounds.Height / 2));
+            Assert.True(Desktop.WaitFor(() => !view.IsSuspended, 4000), "The view didn't come back.");
+            Assert.True(Desktop.WaitFor(OrdinaryInFront, 2000), "The administrator window got the focus back.");
+            AsAdministrator.JiggleInBackground(new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2), 2000);
+            (int visits, List<string> ends) = WatchVisits(view, 3000);
+            Assert.True(visits is >= 1 and <= 2 && !ends.Contains(HookBlind), $"{visits} visits; ended: {string.Join(", ", ends)}");
         });
     }
 

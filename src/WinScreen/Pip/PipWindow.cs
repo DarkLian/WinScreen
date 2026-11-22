@@ -37,7 +37,7 @@ public sealed partial class PipWindow : Form
     private const int WM_MOUSEACTIVATE = 0x0021;
     private const int MA_NOACTIVATE = 3;
     private const int WM_SETCURSOR = 0x0020, HTCLIENT = 1;
-    private const int WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205;
+    private const int WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202;
 
     private bool _cursorFromFrame;
 
@@ -812,15 +812,21 @@ public sealed partial class PipWindow : Form
             _controlAtPress = (m.WParam.ToInt64() & 0x0008) != 0; // MK_CONTROL
         // Presses in quick succession don't move the pointer, and a visit starts with a move, so a right press can reach
         // the view itself between visits. It starts one and goes to the app, never to the view's menu.
-        if (m.Msg == WM_RBUTTONDOWN)
+        // With an administrator window in front no visit starts (BeginLive), so a left press reaches the view too: it
+        // goes to the app the same way (not with Ctrl, which selects), and the app coming forward ends the blindness.
+        if (m.Msg is WM_RBUTTONDOWN or WM_LBUTTONDOWN)
         {
-            _rightPressVisit = null;
-            if (_live is null && _interactiveItem.Checked && GiveRightPressToVisit(ClientPointOf(m.LParam))) return;
+            _pressVisit = null;
+            MouseButtons button = m.Msg == WM_RBUTTONDOWN ? MouseButtons.Right : MouseButtons.Left;
+            if (_live is null && _interactiveItem.Checked &&
+                (button == MouseButtons.Right || (m.WParam.ToInt64() & 0x0008) == 0 && AdministratorInFront()) &&
+                GivePressToVisit(ClientPointOf(m.LParam), button)) return;
         }
-        if (m.Msg == WM_RBUTTONUP && _rightPressVisit is { } visit)
+        if (m.Msg is WM_RBUTTONUP or WM_LBUTTONUP && _pressVisit is { } visit &&
+            _pressButton == (m.Msg == WM_RBUTTONUP ? MouseButtons.Right : MouseButtons.Left))
         {
-            _rightPressVisit = null;
-            if (visit == _live) visit.TakeRelease(PointToScreen(ClientPointOf(m.LParam)), MouseButtons.Right);
+            _pressVisit = null;
+            if (visit == _live) visit.TakeRelease(PointToScreen(ClientPointOf(m.LParam)), _pressButton);
             return;
         }
         if (m.Msg == WM_DISPLAYCHANGE || (m.Msg == 0x0218 && (m.WParam == 7 || m.WParam == 18)))
@@ -862,14 +868,31 @@ public sealed partial class PipWindow : Form
 
     private static Point ClientPointOf(nint lParam) => new((short)lParam.ToInt64(), (short)(lParam.ToInt64() >> 16));
 
-    private bool GiveRightPressToVisit(Point point)
+    private bool GivePressToVisit(Point point, MouseButtons button)
     {
-        BeginLive(point);
+        BeginLive(point, pressed: true);
         if (_live is not { } live) return false;
-        _rightPressVisit = live;
-        live.TakePress(PointToScreen(point), MouseButtons.Right);
+        _pressVisit = live;
+        _pressButton = button;
+        live.TakePress(PointToScreen(point), button); // This thread got the press, so it may bring the app forward.
         return true;
     }
+
+    // While an administrator window has the focus, Windows tells no hook of a program without those rights about the
+    // pointer: a visit would see no move and end at once, over and over, and a press between visits moved the view.
+    private bool AdministratorInFront()
+    {
+        if (ProcessInfo.SelfElevated) return false;
+        nint front = User32.GetForegroundWindow();
+        if (front == _frontChecked) return _frontIsAdministrator;
+        _frontChecked = front;
+        User32.GetWindowThreadProcessId(front, out uint process);
+        _frontIsAdministrator = front != 0 && process != 0 && process != Environment.ProcessId && ProcessInfo.IsElevated(process);
+        return _frontIsAdministrator;
+    }
+
+    private nint _frontChecked;
+    private bool _frontIsAdministrator, _toldAdministratorInFront;
 
     internal bool MenuShown => _menu.Visible;
 
@@ -1788,7 +1811,7 @@ public sealed partial class PipWindow : Form
         }
     }
 
-    private void BeginLive(Point pointer)
+    private void BeginLive(Point pointer, bool pressed = false)
     {
         // The table first: used directly, hidden, on the screen, not paused, no visit already (and experimental help
         // only with the switch). Then what only the view knows: a picture, the window there, no menu or block.
@@ -1800,6 +1823,14 @@ public sealed partial class PipWindow : Form
             return;
         Rectangle area = PictureArea;
         if (!area.Contains(pointer))
+            return;
+        bool blind = AdministratorInFront();
+        if (blind != _toldAdministratorInFront)
+        {
+            _toldAdministratorInFront = blind;
+            if (blind) Diagnostics.Log.Event("view.visitWaitsForPress", ("front", Diagnostics.LogValue.ProgramOf(User32.GetForegroundWindow())));
+        }
+        if (blind && !pressed)
             return;
         _foregroundBeforeLive = User32.GetForegroundWindow();
         _liveSawSourceFocus = false;
@@ -2327,7 +2358,8 @@ public sealed partial class PipWindow : Form
 
     private bool _sourceWasFocused;
     private long _liveEndedAt, _suspendedAt;
-    private PipInteraction? _rightPressVisit; // Its release may reach the view too, and goes to the same visit.
+    private PipInteraction? _pressVisit; // Its release may reach the view too, and goes to the same visit.
+    private MouseButtons _pressButton;
     private const long RevealGrace = 500;
 
     internal long LastReveal { get; private set; }
