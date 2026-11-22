@@ -37,8 +37,15 @@ public sealed partial class TrayApplication
     private void WatchForHelper(nint last)
     {
         if (_helper is not { Connected: true } link) return;
-        nint wanted = last != 0 && User32.IsWindow(last) && !CanReach(last) ? last : 0;
-        if (wanted != _watchSent && link.Send(new HelperLink.Message(HelperLink.Watch, Window: wanted))) _watchSent = wanted;
+        try
+        {
+            nint wanted = last != 0 && User32.IsWindow(last) && !CanReach(last) ? last : 0;
+            if (wanted != _watchSent && link.Send(new HelperLink.Message(HelperLink.Watch, Window: wanted))) _watchSent = wanted;
+        }
+        catch (Exception failure) when (IsExpected(failure) || failure is InvalidOperationException or ArgumentException)
+        {
+            Diagnostics.Log.Swallowed(failure);
+        }
     }
 
     private bool? HelperSaysOn(AppCommand command, nint window) =>
@@ -53,27 +60,37 @@ public sealed partial class TrayApplication
             _stateSent = null;
             return;
         }
-        HelperLink.HelperView[] views = _viewsInOrder.Where(view => view.IsHandleCreated && !view.IsDisposed)
-            .Select(view => new HelperLink.HelperView(view.Handle, _pips.FirstOrDefault(pair => pair.Value == view).Key, view.MenuTitle,
-                view.IsSuspended, view.SourceIsWindow, view.Overrides.ClickThrough, view.CanRetryCapture, view.PointedAt, view.SuspendedAt))
-            .ToArray();
-        nint watched = _watched != 0 && User32.IsWindow(_watched) ? _watched : 0;
-        int[]? on = watched == 0 ? null : CommandCatalog.All.Where(command => !CommandCatalog.ForView(command) && _commands.IsOn(command, watched))
-            .Select(command => (int)command).ToArray();
-        var state = new HelperLink.Message(HelperLink.State, Window: watched, Counts: [_windows.ClickThroughCount, _windows.PinnedCount],
-            Views: views, On: on);
-        string encoded = HelperLink.Encode(state);
-        if (encoded != _stateSent && ordinary.Send(state)) _stateSent = encoded;
+        // Every 300 ms for as long as the helper runs: a window that went meanwhile is skipped, never the helper's end.
+        try
+        {
+            HelperLink.HelperView[] views = _viewsInOrder.Where(view => view.IsHandleCreated && !view.IsDisposed)
+                .Select(view => new HelperLink.HelperView(view.Handle, _pips.FirstOrDefault(pair => pair.Value == view).Key, view.MenuTitle,
+                    view.IsSuspended, view.SourceIsWindow, view.Overrides.ClickThrough, view.CanRetryCapture, view.PointedAt, view.SuspendedAt))
+                .ToArray();
+            nint watched = _watched != 0 && User32.IsWindow(_watched) ? _watched : 0;
+            int[]? on = watched == 0 ? null : CommandCatalog.All.Where(command => !CommandCatalog.ForView(command) && _commands.IsOn(command, watched))
+                .Select(command => (int)command).ToArray();
+            var state = new HelperLink.Message(HelperLink.State, Window: watched, Counts: [_windows.ClickThroughCount, _windows.PinnedCount],
+                Views: views, On: on);
+            string encoded = HelperLink.Encode(state);
+            if (encoded != _stateSent && ordinary.Send(state)) _stateSent = encoded;
+        }
+        catch (Exception failure) when (IsExpected(failure) || failure is InvalidOperationException or ArgumentException)
+        {
+            Diagnostics.Log.Swallowed(failure);
+        }
     }
 
     private void FromHelperState(HelperLink.Message state)
     {
         int[] counts = state.Counts ?? [];
         bool changed = _helperState is null || !(_helperState.Counts ?? []).SequenceEqual(counts) ||
-                       HelperViews.Length != (state.Views?.Length ?? 0);
+                       HelperViews.Length != (state.Views?.Length ?? 0) || _helperState.Window != state.Window ||
+                       !(_helperState.On ?? []).SequenceEqual(state.On ?? []);
         _helperState = state;
         if (changed)
-            Diagnostics.Log.Event("helper.state", ("clickThrough", HelperCount(0)), ("pinned", HelperCount(1)), ("views", HelperViews.Length));
+            Diagnostics.Log.Event("helper.state", ("clickThrough", HelperCount(0)), ("pinned", HelperCount(1)), ("views", HelperViews.Length),
+                ("watched", state.Window != 0), ("on", state.On?.Length ?? 0));
     }
 
     private void RunHelperViewAction(nint view, string action)
@@ -86,14 +103,17 @@ public sealed partial class TrayApplication
     private void ViewActionFromOrdinaryCopy(nint handle, string? action)
     {
         if (_viewsInOrder.FirstOrDefault(each => each.IsHandleCreated && each.Handle == handle) is not { IsDisposed: false } view) return;
-        switch (action)
+        Attempt(() =>
         {
-            case "resume": view.ResumeView(); break;
-            case "goTo": view.GoToSource(); break;
-            case "clicks": view.Overrides = view.Overrides with { ClickThrough = false }; break;
-            case "retry": if (view.CanRetryCapture) view.RetryCapture(); break;
-            case "close": view.Close(); break;
-        }
+            switch (action)
+            {
+                case "resume": view.ResumeView(); break;
+                case "goTo": view.GoToSource(); break;
+                case "clicks": view.Overrides = view.Overrides with { ClickThrough = false }; break;
+                case "retry": if (view.CanRetryCapture) view.RetryCapture(); break;
+                case "close": view.Close(); break;
+            }
+        });
         SendState();
     }
 

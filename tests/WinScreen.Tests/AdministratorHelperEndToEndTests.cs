@@ -237,9 +237,15 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
         Assert.True(Desktop.WaitFor(() => HelperProcess() != 0, 20000), "No helper started.");
         Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("helper.connected"), 15000), "The helper didn't connect.");
 
+        // In front, the tray shows it: the helper says what is on for it.
+        Desktop.GainForegroundRights();
+        Desktop.Activate(adminTarget);
+        Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("watched=yes"), 4000), "The helper wasn't asked about the window in front:\n" + Log("winscreen.log"));
         Assert.Equal(0, Run("TogglePin", "title:WinScreen helper everywhere admin"));
         Assert.Equal(0, Run("ToggleClickThrough", "title:WinScreen helper everywhere admin"));
         Assert.True(Desktop.WaitFor(() => Topmost(adminTarget) && ClickThrough(adminTarget), 3000), "The window wasn't changed.");
+        Assert.True(Desktop.WaitFor(() => System.Text.RegularExpressions.Regex.IsMatch(Log("winscreen.log"), @"watched=yes on=([2-9]|\d\d)"), 4000),
+            "The helper didn't say the window is pinned and click-through:\n" + Log("winscreen.log"));
         // The ordinary copy hears what the helper holds.
         Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("helper.state clickThrough=1 pinned=1"), 4000),
             "The ordinary copy doesn't know the helper's window is changed:\n" + Log("winscreen.log"));
@@ -254,6 +260,16 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
             "The ordinary copy still thinks the helper's window is changed.");
         Thread.Sleep(500);
         Assert.Equal(notices, Count(Log("winscreen-administrator.log"), "notice.forwarded")); // The ordinary copy's notice only.
+
+        // The watched window closes: the helper carries on.
+        uint helperBefore = HelperProcess();
+        User32.GetWindowThreadProcessId(adminTarget, out uint adminProcess);
+        KillElevated(adminProcess);
+        Assert.True(Desktop.WaitFor(() => !User32.IsWindow(adminTarget), 5000), "The administrator window didn't close.");
+        Thread.Sleep(2000);
+        Assert.Equal(helperBefore, HelperProcess());
+        Assert.DoesNotContain("helper.gone", Log("winscreen.log"));
+        Assert.DoesNotContain("app.stopped", Log("winscreen-administrator.log"));
 
         // Hide toolbar flips in both copies. A helper started after it was hidden hides it too, and the next press shows
         // it in both: neither ends up the other way.
