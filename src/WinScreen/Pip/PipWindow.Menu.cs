@@ -166,6 +166,12 @@ public sealed partial class PipWindow
     internal void Run(AppCommand command)
     {
         bool there = _origin.IsWindow && _origin.IsAvailable;
+        // Minimized, the view has no picture to hide its original behind: the key brings it back first.
+        if (command is AppCommand.ViewKeepHidden or AppCommand.ViewInteractive && _suspended && there)
+        {
+            ResumeView();
+            if (_suspended) return;
+        }
         switch (command)
         {
             case AppCommand.ViewKeepHidden when there && !_interactiveItem.Checked: SetOriginalHidden(!_hideItem.Checked); break;
