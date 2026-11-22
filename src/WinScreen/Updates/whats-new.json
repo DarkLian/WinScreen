@@ -1,4 +1,27 @@
 {
+  "1.4.1": {
+    "en": [
+      "Set your own keys for a view's actions, such as Keep hidden, Interactive, Mute, Freeze and Rotate, in Actions and shortcuts. They work on the view in front or under the pointer.",
+      "Save this source, now under Presets, brings the view back exactly as it was: its size, place, crop and options.",
+      "With Run as administrator on, the tray, the keys and Restore all windows also reach administrator apps' windows and views.",
+      "An interactive view works while an administrator app is in front: click the view and keep using the app.",
+      "Many smaller fixes."
+    ],
+    "zh-Hans": [
+      "可以在“操作与快捷键”中为视图的操作设置按键，例如“保持隐藏”“交互”、静音、冻结和旋转。按键作用于最前面的视图或指针下的视图。",
+      "“保存此来源”移到了“预设”中，并会让视图完全按原样回来：大小、位置、裁剪和选项都不变。",
+      "开启“以管理员身份运行”后，托盘、按键和“还原所有窗口”也能作用于管理员应用的窗口和视图。",
+      "管理员应用在最前面时，交互视图仍可使用：点一下视图，就能继续使用应用。",
+      "还有许多小修正。"
+    ],
+    "zh-Hant": [
+      "可以在「操作與快捷鍵」中為檢視的操作設定按鍵，例如「保持隱藏」「互動」、靜音、凍結和旋轉。按鍵作用於最前面的檢視或指標下的檢視。",
+      "「儲存此來源」移到了「預設組合」中，並會讓檢視完全照原樣回來：大小、位置、裁剪和選項都不變。",
+      "開啟「以系統管理員身分執行」後，系統匣、按鍵和「還原所有視窗」也能作用於系統管理員應用程式的視窗和檢視。",
+      "系統管理員應用程式在最前面時，互動檢視仍可使用：按一下檢視，就能繼續使用應用程式。",
+      "還有許多小修正。"
+    ]
+  },
   "1.4.0": {
     "en": [
       "Rotate or mirror a view: choose Rotate or mirror under Picture in a view's menu, and keep using the app turned.",
