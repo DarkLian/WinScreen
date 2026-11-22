@@ -516,10 +516,21 @@ public sealed partial class PipWindow : Form
             LongSide = _longSide, Device = Screen.FromControl(this).DeviceName, Left = left, Top = top,
             FrameRate = _overrides.FrameRate, OpacityPercent = _overrides.OpacityPercent, Scaling = _overrides.Scaling,
             CropShares = PipCropShares.Of(_crop, whole), PositionLocked = _overrides.PositionLocked,
-            TitleBarAlways = _overrides.TitleBarAlways,
+            TitleBarAlways = _overrides.TitleBarAlways, KeepAspectRatio = _overrides.KeepAspectRatio,
             Turns = _turn.Turns == 0 ? null : _turn.Turns, Mirrored = _turn.Mirrored ? true : null,
         };
     }
+
+    // A saved source's view where it was, to the pixel, even over the taskbar or partly off the screen.
+    internal void PlaceExactly(Rectangle bounds)
+    {
+        if (!Screen.AllScreens.Any(screen => screen.Bounds.IntersectsWith(bounds))) return;
+        Bounds = bounds;
+        // Turned, it turns once capture draws and fits itself to the turned picture then: it comes back here after.
+        _placeAfterTurn = _turn != _appliedTurn ? bounds : null;
+    }
+
+    private Rectangle? _placeAfterTurn;
 
     private Size WholeSize() => _thumbnail is null ? Size.Empty : _origin.Whole(_thumbnail.SourceSize).Size;
 
@@ -534,6 +545,7 @@ public sealed partial class PipWindow : Form
             FrameRate = preset.FrameRate, OpacityPercent = preset.OpacityPercent, Scaling = preset.Scaling,
             PositionLocked = preset.PositionLocked ?? _overrides.PositionLocked,
             TitleBarAlways = preset.TitleBarAlways ?? _overrides.TitleBarAlways,
+            KeepAspectRatio = preset.KeepAspectRatio ?? _overrides.KeepAspectRatio,
         };
         _crop = preset.CropFor(WholeSize());
         _zoom = PipGeometry.WholeView;
@@ -1744,6 +1756,7 @@ public sealed partial class PipWindow : Form
     internal void SetTurn(ViewTurn turn)
     {
         if (turn == _turn) return;
+        _placeAfterTurn = null;
         _turn = turn;
         Diagnostics.Log.Event("view.turned", ("turns", turn.Turns), ("mirrored", turn.Mirrored));
         FollowTurn();
@@ -1760,6 +1773,11 @@ public sealed partial class PipWindow : Form
         // Turned a quarter, the view swaps its sides about its middle.
         Point? middle = _overrides.PositionLocked ? null : new Point(Left + Width / 2, Top + Height / 2);
         Attempt(() => FitToSource(middle));
+        if (_placeAfterTurn is { } exact && turn == _turn)
+        {
+            _placeAfterTurn = null;
+            Bounds = exact;
+        }
     }
 
     private void BeginLive(Point pointer)

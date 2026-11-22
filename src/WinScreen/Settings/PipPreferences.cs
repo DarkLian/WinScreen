@@ -89,9 +89,19 @@ public sealed class PipPreset
     // Quarter turns clockwise, then mirrored; left out (null) when upright.
     public int? Turns { get; set; }
     public bool? Mirrored { get; set; }
+    public bool? KeepAspectRatio { get; set; }
+    // A saved source's view, in screen pixels: it comes back exactly there on the display it was saved on.
+    public int? ViewX { get; set; }
+    public int? ViewY { get; set; }
+    public int? ViewWidth { get; set; }
+    public int? ViewHeight { get; set; }
 
     [JsonIgnore]
     internal Pip.ViewTurn Turn => new(Turns ?? 0, Mirrored == true);
+
+    [JsonIgnore]
+    internal Rectangle? ViewBounds => ViewX is { } x && ViewY is { } y && ViewWidth is > 0 and { } width && ViewHeight is > 0 and { } height
+        ? new Rectangle(x, y, width, height) : null;
 
     [JsonIgnore]
     public Rectangle Crop => CropWidth > 0 && CropHeight > 0
@@ -121,6 +131,10 @@ public sealed class PipPreset
             TitleBarAlways = TitleBarAlways,
             Turns = Turn.Turns == 0 ? null : Turn.Turns,
             Mirrored = Turn.Mirrored ? true : null,
+            KeepAspectRatio = KeepAspectRatio,
+            ViewX = ViewBounds?.X, ViewY = ViewBounds?.Y,
+            ViewWidth = ViewBounds is { } bounds ? Math.Min(bounds.Width, 16384) : null,
+            ViewHeight = ViewBounds is { } tall ? Math.Min(tall.Height, 16384) : null,
         };
     }
 }

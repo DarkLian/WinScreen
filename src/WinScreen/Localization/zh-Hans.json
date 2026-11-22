@@ -242,7 +242,7 @@
   "pip.backend.advanced": "流畅（屏幕捕获）",
   "pip.backend.compatibility": "标准（窗口缩略图）",
   "pip.backend.retry": "重试流畅捕获",
-  "pip.bookmarks.includeLayout": "同时记住视图大小和位置",
+  "pip.bookmarks.includeLayout": "同时记住视图的当前状态：大小、位置、裁剪和选项",
   "pip.bookmarks.layoutNotice": "打开前请检查标出的区域，或选择其他显示器。保存时的显示器：",
   "pip.bookmarks.name": "名称",
   "pip.bookmarks.preview": "预览已保存的来源",

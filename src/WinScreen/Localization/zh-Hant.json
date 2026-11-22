@@ -242,7 +242,7 @@
   "pip.backend.advanced": "流暢（螢幕擷取）",
   "pip.backend.compatibility": "標準（視窗縮圖）",
   "pip.backend.retry": "重試流暢擷取",
-  "pip.bookmarks.includeLayout": "同時記住檢視大小與位置",
+  "pip.bookmarks.includeLayout": "同時記住檢視的目前狀態：大小、位置、裁切與選項",
   "pip.bookmarks.layoutNotice": "開啟前請檢查標示的區域，或選擇其他顯示器。儲存時的顯示器：",
   "pip.bookmarks.name": "名稱",
   "pip.bookmarks.preview": "預覽已儲存的來源",

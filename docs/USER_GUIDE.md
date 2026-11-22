@@ -61,7 +61,9 @@ The window itself is hidden while its view is open, so the view keeps going even
 To see the window again, turn off **Keep hidden** in the view's menu.
 To show a whole display or part of the screen, right-click the tray icon and choose **New view**. For part of the
 screen, choose **Region** and drag over the area.
-You can save a display or area there and open it again later from **Saved sources** in the tray menu.
+To keep one, choose **Presets → Save this source** in its view's menu. It keeps the area and the view exactly as it is:
+its size and place on the screen, crop and options. Open it again from **Saved sources** in the tray menu or in
+**New view**.
 
 | On a view | What happens |
 | --- | --- |
@@ -87,7 +89,7 @@ turn on **Always show title bar** in **Size and options**, or for every new view
   view or exit WinScreen. An app you had muted yourself stays muted.
 - **Size and options:** frame limit, scaling, opacity, size, position lock and click-through, just for this view.
   For scaling, **Best** suits almost everything; **Pixelated** is for pixel art and **Soft** for video.
-- **Presets:** save the crop, size and place under a name and use it again later.
+- **Presets:** save how a view looks (crop, size, place and options) under a name, and use it on any view later.
 - **Freeze**, under **Picture:** the view keeps showing what it shows now while the window goes on changing. You can
   still move, resize, crop and zoom it, but not use the app through it. Choose it again to go back to live.
 - **Rotate or mirror**, under **Picture:** turn the view a quarter at a time, or mirror it. You can still use the app

@@ -254,8 +254,6 @@ public sealed partial class PipWindow
         size.DropDownItems.Add(T("pip.size.large"), null, (_, _) => ResizeTo(Dpi.Scale(LargeLongSide, DeviceDpi)));
         size.DropDownItems.Add(T("pip.size.fitSource"), null, (_, _) => FitToSourceSize());
         options.DropDownItems.Add(size);
-        if (_origin is ScreenPipSource)
-            options.DropDownItems.Add(T("pip.bookmarks.save"), null, (_, _) => SaveSourceBookmark());
     }
 
     private void FillPresets(ToolStripMenuItem presets)
@@ -273,6 +271,9 @@ public sealed partial class PipWindow
         if (saved.Count > 0)
             presets.DropDownItems.Add(new ToolStripSeparator());
         presets.DropDownItems.Add(T("pip.presets.save"), null, (_, _) => SavePreset());
+        // A display or region: what it shows, and the view as it is, to open again from Saved sources.
+        if (_origin is ScreenPipSource)
+            presets.DropDownItems.Add(T("pip.bookmarks.save"), null, (_, _) => SaveSourceBookmark());
         if (saved.Count > 0)
         {
             var remove = new ToolStripMenuItem(T("pip.presets.remove"));
@@ -289,7 +290,7 @@ public sealed partial class PipWindow
             AutoSizeMode = AutoSizeMode.GrowAndShrink, StartPosition = FormStartPosition.CenterScreen,
             FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false, TopMost = true };
         var name = new TextBox { Width = 320, MaxLength = PipPreset.NameLimit, AccessibleName = T("pip.bookmarks.name") };
-        var layout = new CheckBox { Text = T("pip.bookmarks.includeLayout"), AutoSize = true };
+        var layout = new CheckBox { Text = T("pip.bookmarks.includeLayout"), AutoSize = true, Checked = true };
         var save = new Button { Text = T("common.save"), DialogResult = DialogResult.OK, AutoSize = true };
         var cancel = new Button { Text = T("common.cancel"), DialogResult = DialogResult.Cancel, AutoSize = true };
         var page = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Padding = new Padding(12) };
@@ -300,20 +301,32 @@ public sealed partial class PipWindow
         if (dialog.ShowDialog() != DialogResult.OK || string.IsNullOrWhiteSpace(name.Text)) return;
         Attempt(() =>
         {
-            source.Require();
-            Rectangle display = source.Screen.Bounds;
-            PipPreset current = CurrentPreset(name.Text.Trim());
-            var bookmark = new PipSourceBookmark
-            {
-                Name = name.Text.Trim(), Device = source.Device,
-                DisplayX = display.X, DisplayY = display.Y, DisplayWidth = display.Width, DisplayHeight = display.Height,
-                Region = source.Region is { } region ? PipCropShares.Of(region, display.Size) : null,
-                View = layout.Checked ? new PipPreset { Name = current.Name, LongSide = current.LongSide,
-                    Device = current.Device, Left = current.Left, Top = current.Top, PositionLocked = current.PositionLocked,
-                    Turns = current.Turns, Mirrored = current.Mirrored } : null,
-            };
-            SourceBookmarkSaved?.Invoke(bookmark);
+            if (SourceBookmark(name.Text.Trim(), layout.Checked) is { } bookmark) SourceBookmarkSaved?.Invoke(bookmark);
         });
+    }
+
+    // With the view, everything about it comes back: crop, options, turn, and its exact place and size in pixels.
+    internal PipSourceBookmark? SourceBookmark(string name, bool withView)
+    {
+        if (_origin is not ScreenPipSource source) return null;
+        source.Require();
+        Rectangle display = source.Screen.Bounds;
+        PipPreset? view = null;
+        if (withView)
+        {
+            view = CurrentPreset(name);
+            view.ViewX = Bounds.X;
+            view.ViewY = Bounds.Y;
+            view.ViewWidth = Bounds.Width;
+            view.ViewHeight = Bounds.Height;
+        }
+        return new PipSourceBookmark
+        {
+            Name = name, Device = source.Device,
+            DisplayX = display.X, DisplayY = display.Y, DisplayWidth = display.Width, DisplayHeight = display.Height,
+            Region = source.Region is { } region ? PipCropShares.Of(region, display.Size) : null,
+            View = view,
+        };
     }
 
     private string PresetChanges(PipPreset preset)
@@ -329,6 +342,7 @@ public sealed partial class PipWindow
         if (preset.Scaling != current.Scaling) changes.Add(T("pip.scaling"));
         if (preset.PositionLocked is { } locked && locked != current.PositionLocked) changes.Add(T("pip.lockPosition") + ": " + (locked ? T("common.yes") : T("common.no")));
         if (preset.TitleBarAlways is { } always && always != TitleBarAlways) changes.Add(T("pip.titleBarAlways") + ": " + (always ? T("common.yes") : T("common.no")));
+        if (preset.KeepAspectRatio is { } keep && keep != _overrides.KeepAspectRatio) changes.Add(T("pip.keepAspectRatio") + ": " + (keep ? T("common.yes") : T("common.no")));
         if (preset.Turn != _turn) changes.Add(T("pip.turn"));
         return changes.Count == 0 ? T("pip.presets.noChanges") : string.Join("; ", changes);
     }

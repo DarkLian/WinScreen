@@ -1920,7 +1920,9 @@ public sealed partial class TrayApplication : ApplicationContext
             ResolvedBookmark resolved = bookmark.Resolve(Screen.AllScreens.Select(screen =>
                 new BookmarkDisplay(screen.DeviceName, screen.Bounds, screen.Primary)).ToArray())
                 ?? throw new WindowOperationException(T("errors.pip.displayUnavailable"));
-            if (resolved.NeedsPreview || previewOnly)
+            // Only on the display it was saved on, unchanged, is the view's saved place still the same spot.
+            bool sameDisplay = !resolved.NeedsPreview && !previewOnly;
+            if (!sameDisplay)
             {
                 using var preview = new PipBookmarkPreview(bookmark);
                 if (preview.ShowDialog() != DialogResult.OK || preview.Selection is not { } selected) return;
@@ -1932,7 +1934,9 @@ public sealed partial class TrayApplication : ApplicationContext
                 throw new WindowOperationException(T("errors.pip.displayUnavailable"));
             var view = new PipWindow(source, _windows);
             OpenView(view);
-            if (bookmark.View is { } preset && !view.IsDisposed) view.ApplyPreset(preset);
+            if (bookmark.View is not { } preset || view.IsDisposed) return;
+            view.ApplyPreset(preset);
+            if (sameDisplay && preset.ViewBounds is { } exact) view.PlaceExactly(exact);
         });
     }
 

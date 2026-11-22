@@ -242,7 +242,7 @@
   "pip.backend.advanced": "Smooth (screen capture)",
   "pip.backend.compatibility": "Standard (window thumbnail)",
   "pip.backend.retry": "Try smooth capture again",
-  "pip.bookmarks.includeLayout": "Also remember view size and position",
+  "pip.bookmarks.includeLayout": "Also remember the view as it is: size, place, crop and options",
   "pip.bookmarks.layoutNotice": "Check the highlighted area before opening, or choose another display. It was saved on:",
   "pip.bookmarks.name": "Name",
   "pip.bookmarks.preview": "Preview saved source",
