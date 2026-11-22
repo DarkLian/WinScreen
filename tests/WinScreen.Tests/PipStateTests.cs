@@ -175,23 +175,29 @@ public sealed class PipOpenTests
         });
     }
 
+    // A minimized window draws nothing, so since 22 Nov a source minimized during a view goes behind it instead, without
+    // a word, and keeps its taskbar button (WgcPipTests.An_original_minimized_while_shown_goes_behind_its_view_and_keeps_drawing).
     [Fact]
-    public void A_source_minimized_during_a_view_stays_minimized()
+    public void A_source_minimized_during_a_view_goes_behind_it_quietly_and_stays_on_the_taskbar()
     {
         using var source = new TargetProcess(new(200, 160, 400, 300));
         OnUiThread(pump =>
         {
-            using var pip = new PipWindow(source.Handle, new WindowController([]));
+            var windows = new WindowController([]);
+            using var pip = new PipWindow(source.Handle, windows);
             var notices = new List<string>();
             pip.Notice += notices.Add;
             pip.ApplyPipPreferences(new PipPreferences { Backend = PipBackendPreference.Dwm });
             pip.ShowOnTop();
             pump(150);
             User32.ShowWindow(source.Handle, 6);
-            pump(600);
-            Assert.True(User32.IsIconic(source.Handle));
+            Assert.True(Desktop.WaitFor(() => windows.IsHidden(source.Handle) && !User32.IsIconic(source.Handle), 3000, () => pump(20)),
+                $"Minimized: hidden {windows.IsHidden(source.Handle)}, minimized {User32.IsIconic(source.Handle)}.");
+            Assert.True(pip.HiddenWhileMinimized && !windows.IsOffTaskbar(source.Handle), pip.StateDescription);
             Assert.Empty(notices);
             pip.Close();
+            pump(150);
+            Assert.False(windows.IsHidden(source.Handle));
         });
     }
 }
