@@ -703,7 +703,11 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             ChangedWindow state = Track(window);
             bool pin = !state.Pinned;
             Prepare(window, state, User32.WS_EX_TOPMOST);
-            if (pin)
+            // Hidden behind a view or tile, brought forward it would come out from behind it (its tile took that as the
+            // person picking it): it is only marked on top here, and the pin check keeps it there once it is shown.
+            if (pin && state.Hidden)
+                SetTopmost(window, true, state.Identity);
+            else if (pin)
                 Pin(window, state.Identity);
             else
                 SetTopmost(window, false, state.Identity);
