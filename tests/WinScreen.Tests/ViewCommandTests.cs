@@ -113,6 +113,32 @@ public sealed class ViewCommandTests
                     Run(AppCommand.ViewKeepHidden, region.Handle); // It has no original: nothing to do.
                     Assert.False(region.KeepsUpdating);
 
+                    // Pressed for real: a view doesn't take the focus, so another window is in front, and a hidden
+                    // original never is. The view under the pointer is the one meant.
+                    Rectangle work = screen.WorkingArea;
+                    region.Location = new Point(work.Right - region.Width - 40, work.Top + 40);
+                    view.Location = new Point(work.Right - view.Width - 40, work.Bottom - view.Height - 40);
+                    pump(200);
+                    void PressFreezeOver(PipWindow pointed)
+                    {
+                        Desktop.GainForegroundRights();
+                        Desktop.Activate(other.Handle);
+                        pump(200);
+                        Cursor.Position = new Point(pointed.Left + pointed.Width / 2, pointed.Top + pointed.Height / 2);
+                        pump(100);
+                        Desktop.Press(Keys.F9, Keys.ControlKey, Keys.Menu, Keys.ShiftKey);
+                    }
+                    PressFreezeOver(region);
+                    Assert.True(Desktop.WaitFor(() => region.Frozen, 3000, () => pump(20)), "The key didn't reach the region view under the pointer.");
+                    Assert.False(view.Frozen);
+                    if (!view.KeepsUpdating) Run(AppCommand.ViewKeepHidden, target.Handle);
+                    Assert.True(Desktop.WaitFor(() => view.KeepsUpdating && view.Frozen == false && view.CanTurn, 15000, () => pump(20)), view.StateDescription);
+                    PressFreezeOver(view);
+                    Assert.True(Desktop.WaitFor(() => view.Frozen, 3000, () => pump(20)), "The key didn't reach the window's view under the pointer.");
+                    Run(AppCommand.ViewFreeze, view.Handle);
+                    Run(AppCommand.ViewFreeze, region.Handle);
+                    Assert.False(view.Frozen || region.Frozen);
+
                     // A click-through view takes no click and never comes to the front: Turn off click-through everywhere
                     // reaches it.
                     view.Overrides = view.Overrides with { ClickThrough = true };

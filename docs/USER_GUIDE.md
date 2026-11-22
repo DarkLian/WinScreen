@@ -35,7 +35,7 @@ You can change or clear any of these in **Settings → Actions and shortcuts**. 
 | Put this window back | Ctrl+Alt+U |
 | Put every window back | Ctrl+Alt+R |
 
-Other commands, like moving a window to a corner, have no shortcut until you give them one. So do the view's own: Keep hidden, Interactive or Watch only, Use or go to the original, Mute, Freeze, Rotate or mirror, Reset crop and zoom, and Minimize or restore. They work on the view in front, or on the view of the window in front; a minimized view comes back with its key.
+Other commands, like moving a window to a corner, have no shortcut until you give them one. So do the view's own: Keep hidden, Interactive or Watch only, Use or go to the original, Mute, Freeze, Rotate or mirror, Reset crop and zoom, and Minimize or restore. They work on the view of the window in front, or else on the view under the pointer; a minimized view comes back with its key.
 
 <p align="center"><img src="assets/screenshots/settings-actions.png" width="880" alt="Settings, Actions and shortcuts page"></p>
 

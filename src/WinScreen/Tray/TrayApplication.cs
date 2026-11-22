@@ -1585,15 +1585,22 @@ public sealed partial class TrayApplication : ApplicationContext
         Diagnostics.Log.Event("command", ("name", command), ("outcome", outcome),
             ("program", window == 0 ? Diagnostics.LogValue.Program("") : Diagnostics.LogValue.ProgramOf(window)));
 
-    // A region or display view is no window's view: in front, the view itself is the target. A minimized view is never
-    // in front, so its key brings back the one minimized last.
+    // The view of the window, or the view itself: a region or display view is no window's view.
+    private PipWindow? ViewOf(nint window) =>
+        window == 0 ? null : _pips.TryGetValue(window, out PipWindow? own) ? own
+            : _viewsInOrder.FirstOrDefault(each => each.IsHandleCreated && each.Handle == window);
+
+    // A view doesn't take the focus, so a key pressed for it usually finds another window in front, often one with no
+    // view (its original is hidden): then the view under the pointer, its title bar included. A minimized view is
+    // nowhere, so its key brings back the one minimized last.
     private PipWindow? ViewFor(AppCommand command, nint window)
     {
-        PipWindow? view = window == 0 ? null : _pips.TryGetValue(window, out PipWindow? own) ? own
-            : _viewsInOrder.FirstOrDefault(each => each.IsHandleCreated && each.Handle == window);
-        if (view is null && command == AppCommand.ViewMinimize)
-            view = _viewsInOrder.Where(each => each.IsSuspended).MaxBy(each => each.SuspendedAt);
-        return view;
+        if (ViewOf(window) is { } view) return view;
+        Point point = Cursor.Position;
+        nint under = User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y }), User32.GA_ROOTOWNER);
+        if (ViewOf(under) is { } pointed && pointed.Handle == under) return pointed;
+        return command == AppCommand.ViewMinimize
+            ? _viewsInOrder.Where(each => each.IsSuspended).MaxBy(each => each.SuspendedAt) : null;
     }
 
     // The view is WinScreen's own, so the checks for other programs' windows don't apply; full screen doesn't either,

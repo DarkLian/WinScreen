@@ -89,7 +89,7 @@ public sealed partial class TrayApplication
             AppCommand.ViewMinimize,
         }.Select(command => Define(command, window => ViewFor(command, window)?.Run(command)) with
         {
-            Target = CommandTarget.View, IsOn = window => ViewFor(command, window)?.IsOn(command) == true,
+            Target = CommandTarget.View, IsOn = window => ViewOf(window)?.IsOn(command) == true,
         });
 
     private IEnumerable<CommandDefinition> EffectCommands() =>
