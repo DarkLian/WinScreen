@@ -1046,8 +1046,10 @@ public sealed partial class PipWindow : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         EndLive();
-        // Keep the recovery surface reachable if a concealed source is temporarily unresponsive.
-        if (_origin.IsWindow && _origin.IsAvailable &&
+        // Keep the recovery surface reachable if a concealed source is temporarily unresponsive. Only what this view did
+        // holds it: an original that Glass, Dark or a tile hides is theirs to show, and the view closed over it before.
+        bool hiddenByAnother = _origin.IsWindow && _windows.IsHidden(_source) && !_windows.IsConcealedBy(_source, this);
+        if (_origin.IsWindow && _origin.IsAvailable && !hiddenByAnother &&
             (_windows.IsHidden(_source) || _windows.IsOutOfSwitcher(_source)))
         {
             ChangeInteractionMode(false, false);
