@@ -70,8 +70,11 @@ public sealed partial class TrayApplication
             nint watched = _watched != 0 && User32.IsWindow(_watched) ? _watched : 0;
             int[]? on = watched == 0 ? null : CommandCatalog.All.Where(command => !CommandCatalog.ForView(command) && _commands.IsOn(command, watched))
                 .Select(command => (int)command).ToArray();
+            HelperLink.HelperItem[] tiles = _shrunk.Where(pair => !pair.Value.IsDisposed)
+                .Select(pair => new HelperLink.HelperItem(pair.Key, pair.Value.Text)).ToArray();
+            HelperLink.HelperItem[] effects = _content.Sources.Select(source => new HelperLink.HelperItem(source, Windows.WindowInfo.Title(source))).ToArray();
             var state = new HelperLink.Message(HelperLink.State, Window: watched, Counts: [_windows.ClickThroughCount, _windows.PinnedCount],
-                Views: views, On: on);
+                Views: views, On: on, Tiles: tiles, Effects: effects);
             string encoded = HelperLink.Encode(state);
             if (encoded != _stateSent && ordinary.Send(state)) _stateSent = encoded;
         }
@@ -86,11 +89,13 @@ public sealed partial class TrayApplication
         int[] counts = state.Counts ?? [];
         bool changed = _helperState is null || !(_helperState.Counts ?? []).SequenceEqual(counts) ||
                        HelperViews.Length != (state.Views?.Length ?? 0) || _helperState.Window != state.Window ||
+                       (_helperState.Tiles?.Length ?? 0) != (state.Tiles?.Length ?? 0) || (_helperState.Effects?.Length ?? 0) != (state.Effects?.Length ?? 0) ||
                        !(_helperState.On ?? []).SequenceEqual(state.On ?? []);
         _helperState = state;
         if (changed)
             Diagnostics.Log.Event("helper.state", ("clickThrough", HelperCount(0)), ("pinned", HelperCount(1)), ("views", HelperViews.Length),
-                ("watched", state.Window != 0), ("on", state.On?.Length ?? 0));
+                ("watched", state.Window != 0), ("on", state.On?.Length ?? 0), ("tiles", state.Tiles?.Length ?? 0),
+                ("effects", state.Effects?.Length ?? 0));
     }
 
     private void RunHelperViewAction(nint view, string action)
@@ -114,6 +119,14 @@ public sealed partial class TrayApplication
                 case "close": view.Close(); break;
             }
         });
+        SendState();
+    }
+
+    private void TileActionFromOrdinaryCopy(nint source)
+    {
+        if (!_shrunk.TryGetValue(source, out var tile) || tile.IsDisposed) return;
+        tile.BringBack = true;
+        tile.Close();
         SendState();
     }
 
@@ -318,6 +331,9 @@ public sealed partial class TrayApplication
                     Reply(result);
                 }
                 SendState();
+                break;
+            case HelperLink.ViewAction when message.Text == "showTile":
+                TileActionFromOrdinaryCopy((nint)message.Window);
                 break;
             case HelperLink.ViewAction:
                 ViewActionFromOrdinaryCopy((nint)message.Window, message.Text);

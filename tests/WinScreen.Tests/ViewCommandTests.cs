@@ -66,7 +66,8 @@ public sealed class ViewCommandTests(Xunit.Abstractions.ITestOutputHelper output
                     MethodInfo fromHelper = typeof(TrayApplication).GetMethod("FromHelper", BindingFlags.Instance | BindingFlags.NonPublic)!;
                     var view = new HelperLink.HelperView(0x1234, 0x5678, "PiP - Claude", Suspended: true, SourceIsWindow: true,
                         ClickThrough: true, CanRetry: false, PointedAt: 1, SuspendedAt: 2);
-                    fromHelper.Invoke(app, [new HelperLink.Message(HelperLink.State, Counts: [1, 1], Views: [view])]);
+                    fromHelper.Invoke(app, [new HelperLink.Message(HelperLink.State, Counts: [1, 1], Views: [view],
+                        Tiles: [new HelperLink.HelperItem(0x2222, "Task Manager")], Effects: [new HelperLink.HelperItem(0x3333, "Registry Editor")])]);
                     Open();
                     Assert.True(Item(clickThroughOff).Available, "Turn off click-through everywhere isn't offered for the helper's window.");
                     Assert.True(Item(unpin).Available, "Unpin everywhere isn't offered for the helper's window.");
@@ -74,6 +75,11 @@ public sealed class ViewCommandTests(Xunit.Abstractions.ITestOutputHelper output
                     string[] actions = listed.DropDownItems.Cast<ToolStripItem>().Select(item => item.Text ?? "").ToArray();
                     Assert.Equal([Localization.UiText.T("pip.restoreView"), Localization.UiText.T("pip.goToOriginal"),
                         Localization.UiText.T("pip.reenableClicks"), Localization.UiText.T("common.close")], actions);
+                    // Its tiles and looks too, each with its way back.
+                    var tile = (ToolStripMenuItem)Item("Task Manager - " + Localization.UiText.T("pip.state.originalHidden"));
+                    Assert.Equal(Localization.UiText.T("window.show"), tile.DropDownItems[0].Text);
+                    var look = (ToolStripMenuItem)Item("Registry Editor - " + Localization.UiText.T("settings.effects.title"));
+                    Assert.Equal(Localization.UiText.T("window.restore"), look.DropDownItems[0].Text);
                     Close();
 
                     // The window last in front is an administrator app's: its ticks are what the helper says.

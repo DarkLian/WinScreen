@@ -28,8 +28,12 @@ internal static class HelperLink
     internal sealed record HelperView(long Handle, long Source, string Title, bool Suspended, bool SourceIsWindow,
         bool ClickThrough, bool CanRetry, long PointedAt, long SuspendedAt);
 
+    // A window of the helper's shrunk to a tile, or under a look (Dark, Glass).
+    internal sealed record HelperItem(long Source, string Title);
+
     internal sealed record Message(string Kind, int Command = 0, long Window = 0, int[]? Display = null, string? Title = null,
-        string? Text = null, int Icon = 0, int[]? Counts = null, HelperView[]? Views = null, int[]? On = null, int Id = 0)
+        string? Text = null, int Icon = 0, int[]? Counts = null, HelperView[]? Views = null, int[]? On = null, int Id = 0,
+        HelperItem[]? Tiles = null, HelperItem[]? Effects = null)
     {
         internal Rectangle? DisplayBounds => Display is [var x, var y, var width, var height] ? new Rectangle(x, y, width, height) : null;
 

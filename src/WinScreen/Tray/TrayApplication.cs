@@ -466,6 +466,19 @@ public sealed partial class TrayApplication : ApplicationContext
             item.DropDownItems.Add(T("window.restore"), null, (_, _) => Run(AppCommand.RestoreWindow, source));
             items.Add(item);
         }
+        // The helper's, for administrator apps: shown here, done there.
+        foreach (HelperLink.HelperItem tile in _helperState?.Tiles ?? [])
+        {
+            var item = new ToolStripMenuItem(MenuText(tile.Title) + " - " + T("pip.state.originalHidden"));
+            item.DropDownItems.Add(T("window.show"), null, (_, _) => RunHelperViewAction((nint)tile.Source, "showTile"));
+            items.Add(item);
+        }
+        foreach (HelperLink.HelperItem effect in _helperState?.Effects ?? [])
+        {
+            var item = new ToolStripMenuItem(MenuText(effect.Title) + " - " + T("settings.effects.title")).Experimental();
+            item.DropDownItems.Add(T("window.restore"), null, (_, _) => Run(AppCommand.RestoreWindow, (nint)effect.Source));
+            items.Add(item);
+        }
         if (items.Count == 0)
             items.Add(new ToolStripMenuItem(T("pip.views.empty")) { Enabled = false });
         if (_settings.PipBookmarks.Count > 0)

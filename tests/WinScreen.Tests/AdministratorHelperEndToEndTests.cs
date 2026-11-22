@@ -381,6 +381,11 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
             bool opened = frontProcess == copy && !windowsBefore.Contains(front) && command is not (AppCommand.OpenPip or AppCommand.ToggleShrink);
             Look after = LookOf(window);
             int newWindows = WindowsOf(copy).Count - windowsBefore.Count;
+            // The helper's tile and look are listed in the ordinary copy's tray.
+            if (elevated && command == AppCommand.ToggleShrink && !Desktop.WaitFor(() => Log("winscreen.log").Contains("tiles=1"), 3000))
+                problems.Add("The ordinary copy doesn't know the helper's tile.");
+            if (elevated && command == AppCommand.ToggleDark && !Desktop.WaitFor(() => Log("winscreen.log").Contains("effects=1"), 3000))
+                problems.Add("The ordinary copy doesn't know the helper's Dark.");
             bool closed = false;
             string note = "";
             if (opened)
