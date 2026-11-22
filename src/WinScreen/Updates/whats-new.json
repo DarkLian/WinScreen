@@ -1,4 +1,33 @@
 {
+  "1.4.0": {
+    "en": [
+      "Rotate or mirror a view: choose Rotate or mirror under Picture in a view's menu, and keep using the app turned.",
+      "Scaling has three clear choices, Best, Pixelated and Soft, and resizing a view stops at the window's own size for an exact picture.",
+      "A minimized window that has a view stays on the taskbar and in Alt+Tab, and its view keeps updating.",
+      "With Keep hidden off, a view keeps updating while other windows cover its original, and Settings lets you choose whether new views hide the original window.",
+      "Drag a file out of a view onto the desktop or into a folder.",
+      "WinScreen's menus and dialogs stay in front of apps that keep themselves on top.",
+      "Many smaller fixes."
+    ],
+    "zh-Hans": [
+      "旋转或翻转视图：在视图菜单的“画面”中选择“旋转或翻转”，旋转后仍可继续使用应用。",
+      "缩放有三个清楚的选项：“最佳”“像素化”和“柔和”；调整视图大小时会停在窗口本身的大小，画面完全一致。",
+      "有视图的窗口最小化后仍保留在任务栏和 Alt+Tab 中，视图也会继续更新。",
+      "关闭“保持隐藏”时，即使原窗口被其他窗口完全挡住，视图也会继续更新；还可以在设置中选择新视图是否隐藏原窗口。",
+      "可以把文件从视图拖到桌面或文件夹中。",
+      "WinScreen 的菜单和对话框会显示在始终置顶的应用前面。",
+      "还有许多小修正。"
+    ],
+    "zh-Hant": [
+      "旋轉或翻轉檢視：在檢視選單的「畫面」中選擇「旋轉或翻轉」，旋轉後仍可繼續使用應用程式。",
+      "縮放有三個清楚的選項：「最佳」「像素化」和「柔和」；調整檢視大小時會停在視窗本身的大小，畫面完全一致。",
+      "有檢視的視窗最小化後仍保留在工作列和 Alt+Tab 中，檢視也會繼續更新。",
+      "關閉「保持隱藏」時，即使原視窗被其他視窗完全擋住，檢視也會繼續更新；也可以在設定中選擇新檢視是否隱藏原視窗。",
+      "可以把檔案從檢視拖曳到桌面或資料夾中。",
+      "WinScreen 的選單和對話方塊會顯示在一律置頂的應用程式前面。",
+      "還有許多小修正。"
+    ]
+  },
   "1.3.0": {
     "en": [
       "Glass levels for each app or a single window: choose Glass levels under Effects in a window's menu, or add the app under Apps in Settings → Backgrounds.",
