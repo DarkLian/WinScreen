@@ -8,7 +8,7 @@ namespace WinScreen.Tests;
 /// What a view does when its hidden original comes to the front, for every combination of what it knows. The rule
 /// (also in ARCHITECTURE.md, INV-20):
 ///
-/// | Original hidden by the view (Keep hidden, or while away) | Visit on or just ended | Picked from the taskbar or switcher, where listed | Desktop just switched | Answer |
+/// | Original hidden by the view (Keep hidden, while away, or while minimized on the taskbar) | Visit on or just ended | Picked from the taskbar or switcher, where listed | Desktop just switched | Answer |
 /// |---|---|---|---|---|
 /// | no  | any | any | any | Nothing |
 /// | yes | yes | any | any | Nothing |
@@ -20,11 +20,11 @@ namespace WinScreen.Tests;
 /// </summary>
 public sealed class ViewStateTests
 {
-    public static TheoryData<bool, bool, bool, bool, bool, bool> EveryCombination()
+    public static TheoryData<bool, bool, bool, bool, bool, bool, bool> EveryCombination()
     {
-        var all = new TheoryData<bool, bool, bool, bool, bool, bool>();
-        for (int bits = 0; bits < 64; bits++)
-            all.Add((bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0, (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0);
+        var all = new TheoryData<bool, bool, bool, bool, bool, bool, bool>();
+        for (int bits = 0; bits < 128; bits++)
+            all.Add((bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0, (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0, (bits & 64) != 0);
         return all;
     }
 
@@ -42,10 +42,10 @@ public sealed class ViewStateTests
     [Theory]
     [MemberData(nameof(EveryCombination))]
     public void An_arriving_original_gets_the_answer_in_the_table(bool hidden, bool away, bool visiting, bool justAfterVisit,
-        bool picked, bool switched)
+        bool picked, bool switched, bool minimized)
     {
-        Arrival answer = OriginalArrived(new Facts(hidden, away, visiting, justAfterVisit, picked, switched));
-        Assert.Equal(Table(hidden || away, visiting || justAfterVisit, picked, switched), answer);
+        Arrival answer = OriginalArrived(new Facts(hidden, away, visiting, justAfterVisit, picked, switched, minimized));
+        Assert.Equal(Table(hidden || away || minimized, visiting || justAfterVisit, picked, switched), answer);
     }
 
     /// <summary>The cases each found as a bug, by name.</summary>
@@ -67,17 +67,18 @@ public sealed class ViewStateTests
     public static TheoryData<int> EveryModeCombination()
     {
         var all = new TheoryData<int>();
-        for (int bits = 0; bits < 2048; bits++) all.Add(bits);
+        for (int bits = 0; bits < 4096; bits++) all.Add(bits);
         return all;
     }
 
     /// <summary>
-    /// Every combination of the view's eleven modes: none of the forbidden pairs passes as fine, and a combination with
+    /// Every combination of the view's twelve modes: none of the forbidden pairs passes as fine, and a combination with
     /// none of them is fine. The forbidden pairs, as ARCHITECTURE.md lists them under INV-20:
     /// used directly with the original shown; a visit without direct use, or while minimized or paused; "use it, then
     /// hide again" with the original hidden or visited, or while minimized; direct use not allowed for the app; a visit
     /// with experimental help while experimental features are off; the original out for a drop during a visit, while
-    /// Keep hidden is off or while minimized; hidden while away with Keep hidden on or while the original is in use.
+    /// Keep hidden is off or while minimized; hidden while away with Keep hidden on or while the original is in use;
+    /// hidden while minimized with Keep hidden on, while away or while the original is in use.
     /// </summary>
     [Theory]
     [MemberData(nameof(EveryModeCombination))]
@@ -95,6 +96,7 @@ public sealed class ViewStateTests
         if (m.TakingDrop && m.Visiting) broken.Add(PipStateProblem.DropDuringVisit);
         if (m.TakingDrop && (!m.Hidden || m.Suspended)) broken.Add(PipStateProblem.DropWithoutHiding);
         if (m.Away && (m.Hidden || m.UsingOriginal)) broken.Add(PipStateProblem.AwayWhileHiddenOrInUse);
+        if (m.OriginalMinimized && (m.Hidden || m.UsingOriginal || m.Away)) broken.Add(PipStateProblem.MinimizedWhileHiddenOrInUse);
 
         PipStateProblem found = ProblemOf(m);
         if (broken.Count == 0) Assert.Equal(PipStateProblem.None, found);
@@ -106,12 +108,12 @@ public sealed class ViewStateTests
         bool B(int i) => (bits & (1 << i)) != 0;
         return new Modes(Interactive: B(0), Hidden: B(1), Visiting: B(2), Suspended: B(3), InputPaused: B(4),
             UsingOriginal: B(5), MayInteract: B(6), ExperimentalSwitch: B(7), VisitUsesExperimental: B(8), TakingDrop: B(9),
-            Away: B(10));
+            Away: B(10), OriginalMinimized: B(11));
     }
 
     /// <summary>
     /// Every allowed combination of modes, every request, Keep hidden before direct use either way: no request leads
-    /// to a combination that must never happen (2048 × 14 × 2, the allowed ones only).
+    /// to a combination that must never happen (4096 × 16 × 2, the allowed ones only).
     /// </summary>
     [Theory]
     [MemberData(nameof(EveryModeCombination))]
@@ -186,5 +188,32 @@ public sealed class ViewStateTests
         Assert.True(Apply(away, Request.KeepHiddenOn) is { Hidden: true, Away: false });
         Assert.Equal(away, Apply(away, Request.VisitStarts));
         Assert.Equal(away, Apply(away, Request.DropStarts));
+    }
+
+    /// <summary>
+    /// An original the person minimized, kept on the taskbar and in Alt+Tab: only a shown original not in use goes
+    /// there; picking it shows it, any choice about the original ends it, and it is never Keep hidden.
+    /// </summary>
+    [Fact]
+    public void A_minimized_original_kept_on_the_taskbar_goes_through_the_table_too()
+    {
+        var shownView = new Modes(Interactive: false, Hidden: false, Visiting: false, Suspended: false, InputPaused: false,
+            UsingOriginal: false, MayInteract: true, ExperimentalSwitch: false, VisitUsesExperimental: false);
+        Modes minimized = Apply(shownView, Request.OriginalMinimized);
+        Assert.True(minimized is { OriginalMinimized: true, Hidden: false });
+        Modes hidden = Apply(shownView, Request.KeepHiddenOn);
+        Assert.Equal(hidden, Apply(hidden, Request.OriginalMinimized));
+        Modes away = Apply(shownView, Request.LeftDesktop);
+        Assert.Equal(away, Apply(away, Request.OriginalMinimized));
+        Assert.Equal(minimized, Apply(minimized, Request.LeftDesktop));
+        Assert.Equal(minimized, Apply(minimized, Request.DropStarts));
+        Assert.Equal(shownView, Apply(minimized, Request.OriginalRestored));
+        Assert.Equal(shownView, Apply(minimized, Request.ShowOriginal));
+        Assert.True(Apply(minimized, Request.KeepHiddenOn) is { Hidden: true, OriginalMinimized: false });
+        // Picked from the taskbar or Alt+Tab it is shown; anything else passes the focus on.
+        Assert.Equal(Arrival.Show, OriginalArrived(new Facts(Hidden: false, Away: false, Visiting: false,
+            JustAfterVisit: false, Picked: true, JustAfterDesktopSwitch: false, Minimized: true)));
+        Assert.Equal(Arrival.PassFocusOn, OriginalArrived(new Facts(Hidden: false, Away: false, Visiting: false,
+            JustAfterVisit: false, Picked: false, JustAfterDesktopSwitch: false, Minimized: true)));
     }
 }

@@ -6,7 +6,8 @@ public sealed record PipViewPreferences
 {
     public PipHoverPreview HoverPreview { get; init; }
     public int HoverDelayMilliseconds { get; init; } = 600;
-    public bool MinimizeToTaskbar { get; init; }
+    public bool MinimizeToTaskbar { get; init; } = true;
+    public bool KeepMinimizedOriginalsOnTaskbar { get; init; } = true;
     public bool AlwaysShowTitleBar { get; init; }
     public bool KeepHiddenOnNewViews { get; init; } = true;
 

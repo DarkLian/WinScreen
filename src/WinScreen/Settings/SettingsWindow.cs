@@ -67,6 +67,7 @@ public sealed partial class SettingsWindow : Form
     private readonly CheckBox _pipTaskbar = new SwitchBox { Text = T("pip.taskbar.enable"), AutoSize = true };
     private readonly CheckBox _pipTitleBar = new SwitchBox { Text = T("pip.titleBarAlways.default"), AutoSize = true };
     private readonly CheckBox _pipKeepHidden = new SwitchBox { Text = T("pip.keepHidden.default"), AutoSize = true };
+    private readonly CheckBox _pipMinimizedOriginals = new SwitchBox { Text = T("pip.minimizedOriginals.taskbar"), AutoSize = true };
     private readonly ComboBox _pipPreview = new ThemedCombo { Width = 240 };
     private readonly CheckBox _pipCaptureBorder = new SwitchBox { Text = T("pip.captureBorder.hide"), AutoSize = true };
     private readonly CheckBox _pipDiagnostics = new SwitchBox { Text = T("pip.diagnostics.includeHardware"), AutoSize = true };
@@ -336,7 +337,7 @@ private readonly ErrorProvider _errors = new();
             [_windowMenuGesture] = '\uE962',
             [_pipBackend] = '\uE7F4', [_pipRate] = '\uE916', [_pipScaling] = '\uE9A6', [_pipOpacity] = '\uE706',
             [_pipCaptureBorder] = '\uE7A8', [_pipDiagnostics] = '\uE9D9', [_pipAutoMove] = '\uE7C2', [_pipMiddleScroll] = '\uE962',
-            [_hoverAutomatic] = '\uE713', [_pipTaskbar] = '\uE7C4', [_pipTitleBar] = '\uE8A0', [_pipKeepHidden] = '\uED1A', [_pipPreview] = '\uE890',
+            [_hoverAutomatic] = '\uE713', [_pipTaskbar] = '\uE7C4', [_pipTitleBar] = '\uE8A0', [_pipKeepHidden] = '\uED1A', [_pipMinimizedOriginals] = '\uE921',[_pipPreview] = '\uE890',
             [_defaultOpacity] = '\uE706', [_opacityStep] = '\uE9E9', [_opacityWheel] = '\uE962', [_opaqueOnHover] = '\uE890',
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
@@ -850,7 +851,7 @@ private readonly ErrorProvider _errors = new();
         draft.Pip.OpacityPercent = Number(_pipOpacity);
         draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
         draft.PipViews = new PipViewPreferences { MinimizeToTaskbar = _pipTaskbar.Checked, AlwaysShowTitleBar = _pipTitleBar.Checked,
-            KeepHiddenOnNewViews = _pipKeepHidden.Checked,
+            KeepHiddenOnNewViews = _pipKeepHidden.Checked, KeepMinimizedOriginalsOnTaskbar = _pipMinimizedOriginals.Checked,
             HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
             HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds }.Validated();
         return draft;
@@ -1281,6 +1282,7 @@ private readonly ErrorProvider _errors = new();
         _pipTaskbar.Checked = values.PipViews.MinimizeToTaskbar;
         _pipTitleBar.Checked = values.PipViews.AlwaysShowTitleBar;
         _pipKeepHidden.Checked = values.PipViews.KeepHiddenOnNewViews;
+        _pipMinimizedOriginals.Checked = values.PipViews.KeepMinimizedOriginalsOnTaskbar;
         _pipPreview.SelectedIndex = (int)values.PipViews.Validated().HoverPreview;
         _opacityStep.Value = Math.Clamp(values.OpacityStepPercent, 1, 25);
         EffectPreferences effects = values.Effects.Validated();
@@ -1468,7 +1470,7 @@ private readonly ErrorProvider _errors = new();
         var parts = new List<Control> { Note(T("settings.pip.apps.help")), _hoverAutomatic, _appRows, adding, Note(T("settings.pip.hover.programsHelp")) };
         if (!Pip.PipEnhancedHover.Supported) parts.Add(Note(T("settings.pip.hover.unsupported")));
         page.Controls.Add(Card(T("settings.pip.apps"), true, parts.ToArray()));
-        page.Controls.Add(Section(T("pip.hover.title"), _pipKeepHidden, _pipTaskbar, _pipTitleBar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));
+        page.Controls.Add(Section(T("pip.hover.title"), _pipKeepHidden, _pipMinimizedOriginals, _pipTaskbar, _pipTitleBar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));
         return page;
     }
 
@@ -1857,6 +1859,7 @@ private readonly ErrorProvider _errors = new();
         Option(_pipTaskbar.Text, none, _pipTaskbar.Checked, "pip");
         Option(_pipTitleBar.Text, none, _pipTitleBar.Checked, "pip");
         Option(_pipKeepHidden.Text, none, _pipKeepHidden.Checked, "pip");
+        Option(_pipMinimizedOriginals.Text, none, _pipMinimizedOriginals.Checked, "pip");
         Option(T("pip.hover.mode"), none, _pipPreview.SelectedIndex > 0, "pip");
         _features.EndUpdate();
         _fillingFeatures = false;

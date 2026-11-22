@@ -125,7 +125,7 @@ Views pause direct use while a WinScreen menu or the tray overflow panel is open
 
 When Windows can't hide the capture border, a hidden original uses standard mode. Showing it brings back your choice.
 
-**In Settings → Picture-in-Picture** you can choose a hover preview (for small views only) or reading lens, and keep minimized views on the taskbar.
+**In Settings → Picture-in-Picture** you can choose a hover preview (for small views only) or reading lens. Minimized views, and minimized windows that have a view, stay on the taskbar unless you turn that off there.
 
 ## Anchors
 
@@ -304,8 +304,8 @@ Nothing leaves your PC unless you send it yourself.
   **Settings → General**. WinScreen keeps running as you and starts a small helper with those rights just for those apps
   (Windows may ask first). The helper starts again whenever WinScreen does, and closes with it.
 - Commands pause while a game or full-screen app is in front.
-- Minimizing a window that has a view hides it behind the view instead, so the view keeps updating. A window that
-  can't be hidden stops drawing when minimized, and its view shows the last picture.
+- Minimizing a window that has a view hides it behind the view instead, so the view keeps updating. It stays on the
+  taskbar and in Alt+Tab, so you bring it back as usual. A window that can't be hidden stops drawing when minimized, and its view shows the last picture.
 - Views show on every virtual desktop and keep updating while you're on another one. To keep it updating, the view
   hides its window while you're away, and its menu says **Hidden while you're on another desktop**. On Windows 10
   and on Windows 11 24H2 and later, a window kept hidden by a view goes back to its own desktop when it's shown again.

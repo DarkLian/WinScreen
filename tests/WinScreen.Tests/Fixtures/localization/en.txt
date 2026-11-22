@@ -280,6 +280,7 @@ pip.keepAspectRatio 7E8913018537C262
 pip.keepHidden.default 274C864777087E15
 pip.lockPosition 20CD3751F574E232
 pip.minimize 8D074C6B563CF245
+pip.minimizedOriginals.taskbar EE02C7068EEAE069
 pip.opacity 6062652E10DD84C6
 pip.opacityPercent 66B35A85F33F451C
 pip.open 597820CE81C2A637
@@ -331,6 +332,7 @@ pip.state.clickThrough 7E8308EA95BE838F
 pip.state.fallback 9B38D74263D9CA6A
 pip.state.frozen 8FDAC69C6FE9CDBC
 pip.state.live B64AC05F17E64D03
+pip.state.minimizedHidden C78B8D3C1407786F
 pip.state.noNewPicture 8D9C725BDBE15F1F
 pip.state.originalHidden A8CF5AAB5B0353AE
 pip.state.pressNotDelivered 08F8A0D128AA8BB8

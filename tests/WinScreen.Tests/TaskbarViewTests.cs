@@ -18,8 +18,14 @@ public sealed class TaskbarViewGeometryTests
         Assert.Equal(new Size(expectedWidth, expectedHeight), PipGeometry.FitInside(new Size(width, height), new Size(limitWidth, limitHeight)));
 
     [Fact]
-    public void Older_settings_keep_minimizing_to_the_tray() =>
-        Assert.False(AppSettings.Parse("{}").PipViews.MinimizeToTaskbar);
+    public void Minimized_views_and_minimized_originals_stay_on_the_taskbar_unless_turned_off()
+    {
+        PipViewPreferences fresh = AppSettings.Parse("{}").PipViews;
+        Assert.True(fresh.MinimizeToTaskbar && fresh.KeepMinimizedOriginalsOnTaskbar);
+        // Settings saved with either off keep it off.
+        PipViewPreferences saved = AppSettings.Parse("""{"PipViews":{"MinimizeToTaskbar":false,"KeepMinimizedOriginalsOnTaskbar":false}}""").PipViews;
+        Assert.False(saved.MinimizeToTaskbar || saved.KeepMinimizedOriginalsOnTaskbar);
+    }
 }
 
 [Trait("Category", "RealWindows")]

@@ -28,7 +28,7 @@ public sealed partial class PipWindow
     internal bool LiftsWhenCovered { get; set; } = true;
 
     private bool MayLift => LiftsWhenCovered && !_cleaned && !_suspended && _thumbnail is not null && !_frozen &&
-        _origin.IsWindow && _origin.IsAvailable && !_hideItem.Checked && _awayFrom == Guid.Empty && !_usingOriginal &&
+        _origin.IsWindow && _origin.IsAvailable && !_hideItem.Checked && _awayFrom == Guid.Empty && !_minimizedOriginal && !_usingOriginal &&
         _live is null && _dropSince == 0 && _goingToUntil == 0 && !_pickingUp && !SteppedAside;
 
     private void FollowCover()

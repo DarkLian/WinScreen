@@ -14,7 +14,9 @@ Paths are relative to `src/WinScreen/` unless they start with `tests/`.
   too: turn on **Settings → General → Run as administrator**.
 - **Games and full-screen apps:** commands pause while one is in front, and views can't appear over games in
   exclusive full screen.
-- **Views:** minimizing a window that has a view hides it behind the view instead, so the view keeps updating; a
+- **Views:** minimizing a window that has a view hides it behind the view instead, so the view keeps updating. It keeps
+  its taskbar button and Alt+Tab entry, and picking it there brings it back (**Keep minimized original windows on the
+  taskbar and in Alt+Tab**, on by default; off, Keep hidden goes on instead, PipWindow.FollowOriginalMinimized). A
   window that can't be hidden stops drawing when minimized, and its view shows the last picture. With Keep hidden off,
   a fully covered window is kept drawing too; one that can't be made see-through still stops, as browsers do when
   covered. Protected video may show as black.

@@ -1,4 +1,4 @@
-﻿using static WinScreen.Localization.UiText;
+using static WinScreen.Localization.UiText;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using WinScreen.Native;
@@ -21,6 +21,7 @@ internal enum PipStateProblem
     DropDuringVisit,
     DropWithoutHiding,
     AwayWhileHiddenOrInUse,
+    MinimizedWhileHiddenOrInUse,
 }
 
 // Never takes the focus from the app in use.
@@ -288,6 +289,7 @@ public sealed partial class PipWindow : Form
         InputDescription,
         _hideItem.Checked ? T("pip.state.originalHidden") : "",
         _awayFrom != Guid.Empty ? T("pip.state.awayHidden") : "",
+        _minimizedOriginal ? T("pip.state.minimizedHidden") : "",
     }.Where(value => value.Length > 0));
 
     internal void RetryCapture()
@@ -633,15 +635,16 @@ public sealed partial class PipWindow : Form
 
     // All mode changes converge here. Menu state is published from actual concealment, including failure and
     // recovery; an interactive view never advertises a visible original as interactive.
-    private void ChangeInteractionMode(bool interactive, bool hidden, bool quiet = false)
+    private void ChangeInteractionMode(bool interactive, bool hidden, bool quiet = false, bool keepOnTaskbar = false)
     {
         _usingOriginal = false; // Any other choice about the original replaces "use it, then hide it again".
         EndLift(CoverEnd.Mode);
         EndDrop();
-        _awayFrom = Guid.Empty; // And any choice replaces "hidden while you're on another desktop".
+        _awayFrom = Guid.Empty; // And any choice replaces "hidden while you're on another desktop"
+        _minimizedOriginal = false; // and "hidden while minimized".
         StepAside(false);
         if (!interactive || !hidden) EndLive();
-        bool changed = SetConcealment(hidden, quiet);
+        bool changed = SetConcealment(hidden, quiet, keepOnTaskbar);
         PublishInteractionMode(interactive && changed);
         CheckState();
     }
@@ -653,15 +656,16 @@ public sealed partial class PipWindow : Form
         {
             EndLive();
             _awayFrom = Guid.Empty;
+            _minimizedOriginal = false;
         }
-        // Hidden only while the person is on another desktop isn't their Keep hidden: the menu, the saved setup and
-        // the state line don't show it.
-        _hideItem.Checked = hidden && _awayFrom == Guid.Empty;
+        // Hidden only while the person is on another desktop, or because they minimized it, isn't their Keep hidden:
+        // the menu, the saved setup and the state line don't show it.
+        _hideItem.Checked = hidden && _awayFrom == Guid.Empty && !_minimizedOriginal;
         _interactiveItem.Checked = interactive && hidden;
         _hideItem.Enabled = !_interactiveItem.Checked;
     }
 
-    private bool SetConcealment(bool hidden, bool quiet = false)
+    private bool SetConcealment(bool hidden, bool quiet = false, bool keepOnTaskbar = false)
     {
         if (!_origin.IsWindow)
             return false;
@@ -677,11 +681,15 @@ public sealed partial class PipWindow : Form
                 // Remembered before hiding: a hidden original shows on every desktop and has none of its own.
                 if (!_windows.IsConcealedBy(_source, this)) _ownDesktop = VirtualDesktops.DesktopOf(_source);
                 _windows.HideOwned(_source, this);
-                if (SwitcherHidingStopsView) { if (!quiet) Problem?.Invoke(T("errors.switcher.windows10")); }
-                // A Store app keeps the taskbar button Windows owns; activating it shows the app (FollowSource).
-                // Only its taskbar entry goes, which Windows 11 also leaves out of Alt+Tab; a tool window's frame
-                // would replace the original's own caption buttons in the view.
-                else if (!WindowController.TaskbarButtonOwnedByWindows(_source)) _windows.RemoveTaskbarButton(_source);
+                // Minimized by the person, it stays on the taskbar and in Alt+Tab, where they look for it.
+                if (!keepOnTaskbar)
+                {
+                    if (SwitcherHidingStopsView) { if (!quiet) Problem?.Invoke(T("errors.switcher.windows10")); }
+                    // A Store app keeps the taskbar button Windows owns; activating it shows the app (FollowSource).
+                    // Only its taskbar entry goes, which Windows 11 also leaves out of Alt+Tab; a tool window's frame
+                    // would replace the original's own caption buttons in the view.
+                    else if (!WindowController.TaskbarButtonOwnedByWindows(_source)) _windows.RemoveTaskbarButton(_source);
+                }
                 // A minimized one has no picture, and restored once parked it went back to its own place on the screen,
                 // unseen, where it isn't the window under the pointer that a browser looks for before it scrolls.
                 // Restored now, while it can't be seen.
@@ -1053,7 +1061,7 @@ public sealed partial class PipWindow : Form
         if (!EndLift(CoverEnd.ViewClosed)) SettleWhenItAnswers();
         _thumbnail?.Dispose();
         _thumbnail = null;
-        if ((_hideItem.Checked || _awayFrom != Guid.Empty) && _origin.IsAvailable)
+        if ((_hideItem.Checked || _awayFrom != Guid.Empty || _minimizedOriginal) && _origin.IsAvailable)
             ChangeInteractionMode(false, false);
         _popups?.ShowAll();
         _closeCheck?.Dispose();
@@ -1102,7 +1110,7 @@ public sealed partial class PipWindow : Form
         Visiting: _live is not null, Suspended: _suspended, InputPaused: _inputPaused, UsingOriginal: _usingOriginal,
         MayInteract: CanInteract, ExperimentalSwitch: _allowInteractive,
         VisitUsesExperimental: _live is { } visit && (visit.EnhancedHover || visit.MiddleClickScroll),
-        TakingDrop: _dropSince != 0, Away: _awayFrom != Guid.Empty);
+        TakingDrop: _dropSince != 0, Away: _awayFrom != Guid.Empty, OriginalMinimized: _minimizedOriginal);
 
     internal int UnexpectedModes { get; private set; }
 
@@ -1990,7 +1998,9 @@ public sealed partial class PipWindow : Form
     }
 
     // Minimized while shown, an original stopped drawing and its view stayed on the last picture: it
-    // goes behind its view instead, as Keep hidden puts it, and goes on drawing. One that can't be hidden stays minimized.
+    // goes behind its view instead and goes on drawing. One that can't be hidden stays minimized.
+    // With KeepMinimizedOriginalsOnTaskbar it keeps its taskbar button and Alt+Tab entry, as a minimized window does,
+    // and picking it there shows it (ViewState.Facts.Minimized); otherwise Keep hidden goes on.
     private void FollowOriginalMinimized()
     {
         bool minimized = _origin.IsWindow && User32.IsIconic(_source);
@@ -1999,6 +2009,27 @@ public sealed partial class PipWindow : Form
         if (!justMinimized || _hideItem.Checked || _suspended || _usingOriginal || _awayFrom != Guid.Empty ||
             _dropSince != 0 || !_origin.IsAvailable) return;
         ViewState.Modes before = CurrentModes();
+        if (_minimizedOriginal)
+        {
+            // Its own button clicked while Windows still had it in front: that minimizes it, but it already looked
+            // minimized, so the person meant to bring it back.
+            GoToSource();
+            return;
+        }
+        if (_viewPreferences.KeepMinimizedOriginalsOnTaskbar)
+        {
+            if (ViewState.Apply(before, ViewState.Request.OriginalMinimized) == before) return;
+            ChangeInteractionMode(false, true, quiet: true, keepOnTaskbar: true);
+            if (_windows.IsConcealedBy(_source, this))
+            {
+                _minimizedOriginal = true;
+                PublishInteractionMode(false);
+                CheckState();
+            }
+            CheckRequest(before, ViewState.Request.OriginalMinimized);
+            Diagnostics.Log.Event("view.minimizedOriginalKept", ("program", Diagnostics.LogValue.ProgramOf(_source)), ("hidden", _minimizedOriginal));
+            return;
+        }
         // Used directly before it was shown, it is again.
         ViewState.Request request = _interactiveBeforeShown && CanInteract ? ViewState.Request.InteractiveOn : ViewState.Request.KeepHiddenOn;
         ViewState.Modes target = ViewState.Apply(before, request);
@@ -2095,7 +2126,8 @@ public sealed partial class PipWindow : Form
             _seenDesktop = desktop;
         }
         nint foreground = User32.GetForegroundWindow();
-        if ((User32.GetAsyncKeyState(0x12 /* Alt */) & 0x8000) != 0) _altSeenAt = Environment.TickCount64;
+        // Held now, or pressed since the last look: a quick Alt+Tab can fall between two ticks (Windows 10).
+        if ((User32.GetAsyncKeyState(0x12 /* Alt */) & 0x8001) != 0) _altSeenAt = Environment.TickCount64;
         bool focused = _origin.IsWindow && foreground == _source;
         bool arrived = focused && !_sourceWasFocused;
         _sourceWasFocused = focused;
@@ -2113,7 +2145,8 @@ public sealed partial class PipWindow : Form
             // half a second of the visit ending in a Windows 10 VM).
             JustAfterVisit: now - _liveEndedAt < RevealGrace && !(_suspended && _suspendedAt >= _liveEndedAt),
             Picked: PickedFromTaskbarOrSwitcher(before),
-            JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && now - _desktopSwitchedAt < SwitchFocusGrace);
+            JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && now - _desktopSwitchedAt < SwitchFocusGrace,
+            Minimized: _minimizedOriginal);
         ViewState.Arrival answer = ViewState.OriginalArrived(facts);
         LastArrival = $"{answer}: before {WindowInfo.ClassName(before)}, picked {facts.Picked}";
         switch (answer)
@@ -2153,8 +2186,12 @@ public sealed partial class PipWindow : Form
     private bool PickedFromTaskbarOrSwitcher(nint before)
     {
         // A quick Alt+Tab switches before the switcher shows, so it is never in front: Alt held a moment ago counts.
-        bool switcher = before != 0 && SwitcherClasses.Contains(WindowInfo.ClassName(before)) ||
-                        Environment.TickCount64 - _altSeenAt < AltSwitchGrace;
+        // Windows 10 hands the focus on through its staging window, which can take longer; without Alt it may be a
+        // desktop switch, which isn't a pick.
+        string beforeClass = before != 0 ? WindowInfo.ClassName(before) : "";
+        long sinceAlt = Environment.TickCount64 - _altSeenAt;
+        bool switcher = SwitcherClasses.Contains(beforeClass) || sinceAlt < AltSwitchGrace ||
+                        beforeClass == "ForegroundStaging" && sinceAlt < AltStagingGrace;
         Point pointer = Cursor.Position;
         nint under = User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = pointer.X, Y = pointer.Y }), User32.GA_ROOT);
         bool taskbar = under != 0 && TaskbarClasses.Contains(WindowInfo.ClassName(under));
@@ -2163,7 +2200,7 @@ public sealed partial class PipWindow : Form
     }
 
     private long _altSeenAt = long.MinValue / 2;
-    private const long AltSwitchGrace = 400;
+    private const long AltSwitchGrace = 400, AltStagingGrace = 2000;
 
     private static readonly HashSet<string> TaskbarClasses = new(StringComparer.Ordinal)
         { "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "TaskListThumbnailWnd", "XamlExplorerHostIslandWindow" };
@@ -2195,7 +2232,10 @@ public sealed partial class PipWindow : Form
     }
 
     private Guid _awayFrom;
+    private bool _minimizedOriginal;
     private int _desktopTick;
+
+    internal bool HiddenWhileMinimized => _minimizedOriginal;
 
     private Guid? _seenDesktop;
     private long _desktopSwitchedAt;

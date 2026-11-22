@@ -14,11 +14,11 @@ internal static class ViewState
     }
 
     internal readonly record struct Facts(bool Hidden, bool Away, bool Visiting, bool JustAfterVisit,
-        bool Picked, bool JustAfterDesktopSwitch);
+        bool Picked, bool JustAfterDesktopSwitch, bool Minimized = false);
 
     internal static Arrival OriginalArrived(Facts facts)
     {
-        if (!facts.Hidden && !facts.Away) return Arrival.Nothing;
+        if (!facts.Hidden && !facts.Away && !facts.Minimized) return Arrival.Nothing;
         if (facts.Visiting || facts.JustAfterVisit) return Arrival.Nothing;
         if (facts.Picked) return Arrival.Show;
         if (facts.JustAfterDesktopSwitch) return Arrival.ViewTakesFocus;
@@ -27,7 +27,7 @@ internal static class ViewState
 
     internal readonly record struct Modes(bool Interactive, bool Hidden, bool Visiting, bool Suspended, bool InputPaused,
         bool UsingOriginal, bool MayInteract, bool ExperimentalSwitch, bool VisitUsesExperimental, bool TakingDrop = false,
-        bool Away = false);
+        bool Away = false, bool OriginalMinimized = false);
 
     internal static PipStateProblem ProblemOf(Modes m)
     {
@@ -41,6 +41,7 @@ internal static class ViewState
         if (m.TakingDrop && m.Visiting) return PipStateProblem.DropDuringVisit;
         if (m.TakingDrop && (!m.Hidden || m.Suspended)) return PipStateProblem.DropWithoutHiding;
         if (m.Away && (m.Hidden || m.UsingOriginal)) return PipStateProblem.AwayWhileHiddenOrInUse;
+        if (m.OriginalMinimized && (m.Hidden || m.UsingOriginal || m.Away)) return PipStateProblem.MinimizedWhileHiddenOrInUse;
         return PipStateProblem.None;
     }
 
@@ -60,22 +61,24 @@ internal static class ViewState
         DropEnds,
         LeftDesktop,
         BackToDesktop,
+        OriginalMinimized,
+        OriginalRestored,
     }
 
-    // Every choice about the original (Keep hidden, used directly, use it, show it) ends a drop and "hidden while
-    // away"; minimizing ends a drop.
+    // Every choice about the original (Keep hidden, used directly, use it, show it) ends a drop, "hidden while away"
+    // and "hidden while minimized"; minimizing the view ends a drop.
     internal static Modes Apply(Modes m, Request request, bool hiddenBeforeInteractive = false) => request switch
     {
-        Request.KeepHiddenOn => m with { Hidden = true, UsingOriginal = false, TakingDrop = false, Away = false },
+        Request.KeepHiddenOn => m with { Hidden = true, UsingOriginal = false, TakingDrop = false, Away = false, OriginalMinimized = false },
         Request.KeepHiddenOff when m.Interactive => m,
-        Request.KeepHiddenOff => m with { Hidden = false, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false },
+        Request.KeepHiddenOff => m with { Hidden = false, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false, OriginalMinimized = false },
         Request.InteractiveOn when m.Interactive || !m.MayInteract => m,
-        Request.InteractiveOn => m with { Interactive = true, Hidden = true, UsingOriginal = false, TakingDrop = false, Away = false },
+        Request.InteractiveOn => m with { Interactive = true, Hidden = true, UsingOriginal = false, TakingDrop = false, Away = false, OriginalMinimized = false },
         Request.InteractiveOff when !m.Interactive => m,
-        Request.InteractiveOff => m with { Interactive = false, Hidden = hiddenBeforeInteractive, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false },
+        Request.InteractiveOff => m with { Interactive = false, Hidden = hiddenBeforeInteractive, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false, OriginalMinimized = false },
         Request.UseOriginal when !m.Hidden || m.UsingOriginal || m.Suspended => m,
-        Request.UseOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = true, TakingDrop = false, Away = false },
-        Request.ShowOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false },
+        Request.UseOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = true, TakingDrop = false, Away = false, OriginalMinimized = false },
+        Request.ShowOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false, OriginalMinimized = false },
         Request.Minimize when m.Suspended => m,
         Request.Minimize => m with { Suspended = true, Visiting = false, UsingOriginal = false, TakingDrop = false },
         Request.Restore => m with { Suspended = false },
@@ -86,9 +89,12 @@ internal static class ViewState
         Request.DropStarts when !m.Hidden || m.Suspended || m.UsingOriginal || m.TakingDrop || m.Away => m,
         Request.DropStarts => m with { TakingDrop = true, Visiting = false },
         Request.DropEnds => m with { TakingDrop = false },
-        Request.LeftDesktop when m.Hidden || m.UsingOriginal || m.Visiting || m.TakingDrop || m.Away => m,
+        Request.LeftDesktop when m.Hidden || m.UsingOriginal || m.Visiting || m.TakingDrop || m.Away || m.OriginalMinimized => m,
         Request.LeftDesktop => m with { Away = true },
         Request.BackToDesktop => m with { Away = false },
+        Request.OriginalMinimized when m.Hidden || m.UsingOriginal || m.Visiting || m.TakingDrop || m.Away || m.OriginalMinimized => m,
+        Request.OriginalMinimized => m with { OriginalMinimized = true },
+        Request.OriginalRestored => m with { OriginalMinimized = false },
         _ => m,
     };
 }

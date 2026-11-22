@@ -331,22 +331,30 @@ public sealed class WgcPipTests(ITestOutputHelper output)
 
     // Owner, 22 Nov: an original shown from its view and then minimized stopped drawing, and the view stayed on its last
     // picture. It goes behind its view instead, off the screen and not minimized, and the view goes on updating.
-    [WgcFact]
-    public void An_original_minimized_while_shown_goes_behind_its_view_and_keeps_drawing()
+    // Then: it should act as a minimized window does with no view, keeping its taskbar button and Alt+Tab entry, and
+    // come back when picked there (Settings, on by default). Turned off, Keep hidden goes on, off the taskbar.
+    [WgcTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void An_original_minimized_while_shown_goes_behind_its_view_and_keeps_drawing(bool keepOnTaskbar)
     {
-        using var source = new TargetProcess(new(200, 160, 400, 300));
+        using var source = new TargetProcess(new(200, 160, 400, 300), "C81E1E", "Minimized source");
+        using var other = new TargetProcess(new(260, 500, 300, 200), "1EC864", "Another window");
         OnUiThread(pump =>
         {
             Desktop.GainForegroundRights();
             var windows = new WindowController([]);
             using var pip = new PipWindow(source.Handle, windows);
             pip.ApplyPipPreferences(new() { Backend = PipBackendPreference.Wgc });
+            pip.ApplyViewPreferences(new PipViewPreferences { KeepMinimizedOriginalsOnTaskbar = keepOnTaskbar });
             pip.ShowOnTop(); pip.Location = new(800, 120);
             try
             {
                 Assert.True(Desktop.WaitFor(() => pip.BackendKind != PipBackendKind.DwmThumbnail, 15000, () => pump(20)), pip.DiagnosticSnapshot);
                 pip.HideOriginalByDefault();
                 pump(300);
+                Desktop.Activate(other.Handle); // Used just before, so Windows gives it the focus on minimize.
+                pump(200);
                 pip.GoToSource();
                 pump(500);
                 Assert.False(windows.IsHidden(source.Handle), "Not shown.");
@@ -355,11 +363,29 @@ public sealed class WgcPipTests(ITestOutputHelper output)
                     $"Minimized: hidden {windows.IsHidden(source.Handle)}, minimized {User32.IsIconic(source.Handle)}.");
                 Rectangle at = Desktop.BoundsOf(source.Handle);
                 Assert.False(Screen.AllScreens.Any(s => Rectangle.Intersect(s.Bounds, at) is { Width: > 2, Height: > 2 }), $"Hidden on the screen at {at}.");
-                Assert.True(pip.KeepsUpdating, pip.StateDescription);
+                Assert.True(pip.KeepsUpdating != keepOnTaskbar && pip.HiddenWhileMinimized == keepOnTaskbar, pip.StateDescription);
+                if (keepOnTaskbar) Assert.False(windows.IsOffTaskbar(source.Handle), "Minimized, it left the taskbar.");
+                else if (Environment.OSVersion.Version.Build >= 22000) Assert.True(windows.IsOffTaskbar(source.Handle), "Keep hidden left it on the taskbar.");
                 Rectangle middle = new(pip.Left + pip.Width / 2 - 10, pip.Top + pip.Height / 2 - 10, 20, 20);
                 source.SetColors("1E64C8");
                 Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(middle), Color.FromArgb(0x1E, 0x64, 0xC8)), 4000, () => pump(20)),
                     "The view didn't update: " + pip.DiagnosticSnapshot);
+                if (!keepOnTaskbar) return;
+
+                // Picked with a quick Alt+Tab from the window used before it, as one would a minimized window: it is
+                // itself again.
+                Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == other.Handle, 2000, () => pump(20)),
+                    $"Minimized, the focus went to {WindowInfo.ClassName(User32.GetForegroundWindow())}, not the window used before.");
+                Desktop.Key(Keys.Menu, true);
+                Thread.Sleep(30);
+                Desktop.Key(Keys.Tab, true);
+                Desktop.Key(Keys.Tab, false);
+                Thread.Sleep(30);
+                Desktop.Key(Keys.Menu, false);
+                Assert.True(Desktop.WaitFor(() => !windows.IsHidden(source.Handle) && User32.GetForegroundWindow() == source.Handle, 3000, () => pump(20)),
+                    $"Picked in Alt+Tab, it wasn't shown: hidden {windows.IsHidden(source.Handle)}, front {WindowInfo.ClassName(User32.GetForegroundWindow())}, {pip.LastArrival}.");
+                Assert.True(!pip.HiddenWhileMinimized && !pip.KeepsUpdating, pip.StateDescription);
+                Assert.Equal(PipStateProblem.None, pip.FirstStateProblem);
             }
             finally { pip.Close(); pump(200); }
             Assert.False(windows.IsHidden(source.Handle));
