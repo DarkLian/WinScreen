@@ -411,6 +411,65 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
         }
     }
 
+    // A command line run by a person comes from the window in front, which may put windows in front; a test has to win
+    // that right first, and keys from it don't get past an administrator window in front.
+    private static void TakeFront(TargetProcess plain)
+    {
+        Rectangle bounds = Desktop.BoundsOf(plain.Handle);
+        var middle = new Point(bounds.Left + bounds.Width / 2, bounds.Top + bounds.Height / 2);
+        User32.GetWindowThreadProcessId(User32.GetForegroundWindow(), out uint front);
+        if (ProcessInfo.IsElevated(front))
+        {
+            ElevatedClick(middle);
+            Desktop.WaitFor(() => User32.GetForegroundWindow() == plain.Handle, 4000);
+        }
+        Desktop.GainForegroundRights();
+    }
+    // A setup saved from an administrator app's window is the helper's to make and the ordinary copy's to write; the
+    // next window of that program, administrator or not, gets it from the copy that reaches it, with nothing failing.
+    [Fact]
+    public void A_setup_saved_on_an_administrator_window_is_written_once_and_applied_to_its_next_windows()
+    {
+        if (!ElevatesWithoutAsking) { Skipped.Because("Windows asks before running as administrator here, and a test can't answer."); return; }
+        if (ProcessInfo.SelfElevated || !ProcessInfo.CanElevate) { Skipped.Because("Needs an administrator account and a test run that isn't elevated."); return; }
+        Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0 && HelperProcess() == 0, "Close the running WinScreen before these tests.");
+        string settingsFile = Path.Combine(_data, "settings.json");
+        new AppSettings { WelcomeShown = true, ShowToolbar = false, ShowNotifications = false, RunAsAdministrator = true }.Save(settingsFile);
+        using var plain = new TargetProcess(new Rectangle(140, 520, 420, 260), "1E64C8", "WinScreen setup plain");
+        nint first = ElevatedTarget("WinScreen setup admin one", new Rectangle(620, 160, 420, 300));
+        _app = Start();
+        Assert.True(Desktop.WaitFor(() => HelperProcess() != 0, 20000), "No helper started.");
+        Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("helper.connected"), 15000), "The helper didn't connect.");
+
+        TakeFront(plain);
+        Assert.Equal(0, Run("TogglePin", "title:WinScreen setup admin one"));
+        Assert.Equal(0, Run("OpacityDown", "title:WinScreen setup admin one"));
+        Assert.True(Desktop.WaitFor(() => Topmost(first) && Desktop.Alpha(first) is < 255, 3000), "The window wasn't changed.");
+        Assert.Equal(0, Run("SaveWindowSetup", "title:WinScreen setup admin one"));
+        Assert.True(Desktop.WaitFor(() => ReadShared(settingsFile).Contains("\"Pinned\": true"), 5000),
+            "The ordinary copy didn't write the helper's setup:\n" + ReadShared(settingsFile));
+        AppSettings written = AppSettings.Parse(ReadShared(settingsFile));
+        ProgramSetup setup = Assert.Single(written.SavedSetups);
+        Assert.True(setup.Pinned && setup.Alpha < 255, setup.ToString());
+
+        // The next window of that program, as administrator: the helper gives it the setup.
+        nint second = ElevatedTarget("WinScreen setup admin two", new Rectangle(660, 200, 420, 300));
+        TakeFront(plain);
+        Desktop.Activate(second);
+        Assert.True(Desktop.WaitFor(() => Topmost(second) && Desktop.Alpha(second) is < 255, 6000),
+            "The helper didn't give the next administrator window its setup:\n" + Log("winscreen-administrator.log"));
+        // And not as administrator: the ordinary copy does.
+        using var ordinary = new TargetProcess(new Rectangle(600, 560, 420, 260), "1E64C8", "WinScreen setup ordinary");
+        TakeFront(plain);
+        Desktop.Activate(ordinary.Handle);
+        Assert.True(Desktop.WaitFor(() => Topmost(ordinary.Handle) && Desktop.Alpha(ordinary.Handle) is < 255, 6000),
+            "The ordinary copy didn't give the ordinary window the setup:\n" + Log("winscreen.log"));
+        Thread.Sleep(1500);
+        Assert.DoesNotContain("command.failed", Log("winscreen.log"));
+        Assert.DoesNotContain("setup.failed", Log("winscreen.log"));
+        Assert.Single(AppSettings.Parse(ReadShared(settingsFile)).SavedSetups);
+    }
+
     // Owner, 1.3.0: Ctrl+right-click on a pinned administrator app opened the helper's menu, which closed again at once
     // each time, the log saying the app took the focus back.
     [Fact]
