@@ -121,7 +121,7 @@ vídeo puede sonar, y se pausa mientras su ventana está minimizada o en otro es
 - Enrollar hasta la barra de título *(experimental)*, enviar al fondo
 
 **Efectos** *(experimental)*
-- Modo oscuro que deja las imágenes y los vídeos como están (en un PC sin tarjeta gráfica, un filtro sencillo)
+- Modo oscuro para cualquier app, que conserva el tono de cada color
 - Cristal que difumina solo el fondo
 - Cuánto difumina Cristal, para cada aplicación o para una sola ventana
 - Texto claro u oscuro sobre Cristal, con o sin una sombra suave

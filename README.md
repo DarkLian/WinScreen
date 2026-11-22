@@ -117,7 +117,7 @@ while its window is minimized or on another desktop.
 - Roll up to the title bar *(experimental)*, send to the back
 
 **Effects** *(experimental)*
-- Dark mode that keeps pictures and video as they are (a simple filter on a PC without a graphics card)
+- Dark mode for any app, keeping each color's hue
 - Glass that fades only the background
 - How much Glass fades, for each app or for a single window
 - Light or dark text over Glass, with or without a soft shadow

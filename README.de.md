@@ -121,7 +121,7 @@ Video kann mit Ton laufen und pausiert, solange sein Fenster minimiert oder auf 
 - Bis zur Titelleiste aufrollen *(experimentell)*, nach hinten schicken
 
 **Effekte** *(experimentell)*
-- Dunkelmodus, der Bilder und Videos lässt, wie sie sind (auf einem PC ohne Grafikkarte ein einfacher Filter)
+- Dunkelmodus für jede App, der den Farbton jeder Farbe behält
 - Glas, das nur den Hintergrund ausblendet
 - Wie stark Glas ausblendet, für jede App oder für ein einzelnes Fenster
 - Helle oder dunkle Schrift über Glas, mit oder ohne weichen Schatten

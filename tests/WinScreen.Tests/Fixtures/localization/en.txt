@@ -434,8 +434,8 @@ settings.dark.title 60ACC53F13A5D1BF
 settings.effects.background A2769F209594C64E
 settings.effects.fade 37EA7D7A4A9EEA6D
 settings.effects.fadeHelp E3175A0580AB0E6D
-settings.effects.help 4FFDAB63790AC4AC
-settings.effects.layeredGlass 36CBC77725A9ABBE
+settings.effects.help 0FD7A3D53D828554
+settings.effects.layeredGlass 38CC3B6E1B4548A5
 settings.effects.shadow B651D6333897DDD5
 settings.effects.text A4BB83DC0EE964E8
 settings.effects.textColor 4A69D01660468781

@@ -123,7 +123,7 @@ autre bureau.
 - Enrouler jusqu'à la barre de titre *(expérimental)*, envoyer à l'arrière-plan
 
 **Effets** *(expérimental)*
-- Un mode sombre qui laisse les images et les vidéos telles quelles (un simple filtre sur un PC sans carte graphique)
+- Un mode sombre pour n'importe quelle appli, qui garde la teinte de chaque couleur
 - Un effet verre qui n'atténue que l'arrière-plan
 - L'intensité de l'effet verre, pour chaque application ou pour une seule fenêtre
 - Un texte clair ou foncé avec l'effet verre, avec ou sans ombre douce

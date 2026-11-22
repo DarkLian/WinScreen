@@ -121,7 +121,7 @@ e pausa enquanto a janela está minimizada ou em outra área de trabalho.
 - Enrolar até a barra de título *(experimental)*, mandar para trás
 
 **Efeitos** *(experimental)*
-- Modo escuro que mantém imagens e vídeos como estão (em PCs sem placa de vídeo, um filtro simples)
+- Modo escuro para qualquer app, que mantém o tom de cada cor
 - Vidro que esmaece só o fundo
 - Quanto o Vidro esmaece, para cada app ou para uma só janela
 - Texto claro ou escuro sobre o Vidro, com ou sem uma sombra suave
