@@ -124,6 +124,74 @@ public sealed class EffectPairTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
     }
 
+    public static TheoryData<AppCommand, AppCommand, AppCommand> Triples() => new()
+    {
+        { AppCommand.TogglePin, AppCommand.ToggleRollUp, AppCommand.ToggleBorderless },
+        { AppCommand.ToggleGlass, AppCommand.ToggleCrop, AppCommand.TogglePin },
+        { AppCommand.ToggleDark, AppCommand.TogglePin, AppCommand.ToggleClickThrough },
+        { AppCommand.OpenPip, AppCommand.ToggleGlass, AppCommand.TogglePin },
+        { AppCommand.ToggleBorderless, AppCommand.ToggleDark, AppCommand.OpacityDown },
+        { AppCommand.ToggleAnchor, AppCommand.ToggleRollUp, AppCommand.ToggleCrop },
+    };
+
+    // Three at a time, in each of the six orders.
+    [WgcTheory]
+    [MemberData(nameof(Triples))]
+    public void Three_changes_each_order_and_Restore_window_takes_them_all_away(AppCommand a, AppCommand b, AppCommand c)
+    {
+        string folder = Directory.CreateTempSubdirectory("winscreen-triples-").FullName;
+        using var target = new TargetProcess(new Rectangle(300, 220, 460, 320), "E8E8E8,1E64C8", "Effect triples");
+        target.UseFrame();
+        var problems = new List<string>();
+        try
+        {
+            OnUiThread(pump =>
+            {
+                var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
+                var settings = new AppSettings { ShowToolbar = true, ShowNotifications = false, WelcomeShown = true, ModifierDrag = true, WindowMenu = true,
+                    ExperimentalFeatures = true, HighlightPinned = true, PipViews = new PipViewPreferences { KeepHiddenOnNewViews = false } };
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                MethodInfo run = typeof(TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                MethodInfo isOn = typeof(TrayApplication).GetMethod("IsOn", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                WindowController windows = Field<WindowController>(app, "_windows");
+                nint window = target.Handle;
+                void Do(AppCommand command)
+                {
+                    try
+                    {
+                        if (command == AppCommand.ToggleCrop) windows.Crop(window, new Rectangle(0, 0, 300, 200));
+                        else run.Invoke(app, [command, window]);
+                    }
+                    catch (WindowOperationException refused) { output.WriteLine($"  {command} refused: {refused.Message}"); }
+                    catch (TargetInvocationException failure) { problems.Add($"{command}: escaped {failure.InnerException}"); }
+                    pump(500);
+                }
+                try
+                {
+                    Look start = LookOf(window);
+                    AppCommand[][] orders = [[a, b, c], [a, c, b], [b, a, c], [b, c, a], [c, a, b], [c, b, a]];
+                    foreach (AppCommand[] order in orders)
+                    {
+                        foreach (AppCommand command in order) Do(command);
+                        string said = Field<string>(app, "_lastStatus");
+                        run.Invoke(app, [AppCommand.RestoreWindow, window]);
+                        pump(700);
+                        Look back = LookOf(window);
+                        string line = $"{string.Join(" then ", order)}: said '{said}'";
+                        output.WriteLine(line);
+                        if (back != start) problems.Add($"{line}: Restore window left {back}, was {start}");
+                        foreach (AppCommand each in Changes.Where(each => each != AppCommand.OpacityDown && each != AppCommand.ToggleCrop))
+                            if ((bool)isOn.Invoke(app, [each, window])!) problems.Add($"{line}: {each} still ticked after Restore window");
+                        if (windows.IsCropped(window) || windows.OpacityOf(window) < 255) problems.Add($"{line}: crop or opacity left");
+                    }
+                }
+                finally { app.ExitThread(); pump(300); }
+            });
+        }
+        finally { Directory.Delete(folder, true); }
+        Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
+    }
+
     // Which second change takes the first's place by design: hiding the window behind a tile or view ends what needs it
     // on screen, and the two kinds of hiding replace each other.
     private static bool Replaces(AppCommand second, AppCommand first) => (second, first) switch
