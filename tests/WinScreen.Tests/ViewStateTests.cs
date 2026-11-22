@@ -123,10 +123,11 @@ public sealed class ViewStateTests
         if (ProblemOf(before) != PipStateProblem.None) return;
         foreach (Request request in Enum.GetValues<Request>())
             foreach (bool hiddenBefore in new[] { false, true })
-            {
-                Modes after = Apply(before, request, hiddenBefore);
-                Assert.True(ProblemOf(after) == PipStateProblem.None, $"{before} + {request} → {after}: {ProblemOf(after)}");
-            }
+                foreach (bool minimizedBefore in new[] { false, true })
+                {
+                    Modes after = Apply(before, request, hiddenBefore, minimizedBefore);
+                    Assert.True(ProblemOf(after) == PipStateProblem.None, $"{before} + {request} → {after}: {ProblemOf(after)}");
+                }
     }
 
     [Fact]
@@ -210,6 +211,11 @@ public sealed class ViewStateTests
         Assert.Equal(shownView, Apply(minimized, Request.OriginalRestored));
         Assert.Equal(shownView, Apply(minimized, Request.ShowOriginal));
         Assert.True(Apply(minimized, Request.KeepHiddenOn) is { Hidden: true, OriginalMinimized: false });
+        // Used directly, then Watch only: minimized again, not shown.
+        Modes used = Apply(minimized, Request.InteractiveOn);
+        Assert.True(used is { Interactive: true, Hidden: true, OriginalMinimized: false });
+        Assert.Equal(minimized, Apply(used, Request.InteractiveOff, hiddenBeforeInteractive: false, minimizedBeforeInteractive: true));
+        Assert.Equal(shownView, Apply(used, Request.InteractiveOff, hiddenBeforeInteractive: false, minimizedBeforeInteractive: false));
         // Picked from the taskbar or Alt+Tab it is shown; anything else passes the focus on.
         Assert.Equal(Arrival.Show, OriginalArrived(new Facts(Hidden: false, Away: false, Visiting: false,
             JustAfterVisit: false, Picked: true, JustAfterDesktopSwitch: false, Minimized: true)));

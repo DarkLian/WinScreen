@@ -123,7 +123,7 @@ public sealed partial class PipWindow : Form
     private ToolStripMenuItem _middleScrollItem;
     private ToolStripMenuItem _enhancedHoverItem;
     private bool _hoverChosen;
-    private bool _hiddenBeforeInteractive;
+    private bool _hiddenBeforeInteractive, _minimizedBeforeInteractive, _offTaskbarBeforeInteractive;
     private bool _wasScrolling;
     private SourcePopups? _popups;
     private int _popupTick;
@@ -522,6 +522,8 @@ public sealed partial class PipWindow : Form
     private Size WholeSize() => _thumbnail is null ? Size.Empty : _origin.Whole(_thumbnail.SourceSize).Size;
 
     internal bool KeepsUpdating => _hideItem.Checked;
+
+    internal bool IsInteractive => _interactiveItem.Checked;
 
     internal void ApplyPreset(PipPreset preset)
     {
@@ -1078,17 +1080,23 @@ public sealed partial class PipWindow : Form
     {
         ViewState.Modes before = CurrentModes();
         ViewState.Request request = on ? ViewState.Request.InteractiveOn : ViewState.Request.InteractiveOff;
-        bool hiddenBefore = _hiddenBeforeInteractive;
-        ViewState.Modes target = ViewState.Apply(before, request, hiddenBefore);
+        bool hiddenBefore = _hiddenBeforeInteractive, minimizedBefore = _minimizedBeforeInteractive;
+        ViewState.Modes target = ViewState.Apply(before, request, hiddenBefore, minimizedBefore);
         if (target == before) return;
         try
         {
-            if (on) _hiddenBeforeInteractive = before.Hidden;
-            ChangeInteractionMode(target.Interactive, target.Hidden);
+            if (on)
+            {
+                _hiddenBeforeInteractive = before.Hidden;
+                _minimizedBeforeInteractive = before.OriginalMinimized;
+                _offTaskbarBeforeInteractive = _origin.IsWindow && _windows.IsOffTaskbar(_source);
+            }
+            if (target.OriginalMinimized) HideAsMinimized(backOnTaskbar: !_offTaskbarBeforeInteractive);
+            else ChangeInteractionMode(target.Interactive, target.Hidden);
             if (on && _interactiveItem.Checked && _overrides.ClickThrough)
                 Overrides = _overrides with { ClickThrough = false };
         }
-        finally { CheckRequest(before, request, hiddenBefore); }
+        finally { CheckRequest(before, request, hiddenBefore, minimizedBefore); }
     }
 
     internal PipInteraction? LiveInteraction => _live;
@@ -1116,10 +1124,11 @@ public sealed partial class PipWindow : Form
 
     // The modes after a request are what the table says, or unchanged (refused or failed, and said so). Anything else
     // is logged.
-    private void CheckRequest(ViewState.Modes before, ViewState.Request request, bool hiddenBeforeInteractive = false)
+    private void CheckRequest(ViewState.Modes before, ViewState.Request request, bool hiddenBeforeInteractive = false,
+        bool minimizedBeforeInteractive = false)
     {
         if (_cleaned || IsDisposed) return;
-        ViewState.Modes now = CurrentModes(), expected = ViewState.Apply(before, request, hiddenBeforeInteractive);
+        ViewState.Modes now = CurrentModes(), expected = ViewState.Apply(before, request, hiddenBeforeInteractive, minimizedBeforeInteractive);
         // The settings and what the visit uses aren't the request's to change.
         expected = expected with { MayInteract = now.MayInteract, ExperimentalSwitch = now.ExperimentalSwitch, VisitUsesExperimental = now.VisitUsesExperimental };
         before = before with { MayInteract = now.MayInteract, ExperimentalSwitch = now.ExperimentalSwitch, VisitUsesExperimental = now.VisitUsesExperimental };
@@ -2019,13 +2028,7 @@ public sealed partial class PipWindow : Form
         if (_viewPreferences.KeepMinimizedOriginalsOnTaskbar)
         {
             if (ViewState.Apply(before, ViewState.Request.OriginalMinimized) == before) return;
-            ChangeInteractionMode(false, true, quiet: true, keepOnTaskbar: true);
-            if (_windows.IsConcealedBy(_source, this))
-            {
-                _minimizedOriginal = true;
-                PublishInteractionMode(false);
-                CheckState();
-            }
+            HideAsMinimized(backOnTaskbar: false);
             CheckRequest(before, ViewState.Request.OriginalMinimized);
             Diagnostics.Log.Event("view.minimizedOriginalKept", ("program", Diagnostics.LogValue.ProgramOf(_source)), ("hidden", _minimizedOriginal));
             return;
@@ -2036,6 +2039,22 @@ public sealed partial class PipWindow : Form
         ChangeInteractionMode(target.Interactive, target.Hidden, quiet: true);
         CheckRequest(before, request);
         Diagnostics.Log.Event("view.minimizedOriginalHidden", ("program", Diagnostics.LogValue.ProgramOf(_source)), ("hidden", _hideItem.Checked));
+    }
+
+    // Hidden behind the view, but on the taskbar and in Alt+Tab. Coming back from direct use, which took it off them,
+    // it goes back on unless it was off them before.
+    private void HideAsMinimized(bool backOnTaskbar)
+    {
+        ChangeInteractionMode(false, true, quiet: true, keepOnTaskbar: true);
+        if (!_windows.IsConcealedBy(_source, this)) return;
+        if (backOnTaskbar)
+        {
+            try { _windows.PutBackOnTaskbarWhileHidden(_source); }
+            catch (WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
+        }
+        _minimizedOriginal = true;
+        PublishInteractionMode(false);
+        CheckState();
     }
 
     // Already minimized when the view opens counts as nothing new.

@@ -349,6 +349,19 @@ public sealed partial class WindowController
         }
     }
 
+    // A view's hidden original the person minimized: it stays hidden, its button and Alt+Tab entry come back.
+    public void PutBackOnTaskbarWhileHidden(nint window)
+    {
+        lock (_gate)
+        {
+            if (!_changed.TryGetValue(window, out ChangedWindow? state) || !state.Identity.Matches()) return;
+            if (!state.TaskbarButtonRemoved && state.SwitcherBits is null) return;
+            RestoreSwitcher(window, state);
+            RestoreTaskbarButton(window, state);
+            SaveJournal();
+        }
+    }
+
     public bool IsOffTaskbar(nint window)
     {
         lock (_gate) return _changed.TryGetValue(window, out var state) && state.Identity.Matches() && state.TaskbarButtonRemoved;

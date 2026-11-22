@@ -372,6 +372,21 @@ public sealed class WgcPipTests(ITestOutputHelper output)
                     "The view didn't update: " + pip.DiagnosticSnapshot);
                 if (!keepOnTaskbar) return;
 
+                // Owner, 22 Nov: used directly from the view and then Watch only, it was shown again. It is minimized
+                // again, back on the taskbar and in Alt+Tab, which direct use took it off.
+                pip.AllowInteractive = true; // A test window is used directly only with the experimental features.
+                pip.SetInteractive(true);
+                pump(300);
+                Assert.True(pip.IsInteractive && !pip.HiddenWhileMinimized, pip.StateDescription);
+                pip.SetInteractive(false);
+                pump(300);
+                Assert.True(windows.IsHidden(source.Handle), "Watch only showed the minimized original.");
+                Assert.True(pip.HiddenWhileMinimized && !pip.KeepsUpdating && !pip.IsInteractive, pip.StateDescription);
+                Assert.False(windows.IsOffTaskbar(source.Handle), "Back to Watch only, it stayed off the taskbar.");
+                Assert.Equal(0, pip.UnexpectedModes);
+                Desktop.Activate(other.Handle);
+                pump(200);
+
                 // Picked with a quick Alt+Tab from the window used before it, as one would a minimized window: it is
                 // itself again.
                 Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == other.Handle, 2000, () => pump(20)),

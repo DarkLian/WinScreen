@@ -66,8 +66,9 @@ internal static class ViewState
     }
 
     // Every choice about the original (Keep hidden, used directly, use it, show it) ends a drop, "hidden while away"
-    // and "hidden while minimized"; minimizing the view ends a drop.
-    internal static Modes Apply(Modes m, Request request, bool hiddenBeforeInteractive = false) => request switch
+    // and "hidden while minimized"; minimizing the view ends a drop. Watch only after direct use goes back to how the
+    // original was before: Keep hidden, shown, or minimized.
+    internal static Modes Apply(Modes m, Request request, bool hiddenBeforeInteractive = false, bool minimizedBeforeInteractive = false) => request switch
     {
         Request.KeepHiddenOn => m with { Hidden = true, UsingOriginal = false, TakingDrop = false, Away = false, OriginalMinimized = false },
         Request.KeepHiddenOff when m.Interactive => m,
@@ -75,7 +76,8 @@ internal static class ViewState
         Request.InteractiveOn when m.Interactive || !m.MayInteract => m,
         Request.InteractiveOn => m with { Interactive = true, Hidden = true, UsingOriginal = false, TakingDrop = false, Away = false, OriginalMinimized = false },
         Request.InteractiveOff when !m.Interactive => m,
-        Request.InteractiveOff => m with { Interactive = false, Hidden = hiddenBeforeInteractive, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false, OriginalMinimized = false },
+        Request.InteractiveOff => m with { Interactive = false, Hidden = hiddenBeforeInteractive, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false,
+            OriginalMinimized = minimizedBeforeInteractive && !hiddenBeforeInteractive },
         Request.UseOriginal when !m.Hidden || m.UsingOriginal || m.Suspended => m,
         Request.UseOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = true, TakingDrop = false, Away = false, OriginalMinimized = false },
         Request.ShowOriginal => m with { Interactive = false, Hidden = false, Visiting = false, UsingOriginal = false, TakingDrop = false, Away = false, OriginalMinimized = false },
