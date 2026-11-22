@@ -265,6 +265,8 @@ public sealed partial class PipWindow : Form
     }
 
     internal bool IsSuspended => _suspended;
+
+    internal long SuspendedAt => _suspendedAt;
     internal nint SourceWindow => _source;
     internal bool SourceIsWindow => _origin.IsWindow;
     internal bool CanRetryCapture => _suspended || _thumbnail?.CanRetry == true;

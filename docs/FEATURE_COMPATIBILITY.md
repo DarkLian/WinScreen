@@ -177,7 +177,7 @@ something away, so they also work while a full-screen app runs (`CommandCatalog.
 
 | Command | What it does |
 |---|---|
-| **Turn off click-through everywhere** | Clicks reach every window again. Shown only while a window is click-through. |
+| **Turn off click-through everywhere** | Clicks reach every window and view again. Shown only while one is click-through. |
 | **Unpin all windows** | Takes every WinScreen pin off. Shown only while a window is pinned. |
 | **Hide all Anchors** | Hides every Anchor until chosen again or WinScreen restarts. |
 | **Hide the toolbar for now** | Hides the title-bar toolbar until chosen again or WinScreen restarts. |

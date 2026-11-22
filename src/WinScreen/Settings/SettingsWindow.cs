@@ -1817,8 +1817,8 @@ private readonly ErrorProvider _errors = new();
         foreach (AppCommand command in CommandCatalog.All)
         {
             string name = CommandCatalog.Name(command).Replace("&", "");
-            string target = CommandCatalog.ForAllWindows(command)
-                ? T("actions.target.app") : T("actions.target.window");
+            string target = CommandCatalog.ForAllWindows(command) ? T("actions.target.app")
+                : CommandCatalog.ForView(command) ? T("actions.target.view") : T("actions.target.window");
             string saved = _settings.Hotkeys.GetValueOrDefault(command, "");
             string state = _shortcutProblems.GetValueOrDefault(command) ??
                 (CommandCatalog.IsExperimental(command) && !_settings.ExperimentalFeatures ? T("features.disabled") :

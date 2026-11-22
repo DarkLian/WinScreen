@@ -50,6 +50,19 @@ public enum AppCommand
     MinimizeToAnchor,
     KeepAreas,
     GlassLevels,
+    ViewKeepHidden,
+    ViewInteractive,
+    ViewUseOriginal,
+    ViewGoToOriginal,
+    ViewMute,
+    ViewFreeze,
+    ViewRotateRight,
+    ViewRotateLeft,
+    ViewMirrorAcross,
+    ViewMirrorDown,
+    ViewUpright,
+    ViewResetZoom,
+    ViewMinimize,
 }
 
 public enum ModifierKey { Alt, Win }
@@ -175,6 +188,17 @@ public static class CommandCatalog
     public static readonly AppCommand[] ToolbarButtons =
         [.. Ordered.Where(command => command != AppCommand.RestoreAll), AppCommand.ShowWindowMenu];
 
+    // Before Extra, which includes them. Each acts on the view in front, or on the view of the window in front.
+    public static readonly AppCommand[] View =
+    [
+        AppCommand.ViewKeepHidden, AppCommand.ViewInteractive, AppCommand.ViewUseOriginal, AppCommand.ViewGoToOriginal,
+        AppCommand.ViewMute, AppCommand.ViewFreeze, AppCommand.ViewRotateRight, AppCommand.ViewRotateLeft,
+        AppCommand.ViewMirrorAcross, AppCommand.ViewMirrorDown, AppCommand.ViewUpright, AppCommand.ViewResetZoom,
+        AppCommand.ViewMinimize,
+    ];
+
+    public static bool ForView(AppCommand command) => View.Contains(command);
+
     public static readonly AppCommand[] Extra =
     [
         AppCommand.PickPipSource, AppCommand.AlignTopLeft, AppCommand.AlignTop, AppCommand.AlignTopRight,
@@ -182,7 +206,7 @@ public static class CommandCatalog
         AppCommand.AlignBottom, AppCommand.AlignBottomRight, AppCommand.MoveToNextDisplay, AppCommand.PlaceExactly,
         AppCommand.RestorePlacement, AppCommand.SendToBottom, AppCommand.ShowWindowInfo, AppCommand.ToggleRollUp,
         AppCommand.ShowWindowMenu, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.ToggleDarkTitleBar,
-        AppCommand.MinimizeToAnchor, AppCommand.KeepAreas, AppCommand.GlassLevels,
+        AppCommand.MinimizeToAnchor, AppCommand.KeepAreas, AppCommand.GlassLevels, .. View,
     ];
 
     public static readonly AppCommand[] Everywhere =
@@ -259,6 +283,19 @@ public static class CommandCatalog
         AppCommand.MinimizeToAnchor => T("anchor.minimize"),
         AppCommand.KeepAreas => T("window.keepAreas"),
         AppCommand.GlassLevels => T("window.glassLevels"),
+        AppCommand.ViewKeepHidden => T("view.command.keepHidden"),
+        AppCommand.ViewInteractive => T("view.command.interactive"),
+        AppCommand.ViewUseOriginal => T("view.command.useOriginal"),
+        AppCommand.ViewGoToOriginal => T("view.command.goToOriginal"),
+        AppCommand.ViewMute => T("menu.original.mute"),
+        AppCommand.ViewFreeze => T("view.command.freeze"),
+        AppCommand.ViewRotateRight => T("view.command.rotateRight"),
+        AppCommand.ViewRotateLeft => T("view.command.rotateLeft"),
+        AppCommand.ViewMirrorAcross => T("view.command.mirrorAcross"),
+        AppCommand.ViewMirrorDown => T("view.command.mirrorDown"),
+        AppCommand.ViewUpright => T("view.command.upright"),
+        AppCommand.ViewResetZoom => T("view.command.resetZoom"),
+        AppCommand.ViewMinimize => T("view.command.minimize"),
         _ => command.ToString(),
     };
 }

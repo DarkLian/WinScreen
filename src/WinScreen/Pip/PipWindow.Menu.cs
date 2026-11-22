@@ -65,12 +65,14 @@ public sealed partial class PipWindow
         _freezeItem = new ToolStripMenuItem(T("pip.freeze"), null, (_, _) => SetFrozen(!Frozen));
         _menu.Items.Add(_freezeItem);
         _turnItem = new ToolStripMenuItem(T("pip.turn"));
-        foreach ((string text, Func<ViewTurn, ViewTurn> next) in new (string, Func<ViewTurn, ViewTurn>)[]
+        foreach ((string text, AppCommand command, Func<ViewTurn, ViewTurn> next) in new (string, AppCommand, Func<ViewTurn, ViewTurn>)[]
         {
-            (T("pip.turn.right"), turn => turn.RotatedRight), (T("pip.turn.left"), turn => turn.RotatedLeft),
-            (T("pip.turn.across"), turn => turn.FlippedAcross), (T("pip.turn.down"), turn => turn.FlippedDown),
+            (T("pip.turn.right"), AppCommand.ViewRotateRight, turn => turn.RotatedRight),
+            (T("pip.turn.left"), AppCommand.ViewRotateLeft, turn => turn.RotatedLeft),
+            (T("pip.turn.across"), AppCommand.ViewMirrorAcross, turn => turn.FlippedAcross),
+            (T("pip.turn.down"), AppCommand.ViewMirrorDown, turn => turn.FlippedDown),
         })
-            _turnItem.DropDownItems.Add(StayingOpen.Keep(new ToolStripMenuItem(text, null, (_, _) => SetTurn(next(_turn)))));
+            _turnItem.DropDownItems.Add(_keyed[command] = StayingOpen.Keep(new ToolStripMenuItem(text, null, (_, _) => SetTurn(next(_turn)))));
         _uprightItem = StayingOpen.Keep(new ToolStripMenuItem(T("pip.turn.upright"), null, (_, _) => SetTurn(ViewTurn.Upright)));
         _turnItem.DropDownItems.Add(_uprightItem);
         _turnItem.DropDownOpening += (_, _) => RefreshTurnItems();
@@ -85,8 +87,17 @@ public sealed partial class PipWindow
         _helpItem.DropDownItems.Add(T("pip.diagnostics.title"), null, (_, _) => ShowDiagnostics());
         _helpItem.DropDownItems.Add(_retryItem);
         _menu.Items.Add(_helpItem);
-        _menu.Items.Add(T("pip.minimize"), MenuParts.Icon(MenuParts.Minimize), (_, _) => SuspendView());
+        var minimize = (ToolStripMenuItem)_menu.Items.Add(T("pip.minimize"), MenuParts.Icon(MenuParts.Minimize), (_, _) => SuspendView());
         _menu.Items.Add(T("pip.close"), MenuParts.Icon(MenuParts.Close), (_, _) => Close());
+        _keyed[AppCommand.ViewKeepHidden] = _hideItem;
+        _keyed[AppCommand.ViewInteractive] = _interactiveItem;
+        _keyed[AppCommand.ViewUseOriginal] = (ToolStripMenuItem)_useOriginalItem;
+        _keyed[AppCommand.ViewGoToOriginal] = (ToolStripMenuItem)_goToItem;
+        _keyed[AppCommand.ViewMute] = _muteItem;
+        _keyed[AppCommand.ViewFreeze] = _freezeItem;
+        _keyed[AppCommand.ViewUpright] = _uprightItem;
+        _keyed[AppCommand.ViewResetZoom] = _removeCropItem;
+        _keyed[AppCommand.ViewMinimize] = minimize;
         _menu.Opening += (_, _) =>
         {
             PauseInput(true, keepTitleBar: true);
@@ -142,7 +153,47 @@ public sealed partial class PipWindow
         // Only a captured picture can be turned.
         _turnItem.Enabled = CanTurn || !_turn.IsUpright;
         RefreshTurnItems();
+        foreach ((AppCommand command, ToolStripMenuItem item) in _keyed) MenuParts.ShowKeys(item, Hotkey?.Invoke(command));
     }
+
+    private readonly Dictionary<AppCommand, ToolStripMenuItem> _keyed = [];
+
+    // The keys set for the view commands, shown beside the items they do.
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<AppCommand, string?>? Hotkey { get; set; }
+
+    // A view command from a key does what its menu item does, and only when the menu would offer it.
+    internal void Run(AppCommand command)
+    {
+        bool there = _origin.IsWindow && _origin.IsAvailable;
+        switch (command)
+        {
+            case AppCommand.ViewKeepHidden when there && !_interactiveItem.Checked: SetOriginalHidden(!_hideItem.Checked); break;
+            case AppCommand.ViewInteractive when there && CanInteract: SetInteractive(!_interactiveItem.Checked); break;
+            case AppCommand.ViewUseOriginal when there && _hideItem.Checked: UseOriginal(); break;
+            case AppCommand.ViewGoToOriginal when there: GoToSource(); break;
+            case AppCommand.ViewMute when _origin.IsWindow && SoundState?.Invoke() is bool muted: ChooseMute(!muted); break;
+            case AppCommand.ViewFreeze when Frozen || _thumbnail?.CanFreeze == true: SetFrozen(!Frozen); break;
+            case AppCommand.ViewRotateRight when CanTurn: SetTurn(_turn.RotatedRight); break;
+            case AppCommand.ViewRotateLeft when CanTurn: SetTurn(_turn.RotatedLeft); break;
+            case AppCommand.ViewMirrorAcross when CanTurn: SetTurn(_turn.FlippedAcross); break;
+            case AppCommand.ViewMirrorDown when CanTurn: SetTurn(_turn.FlippedDown); break;
+            case AppCommand.ViewUpright when !_turn.IsUpright: SetTurn(ViewTurn.Upright); break;
+            case AppCommand.ViewResetZoom when !_crop.IsEmpty || _zoom != PipGeometry.WholeView: ResetZoom(); SetCrop(Rectangle.Empty); break;
+            case AppCommand.ViewMinimize when _suspended: ResumeView(); break;
+            case AppCommand.ViewMinimize: SuspendView(); break;
+        }
+    }
+
+    internal bool IsOn(AppCommand command) => command switch
+    {
+        AppCommand.ViewKeepHidden => _hideItem.Checked,
+        AppCommand.ViewInteractive => _interactiveItem.Checked,
+        AppCommand.ViewMute => _origin.IsWindow && SoundState?.Invoke() == true,
+        AppCommand.ViewFreeze => Frozen,
+        AppCommand.ViewMinimize => _suspended,
+        _ => false,
+    };
 
     private void RefreshTurnItems()
     {

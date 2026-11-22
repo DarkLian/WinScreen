@@ -143,7 +143,10 @@ public class InvariantTests
             "AlignCenter=21 AlignRight=22 AlignBottomLeft=23 AlignBottom=24 AlignBottomRight=25 MoveToNextDisplay=26 " +
             "PlaceExactly=27 RestorePlacement=28 SendToBottom=29 ShowWindowInfo=30 ToggleRollUp=31 ShowWindowMenu=32 " +
             "ToggleBorderless=33 ToggleBorderlessFill=34 ToggleDarkTitleBar=35 ClickThroughOffEverywhere=36 " +
-            "UnpinEverywhere=37 HideAnchors=38 HideToolbar=39 MinimizeToAnchor=40 KeepAreas=41 GlassLevels=42",
+            "UnpinEverywhere=37 HideAnchors=38 HideToolbar=39 MinimizeToAnchor=40 KeepAreas=41 GlassLevels=42 " +
+            "ViewKeepHidden=43 ViewInteractive=44 ViewUseOriginal=45 ViewGoToOriginal=46 ViewMute=47 ViewFreeze=48 " +
+            "ViewRotateRight=49 ViewRotateLeft=50 ViewMirrorAcross=51 ViewMirrorDown=52 ViewUpright=53 ViewResetZoom=54 " +
+            "ViewMinimize=55",
         ["WinScreen.Settings.AnchorLook"] = "Dark=0 Light=1 NoBackground=2",
         ["WinScreen.Settings.AnchorSide"] = "Right=0 Left=1 NearWindow=2",
         ["WinScreen.Settings.ModifierKey"] = "Alt=0 Win=1",

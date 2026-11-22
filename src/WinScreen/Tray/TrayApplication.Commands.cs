@@ -10,7 +10,7 @@ public sealed partial class TrayApplication
 {
     // Built without touching any state, so a test can list it.
     internal IEnumerable<CommandDefinition>[] CommandAreas() =>
-        [WindowCommands(), ArrangeCommands(), ViewCommands(), EffectCommands(), AnchorCommands(), EverywhereCommands(), RecoveryCommands()];
+        [WindowCommands(), ArrangeCommands(), ViewCommands(), ViewActionCommands(), EffectCommands(), AnchorCommands(), EverywhereCommands(), RecoveryCommands()];
 
     private static CommandDefinition Define(AppCommand command, Action<nint> run) => new(command, (window, _) => run(window));
 
@@ -78,6 +78,19 @@ public sealed partial class TrayApplication
         Define(AppCommand.ToggleShrink, window => Shrink(window)) with { IsOn = window => _shrunk.ContainsKey(window), Undoes = [WindowPart.Tile] },
         Define(AppCommand.ToggleCrop, window => ToggleCrop(window)) with { IsOn = window => _windows.IsCropped(window), Undoes = [WindowPart.CropChoice, WindowPart.WindowChanges] },
     ];
+
+    // What the view's own menu does, from a key: the view decides, as its menu does, whether it can.
+    private IEnumerable<CommandDefinition> ViewActionCommands() =>
+        new[]
+        {
+            AppCommand.ViewKeepHidden, AppCommand.ViewInteractive, AppCommand.ViewUseOriginal, AppCommand.ViewGoToOriginal,
+            AppCommand.ViewMute, AppCommand.ViewFreeze, AppCommand.ViewRotateRight, AppCommand.ViewRotateLeft,
+            AppCommand.ViewMirrorAcross, AppCommand.ViewMirrorDown, AppCommand.ViewUpright, AppCommand.ViewResetZoom,
+            AppCommand.ViewMinimize,
+        }.Select(command => Define(command, window => ViewFor(command, window)?.Run(command)) with
+        {
+            Target = CommandTarget.View, IsOn = window => ViewFor(command, window)?.IsOn(command) == true,
+        });
 
     private IEnumerable<CommandDefinition> EffectCommands() =>
     [

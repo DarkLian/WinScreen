@@ -9,6 +9,8 @@ internal enum CommandTarget
     // These only take things away, so they run at any time.
     EveryWindow,
     UnderPointer,
+    // The view in front, or the view of the window in front (TrayApplication.ViewFor).
+    View,
 }
 
 internal enum CommandOutcome

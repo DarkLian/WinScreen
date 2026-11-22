@@ -35,7 +35,7 @@ You can change or clear any of these in **Settings → Actions and shortcuts**. 
 | Put this window back | Ctrl+Alt+U |
 | Put every window back | Ctrl+Alt+R |
 
-Other commands, like moving a window to a corner, have no shortcut until you give them one.
+Other commands, like moving a window to a corner, have no shortcut until you give them one. So do the view's own: Keep hidden, Interactive or Watch only, Use or go to the original, Mute, Freeze, Rotate or mirror, Reset crop and zoom, and Minimize or restore. They work on the view in front, or on the view of the window in front; a minimized view comes back with its key.
 
 <p align="center"><img src="assets/screenshots/settings-actions.png" width="880" alt="Settings, Actions and shortcuts page"></p>
 
@@ -271,7 +271,7 @@ Changes take effect as soon as you make them. The mouse wheel only scrolls; clic
 
 - **Ctrl+Alt+U** puts the window you're using back to normal.
 - **Ctrl+Alt+R**, or **Restore all windows** in the tray menu, puts every window back.
-- **Turn off click-through everywhere** and **Unpin all windows** in the tray menu undo just that, for every window.
+- **Turn off click-through everywhere** and **Unpin all windows** in the tray menu undo just that, for every window. Turn off click-through everywhere also makes click-through views take clicks again.
 - Closing WinScreen puts every window back too.
 - If WinScreen stops unexpectedly, hidden windows come back within a couple of seconds, and the rest when it starts again.
 

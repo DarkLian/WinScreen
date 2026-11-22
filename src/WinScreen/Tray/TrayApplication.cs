@@ -295,7 +295,7 @@ public sealed partial class TrayApplication : ApplicationContext
         void Ticks()
         {
             builder.Refresh(_targetTitle.DropDownItems);
-            everywhere[AppCommand.ClickThroughOffEverywhere].Available = _windows.ClickThroughCount > 0;
+            everywhere[AppCommand.ClickThroughOffEverywhere].Available = _windows.ClickThroughCount > 0 || ClickThroughViews().Any();
             everywhere[AppCommand.UnpinEverywhere].Available = _windows.PinnedCount > 0;
             everywhere[AppCommand.HideAnchors].Checked = _anchors.Hidden;
             everywhere[AppCommand.HideToolbar].Checked = _toolbarHidden;
@@ -316,7 +316,7 @@ public sealed partial class TrayApplication : ApplicationContext
             newView.ShortcutKeyDisplayString = MenuHotkey(AppCommand.PickPipSource);
             foreach ((AppCommand command, ToolStripMenuItem item) in everywhere)
                 item.ShortcutKeyDisplayString = MenuHotkey(command);
-            everywhere[AppCommand.ClickThroughOffEverywhere].Available = _windows.ClickThroughCount > 0;
+            everywhere[AppCommand.ClickThroughOffEverywhere].Available = _windows.ClickThroughCount > 0 || ClickThroughViews().Any();
             everywhere[AppCommand.UnpinEverywhere].Available = _windows.PinnedCount > 0;
             everywhere[AppCommand.HideAnchors].Checked = _anchors.Hidden;
             everywhere[AppCommand.HideToolbar].Checked = _toolbarHidden;
@@ -1585,6 +1585,51 @@ public sealed partial class TrayApplication : ApplicationContext
         Diagnostics.Log.Event("command", ("name", command), ("outcome", outcome),
             ("program", window == 0 ? Diagnostics.LogValue.Program("") : Diagnostics.LogValue.ProgramOf(window)));
 
+    // A region or display view is no window's view: in front, the view itself is the target. A minimized view is never
+    // in front, so its key brings back the one minimized last.
+    private PipWindow? ViewFor(AppCommand command, nint window)
+    {
+        PipWindow? view = window == 0 ? null : _pips.TryGetValue(window, out PipWindow? own) ? own
+            : _viewsInOrder.FirstOrDefault(each => each.IsHandleCreated && each.Handle == window);
+        if (view is null && command == AppCommand.ViewMinimize)
+            view = _viewsInOrder.Where(each => each.IsSuspended).MaxBy(each => each.SuspendedAt);
+        return view;
+    }
+
+    // The view is WinScreen's own, so the checks for other programs' windows don't apply; full screen doesn't either,
+    // as the view is what the key was for.
+    private CommandOutcome RunOnView(AppCommand command, CommandDefinition definition, nint window)
+    {
+        if (ViewFor(command, window) is null)
+        {
+            // An administrator app's view is its helper's.
+            if (window != 0 && !CanReach(window) && _helper is { Connected: true } helper && User32.IsWindow(window))
+            {
+                LogCommand(command, window, CommandOutcome.Started);
+                return helper.Send(new HelperLink.Message(HelperLink.Run, (int)command, window))
+                    ? CommandOutcome.Started : CommandOutcome.Failed;
+            }
+            LogCommand(command, window, CommandOutcome.Refused);
+            // In a full-screen game the key was the game's.
+            if (_role != AppRole.Helper && FullScreenNow() == FullScreenState.None)
+                Alert(CommandCatalog.Name(command), T("pip.commands.noView"), ToolTipIcon.Info);
+            return CommandOutcome.Refused;
+        }
+        LogCommand(command, window, CommandOutcome.Started);
+        try
+        {
+            definition.Run(window, null);
+            return CommandOutcome.Started;
+        }
+        catch (Exception failure) when (IsExpected(failure))
+        {
+            LogCommand(command, window, CommandOutcome.Failed);
+            Diagnostics.Log.Error("command.failed", failure);
+            Alert(T("errors.operation.title"), failure.Message);
+            return CommandOutcome.Failed;
+        }
+    }
+
     // The one way every command runs, from hotkeys, menus and the toolbar: the checks in a fixed order, then the
     // command's definition.
     private CommandOutcome RunOnDisplay(AppCommand command, nint window, Rectangle? display)
@@ -1602,6 +1647,8 @@ public sealed partial class TrayApplication : ApplicationContext
             case CommandTarget.UnderPointer:
                 definition.Run(0, null);
                 return CommandOutcome.Started;
+            case CommandTarget.View:
+                return RunOnView(command, definition, window);
         }
         if (command == AppCommand.RestoreWindow &&
             (window == 0 || !_windows.CanControl(window)) && _lastIdentity?.IsSameWindow() == true)
@@ -1675,6 +1722,8 @@ public sealed partial class TrayApplication : ApplicationContext
         }
     }
 
+    private IEnumerable<PipWindow> ClickThroughViews() => _viewsInOrder.Where(view => view.Overrides.ClickThrough);
+
     // They only take things away, so they work at any time.
     private void RunEverywhere(AppCommand command)
     {
@@ -1682,6 +1731,8 @@ public sealed partial class TrayApplication : ApplicationContext
         switch (command)
         {
             case AppCommand.ClickThroughOffEverywhere:
+                // A click-through view takes no click and never comes to the front: this is its way back too.
+                foreach (PipWindow view in ClickThroughViews().ToArray()) view.Overrides = view.Overrides with { ClickThrough = false };
                 Report(_windows.TurnOffClickThroughEverywhere(), T("everywhere.clickThroughOff.done"));
                 break;
             case AppCommand.UnpinEverywhere:
@@ -1782,6 +1833,7 @@ public sealed partial class TrayApplication : ApplicationContext
         pip.Problem += text => Alert(T("errors.operation.title"), text);
         pip.Notice += text => Alert(T("pip.open"), text, ToolTipIcon.Info);
         pip.AlwaysShowOriginal += ShowOriginalFor;
+        pip.Hotkey = MenuHotkey;
         pip.Presets = () => _settings.PipPresets;
         pip.PresetSaved += preset => ChangePresets(presets =>
         {

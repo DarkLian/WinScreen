@@ -23,6 +23,7 @@ actions.saved 4AC19A3668E2713E
 actions.search 9649223D6E21A866
 actions.target 37EDBC582218714A
 actions.target.app 775EF35E935138AA
+actions.target.view 995385C4546890DC
 actions.target.window 8DFCDD68DCF94D15
 actions.unavailable 460B3574E4BDB8CA
 actions.uncrop 7C6E927940080563
@@ -255,6 +256,7 @@ pip.captureBorder.hide CA99C012822852C6
 pip.chooseSource 129A35808BF2E071
 pip.clickThrough 7FE73761E197F994
 pip.close E19180B58F9A22EA
+pip.commands.noView A51352B08D45DB03
 pip.controls.directHelp 56D324F7C0FF47EE
 pip.controls.help 110692D5ABF690DB
 pip.defaults.inherited 282D8D997ACFE010
@@ -570,6 +572,18 @@ updates.restart E34937A0294E77CD
 updates.restart.ask AF7A7CC437246D6B
 updates.title EB819EA9ED97F0F2
 updates.upToDate D3474430AEDF927D
+view.command.freeze DCAE6CDFCC9C7AF2
+view.command.goToOriginal 007B944D42C91844
+view.command.interactive E786D0B5414CC539
+view.command.keepHidden 3C94424C0AF163A7
+view.command.minimize 2B42D09C20032333
+view.command.mirrorAcross 2F160C696E62992F
+view.command.mirrorDown 263517CCFC6F995F
+view.command.resetZoom D1BF5346773158F5
+view.command.rotateLeft C551F5B653BB18B6
+view.command.rotateRight 19B19BB11EDB4E30
+view.command.upright 34C02E101D77AEC7
+view.command.useOriginal 98374E72BE565390
 whatsNew.none 9EBA60F4E9B47724
 whatsNew.offer 603CE893CFC53079
 whatsNew.open 0BE647DEB27EFECC
