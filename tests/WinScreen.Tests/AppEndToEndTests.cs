@@ -1728,6 +1728,67 @@ public sealed class AppEndToEndTests : IDisposable
     }
 
     /// <summary>
+    /// Something that keeps going wrong leaves one line in WinScreen's own log, for whoever reads it later. Here another
+    /// app takes the focus each time a visit to a browser's view has just begun, four times in a row: each visit ends at
+    /// once with the pointer still on the view.
+    /// </summary>
+    [Fact]
+    public void Visits_that_keep_ending_at_once_leave_one_suspect_line_in_the_log()
+    {
+        RestartWith(new AppSettings { WelcomeShown = true, ShowToolbar = false }, experimental: false);
+        string path = (string)BrowserInputTests.BrowserCases().First()[0];
+        const string page = "<!doctype html><title>Suspect</title><body style='margin:0;background:#2a6'>";
+        var (browser, window, root) = BrowserInputTests.Open(page, "Suspect", app: true, path);
+        using var first = new TargetProcess(new Rectangle(60, 640, 300, 200));
+        using var second = new TargetProcess(new Rectangle(400, 640, 300, 200));
+        Point home = Desktop.CursorPosition();
+        try
+        {
+            Assert.NotEqual(0, window);
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Desktop.Press(Keys.P, Keys.ControlKey, Keys.Menu);
+            nint pip = WaitForPip();
+            Rectangle view = Desktop.BoundsOf(pip);
+            Desktop.RightClickOn(new Point(view.Left + 60, view.Top + 60), pip);
+            Assert.True(Desktop.WaitFor(ForegroundIsApp), "The view's menu didn't open.");
+            Desktop.Press(Keys.I);
+            Assert.True(Desktop.WaitFor(() => Windows.WindowInfo.IsConcealed(window)), "Interactive wasn't offered, or didn't hide the browser.");
+            Desktop.Press(Keys.Escape);
+            Thread.Sleep(500);
+
+            view = Desktop.BoundsOf(pip);
+            var inside = new Point(view.Left + view.Width / 2, view.Top + view.Height / 2);
+            var outside = new Point(view.Left - 40, view.Top + view.Height / 2);
+            TargetProcess[] others = [first, second];
+            for (int i = 0; i < 4; i++)
+            {
+                Desktop.GainForegroundRights();
+                Desktop.Activate(others[i % 2].Handle);
+                Desktop.SlideMouse(outside);
+                Thread.Sleep(200);
+                Desktop.GainForegroundRights();
+                Desktop.SlideMouse(inside);
+                Thread.Sleep(60);
+                Desktop.Activate(others[(i + 1) % 2].Handle);
+                Thread.Sleep(600);
+            }
+
+            int Told() => System.Text.RegularExpressions.Regex.Matches(LogTail(2000), "suspect what=visitsEndAtOnce").Count;
+            Assert.True(Desktop.WaitFor(() => Told() > 0, 5000), "No suspect line." + Environment.NewLine + LogTail());
+            Thread.Sleep(500);
+            Assert.True(Told() == 1, "More than one suspect line for one run of it." + Environment.NewLine + LogTail());
+            string line = LogTail(2000).Split((char)10).FirstOrDefault(l => l.Contains("suspect what=visitsEndAtOnce", StringComparison.Ordinal)) ?? "";
+            Assert.True(line.Contains("front=WinScreen.TestTarget ", StringComparison.Ordinal), line);
+        }
+        finally
+        {
+            Desktop.MoveMouse(home);
+            BrowserInputTests.Close(browser, root);
+        }
+    }
+
+    /// <summary>
     /// Roadmap P1-3's recovery check, the way most people will meet it: experimental features off, a view of Chrome or
     /// Edge used directly from its own menu, a real click and typing that land in the page, then WinScreen ends without
     /// warning during the visit. The browser comes back where it was and as it was, and the helper was never in it,
