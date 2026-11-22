@@ -100,6 +100,10 @@ internal sealed class PipInteraction : IDisposable
         set => Volatile.Write(ref _swallowedBits, (int)value);
     }
 
+    // Of those, the ones whose press reached the view, not the hook: Windows counts that button as down, so its release
+    // must pass, or Windows holds the button until the next press and every move is a drag.
+    private int _reachedViewBits;
+
     // Input worker only.
     private MouseButtons _heldDelivered;
     private MouseButtons _pendingClick; // A deferred press: its outcome comes once the control is activated.
@@ -238,6 +242,11 @@ internal sealed class PipInteraction : IDisposable
     internal IReadOnlyList<(PressOutcome Outcome, Point At, nint Hit)> Log
     {
         get { lock (_log) return _log.ToArray(); }
+    }
+
+    internal void ForgetPresses()
+    {
+        lock (_log) _log.Clear();
     }
 
     internal bool InPopup => _inPopup;
@@ -459,6 +468,7 @@ internal sealed class PipInteraction : IDisposable
         }
         // Everything inside the picture is kept from the desktop; the worker decides what it means.
         Interlocked.Exchange(ref _lastPress, Pack(point));
+        Interlocked.And(ref _reachedViewBits, ~(int)button);
         if (button == MouseButtons.Left) _pressHandedOver = _handedOverReleased = false;
         bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
         // Over a link the app shows a hand, and the pointer still has the app's shape here (sharing stops just below).
@@ -495,6 +505,7 @@ internal sealed class PipInteraction : IDisposable
             if (!Share(false)) _rechecked.Set();
             User32.SetForegroundWindow(_source);
         }
+        Interlocked.Or(ref _reachedViewBits, (int)button);
         Interlocked.Or(ref _swallowedBits, (int)button);
         Enqueue(new(EventKind.Press, point, button, Alt: alt));
     }
@@ -527,6 +538,8 @@ internal sealed class PipInteraction : IDisposable
         }
         bool swallow = (Interlocked.And(ref _swallowedBits, ~(int)button) & (int)button) != 0;
         if (swallow) Enqueue(new(EventKind.Release, point, button));
+        // It reaches the view, which knows it was handled (PipWindow.WndProc).
+        if ((Interlocked.And(ref _reachedViewBits, ~(int)button) & (int)button) != 0) swallow = false;
         if (_swallowed == MouseButtons.None && !_outside && !InView(point) && !_inPopup)
         {
             nint root = RootAt(point);

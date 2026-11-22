@@ -1761,6 +1761,12 @@ public sealed partial class PipWindow : Form
 
     internal IReadOnlyCollection<PressOutcome> PressOutcomes => _pressOutcomes;
 
+    internal void ForgetPresses()
+    {
+        _pressOutcomes.Clear();
+        _live?.ForgetPresses();
+    }
+
     private SourcePopups CreateSourcePopups() => new(_source)
     {
         RaisePopups = popups => BeginInvokeIfAlive(() =>

@@ -779,6 +779,9 @@ public sealed class InteractiveViewTests
             Assert.True(report is not null, $"The press didn't reach the app; view {frame} -> {view.Bounds}; visit ended: {view.LastVisitEnd}");
             Assert.Equal(frame, view.Bounds);
             Assert.True(Desktop.WaitFor(OrdinaryInFront, 2000), "The administrator window kept the focus.");
+            // The press reached the view, not the visit's hook, so Windows counted the button down. Had the hook kept the
+            // release from it, Windows would hold the button and every move after would be a drag.
+            Assert.True(Desktop.WaitFor(() => (User32.GetAsyncKeyState(1) & 0x8000) == 0, 1000), "Windows still holds the left button.");
             // From here the visit follows the pointer as with nothing else in front.
             AsAdministrator.JiggleInBackground(new Point(frame.Left + frame.Width / 2 + 20, frame.Top + frame.Height / 2), 1500);
             (int visits, List<string> ends) = WatchVisits(view, 2500);
@@ -878,6 +881,7 @@ public sealed class InteractiveViewTests
     private static Action<PipWindow, Func<Action, bool>> DrivePresses(nint chrome) => (view, _) =>
     {
         Rectangle frame = view.Bounds;
+        int given = AdministratorFront.PressesGiven;
         Hover(new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2), view);
         var rng = new Random(23);
         int sent = 0;
@@ -910,7 +914,8 @@ public sealed class InteractiveViewTests
         PressOutcome[] outcomes = view.PressOutcomes.ToArray();
         Assert.Equal(sent, outcomes.Length);
         int delivered = outcomes.Count(outcome => outcome == PressOutcome.Delivered);
-        Assert.Equal($"InteractiveProbe n={delivered}", WindowInfo.Title(chrome));
+        // The page counted the presses given with an administrator window in front too.
+        Assert.Equal($"InteractiveProbe n={delivered + AdministratorFront.PressesGiven - given}", WindowInfo.Title(chrome));
         Assert.Contains(outcomes, outcome => outcome == PressOutcome.Delivered);
     };
 }
