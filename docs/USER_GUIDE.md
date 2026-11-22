@@ -188,14 +188,12 @@ A window has Dark mode or Glass, not both: turning one on turns the other off.
 - **Shrink** turns a window into a small live tile. Click the tile to bring the window back. Dark mode or Glass is
   off while it's a tile and comes back with the window.
 
-Dark mode leaves pictures and video as they are, and parts that are dark already stay dark. Glass fades only the
-background and keeps text and pictures. On a PC without a graphics card, Dark mode turns everything dark, pictures too,
-and Glass makes one color see-through, where clicks go through to what's behind. Dark mode's setting is in
-**Settings → Appearance**. Glass's settings, including how solid the background and text stay, are in **Settings →
-Backgrounds**.
-Windows shows a colored border around a
-window while these two are working. If a window under Dark mode or Glass ever stops taking clicks, WinScreen turns
-the effect off and tells you.
+Dark mode swaps light and dark and keeps each color's hue, so pictures and video turn too. To keep one as it is, see
+**Keep pictures and video solid** below. Glass fades the colors close to the page's own and keeps text readable. On a
+PC without a graphics card, neither can keep areas as they are, and Glass makes one color see-through, where clicks go
+through to what's behind. Dark mode's setting is in **Settings → Appearance**. Glass's settings are in **Settings →
+Backgrounds**. On Windows 10, a yellow border shows around a window while these two are working. If a window under
+Dark mode or Glass ever stops taking clicks, WinScreen turns the effect off and tells you.
 
 ### A picture or video behind Glass
 
