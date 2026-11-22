@@ -142,8 +142,12 @@ public sealed class ViewCommandTests(Xunit.Abstractions.ITestOutputHelper output
                         .Single(item => item.Text == Localization.UiText.T("pip.freeze"));
                     Assert.Contains(FreezeKeys, freeze.ShortcutKeyDisplayString ?? "");
 
-                    // A window with no view: nothing happens to any view.
+                    // A window with no view: the view under the pointer or last pointed at, if any (the pointer may have
+                    // crossed it); with neither, nothing happens.
+                    bool meant = view.PointedAt > 0 || view.Bounds.Contains(Cursor.Position);
                     Run(AppCommand.ViewFreeze, other.Handle);
+                    Assert.Equal(meant, view.Frozen);
+                    if (view.Frozen) Run(AppCommand.ViewFreeze, view.Handle);
                     Assert.False(view.Frozen);
 
                     // Minimized, the view is never in front: the key brings back the one minimized last.
