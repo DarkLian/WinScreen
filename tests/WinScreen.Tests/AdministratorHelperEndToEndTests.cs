@@ -55,10 +55,10 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
     private static void KillElevated(uint process) => Elevated("taskkill.exe", $"/PID {process} /F");
 
     /// <summary>A test window in a program running as administrator.</summary>
-    private nint ElevatedTarget(string title, Rectangle bounds)
+    private nint ElevatedTarget(string title, Rectangle bounds, bool framed = false)
     {
         Elevated(Path.Combine(AppContext.BaseDirectory, "WinScreen.TestTarget.exe"),
-            $"--left {bounds.Left} --top {bounds.Top} --width {bounds.Width} --height {bounds.Height} --colors 1E64C8 --title \"{title}\"");
+            $"--left {bounds.Left} --top {bounds.Top} --width {bounds.Width} --height {bounds.Height} --colors 1E64C8 --title \"{title}\"" + (framed ? " --alone-for 900000" : ""));
         nint window = 0;
         Assert.True(Desktop.WaitFor(() => (window = Desktop.FindWindow(null, title)) != 0, 10000), "The administrator test window didn't open.");
         User32.GetWindowThreadProcessId(window, out uint process);
@@ -322,7 +322,9 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
             .Save(Path.Combine(_data, "settings.json"));
         const string ordinaryTitle = "WinScreen matrix ordinary", adminTitle = "WinScreen matrix admin";
         using var ordinaryTarget = new TargetProcess(new Rectangle(120, 150, 420, 300), "1E64C8", ordinaryTitle); // As ElevatedTarget: Dark judges colours.
-        nint adminTarget = ElevatedTarget(adminTitle, new Rectangle(700, 150, 420, 300));
+        ordinaryTarget.UseFrame(); // Title bars, so Borderless, a dark title bar and Roll up have something to work on.
+        nint adminTarget = ElevatedTarget(adminTitle, new Rectangle(700, 150, 420, 300), framed: true);
+        ElevatedPlace(adminTarget, Desktop.BoundsOf(ordinaryTarget.Handle) with { X = 700 });
         _app = Start();
         uint helper = 0;
         Assert.True(Desktop.WaitFor(() => (helper = HelperProcess()) != 0, 20000), "No helper started.");
@@ -444,6 +446,18 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
             Assert.True(Desktop.WaitFor(() => !User32.IsWindow(host) || !User32.IsWindowVisible(host), 5000), $"Round {round}: Escape left the menu open.");
             Thread.Sleep(500);
         }
+    }
+
+    // A framed administrator window may open maximized; this program can't move it, an administrator one can.
+    private static void ElevatedPlace(nint window, Rectangle bounds)
+    {
+        string script = $$"""
+            $k = Add-Type -Name P -PassThru -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c); [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int t, bool r);'
+            [void]$k::ShowWindow([IntPtr]{{(long)window}}, 9); Start-Sleep -Milliseconds 200
+            [void]$k::MoveWindow([IntPtr]{{(long)window}}, {{bounds.X}}, {{bounds.Y}}, {{bounds.Width}}, {{bounds.Height}}, $true)
+            """;
+        Elevated("powershell.exe", "-NoProfile -EncodedCommand " + Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script)));
+        Desktop.WaitFor(() => !User32.IsZoomed(window) && Desktop.BoundsOf(window).Width == bounds.Width, 8000);
     }
 
     private static void ElevatedClick(Point point)
