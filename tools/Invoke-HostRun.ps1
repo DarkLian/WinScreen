@@ -20,6 +20,11 @@
   tests that move focus, drag or drop both ways before each beta. Such a run never counts for a release
   (Confirm-Release.ps1 passes over it), so -All isn't allowed with it.
 
+  -AdministratorInFront gives the focus to a small window of a program running as administrator before each test,
+  as when the person was just typing in one, and sends the tests' input from that program: Windows keeps input
+  from normal programs out of an administrator window in front. Windows mustn't ask before running as administrator.
+  Leave other administrator windows (an elevated shell) as they are. Not with -All or -AsAdministrator.
+
   Results go to TestResults\host\<time>: a .trx per suite, runner.log, environment.json, source.json (the commit
   the build came from, for Confirm-Release.ps1), not-run.txt (skipped tests and tests that returned early, see
   TestRuns.ps1) and exitcode.txt. Exit code 0 when every test passed.
@@ -51,6 +56,8 @@ param(
     [switch]$SkipBuild,
     # From an elevated shell, as WinScreen runs with Run as administrator on. Never counts for a release.
     [switch]$AsAdministrator,
+    # Before each test an administrator window has the focus, and input comes from an administrator program.
+    [switch]$AdministratorInFront,
     [string]$ResultsDirectory,
     [int]$HangMinutes = 3
 )
@@ -62,6 +69,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $Filter -and -not $All) { throw 'Name the tests with -Filter (targeted runs by default), or pass -All.' }
 if ($Filter -and $All) { throw 'Pass -Filter or -All, not both.' }
 if ($AsAdministrator -and $All) { throw 'A run as administrator is for the named tests that need it; -All runs from a normal shell.' }
+if ($AdministratorInFront -and ($All -or $AsAdministrator)) { throw '-AdministratorInFront is for named tests from a normal shell.' }
 
 Add-Type -TypeDefinition @'
 using System;
@@ -292,7 +300,7 @@ $windows = if ([int]$os.CurrentBuildNumber -ge 22000) { '11' } else { '10' }
 $source, $commit = Get-Commit
 # What Confirm-Release.ps1 reads: the commit, and that it was every test.
 Save-RunRecord $ResultsDirectory $source @{ tool = 'host'; windows = $windows; all = [bool]$All; suite = $Suite; filter = $Filter
-    installedApps = [bool]$InstalledApps; administrator = [bool]$AsAdministrator }
+    installedApps = [bool]$InstalledApps; administrator = [bool]$AsAdministrator; administratorInFront = [bool]$AdministratorInFront }
 [ordered]@{
     machine = 'host'
     # ProductName says "Windows 10" on Windows 11 too; the build number tells them apart.
@@ -305,6 +313,7 @@ Save-RunRecord $ResultsDirectory $source @{ tool = 'host'; windows = $windows; a
     # foreach, not the pipeline: the list comes through a pipeline as one object.
     inputLanguages = @(foreach ($language in (Get-WinUserLanguageList)) { "$($language.LanguageTag): $($language.InputMethodTips -join ', ')" })
     administrator = [bool]$AsAdministrator
+    administratorInFront = [bool]$AdministratorInFront
     commit = $commit
     steps = $steps
     installedApps = [bool]$InstalledApps
@@ -315,9 +324,11 @@ $code = 0
 $savedExe = $env:WINSCREEN_EXE
 $savedApps = $env:WINSCREEN_TEST_INSTALLED_APPS
 $savedSkipped = $env:WINSCREEN_SKIPPED_FILE
+$savedFront = $env:WINSCREEN_TEST_ADMINISTRATOR_FRONT
 Start-Transcript -Path (Join-Path $ResultsDirectory 'runner.log') -Force | Out-Null
 try {
     if ($InstalledApps) { $env:WINSCREEN_TEST_INSTALLED_APPS = '1' }
+    $env:WINSCREEN_TEST_ADMINISTRATOR_FRONT = if ($AdministratorInFront) { '1' } else { $null }
     foreach ($step in $steps) {
         # The desktop step's packaged smoke test skips itself without the program: it gets the one published for
         # this run, never one left from an earlier build.
@@ -344,6 +355,7 @@ finally {
     $env:WINSCREEN_EXE = $savedExe
     $env:WINSCREEN_TEST_INSTALLED_APPS = $savedApps
     $env:WINSCREEN_SKIPPED_FILE = $savedSkipped
+    $env:WINSCREEN_TEST_ADMINISTRATOR_FRONT = $savedFront
     Stop-Transcript | Out-Null
     $lock.ReleaseMutex()
     $lock.Dispose()

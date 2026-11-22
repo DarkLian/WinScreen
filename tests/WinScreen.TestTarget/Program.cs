@@ -41,6 +41,23 @@ internal static class Program
                 NativeShow.SetWindowLongPtr(window.Handle, -8, (nint)long.Parse(ownerText));
             };
         }
+        if (options.TryGetValue("--relay", out string? pipe))
+        {
+            // Started as administrator for a run that keeps an administrator window in front: this window takes the
+            // focus when asked, and the test's input is sent from here, where Windows lets it in.
+            Relay.HideConsole();
+            window.FormBorderStyle = FormBorderStyle.Sizable;
+            Rectangle asked = window.Bounds;
+            window.Shown += (_, _) =>
+            {
+                // Started this way it can come up maximized, covering the test's windows: back to its own small place.
+                window.WindowState = FormWindowState.Normal;
+                window.Bounds = asked;
+                new Thread(() => Relay.Serve(pipe, window)) { IsBackground = true }.Start();
+            };
+            Application.Run(window);
+            return;
+        }
         if (options.TryGetValue("--alone-for", out string? lifetime))
         {
             // Started without a test to talk to (as administrator, through Windows' prompt): a title bar from the

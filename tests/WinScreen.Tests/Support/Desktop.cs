@@ -210,7 +210,7 @@ internal static partial class Desktop
         {
             nint found = User32.GetAncestor(TopWindowAt(point), User32.GA_ROOT);
             throw new InvalidOperationException(
-                $"Refusing to use the mouse: \"{Windows.WindowInfo.Title(found)}\" ({Windows.WindowInfo.ClassName(found)}) is at {point}, with the mouse at {CursorPosition()}.");
+                $"Refusing to use the mouse: \"{Windows.WindowInfo.Title(found)}\" ({Windows.WindowInfo.ClassName(found)}, {BoundsOf(found)}) is at {point}, with the mouse at {CursorPosition()}; wanted {BoundsOf(window)}.");
         }
     }
 
@@ -290,6 +290,11 @@ internal static partial class Desktop
 
     public static void Key(Keys key, bool down)
     {
+        if (AdministratorFront.On)
+        {
+            AdministratorFront.Do($"key {(int)key} {(down ? 0 : KeyUp)}");
+            return;
+        }
         var input = new Input { Type = InputKeyboard };
         input.Data.Keyboard.Key = (ushort)key;
         input.Data.Keyboard.Flags = down ? 0 : KeyUp;
@@ -307,18 +312,27 @@ internal static partial class Desktop
             Key(modifier, false);
     }
 
-    public static void MoveMouse(Point point) => SetCursorPos(point.X, point.Y);
+    public static void MoveMouse(Point point)
+    {
+        if (AdministratorFront.On) AdministratorFront.Do($"cursor {point.X} {point.Y}");
+        else SetCursorPos(point.X, point.Y);
+    }
 
     /// <summary>Moves the pointer as input, so low-level hooks see it. Setting its position doesn't reach them.</summary>
     public static void SlideMouse(Point point)
     {
         Rectangle screen = SystemInformation.VirtualScreen;
-        mouse_event(0x8001 | 0x4000, (uint)((point.X - screen.Left + 0.5) * 65536 / screen.Width),
-            (uint)((point.Y - screen.Top + 0.5) * 65536 / screen.Height), 0, 0);
+        int x = (int)((point.X - screen.Left + 0.5) * 65536 / screen.Width), y = (int)((point.Y - screen.Top + 0.5) * 65536 / screen.Height);
+        if (AdministratorFront.On) AdministratorFront.Do($"mouse {0x8001 | 0x4000} {x} {y} 0");
+        else mouse_event(0x8001 | 0x4000, (uint)x, (uint)y, 0, 0);
     }
 
     /// <summary>Moves relative to now, with the system's pointer acceleration, as a real mouse does.</summary>
-    public static void NudgeMouse(int x, int y) => mouse_event(0x0001, unchecked((uint)x), unchecked((uint)y), 0, 0);
+    public static void NudgeMouse(int x, int y)
+    {
+        if (AdministratorFront.On) AdministratorFront.Do($"mouse 1 {x} {y} 0");
+        else mouse_event(0x0001, unchecked((uint)x), unchecked((uint)y), 0, 0);
+    }
 
     [DllImport("user32.dll")]
     private static extern void mouse_event(uint flags, uint x, uint y, uint data, nuint extra);
@@ -420,6 +434,11 @@ internal static partial class Desktop
 
     private static void SendMouse(uint flags, int data)
     {
+        if (AdministratorFront.On)
+        {
+            AdministratorFront.Do($"mouse {flags} 0 0 {data}");
+            return;
+        }
         var input = new Input { Type = InputMouse };
         input.Data.Mouse.Flags = flags;
         input.Data.Mouse.Data = data;
