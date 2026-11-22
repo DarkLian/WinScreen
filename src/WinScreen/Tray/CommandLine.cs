@@ -132,6 +132,10 @@ internal static class CommandLine
         // Another copy, such as an installed one beside this portable one, isn't the one asked for.
         if (window == 0 || !string.Equals(Windows.WindowInfo.ExecutablePath(window), Environment.ProcessPath, StringComparison.OrdinalIgnoreCase))
             return CommandLineExit.NotRunning;
+        // Started from the window in front (a shortcut, a script), this process may put a window in front, and passes
+        // that on: Crop's overlay, a dialog or a tile is then in front as from a hotkey.
+        User32.GetWindowThreadProcessId(window, out uint running);
+        User32.AllowSetForegroundWindow(running);
         if (Ask(window, MessageKind, Encode(command, target)) is not { } ticket || ticket <= 0) return CommandLineExit.NotRunning;
         var clock = System.Diagnostics.Stopwatch.StartNew();
         while (clock.ElapsedMilliseconds < ResultMilliseconds)

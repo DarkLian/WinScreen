@@ -204,6 +204,9 @@ public sealed partial class TrayApplication
             case HelperLink.State:
                 FromHelperState(message);
                 break;
+            case HelperLink.Outcome when _helperAnswers.Remove(message.Id, out Action<CommandLineExit>? answer):
+                answer(CommandLine.ExitFor((CommandOutcome)message.Command));
+                break;
             case HelperLink.Save when message.Text is { } json:
                 try
                 {
@@ -295,8 +298,25 @@ public sealed partial class TrayApplication
                 if (window != 0 && (!User32.IsWindow(window) || !CanReach(window))) return;
                 _forOrdinaryCopy = true;
                 _wantedOn = message.Text switch { "on" => true, "off" => false, _ => null };
-                try { RunOnDisplay((AppCommand)message.Command, window, message.DisplayBounds); }
-                finally { _forOrdinaryCopy = false; _wantedOn = null; }
+                // A command from the command line: its outcome goes back, or for a dialog or menu, that it is open.
+                bool replied = false;
+                void Reply(CommandOutcome outcome)
+                {
+                    if (replied || message.Id == 0) return;
+                    replied = true;
+                    _ordinary?.Send(new HelperLink.Message(HelperLink.Outcome, (int)outcome, Id: message.Id));
+                }
+                var asked = (AppCommand)message.Command;
+                if (message.Id != 0 && _commands.TryGet(asked, out CommandDefinition definition) && definition.Opens?.Invoke(window) == true)
+                    _toolbar.BeginInvoke(() => Reply(CommandOutcome.Started));
+                CommandOutcome result = CommandOutcome.Failed;
+                try { result = RunOnDisplay(asked, window, message.DisplayBounds); }
+                finally
+                {
+                    _forOrdinaryCopy = false;
+                    _wantedOn = null;
+                    Reply(result);
+                }
                 SendState();
                 break;
             case HelperLink.ViewAction:

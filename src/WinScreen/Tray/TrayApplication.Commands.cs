@@ -136,15 +136,53 @@ public sealed partial class TrayApplication
             answered = true;
             answer(exit);
         }
-        Answer(Validate(command, target, out nint window) is { } refused ? refused : Run());
+        if (Validate(command, target, out nint window) is { } refused) Answer(refused);
+        else if (Run() is { } exit) Answer(exit);
 
-        CommandLineExit Run()
+        // Null when the helper took it: its answer comes back over the link.
+        CommandLineExit? Run()
         {
             Diagnostics.Log.Event("command.fromCommandLine", ("name", command));
+            bool handedOver = false;
             if (_commands.TryGet(command, out CommandDefinition definition) && definition.Opens?.Invoke(window) == true)
-                _toolbar.BeginInvoke(() => Answer(CommandLineExit.Done));
-            return CommandLine.ExitFor(RunOnDisplay(command, window, null));
+                _toolbar.BeginInvoke(() => { if (!handedOver) Answer(CommandLineExit.Done); });
+            _commandLineAnswer = Answer;
+            try
+            {
+                CommandOutcome outcome = RunOnDisplay(command, window, null);
+                handedOver = _commandLineAnswer is null;
+                return handedOver ? null : CommandLine.ExitFor(outcome);
+            }
+            finally { _commandLineAnswer = null; }
         }
+    }
+
+    private Action<CommandLineExit>? _commandLineAnswer;
+    private int _helperRequests;
+    private readonly Dictionary<int, Action<CommandLineExit>> _helperAnswers = [];
+    private const int HelperAnswerMilliseconds = 10000;
+
+    // A command from the command line that the helper runs: its outcome is the answer, not that it was handed over.
+    private bool SendToHelper(HelperLink.OrdinaryEnd link, AppCommand command, nint window, Rectangle? display = null)
+    {
+        Native.User32.AllowSetForegroundWindow(link.Peer); // A dialog, menu or tile it opens comes to the front, as the ordinary copy's would.
+        int id = 0;
+        if (_commandLineAnswer is { } answer)
+        {
+            _commandLineAnswer = null;
+            id = ++_helperRequests;
+            _helperAnswers[id] = answer;
+            var wait = new System.Windows.Forms.Timer { Interval = HelperAnswerMilliseconds };
+            wait.Tick += (_, _) =>
+            {
+                wait.Dispose();
+                if (_helperAnswers.Remove(id, out Action<CommandLineExit>? late)) late(CommandLineExit.Done);
+            };
+            wait.Start();
+        }
+        bool sent = link.Send(new HelperLink.Message(HelperLink.Run, (int)command, window, HelperLink.Message.From(display), Id: id));
+        if (!sent && id != 0 && _helperAnswers.Remove(id, out Action<CommandLineExit>? lost)) lost(CommandLineExit.Failed);
+        return sent;
     }
 
     private CommandLineExit? Validate(AppCommand command, string target, out nint window)

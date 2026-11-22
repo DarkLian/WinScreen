@@ -1657,8 +1657,7 @@ public sealed partial class TrayApplication : ApplicationContext
         {
             LogCommand(command, window, CommandOutcome.Started);
             Diagnostics.Log.Event("command.forwarded", ("name", command));
-            User32.AllowSetForegroundWindow(link.Peer); // Go to the original, use it: the key's right to the front is passed on.
-            return link.Send(new HelperLink.Message(HelperLink.Run, (int)command, helpers)) ? CommandOutcome.Started : CommandOutcome.Failed;
+            return SendToHelper(link, command, helpers) ? CommandOutcome.Started : CommandOutcome.Failed;
         }
         if (own is null)
         {
@@ -1666,8 +1665,7 @@ public sealed partial class TrayApplication : ApplicationContext
             if (window != 0 && !CanReach(window) && _helper is { Connected: true } helper && User32.IsWindow(window))
             {
                 LogCommand(command, window, CommandOutcome.Started);
-                return helper.Send(new HelperLink.Message(HelperLink.Run, (int)command, window))
-                    ? CommandOutcome.Started : CommandOutcome.Failed;
+                return SendToHelper(helper, command, window) ? CommandOutcome.Started : CommandOutcome.Failed;
             }
             LogCommand(command, window, CommandOutcome.Refused);
             nint under = UnderPointer();
@@ -1734,8 +1732,7 @@ public sealed partial class TrayApplication : ApplicationContext
             {
                 LogCommand(command, window, CommandOutcome.Started);
                 Diagnostics.Log.Event("command.forwarded", ("name", command));
-                return helper.Send(new HelperLink.Message(HelperLink.Run, (int)command, window, HelperLink.Message.From(display)))
-                    ? CommandOutcome.Started : CommandOutcome.Failed;
+                return SendToHelper(helper, command, window, display) ? CommandOutcome.Started : CommandOutcome.Failed;
             }
             // The helper is asked only for administrator apps' windows; anything else is the ordinary copy's.
             if (_role == AppRole.Helper)

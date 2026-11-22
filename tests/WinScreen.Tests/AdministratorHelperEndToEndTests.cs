@@ -287,6 +287,123 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
         Assert.True(Desktop.WaitFor(() => Count(NewHelpersLog(), "command name=HideToolbar") == 2, 4000), "The new helper didn't show the toolbar again.");
     }
 
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(nint window, int attribute, out int value, int size);
+
+    private static int Dwm(nint window, int attribute) => DwmGetWindowAttribute(window, attribute, out int value, sizeof(int)) == 0 ? value : -1;
+
+    private sealed record Look(Rectangle Bounds, long Style, long ExStyle, byte? Alpha, int DarkTitle, int Cloaked, bool Iconic, bool Visible)
+    {
+        public string Without(Rectangle bounds) => $"style {Style:X} ex {ExStyle:X} alpha {Alpha} dark {DarkTitle} cloaked {Cloaked} iconic {Iconic} visible {Visible}";
+    }
+
+    private static Look LookOf(nint window) => new(Desktop.BoundsOf(window), User32.GetWindowLongPtr(window, User32.GWL_STYLE),
+        Desktop.ExStyle(window), Desktop.Alpha(window), Dwm(window, 20), Dwm(window, 14), User32.IsIconic(window), User32.IsWindowVisible(window));
+
+    private static HashSet<nint> WindowsOf(uint process)
+    {
+        var windows = new HashSet<nint>();
+        Desktop.EachProcessWindow((int)process, window => windows.Add(window));
+        return windows;
+    }
+
+    private sealed record Outcome(int Exit, bool Opened, bool Closed, string Change, Rectangle After, Size Moved, int NewWindows, bool Back, string Note);
+
+    // Every window command on an administrator app's window (the helper's) does what it does on an ordinary one (the
+    // ordinary copy's): the same change, the same new windows, a dialog or menu in front that Esc closes, and Restore
+    // window puts both back the same.
+    [Fact]
+    public void Every_window_command_does_the_same_on_an_administrator_window_as_on_an_ordinary_one()
+    {
+        if (!ElevatesWithoutAsking) { Skipped.Because("Windows asks before running as administrator here, and a test can't answer."); return; }
+        if (ProcessInfo.SelfElevated || !ProcessInfo.CanElevate) { Skipped.Because("Needs an administrator account and a test run that isn't elevated."); return; }
+        Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0 && HelperProcess() == 0, "Close the running WinScreen before these tests.");
+        new AppSettings { WelcomeShown = true, ShowToolbar = false, ShowNotifications = false, RunAsAdministrator = true, ExperimentalFeatures = true }
+            .Save(Path.Combine(_data, "settings.json"));
+        const string ordinaryTitle = "WinScreen matrix ordinary", adminTitle = "WinScreen matrix admin";
+        using var ordinaryTarget = new TargetProcess(new Rectangle(120, 150, 420, 300), "1E64C8", ordinaryTitle); // As ElevatedTarget: Dark judges colours.
+        nint adminTarget = ElevatedTarget(adminTitle, new Rectangle(700, 150, 420, 300));
+        _app = Start();
+        uint helper = 0;
+        Assert.True(Desktop.WaitFor(() => (helper = HelperProcess()) != 0, 20000), "No helper started.");
+        Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("helper.connected"), 15000), "The helper didn't connect.");
+        Thread.Sleep(1000);
+        Look ordinaryStart = LookOf(ordinaryTarget.Handle), adminStart = LookOf(adminTarget);
+        output.WriteLine($"start ordinary {ordinaryStart}\nstart admin    {adminStart}");
+
+        AppCommand[] commands =
+        [
+            AppCommand.TogglePin, AppCommand.OpacityDown, AppCommand.OpacityUp, AppCommand.ToggleDefaultOpacity, AppCommand.ToggleClickThrough,
+            AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.ToggleDarkTitleBar, AppCommand.ToggleRollUp, AppCommand.SendToBottom,
+            AppCommand.AlignTopLeft, AppCommand.AlignCenter, AppCommand.AlignBottomRight, AppCommand.MoveToNextDisplay, AppCommand.RestorePlacement,
+            AppCommand.OpenPip, AppCommand.ToggleShrink, AppCommand.ToggleDark, AppCommand.ToggleGlass, AppCommand.ToggleAnchor, AppCommand.ToggleCrop,
+            AppCommand.ShowWindowInfo, AppCommand.Arrange, AppCommand.PlaceExactly, AppCommand.KeepAreas, AppCommand.GlassLevels,
+        ];
+        uint ordinaryCopy = (uint)_app.Id;
+        var problems = new List<string>();
+        foreach (AppCommand command in commands)
+        {
+            Outcome ordinary = Try(command, ordinaryTarget.Handle, ordinaryTitle, ordinaryCopy, elevated: false);
+            Outcome admin = Try(command, adminTarget, adminTitle, helper, elevated: true);
+            output.WriteLine($"{command}\n  ordinary {ordinary}\n  admin    {admin}");
+            if (ordinary.Exit != admin.Exit) problems.Add($"{command}: exit {ordinary.Exit} vs {admin.Exit}");
+            if (ordinary.Opened != admin.Opened) problems.Add($"{command}: opened something in front {ordinary.Opened} vs {admin.Opened} ({admin.Note})");
+            if (ordinary.Opened && !ordinary.Closed || admin.Opened && !admin.Closed) problems.Add($"{command}: Esc didn't close it (ordinary {ordinary.Closed}, admin {admin.Closed})");
+            if (ordinary.Change != admin.Change) problems.Add($"{command}: changed differently\n    ordinary {ordinary.Change}\n    admin    {admin.Change}");
+            if (ordinary.Moved != admin.Moved && ordinary.After != admin.After) problems.Add($"{command}: placed differently {ordinary.After} vs {admin.After}");
+            if (ordinary.NewWindows != admin.NewWindows) problems.Add($"{command}: new windows {ordinary.NewWindows} vs {admin.NewWindows}");
+            if (!ordinary.Back || !admin.Back) problems.Add($"{command}: Restore window didn't put it back (ordinary {ordinary.Back}, admin {admin.Back}) {admin.Note} {ordinary.Note}");
+        }
+        Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems) + "\n--- admin log\n" + Log("winscreen-administrator.log"));
+
+        Outcome Try(AppCommand command, nint window, string title, uint copy, bool elevated)
+        {
+            // As from a key pressed with that window in front: the command line passes its right to the front on. A click
+            // first, as keys from a test don't reach anything while an administrator window is in front.
+            Rectangle plain = Desktop.BoundsOf(ordinaryTarget.Handle);
+            var middle = new Point(plain.Left + plain.Width / 2, plain.Top + plain.Height / 2);
+            User32.GetWindowThreadProcessId(User32.GetForegroundWindow(), out uint frontNow);
+            if (ProcessInfo.IsElevated(frontNow))
+            {
+                ElevatedClick(middle); // Only input from an administrator program gets past it.
+                Desktop.WaitFor(() => User32.GetForegroundWindow() == ordinaryTarget.Handle, 4000);
+            }
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Thread.Sleep(300);
+            Look before = LookOf(window);
+            HashSet<nint> windowsBefore = WindowsOf(copy);
+            int exit = Run(command.ToString(), "title:" + title);
+            Thread.Sleep(900);
+            nint front = User32.GetForegroundWindow();
+            User32.GetWindowThreadProcessId(front, out uint frontProcess);
+            // A view or tile takes the focus from the window it hides, by design: not something Esc closes.
+            bool opened = frontProcess == copy && !windowsBefore.Contains(front) && command is not (AppCommand.OpenPip or AppCommand.ToggleShrink);
+            Look after = LookOf(window);
+            int newWindows = WindowsOf(copy).Count - windowsBefore.Count;
+            bool closed = false;
+            string note = "";
+            if (opened)
+            {
+                note = $"{WinScreen.Windows.WindowInfo.ClassName(front)} '{WinScreen.Windows.WindowInfo.Title(front)}'";
+                if (elevated) Elevated("powershell.exe", "-NoProfile -Command \"(New-Object -ComObject WScript.Shell).SendKeys('{ESC}')\"");
+                else Desktop.Press(Keys.Escape);
+                closed = Desktop.WaitFor(() => !User32.IsWindow(front) || !User32.IsWindowVisible(front), 5000);
+                if (!closed && !elevated) Desktop.PostMessage(front, User32.WM_CLOSE, 0, 0);
+            }
+            // A place is put back by Restore placement; everything else by Restore window.
+            bool placement = CommandCatalog.AnchorOf(command) is not null || command is AppCommand.MoveToNextDisplay or AppCommand.RestorePlacement;
+            if (command != AppCommand.RestorePlacement) Run(placement ? "RestorePlacement" : "RestoreWindow", "title:" + title);
+            Thread.Sleep(900);
+            Look back = LookOf(window);
+            bool restored = (back == before || command == AppCommand.RestorePlacement) && WindowsOf(copy).Count <= windowsBefore.Count;
+            if (!restored) note += $" back {back} vs {before}, windows {WindowsOf(copy).Count} vs {windowsBefore.Count}";
+            var moved = new Size(after.Bounds.X - before.Bounds.X + after.Bounds.Width - before.Bounds.Width,
+                after.Bounds.Y - before.Bounds.Y + after.Bounds.Height - before.Bounds.Height);
+            return new Outcome(exit, opened, closed, after.Without(after.Bounds), after.Bounds, moved, newWindows, restored, note);
+        }
+    }
+
     // Owner, 1.3.0: Ctrl+right-click on a pinned administrator app opened the helper's menu, which closed again at once
     // each time, the log saying the app took the focus back.
     [Fact]
@@ -322,6 +439,17 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
             Assert.True(Desktop.WaitFor(() => !User32.IsWindow(host) || !User32.IsWindowVisible(host), 5000), $"Round {round}: Escape left the menu open.");
             Thread.Sleep(500);
         }
+    }
+
+    private static void ElevatedClick(Point point)
+    {
+        string script = $$"""
+            $k = Add-Type -Name C -PassThru -MemberDefinition '[DllImport("user32.dll")] public static extern void mouse_event(uint f, int x, int y, uint d, UIntPtr e); [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);'
+            [void]$k::SetCursorPos({{point.X}}, {{point.Y}}); Start-Sleep -Milliseconds 100
+            $k::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 50
+            $k::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+            """;
+        Elevated("powershell.exe", "-NoProfile -EncodedCommand " + Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script)));
     }
 
     // Input into an administrator app's window has to come from a program running as administrator too.

@@ -22,12 +22,14 @@ internal static class HelperLink
     public const string ViewAction = "view";
     // The administrator app's window the ordinary copy's tray shows: the helper's state then says what is on for it.
     public const string Watch = "watch";
+    // The helper's outcome of a command from the command line (Id), so the script hears what happened.
+    public const string Outcome = "outcome";
 
     internal sealed record HelperView(long Handle, long Source, string Title, bool Suspended, bool SourceIsWindow,
         bool ClickThrough, bool CanRetry, long PointedAt, long SuspendedAt);
 
     internal sealed record Message(string Kind, int Command = 0, long Window = 0, int[]? Display = null, string? Title = null,
-        string? Text = null, int Icon = 0, int[]? Counts = null, HelperView[]? Views = null, int[]? On = null)
+        string? Text = null, int Icon = 0, int[]? Counts = null, HelperView[]? Views = null, int[]? On = null, int Id = 0)
     {
         internal Rectangle? DisplayBounds => Display is [var x, var y, var width, var height] ? new Rectangle(x, y, width, height) : null;
 
