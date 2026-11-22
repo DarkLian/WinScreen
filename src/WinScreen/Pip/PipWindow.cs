@@ -925,9 +925,14 @@ public sealed partial class PipWindow : Form
         Attempt(() => FitToSource(pointer));
     }
 
+    // When the pointer was last on this view: a key for a view goes to the one last pointed at when nothing else says
+    // which (TrayApplication.ViewFor).
+    internal long PointedAt { get; private set; }
+
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
+        PointedAt = Environment.TickCount64;
         if (e.Button == MouseButtons.Middle && _zoom != PipGeometry.WholeView)
         {
             _panning = true;
@@ -950,6 +955,7 @@ public sealed partial class PipWindow : Form
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
+        PointedAt = Environment.TickCount64;
         if (_interactiveItem.Checked && e.Button == MouseButtons.None && !_pressed)
             BeginLive(e.Location);
         if (_panning && e.Button == MouseButtons.Middle)

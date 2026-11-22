@@ -11,9 +11,10 @@ namespace WinScreen.Tests;
 // Owner, 22 Nov: the view's own menu had no keys. Its High and Medium actions are commands now; each acts on the view in
 // front, or on the view of the window in front, a region view included, and does nothing where the menu offers nothing.
 [Trait("Category", "RealWindows")]
-public sealed class ViewCommandTests
+public sealed class ViewCommandTests(Xunit.Abstractions.ITestOutputHelper output)
 {
-    private const string FreezeKeys = "Ctrl+Alt+Shift+F9";
+    // No Shift, as the owner's Ctrl+Alt+F; the owner's switches (toolbar, gestures, experimental, hover preview).
+    private const string FreezeKeys = "Ctrl+Alt+J";
 
     private static void OnUiThread(Action<Action<int>> test)
     {
@@ -50,7 +51,7 @@ public sealed class ViewCommandTests
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 Dictionary<AppCommand, string> keys = CommandCatalog.All.ToDictionary(command => command, _ => "");
                 keys[AppCommand.ViewFreeze] = FreezeKeys;
-                var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true, Hotkeys = keys };
+                var settings = new AppSettings { ShowToolbar = true, ShowNotifications = false, WelcomeShown = true, Hotkeys = keys, ModifierDrag = true, WindowMenu = true, ExperimentalFeatures = true, PipMiddleClickScroll = true, HighlightPinned = true, PipViews = new PipViewPreferences { HoverPreview = WinScreen.Settings.PipHoverPreview.Lens, KeepHiddenOnNewViews = false } };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
                 MethodInfo run = typeof(TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;
                 MethodInfo isOn = typeof(TrayApplication).GetMethod("IsOn", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -124,9 +125,15 @@ public sealed class ViewCommandTests
                         Desktop.GainForegroundRights();
                         Desktop.Activate(other.Handle);
                         pump(200);
-                        Cursor.Position = new Point(pointed.Left + pointed.Width / 2, pointed.Top + pointed.Height / 2);
-                        pump(100);
-                        Desktop.Press(Keys.F9, Keys.ControlKey, Keys.Menu, Keys.ShiftKey);
+                        // Owner, 22 Nov: clicked on a region view first, the key still found no view.
+                        var middle = new Point(pointed.Left + pointed.Width / 2, pointed.Top + pointed.Height / 2);
+                        Desktop.ClickOn(middle, pointed.Handle);
+                        pump(1500);
+                        var viewUnder = (PipWindow?)typeof(TrayApplication).GetMethod("ViewUnderPointer", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(app, []);
+                        output.WriteLine($"Pointer lookup found {(viewUnder == pointed ? "the view" : viewUnder is null ? "nothing" : "another view")}");
+                        nint under = Native.User32.GetAncestor(Native.User32.WindowFromPoint(new Native.NativePoint { X = middle.X, Y = middle.Y }), Native.User32.GA_ROOTOWNER);
+                        output.WriteLine($"Clicked: front {WindowInfo.ClassName(Native.User32.GetForegroundWindow())}, under the pointer {WindowInfo.ClassName(under)} (view {under == pointed.Handle}), at {Cursor.Position}");
+                        Desktop.Press(Keys.J, Keys.ControlKey, Keys.Menu);
                     }
                     PressFreezeOver(region);
                     Assert.True(Desktop.WaitFor(() => region.Frozen, 3000, () => pump(20)), "The key didn't reach the region view under the pointer.");
@@ -138,6 +145,18 @@ public sealed class ViewCommandTests
                     Run(AppCommand.ViewFreeze, view.Handle);
                     Run(AppCommand.ViewFreeze, region.Handle);
                     Assert.False(view.Frozen || region.Frozen);
+
+                    // With the pointer off every view, the key goes to the view it was last on.
+                    PressFreezeOver(region);
+                    Assert.True(Desktop.WaitFor(() => region.Frozen, 3000, () => pump(20)));
+                    Run(AppCommand.ViewFreeze, region.Handle);
+                    Assert.False(region.Frozen);
+                    Desktop.MoveMouse(new Point(other.Bounds.Left + 30, other.Bounds.Top + 30));
+                    pump(200);
+                    Desktop.Press(Keys.J, Keys.ControlKey, Keys.Menu);
+                    Assert.True(Desktop.WaitFor(() => region.Frozen, 3000, () => pump(20)), "The key didn't reach the view the pointer was last on.");
+                    Assert.False(view.Frozen);
+                    Run(AppCommand.ViewFreeze, region.Handle);
 
                     // A click-through view takes no click and never comes to the front: Turn off click-through everywhere
                     // reaches it.

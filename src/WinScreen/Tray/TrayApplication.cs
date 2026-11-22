@@ -1591,16 +1591,23 @@ public sealed partial class TrayApplication : ApplicationContext
             : _viewsInOrder.FirstOrDefault(each => each.IsHandleCreated && each.Handle == window);
 
     // A view doesn't take the focus, so a key pressed for it usually finds another window in front, often one with no
-    // view (its original is hidden): then the view under the pointer, its title bar included. A minimized view is
-    // nowhere, so its key brings back the one minimized last.
+    // view (its original is hidden): then the view under the pointer, its title bar included, or else the one the
+    // pointer was last on. A minimized view is nowhere, so its key brings back the one minimized last.
     private PipWindow? ViewFor(AppCommand command, nint window)
     {
         if (ViewOf(window) is { } view) return view;
+        if (ViewUnderPointer() is { } pointed) return pointed;
+        if (command == AppCommand.ViewMinimize && _viewsInOrder.Where(each => each.IsSuspended).MaxBy(each => each.SuspendedAt) is { } minimized)
+            return minimized;
+        return _viewsInOrder.Where(each => !each.IsSuspended && each.PointedAt > 0).MaxBy(each => each.PointedAt);
+    }
+
+    private PipWindow? ViewUnderPointer() => ViewOf(UnderPointer()) is { } view && view.Handle == UnderPointer() ? view : null;
+
+    private static nint UnderPointer()
+    {
         Point point = Cursor.Position;
-        nint under = User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y }), User32.GA_ROOTOWNER);
-        if (ViewOf(under) is { } pointed && pointed.Handle == under) return pointed;
-        return command == AppCommand.ViewMinimize
-            ? _viewsInOrder.Where(each => each.IsSuspended).MaxBy(each => each.SuspendedAt) : null;
+        return User32.GetAncestor(User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y }), User32.GA_ROOTOWNER);
     }
 
     // The view is WinScreen's own, so the checks for other programs' windows don't apply; full screen doesn't either,
@@ -1617,6 +1624,13 @@ public sealed partial class TrayApplication : ApplicationContext
                     ? CommandOutcome.Started : CommandOutcome.Failed;
             }
             LogCommand(command, window, CommandOutcome.Refused);
+            nint under = UnderPointer();
+            Point pointer = Cursor.Position;
+            // Which of "the pointer was on no view" and "the view under it wasn't found" it was.
+            Diagnostics.Log.Event("command.noView", ("front", Diagnostics.LogValue.ClassOf(window)), ("underPointer", Diagnostics.LogValue.ClassOf(under)),
+                ("underProgram", Diagnostics.LogValue.ProgramOf(under)), ("views", _viewsInOrder.Count),
+                ("pointerOnAView", _viewsInOrder.Any(each => each.Visible && each.Bounds.Contains(pointer))),
+                ("pointedBefore", _viewsInOrder.Any(each => each.PointedAt > 0)));
             // In a full-screen game the key was the game's.
             if (_role != AppRole.Helper && FullScreenNow() == FullScreenState.None)
                 Alert(CommandCatalog.Name(command), T("pip.commands.noView"), ToolTipIcon.Info);
