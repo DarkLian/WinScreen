@@ -6,7 +6,8 @@ namespace WinScreen.TestTarget;
 /// <summary>
 /// Input for a test that doesn't run as administrator, sent from this program, which does. Each line on the test's
 /// pipe is one command, answered "ok" once done, so the test's own timing holds:
-/// "key VK FLAGS", "mouse FLAGS DX DY DATA", "cursor X Y", "front" (this window takes the focus), "exit".
+/// "key VK FLAGS", "mouse FLAGS DX DY DATA", "cursor X Y", "held" and "release" (mouse buttons Windows takes for held; release lets them go), "front" (this window
+/// takes the focus, by its own Ctrl+Alt+F23), "exit".
 /// The program ends when the pipe closes.
 /// </summary>
 internal static partial class Relay
@@ -22,6 +23,11 @@ internal static partial class Relay
             using var reader = new StreamReader(stream);
             using var writer = new StreamWriter(stream) { AutoFlush = true };
             nint handle = (nint)window.Invoke(() => window.Handle);
+            window.Invoke(() =>
+            {
+                RegisterHotKey(0, HotkeyId, 0x0002 | 0x0001 | 0x4000, F23); // Ctrl+Alt+F23, no repeat.
+                Application.AddMessageFilter(new HotkeyFilter(handle));
+            });
             while (reader.ReadLine() is { } line)
             {
                 string[] part = line.Split(' ');
@@ -37,6 +43,16 @@ internal static partial class Relay
                         break;
                     case "cursor":
                         SetCursorPos(int.Parse(part[1]), int.Parse(part[2]));
+                        break;
+                    case "held":
+                        answer = "ok " + Held();
+                        break;
+                    case "release":
+                        string held = Held();
+                        if (held.Contains('L')) mouse_event(0x0004, 0, 0, 0, 0);
+                        if (held.Contains('R')) mouse_event(0x0010, 0, 0, 0, 0);
+                        if (held.Contains('M')) mouse_event(0x0040, 0, 0, 0, 0);
+                        answer = "ok " + held;
                         break;
                     case "front":
                         answer = Front(handle) ? "ok" : "failed";
@@ -55,39 +71,38 @@ internal static partial class Relay
         window.BeginInvoke(window.Close);
     }
 
-    // A click on it, as a person would give it the focus. The pointer goes back where it was. Raised first: opened
-    // while another window had the focus, it can be behind that one, and the click must never land on someone else's.
+    // Its own hotkey, pressed from here: Windows lets the program that gets it take the focus. A click would do too, but
+    // the windows of a test that isn't elevated can then take the left button for held, and hover never starts.
     private static bool Front(nint window)
     {
         if (GetForegroundWindow() == window) return true;
         SetWindowPos(window, -1, 0, 0, 0, 0, NoMoveSizeActivate);
         SetWindowPos(window, -2, 0, 0, 0, 0, NoMoveSizeActivate);
-        GetWindowRect(window, out Bounds bounds);
-        Point middle = new() { X = (bounds.Left + bounds.Right) / 2, Y = (bounds.Top + bounds.Bottom) / 2 };
-        if (GetAncestor(WindowFromPoint(middle), 2) != window) return false;
-        GetCursorPos(out Point was);
-        SetCursorPos(middle.X, middle.Y);
-        Thread.Sleep(50);
-        if (GetAncestor(WindowFromPoint(middle), 2) != window)
-        {
-            SetCursorPos(was.X, was.Y);
-            return false;
-        }
-        mouse_event(0x0002, 0, 0, 0, 0);
-        mouse_event(0x0004, 0, 0, 0, 0);
+        foreach (byte key in new byte[] { 0x11, 0x12, F23 }) keybd_event(key, 0, 0, 0);
+        foreach (byte key in new byte[] { F23, 0x12, 0x11 }) keybd_event(key, 0, 2, 0);
         long end = Environment.TickCount64 + 2000;
         while (GetForegroundWindow() != window && Environment.TickCount64 < end) Thread.Sleep(20);
-        SetCursorPos(was.X, was.Y);
         return GetForegroundWindow() == window;
     }
 
+    // The mouse buttons Windows takes for held, as "L", "R", "M" or none.
+    private static string Held() =>
+        ((GetAsyncKeyState(1) & 0x8000) != 0 ? "L" : "") + ((GetAsyncKeyState(2) & 0x8000) != 0 ? "R" : "") + ((GetAsyncKeyState(4) & 0x8000) != 0 ? "M" : "");
+
+    private const int HotkeyId = 0x5754;
+    private const byte F23 = 0x86;
+
+    private sealed class HotkeyFilter(nint window) : IMessageFilter
+    {
+        public bool PreFilterMessage(ref Message m)
+        {
+            if (m.Msg != 0x0312 || m.WParam != HotkeyId) return false;
+            SetForegroundWindow(window);
+            return true;
+        }
+    }
+
     private const uint NoMoveSizeActivate = 0x0002 | 0x0001 | 0x0010;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Point { public int X, Y; }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Bounds { public int Left, Top, Right, Bottom; }
 
     [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -104,14 +119,6 @@ internal static partial class Relay
     private static partial bool SetCursorPos(int x, int y);
 
     [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetCursorPos(out Point point);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetWindowRect(nint window, out Bounds bounds);
-
-    [LibraryImport("user32.dll")]
     private static partial nint GetForegroundWindow();
 
     [LibraryImport("user32.dll")]
@@ -119,8 +126,13 @@ internal static partial class Relay
     private static partial bool SetWindowPos(nint window, nint after, int x, int y, int width, int height, uint flags);
 
     [LibraryImport("user32.dll")]
-    private static partial nint WindowFromPoint(Point point);
+    private static partial short GetAsyncKeyState(int key);
 
     [LibraryImport("user32.dll")]
-    private static partial nint GetAncestor(nint window, uint flags);
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool RegisterHotKey(nint window, int id, uint modifiers, uint key);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetForegroundWindow(nint window);
 }

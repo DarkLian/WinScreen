@@ -117,9 +117,9 @@ public sealed class InteractiveViewTests
         Desktop.MoveMouse(new Point(point.X - 1, point.Y));
         Thread.Sleep(30);
         Desktop.MoveMouse(point);
-        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null, 2000),
+        Assert.True(AdministratorFront.WaitForVisit(view, 2000),
             $"The visit didn't start: pointer={Desktop.CursorPosition()}; view={view.Bounds}; visible={view.Visible}; {view.StateDescription}; " +
-            $"in front {Desktop.FrontDescription()}; last visit ended: {view.LastVisitEnd}; {view.DiagnosticSnapshot}");
+            $"in front {Desktop.FrontDescription()}; last visit ended: {view.LastVisitEnd}; first press: {AdministratorFront.LastFirstPress}; released before the test: '{AdministratorFront.LastReleased}'; {view.DiagnosticSnapshot}");
         Thread.Sleep(100);
     }
 

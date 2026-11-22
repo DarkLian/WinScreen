@@ -92,7 +92,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 try
                 {
                     Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
-                    if (!Desktop.WaitFor(() => view.LiveInteraction is not null)) throw new InvalidOperationException($"No direct-input visit started (last visit ended: {view.LastVisitEnd}; {view.StateDescription}; in front {Desktop.FrontDescription()}).");
+                    if (!AdministratorFront.WaitForVisit(view)) throw new InvalidOperationException($"No direct-input visit started (last visit ended: {view.LastVisitEnd}; {view.StateDescription}; in front {Desktop.FrontDescription()}).");
                     Rectangle window = Desktop.BoundsOf(source);
                     Point ToView(Point offset)
                     {
@@ -881,7 +881,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                     {
                         Point middle = new(view.Left + view.Width / 2, view.Top + view.Height / 2);
                         Desktop.SlideMouse(middle);
-                        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No visit started; in front " + Desktop.FrontDescription());
+                        Assert.True(AdministratorFront.WaitForVisit(view), "No visit started; in front " + Desktop.FrontDescription());
                         for (int i = 0; i < 6; i++) { Desktop.SlideMouse(middle + new Size(i * 4, i * 2)); Thread.Sleep(80); }
                         Assert.False(view.LiveInteraction!.EnhancedHover, "The visit asked for the helper.");
                         Assert.False(HelperIn(), "The helper is in the browser without the switch.");
@@ -1014,7 +1014,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             {
                 // Straight in from wherever the pointer is, the other view included.
                 Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
-                if (!Desktop.WaitFor(() => view.LiveInteraction is not null)) throw new InvalidOperationException("No visit started for " + step + "; in front " + Desktop.FrontDescription());
+                if (!AdministratorFront.WaitForVisit(view)) throw new InvalidOperationException("No visit started for " + step + "; in front " + Desktop.FrontDescription());
                 Point At(Point offset)
                 {
                     var (area, shown) = view.LiveInteraction!.CurrentGeometry;
@@ -1103,7 +1103,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
             void Enter(PipWindow view)
             {
                 Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
-                if (!Desktop.WaitFor(() => view.LiveInteraction is not null))
+                if (!AdministratorFront.WaitForVisit(view))
                     throw new InvalidOperationException($"No visit started: {view.StateDescription}; last end '{view.LastVisitEnd}'; " +
                         $"revealed {(view.LastReveal == 0 ? "never" : $"{Environment.TickCount64 - view.LastReveal} ms ago")}; in front {Desktop.FrontDescription()}");
                 Thread.Sleep(150);
@@ -1849,7 +1849,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                         bool Wheel()
                         {
                             Desktop.SlideMouse(middle);
-                            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null, 2000), "No visit; in front " + Desktop.FrontDescription());
+                            Assert.True(AdministratorFront.WaitForVisit(view, 2000), "No visit; in front " + Desktop.FrontDescription());
                             Thread.Sleep(400);
                             int before = Scrolled();
                             WheelDown();

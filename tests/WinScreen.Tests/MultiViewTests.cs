@@ -71,7 +71,7 @@ public sealed class MultiViewTests
     private static void Enter(PipWindow view)
     {
         Desktop.SlideMouse(Center(view));
-        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null, 3000), "No visit started: " + view.StateDescription + "; in front " + Desktop.FrontDescription());
+        Assert.True(AdministratorFront.WaitForVisit(view, 3000), "No visit started: " + view.StateDescription + "; in front " + Desktop.FrontDescription());
         Thread.Sleep(120);
     }
 

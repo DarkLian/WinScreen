@@ -981,6 +981,8 @@ public sealed partial class PipWindow : Form
         PointedAt = Environment.TickCount64;
         if (_interactiveItem.Checked && e.Button == MouseButtons.None && !_pressed)
             BeginLive(e.Location);
+        else if (_interactiveItem.Checked)
+            NoVisitBecause = $"move with {e.Button}, pressed {_pressed}";
         if (_panning && e.Button == MouseButtons.Middle)
         {
             Rectangle area = PictureArea;
@@ -1145,6 +1147,9 @@ public sealed partial class PipWindow : Form
     }
 
     internal PipInteraction? LiveInteraction => _live;
+    internal bool WaitsForPress => _toldAdministratorInFront && _live is null;
+    // Why the pointer last moved over the view without starting a visit; for tests.
+    internal string NoVisitBecause { get; private set; } = "";
 
     internal bool OpensOriginalOnClick => _origin.IsWindow && _hideItem.Checked && ShowsOriginalOnly;
 
@@ -1816,22 +1821,25 @@ public sealed partial class PipWindow : Form
         // The table first: used directly, hidden, on the screen, not paused, no visit already (and experimental help
         // only with the switch). Then what only the view knows: a picture, the window there, no menu or block.
         ViewState.Modes before = CurrentModes() with { VisitUsesExperimental = HoverOn || MiddleScrollOn };
-        if (ViewState.Apply(before, ViewState.Request.VisitStarts) == before) return;
+        if (ViewState.Apply(before, ViewState.Request.VisitStarts) == before) { NoVisitBecause = "state " + before; return; }
         // A frozen picture isn't what the window shows now, so presses on it would land somewhere else.
         if (_thumbnail is null || !_origin.IsAvailable || !_windows.IsHidden(_source) ||
             _menu.Visible || TopLayer.InputBlocked || ShowsOriginalOnly || Frozen)
+        {
+            NoVisitBecause = $"picture {_thumbnail is not null}, available {_origin.IsAvailable}, hidden {_windows.IsHidden(_source)}, menu {_menu.Visible}, " +
+                $"blocked {TopLayer.InputBlocked}, original only {ShowsOriginalOnly}, frozen {Frozen}";
             return;
+        }
         Rectangle area = PictureArea;
-        if (!area.Contains(pointer))
-            return;
+        if (!area.Contains(pointer)) { NoVisitBecause = $"{pointer} outside {area}"; return; }
         bool blind = AdministratorInFront();
         if (blind != _toldAdministratorInFront)
         {
             _toldAdministratorInFront = blind;
             if (blind) Diagnostics.Log.Event("view.visitWaitsForPress", ("front", Diagnostics.LogValue.ProgramOf(User32.GetForegroundWindow())));
         }
-        if (blind && !pressed)
-            return;
+        if (blind && !pressed) { NoVisitBecause = "an administrator window in front"; return; }
+        NoVisitBecause = "";
         _foregroundBeforeLive = User32.GetForegroundWindow();
         _liveSawSourceFocus = false;
         _unobservedSince = 0;

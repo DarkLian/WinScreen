@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Reflection;
 using WinScreen.Native;
+using WinScreen.Pip;
 using Xunit;
 using Xunit.Sdk;
 
@@ -35,20 +36,65 @@ internal static class AdministratorFront
 
     public static nint Window { get; private set; }
 
-    /// <summary>Sends one command and waits until it is done.</summary>
-    public static void Do(string command)
+    /// <summary>Sends one command and waits until it is done; returns the answer, "ok" and maybe more.</summary>
+    public static string Do(string command)
     {
         lock (Gate)
         {
             Start();
             s_writer!.WriteLine(command);
             string? answer = s_reader!.ReadLine();
-            if (answer != "ok") throw new InvalidOperationException($"The administrator program answered \"{answer}\" to \"{command}\".");
+            if (answer is null || !answer.StartsWith("ok", StringComparison.Ordinal))
+                throw new InvalidOperationException($"The administrator program answered \"{answer}\" to \"{command}\".");
+            return answer;
         }
     }
 
+    /// <summary>
+    /// Waits for a visit to start. With an administrator window in front a view starts none until it is pressed: a
+    /// person whose hover does nothing clicks, so here the view gets that first press where the pointer is, and the test
+    /// carries on. The press is a real click in the app, which a test counting clicks sees too.
+    /// </summary>
+    public static bool WaitForVisit(PipWindow view, int milliseconds = 3000)
+    {
+        if (!On) return Desktop.WaitFor(() => view.LiveInteraction is not null, milliseconds);
+        if (Desktop.WaitFor(() => view.LiveInteraction is not null, Math.Min(milliseconds, 1500)))
+        {
+            LastFirstPress = "none needed";
+            return true;
+        }
+        string before = $"no visit because '{view.NoVisitBecause}', waiting for a press {view.WaitsForPress}, " +
+            $"left button held for the view's thread {view.Invoke(() => (User32.GetKeyState(1) & 0x8000) != 0)}, held for Windows '{Do("held")}'";
+        Desktop.MouseButton(true);
+        bool started = Desktop.WaitFor(() => view.LiveInteraction is not null, 1000);
+        Thread.Sleep(50);
+        Desktop.MouseButton(false);
+        // Not part of a double click the test makes next.
+        Thread.Sleep(SystemInformation.DoubleClickTime + 50);
+        LastFirstPress = $"given at {Desktop.CursorPosition()} ({before}): visit {(started ? "started" : "didn't start")}, " +
+            $"now {(view.LiveInteraction is null ? "none" : "on")}, last end '{view.LastVisitEnd}', in front {Desktop.FrontDescription()}";
+        bool visit = Desktop.WaitFor(() => view.LiveInteraction is not null, milliseconds);
+        // Every first press of the run, beside the other run notes.
+        if (Path.GetDirectoryName(Environment.GetEnvironmentVariable(Skipped.FileVariable)) is { Length: > 0 } results)
+            File.AppendAllText(Path.Combine(results, "first-presses.txt"),
+                $"{TestName()}\t{LastFirstPress}\tvisit after: {visit}{Environment.NewLine}");
+        return visit;
+    }
+
+    private static string TestName() =>
+        new System.Diagnostics.StackTrace().GetFrames().Select(frame => frame.GetMethod())
+            .FirstOrDefault(method => method?.DeclaringType?.Namespace == "WinScreen.Tests" && method.Name.Contains('_'))?.Name ?? "?";
+
+    /// <summary>What <see cref="WaitForVisit"/> did last, for failure messages.</summary>
+    public static string LastFirstPress { get; private set; } = "";
+
+    /// <summary>What the administrator program found held and let go before this test.</summary>
+    public static string LastReleased { get; private set; } = "";
+
     public static void TakeTheFront()
     {
+        // A test that failed holding a button down leaves it held for the next one. Read where Windows doesn't hide it.
+        LastReleased = Do("release");
         Do("front");
         if (!Desktop.WaitFor(() => User32.GetForegroundWindow() == Window, 2000))
             throw new InvalidOperationException("The administrator window didn't take the focus.");

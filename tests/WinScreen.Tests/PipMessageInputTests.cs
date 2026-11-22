@@ -50,7 +50,7 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
     {
         var pointer = new Point(view.Left + view.Width / 3, view.Top + view.Height / 3);
         Desktop.SlideMouse(pointer);
-        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "The message visit did not start; in front " + Desktop.FrontDescription());
+        Assert.True(AdministratorFront.WaitForVisit(view), "The message visit did not start; in front " + Desktop.FrontDescription());
         Thread.Sleep(100);
         return pointer;
     }
@@ -282,7 +282,7 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
         {
             Point now = new(view.Left + view.Width / 3, view.Top + view.Height / 3);
             Desktop.MoveMouse(now); // At once, while the visit is still starting.
-            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No visit; in front " + Desktop.FrontDescription());
+            Assert.True(AdministratorFront.WaitForVisit(view), "No visit; in front " + Desktop.FrontDescription());
             Thread.Sleep(300);
             Rectangle parked = Desktop.BoundsOf(source.Handle);
             var (area, shown) = view.LiveInteraction!.CurrentGeometry;
@@ -354,7 +354,7 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
             Point pointer = new(view.Left + picture.Left + 60 * picture.Width / 400,
                 view.Top + picture.Top + 50 * picture.Height / 300);
             Desktop.SlideMouse(pointer);
-            Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "No visit; in front " + Desktop.FrontDescription());
+            Assert.True(AdministratorFront.WaitForVisit(view), "No visit; in front " + Desktop.FrontDescription());
             Thread.Sleep(100);
             Desktop.MouseButton(true);
             Thread.Sleep(40);
@@ -510,7 +510,7 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
                     try
                     {
                         Desktop.SlideMouse(new Point(view.Left + view.Width / 2, view.Top + view.Height / 2));
-                        Assert.True(Desktop.WaitFor(() => view.LiveInteraction is not null), "The visit didn't start.");
+                        Assert.True(AdministratorFront.WaitForVisit(view), "The visit didn't start; in front " + Desktop.FrontDescription());
                         Thread.Sleep(300);
                         for (int i = 0; i < 3; i++) { mouse_event(0x800, 0, 0, unchecked((uint)-120), 0); Thread.Sleep(80); }
                         Assert.True(Desktop.WaitFor(() => !WindowInfo.Title(edge).EndsWith(" y=0"), 3000), WindowInfo.Title(edge));
