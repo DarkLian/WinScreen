@@ -401,7 +401,9 @@ public sealed class SwitcherListTests
     public void On_windows_11_keep_updating_takes_the_original_out_of_alt_tab_read_from_the_screen()
     {
         if (Environment.OSVersion.Version.Build < 22000) { Skipped.Because("Needs Windows 11; Windows 10's switcher is read by the test above."); return; }
-        const string word = "Lantern";
+        // A number new each run: a fixed title can be on the screen elsewhere, behind the switcher (22 Nov 2026, in a
+        // window that was discussing this test).
+        string word = Random.Shared.Next(100000, 1000000).ToString(System.Globalization.CultureInfo.InvariantCulture);
         using var target = new TargetProcess(new Rectangle(240, 160, 480, 340), "E8E0C8", title: "Kettle " + word + " Meadow");
         Desktop.GainForegroundRights();
         Desktop.Activate(target.Handle);
@@ -409,8 +411,7 @@ public sealed class SwitcherListTests
         var owner = new object();
         try
         {
-            // Any word of the title: the recognizer can miss one, as it did on the highlighted entry (20 Nov 2026).
-            string[] words = ["Kettle", word, "Meadow"];
+            string[] words = [word];
             string text = SwitcherText();
             Assert.True(words.Any(text.Contains), "Not listed: " + text);
             windows.HideOwned(target.Handle, owner);
@@ -426,6 +427,8 @@ public sealed class SwitcherListTests
         }
         finally { windows.RestoreAll(); }
 
+        // Read with the highlight on two different entries: the recognizer misses the highlighted entry's title (22 Nov
+        // 2026, the window shown again was the one highlighted and listed, but not read).
         static string SwitcherText()
         {
             Desktop.Key(Keys.Menu, true);
@@ -433,7 +436,10 @@ public sealed class SwitcherListTests
             {
                 Desktop.Press(Keys.Tab);
                 Thread.Sleep(1200);
-                return ReadScreen().GetAwaiter().GetResult();
+                string first = ReadScreen().GetAwaiter().GetResult();
+                Desktop.Press(Keys.Tab);
+                Thread.Sleep(500);
+                return first + "\n" + ReadScreen().GetAwaiter().GetResult();
             }
             finally
             {
@@ -460,6 +466,20 @@ public sealed class SwitcherListTests
             graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
             graphics.DrawImage(picture, new Rectangle(0, 0, larger.Width, larger.Height), middle, GraphicsUnit.Pixel);
         }
+        // Over the switcher's see-through backdrop the recognizer read some titles and not others, sometimes none (22 Nov
+        // 2026). As black text on white (the titles are light) it read every one in the same pictures.
+        var bits = larger.LockBits(new Rectangle(Point.Empty, larger.Size), System.Drawing.Imaging.ImageLockMode.ReadWrite,
+            System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        byte[] pixels = new byte[bits.Stride * larger.Height];
+        System.Runtime.InteropServices.Marshal.Copy(bits.Scan0, pixels, 0, pixels.Length);
+        for (int i = 0; i < pixels.Length; i += 4)
+        {
+            byte ink = (pixels[i] * 114 + pixels[i + 1] * 587 + pixels[i + 2] * 299) / 1000 >= 160 ? (byte)0 : (byte)255;
+            pixels[i] = pixels[i + 1] = pixels[i + 2] = ink;
+            pixels[i + 3] = 255;
+        }
+        System.Runtime.InteropServices.Marshal.Copy(pixels, 0, bits.Scan0, pixels.Length);
+        larger.UnlockBits(bits);
         using var png = new MemoryStream();
         larger.Save(png, System.Drawing.Imaging.ImageFormat.Png);
         using var stream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream();

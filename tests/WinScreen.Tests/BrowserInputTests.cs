@@ -269,6 +269,11 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 for (int visit = 0; visit < 3; visit++)
                 {
                     Desktop.SlideMouse(first); State("a");
+                    // The helper loads into the browser on its first visit; until then the page may still see the
+                    // pointer leave (about 150 ms on a freshly built helper, 22 Nov). Resting is judged once it is in.
+                    Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.HoverStatus.StartsWith("active", StringComparison.Ordinal) == true, 3000),
+                        "Enhanced hover never came in: " + view.LiveInteraction?.HoverStatus);
+                    Thread.Sleep(200);
                     string leaves = Leaves();
                     for (int sample = 0; sample < 10; sample++)
                     {
