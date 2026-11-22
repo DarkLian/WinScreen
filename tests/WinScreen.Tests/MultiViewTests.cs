@@ -180,7 +180,11 @@ public sealed class MultiViewTests
             Desktop.SlideMouse(new Point(start.X, Math.Min(views[0].Bottom - 10, start.Y + 80)));
             Assert.NotNull(Next(a, "wheel ", 2000));
             Desktop.SlideMouse(Center(views[1]));
-            Assert.True(Desktop.WaitFor(() => views[1].LiveInteraction is not null, 3000), "No visit in the second view.");
+            // Leaving the first view gave the focus back to the window in front before, which may be an administrator's.
+            Assert.True(AdministratorFront.WaitForVisit(views[1], 3000),
+                $"No visit in the second view: '{views[1].NoVisitBecause}', waiting for a press {views[1].WaitsForPress}, pointer {Desktop.CursorPosition()}, " +
+                $"views {views[0].Bounds} {views[1].Bounds}, first view's visit {(views[0].LiveInteraction is null ? "ended: " + views[0].LastVisitEnd : "on")}, " +
+                $"buttons {Control.MouseButtons}, in front {Desktop.FrontDescription()}");
             Thread.Sleep(300);
             Drain(a);
             Assert.Null(Next(a, "wheel ", 600));

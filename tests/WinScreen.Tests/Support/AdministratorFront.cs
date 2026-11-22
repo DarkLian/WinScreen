@@ -36,6 +36,31 @@ internal static class AdministratorFront
 
     public static nint Window { get; private set; }
 
+    /// <summary>
+    /// Whether the tests' input goes through the administrator program now: only while a window running as
+    /// administrator has the focus, which Windows keeps a normal program's input from. Once an ordinary window has it,
+    /// input comes from the test itself, as in any other run: input made by a program running as administrator can
+    /// differ there, for one in which window may take the focus.
+    /// </summary>
+    public static bool Relays
+    {
+        get
+        {
+            if (!On) return false;
+            nint front = User32.GetForegroundWindow();
+            if (front != s_frontChecked)
+            {
+                User32.GetWindowThreadProcessId(front, out uint process);
+                s_frontElevated = process != 0 && ProcessInfo.IsElevated(process);
+                s_frontChecked = front;
+            }
+            return s_frontElevated;
+        }
+    }
+
+    private static nint s_frontChecked;
+    private static bool s_frontElevated;
+
     /// <summary>Sends one command and waits until it is done; returns the answer, "ok" and maybe more.</summary>
     public static string Do(string command)
     {
@@ -53,7 +78,8 @@ internal static class AdministratorFront
     /// <summary>
     /// Waits for a visit to start. With an administrator window in front a view starts none until it is pressed: a
     /// person whose hover does nothing clicks, so here the view gets that first press where the pointer is, and the test
-    /// carries on. The press is a real click in the app, which a test counting clicks sees too.
+    /// carries on. The press is given in the middle of the view, not on a button the test is about to press, and the
+    /// test sees nothing of it: the view's press records and the targets' reports forget it.
     /// </summary>
     public static bool WaitForVisit(PipWindow view, int milliseconds = 3000)
     {
@@ -65,14 +91,26 @@ internal static class AdministratorFront
         }
         string before = $"no visit because '{view.NoVisitBecause}', waiting for a press {view.WaitsForPress}, " +
             $"left button held for the view's thread {view.Invoke(() => (User32.GetKeyState(1) & 0x8000) != 0)}, held for Windows '{Do("held")}'";
+        Point back = Desktop.CursorPosition();
+        Rectangle frame = view.Invoke(() => view.Bounds);
+        var middle = new Point(frame.Left + frame.Width / 2, frame.Top + frame.Height / 2);
+        if (back != middle) Desktop.MoveMouse(middle);
+        int recorded = view.PressOutcomes.Count;
         Desktop.MouseButton(true);
         bool started = Desktop.WaitFor(() => view.LiveInteraction is not null, 1000);
         Thread.Sleep(50);
         Desktop.MouseButton(false);
+        bool answered = Desktop.WaitFor(() => view.PressOutcomes.Count > recorded, 1000);
         // Not part of a double click the test makes next.
         Thread.Sleep(SystemInformation.DoubleClickTime + 50);
-        LastFirstPress = $"given at {Desktop.CursorPosition()} ({before}): visit {(started ? "started" : "didn't start")}, " +
-            $"now {(view.LiveInteraction is null ? "none" : "on")}, last end '{view.LastVisitEnd}', in front {Desktop.FrontDescription()}";
+        view.Invoke(view.ForgetPresses);
+        List<string> dropped = TargetProcess.DropReports();
+        PressesGiven++;
+        // As input, which the visit's hook sees: a pointer that jumped there unseen ends the visit.
+        if (back != middle) Desktop.SlideMouse(back);
+        LastFirstPress = $"given at {middle} ({before}): visit {(started ? "started" : "didn't start")}, answered {answered}, " +
+            $"now {(view.LiveInteraction is null ? "none" : "on")}, last end '{view.LastVisitEnd}', in front {Desktop.FrontDescription()}, " +
+            $"held for Windows after '{Do("held")}', reports dropped '{string.Join("; ", dropped)}'";
         bool visit = Desktop.WaitFor(() => view.LiveInteraction is not null, milliseconds);
         // Every first press of the run, beside the other run notes.
         if (Path.GetDirectoryName(Environment.GetEnvironmentVariable(Skipped.FileVariable)) is { Length: > 0 } results)
@@ -87,6 +125,9 @@ internal static class AdministratorFront
 
     /// <summary>What <see cref="WaitForVisit"/> did last, for failure messages.</summary>
     public static string LastFirstPress { get; private set; } = "";
+
+    /// <summary>How many first presses the run gave; an app that counts presses itself counted these too.</summary>
+    public static int PressesGiven { get; private set; }
 
     /// <summary>What the administrator program found held and let go before this test.</summary>
     public static string LastReleased { get; private set; } = "";

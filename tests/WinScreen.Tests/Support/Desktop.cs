@@ -290,7 +290,7 @@ internal static partial class Desktop
 
     public static void Key(Keys key, bool down)
     {
-        if (AdministratorFront.On)
+        if (AdministratorFront.Relays)
         {
             AdministratorFront.Do($"key {(int)key} {(down ? 0 : KeyUp)}");
             return;
@@ -314,7 +314,7 @@ internal static partial class Desktop
 
     public static void MoveMouse(Point point)
     {
-        if (AdministratorFront.On) AdministratorFront.Do($"cursor {point.X} {point.Y}");
+        if (AdministratorFront.Relays) AdministratorFront.Do($"cursor {point.X} {point.Y}");
         else SetCursorPos(point.X, point.Y);
     }
 
@@ -323,14 +323,14 @@ internal static partial class Desktop
     {
         Rectangle screen = SystemInformation.VirtualScreen;
         int x = (int)((point.X - screen.Left + 0.5) * 65536 / screen.Width), y = (int)((point.Y - screen.Top + 0.5) * 65536 / screen.Height);
-        if (AdministratorFront.On) AdministratorFront.Do($"mouse {0x8001 | 0x4000} {x} {y} 0");
+        if (AdministratorFront.Relays) AdministratorFront.Do($"mouse {0x8001 | 0x4000} {x} {y} 0");
         else mouse_event(0x8001 | 0x4000, (uint)x, (uint)y, 0, 0);
     }
 
     /// <summary>Moves relative to now, with the system's pointer acceleration, as a real mouse does.</summary>
     public static void NudgeMouse(int x, int y)
     {
-        if (AdministratorFront.On) AdministratorFront.Do($"mouse 1 {x} {y} 0");
+        if (AdministratorFront.Relays) AdministratorFront.Do($"mouse 1 {x} {y} 0");
         else mouse_event(0x0001, unchecked((uint)x), unchecked((uint)y), 0, 0);
     }
 
@@ -443,7 +443,7 @@ internal static partial class Desktop
 
     private static void SendMouse(uint flags, int data)
     {
-        if (AdministratorFront.On)
+        if (AdministratorFront.Relays)
         {
             AdministratorFront.Do($"mouse {flags} 0 0 {data}");
             return;

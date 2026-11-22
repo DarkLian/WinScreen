@@ -263,7 +263,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                 Point first = at(new Point(150, top + 140));
                 Point second = at(new Point(Desktop.BoundsOf(window).Width * 3 / 4, top + 140));
                 Point outside = new(view.Left - 50, view.Top + 100);
-                void State(string id) => Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains($"css={id} dom={id} preview={(id == "none" ? "none" : "block")}"), 3000), WindowInfo.Title(window) + "; " + view.LiveInteraction?.HoverStatus + "; pointer=" + Desktop.CursorPosition() + "; geometry=" + view.LiveInteraction?.CurrentGeometry + "; " + Surroundings(window));
+                void State(string id) => Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).Contains($"css={id} dom={id} preview={(id == "none" ? "none" : "block")}"), 3000), WindowInfo.Title(window) + "; " + view.LiveInteraction?.HoverStatus + "; visit " + (view.LiveInteraction is null ? $"none, last ended '{view.LastVisitEnd}', no visit because '{view.NoVisitBecause}'" : "on") + "; first press " + AdministratorFront.LastFirstPress + "; pointer=" + Desktop.CursorPosition() + "; geometry=" + view.LiveInteraction?.CurrentGeometry + "; " + Surroundings(window));
                 string Leaves() => System.Text.RegularExpressions.Regex.Match(WindowInfo.Title(window), @"leave=\d+").Value;
                 view.Invoke(() => view.SetEnhancedHover(true));
                 for (int visit = 0; visit < 3; visit++)

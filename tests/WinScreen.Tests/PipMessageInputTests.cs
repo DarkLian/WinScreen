@@ -125,7 +125,8 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
             ui(view.EndVisit);
             Assert.Null(view.LiveInteraction);
             while (source.NextReport(50) is not null) { }
-            mouse_event(8, 0, 0, 0, 0); Thread.Sleep(40); mouse_event(16, 0, 0, 0, 0);
+            // The visit's end gave the focus back to the window in front before it, which may be an administrator's.
+            Desktop.MouseButton(true, right: true); Thread.Sleep(40); Desktop.MouseButton(false, right: true);
             nint menu = 0;
             bool opened = Desktop.WaitFor(() =>
             {
@@ -136,7 +137,9 @@ public sealed class PipMessageInputTests(Xunit.Abstractions.ITestOutputHelper ou
             bool viewMenu = false;
             ui(() => viewMenu = view.MenuShown);
             Assert.False(viewMenu, "The view's own menu opened.");
-            Assert.True(opened, "No menu from the app.");
+            Assert.True(opened, $"No menu from the app: visit {(view.LiveInteraction is null ? "none, last ended: " + view.LastVisitEnd : "on")}, " +
+                $"no visit because '{view.NoVisitBecause}', outcomes {string.Join(",", view.PressOutcomes)}, pointer {Desktop.CursorPosition()}, view {view.Bounds}, " +
+                $"buttons {Control.MouseButtons}, in front {Desktop.FrontDescription()}");
             Assert.NotNull(view.LiveInteraction);
             Desktop.Press(Keys.Escape);
             Assert.True(Desktop.WaitFor(() => !User32.IsWindowVisible(menu)));

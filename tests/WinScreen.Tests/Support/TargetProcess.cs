@@ -8,6 +8,17 @@ internal sealed class TargetProcess : IDisposable
 {
     private readonly Process _process;
     private readonly BlockingCollection<string> _reports = [];
+    private static readonly ConcurrentDictionary<TargetProcess, byte> Open = new();
+
+    /// <summary>Drops what every open target has said so far, as after a press the test didn't make itself.</summary>
+    internal static List<string> DropReports()
+    {
+        var dropped = new List<string>();
+        foreach (TargetProcess target in Open.Keys)
+            while (target._reports.TryTake(out string? line))
+                dropped.Add(line);
+        return dropped;
+    }
 
     public TargetProcess(Rectangle bounds, string colors = "C81E1E", string title = "WinScreen test target", string dpi = "permonitorv2", nint owner = 0)
     {
@@ -38,6 +49,7 @@ internal sealed class TargetProcess : IDisposable
             while (_process.StandardOutput.ReadLine() is { } line)
                 _reports.Add(line);
         }) { IsBackground = true }.Start();
+        Open[this] = 0;
     }
 
     public nint Handle { get; }
@@ -279,6 +291,7 @@ internal sealed class TargetProcess : IDisposable
 
     public void Dispose()
     {
+        Open.TryRemove(this, out _);
         try
         {
             if (!_process.HasExited)
