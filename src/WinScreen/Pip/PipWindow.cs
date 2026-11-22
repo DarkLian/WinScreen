@@ -1856,6 +1856,7 @@ public sealed partial class PipWindow : Form
             _windows.SetParkedHoverSurface(_source, HoverPlacementWanted);
             live.Start(PointToScreen(pointer));
             _live = live;
+            _liveStartedAt = Environment.TickCount64;
             _windows.SetParkedReachable(_source, true);
             _cursorFromFrame = true; // Whatever shape the pointer arrived with goes back to the arrow once.
             CheckState();
@@ -1898,6 +1899,9 @@ public sealed partial class PipWindow : Form
         ViewState.Modes before = CurrentModes();
         _live = null;
         _liveEndedAt = Environment.TickCount64;
+        if (_liveEndedAt - _liveStartedAt < 300 && Bounds.Contains(Cursor.Position))
+            Diagnostics.Suspicion.VisitsEndAtOnce.Note(("front", Diagnostics.LogValue.ProgramOf(User32.GetForegroundWindow())),
+                ("frontClass", Diagnostics.LogValue.ClassOf(User32.GetForegroundWindow())));
         CheckRequest(before, ViewState.Request.VisitEnds);
         try { if (_origin.IsAvailable) { _windows.SetParkedReachable(_source, false); _windows.SetParkedHoverSurface(_source, HoverPlacementWanted); } }
         catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); }
@@ -2357,7 +2361,7 @@ public sealed partial class PipWindow : Form
     }
 
     private bool _sourceWasFocused;
-    private long _liveEndedAt, _suspendedAt;
+    private long _liveStartedAt, _liveEndedAt, _suspendedAt;
     private PipInteraction? _pressVisit; // Its release may reach the view too, and goes to the same visit.
     private MouseButtons _pressButton;
     private const long RevealGrace = 500;

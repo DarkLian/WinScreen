@@ -160,4 +160,25 @@ public sealed class DiagnosticLogTests : IDisposable
         Assert.True(Log.Flush(TimeSpan.FromMilliseconds(10)));
         Assert.Empty(Log.Files);
     }
+
+    [Fact]
+    public void Something_that_keeps_repeating_is_told_once_per_run_of_it()
+    {
+        long now = 0;
+        var suspicion = new Suspicion("test", times: 3, within: TimeSpan.FromSeconds(10), quietFor: TimeSpan.FromMinutes(1)) { Clock = () => now };
+        bool Note(long at) { now = at; return suspicion.Note(); }
+
+        // Now and then is normal: two close together, then a third too late to count with them.
+        Assert.False(Note(0));
+        Assert.False(Note(1000));
+        Assert.False(Note(11500));
+        Assert.False(Note(12000));
+        Assert.True(Note(12500));
+        // The same run goes on, each time sooner than a minute after the last: nothing more.
+        for (long at = 30000; at <= 300000; at += 30000) Assert.False(Note(at));
+        // A minute of quiet ends it; the next run is told again, once it repeats.
+        Assert.False(Note(400000));
+        Assert.False(Note(401000));
+        Assert.True(Note(402000));
+    }
 }

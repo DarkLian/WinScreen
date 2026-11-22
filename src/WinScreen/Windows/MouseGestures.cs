@@ -155,6 +155,7 @@ internal sealed class MouseGestures : IDisposable
     {
         if (!Active) return;
         Diagnostics.Log.Event("hook.gestures.lost", ("dragEnded", _gesture is not null));
+        Diagnostics.Suspicion.HookLostRepeatedly.Note(("front", Diagnostics.LogValue.ProgramOf(User32.GetForegroundWindow())));
         if (_gesture is { } gesture)
         {
             _gesture = null;
