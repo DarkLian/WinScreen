@@ -140,6 +140,9 @@ internal sealed class ViewRecording
                 if (Finished) { result = new(null, 0, false, false, false); return; }
                 _signal.Wait(250);
             }
+            // The clock starts with the first frame: the time the sound and the encoder take to start (over a second, cold,
+            // on the test VM) is caught up with that frame, so the video is as long as the recording.
+            long start = Stopwatch.GetTimestamp();
             bool soundRefused = sound is not null && !sound.WaitUntilReady(TimeSpan.FromSeconds(3));
             if (soundRefused) { sound!.Dispose(); sound = null; }
             Size size;
@@ -148,8 +151,6 @@ internal sealed class ViewRecording
             writer = VideoFileWriter.Open(_path, size, wanted, sound is not null, _softwareOnly, current);
             int rate = writer.Rate;
             lock (_gate) _rate = rate;
-            // The clock starts with the file, so waiting for the sound or the encoder never leaves a gap.
-            long start = Stopwatch.GetTimestamp();
             Diagnostics.Log.Event("recording.started", ("hardware", writer.Hardware), ("sound", sound is not null),
                 ("width", size.Width), ("height", size.Height), ("rate", rate));
             long tick = 1;
