@@ -178,6 +178,36 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    // The owner, 23 Nov: Glass had a card of its own above the list of apps. Now Every app's card holds the levels every
+    // app starts from, with the switch for Glass that fades the page; an app's card holds its own instead.
+    [Fact]
+    public void Every_apps_card_holds_the_main_glass_levels_and_an_apps_card_its_own()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            using var window = new SettingsWindow(new AppSettings { Language = "en", ExperimentalFeatures = true }, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+            window.Show();
+            TabControl tabs = Descendants(window).OfType<TabControl>().Single();
+            tabs.SelectedTab = tabs.TabPages.Cast<TabPage>().Single(page => page.Text == UiText.T("settings.backgrounds"));
+            void Pump() { for (int i = 0; i < 5; i++) { Application.DoEvents(); Thread.Sleep(10); } }
+            Pump();
+            SwitchBox Switch(string key) => Descendants(window).OfType<SwitchBox>().Single(box => box.Text == UiText.T(key));
+            Assert.DoesNotContain(Descendants(window).OfType<SettingsCard>(), card => card.Text == "Glass");
+            Assert.Contains(Descendants(window).OfType<SettingsCard>(), card => card.Text == "App backgrounds");
+            Assert.True(Switch("settings.effects.layeredGlass").Visible);
+            Assert.False(Switch("settings.apps.ownGlass").Visible);
+            window.AddApp("Notes.exe");
+            Pump();
+            Assert.False(Switch("settings.effects.layeredGlass").Visible);
+            Assert.True(Switch("settings.apps.ownGlass").Visible);
+            Descendants(window).OfType<BackgroundList>().Single().SelectedIndex = 0;
+            Pump();
+            Assert.True(Switch("settings.effects.layeredGlass").Visible);
+            window.Close();
+        });
+    }
+
     /// <summary>
     /// A wider window gives every row the same extra room, up to a width still easy to read; maximized, Settings
     /// stops staying above other windows and views, and stays above them again when made smaller.

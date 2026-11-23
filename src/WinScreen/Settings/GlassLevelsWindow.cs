@@ -7,7 +7,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
 {
     private readonly NumericUpDown _background = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _text = new() { Minimum = 20, Maximum = 100, Width = 70 };
-    private readonly NumericUpDown _fade = new() { Minimum = 1, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _fade = new CurvedNumber { Minimum = 1, Maximum = EffectPreferences.MostFadeRange, Width = 70, Curve = CurvedNumber.FadeCurve };
     private readonly ComboBox _textColor = new ThemedCombo { Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly SwitchBox _shadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
     private readonly System.Windows.Forms.Timer _watch = new() { Interval = 500 };
@@ -65,7 +65,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         {
             _background.Value = Math.Clamp(levels.BackgroundPercent, 0, 100);
             _text.Value = Math.Clamp(levels.TextPercent, 20, 100);
-            _fade.Value = Math.Clamp(levels.FadeRangePercent, 1, 100);
+            _fade.Value = Math.Clamp(levels.FadeRangePercent, 1, EffectPreferences.MostFadeRange);
             if (_textColor.Items.Count > 0) _textColor.SelectedIndex = (int)levels.TextColor;
             _shadow.Checked = levels.TextShadow;
         }

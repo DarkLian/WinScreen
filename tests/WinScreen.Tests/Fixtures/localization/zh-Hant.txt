@@ -430,7 +430,7 @@ settings.admin.help FBD765765CF75642
 settings.admin.helperFailed B59CADF2AE1366EC
 settings.admin.unavailable 466E0F9045803572
 settings.apps.everyBackground 14107FBF389E436E
-settings.apps.glassHelp 9B12070F87B56E05
+settings.apps.glassHelp 2C17D6A6CA0283F4
 settings.apps.ownBackground 0CCC50693D2B598D
 settings.apps.ownGlass 0B21A3AD3479B5F9
 settings.backgrounds F4B669C55756180E
@@ -445,7 +445,7 @@ settings.backgrounds.files E181BAAD64DF4374
 settings.backgrounds.fill 49EA91BA943FB92F
 settings.backgrounds.fit B0352A944F496DC2
 settings.backgrounds.fitWhole 9FB67D089230A8F8
-settings.backgrounds.help E646BE38741DF492
+settings.backgrounds.help A02A8ADF6C3195AE
 settings.backgrounds.list F4B669C55756180E
 settings.backgrounds.none DA5930E53D54D33E
 settings.backgrounds.pictures B210350F38FC32FB
@@ -454,7 +454,7 @@ settings.backgrounds.sound 65FCA0E70388ED3E
 settings.backgrounds.soundHelp D68449407DD3D185
 settings.backgrounds.stretch 6B16FBBABAC33F6C
 settings.backgrounds.tile F24BD6C1089593DB
-settings.backgrounds.title 04F40C4D9C6F862B
+settings.backgrounds.title 1952BE6736CC3E39
 settings.backgrounds.videos C8F059689CD9651C
 settings.backgrounds.withSound 239CF820AAEF7DF7
 settings.customization B70682D027CE5073
@@ -474,11 +474,10 @@ settings.effects.textColor.light DEE60AEE2501C623
 settings.effects.textColorHelp AAFB5061658FA461
 settings.effects.title 91626AFF4237C4DB
 settings.experimental 5B00B4A97282B8B8
-settings.experimental.enable 66B2EE3DE632FE86
+settings.experimental.enable B2F1E885F1430C5B
 settings.fullScreen.allowPip F70A0076EFC5D980
 settings.fullScreen.pause 0533994D4EE99C8C
 settings.general 91E25F4DDC6F6CD8
-settings.glass.title 1CF9F76E181DA84D
 settings.hotkeys.captureHelp ED90BD3D0AD09FB7
 settings.keptAreas.empty ABB8BDE25543E3E3
 settings.keptAreas.help 456DB7514D9656A0

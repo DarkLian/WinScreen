@@ -289,7 +289,7 @@ public sealed partial class TrayApplication : ApplicationContext
         menu.Opening += (_, _) => { restart.Visible = _updates.Ready; check.Visible = !restart.Visible; };
         menu.Items.Add(check);
         menu.Items.Add(restart);
-        menu.Items.Add(new ToolStripMenuItem(T("whatsNew.open"), null, (_, _) => WhatsNew.Show()));
+        menu.Items.Add(new ToolStripMenuItem(T("whatsNew.open"), MenuParts.Icon(MenuParts.News), (_, _) => WhatsNew.Show()));
         menu.Items.Add(new ToolStripMenuItem(T("app.saveDiagnostics"), MenuParts.Icon(MenuParts.Save), (_, _) => SaveDiagnostics()));
         menu.Items.Add(new ToolStripMenuItem(T("app.about"), MenuParts.Icon(MenuParts.Info), (_, _) => ThemedMessage.Show(null,
             string.Format(T("app.version"), AppInfo.Version), "WinScreen")));

@@ -4,7 +4,7 @@ using WinScreen.Glass;
 namespace WinScreen.Settings;
 
 // The list holds Every app and the apps with their own background or Glass levels; the card under it edits the one
-// chosen in the list.
+// chosen in the list. Every app's card holds the Glass levels every other app starts from.
 public sealed partial class SettingsWindow
 {
     private const int MostBackgroundRows = 5;
@@ -16,10 +16,12 @@ public sealed partial class SettingsWindow
     private readonly List<string> _listedApps = [];
     private readonly NumericUpDown _appGlassBackground = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _appGlassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
-    private readonly NumericUpDown _appGlassFade = new() { Minimum = 1, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _appGlassFade = new CurvedNumber { Minimum = 1, Maximum = EffectPreferences.MostFadeRange, Width = 70, Curve = CurvedNumber.FadeCurve };
     private readonly ComboBox _appGlassTextColor = TextColorPicker();
     private readonly SwitchBox _appGlassShadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
     private readonly List<Control> _appGlassRows = [];
+    private readonly List<Control> _mainGlassRows = [];
+    private Control? _appGlassNote;
     private List<AppGlassLevels> _glassApps = [];
     private bool _showingGlassApp;
     private readonly ThemedList _keptList = new() { AccessibleName = T("settings.keptAreas.list"), EmptyText = T("settings.keptAreas.empty") };
@@ -120,16 +122,16 @@ public sealed partial class SettingsWindow
         _appGlassRows.Add(SettingRow(T("settings.effects.fade"), _appGlassFade));
         _appGlassRows.Add(SettingRow(T("settings.effects.textColor"), _appGlassTextColor));
         _appGlassRows.Add(_appGlassShadow);
-        _backgroundEditor = Card(T("settings.backgrounds.everyApp"), false,
-            [_ownBackground, .. _backgroundRows, Note(T("settings.backgrounds.soundHelp")), _ownGlass, Note(T("settings.apps.glassHelp")), .. _appGlassRows]);
-
-        FlowLayoutPanel page = ScrollingPage();
-        // Glass's own settings decide how much of the background shows, so they come first.
-        page.Controls.Add(Card(T("settings.glass.title"), true, _layeredGlass,
+        _mainGlassRows.AddRange([_layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.fade"), _glassFade), Note(T("settings.effects.fadeHelp")),
             SettingRow(T("settings.effects.textColor"), _glassTextColor), Note(T("settings.effects.textColorHelp")), _glassShadow,
-            Note(T("settings.effects.help"))));
+            Note(T("settings.effects.help"))]);
+        _appGlassNote = Note(T("settings.apps.glassHelp"));
+        _backgroundEditor = Card(T("settings.backgrounds.everyApp"), false,
+            [_ownBackground, .. _backgroundRows, Note(T("settings.backgrounds.soundHelp")), .. _mainGlassRows, _ownGlass, _appGlassNote, .. _appGlassRows]);
+
+        FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Card(T("settings.backgrounds.title"), true, Note(T("settings.backgrounds.help")), _backgroundFrame, adding));
         page.Controls.Add(_backgroundEditor);
         page.Controls.Add(Card(T("settings.keptAreas.title"), true, Note(T("settings.keptAreas.help")), _keptFrame, keptButtons));
@@ -353,9 +355,11 @@ public sealed partial class SettingsWindow
             }
             finally { _showingBackground = false; }
             _backgroundRemoveApp.Enabled = app is not null; // Every app stays.
-            // Every app's Glass levels are the ones above.
+            // Every app's own Glass levels are the ones every app starts from.
             _ownBackground.Visible = _ownGlass.Visible = app is not null;
+            _appGlassNote?.Visible = app is not null;
             foreach (Control row in _appGlassRows) row.Visible = app is not null;
+            foreach (Control row in _mainGlassRows) row.Visible = app is null;
             ShowGlassApp(app);
         }
         bool own = app is null || _backgroundEdit.OwnOf(app) is not null;

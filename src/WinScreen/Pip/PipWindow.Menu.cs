@@ -55,16 +55,16 @@ public sealed partial class PipWindow
         _menu.Items.Add(_hideItem);
         _useOriginalItem = _menu.Items.Add(T("menu.original.use"), MenuParts.Icon(MenuParts.Undo), (_, _) => UseOriginal());
         _goToItem = _menu.Items.Add(T("menu.original.goTo"), MenuParts.Icon(MenuParts.NewWindow), (_, _) => GoToSource());
-        _muteItem = new ToolStripMenuItem(T("menu.original.mute"), null, (_, _) => ChooseMute(!_muteItem!.Checked));
+        _muteItem = new ToolStripMenuItem(T("menu.original.mute"), MenuParts.Icon(MenuParts.Volume), (_, _) => ChooseMute(!_muteItem!.Checked));
         _menu.Items.Add(_muteItem);
 
         _menu.Items.Add(MenuParts.Header(T("menu.group.picture")));
         _removeCropItem = new ToolStripMenuItem(T("pip.zoom.reset"), MenuParts.Icon(MenuParts.Crop),
             (_, _) => { ResetZoom(); SetCrop(Rectangle.Empty); });
         _menu.Items.Add(_removeCropItem);
-        _freezeItem = new ToolStripMenuItem(T("pip.freeze"), null, (_, _) => SetFrozen(!Frozen));
+        _freezeItem = new ToolStripMenuItem(T("pip.freeze"), MenuParts.Icon(MenuParts.Pause), (_, _) => SetFrozen(!Frozen));
         _menu.Items.Add(_freezeItem);
-        _turnItem = new ToolStripMenuItem(T("pip.turn"));
+        _turnItem = new ToolStripMenuItem(T("pip.turn")).WithIcon(MenuParts.Rotate);
         foreach ((string text, AppCommand command, Func<ViewTurn, ViewTurn> next) in new (string, AppCommand, Func<ViewTurn, ViewTurn>)[]
         {
             (T("pip.turn.right"), AppCommand.ViewRotateRight, turn => turn.RotatedRight),
@@ -77,12 +77,12 @@ public sealed partial class PipWindow
         _turnItem.DropDownItems.Add(_uprightItem);
         _turnItem.DropDownOpening += (_, _) => RefreshTurnItems();
         _menu.Items.Add(_turnItem);
-        _copyPictureItem = new ToolStripMenuItem(T("pip.picture.copy"), null, (_, _) => CopyPicture());
-        _freezeCopyItem = new ToolStripMenuItem(T("pip.picture.freezeCopy"), null, (_, _) => FreezeCopy());
-        _copyTextItem = new ToolStripMenuItem(T("pip.picture.copyText"), null, (_, _) => CopyText());
-        _coverItem = new ToolStripMenuItem(T("pip.picture.cover"), null, (_, _) => EditCovers());
-        _uncoverItem = new ToolStripMenuItem(T("pip.picture.uncover"), null, (_, _) => SetCovers([]));
-        _recordItem = new ToolStripMenuItem(T("pip.picture.record"), null, (_, _) => ToggleRecording());
+        _copyPictureItem = new ToolStripMenuItem(T("pip.picture.copy"), MenuParts.Icon(MenuParts.Copy), (_, _) => CopyPicture());
+        _freezeCopyItem = new ToolStripMenuItem(T("pip.picture.freezeCopy"), MenuParts.Icon(MenuParts.Picture), (_, _) => FreezeCopy());
+        _copyTextItem = new ToolStripMenuItem(T("pip.picture.copyText"), MenuParts.Icon(MenuParts.Text), (_, _) => CopyText());
+        _coverItem = new ToolStripMenuItem(T("pip.picture.cover"), MenuParts.Icon(MenuParts.Hide), (_, _) => EditCovers());
+        _uncoverItem = new ToolStripMenuItem(T("pip.picture.uncover"), MenuParts.Icon(MenuParts.View), (_, _) => SetCovers([]));
+        _recordItem = new ToolStripMenuItem(T("pip.picture.record"), MenuParts.Icon(MenuParts.Record), (_, _) => ToggleRecording());
         _recordNote = new NoteRow(T("pip.record.noCapture"));
         _menu.Items.AddRange([_copyPictureItem, _freezeCopyItem, _copyTextItem, _recordItem, _recordNote, _coverItem, _uncoverItem]);
         _menu.Items.Add(options);
@@ -90,9 +90,9 @@ public sealed partial class PipWindow
 
         _menu.Items.Add(new ToolStripSeparator());
         _helpItem = new ToolStripMenuItem(T("menu.help")).WithIcon(MenuParts.Help);
-        _retryItem = new ToolStripMenuItem(T("pip.backend.retry"), null, (_, _) => RetryCapture());
+        _retryItem = new ToolStripMenuItem(T("pip.backend.retry"), MenuParts.Icon(MenuParts.Refresh), (_, _) => RetryCapture());
         _helpItem.DropDownItems.Add(new ToolStripSeparator());
-        _helpItem.DropDownItems.Add(T("pip.diagnostics.title"), null, (_, _) => ShowDiagnostics());
+        _helpItem.DropDownItems.Add(T("pip.diagnostics.title"), MenuParts.Icon(MenuParts.Diagnostic), (_, _) => ShowDiagnostics());
         _helpItem.DropDownItems.Add(_retryItem);
         _menu.Items.Add(_helpItem);
         var minimize = (ToolStripMenuItem)_menu.Items.Add(T("pip.minimize"), MenuParts.Icon(MenuParts.Minimize), (_, _) => SuspendView());

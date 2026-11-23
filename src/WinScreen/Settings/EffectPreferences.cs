@@ -3,6 +3,9 @@ namespace WinScreen.Settings;
 // On by default (plain Glass passes presses through its see-through page); a PC with no graphics card gets plain Glass.
 public sealed record EffectPreferences
 {
+    // The fade's band ends at 0.03 + 0.27 x the range (ContentShaders.Composite); at 650% that passes sqrt(3), the farthest
+    // any colour can be from the page, so every colour fades.
+    internal const int MostFadeRange = 650;
     public bool LayeredGlass { get; init; } = true;
     public int BackgroundPercent { get; init; } = 15;
     public int TextPercent { get; init; } = 100;
@@ -23,7 +26,7 @@ public sealed record EffectPreferences
         {
             BackgroundPercent = Math.Clamp(BackgroundPercent, 0, 100),
             TextPercent = Math.Clamp(TextPercent, 20, 100),
-            FadeRangePercent = Math.Clamp(FadeRangePercent, 1, 100),
+            FadeRangePercent = Math.Clamp(FadeRangePercent, 1, EffectPreferences.MostFadeRange),
             TextColor = Enum.IsDefined(TextColor) ? TextColor : Glass.GlassText.AsItIs,
             Apps = apps,
         };
@@ -71,7 +74,7 @@ public sealed record AppGlassLevels
         Program = Program?.Trim() ?? "",
         BackgroundPercent = Math.Clamp(BackgroundPercent, 0, 100),
         TextPercent = Math.Clamp(TextPercent, 20, 100),
-        FadeRangePercent = Math.Clamp(FadeRangePercent, 1, 100),
+        FadeRangePercent = Math.Clamp(FadeRangePercent, 1, EffectPreferences.MostFadeRange),
         TextColor = Enum.IsDefined(TextColor) ? TextColor : Glass.GlassText.AsItIs,
     };
 

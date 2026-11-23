@@ -19,7 +19,7 @@ public sealed partial class SettingsWindow : Form
     private readonly CheckBox _layeredGlass = new SwitchBox { Text = T("settings.effects.layeredGlass"), AutoSize = true };
     private readonly NumericUpDown _glassBackground = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _glassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
-    private readonly NumericUpDown _glassFade = new() { Minimum = 1, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _glassFade = new CurvedNumber { Minimum = 1, Maximum = EffectPreferences.MostFadeRange, Width = 70, Curve = CurvedNumber.FadeCurve };
     private readonly ComboBox _glassTextColor = TextColorPicker();
     private readonly SwitchBox _glassShadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
     private readonly CheckBox _detectDark = new SwitchBox { Text = T("settings.dark.detect"), AutoSize = true };

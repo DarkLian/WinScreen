@@ -104,7 +104,8 @@ internal static class ContentShaders
                 result = length(c - page.rgb) < 0.008 ? float4(0, 0, 0, 0) : float4(c, 1);
             } else {
                 float away = length(c - page.rgb);
-                // levels.z narrows the colours that fade: at 1, the band reaches 0.30; lower keeps pictures solid.
+                // levels.z narrows the colours that fade: at 1, the band reaches 0.30; lower keeps pictures solid,
+                // and higher, up to 6.5, takes in every colour.
                 // Below 0.1 the fully faded part narrows too, so at 0.01 only the page colour itself fades.
                 float start = 0.03 * min(1, levels.z * 10);
                 float d = smoothstep(start, start + 0.27 * levels.z, away);

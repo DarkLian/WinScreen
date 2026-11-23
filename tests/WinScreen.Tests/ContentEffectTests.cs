@@ -272,7 +272,9 @@ public sealed class PageReaderTests
         Assert.Equal(100, effects.FadeRangePercent);
         Assert.Equal(1f, effects.Levels.FadeRange);
         Assert.Equal(1, AppSettings.Parse("""{"Effects":{"FadeRangePercent":0}}""").Effects.FadeRangePercent);
-        Assert.Equal(100, AppSettings.Parse("""{"Effects":{"FadeRangePercent":500}}""").Effects.FadeRangePercent);
+        // Up to 650%, where every colour is in the band (the owner, 23 Nov).
+        Assert.Equal(500, AppSettings.Parse("""{"Effects":{"FadeRangePercent":500}}""").Effects.FadeRangePercent);
+        Assert.Equal(650, AppSettings.Parse("""{"Effects":{"FadeRangePercent":900}}""").Effects.FadeRangePercent);
         // Settings saved before Dark and Glass went pixel by pixel still load.
         Assert.True(AppSettings.Parse("""{"Effects":{"PictureSafeDark":false,"PicturePercent":50}}""").Effects.LayeredGlass);
     }
@@ -396,6 +398,41 @@ public sealed class ContentEffectTests
                 Pump(() => Desktop.IsNear(Middle(bounds), expected, 24));
                 Assert.True(Desktop.IsNear(Middle(bounds), expected, 24), $"{Middle(bounds)} rather than {expected}");
                 Assert.Equal(128, windows.OpacityOf(target.Handle));
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
+    // A grey band on a white page: at the usual fade range it stays solid; at the widest, grey is halfway from the page
+    // to black, so about half of what is behind shows through it.
+    [GraphicsCardFact]
+    public void The_widest_fade_range_fades_colours_far_from_the_page_too()
+    {
+        using var behind = new TargetProcess(new Rectangle(250, 180, 520, 400), "1E64C8");
+        using var target = new TargetProcess(Spot, "FFFFFF,808080,FFFFFF");
+        User32.SetWindowPos(target.Handle, 0, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        Rectangle band = new(bounds.Left + bounds.Width / 2 - 5, bounds.Top + bounds.Height / 2 - 5, 10, 10);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            effects.SetLevels(new ContentLevels(0, 1, 1, Shadow: false));
+            try
+            {
+                Assert.True(effects.Toggle(target.Handle, ContentLook.Glass));
+                Color grey = Color.FromArgb(0x80, 0x80, 0x80);
+                Pump(() => Desktop.IsNear(Desktop.ColorOnScreen(band), grey, 20));
+                Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(band), grey, 20), $"{Desktop.ColorOnScreen(band)} at 100%");
+
+                effects.SetLevels(new ContentLevels(0, 1, WinScreen.Settings.EffectPreferences.MostFadeRange / 100f, Shadow: false));
+                bool Faded() => Desktop.ColorOnScreen(band) is var now && now.B - now.R > 40;
+                Pump(Faded);
+                Assert.True(Faded(), $"{Desktop.ColorOnScreen(band)} at the widest: the blue window behind should show through the grey.");
             }
             finally
             {

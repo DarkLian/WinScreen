@@ -1321,6 +1321,16 @@ internal sealed class ProgramList : Panel
 }
 
 // The number box it stands for stays inside, hidden, and holds the value.
+// A number whose slider gives the low end more room: the slider's place is the value's share to the power 1/Curve.
+internal sealed class CurvedNumber : NumericUpDown
+{
+    // Fade range 100% sits about halfway along, with up to 650% after it.
+    internal const float FadeCurve = 2.6f;
+
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal float Curve { get; init; } = 1;
+}
+
 internal sealed class NumberSlider : Control
 {
     private readonly NumericUpDown _number;
@@ -1367,7 +1377,10 @@ internal sealed class NumberSlider : Control
 
     private (int Left, int Right) Track => (NumberRoom + Unit(18), Width - Unit(10));
 
-    private float Share => _number.Maximum <= _number.Minimum ? 0 : (float)((_number.Value - _number.Minimum) / (_number.Maximum - _number.Minimum));
+    private float Curve => _number is CurvedNumber { Curve: > 0 } curved ? curved.Curve : 1;
+
+    private float Share => _number.Maximum <= _number.Minimum ? 0
+        : MathF.Pow((float)((_number.Value - _number.Minimum) / (_number.Maximum - _number.Minimum)), 1 / Curve);
 
     protected override void OnDpiChangedAfterParent(EventArgs e) { base.OnDpiChangedAfterParent(e); Fit(); }
     protected override void OnFontChanged(EventArgs e) { base.OnFontChanged(e); Fit(); }
@@ -1438,7 +1451,7 @@ internal sealed class NumberSlider : Control
     {
         (int left, int right) = Track;
         float share = Math.Clamp((x - left) / (float)Math.Max(1, right - left), 0, 1);
-        Set(_number.Minimum + (decimal)share * (_number.Maximum - _number.Minimum));
+        Set(_number.Minimum + (decimal)MathF.Pow(share, Curve) * (_number.Maximum - _number.Minimum));
     }
 
     protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Become(); }
