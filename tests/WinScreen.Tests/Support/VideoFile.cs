@@ -129,7 +129,8 @@ internal sealed class VideoFile : IDisposable
                 // The decoder's own size, rows and columns kept to multiples of 16 (432 x 304 for 420 x 300), whatever the
                 // media type says (seen on Windows 11 26300).
                 int padded = (size.Height + 15) / 16 * 16;
-                if (length != Math.Abs(pitch) * size.Height && length % padded == 0) pitch = Math.Sign(pitch) * (length / padded);
+                if (length != Math.Abs(pitch) * size.Height)
+                    pitch = Math.Sign(pitch) * (length % size.Height == 0 ? length / size.Height : length / padded);
                 top = pitch >= 0 ? (byte*)data : (byte*)data + (long)(size.Height - 1) * -pitch;
             }
             try

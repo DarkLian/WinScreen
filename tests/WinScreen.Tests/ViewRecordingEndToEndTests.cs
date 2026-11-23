@@ -127,8 +127,11 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
             for (int i = 0; i < 8; i++)
             {
                 scene.Target.SetColors(i % 2 == 0 ? "1EC81E,1E64C8" : "C81E1E,1E64C8");
+                // Half see-through for a while: the recording is the picture, not the screen.
+                if (i == 3) view.Overrides = view.Overrides with { OpacityPercent = 50 };
                 scene.Pump(400);
             }
+            view.Overrides = view.Overrides with { OpacityPercent = null };
             scene.View.Run(AppCommand.ViewRecord);
             double seconds = clock.Elapsed.TotalSeconds;
             Assert.False(view.IsOn(AppCommand.ViewRecord));
@@ -137,7 +140,8 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
             Assert.Equal(PipChipState.SavedFile, view.ChipShown);
             output.WriteLine($"{result}, {seconds:0.00} s, shown {shown}");
 
-            using VideoFile video = VideoFile.Read(result.File!, index => index % 3 == 0);
+            // Every frame: nothing under a cover may ever show.
+            using VideoFile video = VideoFile.Read(result.File!, _ => true);
             Assert.Equal(expected, video.Size);
             Assert.InRange(video.Frames, (int)(seconds * 30 * 0.7), (int)(seconds * 30) + 3);
             Point covered = FrameSpot(view, new Point(cover.X + cover.Width / 2, cover.Y + cover.Height / 2), video.Size);
@@ -157,15 +161,25 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
         });
     }
 
-    [WgcFact]
-    public void Crop_zoom_and_turn_are_recorded_as_the_view_shows_them()
+    public static TheoryData<int, bool, bool> Turns() => new() { { 1, false, false }, { 0, true, false }, { 3, true, true } };
+
+    // A cover in one corner of the cropped part tells every turn and mirror apart: it must land where the view shows it,
+    // and the opposite corner must not be black.
+    [WgcTheory]
+    [MemberData(nameof(Turns))]
+    public void Crop_zoom_turn_and_mirror_are_recorded_as_the_view_shows_them(int turns, bool mirrored, bool zoomed)
     {
         WithView(scene =>
         {
             PipWindow view = scene.View;
             view.SetCrop(new Rectangle(120, 40, 240, 200));
-            view.Run(AppCommand.ViewRotateRight);
-            Assert.True(Desktop.WaitFor(() => view.Turn.Turns == 1, 5000, () => scene.Pump(20)));
+            if (zoomed) view.ZoomAt(new PointF(0.5f, 0.5f), 1.3);
+            var cover = new Rectangle(152, 72, 28, 24);
+            view.SetCovers([cover]);
+            var turn = new ViewTurn(turns, mirrored);
+            for (int i = 0; i < turns; i++) view.Run(AppCommand.ViewRotateRight);
+            if (mirrored) view.Run(AppCommand.ViewMirrorAcross);
+            Assert.True(Desktop.WaitFor(() => view.Turn == turn, 5000, () => scene.Pump(20)), $"Turned {view.Turn}, wanted {turn}.");
             scene.Pump(500);
             Rectangle shown = Field<Rectangle>(view, "_lastShown");
             ViewRecording recording = Start(scene);
@@ -173,12 +187,15 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
             view.Run(AppCommand.ViewRecord);
             RecordingResult result = Finished(scene, recording);
             using VideoFile video = VideoFile.Read(result.File!, index => index % 5 == 2);
-            // Turned a quarter: the cropped part stands up.
-            Assert.Equal(RecordingGeometry.FrameSize(new Size(shown.Height, shown.Width)), video.Size);
-            Point left = FrameSpot(view, new Point(150, 140), video.Size), right = FrameSpot(view, new Point(330, 140), video.Size);
-            Assert.True(left.Y < right.Y, $"Turned right, the left of the window should be at the top: {left} {right}.");
+            Assert.Equal(RecordingGeometry.FrameSize(turn.Oriented(shown.Size)), video.Size);
+            Point covered = FrameSpot(view, new Point(cover.X + cover.Width / 2, cover.Y + cover.Height / 2), video.Size);
+            Point opposite = FrameSpot(view, new Point(cover.X + 160, cover.Y + 125), video.Size);
+            Point left = FrameSpot(view, new Point(190, 140), video.Size), right = FrameSpot(view, new Point(300, 140), video.Size);
+            output.WriteLine($"{turn}, zoomed {zoomed}: shown {shown}, video {video.Size}, cover at {covered}, opposite {opposite}");
             foreach ((int index, Bitmap picture) in video.Kept)
             {
+                Assert.True(Black(picture.GetPixel(covered.X, covered.Y)), $"Frame {index}: the cover at {covered} is {picture.GetPixel(covered.X, covered.Y)}.");
+                Assert.True(Blue(picture.GetPixel(opposite.X, opposite.Y)), $"Frame {index}: the opposite corner at {opposite} is {picture.GetPixel(opposite.X, opposite.Y)}.");
                 Assert.True(Red(picture.GetPixel(left.X, left.Y)), $"Frame {index} at {left}: {picture.GetPixel(left.X, left.Y)}.");
                 Assert.True(Blue(picture.GetPixel(right.X, right.Y)), $"Frame {index} at {right}: {picture.GetPixel(right.X, right.Y)}.");
             }
@@ -205,7 +222,7 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
         });
     }
 
-    public static TheoryData<string> Endings() => ["closed", "minimized", "captureRestarted", "exit"];
+    public static TheoryData<string> Endings() => ["closed", "minimized", "captureRestarted", "exit", "originalClosed"];
 
     [WgcTheory]
     [MemberData(nameof(Endings))]
@@ -221,6 +238,7 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
                 case "minimized": scene.View.Run(AppCommand.ViewMinimize); break;
                 case "captureRestarted": scene.View.ApplyPipPreferences(new PipPreferences { Backend = PipBackendPreference.Wgc }); break;
                 case "exit": scene.App.ExitThread(); break;
+                case "originalClosed": Native.User32.PostMessage(scene.Target.Handle, 0x0010 /* WM_CLOSE */, 0, 0); break;
             }
             if (ending == "exit") Assert.True(recording.Completion.IsCompleted, "Exit didn't wait for the recording to finish.");
             RecordingResult result = Finished(scene, recording);
@@ -316,6 +334,7 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
     {
         WithView(scene =>
         {
+            if (Native.AudioSessions.Instance.Devices().Length == 0) { Skipped.Because("This PC has no sound output."); return; }
             scene.Target.PlayTone();
             scene.Pump(500);
             ViewRecording recording = Start(scene);

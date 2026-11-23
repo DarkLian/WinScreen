@@ -217,6 +217,7 @@ public sealed partial class TrayApplication : ApplicationContext
         };
         _tray.Visible = _role != AppRole.Helper; // The helper speaks through the ordinary copy's icon.
         Microsoft.Win32.SystemEvents.UserPreferenceChanged += FollowWindowsTheme;
+        Microsoft.Win32.SystemEvents.SessionEnded += FinishRecordings;
         ShowStatus();
 
         bool firstRun = !_settings.WelcomeShown;
@@ -696,6 +697,10 @@ public sealed partial class TrayApplication : ApplicationContext
         try { _settings.Save(_settingsPath); }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(failure); }
     }
+
+    // Signing out or shutting down may end WinScreen without its own exit: recordings are completed first.
+    private static void FinishRecordings(object? sender, Microsoft.Win32.SessionEndedEventArgs e) =>
+        Pip.ViewRecording.FinishAll(TimeSpan.FromSeconds(5));
 
     private void FollowWindowsTheme(object? sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
     {
@@ -1583,6 +1588,7 @@ public sealed partial class TrayApplication : ApplicationContext
         _updateTimer.Dispose();
         _menuGuard.Dispose();
         Microsoft.Win32.SystemEvents.UserPreferenceChanged -= FollowWindowsTheme;
+        Microsoft.Win32.SystemEvents.SessionEnded -= FinishRecordings;
         _watch.Dispose();
         _borders.Dispose();
         _dark.Dispose();
