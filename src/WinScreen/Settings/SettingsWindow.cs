@@ -69,6 +69,12 @@ public sealed partial class SettingsWindow : Form
     private readonly CheckBox _pipKeepHidden = new SwitchBox { Text = T("pip.keepHidden.default"), AutoSize = true };
     private readonly CheckBox _pipMinimizedOriginals = new SwitchBox { Text = T("pip.minimizedOriginals.taskbar"), AutoSize = true };
     private readonly ComboBox _pipPreview = new ThemedCombo { Width = 240 };
+    private readonly ComboBox _pictureSave = new ThemedCombo { Width = 240 };
+    private readonly PlainButton _pictureFolderChange = new() { Text = T("settings.pip.pictures.change") };
+    private readonly PlainButton _pictureFolderOpen = new() { Text = T("settings.pip.pictures.open") };
+    private SettingRowPanel? _pictureFolderRow;
+    // Null is Windows' Screenshots folder.
+    private string? _pictureFolder;
     private readonly CheckBox _pipCaptureBorder = new SwitchBox { Text = T("pip.captureBorder.hide"), AutoSize = true };
     private readonly CheckBox _pipDiagnostics = new SwitchBox { Text = T("pip.diagnostics.includeHardware"), AutoSize = true };
     private readonly List<int> _pipRates = [.. PipPreferences.FrameRates];
@@ -337,7 +343,7 @@ private readonly ErrorProvider _errors = new();
             [_windowMenuGesture] = '\uE962',
             [_pipBackend] = '\uE7F4', [_pipRate] = '\uE916', [_pipScaling] = '\uE9A6', [_pipOpacity] = '\uE706',
             [_pipCaptureBorder] = '\uE7A8', [_pipDiagnostics] = '\uE9D9', [_pipAutoMove] = '\uE7C2', [_pipMiddleScroll] = '\uE962',
-            [_hoverAutomatic] = '\uE713', [_pipTaskbar] = '\uE7C4', [_pipTitleBar] = '\uE8A0', [_pipKeepHidden] = '\uED1A', [_pipMinimizedOriginals] = '\uE921',[_pipPreview] = '\uE890',
+            [_hoverAutomatic] = '\uE713', [_pipTaskbar] = '\uE7C4', [_pipTitleBar] = '\uE8A0', [_pipKeepHidden] = '\uED1A', [_pipMinimizedOriginals] = '\uE921',[_pipPreview] = '\uE890', [_pictureSave] = '\uE722', [_pictureFolderChange] = '\uE8B7',
             [_defaultOpacity] = '\uE706', [_opacityStep] = '\uE9E9', [_opacityWheel] = '\uE962', [_opaqueOnHover] = '\uE890',
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
@@ -854,6 +860,7 @@ private readonly ErrorProvider _errors = new();
         draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
         draft.PipViews = new PipViewPreferences { MinimizeToTaskbar = _pipTaskbar.Checked, AlwaysShowTitleBar = _pipTitleBar.Checked,
             KeepHiddenOnNewViews = _pipKeepHidden.Checked, KeepMinimizedOriginalsOnTaskbar = _pipMinimizedOriginals.Checked,
+            SavePictures = _pictureSave.SelectedIndex != 1, PictureFolder = _pictureFolder,
             HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
             HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds }.Validated();
         return draft;
@@ -1286,6 +1293,9 @@ private readonly ErrorProvider _errors = new();
         _pipKeepHidden.Checked = values.PipViews.KeepHiddenOnNewViews;
         _pipMinimizedOriginals.Checked = values.PipViews.KeepMinimizedOriginalsOnTaskbar;
         _pipPreview.SelectedIndex = (int)values.PipViews.Validated().HoverPreview;
+        _pictureSave.SelectedIndex = values.PipViews.SavePictures ? 0 : 1;
+        _pictureFolder = values.PipViews.Validated().PictureFolder;
+        ShowPictureFolder();
         _opacityStep.Value = Math.Clamp(values.OpacityStepPercent, 1, 25);
         EffectPreferences effects = values.Effects.Validated();
         _layeredGlass.Checked = effects.LayeredGlass;
@@ -1472,8 +1482,39 @@ private readonly ErrorProvider _errors = new();
         var parts = new List<Control> { Note(T("settings.pip.apps.help")), _hoverAutomatic, _appRows, adding, Note(T("settings.pip.hover.programsHelp")) };
         if (!Pip.PipEnhancedHover.Supported) parts.Add(Note(T("settings.pip.hover.unsupported")));
         page.Controls.Add(Card(T("settings.pip.apps"), true, parts.ToArray()));
+        _pictureSave.Items.AddRange([T("settings.pip.pictures.copySave"), T("settings.pip.pictures.copyOnly")]);
+        _pictureSave.SelectedIndexChanged += (_, _) => ShowPictureFolder();
+        _pictureFolderChange.Click += (_, _) =>
+        {
+            using var dialog = new FolderBrowserDialog { SelectedPath = PictureFolderInUse, UseDescriptionForTitle = true,
+                Description = T("settings.pip.pictures.folder") };
+            if (dialog.ShowDialog(this) != DialogResult.OK || dialog.SelectedPath.Length == 0) return;
+            _pictureFolder = string.Equals(dialog.SelectedPath, Pip.PictureShelf.DefaultFolder(), StringComparison.OrdinalIgnoreCase)
+                ? null : dialog.SelectedPath;
+            ShowPictureFolder();
+        };
+        _pictureFolderOpen.Click += (_, _) => Pip.PictureShelf.OpenFolder(PictureFolderInUse);
+        _pictureFolderChange.Margin = new Padding(0, 0, 8, 0);
+        _pictureFolderOpen.Margin = Padding.Empty;
+        var folderButtons = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
+            Margin = Padding.Empty, BackColor = SettingsStyle.Card };
+        folderButtons.Controls.Add(_pictureFolderChange);
+        folderButtons.Controls.Add(_pictureFolderOpen);
+        _pictureFolderRow = (SettingRowPanel)SettingRow(T("settings.pip.pictures.folder"), folderButtons);
+        page.Controls.Add(Section(T("settings.pip.pictures"), Row(T("settings.pip.pictures.after"), _pictureSave), _pictureFolderRow,
+            Note(T("settings.pip.pictures.help"))));
+        ShowPictureFolder();
         page.Controls.Add(Section(T("pip.hover.title"), _pipKeepHidden, _pipMinimizedOriginals, _pipTaskbar, _pipTitleBar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));
         return page;
+    }
+
+    private string PictureFolderInUse => _pictureFolder ?? Pip.PictureShelf.DefaultFolder();
+
+    private void ShowPictureFolder()
+    {
+        if (_pictureFolderRow is null) return;
+        _pictureFolderRow.Description = PictureFolderInUse;
+        _pictureFolderChange.Enabled = _pictureSave.SelectedIndex != 1;
     }
 
     private FlowLayoutPanel BuildPrograms()

@@ -7,6 +7,7 @@ namespace WinScreen.Pip;
 internal sealed class DwmThumbnail : IDisposable
 {
     private nint _handle;
+    private Rectangle _destination = new(0, 0, 1, 1), _source = new(0, 0, 1, 1);
 
     private DwmThumbnail(nint handle) => _handle = handle;
 
@@ -40,6 +41,19 @@ internal sealed class DwmThumbnail : IDisposable
             Dwmapi.DwmUpdateThumbnailProperties(_handle, ref properties) != 0)
             throw new Windows.WindowOperationException(
                 UiText.T("errors.pip.renderFailed"));
+        (_destination, _source) = (destination, source);
+    }
+
+    // Best effort: a thumbnail that can't be hidden is one whose window has gone. Hidden as Show hides one, with every
+    // property given.
+    public void Hide()
+    {
+        var properties = new DwmThumbnailProperties
+        {
+            Flags = Dwmapi.DWM_TNP_RECTDESTINATION | Dwmapi.DWM_TNP_RECTSOURCE | Dwmapi.DWM_TNP_OPACITY | Dwmapi.DWM_TNP_VISIBLE,
+            Destination = ToRect(_destination), Source = ToRect(_source), Opacity = 0, Visible = 0,
+        };
+        Dwmapi.DwmUpdateThumbnailProperties(_handle, ref properties);
     }
 
     public void Dispose()

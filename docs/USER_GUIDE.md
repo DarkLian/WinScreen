@@ -35,7 +35,7 @@ You can change or clear any of these in **Settings → Actions and shortcuts**. 
 | Put this window back | Ctrl+Alt+U |
 | Put every window back | Ctrl+Alt+R |
 
-Other commands, like moving a window to a corner, have no shortcut until you give them one. So do the view's own: Keep hidden, Interactive or Watch only, Use or go to the original, Mute, Freeze, Rotate or mirror, Reset crop and zoom, and Minimize or restore. They work on the view of the window in front, or else on the view under the pointer, or the one it was last on; a minimized view comes back with its key.
+Other commands, like moving a window to a corner, have no shortcut until you give them one. So do the view's own: Keep hidden, Interactive or Watch only, Use or go to the original, Mute, Freeze, Rotate or mirror, Reset crop and zoom, Minimize or restore, Copy picture, Freeze a copy, Copy text and Cover parts. They work on the view of the window in front, or else on the view under the pointer, or the one it was last on; a minimized view comes back with its key.
 
 <p align="center"><img src="assets/screenshots/settings-actions.png" width="880" alt="Settings, Actions and shortcuts page"></p>
 
@@ -95,6 +95,20 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 - **Rotate or mirror**, under **Picture:** turn the view a quarter at a time, or mirror it. You can still use the app
   through it: clicks, drags and typing land where you see them. The app's own menus stay upright, and **Upright**
   puts the view back. Saved with a preset.
+- **Copy picture**, under **Picture:** copies what the view shows, cropped, zoomed and turned as it is, at the
+  window's own sharpness. Like Windows' Snipping Tool, it also saves a file to your Screenshots folder; in
+  **Settings → Picture-in-Picture** you can choose another folder, or copy only. It works the same whatever covers the
+  view, at any opacity, and on views of a display or part of the screen, which screenshots can't take.
+- **Freeze a copy:** keeps the picture in a small window of its own beside the view, while the view goes on. Move it,
+  resize it with the wheel, Ctrl+drag to crop and Ctrl+wheel to zoom. Right-click it to copy or save the picture, copy
+  its text, or close it (Esc).
+- **Copy text:** drag over the text you want, or click to take all of it, and the words are copied. It reads the text in
+  the picture, so it also works on video, games, remote desktops and pages that won't let you select. It uses Windows'
+  own text recognition for your languages.
+- **Cover parts:** drag over anything private, such as an email address or a chat, and it's blacked out in the view.
+  Copies, frozen copies, the text reader and sharing the view in a call never show it. Covers stay through zoom, crop,
+  turning, Freeze, Keep hidden, minimizing and everything else, and are saved with a preset. Click a cover in the
+  same editor to remove it, or choose **Remove covers**.
 - **Interactive** lets you point, click, select text, drag and scroll in the picture. Ready for Chrome, Edge, Brave,
   Vivaldi, Firefox, Electron apps and File Explorer; *experimental* for other apps.
   **Keep hidden** stays checked and locked while this is on. Turning it off restores your previous hiding choice.
@@ -264,7 +278,7 @@ Changes take effect as soon as you make them. The mouse wheel only scrolls; clic
 | Anchors | Automatic Anchors and how Anchors look |
 | Appearance | Opacity, pin border and Dark mode |
 | Backgrounds | How Glass looks, and a picture or video behind it, for every app or for each app |
-| Picture-in-Picture | How views look and behave |
+| Picture-in-Picture | How views look and behave, and where copied pictures are saved |
 | Programs | Programs WinScreen should leave alone, or the only ones it should work on |
 | Saved setups | Program setups you've remembered |
 

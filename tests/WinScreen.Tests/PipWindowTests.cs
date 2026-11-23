@@ -282,7 +282,9 @@ public class PipWindowTests
             using PipWindow pip = OpenAwayFromToasts(source.Handle);
             Assert.True(Shows(pip, Red, pump), "PiP didn't start with the source.");
             Desktop.Activate(cover.Handle);
-            Assert.Equal(cover.Handle, Desktop.TopWindowAt(cover.Center));
+            nint top = Desktop.TopWindowAt(cover.Center);
+            Assert.True(cover.Handle == top, $"On top over the cover: \"{WindowInfo.Title(top)}\" ({WindowInfo.ProgramOf(top)}); " +
+                $"the source is {source.Handle}, the view {pip.Handle}, the top {top}.");
             Assert.NotEqual(0, Desktop.ExStyle(pip.Handle) & User32.WS_EX_TOPMOST);
             Assert.Equal(pip.Handle, Desktop.TopWindowAt(Middle(pip).Location));
             Assert.True(Shows(pip, Red, pump), $"PiP showed {Desktop.ColorOnScreen(Middle(pip))}.");

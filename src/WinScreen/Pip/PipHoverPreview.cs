@@ -22,7 +22,7 @@ internal static class PipPreviewGeometry
 // A compositor thumbnail only: no capture, hook, timer or input forwarding.
 internal sealed class PipHoverPreview : Form
 {
-    private readonly DwmThumbnail _thumbnail;
+    private readonly DwmPieces _thumbnail;
 
     public PipHoverPreview(Form owner, nint source)
     {
@@ -35,16 +35,17 @@ internal sealed class PipHoverPreview : Form
         {
             if (!User32.SetLayeredWindowAttributes(Handle, 0, 255, User32.LWA_ALPHA))
                 throw new Windows.WindowOperationException(Localization.UiText.T("errors.pip.renderFailed"));
-            _thumbnail = DwmThumbnail.TryCreate(Handle, source) ?? throw new Windows.WindowOperationException(
+            _thumbnail = DwmPieces.TryCreate(Handle, source) ?? throw new Windows.WindowOperationException(
                 Localization.UiText.T("errors.pip.renderFailed"));
         }
         catch { Dispose(); throw; }
     }
 
-    internal void UpdatePreview(Rectangle source, Rectangle destination)
+    // covers in the source's pixels, as the view has them.
+    internal void UpdatePreview(Rectangle source, Rectangle destination, IReadOnlyList<Rectangle>? covers = null)
     {
         Bounds = destination;
-        _thumbnail.Show(new Rectangle(Point.Empty, ClientSize), source);
+        _thumbnail.Show(new Rectangle(Point.Empty, ClientSize), source, covers ?? []);
         if (!Visible) Show();
     }
 

@@ -117,6 +117,15 @@ internal static class Program
                             Console.WriteLine("framed");
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "text")
+                        window.BeginInvoke(() =>
+                        {
+                            window.Words = parts.Length > 1 ? parts[1] : "";
+                            window.Invalidate();
+                            window.Update();
+                            Console.WriteLine("text");
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "button")
                         window.BeginInvoke(() =>
                         {
@@ -318,6 +327,9 @@ internal sealed partial class TargetForm : Form
     private static partial bool PostMessage(nint hwnd, int message, nint wparam, nint lparam);
     private readonly ManualResetEvent _animationStop = new(false);
     private bool _animating;
+    // Large dark words on a light band at the top, for text recognition.
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal string Words { get; set; } = "";
     private int _animationPending, _phase;
 
     public void Animate(int rate)
@@ -642,6 +654,12 @@ internal sealed partial class TargetForm : Form
             using var brush = new SolidBrush(Color.FromArgb(_phase % 256, (_phase * 17) % 256, (_phase * 37) % 256));
             e.Graphics.FillRectangle(brush, 0, 0, ClientSize.Width, ClientSize.Height);
             for (int x = 0; x < ClientSize.Width; x += 32) e.Graphics.DrawLine(Pens.White, x + _phase % 32, 0, x, ClientSize.Height);
+        }
+        if (Words.Length > 0)
+        {
+            e.Graphics.FillRectangle(Brushes.White, 0, 0, ClientSize.Width, 90);
+            using var font = new Font("Segoe UI", 26f, FontStyle.Regular, GraphicsUnit.Pixel);
+            TextRenderer.DrawText(e.Graphics, Words, font, new Point(16, 26), Color.Black);
         }
     }
 }

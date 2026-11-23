@@ -21,7 +21,11 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         public void Dispose() => Interlocked.Exchange(ref _value, null)?.Dispose();
     }
     private sealed record View(Size Client, Rectangle Destination, Rectangle Crop, byte Opacity,
-        Rectangle? Selection, bool Visible, int SourceHz, int TargetHz, int FrameRate, PipScaling Scaling, ViewTurn Turn = default);
+        Rectangle? Selection, bool Visible, int SourceHz, int TargetHz, int FrameRate, PipScaling Scaling, ViewTurn Turn = default)
+    {
+        // In the capture's pixels. A new array each time they change, so the record tells a change by reference.
+        public Rectangle[] Covers { get; init; } = [];
+    }
     private readonly object _captureGate = new(), _viewGate = new();
     private readonly LatestFrame<Frame> _frames = new();
     private readonly PipWorkerSignal _wake = new();
@@ -36,6 +40,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     private bool _signalGone;
     private volatile PipSessionState _state = PipSessionState.Starting;
     private int _generation;
+    private TaskCompletionSource<Bitmap?>? _pictureWanted;
     private Size _sourceSize;
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public Task Completion => _completion.Task;
@@ -52,7 +57,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     }
 
     internal WgcCaptureSession(PipSource source, nint destination, Size client, nint monitor,
-        PipPreferences preferences, int sourceHz, int targetHz, bool software)
+        PipPreferences preferences, int sourceHz, int targetHz, bool software, Rectangle[]? covers = null)
     {
         _source = source;
         _destination = destination;
@@ -60,7 +65,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         _preferences = preferences;
         _software = software;
         _view = new(client, Rectangle.Empty, Rectangle.Empty, preferences.Alpha, null, true, sourceHz, targetHz,
-            preferences.FrameRate, preferences.Scaling);
+            preferences.FrameRate, preferences.Scaling) { Covers = covers ?? [] };
         _worker = new Thread(Run) { IsBackground = true, Name = "WinScreen PiP capture" };
         _worker.SetApartmentState(ApartmentState.MTA);
         _worker.Start();
@@ -87,6 +92,19 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     public void SetVisible(bool visible) => Change(v => v with { Visible = visible });
     public void SetSelection(Rectangle? selection) => Change(v => v with { Selection = selection });
     public void SetTurn(ViewTurn turn) => Change(v => v with { Turn = turn });
+    public void SetCovers(Rectangle[] covers) => Change(v => v with { Covers = covers });
+
+    // The frame the view shows (frozen or not), covers included; null once the capture has ended.
+    public Task<Bitmap?> TakePicture()
+    {
+        lock (_viewGate)
+        {
+            if (_stopping || _signalGone) return Task.FromResult<Bitmap?>(null);
+            _pictureWanted ??= new TaskCompletionSource<Bitmap?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _wake.Set();
+            return _pictureWanted.Task;
+        }
+    }
 
     // The view goes on passing its state after the capture ends, as when the PC is locked; the worker's signal is
     // gone by then, and using it throws.
@@ -186,11 +204,11 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
             int previousRate = -1, previousSourceHz = -1;
             long cachedTimestamp = 0, cachedArrival = 0;
             long? mismatchedSince = null;
-            bool newCachedFrame = false, needsPresent = false, everPresented = false;
+            bool newCachedFrame = false, needsPresent = false, everPresented = false, readingBack = false;
             session.StartCapture();
             while (!_stopping && Volatile.Read(ref closed) == 0 && _state != PipSessionState.Failed)
             {
-                _wake.Wait(needsPresent || _frames.HasPending ? Math.Max(1, 1000 / Math.Max(15, previousRate)) : 100);
+                _wake.Wait(needsPresent || readingBack || _frames.HasPending ? Math.Max(1, 1000 / Math.Max(15, previousRate)) : 100);
                 if (_stopping || Volatile.Read(ref closed) != 0) break;
                 View view;
                 bool dirty;
@@ -208,6 +226,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                 }
                 bool sourcePaused = _source.IsMinimized;
                 bool ready = renderer.ReadyForWork(), submitted = false;
+                if (renderer.SetCovers(view.Covers)) { submitted = true; needsPresent = true; }
                 // Retain the capture buffer until EndWork has flushed its copy commands.
                 Frame? taken = ready ? _frames.Take() : null;
                 // A session started while frozen still takes its first frame, so there is a picture to keep.
@@ -289,6 +308,22 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                         if (_software) Diagnostics.Capabilities = renderer.Capabilities with { WarpUsable = true };
                     }
                 }
+                TaskCompletionSource<Bitmap?>? wanted;
+                lock (_viewGate) wanted = _pictureWanted;
+                if (wanted is not null && renderer.HasFrame)
+                {
+                    if (!readingBack)
+                    {
+                        renderer.BeginReadBack();
+                        readingBack = submitted = true;
+                    }
+                    else if (renderer.TryReadBack() is { } picture)
+                    {
+                        lock (_viewGate) _pictureWanted = null;
+                        readingBack = false;
+                        if (!wanted.TrySetResult(picture)) picture.Dispose();
+                    }
+                }
                 if (submitted) renderer.EndWork();
                 if (!everPresented && Stopwatch.GetElapsedTime(Started).TotalSeconds > 5)
                     throw new TimeoutException("No presentable WGC frame within five seconds.");
@@ -332,6 +367,8 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
             {
                 _signalGone = true;
                 _wake.Dispose();
+                _pictureWanted?.TrySetResult(null);
+                _pictureWanted = null;
             }
             _completion.TrySetResult();
         }

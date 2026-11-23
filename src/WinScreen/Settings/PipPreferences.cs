@@ -95,6 +95,8 @@ public sealed class PipPreset
     public int? ViewY { get; set; }
     public int? ViewWidth { get; set; }
     public int? ViewHeight { get; set; }
+    // Parts hidden in the view, as shares of the whole source; null leaves a view's own covers as they are.
+    public List<PipCropShares>? Covers { get; set; }
 
     [JsonIgnore]
     internal Pip.ViewTurn Turn => new(Turns ?? 0, Mirrored == true);
@@ -135,6 +137,7 @@ public sealed class PipPreset
             ViewX = ViewBounds?.X, ViewY = ViewBounds?.Y,
             ViewWidth = ViewBounds is { } bounds ? Math.Min(bounds.Width, 16384) : null,
             ViewHeight = ViewBounds is { } tall ? Math.Min(tall.Height, 16384) : null,
+            Covers = Covers?.Select(cover => cover?.Validated()).OfType<PipCropShares>().Take(Pip.ViewCovers.Most).ToList(),
         };
     }
 }

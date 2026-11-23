@@ -63,6 +63,10 @@ public enum AppCommand
     ViewUpright,
     ViewResetZoom,
     ViewMinimize,
+    ViewCopyPicture,
+    ViewFreezeCopy,
+    ViewCopyText,
+    ViewCover,
 }
 
 public enum ModifierKey { Alt, Win }
@@ -194,7 +198,7 @@ public static class CommandCatalog
         AppCommand.ViewKeepHidden, AppCommand.ViewInteractive, AppCommand.ViewUseOriginal, AppCommand.ViewGoToOriginal,
         AppCommand.ViewMute, AppCommand.ViewFreeze, AppCommand.ViewRotateRight, AppCommand.ViewRotateLeft,
         AppCommand.ViewMirrorAcross, AppCommand.ViewMirrorDown, AppCommand.ViewUpright, AppCommand.ViewResetZoom,
-        AppCommand.ViewMinimize,
+        AppCommand.ViewMinimize, AppCommand.ViewCopyPicture, AppCommand.ViewFreezeCopy, AppCommand.ViewCopyText, AppCommand.ViewCover,
     ];
 
     public static bool ForView(AppCommand command) => View.Contains(command);
@@ -296,6 +300,10 @@ public static class CommandCatalog
         AppCommand.ViewUpright => T("view.command.upright"),
         AppCommand.ViewResetZoom => T("view.command.resetZoom"),
         AppCommand.ViewMinimize => T("view.command.minimize"),
+        AppCommand.ViewCopyPicture => T("view.command.copyPicture"),
+        AppCommand.ViewFreezeCopy => T("view.command.freezeCopy"),
+        AppCommand.ViewCopyText => T("view.command.copyText"),
+        AppCommand.ViewCover => T("view.command.cover"),
         _ => command.ToString(),
     };
 }

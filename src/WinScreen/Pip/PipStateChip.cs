@@ -3,7 +3,8 @@ using WinScreen.Native;
 
 namespace WinScreen.Pip;
 
-internal enum PipChipState { None, SourceMinimized, NoNewPicture, Starting, Fallback, Unavailable, OriginalOffered, AlwaysOriginalOffered }
+// Said: a moment's word after a copy; SavedFile: the same, and a click shows the file.
+internal enum PipChipState { None, SourceMinimized, NoNewPicture, Starting, Fallback, Unavailable, OriginalOffered, AlwaysOriginalOffered, Said, SavedFile }
 
 // A window of its own, like the title bar, because nothing can be painted over the picture.
 internal sealed class PipStateChip : Form
@@ -28,12 +29,13 @@ internal sealed class PipStateChip : Form
     public event Action<PipChipState>? Chosen;
 
     internal static bool OffersAction(PipChipState state) =>
-        state is PipChipState.SourceMinimized or PipChipState.OriginalOffered or PipChipState.AlwaysOriginalOffered;
+        state is PipChipState.SourceMinimized or PipChipState.OriginalOffered or PipChipState.AlwaysOriginalOffered or PipChipState.SavedFile;
 
     internal static PipChipState Decide(bool minimized, PipSessionState state, bool pointerOnView, bool busy,
-        PressOffer offer = PressOffer.None)
+        PressOffer offer = PressOffer.None, PipChipState said = PipChipState.None)
     {
         if (busy) return PipChipState.None;
+        if (said is PipChipState.Said or PipChipState.SavedFile) return said;
         if (minimized) return PipChipState.SourceMinimized;
         if (state == PipSessionState.Failed) return PipChipState.Unavailable;
         if (offer == PressOffer.UseOriginal) return PipChipState.OriginalOffered;
@@ -55,12 +57,13 @@ internal sealed class PipStateChip : Form
         _ => "",
     };
 
-    public void Show(PipChipState state, Point bottomLeft)
+    public void Show(PipChipState state, Point bottomLeft, string said = "")
     {
-        if (state != _state)
+        string words = state is PipChipState.Said or PipChipState.SavedFile ? said : Words(state);
+        if (state != _state || words != Text)
         {
             _state = state;
-            Text = Words(state);
+            Text = words;
             Fit();
             Cursor = OffersAction(state) ? Cursors.Hand : Cursors.Default;
             Invalidate();

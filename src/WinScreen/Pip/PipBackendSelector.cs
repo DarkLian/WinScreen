@@ -26,6 +26,9 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     private byte _opacity;
     private bool _visible = true, _frozen;
     private ViewTurn _turn;
+    // In the window's surface pixels; the capture gets them moved into its own, made again only when either changes.
+    private Rectangle[] _covers = [], _captureCovers = [];
+    private Point _captureCoversOrigin;
     private nint _monitor;
     private int _sourceHz, _targetHz;
     private long _lastDisplayCheck;
@@ -65,7 +68,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         source.Require();
         _source = source; _hwnd = destination; _preferences = Effective(preferences);
         _createCapture = createCapture ?? (start => new WgcCaptureSession(start.Source, start.Destination,
-            start.Client, start.Monitor, start.Preferences, start.SourceHz, start.TargetHz, start.Software));
+            start.Client, start.Monitor, start.Preferences, start.SourceHz, start.TargetHz, start.Software, start.Covers));
         _opacity = _preferences.Alpha;
         if (source.IsWindow)
         {
@@ -108,6 +111,32 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         _turn = turn;
         _advanced?.SetTurn(turn);
     }
+
+    private Rectangle[] CaptureCovers()
+    {
+        if (_visibleSource.IsEmpty || !_source.IsMinimized)
+            _visibleSource = _source.Whole(SourceSize);
+        Point origin = _source.CaptureOrigin(_visibleSource);
+        Rectangle[] moved = ViewCovers.Moved(_covers, new Point(-origin.X, -origin.Y));
+        if (origin != _captureCoversOrigin || !moved.AsSpan().SequenceEqual(_captureCovers))
+        {
+            _captureCovers = moved;
+            _captureCoversOrigin = origin;
+        }
+        return _captureCovers;
+    }
+
+    internal void SetCovers(Rectangle[] covers)
+    {
+        if (covers.AsSpan().SequenceEqual(_covers)) return;
+        _covers = covers;
+        _dwm?.SetCovers(covers);
+        UpdateAdvanced();
+    }
+
+    // The capture's frame (its pixels start at Origin in the surface), or null when Windows' thumbnail is what shows.
+    internal (Task<Bitmap?> Picture, Point Origin)? TakePicture() =>
+        _active && _advanced is { } capture ? (capture.TakePicture(), _source.CaptureOrigin(_visibleSource)) : null;
 
     public void SetSelection(Rectangle? selection)
     {
@@ -243,7 +272,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         {
             _advanced = _createCapture(new(_source, _hwnd, _client,
                 _trySourceAdapter ? _source.Monitor : _monitor,
-                _preferences, _sourceHz, _targetHz, _software));
+                _preferences, _sourceHz, _targetHz, _software) { Covers = CaptureCovers() });
             Diagnostics.Log.Event("capture.started", ("software", _software), ("sourceAdapter", _trySourceAdapter),
                 ("sourceHz", _sourceHz), ("targetHz", _targetHz));
         }
@@ -272,6 +301,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         if (_visibleSource.IsEmpty || !_source.IsMinimized)
             _visibleSource = _source.Whole(SourceSize);
         Point origin = _source.CaptureOrigin(_visibleSource);
+        advanced.SetCovers(CaptureCovers());
         Rectangle captureCrop = _crop;
         captureCrop.Offset(-origin.X, -origin.Y);
         advanced.SetViewport(_viewport, captureCrop);

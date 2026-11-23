@@ -29,6 +29,7 @@ public sealed class DiagnosticsFileTests : IDisposable
         settings.SavedSetups.Add(new ProgramSetup { Program = "Spending tracker", ExecutablePath = @"C:\Users\Someone\spending.exe" });
         settings.PipOriginalPrograms.Add("someones-tool");
         settings.SettingsWindowPlacement = new SettingsPlacement(10, 20, 900, 700, false);
+        settings.PipViews = settings.PipViews with { PictureFolder = @"C:\Users\Someone\Pictures\Shots" };
 
         string shrunk = DiagnosticsFile.Shrunk(settings);
 

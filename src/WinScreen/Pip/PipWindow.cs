@@ -316,6 +316,8 @@ public sealed partial class PipWindow : Form
         _suspendedAt = Environment.TickCount64;
         _resumeRequested = false;
         DropHoverPreview();
+        AreaPicker?.Close();
+        CoverEditor?.Close();
         _titleBar?.Dismiss();
         _chip?.Hide();
         _autoMove.Stop();
@@ -391,6 +393,7 @@ public sealed partial class PipWindow : Form
                 _appliedTurn = ViewTurn.Upright;
                 Attempt(() => FitToSource());
             }
+            PushCovers();
             _thumbnail.SetViewport(PictureArea, _lastShown);
             _suspended = false;
             DropTaskbarProxy();
@@ -518,6 +521,7 @@ public sealed partial class PipWindow : Form
             CropShares = PipCropShares.Of(_crop, whole), PositionLocked = _overrides.PositionLocked,
             TitleBarAlways = _overrides.TitleBarAlways, KeepAspectRatio = _overrides.KeepAspectRatio,
             Turns = _turn.Turns == 0 ? null : _turn.Turns, Mirrored = _turn.Mirrored ? true : null,
+            Covers = CoverShares(whole),
         };
     }
 
@@ -549,6 +553,11 @@ public sealed partial class PipWindow : Form
         };
         _crop = preset.CropFor(WholeSize());
         _zoom = PipGeometry.WholeView;
+        if (preset.Covers is { } covers)
+        {
+            Size whole = WholeSize();
+            _covers = covers.Select(cover => cover.Within(whole)).Take(ViewCovers.Most).ToList();
+        }
         SetTurn(preset.Turn);
         if (preset.LongSide > 0)
             _longSide = preset.LongSide;
@@ -1105,6 +1114,8 @@ public sealed partial class PipWindow : Form
         ClaimEscape(false);
         EndLive();
         _growing?.Dispose();
+        AreaPicker?.Close();
+        CoverEditor?.Close();
         // Teardown must never submit another draw: the source or destination HWND may already be gone.
         _selecting = false;
         if (!EndLift(CoverEnd.ViewClosed)) SettleWhenItAnswers();
@@ -2189,6 +2200,7 @@ public sealed partial class PipWindow : Form
             .Select(other => other.Bounds);
         Bounds = new Rectangle(PipGeometry.FreeSpot(wanted, others, area, margin), size);
         _lastShown = shown;
+        PushCovers();
         view.SetViewport(PictureArea, shown);
     }
 
@@ -2212,6 +2224,7 @@ public sealed partial class PipWindow : Form
         try { Bounds = new Rectangle(PipGeometry.KeepInside(new Rectangle(place, size), area), size); }
         finally { _fitting = false; }
         _lastShown = shown;
+        PushCovers();
         _thumbnail.SetViewport(PictureArea, shown);
     }
 
@@ -2606,7 +2619,7 @@ public sealed partial class PipWindow : Form
                 KeepPartOutOfScreenCapture(_hoverPreview);
             }
             bool appearing = !_hoverPreview.Visible;
-            _hoverPreview.UpdatePreview(shown, PipPreviewGeometry.Place(avoid, size, area));
+            _hoverPreview.UpdatePreview(shown, PipPreviewGeometry.Place(avoid, size, area), SurfaceCovers());
             if (appearing) WinScreen.Windows.TopLayer.Raise(_hoverPreview.Handle);
         }
         catch (WindowOperationException)
@@ -2619,14 +2632,16 @@ public sealed partial class PipWindow : Form
     private void ShowState()
     {
         if (_offer != PressOffer.None && (Environment.TickCount64 >= _offerUntil || !CanOffer)) _offer = PressOffer.None;
+        PipChipState said = Environment.TickCount64 < _saidUntil ? _saying : PipChipState.None;
         PipChipState state = PipStateChip.Decide(_origin.IsMinimized, BackendState,
-            Bounds.Contains(Cursor.Position), _selecting || _pressed || _steppedAside.Length > 0, _offer);
+            Bounds.Contains(Cursor.Position), _selecting || _pressed || _steppedAside.Length > 0, _offer, said);
         if (state == PipChipState.None)
         {
             _chip?.Hide();
             return;
         }
 
+        if (_chip is { IsDisposed: true }) _chip = null;
         if (_chip is null)
         {
             _chip = new PipStateChip(this);
@@ -2634,7 +2649,7 @@ public sealed partial class PipWindow : Form
             KeepPartOutOfScreenCapture(_chip);
         }
 
-        _chip.Show(state, new Point(Left + PipGeometry.Border, Bottom - PipGeometry.Border));
+        _chip.Show(state, new Point(Left + PipGeometry.Border, Bottom - PipGeometry.Border), _said);
     }
 
     internal PipChipState ChipShown => _chip?.Saying ?? PipChipState.None;

@@ -7,6 +7,8 @@ using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Vortice.Mathematics;
 using Size = System.Drawing.Size;
+using SharpGen.Runtime;
+using Vortice;
 using WinScreen.Diagnostics;
 using WinScreen.Settings;
 using static Vortice.Direct3D11.D3D11;
@@ -22,6 +24,12 @@ internal sealed class D3D11Renderer : IDisposable
     private IDXGISwapChain1? _swapChain;
     private ID3D11RenderTargetView? _renderTarget;
     private ID3D11Texture2D? _cache, _scaled;
+    // With covers, the frame as it came is kept here and the cache is it with the covers blacked out: everything drawn
+    // or copied from the cache has them, and they can change without waiting for the window to change.
+    private ID3D11Texture2D? _whole, _staging;
+    private ID3D11RenderTargetView? _cacheTarget;
+    private ID3D11DeviceContext1? _clearing;
+    private Rectangle[] _covers = [];
     private ID3D11ShaderResourceView? _sourceView, _scaledView;
     private ID3D11UnorderedAccessView? _scaledOutput;
     private ID3D11VertexShader? _vertex;
@@ -173,15 +181,99 @@ internal sealed class D3D11Renderer : IDisposable
         if (SourceSize != content)
         {
             _sourceView?.Dispose(); _sourceView = null;
+            _cacheTarget?.Dispose(); _cacheTarget = null;
+            _whole?.Dispose(); _whole = null;
+            _staging?.Dispose(); _staging = null;
             _cache?.Dispose(); _cache = null;
             _cache = Device.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm,
-                (uint)content.Width, (uint)content.Height, 1, 1, BindFlags.ShaderResource));
+                (uint)content.Width, (uint)content.Height, 1, 1, BindFlags.ShaderResource | BindFlags.RenderTarget));
             _sourceView = Device.CreateShaderResourceView(_cache);
             SourceSize = content;
         }
-        _context.CopySubresourceRegion(_cache!, 0, 0, 0, 0, texture, 0,
-            new Box(0, 0, 0, content.Width, content.Height, 1));
+        var box = new Box(0, 0, 0, content.Width, content.Height, 1);
+        if (_covers.Length == 0)
+        {
+            _context.CopySubresourceRegion(_cache!, 0, 0, 0, 0, texture, 0, box);
+        }
+        else
+        {
+            _whole ??= Device.CreateTexture2D(_cache!.Description with { BindFlags = BindFlags.ShaderResource });
+            _context.CopySubresourceRegion(_whole, 0, 0, 0, 0, texture, 0, box);
+            Cover();
+        }
         _diagnostics.Source = content;
+    }
+
+    // In the cache's pixels. True when it queued work on the graphics card.
+    internal bool SetCovers(Rectangle[] covers)
+    {
+        if (covers.AsSpan().SequenceEqual(_covers)) return false;
+        _covers = covers;
+        if (_cache is null) return false;
+        if (covers.Length > 0 && _whole is null)
+        {
+            // Until now the cache was the whole frame.
+            _whole = Device.CreateTexture2D(_cache.Description with { BindFlags = BindFlags.ShaderResource });
+            _context.CopyResource(_whole, _cache);
+        }
+        if (_whole is null) return false;
+        if (covers.Length > 0)
+        {
+            Cover();
+            return true;
+        }
+        _context.CopyResource(_cache, _whole);
+        _whole.Dispose();
+        _whole = null;
+        return true;
+    }
+
+    private void Cover()
+    {
+        _context.CopyResource(_cache!, _whole!);
+        var whole = new Rectangle(Point.Empty, SourceSize);
+        RawRect[] rects = _covers.Select(cover => Rectangle.Intersect(cover, whole)).Where(cover => cover.Width > 0 && cover.Height > 0)
+            .Select(cover => new RawRect(cover.Left, cover.Top, cover.Right, cover.Bottom)).ToArray();
+        if (rects.Length == 0) return;
+        _cacheTarget ??= Device.CreateRenderTargetView(_cache);
+        _clearing ??= _context.QueryInterface<ID3D11DeviceContext1>();
+        _clearing.ClearView(_cacheTarget, new Color4(0, 0, 0, 1), rects);
+    }
+
+    // The picture as the view has it, covers included, read once the graphics card has copied it: the worker asks
+    // again on its next turns and never waits.
+    internal void BeginReadBack()
+    {
+        if (_cache is null) return;
+        _staging ??= Device.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)SourceSize.Width,
+            (uint)SourceSize.Height, 1, 1, BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read));
+        _context.CopyResource(_staging, _cache);
+    }
+
+    internal unsafe Bitmap? TryReadBack()
+    {
+        if (_staging is null) return null;
+        Result mapped = _context.Map(_staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.DoNotWait, out MappedSubresource map);
+        if (mapped.Code == unchecked((int)0x887A000A)) return null; // Still copying.
+        mapped.CheckError();
+        try
+        {
+            var picture = new Bitmap(SourceSize.Width, SourceSize.Height, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+            var bits = picture.LockBits(new Rectangle(Point.Empty, picture.Size), System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+            try
+            {
+                for (int y = 0; y < picture.Height; y++)
+                    Buffer.MemoryCopy((byte*)map.DataPointer + (long)y * map.RowPitch, (byte*)bits.Scan0 + (long)y * bits.Stride,
+                        bits.Stride, picture.Width * 4L);
+            }
+            finally { picture.UnlockBits(bits); }
+            return picture;
+        }
+        finally
+        {
+            _context.Unmap(_staging, 0);
+        }
     }
 
     internal bool ReadyForWork()
@@ -295,8 +387,20 @@ internal sealed class D3D11Renderer : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        // The window keeps showing the last frame after the capture ends, under Windows' thumbnail when that takes
+        // over. It may be from another layout (turned, zoomed), so where the thumbnail leaves a cover's gap an old,
+        // uncovered part could show: black first.
+        try
+        {
+            if (_renderTarget is not null && _swapChain is not null)
+            {
+                _context.ClearRenderTargetView(_renderTarget, new Color4(0, 0, 0, 1));
+                _swapChain.Present(0, PresentFlags.None);
+            }
+        }
+        catch (Exception e) when (e is SharpGenException or ExternalException) { Log.Swallowed(e); }
         _context?.ClearState();
-        _sourceView?.Dispose(); _cache?.Dispose();
+        _sourceView?.Dispose(); _cacheTarget?.Dispose(); _cache?.Dispose(); _whole?.Dispose(); _staging?.Dispose(); _clearing?.Dispose();
         _scaledOutput?.Dispose(); _scaledView?.Dispose(); _scaled?.Dispose();
         _renderTarget?.Dispose(); _swapChain?.Dispose();
         _constants?.Dispose(); _sampler?.Dispose(); _compute?.Dispose(); _computeCubic?.Dispose(); _pixel?.Dispose(); _vertex?.Dispose();

@@ -30,6 +30,13 @@ public sealed partial class PipWindow
 
     internal void OnChipChosen(PipChipState state)
     {
+        if (state == PipChipState.SavedFile && _savedFile is { } file)
+        {
+            Pictures.ShowFile(file);
+            _saidUntil = 0;
+            _chip?.Hide();
+            return;
+        }
         if (state == PipChipState.SourceMinimized)
         {
             KeepUpdating();

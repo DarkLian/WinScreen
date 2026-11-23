@@ -10,10 +10,14 @@ public sealed record PipViewPreferences
     public bool KeepMinimizedOriginalsOnTaskbar { get; init; } = true;
     public bool AlwaysShowTitleBar { get; init; }
     public bool KeepHiddenOnNewViews { get; init; } = true;
+    // Copy picture also saves a file, as Windows' Snipping Tool does; null folder is Windows' Screenshots folder.
+    public bool SavePictures { get; init; } = true;
+    public string? PictureFolder { get; init; }
 
     internal PipViewPreferences Validated() => this with
     {
         HoverPreview = Enum.IsDefined(HoverPreview) ? HoverPreview : PipHoverPreview.Off,
         HoverDelayMilliseconds = Math.Clamp(HoverDelayMilliseconds, 250, 2000),
+        PictureFolder = string.IsNullOrWhiteSpace(PictureFolder) ? null : PictureFolder.Trim(),
     };
 }

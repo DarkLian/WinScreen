@@ -7,8 +7,9 @@ internal sealed class DwmThumbnailBackend : IPipRenderBackend
 {
     private readonly nint _source;
     private readonly nint _destination;
-    private readonly DwmThumbnail _thumbnail;
-    private DwmThumbnail? _selection;
+    private readonly DwmPieces _thumbnail;
+    private DwmPieces? _selection;
+    private Rectangle[] _covers = [];
     private Rectangle _viewport, _crop;
     private byte _opacity = 255;
     private bool _visible = true, _selecting, _disposed;
@@ -17,7 +18,7 @@ internal sealed class DwmThumbnailBackend : IPipRenderBackend
     {
         _source = source;
         _destination = destination;
-        _thumbnail = DwmThumbnail.TryCreate(destination, source) ??
+        _thumbnail = DwmPieces.TryCreate(destination, source) ??
             throw new WindowOperationException(T("errors.pip.windowUnavailable"));
     }
 
@@ -34,7 +35,14 @@ internal sealed class DwmThumbnailBackend : IPipRenderBackend
     private void Update()
     {
         if (_disposed || _viewport.Width <= 0 || _viewport.Height <= 0) return;
-        _thumbnail.Show(_viewport, _crop, _selecting ? (byte)(_opacity * 90 / 255) : _opacity, _visible);
+        _thumbnail.Show(_viewport, _crop, _covers, _selecting ? (byte)(_opacity * 90 / 255) : _opacity, _visible);
+    }
+
+    // In the window's surface pixels, as the crop is.
+    public void SetCovers(Rectangle[] covers)
+    {
+        _covers = covers;
+        Update();
     }
     public void SetSelection(Rectangle? selection)
     {
@@ -47,8 +55,8 @@ internal sealed class DwmThumbnailBackend : IPipRenderBackend
         }
         else if (selection is { Width: > 0, Height: > 0 } rectangle)
         {
-            _selection ??= DwmThumbnail.TryCreate(_destination, _source);
-            _selection?.Show(rectangle, PipGeometry.SelectionToSource(rectangle, _viewport, _crop), _opacity);
+            _selection ??= DwmPieces.TryCreate(_destination, _source);
+            _selection?.Show(rectangle, PipGeometry.SelectionToSource(rectangle, _viewport, _crop), _covers, _opacity);
         }
         Update();
     }

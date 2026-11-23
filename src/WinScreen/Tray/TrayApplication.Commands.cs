@@ -86,7 +86,7 @@ public sealed partial class TrayApplication
             AppCommand.ViewKeepHidden, AppCommand.ViewInteractive, AppCommand.ViewUseOriginal, AppCommand.ViewGoToOriginal,
             AppCommand.ViewMute, AppCommand.ViewFreeze, AppCommand.ViewRotateRight, AppCommand.ViewRotateLeft,
             AppCommand.ViewMirrorAcross, AppCommand.ViewMirrorDown, AppCommand.ViewUpright, AppCommand.ViewResetZoom,
-            AppCommand.ViewMinimize,
+            AppCommand.ViewMinimize, AppCommand.ViewCopyPicture, AppCommand.ViewFreezeCopy, AppCommand.ViewCopyText, AppCommand.ViewCover,
         }.Select(command => Define(command, window => ViewFor(command, window)?.Run(command)) with
         {
             Target = CommandTarget.View, IsOn = window => ViewOf(window)?.IsOn(command) == true,

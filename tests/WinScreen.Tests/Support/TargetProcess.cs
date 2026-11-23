@@ -60,6 +60,14 @@ internal sealed class TargetProcess : IDisposable
     public string? NextReport(int milliseconds = 3000) =>
         _reports.TryTake(out string? line, milliseconds) ? line : null;
 
+    /// <summary>Shows these words in large dark letters on a light band across the top.</summary>
+    internal void ShowText(string words)
+    {
+        _process.StandardInput.WriteLine("text " + words);
+        _process.StandardInput.Flush();
+        if (NextReport() != "text") throw new InvalidOperationException("Test target didn't show the text.");
+    }
+
     public void SetColors(string colors)
     {
         _process.StandardInput.WriteLine("color " + colors);

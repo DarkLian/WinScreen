@@ -77,6 +77,12 @@ public sealed partial class PipWindow
         _turnItem.DropDownItems.Add(_uprightItem);
         _turnItem.DropDownOpening += (_, _) => RefreshTurnItems();
         _menu.Items.Add(_turnItem);
+        _copyPictureItem = new ToolStripMenuItem(T("pip.picture.copy"), null, (_, _) => CopyPicture());
+        _freezeCopyItem = new ToolStripMenuItem(T("pip.picture.freezeCopy"), null, (_, _) => FreezeCopy());
+        _copyTextItem = new ToolStripMenuItem(T("pip.picture.copyText"), null, (_, _) => CopyText());
+        _coverItem = new ToolStripMenuItem(T("pip.picture.cover"), null, (_, _) => EditCovers());
+        _uncoverItem = new ToolStripMenuItem(T("pip.picture.uncover"), null, (_, _) => SetCovers([]));
+        _menu.Items.AddRange([_copyPictureItem, _freezeCopyItem, _copyTextItem, _coverItem, _uncoverItem]);
         _menu.Items.Add(options);
         _menu.Items.Add(presets);
 
@@ -98,6 +104,10 @@ public sealed partial class PipWindow
         _keyed[AppCommand.ViewUpright] = _uprightItem;
         _keyed[AppCommand.ViewResetZoom] = _removeCropItem;
         _keyed[AppCommand.ViewMinimize] = minimize;
+        _keyed[AppCommand.ViewCopyPicture] = _copyPictureItem;
+        _keyed[AppCommand.ViewFreezeCopy] = _freezeCopyItem;
+        _keyed[AppCommand.ViewCopyText] = _copyTextItem;
+        _keyed[AppCommand.ViewCover] = _coverItem;
         _menu.Opening += (_, _) =>
         {
             PauseInput(true, keepTitleBar: true);
@@ -150,6 +160,9 @@ public sealed partial class PipWindow
         // The compositor's picture can't be held, only a captured one.
         _freezeItem.Checked = Frozen;
         _freezeItem.Enabled = Frozen || _thumbnail?.CanFreeze == true;
+        bool picture = _thumbnail is not null;
+        _copyPictureItem.Enabled = _freezeCopyItem.Enabled = _copyTextItem.Enabled = _coverItem.Enabled = picture;
+        _uncoverItem.Available = _covers.Count > 0;
         // Only a captured picture can be turned.
         _turnItem.Enabled = CanTurn || !_turn.IsUpright;
         RefreshTurnItems();
@@ -157,6 +170,7 @@ public sealed partial class PipWindow
     }
 
     private readonly Dictionary<AppCommand, ToolStripMenuItem> _keyed = [];
+    private ToolStripMenuItem _copyPictureItem = null!, _freezeCopyItem = null!, _copyTextItem = null!, _coverItem = null!, _uncoverItem = null!;
 
     // The keys set for the view commands, shown beside the items they do.
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -172,8 +186,18 @@ public sealed partial class PipWindow
             ResumeView();
             if (_suspended) return;
         }
+        // A minimized view shows no picture to copy, read or cover: the key brings it back first, as its menu would.
+        if (command is AppCommand.ViewCopyPicture or AppCommand.ViewFreezeCopy or AppCommand.ViewCopyText or AppCommand.ViewCover && _suspended)
+        {
+            ResumeView();
+            if (_suspended) return;
+        }
         switch (command)
         {
+            case AppCommand.ViewCopyPicture when _thumbnail is not null: CopyPicture(); break;
+            case AppCommand.ViewFreezeCopy when _thumbnail is not null: FreezeCopy(); break;
+            case AppCommand.ViewCopyText when _thumbnail is not null: CopyText(); break;
+            case AppCommand.ViewCover when _thumbnail is not null: EditCovers(); break;
             case AppCommand.ViewKeepHidden when there && !_interactiveItem.Checked: SetOriginalHidden(!_hideItem.Checked); break;
             case AppCommand.ViewInteractive when there && CanInteract: SetInteractive(!_interactiveItem.Checked); break;
             case AppCommand.ViewUseOriginal when there && _hideItem.Checked: UseOriginal(); break;
@@ -198,6 +222,7 @@ public sealed partial class PipWindow
         AppCommand.ViewMute => _origin.IsWindow && SoundState?.Invoke() == true,
         AppCommand.ViewFreeze => Frozen,
         AppCommand.ViewMinimize => _suspended,
+        AppCommand.ViewCover => _covers.Count > 0,
         _ => false,
     };
 
@@ -350,6 +375,7 @@ public sealed partial class PipWindow
         if (preset.TitleBarAlways is { } always && always != TitleBarAlways) changes.Add(T("pip.titleBarAlways") + ": " + (always ? T("common.yes") : T("common.no")));
         if (preset.KeepAspectRatio is { } keep && keep != _overrides.KeepAspectRatio) changes.Add(T("pip.keepAspectRatio") + ": " + (keep ? T("common.yes") : T("common.no")));
         if (preset.Turn != _turn) changes.Add(T("pip.turn"));
+        if (preset.Covers is { } covers && !covers.SequenceEqual(current.Covers ?? [])) changes.Add(T("pip.covers.preset"));
         return changes.Count == 0 ? T("pip.presets.noChanges") : string.Join("; ", changes);
     }
 

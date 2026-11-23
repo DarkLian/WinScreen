@@ -1922,8 +1922,20 @@ public sealed partial class TrayApplication : ApplicationContext
         return pip;
     }
 
+    // Where views put their pictures and text, as Settings says; tests give their own.
+    internal Pip.PictureShelf Pictures
+    {
+        get => field ??= new Pip.PictureShelf
+        {
+            Saves = () => _settings.PipViews.SavePictures,
+            Folder = () => _settings.PipViews.Validated().PictureFolder,
+        };
+        set;
+    }
+
     private void OpenView(PipWindow pip)
     {
+        pip.Pictures = Pictures;
         pip.AllowAutoMove = _settings.ExperimentalFeatures;
         pip.AllowInteractive = _settings.ExperimentalFeatures;
         pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;

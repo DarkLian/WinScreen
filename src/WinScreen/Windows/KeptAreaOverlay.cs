@@ -9,7 +9,10 @@ public sealed class KeptAreaOverlay : Form
 {
     private const int SmallestSide = 20;
 
-    private static readonly Color Accent = Color.FromArgb(79, 140, 255);
+    private static readonly Color Blue = Color.FromArgb(79, 140, 255);
+    private readonly Color Accent = Blue;
+    private readonly string _instructions = T("keptAreas.instructions");
+    private readonly bool _hints = true;
 
     private readonly Rectangle _covers;
     private readonly List<Rectangle> _areas;
@@ -40,6 +43,17 @@ public sealed class KeptAreaOverlay : Form
         Bounds = frame;
     }
 
+    // Marking something else the same way, such as a view's covers: its own words and fill, and no highlighted parts
+    // (they would be the parts of whatever is under it).
+    internal KeptAreaOverlay(Rectangle frame, IEnumerable<Rectangle> areas, int most, string title, string instructions, Color fill)
+        : this(frame, areas, most)
+    {
+        Text = title;
+        _instructions = instructions;
+        Accent = fill;
+        _hints = false;
+    }
+
     // The areas when the person is done; never raised for Esc.
     public event Action<IReadOnlyList<Rectangle>>? Done;
 
@@ -48,9 +62,12 @@ public sealed class KeptAreaOverlay : Form
     public void ShowOnTop()
     {
         Show();
-        WindowController.Pin(Handle);
-        _words = new CropOverlay.Instructions(this, T("keptAreas.instructions"));
+        // Windows can refuse to bring it forward (a key pressed with another app in front): on top is enough.
+        try { WindowController.Pin(Handle); }
+        catch (WindowOperationException) { TopMost = true; }
+        _words = new CropOverlay.Instructions(this, _instructions);
         _words.ShowOver(_covers);
+        if (!_hints) return;
         _finder = new ElementFinder(Handle);
         _finder.Found += ShowHint;
     }

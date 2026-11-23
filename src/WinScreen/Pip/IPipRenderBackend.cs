@@ -17,7 +17,11 @@ internal interface IPipRenderBackend : IDisposable
 }
 
 internal sealed record PipCaptureStart(PipSource Source, nint Destination, Size Client,
-    nint Monitor, Settings.PipPreferences Preferences, int SourceHz, int TargetHz, bool Software);
+    nint Monitor, Settings.PipPreferences Preferences, int SourceHz, int TargetHz, bool Software)
+{
+    // From the first frame on, never drawn without them.
+    public Rectangle[] Covers { get; init; } = [];
+}
 
 // DWM never implements a fabricated frame stream.
 internal interface IPipCaptureBackend : IPipRenderBackend
@@ -34,4 +38,9 @@ internal interface IPipCaptureBackend : IPipRenderBackend
     void SetFrozen(bool frozen) { }
 
     void SetTurn(ViewTurn turn) { }
+
+    // In the capture's pixels: blacked out of everything drawn or copied.
+    void SetCovers(Rectangle[] covers) { }
+
+    Task<Bitmap?> TakePicture() => Task.FromResult<Bitmap?>(null);
 }
