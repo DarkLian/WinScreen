@@ -266,6 +266,31 @@ public sealed class BackdropTests
         Assert.Equal(set, new BackdropSet([new(@"C:\a.mp4", BackdropFit.Fill), new(@"C:\b.png", BackdropFit.Fill)]));
     }
 
+    // The owner, 24 Nov: a picture is kept only as large as it can ever show, so no quality is lost; centred and tiled
+    // ones show their own pixels and stay whole.
+    [Theory]
+    [InlineData(BackdropFit.Fill, 2560, 1440)]
+    [InlineData(BackdropFit.Fit, 2560, 1440)]
+    [InlineData(BackdropFit.Stretch, 2560, 1440)]
+    [InlineData(BackdropFit.Center, 7680, 4320)]
+    [InlineData(BackdropFit.Tile, 7680, 4320)]
+    public void A_picture_is_kept_as_large_as_it_can_show(BackdropFit fit, int width, int height)
+    {
+        var room = new Size(2560, 1440);
+        Assert.Equal(new Size(width, height), PictureBackdrop.Kept(new Size(7680, 4320), fit, room));
+        Assert.Equal(new Size(800, 600), PictureBackdrop.Kept(new Size(800, 600), fit, room)); // Never enlarged.
+        // Whatever the window, what is kept is never enlarged where the whole picture wouldn't be.
+        foreach (Size picture in new[] { new Size(7680, 4320), new Size(6000, 900), new Size(900, 6000) })
+            foreach (Size window in new[] { room, new Size(400, 1440), new Size(2560, 300), new Size(1000, 1000) })
+            {
+                Size kept = PictureBackdrop.Kept(picture, fit, room);
+                RectangleF shown = BackdropChoice.Place(fit, kept, window), whole = BackdropChoice.Place(fit, picture, window);
+                if (fit is BackdropFit.Center or BackdropFit.Tile) { Assert.Equal(whole, shown); continue; }
+                Assert.True(shown.Width / kept.Width <= Math.Max(1.001f, whole.Width / picture.Width + 0.001f), $"{fit} {picture} in {window}: kept {kept}");
+                Assert.True(shown.Height / kept.Height <= Math.Max(1.001f, whole.Height / picture.Height + 0.001f), $"{fit} {picture} in {window}: kept {kept}");
+            }
+    }
+
     // A link is a video unless its path ends as a picture's; a file that was moved or deleted is known before opening.
     [Fact]
     public void Links_and_missing_files_are_known_by_their_names()

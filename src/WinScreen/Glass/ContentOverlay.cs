@@ -457,6 +457,12 @@ internal sealed unsafe class ContentOverlay : Form
                     backdrop = OpenNext(shown, turns);
                     redraw = true;
                 }
+                // A new fit, or another display, may need more or less of a picture than was kept.
+                if (backdrop is { View: not null } && leaving is null && _showing is { } wanted && AgainFrom(backdrop, wanted, turns) is { } again)
+                {
+                    (leaving, left) = (backdrop, wanted);
+                    backdrop = again;
+                }
                 if (backdrop is not null)
                 {
                     try
@@ -531,8 +537,8 @@ internal sealed unsafe class ContentOverlay : Form
                                 output = _device.CreateTexture2D(new Texture2DDescription(Format.R8G8B8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 1, BindFlags.UnorderedAccess | BindFlags.ShaderResource));
                                 outputView = _device.CreateUnorderedAccessView(output);
                                 outputRead = _device.CreateShaderResourceView(output);
-                                final = _device.CreateTexture2D(new Texture2DDescription(Format.R8G8B8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 1, BindFlags.UnorderedAccess));
-                                finalView = _device.CreateUnorderedAccessView(final);
+                                final = null;
+                                finalView = null;
                                 _chain!.ResizeBuffers(2, (uint)size.Width, (uint)size.Height, Format.R8G8B8A8_UNorm, SwapChainFlags.None);
                                 _pool.Recreate(_captureDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, next.ContentSize);
                                 _page.Reset();
@@ -556,8 +562,20 @@ internal sealed unsafe class ContentOverlay : Form
                     redraw = true;
                 }
 
+                // Only a window with a background needs somewhere to put the two together.
+                if ((leaving ?? backdrop)?.View is null)
+                {
+                    DisposeAll(final, finalView);
+                    final = null;
+                    finalView = null;
+                }
+                else if (drawn && final is null)
+                {
+                    final = _device!.CreateTexture2D(new Texture2DDescription(Format.R8G8B8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 1, BindFlags.UnorderedAccess));
+                    finalView = _device.CreateUnorderedAccessView(final);
+                }
                 if (drawn && redraw)
-                    Present(size, output!, outputRead!, final!, finalView!, leaving ?? backdrop, leaving is not null ? left : _showing);
+                    Present(size, output!, outputRead!, final, finalView, leaving ?? backdrop, leaving is not null ? left : _showing);
             }
         }
         catch (Exception failure) when (failure is SharpGen.Runtime.SharpGenException or COMException or ObjectDisposedException or InvalidOperationException)
@@ -580,6 +598,7 @@ internal sealed unsafe class ContentOverlay : Form
         public BackdropSequence? Sequence => sequence;
         public int Showing = -1;
         public bool Seen;
+        public (Backdrop? Backdrop, BackdropFit Fit, Size Displays) Asked;
         public long Since;
         public const int FirstRetry = 5_000, LongestRetry = 300_000;
         public int RetryWait = FirstRetry;
@@ -621,6 +640,24 @@ internal sealed unsafe class ContentOverlay : Form
         return null;
     }
 
+    // What shows stays when its file can't be read again, and isn't asked about until the fit or the displays change.
+    private static Backdrop? AgainFrom(Backdrop backdrop, BackdropChoice item, Turns turns)
+    {
+        var asked = (backdrop, item.Fit, SystemInformation.VirtualScreen.Size);
+        if (turns.Asked == asked) return null;
+        turns.Asked = asked;
+        try
+        {
+            return backdrop.Again(item);
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or ArgumentException or OutOfMemoryException
+                                            or NotSupportedException or ExternalException)
+        {
+            Diagnostics.Log.Swallowed(failure);
+            return null;
+        }
+    }
+
     private void Report(BackdropChoice? item, Exception failure)
     {
         if (item is null || _stopping) return;
@@ -630,12 +667,12 @@ internal sealed unsafe class ContentOverlay : Form
         catch (InvalidOperationException closed) { Diagnostics.Log.Swallowed(closed); }
     }
 
-    private void Present(Size size, ID3D11Texture2D output, ID3D11ShaderResourceView outputRead, ID3D11Texture2D final,
-        ID3D11UnorderedAccessView finalView, Backdrop? backdrop, BackdropChoice? item)
+    private void Present(Size size, ID3D11Texture2D output, ID3D11ShaderResourceView outputRead, ID3D11Texture2D? final,
+        ID3D11UnorderedAccessView? finalView, Backdrop? backdrop, BackdropChoice? item)
     {
         var context = _context!;
         ID3D11Texture2D shown = output;
-        if (backdrop?.View is { } picture && item is { } choice)
+        if (backdrop?.View is { } picture && item is { } choice && final is not null && finalView is not null)
         {
             RectangleF place = BackdropChoice.Place(choice.Fit, backdrop.Size, size);
             float detail = choice.Fit == BackdropFit.Tile ? 0
@@ -675,7 +712,7 @@ internal sealed unsafe class ContentOverlay : Form
         context.CSSetShader(_stats);
         context.CSSetShaderResource(0, cacheView);
         context.CSSetUnorderedAccessView(0, tilesView);
-        context.Dispatch((uint)(columns + 7) / 8, (uint)(rows + 7) / 8, 1);
+        context.Dispatch((uint)columns, (uint)rows, 1);
         context.CSSetUnorderedAccessView(0, null);
         context.CSSetShaderResource(0, null);
         // This frame's own page colour. A still window sends a single frame, so it can't lag behind. The statistics

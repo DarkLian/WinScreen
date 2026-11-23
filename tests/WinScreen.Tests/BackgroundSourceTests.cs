@@ -212,6 +212,103 @@ public sealed class BackgroundSourceTests(ITestOutputHelper output) : IDisposabl
         });
     }
 
+    // Too long to keep whole, so it is decoded as it plays: every frame in turn, round again, and on after its file is
+    // deleted. Longer than the 600 frames that used to be the end of it.
+    [GraphicsCardFact]
+    public void A_long_animation_plays_in_order_and_round_again_with_its_file_gone()
+    {
+        string file = Path.Combine(_folder, "long.gif");
+        const int Frames = 700, Wide = 160, High = 160;
+        WriteGif(file, Wide, High, Frames);
+        Assert.True((long)Wide * High * 4 * Frames > AnimationBackdrop.MostKept);
+        WithGlass(new([new(file, BackdropFit.Fill, Speed: 400)]), (_, _, colour, problems) =>
+        {
+            int Frame(Color at) => at.R < 200 && at.B > 200 ? at.G * 4 : -1; // Frame n is (0, n / 4, 255); round again it starts low.
+            Assert.True(Wait(() => Frame(colour()) >= 0, 5000), colour().ToString());
+            File.Delete(file);
+            int last = Frame(colour()), most = last, rounds = 0;
+            long end = Environment.TickCount64 + 30_000;
+            while (rounds < 1 && Environment.TickCount64 < end)
+            {
+                int now = Frame(colour());
+                if (now >= 0)
+                {
+                    if (now < last - 100) rounds++;
+                    else Assert.True(now >= last - 8, $"Went back from {last} to {now}.");
+                    last = now;
+                    most = Math.Max(most, now);
+                }
+                Application.DoEvents();
+                Thread.Sleep(5);
+            }
+            output.WriteLine($"last {last}, most {most}, rounds {rounds}");
+            Assert.True(most > 620, $"Only got to about frame {most}.");
+            Assert.Equal(1, rounds);
+            Assert.Empty(problems);
+            Assert.False(File.Exists(file));
+        });
+    }
+
+    // Uncompressed blocks of one colour each, 20 ms a frame.
+    private static void WriteGif(string path, int wide, int high, int frames)
+    {
+        using var writer = new BinaryWriter(File.Create(path));
+        void U16(int value) => writer.Write((ushort)value);
+        writer.Write("GIF89a"u8);
+        U16(wide); U16(high);
+        writer.Write((byte)0xF7); writer.Write((byte)0); writer.Write((byte)0);
+        for (int i = 0; i < 256; i++) { writer.Write((byte)0); writer.Write((byte)i); writer.Write((byte)255); }
+        writer.Write([0x21, 0xFF, 11]); writer.Write("NETSCAPE2.0"u8); writer.Write([3, 1, 0, 0, 0]);
+        for (int frame = 0; frame < frames; frame++)
+        {
+            writer.Write([0x21, 0xF9, 4, 4]); U16(2); writer.Write([0, 0]);
+            writer.Write((byte)0x2C); U16(0); U16(0); U16(wide); U16(high); writer.Write((byte)0);
+            writer.Write((byte)8);
+            // Nine-bit codes with a clear often enough that they never grow.
+            var bits = new List<byte>();
+            int held = 0, count = 0;
+            void Code(int code)
+            {
+                held |= code << count;
+                for (count += 9; count >= 8; count -= 8, held >>= 8) bits.Add((byte)held);
+            }
+            for (int i = 0; i < wide * high; i++) { if (i % 250 == 0) Code(256); Code(frame / 4); }
+            Code(257);
+            if (count > 0) bits.Add((byte)held);
+            for (int at = 0; at < bits.Count; at += 255)
+            {
+                int part = Math.Min(255, bits.Count - at);
+                writer.Write((byte)part);
+                writer.Write([.. bits.Skip(at).Take(part)]);
+            }
+            writer.Write((byte)0);
+        }
+        writer.Write((byte)0x3B);
+    }
+
+    // A picture deleted or moved while it shows stays; with a fit that needs its own pixels it is read again, and stays
+    // as it is when it can't be.
+    [GraphicsCardFact]
+    public void A_picture_whose_fit_changes_is_read_again_and_stays_when_it_is_gone()
+    {
+        string file = Path.Combine(_folder, "large.png");
+        using (var picture = new Bitmap(SystemInformation.VirtualScreen.Width + 2000, SystemInformation.VirtualScreen.Height + 1200))
+        {
+            using (Graphics g = Graphics.FromImage(picture)) g.Clear(Green);
+            picture.Save(file);
+        }
+        WithGlass(new([Item(file)]), (effects, _, colour, problems) =>
+        {
+            Assert.True(Wait(() => Desktop.IsNear(colour(), Green, 24), 9000), colour().ToString());
+            effects.SetBackgrounds(_ => new BackdropSet([Item(file) with { Fit = BackdropFit.Center }]));
+            for (int i = 0; i < 60; i++) { Application.DoEvents(); Thread.Sleep(20); Assert.True(Desktop.IsNear(colour(), Green, 24), colour().ToString()); }
+            File.Delete(file);
+            effects.SetBackgrounds(_ => new BackdropSet([Item(file)]));
+            for (int i = 0; i < 60; i++) { Application.DoEvents(); Thread.Sleep(20); Assert.True(Desktop.IsNear(colour(), Green, 24), colour().ToString()); }
+            Assert.Empty(problems);
+        });
+    }
+
     [GraphicsCardTheory]
     [InlineData("text")]
     [InlineData("big")]

@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using Vortice.Direct3D11;
@@ -141,20 +143,39 @@ internal abstract class Backdrop : IDisposable
     // A video asked to play once, which has.
     public virtual bool Ended => false;
 
+    // The same source for a new fit or larger displays, or null when what it has will do.
+    public virtual Backdrop? Again(BackdropChoice item) => null;
+
     // Once is for a set, where the next one follows; alone, a video plays round and round.
     public static Backdrop Open(BackdropChoice item, bool once = false)
     {
         if (item.IsMissing) throw new FileNotFoundException(null, item.File);
         if (item.IsVideo) return new VideoBackdrop(item.File.Trim(), once, item.Speed);
-        if (item.IsLink) return new LinkedPicture(item.File.Trim(), item.Speed);
-        using var image = Image.FromFile(item.File);
-        return FromImage(image, item.Speed);
+        if (item.IsLink) return new LinkedPicture(item);
+        return FromStream(OpenFile(item.File), item);
     }
 
-    internal static Backdrop FromImage(Image image, int speed)
+    // It can be moved or deleted while it shows: a long animation goes on reading it.
+    protected static FileStream OpenFile(string file) => new(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+    // The stream is the backdrop's from here on.
+    internal static Backdrop FromStream(Stream file, BackdropChoice item)
     {
-        int frames = image.FrameDimensionsList.Contains(FrameDimension.Time.Guid) ? image.GetFrameCount(FrameDimension.Time) : 1;
-        return frames > 1 ? new AnimationBackdrop(image, frames, speed) : new PictureBackdrop(image);
+        Image? image = null;
+        try
+        {
+            image = Image.FromStream(file, useEmbeddedColorManagement: false, validateImageData: false);
+            int frames = image.FrameDimensionsList.Contains(FrameDimension.Time.Guid) ? image.GetFrameCount(FrameDimension.Time) : 1;
+            if (frames < 2) return new PictureBackdrop(image, item.Fit);
+            var animation = new AnimationBackdrop(image, file, frames, item.Speed);
+            if (animation.TakesImage) (image, file) = (null, Stream.Null);
+            return animation;
+        }
+        finally
+        {
+            image?.Dispose();
+            file.Dispose();
+        }
     }
 
     protected void Allocate(ID3D11Device device, Size size)
@@ -214,46 +235,157 @@ internal abstract class Backdrop : IDisposable
     }
 }
 
-internal sealed class PictureBackdrop(Image image) : Backdrop
+internal sealed class PictureBackdrop : Backdrop
 {
-    private byte[]? _pixels = Pixels(image, Limited(image.Size));
-    private readonly Size _size = Limited(image.Size);
+    private readonly Size _size, _source, _room;
+    private Bitmap? _picture;
+
+    public PictureBackdrop(Image image, BackdropFit fit)
+    {
+        _source = image.Size;
+        _room = Room(fit);
+        _size = Kept(_source, fit, _room);
+        _picture = new Bitmap(_size.Width, _size.Height, PixelFormat.Format32bppArgb);
+        using Graphics graphics = Graphics.FromImage(_picture);
+        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        // Without this the edge pixels blend with nothing and turn see-through.
+        using var attributes = new ImageAttributes();
+        attributes.SetWrapMode(WrapMode.TileFlipXY);
+        graphics.DrawImage(image, new Rectangle(Point.Empty, _size), 0, 0, _source.Width, _source.Height, GraphicsUnit.Pixel, attributes);
+    }
+
+    // Every display together: a window can be as large as that, and no larger.
+    private static Size Room(BackdropFit fit) => fit is BackdropFit.Center or BackdropFit.Tile ? Size.Empty : SystemInformation.VirtualScreen.Size;
+
+    // As large as it can ever show: centred and tiled pictures show their own pixels, so they stay whole.
+    internal static Size Kept(Size picture, BackdropFit fit, Size room)
+    {
+        if (fit is BackdropFit.Center or BackdropFit.Tile) return Limited(picture);
+        float wide = room.Width / (float)picture.Width, tall = room.Height / (float)picture.Height;
+        (float x, float y) = fit switch
+        {
+            BackdropFit.Fill => (Math.Max(wide, tall), Math.Max(wide, tall)),
+            BackdropFit.Fit => (Math.Min(wide, tall), Math.Min(wide, tall)),
+            _ => (wide, tall),
+        };
+        return Limited(new Size(Math.Max(1, (int)Math.Ceiling(picture.Width * Math.Min(1, x))), Math.Max(1, (int)Math.Ceiling(picture.Height * Math.Min(1, y)))));
+    }
+
+    internal static bool Outgrown(Size source, Size kept, BackdropFit fit) => Kept(source, fit, SystemInformation.VirtualScreen.Size) != kept;
+
+    public override Backdrop? Again(BackdropChoice item) =>
+        Outgrown(_source, _size, item.Fit) ? FromStream(OpenFile(item.File), item) : null;
+
+    internal Size Source => _source;
+
+    internal Size KeptSize => _size;
 
     public override bool Update(ID3D11Device device, ID3D11DeviceContext context)
     {
-        if (_pixels is null) return false;
+        if (_picture is not { } picture) return false;
         Allocate(device, _size);
-        Upload(context, _pixels);
-        _pixels = null;
+        BitmapData bits = picture.LockBits(new Rectangle(Point.Empty, _size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try { Upload(context, bits.Scan0, bits.Stride); }
+        finally { picture.UnlockBits(bits); }
+        picture.Dispose();
+        _picture = null;
         return true;
+    }
+
+    public override void Dispose()
+    {
+        _picture?.Dispose();
+        _picture = null;
+        base.Dispose();
     }
 }
 
+// Small ones are kept whole; others are decoded as they play, a few frames ahead, on a thread of their own.
 internal sealed class AnimationBackdrop : Backdrop
 {
-    private const int MostFrames = 600;
-    private readonly List<(byte[] Pixels, int Milliseconds)> _frames = [];
+    internal const long MostKept = 64L * 1024 * 1024;
+    private const int Ahead = 3;
+    private readonly int[] _delays;
     private readonly Size _size;
+    private readonly byte[][]? _all;
+    private readonly BlockingCollection<(int Frame, byte[] Pixels)>? _ready;
+    private readonly ConcurrentBag<byte[]> _spare = [];
+    private readonly CancellationTokenSource _stop = new();
+    private volatile bool _failed;
     private int _shown = -1;
     private long _due;
     private bool _paused;
     private int _speed;
 
-    public AnimationBackdrop(Image image, int frames, int speed = 100)
+    public AnimationBackdrop(Image image, Stream file, int frames, int speed = 100)
     {
         _size = Limited(image.Size);
         _speed = Math.Max(1, speed);
         PropertyItem? delays = image.PropertyIdList.Contains(0x5100) ? image.GetPropertyItem(0x5100) : null;
-        for (int i = 0; i < Math.Min(frames, MostFrames); i++)
+        _delays = [.. Enumerable.Range(0, frames).Select(i =>
         {
-            image.SelectActiveFrame(FrameDimension.Time, i);
             int hundredths = delays?.Value is { } value && value.Length >= (i + 1) * 4 ? BitConverter.ToInt32(value, i * 4) : 10;
             // Like browsers: a delay this short is played as a tenth of a second.
-            _frames.Add((Pixels(image, _size), hundredths <= 1 ? 100 : hundredths * 10));
+            return hundredths <= 1 ? 100 : hundredths * 10;
+        })];
+        if ((long)_size.Width * _size.Height * 4 * frames <= MostKept)
+        {
+            _all = new byte[frames][];
+            for (int i = 0; i < frames; i++)
+            {
+                image.SelectActiveFrame(FrameDimension.Time, i);
+                _all[i] = Pixels(image, _size);
+            }
+            return;
+        }
+        _ready = new BlockingCollection<(int, byte[])>(Ahead);
+        TakesImage = true;
+        CancellationToken stop = _stop.Token;
+        new Thread(() => Decode(image, file, stop)) { IsBackground = true, Name = "WinScreen background frames", Priority = ThreadPriority.BelowNormal }.Start();
+    }
+
+    // The image and its file are the decoding thread's from here on, and it disposes them.
+    internal bool TakesImage { get; }
+
+    internal int BuffersMade { get; private set; }
+
+    private void Decode(Image image, Stream file, CancellationToken stop)
+    {
+        try
+        {
+            using (file)
+            using (image)
+            using (var copy = new Bitmap(_size.Width, _size.Height, PixelFormat.Format32bppArgb))
+            using (Graphics graphics = Graphics.FromImage(copy))
+            {
+                graphics.CompositingMode = CompositingMode.SourceCopy;
+                for (int i = 0; ; i = (i + 1) % _delays.Length)
+                {
+                    image.SelectActiveFrame(FrameDimension.Time, i);
+                    graphics.DrawImage(image, 0, 0, _size.Width, _size.Height);
+                    if (!_spare.TryTake(out byte[]? pixels))
+                    {
+                        pixels = new byte[_size.Width * _size.Height * 4];
+                        BuffersMade++;
+                    }
+                    BitmapData bits = copy.LockBits(new Rectangle(Point.Empty, _size), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                    try { Marshal.Copy(bits.Scan0, pixels, 0, pixels.Length); }
+                    finally { copy.UnlockBits(bits); }
+                    _ready!.Add((i, pixels), stop);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested) { return; }
+        catch (Exception failure) when (failure is ExternalException or ArgumentException or OutOfMemoryException or InvalidOperationException)
+        {
+            Diagnostics.Log.Error("effect.backdropFailed", failure);
+            _failed = true;
         }
     }
 
-    public override int Wait => _paused ? Timeout.Infinite : (int)Math.Clamp(_due - Environment.TickCount64, 1, 1000);
+    // Due but not decoded yet: looked for again soon.
+    public override int Wait => _paused ? Timeout.Infinite : (int)Math.Clamp(_due - Environment.TickCount64, 2, 1000);
 
     public override void Pause(bool paused) => _paused = paused;
 
@@ -261,30 +393,48 @@ internal sealed class AnimationBackdrop : Backdrop
 
     public override bool Update(ID3D11Device device, ID3D11DeviceContext context)
     {
-        if (Texture is null) Allocate(device, _size);
+        if (_failed) throw new NotSupportedException("The picture couldn't be decoded.");
         if (_shown >= 0 && (_paused || Environment.TickCount64 < _due)) return false;
-        _shown = (_shown + 1) % _frames.Count;
-        _due = Environment.TickCount64 + Math.Max(10, _frames[_shown].Milliseconds * 100 / _speed);
-        Upload(context, _frames[_shown].Pixels);
+        int next;
+        byte[] pixels;
+        if (_all is not null) pixels = _all[next = (_shown + 1) % _all.Length];
+        else if (_ready!.TryTake(out (int Frame, byte[] Pixels) taken)) (next, pixels) = taken;
+        else return false;
+        if (Texture is null) Allocate(device, _size);
+        Upload(context, pixels);
+        if (_ready is not null) _spare.Add(pixels);
+        _shown = next;
+        // Late by little keeps time; late by much (paused, hidden) starts from now.
+        long now = Environment.TickCount64, stay = Math.Max(10, _delays[next] * 100 / _speed);
+        _due = now - _due < stay && _due > 0 ? _due + stay : now + stay;
         return true;
+    }
+
+    public override void Dispose()
+    {
+        _stop.Cancel();
+        base.Dispose();
     }
 }
 
 // A picture from a link, fetched away from the drawing thread (BackdropLink); until it arrives, nothing shows.
 internal sealed class LinkedPicture : Backdrop
 {
-    private readonly Task<Backdrop> _fetching;
+    private readonly Task<(byte[] File, Backdrop Picture)> _fetching;
     private readonly CancellationTokenSource _cancel = new();
     private Backdrop? _picture;
 
-    public LinkedPicture(string link, int speed)
+    public LinkedPicture(BackdropChoice item) : this(item, null)
+    {
+    }
+
+    private LinkedPicture(BackdropChoice item, byte[]? file)
     {
         CancellationToken cancel = _cancel.Token;
         _fetching = Task.Run(async () =>
         {
-            using var bytes = new MemoryStream(await BackdropLink.Fetch(link, cancel));
-            using Image image = Image.FromStream(bytes);
-            return FromImage(image, speed);
+            byte[] bytes = file ?? await BackdropLink.Fetch(item.File.Trim(), cancel);
+            return (bytes, FromStream(new MemoryStream(bytes), item));
         }, cancel);
     }
 
@@ -298,6 +448,11 @@ internal sealed class LinkedPicture : Backdrop
 
     public override void Speed(int percent) => _picture?.Speed(percent);
 
+    // From what was fetched, never asked for again.
+    public override Backdrop? Again(BackdropChoice item) =>
+        _picture is PictureBackdrop picture && PictureBackdrop.Outgrown(picture.Source, picture.KeptSize, item.Fit)
+            ? new LinkedPicture(item, _fetching.Result.File) : null;
+
     public override bool Update(ID3D11Device device, ID3D11DeviceContext context)
     {
         if (_picture is null)
@@ -305,7 +460,7 @@ internal sealed class LinkedPicture : Backdrop
             if (!_fetching.IsCompleted) return false;
             if (!_fetching.IsCompletedSuccessfully)
                 throw new NotSupportedException("The picture couldn't be fetched.", _fetching.Exception?.GetBaseException());
-            _picture = _fetching.Result;
+            _picture = _fetching.Result.Picture;
         }
         return _picture.Update(device, context);
     }
@@ -316,7 +471,7 @@ internal sealed class LinkedPicture : Backdrop
         if (_picture is not null) _picture.Dispose();
         else _fetching.ContinueWith(done =>
         {
-            if (done.IsCompletedSuccessfully) done.Result.Dispose();
+            if (done.IsCompletedSuccessfully) done.Result.Picture.Dispose();
             else if (done.Exception is { } failure) Diagnostics.Log.Swallowed(failure);
         }, TaskScheduler.Default);
         _cancel.Dispose();

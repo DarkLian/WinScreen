@@ -17,7 +17,8 @@
 
 .PARAMETER Scenario
     Which scenarios to run; all by default. tray, toolbar, pinned, view, smooth30, smooth60, smooth3, dark (the filter kind),
-    darkpicture (picture-keeping Dark), visit.
+    darkpicture (picture-keeping Dark), visit. Not by default: glass, glasspicture (7680 x 4320), glassgif (the file given
+    as -Gif), glassvideo (the one given as -Video), glassgif3 (three windows with that GIF). Their files are made on the spot.
 
 .PARAMETER MovePointer
     Lets the 'visit' scenario sweep the real pointer over a view used directly. Without it that scenario is skipped.
@@ -27,7 +28,9 @@ param(
     [int]$Seconds = 60,
     [int]$Settle = 8,
     [switch]$MovePointer,
-    [string]$ResultsRoot
+    [string]$ResultsRoot,
+    [string]$Video,
+    [string]$Gif
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -47,7 +50,7 @@ $dotnetRoot = if ($env:DOTNET_ROOT) { $env:DOTNET_ROOT } else { Join-Path $env:L
 foreach ($needed in $program, $target) { if (-not (Test-Path $needed)) { throw "Build first: $needed is missing." } }
 if (Get-Process WinScreen -ErrorAction SilentlyContinue) { throw 'A WinScreen is running. Close it first; this script never ends it itself.' }
 
-Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 Add-Type -Namespace Perf -Name Native -MemberDefinition @'
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
 [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
@@ -201,6 +204,39 @@ $scenarios = [ordered]@{
                   Setup = { Start-Video 'WinScreen perf page' -Scrolling; Send-WinScreen 'OpenPip' 'title:WinScreen perf page' } }
 }
 
+function New-Background([string]$kind) {
+    $file = Join-Path $work "background.$kind"
+    if (Test-Path $file) { return $file }
+    if ($kind -eq 'jpg') {
+        $picture = [Drawing.Bitmap]::new(7680, 4320)
+        $g = [Drawing.Graphics]::FromImage($picture)
+        $g.Clear([Drawing.Color]::SteelBlue)
+        foreach ($i in 0..199) { $g.FillEllipse([Drawing.Brushes]::Orange, ($i * 397) % 7600, ($i * 211) % 4200, 300, 200) }
+        $g.Dispose(); $picture.Save($file, [Drawing.Imaging.ImageFormat]::Jpeg); $picture.Dispose()
+    }
+    else {
+        # Not made here: Windows' own APIs write GIFs without timing, and videos with the graphics card's encoder, which
+        # never finishes on some PCs.
+        $given = if ($kind -eq 'gif') { $Gif } else { $Video }
+        if (-not $given) { throw "The scenario needs a $kind file: -Gif or -Video." }
+        Copy-Item $given $file
+    }
+    $file
+}
+
+function Set-Glass([string]$kind) {
+    $extra = @{ ExperimentalFeatures = $true }
+    if ($kind) { $extra.Backgrounds = @{ Everywhere = @{ File = (New-Background $kind) } } }
+    $extra
+}
+foreach ($glass in @(@('glass', 'no background', ''), @('glasspicture', 'a 7680 x 4320 picture', 'jpg'), @('glassgif', 'a GIF', 'gif'),
+        @('glassvideo', 'a video', 'mp4'))) {
+    $scenarios[$glass[0]] = @{ Text = "Glass on a still window, $($glass[1])"; Kind = $glass[2]
+        Setup = { Start-Target 'WinScreen perf target'; Send-WinScreen 'ToggleGlass' 'title:WinScreen perf target' } }
+}
+$scenarios['glassgif3'] = @{ Text = 'Glass on three still windows, the same GIF'; Kind = 'gif'
+    Setup = { foreach ($i in 1..3) { Start-Target "WinScreen perf target $i" (200 * $i) (120 * $i); Send-WinScreen 'ToggleGlass' "title:WinScreen perf target $i" } } }
+
 $results = [Collections.Generic.List[object]]::new()
 try {
     foreach ($name in $Scenario) {
@@ -208,7 +244,7 @@ try {
         if (-not $definition) { throw "No scenario called $name." }
         if ($name -eq 'visit' -and -not $MovePointer) { Write-Host "skipped $name (needs -MovePointer)"; continue }
         Write-Host "== ${name}: $($definition.Text)"
-        Write-Settings $definition.Settings
+        Write-Settings $(if ($null -ne $definition.Kind) { Set-Glass $definition.Kind } else { $definition.Settings })
         $app = Start-WinScreen
         try {
             & $definition.Setup

@@ -17,19 +17,22 @@ internal static class ContentShaders
 
         """;
 
+    // The counts are in group-shared memory and each group is one thread: as ordinary arrays they needed scratch memory,
+    // which AMD's driver sets aside for the whole card, 175 MB for each window; groups of 2 or more still took 70 MB.
     public const string Stats = """
         Texture2D<float4> source : register(t0);
         RWTexture2D<float4> tiles : register(u0);
-        [numthreads(8,8,1)]
+        groupshared uint hist[32];
+        groupshared float3 sum[32];
+        [numthreads(1,1,1)]
         void Stats(uint3 id : SV_DispatchThreadID) {
             uint w, h; source.GetDimensions(w, h);
             int2 origin = int2(id.xy) * 16;
             if (origin.x + 16 > (int)w || origin.y + 16 > (int)h) return;
-            uint hist[32]; float3 sum[32];
-            for (uint i = 0; i < 32; i++) { hist[i] = 0; sum[i] = 0; }
+            [loop] for (uint i = 0; i < 32; i++) { hist[i] = 0; sum[i] = 0; }
             uint flat = 0;
             float previous = -1;
-            for (int y = 0; y < 16; y++) for (int x = 0; x < 16; x++) {
+            [loop] for (int y = 0; y < 16; y++) [loop] for (int x = 0; x < 16; x++) {
                 float3 c = source.Load(int3(origin + int2(x,y), 0)).rgb;
                 float l = dot(c, float3(0.3,0.59,0.11));
                 uint bin = min(31, (uint)(l * 32));
@@ -38,11 +41,11 @@ internal static class ContentShaders
                 previous = l;
             }
             uint best = 0, used = 0;
-            for (uint j = 0; j < 32; j++) { if (hist[j] > hist[best]) best = j; if (hist[j] >= 3) used++; }
+            [loop] for (uint j = 0; j < 32; j++) { if (hist[j] > hist[best]) best = j; if (hist[j] >= 3) used++; }
             bool picture = hist[best] / 256.0 < 0.42 && flat < 120 && used >= 7;
             float3 mode = sum[best] / max(1, hist[best]);
             uint exact = 0;
-            for (int y2 = 0; y2 < 16; y2++) for (int x2 = 0; x2 < 16; x2++) {
+            [loop] for (int y2 = 0; y2 < 16; y2++) [loop] for (int x2 = 0; x2 < 16; x2++) {
                 float3 e = abs(source.Load(int3(origin + int2(x2,y2), 0)).rgb - mode);
                 if (max(e.r, max(e.g, e.b)) < 1.5 / 255) exact++;
             }
