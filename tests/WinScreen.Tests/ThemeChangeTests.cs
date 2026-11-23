@@ -1,5 +1,6 @@
 using System.Reflection;
 using WinScreen.Settings;
+using WinScreen.Tests.Support;
 using WinScreen.Tray;
 using WinScreen.Windows;
 using Xunit;
@@ -30,7 +31,7 @@ public sealed class ThemeChangeTests
                     first.PageIndex = 4;
                     Pump();
                     Theme(first).SelectedIndex = 2; // Dark.
-                    Assert.True(first.ApplyChanges());
+                    Assert.True(first.ApplyChanges(), first.StatusText);
                     Pump();
 
                     Assert.True(MenuStyle.Dark);
@@ -42,7 +43,7 @@ public sealed class ThemeChangeTests
                     Assert.Same(lightIcon, MenuParts.ForCurrentTheme(lightIcon)); // Coloured icons are drawn to suit both looks.
 
                     Theme(second).SelectedIndex = 1; // Light.
-                    Assert.True(second.ApplyChanges());
+                    Assert.True(second.ApplyChanges(), second.StatusText);
                     Pump();
                     Assert.False(MenuStyle.Dark);
                     Assert.True(second.IsDisposed);
@@ -104,8 +105,14 @@ public sealed class ThemeChangeTests
                     Pump();
                     SettingsWindow maximized = Current(app);
                     Assert.True(maximized.FillsScreen);
+                    // In use: one filling the screen behind what is in use is made again only when brought back. Opened,
+                    // it gets the focus only if the test may give it.
+                    Desktop.GainForegroundRights();
+                    maximized.Activate();
+                    Pump();
+                    Assert.True(Form.ActiveForm == maximized, "Settings didn't get the focus.");
                     Theme(maximized).SelectedIndex = 2; // Dark.
-                    Assert.True(maximized.ApplyChanges());
+                    Assert.True(maximized.ApplyChanges(), maximized.StatusText);
                     Pump();
                     Assert.True(maximized.IsDisposed);
                     Assert.True(Current(app).FillsScreen);
@@ -114,7 +121,7 @@ public sealed class ThemeChangeTests
                     minimized.WindowState = FormWindowState.Minimized;
                     Pump();
                     Theme(minimized).SelectedIndex = 1; // Light.
-                    Assert.True(minimized.ApplyChanges());
+                    Assert.True(minimized.ApplyChanges(), minimized.StatusText);
                     Pump();
                     Assert.False(minimized.IsDisposed); // Waits on the taskbar in the old look.
                     Assert.Same(minimized, Current(app));

@@ -60,7 +60,7 @@ public sealed class LanguageRestartTests
             {
                 Open(app);
                 Language(Current(app)).SelectedIndex = 2; // 简体中文
-                Assert.True(Current(app).ApplyChanges());
+                { SettingsWindow shown = Current(app); Assert.True(shown.ApplyChanges(), shown.StatusText); }
                 Pump();
                 Assert.False(asked);
                 Assert.Equal([0], started);
@@ -92,7 +92,7 @@ public sealed class LanguageRestartTests
                 // "Later": nothing closes, and the language waits for the next start.
                 Open(app);
                 Language(Current(app)).SelectedIndex = 3; // 繁體中文
-                Assert.True(Current(app).ApplyChanges());
+                { SettingsWindow shown = Current(app); Assert.True(shown.ApplyChanges(), shown.StatusText); }
                 Pump();
                 Assert.Equal([(0, 1)], asked);
                 Assert.Empty(started);
@@ -102,7 +102,7 @@ public sealed class LanguageRestartTests
                 // Yes: the window is put back first, then the new copy starts, then this one exits.
                 answer = true;
                 Language(Current(app)).SelectedIndex = 2;
-                Assert.True(Current(app).ApplyChanges());
+                { SettingsWindow shown = Current(app); Assert.True(shown.ApplyChanges(), shown.StatusText); }
                 Pump();
                 Assert.Equal(2, asked.Count);
                 Assert.Single(started);

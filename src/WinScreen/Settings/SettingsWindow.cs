@@ -411,6 +411,8 @@ private readonly ErrorProvider _errors = new();
         RefreshApply();
     }
 
+    internal string StatusText => _status.Text;
+
     internal bool ApplyChanges()
     {
         if (_applying) return false;

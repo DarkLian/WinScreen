@@ -32,7 +32,10 @@ public sealed partial class TrayApplication : ApplicationContext
     private readonly string _settingsPath;
     private readonly HotkeyHost _hotkeys;
     private readonly NotifyIcon _tray = new();
-    private readonly StartWithWindows _startup = new();
+    private readonly StartWithWindows _startup = NewStartup();
+
+    // Tests give theirs a key and task list of their own: this PC's sign-in entry and task are the person's.
+    internal static Func<StartWithWindows> NewStartup { get; set; } = () => new StartWithWindows();
     private readonly DarkMode _dark = new();
     private readonly AnchorSet _anchors = new();
     private readonly AutomaticAnchors _automaticAnchors;
