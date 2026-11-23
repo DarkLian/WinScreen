@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using WinScreen.Native;
@@ -697,4 +698,88 @@ public sealed class ModifierGestureTests
             Cursor.Position = original;
         }
     }
+
+    // Alt+drag, Alt+right drag and Ctrl+Alt+wheel left a window under Glass or Dark alone, taken for a hidden one, while
+    // Ctrl+right click worked (the owner, 24 Nov). The whole program, with the settings that choose each kind.
+    [Theory]
+    [InlineData(AppCommand.ToggleGlass)]
+    [InlineData(AppCommand.ToggleDark)]
+    public void Alt_drags_and_the_opacity_wheel_work_on_a_window_under_an_effect(AppCommand effect)
+    {
+        bool graphicsCard = Glass.ContentOverlay.GraphicsCardPresent;
+        if (!graphicsCard && effect == AppCommand.ToggleGlass) { Skipped.Because("Windows passes presses through colour-key Glass."); return; }
+        string folder = Directory.CreateTempSubdirectory("winscreen-gesture-effect-").FullName;
+        Point original = Cursor.Position;
+        Desktop.GainForegroundRights();
+        using var target = new TargetProcess(new(300, 200, 500, 360), "E8E8E8");
+        Desktop.Activate(target.Handle);
+        try
+        {
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                void Wait(int ms)
+                {
+                    long end = Environment.TickCount64 + ms;
+                    while (Environment.TickCount64 < end) { Application.DoEvents(); Thread.Sleep(5); }
+                }
+                var windows = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
+                var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true, ModifierDrag = true,
+                    OpacityWheel = true, ExperimentalFeatures = true, SnapWhileDragging = false };
+                using var app = new Tray.TrayApplication(windows, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
+                MethodInfo run = typeof(Tray.TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                try
+                {
+                    Wait(400);
+                    run.Invoke(app, [effect, target.Handle]);
+                    Wait(900);
+                    Assert.Equal(graphicsCard, windows.IsDrawnByEffect(target.Handle));
+                    // The gestures run on their own threads; the presses come from another, so that the program goes on.
+                    void Press(Action press)
+                    {
+                        Task pressing = Task.Run(press);
+                        while (!pressing.IsCompleted) { Application.DoEvents(); Thread.Sleep(5); }
+                        pressing.GetAwaiter().GetResult();
+                        Wait(400);
+                    }
+                    Press(() =>
+                    {
+                        keybd_event(Alt, 0, 0, 0);
+                        Drag(new Point(450, 300), new Point(550, 360), LeftDown, LeftUp);
+                    });
+                    Assert.True(Near(RectOf(target.Handle).Location, new Point(400, 260)), $"Alt+drag: {RectOf(target.Handle)}");
+                    Press(() => Drag(new Point(880, 600), new Point(930, 640), RightDown, RightUp));
+                    Assert.True(Near(RectOf(target.Handle).Size, new Size(550, 400)), $"Alt+right drag: {RectOf(target.Handle)}");
+                    if (graphicsCard)
+                    {
+                        // What draws it follows.
+                        nint drawn = Field<Glass.ContentEffects>(app, "_content").OverlayOf(target.Handle);
+                        Assert.True(Desktop.WaitFor(() => Math.Abs(RectOf(drawn).Left - RectOf(target.Handle).Left) <= 12 &&
+                            Math.Abs(RectOf(drawn).Right - RectOf(target.Handle).Right) <= 12, 2000, Application.DoEvents),
+                            $"The effect is at {RectOf(drawn)}, the window at {RectOf(target.Handle)}.");
+                    }
+                    Press(() =>
+                    {
+                        keybd_event(0x11, 0, 0, 0);
+                        Pump(40);
+                        mouse_event(0x0800, 0, 0, unchecked((uint)-120), 0);
+                        Pump(80);
+                        keybd_event(0x11, 0, 2, 0);
+                        keybd_event(Alt, 0, 2, 0);
+                    });
+                    Assert.True(windows.OpacityOf(target.Handle) < 255, "Ctrl+Alt+wheel changed nothing.");
+                }
+                finally { app.ExitThread(); Wait(300); windows.RestoreAll(); }
+            });
+        }
+        finally
+        {
+            keybd_event(Alt, 0, 2, 0);
+            keybd_event(0x11, 0, 2, 0);
+            Cursor.Position = original;
+            Directory.Delete(folder, true);
+        }
+    }
+
+    private static T Field<T>(object owner, string name) =>
+        (T)owner.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(owner)!;
 }

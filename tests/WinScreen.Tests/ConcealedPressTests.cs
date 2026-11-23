@@ -388,9 +388,9 @@ public sealed class ConcealedPressTests
 public sealed class EffectWindowMenuTests
 {
     // Glass on Chrome: Ctrl+right-click did nothing and Keep areas said "Show this window first", because the window
-    // an effect draws again counted as hidden.
+    // an effect draws again counted as hidden. Alt+drag and the opacity wheel still refused it on 24 Nov.
     [Fact]
-    public void A_window_concealed_for_an_effect_still_opens_its_menu_but_a_hidden_one_doesnt()
+    public void A_window_concealed_for_an_effect_still_takes_gestures_but_a_hidden_one_doesnt()
     {
         using var drawn = new TargetProcess(new Rectangle(300, 220, 480, 320), "F0F0F0");
         using var hidden = new TargetProcess(new Rectangle(820, 220, 480, 320), "F0F0F0");
@@ -402,9 +402,9 @@ public sealed class EffectWindowMenuTests
                 windows.ConcealSolid(drawn.Handle);
                 windows.Hide(hidden.Handle);
                 Assert.True(windows.IsDrawnByEffect(drawn.Handle));
-                Assert.False(windows.MenuBlocked(drawn.Handle));
+                Assert.False(windows.GestureBlocked(drawn.Handle));
                 Assert.False(windows.IsDrawnByEffect(hidden.Handle));
-                Assert.True(windows.MenuBlocked(hidden.Handle));
+                Assert.True(windows.GestureBlocked(hidden.Handle));
             }
             finally { windows.RestoreAll(); }
         });

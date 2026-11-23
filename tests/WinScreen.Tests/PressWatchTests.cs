@@ -105,6 +105,61 @@ public sealed class PressWatchTests
         });
     }
 
+    // "Open with" over Claude under Glass turned its Glass off (the owner, 24 Nov): Windows keeps that box, Start and
+    // search in layers of their own, which walking the stack up from a window never meets.
+    [Trait("Category", "RealWindows")]
+    [Fact]
+    public void The_Open_with_box_over_a_window_does_not_count_against_its_look()
+    {
+        string file = Path.Combine(Path.GetTempPath(), $"winscreen-{Guid.NewGuid():N}.winscreentest");
+        File.WriteAllText(file, "x");
+        DateTime before = DateTime.Now;
+        using var target = new TargetProcess(Screen.PrimaryScreen!.WorkingArea, "E8E8E8");
+        try
+        {
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                Desktop.GainForegroundRights();
+                Desktop.Activate(target.Handle);
+                Assert.True(PressWatch.TakesPresses(target.Handle, 0));
+                using var opened = System.Diagnostics.Process.Start("rundll32.exe", $"shell32.dll,OpenAs_RunDLL {file}");
+                bool? asked = true;
+                if (!Desktop.WaitFor(() => (asked = PressWatch.TakesPresses(target.Handle, 0)) != true, 8000, Application.DoEvents))
+                {
+                    Skipped.Because("Windows showed no Open with box over the middle of the window.");
+                    return;
+                }
+                Assert.Null(asked);
+            });
+        }
+        finally
+        {
+            foreach (System.Diagnostics.Process box in System.Diagnostics.Process.GetProcessesByName("OpenWith"))
+                using (box)
+                    if (box.StartTime >= before) box.Kill();
+            File.Delete(file);
+        }
+    }
+
+    // A window its app disabled, as while a dialog of its is up elsewhere, takes no presses by the app's own choice.
+    [Trait("Category", "RealWindows")]
+    [Fact]
+    public void A_window_its_app_disabled_does_not_count_against_its_look()
+    {
+        using var below = new TargetProcess(new Rectangle(280, 200, 500, 360), "1E64C8", title: "Below");
+        using var target = new TargetProcess(new Rectangle(300, 220, 460, 320), "E8E8E8");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(target.Handle);
+            Assert.True(PressWatch.TakesPresses(target.Handle, 0));
+            User32.EnableWindow(target.Handle, false);
+            Assert.Null(PressWatch.TakesPresses(target.Handle, 0));
+            User32.EnableWindow(target.Handle, true);
+            Assert.True(PressWatch.TakesPresses(target.Handle, 0));
+        });
+    }
+
     /// <summary>
     /// The person's own Click-through, a window WinScreen hides behind a tile or a view, and a crop that keeps a corner,
     /// send presses at the window's middle below by choice. None may count against a look on the window, or the

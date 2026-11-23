@@ -26,7 +26,7 @@ public sealed class SettingsLayoutTests
             window.Bounds = new Rectangle(0, 0, 1100, Screen.PrimaryScreen!.WorkingArea.Height);
             window.Show();
             TabControl tabs = Descendants(window).OfType<TabControl>().Single();
-            tabs.SelectedIndex = 1;
+            tabs.SelectedIndex = 7;
             void Pump() { for (int i = 0; i < 10; i++) { Application.DoEvents(); Thread.Sleep(20); } }
             Pump();
             window.Bounds = new Rectangle(0, 0, 855, 670);
@@ -37,6 +37,22 @@ public sealed class SettingsLayoutTests
             Assert.True((Native.User32.GetWindowLongPtr(table.Handle, Native.User32.GWL_STYLE) & 0x00100000) == 0,
                 "The table kept its sideways scroll bar.");
             window.Close();
+        });
+    }
+
+    // The owner's order (24 Nov).
+    [Fact]
+    public void Pages_come_in_the_chosen_order()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+            Assert.Equal(["settings.general", "pip.open", "settings.backgrounds", "anchors.settings.title", "settings.customization",
+                "gestures.title", "toolbar.settings.title", "features.title", "settings.programs", "settings.savedSetups"],
+                Descendants(window).OfType<TabControl>().Single().TabPages.Cast<TabPage>().Select(page => new[] { "settings.general", "pip.open",
+                    "settings.backgrounds", "anchors.settings.title", "settings.customization", "gestures.title", "toolbar.settings.title",
+                    "features.title", "settings.programs", "settings.savedSetups" }.Single(key => UiText.T(key) == page.Text)));
         });
     }
 
@@ -492,7 +508,7 @@ public sealed class SettingsLayoutTests
                 window.Show();
                 window.WindowState = FormWindowState.Normal; // Windows may show a process's first window maximized.
                 TabControl tabs = Descendants(window).OfType<TabControl>().Single();
-                tabs.SelectedIndex = 1;
+                tabs.SelectedIndex = 7;
                 for (int i = 0; i < 8; i++) { Application.DoEvents(); Thread.Sleep(15); }
                 ListView table = Descendants(window).OfType<ListView>().Single();
                 const TextFormatFlags measure = TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
@@ -688,7 +704,7 @@ public sealed class SettingsLayoutTests
                 throw new InvalidOperationException("Not on a page.");
             }
 
-            window.PageIndex = 6; // Appearance: sliders first.
+            window.PageIndex = 4; // Appearance: sliders first.
             Application.DoEvents();
             NumberSlider slider = Descendants(window).OfType<NumberSlider>().First(control => control.Visible);
             ScrollPage appearance = Page(slider);
@@ -705,7 +721,7 @@ public sealed class SettingsLayoutTests
             Assert.Equal(chosen, look.SelectedIndex);
             Assert.True(Page(look).AutoScrollPosition.Y < 0, "The page didn't scroll over a list.");
 
-            window.PageIndex = 2; // Programs: a long list, and the box for a name.
+            window.PageIndex = 8; // Programs: a long list, and the box for a name.
             Application.DoEvents();
             ThemedList list = Descendants(window).OfType<ThemedList>().First(control => control.Visible && control.Items.Count == 30);
             ScrollPage programs = Page(list);
@@ -740,7 +756,7 @@ public sealed class SettingsLayoutTests
             using var window = new SettingsWindow(settings, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
             window.Show();
             window.Activate();
-            window.PageIndex = 4; // Picture-in-Picture.
+            window.PageIndex = 1; // Picture-in-Picture.
             Application.DoEvents();
             PlainButton[] Removes() => [.. Descendants(window).OfType<PlainButton>().Where(button => button.AccessibleName?.StartsWith(
                 UiText.T("settings.pip.apps.remove").Split("{0}")[0] + "app", StringComparison.Ordinal) == true)];

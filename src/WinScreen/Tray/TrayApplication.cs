@@ -1056,7 +1056,7 @@ public sealed partial class TrayApplication : ApplicationContext
         return AppRoles.Reaches(_role, ProcessInfo.IsElevated(process));
     }
 
-    private bool CanOpenWindowMenu(nint window) => _windows.Refusal(window) is null && !_windows.MenuBlocked(window) &&
+    private bool CanOpenWindowMenu(nint window) => _windows.Refusal(window) is null && !_windows.GestureBlocked(window) &&
         CanReach(window) && !User32.IsIconic(window) &&
         (!WindowInfo.FillsMonitor(window) || _windows.FilledByWinScreen(window)) && !_settings.WindowMenuExclusions.Contains(WindowInfo.ProgramOf(window),
             StringComparer.OrdinalIgnoreCase);
@@ -2348,8 +2348,8 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private readonly PressWatch _pressWatch = new();
 
-    // The watchdog (INV-18): a look whose window has stopped taking presses for a second is turned off, and the person
-    // is told. Colour-key Glass is left out: Windows passes presses on its see-through colour by design.
+    // The watchdog (INV-18): a look whose window lets presses through, or catches them itself, for a second is turned
+    // off, and the person is told. Colour-key Glass is left out: Windows passes presses on its see-through colour by design.
     private void FollowLookPresses()
     {
         if (_content.Count == 0 && !_dark.Targets.Any()) return;

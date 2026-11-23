@@ -225,18 +225,26 @@ private readonly ErrorProvider _errors = new();
         tabs.Dock = DockStyle.Fill;
         var generalPage = Tab(T("settings.general"), BuildGeneral());
         var featuresPage = Tab(T("features.title"), BuildFeatures());
-        tabs.TabPages.Add(generalPage);
-        tabs.TabPages.Add(featuresPage);
-        tabs.TabPages.Add(Tab(T("settings.programs"), BuildPrograms()));
-        tabs.TabPages.Add(Tab(T("settings.savedSetups"), BuildSetups()));
+        var programsPage = Tab(T("settings.programs"), BuildPrograms());
+        var setupsPage = Tab(T("settings.savedSetups"), BuildSetups());
         var pipPage = Tab(T("pip.open"), BuildPip());
         var gesturePage = Tab(T("gestures.title"), BuildModifierDrag());
         var appearancePage = Tab(T("settings.customization"), BuildCustomization());
         var toolbarPage = Tab(T("toolbar.settings.title"), BuildToolbar());
         var anchorsPage = Tab(T("anchors.settings.title"), BuildAnchors());
-        tabs.TabPages.AddRange([pipPage, gesturePage, appearancePage, toolbarPage, anchorsPage]);
         var backgroundsPage = _backgroundsPage = Tab(T("settings.backgrounds"), BuildBackgrounds());
-        tabs.TabPages.Add(backgroundsPage);
+        // In the order of the list at the side.
+        foreach ((TabPage tab, char glyph) in new[]
+                 {
+                     (generalPage, MenuParts.Home), (pipPage, MenuParts.NewWindow), (backgroundsPage, MenuParts.Picture),
+                     (anchorsPage, MenuParts.Pinned), (appearancePage, MenuParts.Palette), (gesturePage, MenuParts.Mouse),
+                     (toolbarPage, MenuParts.Bar), (featuresPage, MenuParts.Keyboard), (programsPage, MenuParts.Apps),
+                     (setupsPage, MenuParts.Save),
+                 })
+        {
+            tabs.TabPages.Add(tab);
+            _nav.Add(tab.Text, glyph, tab);
+        }
         tabs.Selected += (_, _) =>
         {
             if (tabs.SelectedTab == featuresPage) RefreshFeatures();
@@ -247,16 +255,6 @@ private readonly ErrorProvider _errors = new();
         foreach (TabPage tab in tabs.TabPages)
             if (ColumnOf(tab) is { } column) column.Shifted += FollowColumn;
         tabs.SizeChanged += (_, _) => FollowColumn(); // Where the pages sit in it is known once it has a size.
-        _nav.Add(generalPage.Text, MenuParts.Home, generalPage);
-        _nav.Add(featuresPage.Text, MenuParts.Keyboard, featuresPage);
-        _nav.Add(gesturePage.Text, MenuParts.Mouse, gesturePage);
-        _nav.Add(toolbarPage.Text, MenuParts.Bar, toolbarPage);
-        _nav.Add(anchorsPage.Text, MenuParts.Pinned, anchorsPage);
-        _nav.Add(appearancePage.Text, MenuParts.Palette, appearancePage);
-        _nav.Add(backgroundsPage.Text, MenuParts.Picture, backgroundsPage);
-        _nav.Add(pipPage.Text, MenuParts.NewWindow, pipPage);
-        _nav.Add(tabs.TabPages[2].Text, MenuParts.Apps, tabs.TabPages[2]);
-        _nav.Add(tabs.TabPages[3].Text, MenuParts.Save, tabs.TabPages[3]);
         _nav.Selected = generalPage;
         _nav.Chosen += chosen => { tabs.SelectedTab = (TabPage)chosen; ShowSearchMatch(); };
         _search.Hint = _search.AccessibleName = T("settings.search");

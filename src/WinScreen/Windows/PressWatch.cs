@@ -36,12 +36,15 @@ internal sealed class PressWatch
         return turnOff;
     }
 
-    // A window above it there is the person's own arrangement. One the person made click-through sends presses below by
+    // Only the look's own window, or one below, getting the press counts against it. Anything else there is in front:
+    // another window, or Start, search and "Open with", which Windows keeps in layers of their own that walking the
+    // stack never meets. One the person made click-through sends presses below by
     // choice, so it can't be told; a cropped one is asked at the middle of the part it keeps.
     public static bool? TakesPresses(nint window, nint overlay, WindowController? windows = null)
     {
         if (!User32.IsWindow(window) || !User32.IsWindowVisible(window) || User32.IsIconic(window)) return null;
         if (windows?.IsClickThrough(window) == true) return null;
+        if (!User32.IsWindowEnabled(window)) return null; // The app's own doing, as while it shows a dialog.
         // Hidden by WinScreen behind a tile or a view: see-through and click-through on purpose, and its look waits for
         // it to come back. An effect's own concealing is different: there the window still takes the presses.
         if (windows is not null && windows.IsHidden(window) && !windows.IsDrawnByEffect(window)) return null;
@@ -59,18 +62,18 @@ internal sealed class PressWatch
         if (root == window) return true;
         if (root == 0) return null;
         if (overlay != 0 && root == overlay) return false;
-        return IsAbove(root, window) ? null : false;
+        return IsBelow(root, window) ? false : null;
     }
 
-    private static bool IsAbove(nint other, nint window)
+    private static bool IsBelow(nint other, nint window)
     {
-        nint above = window;
+        nint below = window;
         for (int step = 0; step < 2000; step++)
         {
-            above = User32.GetWindow(above, User32.GW_HWNDPREV);
-            if (above == 0) return false;
-            if (above == other) return true;
+            below = User32.GetWindow(below, User32.GW_HWNDNEXT);
+            if (below == 0) return false;
+            if (below == other) return true;
         }
-        return true; // Too deep to tell: not counted against the look.
+        return false; // Too deep to tell: not counted against the look.
     }
 }
