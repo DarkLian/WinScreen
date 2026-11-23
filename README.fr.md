@@ -55,10 +55,10 @@ Rognez une vue sur la partie qui vous intéresse et zoomez. Une vue d'une partie
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Rognez une vue sur la partie qui vous intéresse et zoomez. Une vue d'une partie de l'écran fonctionne de la même façon.">
 </p>
 
-L'effet verre n'atténue que l'arrière-plan. Épinglez une fenêtre, rendez-la translucide ou ouvrez-en une vue, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.
+L'effet verre n'atténue que l'arrière-plan. Rendez une fenêtre sombre ou translucide, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="L'effet verre n'atténue que l'arrière-plan. Épinglez une fenêtre, rendez-la translucide ou ouvrez-en une vue, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="L'effet verre n'atténue que l'arrière-plan. Rendez une fenêtre sombre ou translucide, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.">
 </p>
 
 L'effet verre avec une vidéo derrière : chaque fenêtre d'application peut avoir son propre fond animé.

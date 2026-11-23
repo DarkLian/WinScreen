@@ -53,10 +53,10 @@ Crop a view to the part you want and zoom in. A view of a region of the screen w
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Crop a view to the part you want and zoom in. A view of a region of the screen works the same way.">
 </p>
 
-Glass fades only the background. Pin a window, make it see-through or open a view of it, press Ctrl+Alt+Shift+S, and it opens that way next time.
+Glass fades only the background. Make a window dark or see-through, press Ctrl+Alt+Shift+S, and it opens that way next time.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glass fades only the background. Pin a window, make it see-through or open a view of it, press Ctrl+Alt+Shift+S, and it opens that way next time.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glass fades only the background. Make a window dark or see-through, press Ctrl+Alt+Shift+S, and it opens that way next time.">
 </p>
 
 Glass with a video behind it: any app's window can have its own live background.

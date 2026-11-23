@@ -167,7 +167,9 @@ and one-color Glass leave the window itself on screen, and nothing here applies.
 
 | Feature | While Dark or Glass is on |
 |---|---|
-| Opacity, Click-through, Send to bottom, Dark title bar | ✅ The effect is drawn at the opacity chosen. |
+| Opacity | ✅ The effect is drawn at the opacity chosen. |
+| Click-through, Dark title bar | ✅ |
+| Send to bottom | ✅ The effect goes down with its window (`ContentEffectTests.Sent_to_the_bottom_an_effect_goes_down_with_its_window`). |
 | Arrange window, Move to display, exact position, Back to previous position | ✅ |
 | Alt+drag, Alt+right drag, snapping, Ctrl+Alt+wheel, the window menu gesture | ✅ (Alt+drag and Ctrl+Alt+wheel since 1.5.0) (`WindowController.GestureBlocked`, `ModifierGestureTests.Alt_drags_and_the_opacity_wheel_work_on_a_window_under_an_effect`) |
 | Anchors, the toolbar, Keep areas as they are, Glass levels | ✅ |

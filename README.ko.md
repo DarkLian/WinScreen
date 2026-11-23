@@ -55,10 +55,10 @@
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="작은 화면을 원하는 부분만 남기고 잘라 확대할 수 있습니다. 화면 일부의 작은 화면도 똑같이 쓸 수 있습니다.">
 </p>
 
-유리 효과는 배경만 흐리게 합니다. 창을 맨 위에 고정하거나 반투명하게 하거나 화면을 열고 Ctrl+Alt+Shift+S를 누르면 다음부터 그대로 열립니다.
+유리 효과는 배경만 흐리게 합니다. 창을 어둡게 하거나 반투명하게 하고 Ctrl+Alt+Shift+S를 누르면 다음부터 그대로 열립니다.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="유리 효과는 배경만 흐리게 합니다. 창을 맨 위에 고정하거나 반투명하게 하거나 화면을 열고 Ctrl+Alt+Shift+S를 누르면 다음부터 그대로 열립니다.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="유리 효과는 배경만 흐리게 합니다. 창을 어둡게 하거나 반투명하게 하고 Ctrl+Alt+Shift+S를 누르면 다음부터 그대로 열립니다.">
 </p>
 
 유리 효과 뒤에 동영상을 깔면, 어떤 앱 창이든 나만의 움직이는 배경을 가질 수 있습니다.

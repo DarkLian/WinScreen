@@ -55,10 +55,10 @@ Corte uma visualização na parte que você quer e amplie. Uma visualização de
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Corte uma visualização na parte que você quer e amplie. Uma visualização de parte da tela funciona do mesmo jeito.">
 </p>
 
-Vidro esmaece só o fundo. Fixe uma janela, deixe-a translúcida ou abra uma visualização dela, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.
+Vidro esmaece só o fundo. Deixe uma janela escura ou translúcida, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Vidro esmaece só o fundo. Fixe uma janela, deixe-a translúcida ou abra uma visualização dela, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Vidro esmaece só o fundo. Deixe uma janela escura ou translúcida, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.">
 </p>
 
 Vidro com um vídeo atrás: a janela de qualquer app pode ter seu próprio fundo animado.

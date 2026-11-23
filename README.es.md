@@ -55,10 +55,10 @@ Recorta una vista a la parte que quieres y amplíala. Una vista de parte de la p
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Recorta una vista a la parte que quieres y amplíala. Una vista de parte de la pantalla funciona igual.">
 </p>
 
-Cristal difumina solo el fondo. Fija una ventana, hazla translúcida o abre una vista de ella, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.
+Cristal difumina solo el fondo. Haz una ventana oscura o translúcida, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Cristal difumina solo el fondo. Fija una ventana, hazla translúcida o abre una vista de ella, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Cristal difumina solo el fondo. Haz una ventana oscura o translúcida, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.">
 </p>
 
 Cristal con un vídeo detrás: la ventana de cualquier aplicación puede tener su propio fondo animado.

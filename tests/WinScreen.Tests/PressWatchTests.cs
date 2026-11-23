@@ -130,14 +130,24 @@ public sealed class PressWatchTests
                     return;
                 }
                 Assert.Null(asked);
+                // Gone and the focus taken back before the next test, whose window couldn't become active otherwise.
+                Close();
+                Desktop.WaitFor(() => PressWatch.TakesPresses(target.Handle, 0) == true, 3000, Application.DoEvents);
+                Desktop.GainForegroundRights();
+                Desktop.Activate(target.Handle);
             });
         }
         finally
         {
+            Close();
+            File.Delete(file);
+        }
+
+        void Close()
+        {
             foreach (System.Diagnostics.Process box in System.Diagnostics.Process.GetProcessesByName("OpenWith"))
                 using (box)
-                    if (box.StartTime >= before) box.Kill();
-            File.Delete(file);
+                    if (box.StartTime >= before) { box.Kill(); box.WaitForExit(2000); }
         }
     }
 

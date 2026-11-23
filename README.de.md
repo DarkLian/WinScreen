@@ -55,10 +55,10 @@ Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein. Eine A
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein. Eine Ansicht eines Bildschirmausschnitts funktioniert genauso.">
 </p>
 
-Glas blendet nur den Hintergrund aus. Halte ein Fenster oben, mach es durchsichtig oder öffne eine Ansicht davon, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.
+Glas blendet nur den Hintergrund aus. Mach ein Fenster dunkel oder durchsichtig, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glas blendet nur den Hintergrund aus. Halte ein Fenster oben, mach es durchsichtig oder öffne eine Ansicht davon, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glas blendet nur den Hintergrund aus. Mach ein Fenster dunkel oder durchsichtig, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.">
 </p>
 
 Glas mit einem Video dahinter: Jedes App-Fenster kann seinen eigenen bewegten Hintergrund haben.

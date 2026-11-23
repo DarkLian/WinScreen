@@ -55,10 +55,10 @@ WinScreen のアプリとユーザーガイドは、英語と中国語のみで�
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="ビューを必要な部分だけに切り抜いて拡大できます。画面の一部のビューも同じように使えます。">
 </p>
 
-ガラス効果は背景だけを薄くします。ウィンドウを最前面に固定したり、半透明にしたり、ビューを開いたりして Ctrl+Alt+Shift+S を押せば、次からその状態で開きます。
+ガラス効果は背景だけを薄くします。ウィンドウをダークや半透明にして Ctrl+Alt+Shift+S を押せば、次からその状態で開きます。
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="ガラス効果は背景だけを薄くします。ウィンドウを最前面に固定したり、半透明にしたり、ビューを開いたりして Ctrl+Alt+Shift+S を押せば、次からその状態で開きます。">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="ガラス効果は背景だけを薄くします。ウィンドウをダークや半透明にして Ctrl+Alt+Shift+S を押せば、次からその状態で開きます。">
 </p>
 
 ガラス効果の後ろに動画を流せば、どのアプリのウィンドウにも自分だけの動く背景を付けられます。

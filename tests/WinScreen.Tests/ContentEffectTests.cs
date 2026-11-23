@@ -463,6 +463,37 @@ public sealed class ContentEffectTests
     private static Color Middle(Rectangle bounds) =>
         Desktop.ColorOnScreen(new Rectangle(bounds.Left + bounds.Width / 2 - 5, bounds.Top + bounds.Height / 2 - 5, 10, 10));
 
+    [GraphicsCardTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Sent_to_the_bottom_an_effect_goes_down_with_its_window(bool dark)
+    {
+        using var other = new TargetProcess(new Rectangle(250, 180, 520, 400), "1E64C8");
+        using var target = new TargetProcess(Spot, "E8E8E8");
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(target.Handle);
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            try
+            {
+                Assert.True(effects.Toggle(target.Handle, dark ? ContentLook.Dark : ContentLook.Glass));
+                Pump(() => false);
+                windows.SendToBottom(target.Handle);
+                Color blue = Color.FromArgb(0x1E, 0x64, 0xC8);
+                Pump(() => Desktop.IsNear(Middle(bounds), blue, 12));
+                Assert.True(Desktop.IsNear(Middle(bounds), blue, 12), $"{Middle(bounds)} rather than the window in front");
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
     [GraphicsCardFact]
     public void Glass_shows_what_is_behind_through_the_page_and_turning_it_off_restores_the_window()
     {

@@ -53,10 +53,10 @@
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="把视图裁剪到你要的部分并放大。屏幕某一部分的视图也是同样的用法。">
 </p>
 
-玻璃效果只淡化背景。把窗口置顶、调成半透明或打开它的视图，按 Ctrl+Alt+Shift+S，下次打开时就是这个样子。
+玻璃效果只淡化背景。把窗口调成深色或半透明，按 Ctrl+Alt+Shift+S，下次打开时就是这个样子。
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="玻璃效果只淡化背景。把窗口置顶、调成半透明或打开它的视图，按 Ctrl+Alt+Shift+S，下次打开时就是这个样子。">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="玻璃效果只淡化背景。把窗口调成深色或半透明，按 Ctrl+Alt+Shift+S，下次打开时就是这个样子。">
 </p>
 
 玻璃后面放一段视频：任何应用的窗口都能有自己的动态背景。
