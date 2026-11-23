@@ -152,6 +152,7 @@ public sealed partial class PipWindow
         bool? muted = _origin.IsWindow ? SoundState?.Invoke() : null;
         _muteItem.Available = muted is not null;
         _muteItem.Checked = muted == true;
+        if (_recording is { } recording && muted is not null) recording.Muted = muted == true;
         if (muted is not null)
             _muteItem.Text = PipEnhancedHover.Describe(_source).App is PipHoverApp.Browser or PipHoverApp.Firefox
                 ? T("menu.original.muteBrowser") : T("menu.original.mute");
@@ -249,6 +250,7 @@ public sealed partial class PipWindow
     {
         if (SetSound?.Invoke(on) == false) Problem?.Invoke(T("errors.sound.failed"));
         _muteItem.Checked = SoundState?.Invoke() == true;
+        if (_recording is { } recording) recording.Muted = _muteItem.Checked;
     }
 
     private void FillHelp()

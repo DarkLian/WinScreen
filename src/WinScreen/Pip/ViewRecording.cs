@@ -25,6 +25,10 @@ internal sealed class ViewRecording
     private byte[]? _newest;
     private Size _size;
     private bool _finished;
+    private volatile bool _muted;
+
+    // The view's Mute: while it is on, the program's sound is recorded as silence.
+    internal bool Muted { get => _muted; set => _muted = value; }
 
     // softwareOnly: Windows' own encoder even where a hardware one has proved itself (tests try both).
     internal ViewRecording(string path, uint soundProcess = 0, bool softwareOnly = false)
@@ -116,7 +120,7 @@ internal sealed class ViewRecording
 
     private void Run()
     {
-        AppSoundCapture? sound = _soundProcess == 0 ? null : new AppSoundCapture(_soundProcess);
+        AppSoundCapture? sound = _soundProcess == 0 ? null : new AppSoundCapture(_soundProcess, () => _muted);
         VideoFileWriter? writer = null;
         long frames = 0;
         RecordingResult? result = null;

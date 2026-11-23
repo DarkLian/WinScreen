@@ -524,7 +524,7 @@
   "settings.pip.pictures.copyOnly": "Only copies it",
   "settings.pip.pictures.copySave": "Copies it and saves it",
   "settings.pip.pictures.folder": "Save pictures to",
-  "settings.pip.pictures.help": "Copy picture, Freeze a copy, Copy text, Record and Cover parts are under Picture in each view's menu. A frozen copy's Save picture saves here too. A view of a display or part of the screen records without sound.",
+  "settings.pip.pictures.help": "Copy picture, Freeze a copy, Copy text, Record and Cover parts are under Picture in each view's menu. A frozen copy's Save picture saves here too. A view of a display or part of the screen records without sound, and a muted view records silence.",
   "settings.pip.pictures.open": "Open folder",
   "settings.pip.recordings.folder": "Save recordings to",
   "settings.pip.recordings.sound": "Record the app's sound",

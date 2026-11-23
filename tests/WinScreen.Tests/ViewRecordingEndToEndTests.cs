@@ -350,4 +350,36 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
             Assert.True(video.SoundLevel > 0.003, $"The tone isn't in the recording (level {video.SoundLevel}).");
         }, sound: true);
     }
+
+    // Owner, 23 Nov: recording the sound is its own setting, and it respects the view's Mute: muted, the recording is
+    // silent; unmuted while recording, the sound comes in from then on.
+    [WgcFact]
+    public void A_muted_view_records_silence_until_it_is_unmuted()
+    {
+        WithView(scene =>
+        {
+            if (Native.AudioSessions.Instance.Devices().Length == 0) { Skipped.Because("This PC has no sound output."); return; }
+            scene.Target.PlayTone();
+            Assert.True(Desktop.WaitFor(() => scene.View.SoundState?.Invoke() is not null, 5000, () => scene.Pump(50)),
+                "The program's sound never showed in Windows' mixer.");
+            scene.View.Run(AppCommand.ViewMute);
+            Assert.True(scene.View.IsOn(AppCommand.ViewMute));
+            ViewRecording recording = Start(scene);
+            Assert.True(recording.Muted);
+            scene.Pump(2000);
+            scene.View.Run(AppCommand.ViewMute);
+            Assert.False(scene.View.IsOn(AppCommand.ViewMute));
+            Assert.False(recording.Muted);
+            scene.Pump(2000);
+            scene.View.Run(AppCommand.ViewRecord);
+            RecordingResult result = Finished(scene, recording);
+            if (result.SoundRefused) { Skipped.Because("Windows didn't share the program's sound here."); return; }
+            using VideoFile video = VideoFile.Read(result.File!);
+            output.WriteLine("Quarter-second levels: " + string.Join(" ", video.SoundLevels.Select(level => level.ToString("0.0000"))));
+            Assert.True(video.SoundLevels.Count >= 14, $"Only {video.SoundLevels.Count} quarters of sound.");
+            // Muted for the first two seconds, a quarter's leeway at the change.
+            Assert.All(video.SoundLevels.Take(6), level => Assert.True(level < 0.001, $"Sound while muted: {level}."));
+            Assert.All(video.SoundLevels.Skip(10).SkipLast(1), level => Assert.True(level > 0.005, $"No sound once unmuted: {level}."));
+        }, sound: true);
+    }
 }

@@ -14,6 +14,8 @@ internal sealed class VideoFile : IDisposable
     // Root mean square of the samples, 0 to 1.
     internal double SoundLevel { get; private set; }
     internal double SoundSeconds { get; private set; }
+    // Root mean square of each quarter second, in order.
+    internal List<double> SoundLevels { get; } = [];
 
     private static readonly Lazy<bool> Started = new(() => MediaFactory.MFStartup().Success);
 
@@ -83,8 +85,8 @@ internal sealed class VideoFile : IDisposable
             rate = (int)current.GetUInt32(MediaTypeAttributeKeys.AudioSamplesPerSecond);
         }
         HasSound = true;
-        double sum = 0;
-        long samples = 0;
+        double sum = 0, quarter = 0;
+        long samples = 0, inQuarter = 0, perQuarter = (long)Math.Max(1, channels) * Math.Max(1, rate) / 4;
         while (true)
         {
             using IMFSample? sample = reader.ReadSample(SourceReaderIndex.FirstAudioStream, SourceReaderControlFlag.None,
@@ -100,6 +102,13 @@ internal sealed class VideoFile : IDisposable
                     double value = System.Runtime.InteropServices.Marshal.ReadInt16(data, i) / 32768.0;
                     sum += value * value;
                     samples++;
+                    quarter += value * value;
+                    if (++inQuarter == perQuarter)
+                    {
+                        SoundLevels.Add(Math.Sqrt(quarter / inQuarter));
+                        quarter = 0;
+                        inQuarter = 0;
+                    }
                 }
             }
             finally { buffer.Unlock(); }

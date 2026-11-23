@@ -15,12 +15,15 @@ internal sealed class AppSoundCapture : IDisposable
     private readonly uint _process;
     private readonly ManualResetEventSlim _ready = new();
     private volatile bool _stopping;
+    private readonly Func<bool> _muted;
     internal ConcurrentQueue<Packet> Packets { get; } = new();
     internal bool Capturing { get; private set; }
 
-    internal AppSoundCapture(uint process)
+    // muted: asked as each packet comes; a muted one is kept as silence, so the time it took stays.
+    internal AppSoundCapture(uint process, Func<bool>? muted = null)
     {
         _process = process;
+        _muted = muted ?? (static () => false);
         var thread = new Thread(Run) { IsBackground = true, Name = "WinScreen recording sound" };
         thread.SetApartmentState(ApartmentState.MTA);
         thread.Start();
@@ -82,7 +85,7 @@ internal sealed class AppSoundCapture : IDisposable
                     try
                     {
                         var pcm = new byte[frames * VideoFileWriter.SoundFrameBytes];
-                        if ((flags & Silent) == 0 && data != 0) Marshal.Copy(data, pcm, 0, pcm.Length);
+                        if ((flags & Silent) == 0 && data != 0 && !_muted()) Marshal.Copy(data, pcm, 0, pcm.Length);
                         // Where its first sample was heard, on the pictures' clock.
                         Packets.Enqueue(new Packet(pcm, received - frames * Stopwatch.Frequency / VideoFileWriter.SoundRate));
                     }

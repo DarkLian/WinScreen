@@ -526,7 +526,7 @@ settings.pip.pictures.change C0BF75BD78BF9572
 settings.pip.pictures.copyOnly 878EBA51E6DE1597
 settings.pip.pictures.copySave 4BEF7E0CDBCC692C
 settings.pip.pictures.folder FB78DBB710842585
-settings.pip.pictures.help 8D12AE523ECDA8D2
+settings.pip.pictures.help F7C90674EB848434
 settings.pip.pictures.open 6A9084025C4BF3E1
 settings.pip.recordings.folder 9B6C6038D98BA037
 settings.pip.recordings.sound 4C5795578F636734
