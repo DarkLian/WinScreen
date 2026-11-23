@@ -81,6 +81,7 @@ public sealed partial class SettingsWindow : Form
     // Null is the Screen Recordings folder under Videos.
     private string? _recordingFolder;
     private readonly CheckBox _recordSound = new SwitchBox { Text = T("settings.pip.recordings.sound"), AutoSize = true };
+    private readonly ComboBox _recordingRate = new ThemedCombo { Width = 240 };
     private readonly CheckBox _pipCaptureBorder = new SwitchBox { Text = T("pip.captureBorder.hide"), AutoSize = true };
     private readonly CheckBox _pipDiagnostics = new SwitchBox { Text = T("pip.diagnostics.includeHardware"), AutoSize = true };
     private readonly List<int> _pipRates = [.. PipPreferences.FrameRates];
@@ -349,7 +350,7 @@ private readonly ErrorProvider _errors = new();
             [_windowMenuGesture] = '\uE962',
             [_pipBackend] = '\uE7F4', [_pipRate] = '\uE916', [_pipScaling] = '\uE9A6', [_pipOpacity] = '\uE706',
             [_pipCaptureBorder] = '\uE7A8', [_pipDiagnostics] = '\uE9D9', [_pipAutoMove] = '\uE7C2', [_pipMiddleScroll] = '\uE962',
-            [_hoverAutomatic] = '\uE713', [_pipTaskbar] = '\uE7C4', [_pipTitleBar] = '\uE8A0', [_pipKeepHidden] = '\uED1A', [_pipMinimizedOriginals] = '\uE921',[_pipPreview] = '\uE890', [_pictureSave] = '\uE722', [_pictureFolderChange] = '\uE8B7', [_recordingFolderChange] = '\uE714', [_recordSound] = '\uE767',
+            [_hoverAutomatic] = '\uE713', [_pipTaskbar] = '\uE7C4', [_pipTitleBar] = '\uE8A0', [_pipKeepHidden] = '\uED1A', [_pipMinimizedOriginals] = '\uE921',[_pipPreview] = '\uE890', [_pictureSave] = '\uE722', [_pictureFolderChange] = '\uE8B7', [_recordingFolderChange] = '\uE714', [_recordSound] = '\uE767', [_recordingRate] = '\uE916',
             [_defaultOpacity] = '\uE706', [_opacityStep] = '\uE9E9', [_opacityWheel] = '\uE962', [_opaqueOnHover] = '\uE890',
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
@@ -868,6 +869,7 @@ private readonly ErrorProvider _errors = new();
             KeepHiddenOnNewViews = _pipKeepHidden.Checked, KeepMinimizedOriginalsOnTaskbar = _pipMinimizedOriginals.Checked,
             SavePictures = _pictureSave.SelectedIndex != 1, PictureFolder = _pictureFolder,
             RecordingFolder = _recordingFolder, RecordSound = _recordSound.Checked,
+            RecordingFrameRate = Pip.RecordingGeometry.ChoosableRates[Math.Max(0, _recordingRate.SelectedIndex)],
             HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
             HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds }.Validated();
         return draft;
@@ -1305,6 +1307,7 @@ private readonly ErrorProvider _errors = new();
         ShowPictureFolder();
         _recordingFolder = values.PipViews.Validated().RecordingFolder;
         _recordSound.Checked = values.PipViews.RecordSound;
+        _recordingRate.SelectedIndex = Math.Max(0, Array.IndexOf(Pip.RecordingGeometry.ChoosableRates, values.PipViews.Validated().RecordingFrameRate));
         ShowRecordingFolder();
         _opacityStep.Value = Math.Clamp(values.OpacityStepPercent, 1, 25);
         EffectPreferences effects = values.Effects.Validated();
@@ -1528,8 +1531,9 @@ private readonly ErrorProvider _errors = new();
         recordingButtons.Controls.Add(_recordingFolderChange);
         recordingButtons.Controls.Add(_recordingFolderOpen);
         _recordingFolderRow = (SettingRowPanel)SettingRow(T("settings.pip.recordings.folder"), recordingButtons);
+        _recordingRate.Items.AddRange([.. Pip.RecordingGeometry.ChoosableRates.Select(rate => (object)(rate == 0 ? T("settings.pip.recordings.rate.view") : rate + " FPS"))]);
         page.Controls.Add(Section(T("settings.pip.pictures"), Row(T("settings.pip.pictures.after"), _pictureSave), _pictureFolderRow,
-            _recordingFolderRow, _recordSound, Note(T("settings.pip.pictures.help"))));
+            _recordingFolderRow, Row(T("settings.pip.recordings.rate"), _recordingRate), _recordSound, Note(T("settings.pip.pictures.help"))));
         ShowPictureFolder();
         ShowRecordingFolder();
         page.Controls.Add(Section(T("pip.hover.title"), _pipKeepHidden, _pipMinimizedOriginals, _pipTaskbar, _pipTitleBar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));

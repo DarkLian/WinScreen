@@ -234,10 +234,14 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                 View view;
                 bool dirty;
                 lock (_viewGate) { view = _view; dirty = _dirty; _dirty = false; }
-                int rate = view.FrameRate == 0 ? view.TargetHz : view.FrameRate;
+                int viewRate = view.FrameRate == 0 ? view.TargetHz : view.FrameRate;
                 renderer.ViewScaling = view.Scaling;
                 renderer.Turn = view.Turn;
-                if (_software) rate = Math.Min(rate, 30);
+                if (_software) viewRate = Math.Min(viewRate, 30);
+                // A recording asked to be faster than the view makes the capture as fast while it records: capture only
+                // makes new frames at its own pace, and the recording would repeat them.
+                int rate = recordingNow is { RequestedRate: > 0 } asking && asking.RequestedRate > viewRate
+                    ? (_software ? Math.Max(viewRate, Math.Min(asking.RequestedRate, 30)) : asking.RequestedRate) : viewRate;
                 if (rate != previousRate || view.SourceHz != previousSourceHz)
                 {
                     pacer.SetRate(rate);
@@ -366,7 +370,8 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                     if (ready && recordPending && Stopwatch.GetTimestamp() - lastRecorded >= recording.Period * 3 / 4)
                     {
                         Rectangle shown = PipRenderGeometry.Crop(view.Crop, renderer.SourceSize);
-                        if (renderer.DrawRecording(recording.FrameSize(view.Turn.Oriented(shown.Size), rate), view.Crop))
+                        int recordRate = recording.RequestedRate > 0 ? recording.RequestedRate : viewRate;
+                        if (renderer.DrawRecording(recording.FrameSize(view.Turn.Oriented(shown.Size), recordRate), view.Crop))
                         {
                             recordPending = false;
                             lastRecorded = Stopwatch.GetTimestamp();

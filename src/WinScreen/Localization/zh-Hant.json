@@ -527,6 +527,8 @@
   "settings.pip.pictures.help": "複製畫面、凍結一份副本、複製文字、錄製和遮蓋部分位於每個檢視選單的「畫面」下。凍結的副本中的「儲存畫面」也儲存到這裡。顯示器或螢幕區域的檢視錄製時沒有聲音，靜音的檢視錄製時也沒有聲音。",
   "settings.pip.pictures.open": "開啟資料夾",
   "settings.pip.recordings.folder": "錄製儲存到",
+  "settings.pip.recordings.rate": "錄製影格率",
+  "settings.pip.recordings.rate.view": "與檢視相同",
   "settings.pip.recordings.sound": "錄製應用程式的聲音",
   "settings.programs": "程式",
   "settings.savedSetups": "已儲存的設定",

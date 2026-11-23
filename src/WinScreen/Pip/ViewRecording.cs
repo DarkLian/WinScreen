@@ -32,9 +32,11 @@ internal sealed class ViewRecording
     // The view's Mute: while it is on, the program's sound is recorded as silence.
     internal bool Muted { get => _muted; set => _muted = value; }
 
-    // softwareOnly: Windows' own encoder even where a hardware one has proved itself (tests try both).
-    internal ViewRecording(string path, uint soundProcess = 0, bool softwareOnly = false)
+    // softwareOnly: Windows' own encoder even where a hardware one has proved itself (tests try both). rate: frames a
+    // second asked for in Settings, 0 for the view's own.
+    internal ViewRecording(string path, uint soundProcess = 0, bool softwareOnly = false, int rate = 0)
     {
+        RequestedRate = Math.Max(0, rate);
         _path = path;
         _soundProcess = soundProcess;
         _softwareOnly = softwareOnly;
@@ -49,7 +51,10 @@ internal sealed class ViewRecording
     internal string Path => _path;
     internal Task<RecordingResult> Completion => _done.Task;
     internal bool Finished { get { lock (_gate) return _finished; } }
-    // Frames a second: the view's capture rate when the first frame came, kept for the whole file.
+    // Settings' rate for this recording, or 0 for the view's own: the capture runs at least this fast while it records.
+    internal int RequestedRate { get; }
+
+    // Frames a second: the asked-for rate, or the view's capture rate when the first frame came; kept for the whole file.
     internal int Rate { get { lock (_gate) return _rate == 0 ? RecordingGeometry.DefaultRate : _rate; } }
     internal long Period => Stopwatch.Frequency / Rate;
 

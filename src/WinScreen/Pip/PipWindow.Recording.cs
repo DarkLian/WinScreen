@@ -49,7 +49,7 @@ public sealed partial class PipWindow
             return;
         }
         uint sound = _origin.IsWindow && Pictures.RecordsSound() ? AppSoundCapture.ProcessOf(_source) : 0;
-        var recording = new ViewRecording(path, sound) { Muted = sound != 0 && SoundState?.Invoke() == true };
+        var recording = new ViewRecording(path, sound, rate: Pictures.RecordingRate()) { Muted = sound != 0 && SoundState?.Invoke() == true };
         _recording = recording;
         _thumbnail.Configure(BackendPreferences());
         _thumbnail.Record(recording);

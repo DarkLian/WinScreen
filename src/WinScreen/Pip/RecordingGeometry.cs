@@ -8,6 +8,8 @@ internal static class RecordingGeometry
     internal const int Longest = 4096, Shortest = 64;
     // A view whose rate isn't known yet records at this.
     internal const int DefaultRate = 60;
+    // Settings' choices for recordings; 0 is the view's own rate. 240 is left out: Windows' own encoder refuses it.
+    internal static readonly int[] ChoosableRates = [0, 24, 30, 60, 120, 144];
     // H.264 level 5.2: macroblocks (16 x 16) a second.
     private const long MostMacroblocks = 2_073_600;
     private static readonly int[] Standard = [240, 165, 144, 120, 90, 75, 60, 50, 48, 30, 25, 24, 15];

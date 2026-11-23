@@ -91,13 +91,17 @@ public sealed class ViewRecordingTests(Xunit.Abstractions.ITestOutputHelper outp
     [Fact]
     public void The_recordings_folder_and_sound_switch_are_kept_in_the_settings_file()
     {
-        var settings = new AppSettings { PipViews = new PipViewPreferences { RecordingFolder = @" D:\Clips ", RecordSound = true } };
+        var settings = new AppSettings { PipViews = new PipViewPreferences { RecordingFolder = @" D:\Clips ", RecordSound = true, RecordingFrameRate = 144 } };
         AppSettings read = AppSettings.Parse(System.Text.Json.JsonSerializer.Serialize(settings));
         Assert.Equal(@"D:\Clips", read.PipViews.Validated().RecordingFolder);
         Assert.True(read.PipViews.RecordSound);
+        Assert.Equal(144, read.PipViews.Validated().RecordingFrameRate);
+        // A rate Settings doesn't offer (an edited file, a newer copy's choice) is the view's own.
+        Assert.Equal(0, new PipViewPreferences { RecordingFrameRate = 77 }.Validated().RecordingFrameRate);
         AppSettings fresh = AppSettings.Parse(System.Text.Json.JsonSerializer.Serialize(new AppSettings()));
         Assert.Null(fresh.PipViews.Validated().RecordingFolder);
         Assert.False(fresh.PipViews.RecordSound);
+        Assert.Equal(0, fresh.PipViews.RecordingFrameRate);
         Assert.Null(new PipViewPreferences { RecordingFolder = "  " }.Validated().RecordingFolder);
     }
 

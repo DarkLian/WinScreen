@@ -529,6 +529,8 @@ settings.pip.pictures.folder 42C09FA65E83FE95
 settings.pip.pictures.help 4A4614648703DAAE
 settings.pip.pictures.open 81835B6D20DAD324
 settings.pip.recordings.folder FEA0D43452169ADA
+settings.pip.recordings.rate 06C5DE574D0C1BF0
+settings.pip.recordings.rate.view 3E0A175179BADD64
 settings.pip.recordings.sound EFAFBBEA6C9FBFBF
 settings.programs 4A92B6E675A43482
 settings.savedSetups 491FD430B6864FDC

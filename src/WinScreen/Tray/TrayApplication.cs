@@ -1939,6 +1939,7 @@ public sealed partial class TrayApplication : ApplicationContext
             Folder = () => _settings.PipViews.Validated().PictureFolder,
             RecordingFolder = () => _settings.PipViews.Validated().RecordingFolder,
             RecordsSound = () => _settings.PipViews.RecordSound,
+            RecordingRate = () => _settings.PipViews.Validated().RecordingFrameRate,
         };
         set;
     }

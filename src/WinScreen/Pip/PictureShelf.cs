@@ -14,6 +14,8 @@ internal sealed class PictureShelf
     internal Func<DateTime> Now { get; init; } = static () => DateTime.Now;
     internal Func<string?> RecordingFolder { get; init; } = static () => null;
     internal Func<bool> RecordsSound { get; init; } = static () => false;
+    // Frames a second for a new recording; 0 is the view's own rate.
+    internal Func<int> RecordingRate { get; init; } = static () => 0;
 
     internal string FolderInUse => Folder() ?? DefaultFolder();
 

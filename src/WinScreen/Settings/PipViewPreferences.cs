@@ -16,6 +16,8 @@ public sealed record PipViewPreferences
     // Null is Windows' Screen Recordings folder under Videos, where the Snipping Tool saves.
     public string? RecordingFolder { get; init; }
     public bool RecordSound { get; init; }
+    // Frames a second for recordings; 0 is the view's own rate.
+    public int RecordingFrameRate { get; init; }
 
     internal PipViewPreferences Validated() => this with
     {
@@ -23,5 +25,6 @@ public sealed record PipViewPreferences
         HoverDelayMilliseconds = Math.Clamp(HoverDelayMilliseconds, 250, 2000),
         PictureFolder = string.IsNullOrWhiteSpace(PictureFolder) ? null : PictureFolder.Trim(),
         RecordingFolder = string.IsNullOrWhiteSpace(RecordingFolder) ? null : RecordingFolder.Trim(),
+        RecordingFrameRate = Pip.RecordingGeometry.ChoosableRates.Contains(RecordingFrameRate) ? RecordingFrameRate : 0,
     };
 }

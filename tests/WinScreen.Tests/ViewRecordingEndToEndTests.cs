@@ -45,7 +45,7 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
     private sealed record Scene(TrayApplication App, PipWindow View, TargetProcess Target, string Folder, Action<int> Pump);
 
     // A view of a window red on the left and blue on the right, drawn by capture, recordings to a folder of the test's.
-    private void WithView(Action<Scene> test, bool sound = false, Rectangle? bounds = null)
+    private void WithView(Action<Scene> test, bool sound = false, Rectangle? bounds = null, int recordingRate = 0)
     {
         if (!ViewRecording.Supported) { Skipped.Because("Windows' video encoder isn't on this PC (an N edition)."); return; }
         string folder = Directory.CreateTempSubdirectory("winscreen-recording-").FullName;
@@ -63,6 +63,7 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
                 {
                     Saves = () => false, PutPicture = _ => { }, PutText = _ => { }, ShowFile = _ => { },
                     RecordingFolder = () => Path.Combine(folder, "recordings"), RecordsSound = () => sound,
+                    RecordingRate = () => recordingRate,
                 };
                 MethodInfo run = typeof(TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;
                 try
@@ -266,6 +267,46 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
             SteadyAt(video, result.Rate);
             Assert.InRange(video.Frames, (int)(seconds * result.Rate * 0.7), (int)(seconds * result.Rate) + 3);
         });
+    }
+
+    // Owner, 23 Nov: Settings' recording frame rate, above or below the view's own. Above it, the capture runs as fast
+    // while it records, so nearly every frame is new (the window changes every 1/60 s); below, frames are left out.
+    [WgcTheory]
+    [InlineData(30, 60)]
+    [InlineData(144, 30)]
+    public void A_recording_at_the_rate_chosen_in_Settings(int viewRate, int recordingRate)
+    {
+        WithView(scene =>
+        {
+            scene.View.Overrides = scene.View.Overrides with { FrameRate = viewRate };
+            scene.Target.Animate(60);
+            scene.Pump(500);
+            var clock = Stopwatch.StartNew();
+            ViewRecording recording = Start(scene);
+            Assert.Equal(recordingRate, recording.RequestedRate);
+            scene.Pump(2500);
+            scene.View.Run(AppCommand.ViewRecord);
+            double seconds = clock.Elapsed.TotalSeconds;
+            RecordingResult result = Finished(scene, recording);
+            using VideoFile video = VideoFile.Read(result.File!, _ => true);
+            Point spot = FrameSpot(scene.View, new Point(17, 150), video.Size);
+            int changed = 0;
+            for (int i = 1; i < video.Kept.Count; i++)
+            {
+                Color before = video.Kept[i - 1].Picture.GetPixel(spot.X, spot.Y), now = video.Kept[i].Picture.GetPixel(spot.X, spot.Y);
+                if (Math.Abs(before.R - now.R) + Math.Abs(before.G - now.G) + Math.Abs(before.B - now.B) > 6) changed++;
+            }
+            double share = changed / (double)Math.Max(1, video.Frames - 1);
+            output.WriteLine($"view {viewRate}, asked {recordingRate}: recorded {result.Rate}, {video.Frames} frames in {seconds:0.00} s, {share:P0} new, {scene.View.BackendKind}");
+            Assert.Equal(recordingRate, result.Rate);
+            SteadyAt(video, result.Rate);
+            Assert.InRange(video.Frames, (int)(seconds * result.Rate * 0.7), (int)(seconds * result.Rate) + 3);
+            // Faster than the view: without the capture keeping up, only about half would be new.
+            if (recordingRate > viewRate && scene.View.BackendKind != PipBackendKind.WgcSoftware)
+                Assert.True(share > 0.75, $"Only {share:P0} of the frames are new: the capture didn't run at the recording's rate.");
+            // After, the view is back at its own rate.
+            Assert.Equal(viewRate, scene.View.EffectivePreferences.FrameRate);
+        }, recordingRate: recordingRate);
     }
 
     public static TheoryData<string> Endings() => ["closed", "minimized", "captureRestarted", "exit", "originalClosed"];

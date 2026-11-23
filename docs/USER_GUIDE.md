@@ -105,13 +105,13 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 - **Copy text:** drag over the text you want, or click to take all of it, and the words are copied. It reads the text in
   the picture, so it also works on video, games, remote desktops and pages that won't let you select. It uses Windows'
   own text recognition for your languages.
-- **Record:** makes a video of what the view shows, at the view's frame rate, cropped, zoomed and turned as it is,
-  with covered parts black in every frame. A red dot on the view shows it's recording. Choose **Stop recording**, then
-  click the note on the view to see the file. Minimizing or closing the view stops it and saves the video too. Like
-  the Snipping Tool, it saves to Screen Recordings in your Videos folder; in **Settings → Picture-in-Picture** you can
-  choose another folder and record the app's sound; while the view is muted, the recording is silent too. It works
-  whatever covers the view, and on views of a display or part of the screen (without sound). On Windows 10, a view
-  can't record while its original is hidden.
+- **Record:** makes a video of what the view shows, at the view's frame rate unless Settings names another, cropped,
+  zoomed and turned as it is, with covered parts black in every frame. A red dot on the view shows it's recording.
+  Choose **Stop recording**, then click the note on the view to see the file. Minimizing or closing the view stops it
+  and saves the video too. Like the Snipping Tool, it saves to Screen Recordings in your Videos folder; in **Settings
+  → Picture-in-Picture** you can choose another folder and record the app's sound; while the view is muted, the
+  recording is silent too. It works whatever covers the view, and on views of a display or part of the screen (without
+  sound). On Windows 10, a view can't record while its original is hidden.
 - **Cover parts:** drag over anything private, such as an email address or a chat, and it's blacked out in the view.
   Copies, frozen copies, the text reader and sharing the view in a call never show it. Covers stay through zoom, crop,
   turning, Freeze, Keep hidden, minimizing and everything else, and are saved with a preset. Click a cover in the
