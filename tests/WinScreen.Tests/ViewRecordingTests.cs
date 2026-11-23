@@ -147,6 +147,12 @@ public sealed class ViewRecordingTests(Xunit.Abstractions.ITestOutputHelper outp
             // Red on the left, grey on the right, a white bar at the top (so a turned or flipped frame shows), then green,
             // then blue, a second each,
             // handed in faster and slower than the recording's rate; the recording repeats or skips as needed.
+            byte[][] patterns = [.. new[] { 0xC81E1E, 0x1EC81E, 0x1E1EC8 }.Select(rgb =>
+            {
+                var pattern = new byte[size.Width * size.Height * 4];
+                Fill(pattern, size, rgb);
+                return pattern;
+            })];
             var clock = Stopwatch.StartNew();
             int handed = 0;
             while (clock.Elapsed < TimeSpan.FromSeconds(3))
@@ -154,7 +160,9 @@ public sealed class ViewRecordingTests(Xunit.Abstractions.ITestOutputHelper outp
                 int phase = (int)clock.Elapsed.TotalSeconds;
                 if (recording.Rent() is { } frame)
                 {
-                    Fill(frame, size, phase switch { 0 => 0xC81E1E, 1 => 0x1EC81E, _ => 0x1E1EC8 });
+                    // Copied from patterns made once: painting each frame here took the processor the encoder needs on
+                    // the two-core test VM (278 of 432 frames at 144 a second).
+                    patterns[Math.Min(phase, 2)].CopyTo(frame, 0);
                     recording.Deliver(frame);
                     handed++;
                 }
