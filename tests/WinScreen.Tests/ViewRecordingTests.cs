@@ -37,11 +37,11 @@ public sealed class ViewRecordingTests(Xunit.Abstractions.ITestOutputHelper outp
     }
 
     [Fact]
-    public void The_clock_writes_every_tick_unless_more_than_a_second_behind()
+    public void The_clock_writes_every_tick_unless_more_than_three_seconds_behind()
     {
         Assert.Equal(10, RecordingGeometry.NextTick(10, 10 / 30.0, 30));
-        Assert.Equal(10, RecordingGeometry.NextTick(10, 1.2, 30));
-        Assert.Equal(60, RecordingGeometry.NextTick(10, 2.0, 30));
+        Assert.Equal(10, RecordingGeometry.NextTick(10, 2.0, 30));
+        Assert.Equal(150, RecordingGeometry.NextTick(10, 5.0, 30));
         Assert.InRange(RecordingGeometry.Bitrate(new Size(1920, 1080), 30), 7_000_000, 8_000_000);
         Assert.InRange(RecordingGeometry.Bitrate(new Size(1920, 1080), 120), 15_000_000, 16_000_000);
     }

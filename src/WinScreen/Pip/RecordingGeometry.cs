@@ -50,10 +50,11 @@ internal static class RecordingGeometry
     internal static int Bitrate(Size frame, int rate) =>
         (int)Math.Clamp((long)(frame.Width * (double)frame.Height * 30 / 8 * Math.Sqrt(rate / 30.0)), 1_000_000L, 50_000_000L);
 
-    // Where the newest of `due` frames falls; one running more than a second late jumps ahead rather than queueing.
+    // The next tick to write. A short stall (an encoder starting cold, seen as a second on the test VM) is caught up by
+    // writing the same frame again, which encodes fast; more than three seconds behind, the clock jumps ahead instead.
     internal static long NextTick(long tick, double elapsedSeconds, int rate)
     {
         long now = (long)Math.Floor(elapsedSeconds * rate);
-        return now - tick > rate ? now : tick;
+        return now - tick > 3L * rate ? now : tick;
     }
 }
