@@ -135,6 +135,7 @@ public class InvariantTests
     private static readonly Dictionary<string, string> FrozenEnums = new()
     {
         ["WinScreen.Glass.BackdropFit"] = "Fill=0 Fit=1 Stretch=2 Tile=3 Center=4",
+        ["WinScreen.Glass.BackdropOrder"] = "InOrder=0 Shuffle=1",
         ["WinScreen.Glass.GlassText"] = "AsItIs=0 Light=1 Dark=2",
         ["WinScreen.Settings.AppCommand"] =
             "TogglePin=1 OpacityUp=2 OpacityDown=3 ToggleClickThrough=4 OpenPip=5 RestoreAll=6 ToggleDark=7 " +
@@ -258,7 +259,8 @@ public class InvariantTests
         var problems = new List<string>();
         foreach ((string path, string raw) in sources)
         {
-            if (path.StartsWith("Updates/", StringComparison.Ordinal)) continue;
+            // A background the person gave as a link is fetched from there, and only there (owner, 23 Nov 2026).
+            if (path.StartsWith("Updates/", StringComparison.Ordinal) || path == "Glass/BackdropLink.cs") continue;
             string code = WithoutComments(raw);
             foreach (Match match in NetworkCode.Matches(code))
                 problems.Add($"{path}: '{match.Value}' outside Updates/.");
@@ -284,6 +286,8 @@ public class InvariantTests
             Entry("Program.cs", "using Velopack;\r\nVelopackApp.Build().Run();"), Entry("Pip/View.cs", "// HttpClient in a comment")]));
 
         Assert.NotEmpty(NetworkProblems([Entry("Pip/View.cs", "using System.Net.Http;")]));
+        Assert.Empty(NetworkProblems([Entry("Glass/BackdropLink.cs", "new HttpClient();")]));
+        Assert.NotEmpty(NetworkProblems([Entry("Glass/Backdrop.cs", "new HttpClient();")]));
         Assert.NotEmpty(NetworkProblems([Entry("Tray/Ping.cs", "var c = new HttpClient();")]));
         Assert.NotEmpty(NetworkProblems([Entry("Native/Net.cs", "[LibraryImport(\"winhttp.dll\")] static partial nint Open();")]));
         Assert.NotEmpty(NetworkProblems([Entry("Tray/Check.cs", "using Velopack;\nnew UpdateManager(source);")]));

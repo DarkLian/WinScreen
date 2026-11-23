@@ -32,11 +32,24 @@ public sealed partial class SettingsWindow
     private readonly BackgroundList _backgroundList = new() { AccessibleName = T("settings.backgrounds.list") };
     private readonly ComboBox _newBackgroundApp = ProgramPicker();
     private readonly BackdropPreview _backgroundPreview = new() { AccessibleName = T("settings.backgrounds.preview") };
-    private readonly PlainButton _backgroundChoose = new() { Text = T("settings.backgrounds.choose"), AutoSize = true };
+    private readonly PlainButton _backgroundChoose = new() { Text = T("common.add"), AutoSize = true };
+    private readonly PlainButton _backgroundLink = new() { Text = T("settings.backgrounds.addLink"), AutoSize = true };
     private readonly PlainButton _backgroundClear = new() { Text = T("settings.backgrounds.clear"), AutoSize = true };
+    private readonly PlainButton _itemUp = new() { Text = T("settings.backgrounds.moveUp"), AutoSize = true };
+    private readonly PlainButton _itemDown = new() { Text = T("settings.backgrounds.moveDown"), AutoSize = true };
     private readonly PlainButton _backgroundRemoveApp = new() { Text = T("common.remove"), Enabled = false };
     private readonly ComboBox _backgroundFit = new ThemedCombo { Width = 200 };
     private readonly NumericUpDown _backgroundVolume = new() { Minimum = 0, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _backgroundSpeed = new() { Minimum = BackgroundItem.SlowestSpeed, Maximum = BackgroundItem.FastestSpeed, Increment = 5, Width = 70 };
+    private readonly NumericUpDown _backgroundBrightness = new() { Minimum = BackgroundItem.DimmestBrightness, Maximum = 100, Width = 70 };
+    private readonly ComboBox _backgroundOrder = new ThemedCombo { Width = 200 };
+    private readonly ComboBox _pictureMinutes = new ThemedCombo { Width = 120 };
+    private static readonly int[] PictureMinuteChoices = [1, 2, 5, 10, 15, 30, 60, 120, 240, 1440];
+    // The pictures and videos of the background shown, when there is more than one; the rows under it edit the one chosen.
+    private readonly ThemedList _itemList = new() { AccessibleName = T("settings.backgrounds.items") };
+    private InputFrame? _itemFrame;
+    private readonly List<Control> _setRows = [];
+    private int _itemAt;
     private SettingsCard? _backgroundEditor;
     private SettingRowPanel? _backgroundFileRow;
     private InputFrame? _backgroundFrame;
@@ -47,7 +60,9 @@ public sealed partial class SettingsWindow
     {
         _backgroundFit.Items.AddRange([T("settings.backgrounds.fill"), T("settings.backgrounds.fitWhole"),
             T("settings.backgrounds.stretch"), T("settings.backgrounds.tile"), T("settings.backgrounds.center")]);
-        _backgroundList.SelectedIndexChanged += (_, _) => ShowBackground(controls: true);
+        _backgroundOrder.Items.AddRange([T("settings.backgrounds.order.inOrder"), T("settings.backgrounds.order.shuffle")]);
+        _pictureMinutes.Items.AddRange([.. PictureMinuteChoices.Select(minutes => (object)minutes.ToString(System.Globalization.CultureInfo.CurrentCulture))]);
+        _backgroundList.SelectedIndexChanged += (_, _) => { _itemAt = 0; ShowBackground(controls: true); };
         _backgroundList.KeyDown += (_, e) =>
         {
             if (e.KeyCode != Keys.Delete || ShownApp is null) return;
@@ -80,21 +95,48 @@ public sealed partial class SettingsWindow
         adding.Controls.Add(_backgroundRemoveApp);
 
         _backgroundChoose.Click += (_, _) => ChooseBackground();
+        _backgroundLink.Click += (_, _) => AddLink();
         _backgroundPreview.ChooseAsked += ChooseBackground;
-        _backgroundPreview.Dropped += file => ChangeBackground(choice => choice with { File = file });
-        _backgroundClear.Click += (_, _) => ChangeBackground(choice => choice with { File = "" });
+        _backgroundPreview.Dropped += AddItem;
+        _backgroundClear.Click += (_, _) => RemoveItem();
+        _itemUp.Click += (_, _) => MoveItem(-1);
+        _itemDown.Click += (_, _) => MoveItem(1);
+        _itemList.SelectedIndexChanged += (_, _) =>
+        {
+            if (_showingBackground || _itemList.SelectedIndex < 0) return;
+            _itemAt = _itemList.SelectedIndex;
+            ShowBackground(controls: true);
+        };
+        _itemList.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Delete || _itemList.SelectedIndex < 0) return;
+            e.Handled = true;
+            RemoveItem();
+        };
+        _itemFrame = new InputFrame(_itemList, InputFrame.Look.List) { Width = SwitchBox.RowWidth, Margin = new Padding(3, 6, 3, 4) };
+        _itemList.FontChanged += (_, _) => FitItemList();
+        _itemFrame.DpiChangedAfterParent += (_, _) => FitItemList();
         _backgroundFit.SelectedIndexChanged += (_, _) =>
-            ChangeBackground(choice => choice with { Fit = (BackdropFit)Math.Max(0, _backgroundFit.SelectedIndex) });
-        _backgroundVolume.TextChanged += (_, _) => ChangeBackground(choice => choice with { Volume = Typed(_backgroundVolume) });
+            ChangeItem(item => item with { Fit = (BackdropFit)Math.Max(0, _backgroundFit.SelectedIndex) });
+        _backgroundVolume.TextChanged += (_, _) => ChangeItem(item => item with { Volume = Typed(_backgroundVolume) });
+        _backgroundSpeed.TextChanged += (_, _) => ChangeItem(item => item with { Speed = Typed(_backgroundSpeed) });
+        _backgroundBrightness.TextChanged += (_, _) => ChangeItem(item => item with { Brightness = Typed(_backgroundBrightness) });
+        _backgroundOrder.SelectedIndexChanged += (_, _) =>
+            ChangeBackground(choice => choice with { Order = (BackdropOrder)Math.Max(0, _backgroundOrder.SelectedIndex) });
+        _pictureMinutes.SelectedIndexChanged += (_, _) =>
+            ChangeBackground(choice => choice with { PictureMinutes = PictureMinuteChoices[Math.Max(0, _pictureMinutes.SelectedIndex)] });
         _backgroundRemoveApp.Click += (_, _) => RemoveBackgroundApp();
-        _backgroundChoose.Margin = new Padding(0, 0, 8, 0);
-        _backgroundClear.Margin = Padding.Empty;
+        foreach (PlainButton button in new[] { _backgroundChoose, _backgroundLink, _backgroundClear, _itemUp })
+            button.Margin = new Padding(0, 0, 8, 0);
+        _itemDown.Margin = Padding.Empty;
         var buttons = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty, BackColor = SettingsStyle.Card };
-        buttons.Controls.Add(_backgroundChoose);
-        buttons.Controls.Add(_backgroundClear);
+        buttons.Controls.AddRange([_backgroundChoose, _backgroundLink, _backgroundClear, _itemUp, _itemDown]);
         _backgroundFileRow = (SettingRowPanel)SettingRow(T("settings.backgrounds.file"), buttons);
-        _backgroundRows.AddRange([_backgroundPreview, _backgroundFileRow, SettingRow(T("settings.backgrounds.fit"), _backgroundFit),
-            SettingRow(T("settings.backgrounds.sound"), _backgroundVolume)]);
+        _setRows.AddRange([_itemFrame, SettingRow(T("settings.backgrounds.order"), _backgroundOrder),
+            SettingRow(T("settings.backgrounds.pictureMinutes"), _pictureMinutes), Note(T("settings.backgrounds.setHelp"))]);
+        _backgroundRows.AddRange([_backgroundPreview, _backgroundFileRow, .. _setRows, SettingRow(T("settings.backgrounds.fit"), _backgroundFit),
+            SettingRow(T("settings.backgrounds.sound"), _backgroundVolume), SettingRow(T("settings.backgrounds.speed"), _backgroundSpeed),
+            SettingRow(T("settings.backgrounds.brightness"), _backgroundBrightness)]);
         _ownBackground.CheckedChanged += (_, _) => SetOwnBackground(_ownBackground.Checked);
         _ownGlass.CheckedChanged += (_, _) => SetOwnGlass(_ownGlass.Checked);
 
@@ -296,15 +338,84 @@ public sealed partial class SettingsWindow
 
     private BackgroundChoice ChoiceOf(string? program) => program is null ? _backgroundEdit.Everywhere : _backgroundEdit.OwnOf(program) ?? _backgroundEdit.Everywhere;
 
-    private static bool IsVideo(string file) => BackdropChoice.Videos.Contains(Path.GetExtension(file).ToLowerInvariant());
+    private static bool IsVideo(string file) => BackdropChoice.IsVideoText(file);
+
+    // A file by its name, a link as it is, and either marked when it can't be found.
+    internal static string NameOf(string file)
+    {
+        if (BackdropChoice.IsLinkText(file)) return file.Trim();
+        string name = Path.GetFileName(file);
+        return new BackdropChoice(file, BackdropFit.Fill).IsMissing ? string.Format(T("settings.backgrounds.missing"), name) : name;
+    }
+
+    private static string ItemText(BackgroundItem item) =>
+        item.Volume > 0 && IsVideo(item.File) ? string.Format(T("settings.backgrounds.withSound"), NameOf(item.File), item.Volume) : NameOf(item.File);
 
     private string DetailOf(string? program)
     {
         if (program is not null && _backgroundEdit.OwnOf(program) is null) return T("settings.apps.everyBackground");
-        BackgroundChoice choice = ChoiceOf(program);
-        if (choice.File.Length == 0) return program is null ? T("settings.backgrounds.none") : T("settings.backgrounds.appNone");
-        string name = Path.GetFileName(choice.File);
-        return choice.Volume > 0 && IsVideo(choice.File) ? string.Format(T("settings.backgrounds.withSound"), name, choice.Volume) : name;
+        IReadOnlyList<BackgroundItem> items = ChoiceOf(program).Items;
+        if (items.Count == 0) return program is null ? T("settings.backgrounds.none") : T("settings.backgrounds.appNone");
+        return items.Count == 1 ? ItemText(items[0]) : string.Format(T("settings.backgrounds.andMore"), NameOf(items[0].File), items.Count - 1);
+    }
+
+    private BackgroundItem? ShownItem(BackgroundChoice choice) => choice.Items is { Count: > 0 } items ? items[Math.Clamp(_itemAt, 0, items.Count - 1)] : null;
+
+    private void FitItemList()
+    {
+        if (_itemFrame is null) return;
+        int rows = Math.Clamp(_itemList.Items.Count, 2, MostBackgroundRows);
+        _itemFrame.Height = _itemList.ItemHeight * rows + SettingsStyle.Unit(_itemFrame, 8);
+    }
+
+    private void ChangeItem(Func<BackgroundItem, BackgroundItem> change) => ChangeBackground(choice =>
+    {
+        IReadOnlyList<BackgroundItem> items = choice.Items;
+        if (items.Count == 0) return choice;
+        int at = Math.Clamp(_itemAt, 0, items.Count - 1);
+        return choice.WithItems(items.Select((item, index) => index == at ? change(item) : item));
+    });
+
+    // After the one shown, taking its fit so a set looks alike.
+    private void AddItem(string file)
+    {
+        BackgroundChoice choice = ChoiceOf(ShownApp);
+        BackgroundItem? like = ShownItem(choice);
+        var added = new BackgroundItem { File = file.Trim(), Fit = like?.Fit ?? BackdropFit.Fill };
+        int at = choice.Items.Count == 0 ? 0 : Math.Clamp(_itemAt, 0, choice.Items.Count - 1) + 1;
+        _itemAt = at;
+        ChangeBackground(current => current.WithItems(current.Items.Take(at).Append(added).Concat(current.Items.Skip(at))));
+        ShowBackground(controls: true);
+    }
+
+    private void RemoveItem()
+    {
+        BackgroundChoice choice = ChoiceOf(ShownApp);
+        if (choice.Items.Count == 0) return;
+        int at = Math.Clamp(_itemAt, 0, choice.Items.Count - 1);
+        _itemAt = Math.Max(0, Math.Min(at, choice.Items.Count - 2));
+        ChangeBackground(current => current.WithItems(current.Items.Where((_, index) => index != at)));
+        ShowBackground(controls: true);
+    }
+
+    private void MoveItem(int by)
+    {
+        BackgroundChoice choice = ChoiceOf(ShownApp);
+        int at = Math.Clamp(_itemAt, 0, Math.Max(0, choice.Items.Count - 1)), to = at + by;
+        if (to < 0 || to >= choice.Items.Count) return;
+        _itemAt = to;
+        ChangeBackground(current =>
+        {
+            List<BackgroundItem> items = [.. current.Items];
+            (items[at], items[to]) = (items[to], items[at]);
+            return current.WithItems(items);
+        });
+        ShowBackground(controls: true);
+    }
+
+    private void AddLink()
+    {
+        if (LinkDialog.Ask(this) is { } link) AddItem(link);
     }
 
     private static int Typed(NumericUpDown box) =>
@@ -350,8 +461,15 @@ public sealed partial class SettingsWindow
             try
             {
                 _backgroundEditor.Text = app ?? T("settings.backgrounds.everyApp");
-                _backgroundFit.SelectedIndex = (int)choice.Fit;
-                _backgroundVolume.Value = choice.Volume;
+                BackgroundItem item = ShownItem(choice) ?? new BackgroundItem();
+                _backgroundFit.SelectedIndex = (int)item.Fit;
+                _backgroundVolume.Value = item.Volume;
+                _backgroundSpeed.Value = Math.Clamp(item.Speed, BackgroundItem.SlowestSpeed, BackgroundItem.FastestSpeed);
+                _backgroundBrightness.Value = Math.Clamp(item.Brightness, BackgroundItem.DimmestBrightness, 100);
+                _backgroundOrder.SelectedIndex = (int)choice.Order;
+                // The nearest choice to a number from elsewhere.
+                _pictureMinutes.SelectedIndex = Array.IndexOf(PictureMinuteChoices,
+                    PictureMinuteChoices.MinBy(minutes => Math.Abs(minutes - choice.PictureMinutes)));
             }
             finally { _showingBackground = false; }
             _backgroundRemoveApp.Enabled = app is not null; // Every app stays.
@@ -367,11 +485,36 @@ public sealed partial class SettingsWindow
         try { _ownBackground.Checked = own; }
         finally { _showingBackground = false; }
         foreach (Control row in _backgroundRows) row.Enabled = own;
-        bool chosen = choice.File.Length > 0;
+        IReadOnlyList<BackgroundItem> items = choice.Items;
+        _itemAt = Math.Clamp(_itemAt, 0, Math.Max(0, items.Count - 1));
+        BackgroundItem? shown = ShownItem(choice);
+        bool chosen = shown is not null, several = items.Count > 1;
         _backgroundClear.Enabled = chosen;
-        _backgroundVolume.Enabled = chosen && IsVideo(choice.File);
+        _itemUp.Visible = _itemDown.Visible = several;
+        _itemUp.Enabled = _itemAt > 0;
+        _itemDown.Enabled = _itemAt < items.Count - 1;
+        foreach (Control row in _setRows) row.Visible = several;
+        bool video = chosen && IsVideo(shown!.File);
+        _backgroundVolume.Enabled = video;
+        _backgroundSpeed.Enabled = video || chosen && BackdropChoice.Kind(shown!.File) == ".gif";
+        _backgroundFit.Enabled = _backgroundBrightness.Enabled = chosen;
+        _showingBackground = true;
+        try
+        {
+            _itemList.BeginUpdate();
+            _itemList.Items.Clear();
+            foreach (BackgroundItem item in items) _itemList.Items.Add(ItemText(item));
+            _itemList.EndUpdate();
+            if (items.Count > 0) _itemList.SelectedIndex = _itemAt;
+        }
+        finally { _showingBackground = false; }
+        FitItemList();
         _backgroundFileRow.Description = DetailOf(app);
-        _backgroundPreview.Show(choice.File, choice.Fit, T("settings.backgrounds.drop"));
+        if (shown is null) _backgroundPreview.Show("", BackdropFit.Fill, T("settings.backgrounds.drop"));
+        else if (BackdropChoice.IsLinkText(shown.File)) _backgroundPreview.Show("", shown.Fit, string.Format(T("settings.backgrounds.linkPreview"), shown.File));
+        else if (new BackdropChoice(shown.File, shown.Fit).IsMissing)
+            _backgroundPreview.Show("", shown.Fit, string.Format(T("settings.backgrounds.missingPreview"), Path.GetFileName(shown.File)));
+        else _backgroundPreview.Show(shown.File, shown.Fit, T("settings.backgrounds.drop"));
         _backgroundList.Invalidate();
     }
 
@@ -400,10 +543,12 @@ public sealed partial class SettingsWindow
         };
         // Where this one is, or else where any other is: backgrounds tend to be kept together.
         string? folder = new[] { ChoiceOf(ShownApp) }.Append(_backgroundEdit.Everywhere).Concat(_backgroundEdit.Apps.Select(app => app.Background))
-            .Select(choice => choice.File).Where(file => file.Length > 0).Select(Path.GetDirectoryName).FirstOrDefault(Directory.Exists);
+            .SelectMany(choice => choice.Items).Select(item => item.File).Where(file => file.Length > 0 && !BackdropChoice.IsLinkText(file))
+            .Select(Path.GetDirectoryName).FirstOrDefault(Directory.Exists);
         if (folder is not null) dialog.InitialDirectory = folder;
+        dialog.Multiselect = true;
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        ChangeBackground(choice => choice with { File = dialog.FileName });
+        foreach (string file in dialog.FileNames) AddItem(file);
     }
 
     // A new app gets its own background and Glass levels at once, both as every app has them, so nothing changes until

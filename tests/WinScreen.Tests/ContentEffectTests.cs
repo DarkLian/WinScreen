@@ -147,9 +147,9 @@ public sealed class BackdropTests
              "Apps":[{"Program":"Code.exe","Background":{"File":"C:\\Pictures\\code.png","Fit":1}},
                      {"Program":"notepad","Background":{"File":""}}]}}
             """).Backgrounds;
-        Assert.Equal(new BackdropChoice(@"C:\Pictures\sea.mp4", BackdropFit.Tile, 40), chosen.For("chrome"));
+        Assert.Equal(new BackdropSet([new BackdropChoice(@"C:\Pictures\sea.mp4", BackdropFit.Tile, 40)]), chosen.For("chrome"));
         // Names are matched as Windows reports a process: no ".exe", any case.
-        Assert.Equal(new BackdropChoice(@"C:\Pictures\code.png", BackdropFit.Fit), chosen.For("code"));
+        Assert.Equal(new BackdropSet([new BackdropChoice(@"C:\Pictures\code.png", BackdropFit.Fit)]), chosen.For("code"));
         Assert.Equal("Code", chosen.Apps[0].Program);
         // Listed with no file: none, whatever every app has.
         Assert.Null(chosen.For("Notepad"));
@@ -163,9 +163,9 @@ public sealed class BackdropTests
              "Apps":[null,{"Program":" "},{"Program":"code","Background":{"File":"C:\\b.png","Fit":77,"Volume":-5}},
                      {"Program":"CODE.EXE","Background":{"File":"C:\\c.png"}},{"Program":"edge"}]}}
             """).Backgrounds;
-        Assert.Equal(new BackdropChoice(@"C:\a.jpg", BackdropFit.Fill, 100), tidied.Everywhere.Backdrop);
+        Assert.Equal(new BackdropSet([new BackdropChoice(@"C:\a.jpg", BackdropFit.Fill, 100)]), tidied.Everywhere.Backdrop);
         Assert.Equal(["code", "edge"], tidied.Apps.Select(app => app.Program));
-        Assert.Equal(new BackdropChoice(@"C:\b.png", BackdropFit.Fill, 0), tidied.For("code"));
+        Assert.Equal(new BackdropSet([new BackdropChoice(@"C:\b.png", BackdropFit.Fill, 0)]), tidied.For("code"));
         Assert.Null(tidied.For("edge"));
     }
 
@@ -177,6 +177,86 @@ public sealed class BackdropTests
         Assert.True(new BackdropChoice(@"c:\V\SEA.mp4", BackdropFit.Fill).SameFile(playing));
         Assert.False(new BackdropChoice(@"C:\v\lake.mp4", BackdropFit.Fill).SameFile(playing));
         Assert.False(playing.SameFile(null));
+    }
+
+    // The owner, 23 Nov: several pictures and videos for one background, taking turns. The first stays where older
+    // copies of WinScreen read it, so going back to one still shows that.
+    [Fact]
+    public void A_set_keeps_its_first_where_older_copies_read_it_and_the_rest_after()
+    {
+        var choice = new BackgroundChoice().WithItems([
+            new BackgroundItem { File = @"C:\v\sea.mp4", Volume = 30, Speed = 150 },
+            new BackgroundItem { File = @"C:\p\hill.png", Fit = BackdropFit.Fit, Brightness = 60 },
+            new BackgroundItem { File = "https://example.com/clip.mp4" }]) with { Order = BackdropOrder.Shuffle, PictureMinutes = 2 };
+        string saved = System.Text.Json.JsonSerializer.Serialize(new AppSettings { Backgrounds = new BackgroundPreferences { Everywhere = choice } });
+        using (var json = System.Text.Json.JsonDocument.Parse(saved))
+        {
+            System.Text.Json.JsonElement everywhere = json.RootElement.GetProperty("Backgrounds").GetProperty("Everywhere");
+            Assert.Equal(@"C:\v\sea.mp4", everywhere.GetProperty("File").GetString());
+            Assert.Equal(30, everywhere.GetProperty("Volume").GetInt32());
+            Assert.Equal(2, everywhere.GetProperty("More").GetArrayLength());
+        }
+        BackgroundChoice read = AppSettings.Parse(saved).Backgrounds.Everywhere;
+        Assert.Equal(choice, read);
+        BackdropSet set = read.Backdrop!;
+        Assert.Equal(3, set.Items.Count);
+        Assert.Equal((BackdropOrder.Shuffle, 2), (set.Order, set.PictureMinutes));
+        Assert.Equal(new BackdropChoice(@"C:\p\hill.png", BackdropFit.Fit, 0, 100, 60), set.Items[1]);
+        Assert.True(set.HasSound);
+        // Taking the first away moves the next up.
+        BackgroundChoice fewer = read.WithItems(read.Items.Skip(1));
+        Assert.Equal(@"C:\p\hill.png", fewer.File);
+        Assert.Single(fewer.More);
+        Assert.Null(read.WithItems([]).Backdrop);
+        // Out of range from an edited file: the nearest that works.
+        BackgroundChoice wild = AppSettings.Parse("""
+            {"Backgrounds":{"Everywhere":{"File":"","Speed":9000,"PictureMinutes":0,"Order":7,
+             "More":[null,{"File":" "},{"File":"C:\\x.png","Brightness":1,"Speed":1}]}}}
+            """).Backgrounds.Everywhere;
+        Assert.Equal(@"C:\x.png", wild.File);
+        Assert.Equal((BackgroundItem.DimmestBrightness, BackgroundItem.SlowestSpeed), (wild.Brightness, wild.Speed));
+        Assert.Equal((1, BackdropOrder.InOrder), (wild.PictureMinutes, wild.Order));
+        Assert.Empty(wild.More);
+    }
+
+    [Fact]
+    public void A_set_takes_turns_in_order_or_shuffled_with_none_twice_running()
+    {
+        var inOrder = new BackdropSequence(3, BackdropOrder.InOrder, new Random(1));
+        Assert.Equal([0, 1, 2, 0, 1], Enumerable.Range(0, 5).Select(_ => inOrder.Next()));
+        var shuffled = new BackdropSequence(4, BackdropOrder.Shuffle, new Random(7));
+        int[] turns = [.. Enumerable.Range(0, 40).Select(_ => shuffled.Next())];
+        for (int round = 0; round < 10; round++)
+            Assert.Equal([0, 1, 2, 3], turns.Skip(round * 4).Take(4).Order());
+        Assert.All(turns.Zip(turns.Skip(1)), pair => Assert.NotEqual(pair.First, pair.Second));
+        var one = new BackdropSequence(1, BackdropOrder.Shuffle, new Random(1));
+        Assert.Equal([0, 0], new[] { one.Next(), one.Next() });
+    }
+
+    // Changing a fit, sound or speed carries on with what shows; a different set starts again.
+    [Fact]
+    public void Only_a_different_set_starts_over()
+    {
+        var set = new BackdropSet([new(@"C:\a.mp4", BackdropFit.Fill), new(@"C:\b.png", BackdropFit.Fill)]);
+        Assert.True(set.SameItems(set with { Items = [new(@"c:\A.mp4", BackdropFit.Tile, 40, 200), new(@"C:\b.png", BackdropFit.Fit)] }));
+        Assert.False(set.SameItems(set with { Order = BackdropOrder.Shuffle }));
+        Assert.False(set.SameItems(set with { Items = [new(@"C:\b.png", BackdropFit.Fill), new(@"C:\a.mp4", BackdropFit.Fill)] }));
+        Assert.Equal(set, new BackdropSet([new(@"C:\a.mp4", BackdropFit.Fill), new(@"C:\b.png", BackdropFit.Fill)]));
+    }
+
+    // A link is a video unless its path ends as a picture's; a file that was moved or deleted is known before opening.
+    [Fact]
+    public void Links_and_missing_files_are_known_by_their_names()
+    {
+        Assert.True(new BackdropChoice("https://example.com/sea.mp4", BackdropFit.Fill).IsVideo);
+        Assert.True(new BackdropChoice("https://example.com/live/stream", BackdropFit.Fill).IsVideo);
+        Assert.False(new BackdropChoice("https://example.com/hill.JPG?size=big", BackdropFit.Fill).IsVideo);
+        Assert.True(new BackdropChoice("https://example.com/hill.png", BackdropFit.Fill).IsLink);
+        Assert.False(BackdropChoice.IsLinkText(@"C:\pictures\hill.png"));
+        Assert.False(BackdropChoice.IsLinkText("file:///C:/hill.png"));
+        Assert.True(new BackdropChoice(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".png"), BackdropFit.Fill).IsMissing);
+        Assert.False(new BackdropChoice("https://example.com/gone.png", BackdropFit.Fill).IsMissing);
+        Assert.Throws<FileNotFoundException>(() => Backdrop.Open(new BackdropChoice(@"C:\nowhere\gone.mp4", BackdropFit.Fill)));
     }
 }
 
@@ -440,6 +520,57 @@ public sealed class ContentEffectTests
                 windows.RestoreAll();
             }
         });
+    }
+
+    // The owner, 23 Nov: a background file moved or deleted is passed over and named once; the next in the set shows,
+    // and Brightness darkens the picture.
+    [GraphicsCardFact]
+    public void A_missing_file_is_passed_over_for_the_next_and_brightness_darkens_the_picture()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "WinScreen background " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        string red = Path.Combine(folder, "red.png"), gone = Path.Combine(folder, "gone.png");
+        using (var picture = new Bitmap(64, 64))
+        {
+            using (Graphics g = Graphics.FromImage(picture)) g.Clear(Color.FromArgb(0xD0, 0x20, 0x20));
+            picture.Save(red, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        try
+        {
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                var windows = new WindowController([]);
+                using var effects = new ContentEffects(windows);
+                var problems = new List<string>();
+                effects.Problem += problems.Add;
+                effects.SetLevels(new ContentLevels(0, 1, Shadow: false));
+                BackdropSet Set(int brightness) => new([new(gone, BackdropFit.Fill), new(red, BackdropFit.Fill, Brightness: brightness)]);
+                effects.SetBackgrounds(_ => Set(100));
+                try
+                {
+                    Assert.True(effects.Toggle(target.Handle, ContentLook.Glass));
+                    Color bright = Color.FromArgb(0xD0, 0x20, 0x20);
+                    Pump(() => Desktop.IsNear(Middle(bounds), bright, 24));
+                    Assert.True(Desktop.IsNear(Middle(bounds), bright, 24), $"{Middle(bounds)} rather than the red picture");
+                    Pump(() => problems.Count > 0);
+                    Assert.Contains("gone.png", Assert.Single(problems));
+                    Assert.Equal(red, effects.ShowingOf(target.Handle)?.File);
+
+                    effects.SetBackgrounds(_ => Set(50));
+                    Color dim = Color.FromArgb(0x68, 0x10, 0x10);
+                    Pump(() => Desktop.IsNear(Middle(bounds), dim, 24));
+                    Assert.True(Desktop.IsNear(Middle(bounds), dim, 24), $"{Middle(bounds)} rather than half as bright");
+                }
+                finally
+                {
+                    effects.TurnAllOff();
+                    windows.RestoreAll();
+                }
+            });
+        }
+        finally { Directory.Delete(folder, true); }
     }
 
     // Light text on a white page with a black band: the page turns dark and see-through, the band light; the shadow

@@ -25,7 +25,19 @@ public sealed record BackgroundPreferences
         return Apps.Find(app => string.Equals(app.Program, key, StringComparison.OrdinalIgnoreCase))?.Background;
     }
 
-    internal Glass.BackdropChoice? For(string program) => (OwnOf(program) ?? Everywhere).Backdrop;
+    internal Glass.BackdropSet? For(string program) => (OwnOf(program) ?? Everywhere).Backdrop;
+
+    // The app's own background, or Every app's when it has none, changed.
+    internal BackgroundPreferences Change(string program, Func<BackgroundChoice, BackgroundChoice> change)
+    {
+        string key = ProgramKey(program);
+        if (OwnOf(key) is null) return this with { Everywhere = change(Everywhere).Validated() };
+        return this with
+        {
+            Apps = Apps.Select(app => string.Equals(app.Program, key, StringComparison.OrdinalIgnoreCase)
+                ? app with { Background = change(app.Background).Validated() } : app).ToList(),
+        };
+    }
 
     internal static string ProgramKey(string? program)
     {
@@ -34,6 +46,31 @@ public sealed record BackgroundPreferences
     }
 }
 
+// One picture or video (a file, or a link to one) and how it shows. Volume, Speed and Brightness are percents.
+public sealed record BackgroundItem
+{
+    public const int SlowestSpeed = 25, FastestSpeed = 400, DimmestBrightness = 10;
+
+    public string File { get; init; } = "";
+    public Glass.BackdropFit Fit { get; init; } = Glass.BackdropFit.Fill;
+    public int Volume { get; init; }
+    public int Speed { get; init; } = 100;
+    public int Brightness { get; init; } = 100;
+
+    internal BackgroundItem Validated() => this with
+    {
+        File = File?.Trim() ?? "",
+        Fit = Enum.IsDefined(Fit) ? Fit : Glass.BackdropFit.Fill,
+        Volume = Math.Clamp(Volume, 0, 100),
+        Speed = Math.Clamp(Speed == 0 ? 100 : Speed, SlowestSpeed, FastestSpeed),
+        Brightness = Math.Clamp(Brightness == 0 ? 100 : Brightness, DimmestBrightness, 100),
+    };
+
+    internal Glass.BackdropChoice Backdrop => new(File, Fit, Volume, Speed, Brightness);
+}
+
+// A background is one picture or video, or several taking turns. The first is kept in File, Fit, Volume, Speed and
+// Brightness, as before sets, so an older copy of WinScreen still shows it; the rest are in More.
 public sealed record BackgroundChoice
 {
     public string File { get; init; } = "";
@@ -41,15 +78,47 @@ public sealed record BackgroundChoice
 
     // Percent; none unless the person turns it up.
     public int Volume { get; init; }
+    public int Speed { get; init; } = 100;
+    public int Brightness { get; init; } = 100;
+    public List<BackgroundItem> More { get; init; } = [];
+    public Glass.BackdropOrder Order { get; init; }
 
-    internal BackgroundChoice Validated() => this with
+    // How long each picture of a set shows; each video plays once.
+    public int PictureMinutes { get; init; } = 5;
+
+    internal const int MostPictureMinutes = 24 * 60;
+
+    internal IReadOnlyList<BackgroundItem> Items => File.Length == 0 ? [] :
+        [new BackgroundItem { File = File, Fit = Fit, Volume = Volume, Speed = Speed, Brightness = Brightness }, .. More];
+
+    internal BackgroundChoice WithItems(IEnumerable<BackgroundItem> items)
     {
-        File = File?.Trim() ?? "",
-        Fit = Enum.IsDefined(Fit) ? Fit : Glass.BackdropFit.Fill,
-        Volume = Math.Clamp(Volume, 0, 100),
-    };
+        BackgroundItem[] all = [.. items.Where(item => !string.IsNullOrWhiteSpace(item.File))];
+        BackgroundItem first = all.FirstOrDefault() ?? new BackgroundItem();
+        return this with
+        {
+            File = first.File, Fit = first.Fit, Volume = first.Volume, Speed = first.Speed, Brightness = first.Brightness, More = [.. all.Skip(1)],
+        };
+    }
 
-    internal Glass.BackdropChoice? Backdrop => string.IsNullOrEmpty(File) ? null : new(File, Fit, Volume);
+    internal BackgroundChoice Validated()
+    {
+        BackgroundChoice tidied = WithItems(new[] { new BackgroundItem { File = File ?? "", Fit = Fit, Volume = Volume, Speed = Speed, Brightness = Brightness } }
+            .Concat((More ?? []).Where(item => item is not null)).Select(item => item.Validated()));
+        return tidied with
+        {
+            Order = Enum.IsDefined(Order) ? Order : Glass.BackdropOrder.InOrder,
+            PictureMinutes = Math.Clamp(PictureMinutes, 1, MostPictureMinutes),
+        };
+    }
+
+    internal Glass.BackdropSet? Backdrop => Items.Count == 0 ? null : new([.. Items.Select(item => item.Backdrop)], Order, PictureMinutes);
+
+    public bool Equals(BackgroundChoice? other) => other is not null && File == other.File && Fit == other.Fit && Volume == other.Volume &&
+        Speed == other.Speed && Brightness == other.Brightness && Order == other.Order && PictureMinutes == other.PictureMinutes &&
+        (More ?? []).SequenceEqual(other.More ?? []);
+
+    public override int GetHashCode() => HashCode.Combine(File, Fit, Volume, Speed, Brightness, Order, PictureMinutes, More?.Count ?? 0);
 }
 
 public sealed record AppBackground

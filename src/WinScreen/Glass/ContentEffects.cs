@@ -20,7 +20,7 @@ internal sealed class ContentEffects : IDisposable
     private readonly Dictionary<nint, ContentLevels> _ownLevels = [];
     // Glass that makes only the page colour see-through, drawn here so the kept areas stay as they are.
     private readonly HashSet<nint> _plain = [];
-    private Func<string, BackdropChoice?> _backgroundOf = _ => null;
+    private Func<string, BackdropSet?> _backgroundOf = _ => null;
     private Func<string, IReadOnlyList<Settings.KeptArea>> _keptOf = _ => [];
     private readonly Dictionary<nint, string> _programs = [];
     private readonly HashSet<string> _reported = new(StringComparer.OrdinalIgnoreCase);
@@ -72,7 +72,7 @@ internal sealed class ContentEffects : IDisposable
         (_ownLevels.TryGetValue(window, out ContentLevels own) ? own : _levelsOf(ProgramOf(window))) with { Plain = _plain.Contains(window) };
 
     // Called for each window's program, by name without ".exe".
-    public void SetBackgrounds(Func<string, BackdropChoice?> backgroundOf)
+    public void SetBackgrounds(Func<string, BackdropSet?> backgroundOf)
     {
         _backgroundOf = backgroundOf;
         _reported.Clear();
@@ -92,7 +92,10 @@ internal sealed class ContentEffects : IDisposable
 
     private Settings.KeptArea[] KeptOf(nint window) => ProgramOf(window) is { Length: > 0 } program ? [.. _keptOf(program)] : [];
 
-    internal BackdropChoice? BackdropOf(nint window) => _overlays.TryGetValue(window, out ContentOverlay? overlay) ? overlay.Background : null;
+    internal BackdropSet? BackdropOf(nint window) => _overlays.TryGetValue(window, out ContentOverlay? overlay) ? overlay.Background : null;
+
+    // The one of its set the window shows now.
+    internal BackdropChoice? ShowingOf(nint window) => _overlays.TryGetValue(window, out ContentOverlay? overlay) ? overlay.Showing : null;
 
     internal nint Audible => _audible;
 
@@ -102,10 +105,10 @@ internal sealed class ContentEffects : IDisposable
         return program;
     }
 
-    private BackdropChoice? BackgroundOf(nint window) => ProgramOf(window) is { Length: > 0 } program ? _backgroundOf(program) : null;
+    private BackdropSet? BackgroundOf(nint window) => ProgramOf(window) is { Length: > 0 } program ? _backgroundOf(program) : null;
 
     private bool HasSound(nint window) =>
-        _overlays.TryGetValue(window, out ContentOverlay? overlay) && overlay.Look == ContentLook.Glass && overlay.Background is { Volume: > 0 };
+        _overlays.TryGetValue(window, out ContentOverlay? overlay) && overlay.Look == ContentLook.Glass && overlay.Background is { HasSound: true };
 
     private void CameForward(nint window)
     {
@@ -160,11 +163,13 @@ internal sealed class ContentEffects : IDisposable
             TurnOff(window);
             Problem?.Invoke(message);
         };
-        overlay.BackdropFailed += message =>
+        overlay.BackdropFailed += file =>
         {
             // Once for each file, until the backgrounds change.
-            if (overlay.Background is { } failed && !_reported.Add(failed.File)) return;
-            Problem?.Invoke(message);
+            if (!_reported.Add(file)) return;
+            string name = BackdropChoice.IsLinkText(file) ? file : Path.GetFileName(file);
+            Problem?.Invoke(string.Format(new BackdropChoice(file, BackdropFit.Fill).IsMissing
+                ? Localization.UiText.T("errors.glass.backdropMissing") : Localization.UiText.T("errors.glass.backdropNamed"), name));
         };
         overlay.CameForward += () => CameForward(window);
         if (HasSound(window))

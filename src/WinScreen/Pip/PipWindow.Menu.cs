@@ -90,7 +90,7 @@ public sealed partial class PipWindow
 
         _menu.Items.Add(new ToolStripSeparator());
         _helpItem = new ToolStripMenuItem(T("menu.help")).WithIcon(MenuParts.Help);
-        _retryItem = new ToolStripMenuItem(T("pip.backend.retry"), MenuParts.Icon(MenuParts.Refresh), (_, _) => RetryCapture());
+        _retryItem = new ToolStripMenuItem(T("pip.backend.retry"), MenuParts.Icon(MenuParts.Sync), (_, _) => RetryCapture());
         _helpItem.DropDownItems.Add(new ToolStripSeparator());
         _helpItem.DropDownItems.Add(T("pip.diagnostics.title"), MenuParts.Icon(MenuParts.Diagnostic), (_, _) => ShowDiagnostics());
         _helpItem.DropDownItems.Add(_retryItem);

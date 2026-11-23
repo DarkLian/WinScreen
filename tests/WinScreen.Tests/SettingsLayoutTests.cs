@@ -215,7 +215,7 @@ public sealed class SettingsLayoutTests
         }
     }
 
-    // The owner, 23 Nov: General has a button to check for updates, beside the version; it opens the tray's check.
+    // The owner, 23 Nov: General has a button to check for updates under New versions; it opens the tray's check.
     [Fact]
     public void General_has_a_button_to_check_for_updates()
     {
@@ -227,14 +227,68 @@ public sealed class SettingsLayoutTests
                 { CheckForUpdates = () => checks++ };
             window.Show();
             Application.DoEvents();
-            SettingRowPanel row = Descendants(window).OfType<SettingRowPanel>().Single(row => row.Text.StartsWith("WinScreen version "));
-            Button check = Descendants(row).OfType<Button>().Single(button => button.Text == UiText.T("updates.check"));
+            SettingRowPanel row = Descendants(window).OfType<SettingRowPanel>().Single(row => row.Text == UiText.T("updates.check"));
+            Button check = Descendants(row).OfType<Button>().Single(button => button.Text == UiText.T("updates.checkNow"));
             if (check.Enabled)
             {
                 check.PerformClick();
                 Assert.Equal(1, checks);
             }
             window.Close();
+        });
+    }
+
+    // The owner, 23 Nov: a background can be several pictures and videos taking turns, and a file that was moved or
+    // deleted says so in the list instead of failing quietly.
+    [Fact]
+    public void A_background_set_lists_its_items_and_marks_one_that_is_gone()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            string picture = Path.Combine(Path.GetTempPath(), "WinScreen set " + Guid.NewGuid().ToString("N") + ".png");
+            using (var bitmap = new Bitmap(32, 18)) { using (Graphics g = Graphics.FromImage(bitmap)) g.Clear(Color.SteelBlue); bitmap.Save(picture); }
+            try
+            {
+                var choice = new BackgroundChoice().WithItems([new BackgroundItem { File = picture },
+                    new BackgroundItem { File = @"C:\gone\sea.mp4", Volume = 40 }, new BackgroundItem { File = "https://example.com/hill.jpg" }]);
+                AppSettings? applied = null;
+                using var window = new SettingsWindow(new AppSettings { Language = "en", ExperimentalFeatures = true,
+                    Backgrounds = new BackgroundPreferences { Everywhere = choice } }, new StartWithWindows(tasks: NoTasks.Instance), chosen =>
+                {
+                    applied = chosen;
+                    return [];
+                });
+                window.Show();
+                TabControl tabs = Descendants(window).OfType<TabControl>().Single();
+                tabs.SelectedTab = tabs.TabPages.Cast<TabPage>().Single(page => page.Text == UiText.T("settings.backgrounds"));
+                void Pump() { for (int i = 0; i < 5; i++) { Application.DoEvents(); Thread.Sleep(10); } }
+                Pump();
+                ThemedList items = Descendants(window).OfType<ThemedList>().Single(list => list.AccessibleName == UiText.T("settings.backgrounds.items"));
+                Assert.True(items.Visible);
+                Assert.Equal([Path.GetFileName(picture), "sea.mp4 (not found), sound 40%", "https://example.com/hill.jpg"],
+                    items.Items.Cast<string>());
+                SettingRowPanel order = Descendants(window).OfType<SettingRowPanel>().Single(row => row.Text == "Order");
+                Assert.True(order.Visible);
+                if (order.Parent?.Parent?.Parent is ScrollableControl scroller) scroller.ScrollControlIntoView(items);
+                Pump();
+                if (Environment.GetEnvironmentVariable("WINSCREEN_LAYOUT_EVIDENCE") is { } folder)
+                {
+                    Directory.CreateDirectory(folder);
+                    using var image = new Bitmap(window.Width, window.Height);
+                    window.DrawToBitmap(image, new Rectangle(Point.Empty, window.Size));
+                    image.Save(Path.Combine(folder, "background-set.png"));
+                }
+                // The list's choice is the one the rows under it change; moving it down keeps it chosen.
+                items.SelectedIndex = 1;
+                Pump();
+                Descendants(window).OfType<Button>().Single(button => button.Text == UiText.T("settings.backgrounds.moveDown")).PerformClick();
+                Assert.True(window.SaveChanges());
+                Assert.Equal(["https://example.com/hill.jpg", @"C:\gone\sea.mp4"], applied!.Backgrounds.Everywhere.More.Select(item => item.File));
+                Assert.Equal(2, items.SelectedIndex);
+                window.Close();
+            }
+            finally { File.Delete(picture); }
         });
     }
 

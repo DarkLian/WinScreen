@@ -66,8 +66,9 @@ internal static class ContentShaders
             float2 uv = (float2(id.xy) + 0.5 - place.xy) / place.zw;
             // Light or dark text flipped the page, so the colour around the picture is the flipped one too.
             float3 p = page.w > 0.5 ? Flipped(page.rgb, page.rgb) : page.rgb;
-            if (how.x > 0.5) p = picture.SampleLevel(repeat, uv, 0).rgb;
-            else if (all(uv >= 0) && all(uv <= 1)) p = picture.SampleLevel(edge, uv, how.y).rgb;
+            // how.z darkens the picture, never the page around it.
+            if (how.x > 0.5) p = picture.SampleLevel(repeat, uv, 0).rgb * how.z;
+            else if (all(uv >= 0) && all(uv <= 1)) p = picture.SampleLevel(edge, uv, how.y).rgb * how.z;
             output[id.xy] = float4(l.rgb + p * (1 - l.a), 1);
         }
         """;

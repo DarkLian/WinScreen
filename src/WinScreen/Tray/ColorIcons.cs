@@ -415,6 +415,51 @@ internal static class ColorIcons
             p.Shape(Blue, 15.4f, 8, 12.6f, 5.8f, 12.6f, 10.2f);
             p.Box(5.4f, 5.4f, 5.2f, 5.2f, 1, Teal);
         },
+        [MenuParts.Volume] = p =>
+        {
+            p.Shape(Blue, 1.5f, 5.6f, 4.6f, 5.6f, 8.8f, 2, 8.8f, 14, 4.6f, 10.4f, 1.5f, 10.4f);
+            p.Arc(Rgb(0x0F6CBD), 1.4f, 7.2f, 5.2f, 5.6f, -55, 110);
+            p.Arc(Rgb(0x0F6CBD), 1.4f, 5, 3, 10, -55, 110);
+        },
+        [MenuParts.Pause] = p =>
+        {
+            p.Circle(1, 1, 14, Blue);
+            p.Box(5, 4.6f, 2.2f, 6.8f, 0.7f, White);
+            p.Box(8.8f, 4.6f, 2.2f, 6.8f, 0.7f, White);
+        },
+        [MenuParts.Rotate] = p =>
+        {
+            p.Circle(1, 1, 14, Teal);
+            p.Arc(Light, 1.6f, 4.3f, 4.3f, 7.4f, 330, -290);
+            p.Shape(White, 13.1f, 4.4f, 8.9f, 4.1f, 11.4f, 8.2f);
+        },
+        [MenuParts.Text] = p =>
+        {
+            p.Box(1, 1, 14, 14, 3, Purple);
+            p.Sign("A", 9.5f, Light);
+        },
+        [MenuParts.Record] = p =>
+        {
+            p.Circle(1, 1, 14, Grey);
+            p.Circle(4, 4, 8, Red);
+        },
+        [MenuParts.Hide] = p =>
+        {
+            p.Box(1, 2.5f, 14, 11, 1.8f, Grey);
+            p.Box(2.2f, 3.7f, 11.6f, 8.6f, 0.8f, Blue);
+            p.Shape(Green, 2.2f, 12.3f, 2.2f, 10.6f, 5.6f, 7.4f, 8.4f, 10, 10.2f, 8.6f, 13.8f, 11.4f, 13.8f, 12.3f);
+            p.Box(3.2f, 6.2f, 9.6f, 3, 0.6f, (Rgb(0x3A3F48), Rgb(0x1E2228)));
+        },
+        [MenuParts.News] = p =>
+        {
+            p.Shape(Yellow, 7, 1.5f, 8.6f, 6.4f, 13.5f, 8, 8.6f, 9.6f, 7, 14.5f, 5.4f, 9.6f, 0.5f, 8, 5.4f, 6.4f);
+            p.Shape(Orange, 13, 1, 13.7f, 2.8f, 15.5f, 3.5f, 13.7f, 4.2f, 13, 6, 12.3f, 4.2f, 10.5f, 3.5f, 12.3f, 2.8f);
+        },
+        [MenuParts.Diagnostic] = p =>
+        {
+            p.Box(1, 2.5f, 14, 11, 1.8f, Slate);
+            p.Line(Rgb(0x72E39A), 1.3f, 3, 8.5f, 5.4f, 8.5f, 6.9f, 5, 9, 11.2f, 10.5f, 8.5f, 13, 8.5f);
+        },
         [Plus] = p =>
         {
             p.Circle(1.5f, 1.5f, 13, Blue);

@@ -356,7 +356,7 @@ private readonly ErrorProvider _errors = new();
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
             [_glassText] = '\uE8D2', [_glassFade] = '\uE790', [_appGlassBackground] = '\uE706', [_appGlassText] = '\uE8D2',
             [_appGlassFade] = '\uE790', [_glassTextColor] = '\uE8D3', [_appGlassTextColor] = '\uE8D3', [_glassShadow] = '\uE81E',
-            [_appGlassShadow] = '\uE81E', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767',
+            [_appGlassShadow] = '\uE81E', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767', [_backgroundSpeed] = '\uEC4A', [_backgroundBrightness] = '\uE706', [_backgroundOrder] = '\uE8B1', [_pictureMinutes] = '\uE823',
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
             [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
             [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',
@@ -1190,7 +1190,7 @@ private readonly ErrorProvider _errors = new();
     internal Action? CheckForUpdates { get; init; }
 
     private readonly PlainButton _restartToUpdate = new() { AutoSize = true, Visible = false, Margin = Padding.Empty };
-    private readonly PlainButton _checkUpdates = new() { Text = T("updates.check"), AutoSize = true, Margin = new Padding(0, 0, 8, 0) };
+    private readonly PlainButton _checkUpdates = new() { Text = T("updates.checkNow"), AutoSize = true, Margin = new Padding(0, 0, 8, 0) };
 
     internal void SetOption(string option, bool on)
     {
@@ -1401,7 +1401,8 @@ private readonly ErrorProvider _errors = new();
         var updateButtons = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty, BackColor = SettingsStyle.Card };
         updateButtons.Controls.Add(_checkUpdates);
         updateButtons.Controls.Add(_restartToUpdate);
-        startup.Add(SettingRow(string.Format(T("app.version"), AppInfo.Version), updateButtons));
+        // The version is at the end of the page, with What's new.
+        startup.Add(SettingRow(T("updates.check"), updateButtons));
         // Shown each time Settings comes forward: an update can finish downloading while it is open.
         Activated += (_, _) => _restartToUpdate.Visible = UpdateReady?.Invoke() == true;
         if (!VelopackUpdateSession.IsConfigured)

@@ -151,6 +151,8 @@ internal sealed class BackgroundPictures(int largest, Action arrived) : IDisposa
     // Call on a single-threaded apartment thread.
     internal static (Bitmap?, Size) Load(string file, int largest)
     {
+        // A link isn't fetched for a thumbnail, and a file that was moved or deleted has none.
+        if (BackdropChoice.IsLinkText(file) || !File.Exists(file)) return (null, Size.Empty);
         if (!BackdropChoice.Videos.Contains(Path.GetExtension(file).ToLowerInvariant()))
         {
             try

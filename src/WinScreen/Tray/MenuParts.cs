@@ -15,7 +15,7 @@ internal static class MenuParts
         FullScreen = '', Undo = '', Copy = '', Folder = '', Save = '', More = '',
         Settings = '', Sync = '', Info = '', Power = '', View = '', Crop = '',
         Star = '', Help = '', Minimize = '', Close = '', Warning = '', Page = '',
-        Monitor = '', Home = '', Keyboard = '', Mouse = '', Bar = '', Palette = '', Apps = '', Search = '', Sliders = '', Brightness = '', Repair = '', Volume = '\uE767', Pause = '\uE769', Rotate = '\uE7AD', Text = '\uE8D2', Record = '\uE7C8', Hide = '\uED1A', News = '\uE789', Refresh = '\uE72C', Diagnostic = '\uE9D9', History = '', Delete = '', Picture = '';
+        Monitor = '', Home = '', Keyboard = '', Mouse = '', Bar = '', Palette = '', Apps = '', Search = '', Sliders = '', Brightness = '', Repair = '', Volume = '\uE767', Pause = '\uE769', Rotate = '\uE7AD', Text = '\uE8D2', Record = '\uE7C8', Hide = '\uED1A', News = '\uE789', Diagnostic = '\uE9D9', History = '', Delete = '', Picture = '';
 
     internal static int SystemDpi
     {
@@ -225,6 +225,25 @@ internal static class MenuParts
         AppCommand.Arrange => ColorIcons.Move,
         AppCommand.OpacityUp => ColorIcons.Plus,
         AppCommand.OpacityDown => ColorIcons.Minus,
+        AppCommand.MinimizeToAnchor => Pinned,
+        AppCommand.MoveToNextDisplay => Monitor,
+        AppCommand.RestorePlacement => History,
+        AppCommand.ToggleBorderless or AppCommand.ToggleBorderlessFill => FullScreen,
+        AppCommand.ViewKeepHidden => View,
+        AppCommand.ViewInteractive => Pointer,
+        AppCommand.ViewUseOriginal => Undo,
+        AppCommand.ViewGoToOriginal => NewWindow,
+        AppCommand.ViewMute => Volume,
+        AppCommand.ViewFreeze => Pause,
+        AppCommand.ViewRotateRight or AppCommand.ViewRotateLeft or AppCommand.ViewMirrorAcross or AppCommand.ViewMirrorDown
+            or AppCommand.ViewUpright => Rotate,
+        AppCommand.ViewResetZoom => Crop,
+        AppCommand.ViewMinimize => Minimize,
+        AppCommand.ViewCopyPicture => Copy,
+        AppCommand.ViewFreezeCopy => Picture,
+        AppCommand.ViewCopyText => Text,
+        AppCommand.ViewCover => Hide,
+        AppCommand.ViewRecord => Record,
         _ => null,
     };
 }

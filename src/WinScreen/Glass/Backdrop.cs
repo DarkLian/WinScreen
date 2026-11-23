@@ -8,8 +8,11 @@ namespace WinScreen.Glass;
 
 public enum BackdropFit { Fill = 0, Fit = 1, Stretch = 2, Tile = 3, Center = 4 }
 
-// Volume is a percent, heard only from the one window ContentEffects lets play sound.
-internal sealed record BackdropChoice(string File, BackdropFit Fit, int Volume = 0)
+public enum BackdropOrder { InOrder = 0, Shuffle = 1 }
+
+// One picture or video, a file or a link to one. Volume, Speed and Brightness are percents; sound is heard only from
+// the one window ContentEffects lets play it.
+internal sealed record BackdropChoice(string File, BackdropFit Fit, int Volume = 0, int Speed = 100, int Brightness = 100)
 {
     public bool SameFile(BackdropChoice? other) => other is not null && string.Equals(File, other.File, StringComparison.OrdinalIgnoreCase);
 
@@ -18,6 +21,27 @@ internal sealed record BackdropChoice(string File, BackdropFit Fit, int Volume =
     public static readonly string[] Videos = [".mp4", ".m4v", ".mov", ".wmv", ".avi", ".mkv", ".webm"];
 
     public bool IsSet => !string.IsNullOrWhiteSpace(File);
+
+    public bool IsLink => IsLinkText(File);
+
+    public static bool IsLinkText(string? file) =>
+        Uri.TryCreate(file?.Trim(), UriKind.Absolute, out Uri? link) && (link.Scheme == Uri.UriSchemeHttps || link.Scheme == Uri.UriSchemeHttp);
+
+    // A link's kind is its path's extension; one without a picture's extension (a stream, say) is taken as a video.
+    public bool IsVideo => IsVideoText(File);
+
+    public static bool IsVideoText(string file)
+    {
+        string kind = Kind(file);
+        return Videos.Contains(kind) || IsLinkText(file) && !Pictures.Contains(kind) && !Animations.Contains(kind);
+    }
+
+    public static string Kind(string file) =>
+        (IsLinkText(file) ? Path.GetExtension(new Uri(file.Trim()).AbsolutePath) : Path.GetExtension(file)).ToLowerInvariant();
+
+    // A file on this PC that isn't there any more: moved, renamed or deleted. Whether a link works is only known when
+    // it is opened.
+    public bool IsMissing => IsSet && !IsLink && !System.IO.File.Exists(File);
 
     // Where the picture goes in a window of the given size, in the window's pixels. A tiled picture repeats from there.
     public static RectangleF Place(BackdropFit fit, Size picture, Size window)
@@ -36,14 +60,53 @@ internal sealed record BackdropChoice(string File, BackdropFit Fit, int Volume =
     }
 }
 
+// What a window shows behind Glass: one picture or video, or several taking turns. With several, a video plays once
+// and the next follows; a picture stays for PictureMinutes.
+internal sealed record BackdropSet(IReadOnlyList<BackdropChoice> Items, BackdropOrder Order = BackdropOrder.InOrder, int PictureMinutes = 5)
+{
+    public bool HasSound => Items.Any(item => item.Volume > 0 && item.IsVideo);
+
+    // The same pictures and videos in the same order: what shows can carry on, with any new fit, sound or speed.
+    public bool SameItems(BackdropSet? other) => other is not null && Order == other.Order && Items.Count == other.Items.Count &&
+        Items.Zip(other.Items).All(pair => pair.First.SameFile(pair.Second));
+
+    public bool Equals(BackdropSet? other) =>
+        other is not null && Order == other.Order && PictureMinutes == other.PictureMinutes && Items.SequenceEqual(other.Items);
+
+    public override int GetHashCode() => HashCode.Combine(Order, PictureMinutes, Items.Count, Items.FirstOrDefault());
+}
+
+// Which of a set shows next: in order, or shuffled so that each shows once a round and none twice running.
+internal sealed class BackdropSequence(int count, BackdropOrder order, Random random)
+{
+    private readonly List<int> _round = [];
+    private int _last = -1;
+
+    public int Next()
+    {
+        if (count <= 1) return _last = 0;
+        if (order == BackdropOrder.InOrder) return _last = (_last + 1) % count;
+        if (_round.Count == 0)
+        {
+            _round.AddRange(Enumerable.Range(0, count).OrderBy(_ => random.Next()));
+            if (_round[0] == _last) (_round[0], _round[^1]) = (_round[^1], _round[0]);
+        }
+        _last = _round[0];
+        _round.RemoveAt(0);
+        return _last;
+    }
+}
+
 // Lives on the effect's drawing thread: everything here uses the device's context from that thread only.
 internal abstract class Backdrop : IDisposable
 {
     protected ID3D11Texture2D? Texture;
+    private ID3D11ShaderResourceView? _view;
+    private Size _size;
 
-    public ID3D11ShaderResourceView? View { get; private set; }
+    public virtual ID3D11ShaderResourceView? View => _view;
 
-    public Size Size { get; private set; }
+    public virtual Size Size => _size;
 
     // How long the drawing thread may wait before the next frame could be due.
     public virtual int Wait => Timeout.Infinite;
@@ -61,29 +124,43 @@ internal abstract class Backdrop : IDisposable
     {
     }
 
-    public static Backdrop? Open(string file)
+    public virtual void Speed(int percent)
     {
-        string kind = Path.GetExtension(file).ToLowerInvariant();
-        if (BackdropChoice.Videos.Contains(kind)) return new VideoBackdrop(file);
-        using var image = Image.FromFile(file);
+    }
+
+    // A video asked to play once, which has.
+    public virtual bool Ended => false;
+
+    // Once is for a set, where the next one follows; alone, a video plays round and round.
+    public static Backdrop Open(BackdropChoice item, bool once = false)
+    {
+        if (item.IsMissing) throw new FileNotFoundException(null, item.File);
+        if (item.IsVideo) return new VideoBackdrop(item.File.Trim(), once, item.Speed);
+        if (item.IsLink) return new LinkedPicture(item.File.Trim(), item.Speed);
+        using var image = Image.FromFile(item.File);
+        return FromImage(image, item.Speed);
+    }
+
+    internal static Backdrop FromImage(Image image, int speed)
+    {
         int frames = image.FrameDimensionsList.Contains(FrameDimension.Time.Guid) ? image.GetFrameCount(FrameDimension.Time) : 1;
-        return frames > 1 ? new AnimationBackdrop(image, frames) : new PictureBackdrop(image);
+        return frames > 1 ? new AnimationBackdrop(image, frames, speed) : new PictureBackdrop(image);
     }
 
     protected void Allocate(ID3D11Device device, Size size)
     {
-        View?.Dispose();
+        _view?.Dispose();
         Texture?.Dispose();
-        Size = size;
+        _size = size;
         Texture = device.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)size.Width, (uint)size.Height, 1, 0,
             BindFlags.ShaderResource | BindFlags.RenderTarget, ResourceUsage.Default, CpuAccessFlags.None, 1, 0, ResourceOptionFlags.GenerateMips));
-        View = device.CreateShaderResourceView(Texture);
+        _view = device.CreateShaderResourceView(Texture);
     }
 
     protected void Upload(ID3D11DeviceContext context, nint pixels, int stride)
     {
         context.UpdateSubresource(Texture!, 0, null, pixels, (uint)stride, 0);
-        context.GenerateMips(View!);
+        context.GenerateMips(_view!);
     }
 
     protected static byte[] Pixels(Image image, Size size)
@@ -120,9 +197,9 @@ internal abstract class Backdrop : IDisposable
 
     public virtual void Dispose()
     {
-        View?.Dispose();
+        _view?.Dispose();
         Texture?.Dispose();
-        View = null;
+        _view = null;
         Texture = null;
     }
 }
@@ -150,10 +227,12 @@ internal sealed class AnimationBackdrop : Backdrop
     private int _shown = -1;
     private long _due;
     private bool _paused;
+    private int _speed;
 
-    public AnimationBackdrop(Image image, int frames)
+    public AnimationBackdrop(Image image, int frames, int speed = 100)
     {
         _size = Limited(image.Size);
+        _speed = Math.Max(1, speed);
         PropertyItem? delays = image.PropertyIdList.Contains(0x5100) ? image.GetPropertyItem(0x5100) : null;
         for (int i = 0; i < Math.Min(frames, MostFrames); i++)
         {
@@ -168,18 +247,70 @@ internal sealed class AnimationBackdrop : Backdrop
 
     public override void Pause(bool paused) => _paused = paused;
 
+    public override void Speed(int percent) => _speed = Math.Max(1, percent);
+
     public override bool Update(ID3D11Device device, ID3D11DeviceContext context)
     {
         if (Texture is null) Allocate(device, _size);
         if (_shown >= 0 && (_paused || Environment.TickCount64 < _due)) return false;
         _shown = (_shown + 1) % _frames.Count;
-        _due = Environment.TickCount64 + _frames[_shown].Milliseconds;
+        _due = Environment.TickCount64 + Math.Max(10, _frames[_shown].Milliseconds * 100 / _speed);
         Upload(context, _frames[_shown].Pixels);
         return true;
     }
 }
 
-internal sealed class VideoBackdrop(string file) : Backdrop
+// A picture from a link, fetched away from the drawing thread (BackdropLink); until it arrives, nothing shows.
+internal sealed class LinkedPicture : Backdrop
+{
+    private readonly Task<Backdrop> _fetching;
+    private readonly CancellationTokenSource _cancel = new();
+    private Backdrop? _picture;
+
+    public LinkedPicture(string link, int speed)
+    {
+        CancellationToken cancel = _cancel.Token;
+        _fetching = Task.Run(async () =>
+        {
+            using var bytes = new MemoryStream(await BackdropLink.Fetch(link, cancel));
+            using Image image = Image.FromStream(bytes);
+            return FromImage(image, speed);
+        }, cancel);
+    }
+
+    public override ID3D11ShaderResourceView? View => _picture?.View;
+
+    public override Size Size => _picture?.Size ?? Size.Empty;
+
+    public override int Wait => _picture?.Wait ?? (_fetching.IsCompleted ? 1 : 100);
+
+    public override void Pause(bool paused) => _picture?.Pause(paused);
+
+    public override void Speed(int percent) => _picture?.Speed(percent);
+
+    public override bool Update(ID3D11Device device, ID3D11DeviceContext context)
+    {
+        if (_picture is null)
+        {
+            if (!_fetching.IsCompleted) return false;
+            if (!_fetching.IsCompletedSuccessfully)
+                throw new NotSupportedException("The picture couldn't be fetched.", _fetching.Exception?.GetBaseException());
+            _picture = _fetching.Result;
+        }
+        return _picture.Update(device, context);
+    }
+
+    public override void Dispose()
+    {
+        _cancel.Cancel();
+        if (_picture is not null) _picture.Dispose();
+        else _fetching.ContinueWith(done => { if (done.IsCompletedSuccessfully) done.Result.Dispose(); }, TaskScheduler.Default);
+        _cancel.Dispose();
+        base.Dispose();
+    }
+}
+
+internal sealed class VideoBackdrop(string file, bool once = false, int speed = 100) : Backdrop
 {
     private const int Poll = 8;
     private static readonly Lazy<bool> Started = new(() => MediaFactory.MFStartup().Success);
@@ -187,10 +318,14 @@ internal sealed class VideoBackdrop(string file) : Backdrop
     private IMFMediaEngine? _engine;
     private ID3D11Texture2D? _frame;
     private volatile bool _failed;
+    private volatile bool _ended;
     private bool _paused;
     private int _percent = -1;
+    private int _speed = speed;
 
     public bool Failed => _failed;
+
+    public override bool Ended => _ended;
 
     public override int Wait => _paused || _failed ? Timeout.Infinite : Poll;
 
@@ -210,6 +345,15 @@ internal sealed class VideoBackdrop(string file) : Backdrop
         _percent = percent;
         _engine.Volume = percent / 100.0;
         _engine.Muted = percent <= 0;
+    }
+
+    public override void Speed(int percent)
+    {
+        if (percent == _speed) return;
+        _speed = percent;
+        if (_engine is null) return;
+        _engine.DefaultPlaybackRate = percent / 100.0;
+        _engine.PlaybackRate = percent / 100.0;
     }
 
     public override bool Update(ID3D11Device device, ID3D11DeviceContext context)
@@ -253,11 +397,17 @@ internal sealed class VideoBackdrop(string file) : Backdrop
         _engine!.PlaybackEvent += (kind, _, _) =>
         {
             if (kind == MediaEngineEvent.Error) _failed = true;
+            else if (kind == MediaEngineEvent.Ended) _ended = true;
         };
         _engine.Volume = 0;
         _engine.Muted = true;
         _percent = 0;
-        _engine.Loop = true;
+        _engine.Loop = !once;
+        if (_speed != 100)
+        {
+            _engine.DefaultPlaybackRate = _speed / 100.0;
+            _engine.PlaybackRate = _speed / 100.0;
+        }
         _engine.SetSource(file);
         _engine.Play();
     }

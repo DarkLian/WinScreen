@@ -46,7 +46,8 @@ internal sealed unsafe class ContentOverlay : Form
     private volatile bool _changed;
     private volatile Settings.KeptArea[] _kept;
     private readonly bool _leaveAlreadyDark;
-    private volatile BackdropChoice? _backdrop;
+    private volatile BackdropSet? _backdrop;
+    private volatile BackdropChoice? _showing;
     private volatile bool _hidden;
     private volatile bool _audible;
     private Thread? _renderer;
@@ -62,7 +63,7 @@ internal sealed unsafe class ContentOverlay : Form
     private GraphicsCaptureSession? _session;
     private global::Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice? _captureDevice;
 
-    public ContentOverlay(nint source, ContentLook look, ContentLevels levels, bool leaveAlreadyDark = true, BackdropChoice? backdrop = null,
+    public ContentOverlay(nint source, ContentLook look, ContentLevels levels, bool leaveAlreadyDark = true, BackdropSet? backdrop = null,
         Settings.KeptArea[]? kept = null)
     {
         _source = source;
@@ -80,11 +81,15 @@ internal sealed unsafe class ContentOverlay : Form
 
     public event Action<string>? Failed;
 
+    // With the file or link that couldn't be opened or stopped playing.
     public event Action<string>? BackdropFailed;
 
     public event Action? CameForward;
 
-    public BackdropChoice? Background => _backdrop;
+    public BackdropSet? Background => _backdrop;
+
+    // The one of the set showing now.
+    public BackdropChoice? Showing => _showing;
 
     public nint Source => _source;
 
@@ -123,7 +128,7 @@ internal sealed unsafe class ContentOverlay : Form
         if (!_stopping) _arrived.Set();
     }
 
-    public void SetBackdrop(BackdropChoice? backdrop)
+    public void SetBackdrop(BackdropSet? backdrop)
     {
         _backdrop = backdrop;
         if (!_stopping) _arrived.Set();
@@ -359,29 +364,45 @@ internal sealed unsafe class ContentOverlay : Form
         ID3D11ShaderResourceView? cacheView = null, outputRead = null;
         ID3D11UnorderedAccessView? tilesView = null, outputView = null, finalView = null;
         Backdrop? backdrop = null;
-        BackdropChoice? shown = null;
+        BackdropSet? shown = null;
+        var turns = new Turns();
         bool drawn = false;
         try
         {
             while (true)
             {
                 int wait = backdrop?.Wait ?? Timeout.Infinite;
+                if (backdrop is not null && turns.ChangeAt != long.MaxValue)
+                {
+                    int left = (int)Math.Clamp(turns.ChangeAt - Environment.TickCount64, 1, int.MaxValue);
+                    wait = wait == Timeout.Infinite ? left : Math.Min(wait, left);
+                }
                 if (WaitHandle.WaitAny([_arrived, _stop], wait) == 1)
                     break;
 
                 bool redraw = false;
                 bool changed = _changed;
                 _changed = false;
-                BackdropChoice? chosen = _backdrop;
-                // A new fit or volume is taken as it is: opening the file again would start a video over.
-                if (chosen != shown)
+                BackdropSet? chosen = _backdrop;
+                // A new fit, volume or speed is taken as it is: opening the file again would start a video over.
+                if (!Equals(chosen, shown))
                 {
-                    if (!(chosen?.SameFile(shown) ?? shown is null))
+                    if (!(chosen?.SameItems(shown) ?? shown is null))
                     {
                         backdrop?.Dispose();
-                        backdrop = OpenBackdrop(chosen);
+                        turns = new Turns(chosen is { Items.Count: > 0 } && _look == ContentLook.Glass
+                            ? new BackdropSequence(chosen.Items.Count, chosen.Order, Random.Shared) : null);
+                        backdrop = chosen is null ? null : OpenNext(chosen, turns);
                     }
+                    else if (turns.Showing >= 0 && chosen is not null) _showing = chosen.Items[turns.Showing];
                     shown = chosen;
+                    redraw = true;
+                }
+                // The next of a set: the video played through, or the picture's time is up.
+                if (backdrop is not null && shown is { Items.Count: > 1 } && (backdrop.Ended || Environment.TickCount64 >= turns.ChangeAt))
+                {
+                    backdrop.Dispose();
+                    backdrop = OpenNext(shown, turns);
                     redraw = true;
                 }
                 if (backdrop is not null)
@@ -389,8 +410,13 @@ internal sealed unsafe class ContentOverlay : Form
                     try
                     {
                         backdrop.Pause(_hidden);
-                        backdrop.Sound(_audible && !_hidden ? shown?.Volume ?? 0 : 0);
-                        redraw |= backdrop.Update(_device!, _context!);
+                        backdrop.Sound(_audible && !_hidden ? _showing?.Volume ?? 0 : 0);
+                        backdrop.Speed(_showing?.Speed ?? 100);
+                        if (backdrop.Update(_device!, _context!))
+                        {
+                            redraw = true;
+                            turns.Failed = 0;
+                        }
                         if (backdrop is VideoBackdrop { Failed: true }) throw new NotSupportedException();
                     }
                     catch (Exception failure) when (failure is SharpGen.Runtime.SharpGenException or COMException or NotSupportedException
@@ -398,9 +424,12 @@ internal sealed unsafe class ContentOverlay : Form
                     {
                         Diagnostics.Log.Error("effect.backdropFailed", failure);
                         backdrop.Dispose();
-                        backdrop = null;
+                        Report(_showing?.File);
+                        turns.Failed++;
+                        // With others in the set, the next one shows instead.
+                        backdrop = shown is { Items.Count: > 1 } ? OpenNext(shown, turns) : null;
+                        if (backdrop is null) _showing = null;
                         redraw = true;
-                        BeginInvoke(() => BackdropFailed?.Invoke(Localization.UiText.T("errors.glass.backdrop")));
                     }
                 }
 
@@ -471,21 +500,47 @@ internal sealed unsafe class ContentOverlay : Form
         }
     }
 
-    private Backdrop? OpenBackdrop(BackdropChoice? choice)
+    // Where the drawing thread is in a set: which shows, when the next is due, and how many failed in a row, so a set
+    // where nothing opens stops trying until it changes.
+    private sealed class Turns(BackdropSequence? sequence = null)
     {
-        if (_look != ContentLook.Glass || choice is not { IsSet: true } chosen)
-            return null;
-        try
+        public BackdropSequence? Sequence => sequence;
+        public int Showing = -1;
+        public long ChangeAt = long.MaxValue;
+        public int Failed;
+    }
+
+    private Backdrop? OpenNext(BackdropSet set, Turns turns)
+    {
+        while (turns.Sequence is { } sequence && turns.Failed < set.Items.Count)
         {
-            return Backdrop.Open(chosen.File);
+            turns.Showing = sequence.Next();
+            BackdropChoice item = set.Items[turns.Showing];
+            _showing = item;
+            bool several = set.Items.Count > 1;
+            turns.ChangeAt = several && !item.IsVideo ? Environment.TickCount64 + Math.Max(1, set.PictureMinutes) * 60_000L : long.MaxValue;
+            try
+            {
+                return Backdrop.Open(item, once: several);
+            }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or ArgumentException or OutOfMemoryException
+                                                or NotSupportedException or ExternalException)
+            {
+                Diagnostics.Log.Error("effect.backdropFailed", failure);
+                Report(item.File);
+                turns.Failed++;
+            }
         }
-        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or ArgumentException or OutOfMemoryException
-                                            or NotSupportedException or ExternalException)
-        {
-            Diagnostics.Log.Error("effect.backdropFailed", failure);
-            BeginInvoke(() => BackdropFailed?.Invoke(Localization.UiText.T("errors.glass.backdrop")));
-            return null;
-        }
+        _showing = null;
+        turns.ChangeAt = long.MaxValue;
+        return null;
+    }
+
+    private void Report(string? file)
+    {
+        if (file is null || _stopping) return;
+        try { BeginInvoke(() => BackdropFailed?.Invoke(file)); }
+        catch (InvalidOperationException closed) { Diagnostics.Log.Swallowed(closed); }
     }
 
     private void Present(Size size, ID3D11Texture2D output, ID3D11ShaderResourceView outputRead, ID3D11Texture2D final,
@@ -493,7 +548,7 @@ internal sealed unsafe class ContentOverlay : Form
     {
         var context = _context!;
         ID3D11Texture2D shown = output;
-        if (backdrop?.View is { } picture && _backdrop is { } choice)
+        if (backdrop?.View is { } picture && _showing is { } choice)
         {
             RectangleF place = BackdropChoice.Place(choice.Fit, backdrop.Size, size);
             float detail = choice.Fit == BackdropFit.Tile ? 0
@@ -502,7 +557,8 @@ internal sealed unsafe class ContentOverlay : Form
             var where = new Place
             {
                 X = place.X, Y = place.Y, Width = place.Width, Height = place.Height,
-                Tile = choice.Fit == BackdropFit.Tile ? 1 : 0, Detail = detail, PageR = pr, PageG = pg, PageB = pb,
+                Tile = choice.Fit == BackdropFit.Tile ? 1 : 0, Detail = detail, Brightness = Math.Clamp(choice.Brightness, 0, 100) / 100f,
+                PageR = pr, PageG = pg, PageB = pb,
                 Flip = Flips(_levels.Value) ? 1 : 0,
             };
             context.UpdateSubresource(in where, _place!);
@@ -609,7 +665,7 @@ internal sealed unsafe class ContentOverlay : Form
     private struct Place
     {
         public float X, Y, Width, Height;
-        public float Tile, Detail, Unused1, Unused2;
+        public float Tile, Detail, Brightness, Unused2;
         public float PageR, PageG, PageB, Flip;
     }
 
