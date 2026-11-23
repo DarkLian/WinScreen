@@ -23,6 +23,49 @@ public sealed class WindowMenuBuilderTests
     private static IEnumerable<ToolStripMenuItem> Commands(ToolStripItemCollection items) =>
         items.OfType<ToolStripMenuItem>().SelectMany(item => new[] { item }.Concat(Commands(item.DropDownItems)));
 
+    // The owner, 23 Nov: Effects has the background's sound and a way to its settings. The sound shows only while a
+    // video plays behind the window's Glass, says when it is Every app's, and marks the nearest step.
+    [Fact]
+    public void Effects_offers_the_backgrounds_sound_and_a_way_to_change_it()
+    {
+        OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            using var form = new Form();
+            _ = form.Handle;
+            WindowIdentity identity = WindowIdentity.Capture(form.Handle);
+            WindowMenuBuilder.BackgroundSound? sound = new(40, true);
+            bool glass = true;
+            int? set = null;
+            nint edited = 0;
+            using var menu = new ContextMenuStrip();
+            var builder = new WindowMenuBuilder(() => identity, (_, _) => { }, (_, _) => { }, _ => true, (_, _) => true, (_, _) => false, () => { })
+            {
+                BackgroundSoundOf = _ => sound, SetBackgroundSound = (_, percent) => set = percent,
+                HasBackground = _ => glass, EditBackground = window => edited = window,
+            };
+            builder.Populate(menu.Items, false);
+            builder.Refresh(menu.Items);
+            ToolStripMenuItem soundMenu = Commands(menu.Items).Single(item => item.Text == UiText.T("menu.background.soundEveryApp"));
+            ToolStripMenuItem edit = Commands(menu.Items).Single(item => item.Text == UiText.T("menu.background.edit"));
+            Assert.True(soundMenu.Available);
+            Assert.Equal("50%", Assert.Single(soundMenu.DropDownItems.OfType<ToolStripMenuItem>(), item => item.Checked).Text);
+            soundMenu.DropDownItems.OfType<ToolStripMenuItem>().First().PerformClick();
+            Assert.Equal(0, set);
+            edit.PerformClick();
+            Assert.Equal(form.Handle, edited);
+
+            sound = new(75, false);
+            builder.Refresh(menu.Items);
+            Assert.Equal(UiText.T("menu.background.sound"), soundMenu.Text);
+            sound = null;
+            glass = false;
+            builder.Refresh(menu.Items);
+            Assert.False(soundMenu.Available);
+            Assert.False(edit.Available);
+        });
+    }
+
     /// <summary>
     /// The toolbar's Window menu offers what the window menu has that the bar doesn't: with every button on the bar,
     /// Minimize to an Anchor, the title bar and frame choices and the window's details. Anything shown as a button is left out, and so is the

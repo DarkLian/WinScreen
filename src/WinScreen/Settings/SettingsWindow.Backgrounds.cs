@@ -50,6 +50,11 @@ public sealed partial class SettingsWindow
     private InputFrame? _itemFrame;
     private readonly List<Control> _setRows = [];
     private int _itemAt;
+    private readonly SwitchBox _soundInFront = new() { Text = T("settings.backgrounds.soundInFront"), AutoSize = true };
+    private readonly SwitchBox _pauseFullScreen = new() { Text = T("settings.backgrounds.pauseFullScreen"), AutoSize = true };
+    private readonly SwitchBox _pauseSaver = new() { Text = T("settings.backgrounds.pauseSaver"), AutoSize = true };
+    private TabPage? _backgroundsPage;
+    private FlowLayoutPanel? _backgroundsScroll;
     private SettingsCard? _backgroundEditor;
     private SettingRowPanel? _backgroundFileRow;
     private InputFrame? _backgroundFrame;
@@ -173,8 +178,21 @@ public sealed partial class SettingsWindow
         _backgroundEditor = Card(T("settings.backgrounds.everyApp"), false,
             [_ownBackground, .. _backgroundRows, Note(T("settings.backgrounds.soundHelp")), .. _mainGlassRows, _ownGlass, _appGlassNote, .. _appGlassRows]);
 
+        foreach (SwitchBox rule in new[] { _soundInFront, _pauseFullScreen, _pauseSaver })
+            rule.CheckedChanged += (_, _) =>
+            {
+                if (_showingBackground || _loading) return;
+                _backgroundEdit = _backgroundEdit with
+                {
+                    SoundOnlyInFront = _soundInFront.Checked, PauseInFullScreen = _pauseFullScreen.Checked, PauseOnBatterySaver = _pauseSaver.Checked,
+                };
+                QueueApplyRefresh();
+            };
+
         FlowLayoutPanel page = ScrollingPage();
-        page.Controls.Add(Card(T("settings.backgrounds.title"), true, Note(T("settings.backgrounds.help")), _backgroundFrame, adding));
+        _backgroundsScroll = page;
+        page.Controls.Add(Card(T("settings.backgrounds.title"), true, Note(T("settings.backgrounds.help")), _backgroundFrame, adding,
+            _soundInFront, _pauseFullScreen, _pauseSaver));
         page.Controls.Add(_backgroundEditor);
         page.Controls.Add(Card(T("settings.keptAreas.title"), true, Note(T("settings.keptAreas.help")), _keptFrame, keptButtons));
         ListBackgrounds(null);
@@ -424,7 +442,42 @@ public sealed partial class SettingsWindow
     private void FillBackgrounds(BackgroundPreferences values)
     {
         _backgroundEdit = values.Validated();
+        _showingBackground = true;
+        try
+        {
+            _soundInFront.Checked = _backgroundEdit.SoundOnlyInFront;
+            _pauseFullScreen.Checked = _backgroundEdit.PauseInFullScreen;
+            _pauseSaver.Checked = _backgroundEdit.PauseOnBatterySaver;
+        }
+        finally { _showingBackground = false; }
         ListBackgrounds(ShownApp);
+    }
+
+    // Saved from a window's menu (its background's sound): the rest being edited here stays.
+    internal void BackgroundsSaved(BackgroundPreferences saved)
+    {
+        bool wasPending = _pending;
+        string? shown = ShownApp;
+        _backgroundEdit = _backgroundEdit with
+        {
+            Everywhere = saved.Everywhere,
+            Apps = [.. _backgroundEdit.Apps.Select(app => saved.OwnOf(app.Program) is { } own ? app with { Background = own } : app)],
+        };
+        ListBackgrounds(shown);
+        if (!wasPending) MarkSaved();
+        else RefreshApply();
+    }
+
+    // From a window's menu: its app chosen in the list, added to it when it has nothing of its own.
+    internal void ShowBackgroundOf(string program)
+    {
+        string name = BackgroundPreferences.ProgramKey(program);
+        if (name.Length == 0) return;
+        if (_backgroundsPage is not null) PageIndex = _tabs.TabPages.IndexOf(_backgroundsPage);
+        if (!ListedApps().Any(listed => SameApp(listed, name))) _listedApps.Add(name);
+        _itemAt = 0;
+        ListBackgrounds(ListedApps().First(listed => SameApp(listed, name)));
+        if (_backgroundEditor is not null) _backgroundsScroll?.ScrollControlIntoView(_backgroundEditor);
     }
 
     private void ListBackgrounds(string? select)

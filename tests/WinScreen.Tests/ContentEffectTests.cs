@@ -573,6 +573,56 @@ public sealed class ContentEffectTests
         finally { Directory.Delete(folder, true); }
     }
 
+    // The owner, 23 Nov, after Lively: a background's sound plays only while its app is in front, unless the person
+    // turns that off; WinScreen's own windows coming forward (its menu) change nothing.
+    [GraphicsCardFact]
+    public void A_backgrounds_sound_follows_its_app_to_the_front()
+    {
+        using var other = new TargetProcess(new Rectangle(700, 120, 300, 200), "1E64C8");
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            effects.SetBackgrounds(_ => new BackdropSet([new(@"C:\nowhere\sea.mp4", BackdropFit.Fill, 50)]));
+            using var own = new Form { StartPosition = FormStartPosition.Manual, Bounds = new Rectangle(40, 40, 200, 120) };
+            void Pump(Func<bool> until)
+            {
+                for (int i = 0; i < 150 && !until(); i++) { Application.DoEvents(); Thread.Sleep(20); }
+            }
+            try
+            {
+                Desktop.GainForegroundRights();
+                Desktop.Activate(target.Handle);
+                Assert.True(effects.Toggle(target.Handle, ContentLook.Glass));
+                Assert.Equal(target.Handle, effects.Audible);
+                Assert.True(effects.Hearing);
+                own.Show();
+                own.Activate();
+                for (int i = 0; i < 25; i++) { Application.DoEvents(); Thread.Sleep(20); }
+                Assert.True(effects.Hearing, "WinScreen's own window came forward, and the sound stopped.");
+                Desktop.GainForegroundRights();
+                Desktop.Activate(other.Handle);
+                Pump(() => !effects.Hearing);
+                Assert.False(effects.Hearing);
+                effects.SoundOnlyInFront = false;
+                Assert.True(effects.Hearing);
+                effects.SoundOnlyInFront = true;
+                Desktop.GainForegroundRights();
+                Desktop.Activate(target.Handle);
+                Pump(() => effects.Hearing);
+                Assert.True(effects.Hearing);
+                effects.Hold(true);
+                Assert.True(effects.Held);
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
     // Light text on a white page with a black band: the page turns dark and see-through, the band light; the shadow
     // keeps a strip of the page solid beside the band, and without it that strip is as see-through as the rest.
     [GraphicsCardFact]

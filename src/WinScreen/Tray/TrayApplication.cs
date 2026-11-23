@@ -356,6 +356,11 @@ public sealed partial class TrayApplication : ApplicationContext
             MoveToDisplay = (window, device) => Attempt(() => _placer.MoveToDisplay(window, device)),
             ResizeTo = (window, size) => Attempt(() => ResizeWindow(window, size)),
             Hotkey = command => MenuHotkey(command) ?? "",
+            BackgroundSoundOf = window => GlassLook(window) == Look.LayeredGlass && _content.ShowingOf(window) is { IsVideo: true } item
+                ? new WindowMenuBuilder.BackgroundSound(item.Volume, _settings.Backgrounds.OwnOf(WindowInfo.ProgramOf(window)) is null) : null,
+            SetBackgroundSound = (window, percent) => SetBackgroundSound(window, percent),
+            HasBackground = window => GlassLook(window) == Look.LayeredGlass,
+            EditBackground = window => OpenBackgroundOf(WindowInfo.ProgramOf(window)),
             OpacityPercent = window => (int)Math.Round(_windows.OpacityOf(window) * 100.0 / 255),
             SetOpacityPercent = (window, percent) => Attempt(() =>
             {
@@ -752,7 +757,11 @@ public sealed partial class TrayApplication : ApplicationContext
         if (Changed(settings => settings.Backgrounds))
         {
             Settings.BackgroundPreferences backgrounds = _settings.Backgrounds;
-            Part(() => _content.SetBackgrounds(backgrounds.For));
+            Part(() =>
+            {
+                _content.SoundOnlyInFront = backgrounds.SoundOnlyInFront;
+                _content.SetBackgrounds(backgrounds.For);
+            });
         }
         if (Changed(settings => settings.KeptAreas))
         {
@@ -944,6 +953,7 @@ public sealed partial class TrayApplication : ApplicationContext
         // Dialogs and Settings have no guard of their own, and a window unpinned while they were open is pinned again here.
         if (WinScreen.Windows.TopLayer.AnyUnpinnedForNow || AppWindowsAbove().Any()) WinScreen.Windows.TopLayer.KeepAbove();
         FollowLookPresses();
+        FollowBackgroundPause();
         _borders.Show(_settings.HighlightPinned ? _windows.VisiblePinnedWindows() : []);
     }
 
@@ -1405,6 +1415,63 @@ public sealed partial class TrayApplication : ApplicationContext
         panel.FormClosed += (_, _) => { if (_glassLevels == panel) _glassLevels = null; };
         _glassLevels = panel;
         panel.ShowAt(Cursor.Position);
+    }
+
+    // The video showing now, wherever it is kept: the app's own background, or Every app's when it has none.
+    private void SetBackgroundSound(nint window, int percent)
+    {
+        string program = WindowInfo.ProgramOf(window);
+        if (program.Length == 0 || _content.ShowingOf(window) is not { } showing) return;
+        BackgroundPreferences before = _settings.Backgrounds;
+        try
+        {
+            _settings.Backgrounds = before.Change(program, choice => choice.WithItems(choice.Items.Select(item =>
+                string.Equals(item.File, showing.File, StringComparison.OrdinalIgnoreCase) ? item with { Volume = percent } : item)));
+            SaveSettings(_settings);
+            _content.SetBackgrounds(_settings.Backgrounds.For);
+            _content.HearFrom(window);
+            if (_settingsWindow is { IsDisposed: false } open) open.BackgroundsSaved(_settings.Backgrounds);
+        }
+        catch (Exception failure) when (IsExpected(failure))
+        {
+            _settings.Backgrounds = before;
+            Alert(T("errors.operation.title"), failure.Message);
+        }
+    }
+
+    // Settings on the Backgrounds page with the app chosen, listed even when it has nothing of its own yet.
+    private void OpenBackgroundOf(string program)
+    {
+        if (_role == AppRole.Helper)
+        {
+            _ordinary?.Send(new HelperLink.Message(HelperLink.OpenSettings, Text: program));
+            return;
+        }
+        OpenSettings();
+        if (program.Length > 0) _settingsWindow?.ShowBackgroundOf(program);
+    }
+
+    private bool _batterySaverUnknown;
+
+    // Held still behind a full-screen game, or while Windows saves battery, as the person chose.
+    private void FollowBackgroundPause()
+    {
+        if (_content.Count == 0) return;
+        BackgroundPreferences backgrounds = _settings.Backgrounds;
+        _content.Hold(backgrounds.PauseInFullScreen && FullScreenNow() != FullScreenState.None ||
+                      backgrounds.PauseOnBatterySaver && BatterySaverOn());
+    }
+
+    private bool BatterySaverOn()
+    {
+        if (_batterySaverUnknown) return false;
+        try { return global::Windows.System.Power.PowerManager.EnergySaverStatus == global::Windows.System.Power.EnergySaverStatus.On; }
+        catch (Exception failure) when (failure is COMException or InvalidOperationException or TypeInitializationException)
+        {
+            _batterySaverUnknown = true; // Asked once: a PC that can't say won't start saying.
+            Diagnostics.Log.Swallowed(failure);
+            return false;
+        }
     }
 
     private void SaveAppGlass(nint window, string program, AppGlassLevels levels)

@@ -209,7 +209,7 @@ public sealed partial class TrayApplication
                 Balloon(title, message.Text ?? "", Enum.IsDefined((ToolTipIcon)message.Icon) ? (ToolTipIcon)message.Icon : ToolTipIcon.Info);
                 break;
             case HelperLink.OpenSettings:
-                OpenSettings();
+                OpenBackgroundOf(message.Text ?? "");
                 break;
             case HelperLink.Run when message.Command == (int)AppCommand.RestoreAll:
                 Run(AppCommand.RestoreAll, 0);

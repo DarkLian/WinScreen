@@ -25,6 +25,18 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     internal Func<nint, int>? OpacityPercent { get; init; }
     internal Action<nint, int>? SetOpacityPercent { get; init; }
 
+    // The sound of the video behind the window's Glass, or null when none plays there; EveryApp when it is Every
+    // app's background, so changing it changes it for every app without its own.
+    internal readonly record struct BackgroundSound(int Percent, bool EveryApp);
+    internal Func<nint, BackgroundSound?>? BackgroundSoundOf { get; init; }
+    internal Action<nint, int>? SetBackgroundSound { get; init; }
+    internal Func<nint, bool>? HasBackground { get; init; }
+    internal Action<nint>? EditBackground { get; init; }
+    internal static readonly int[] SoundChoices = [0, 25, 50, 75, 100];
+    private sealed record SoundMenu;
+    private sealed record SoundChoice(int Percent);
+    private sealed record BackgroundEdit;
+
     private sealed record Group;
     private sealed record MoreGroup;
 
@@ -76,6 +88,17 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         var experimental = new ToolStripMenuItem(T("menu.effects")) { Tag = new Group() }.WithIcon(MenuParts.Repair).Experimental();
         foreach (AppCommand command in new[] { AppCommand.ToggleDark, AppCommand.ToggleGlass, AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleShrink, AppCommand.ToggleCrop })
             experimental.DropDownItems.Add(Command(command));
+        if (BackgroundSoundOf is not null && SetBackgroundSound is { } setSound)
+        {
+            var sound = new ToolStripMenuItem(T("menu.background.sound")) { Tag = new SoundMenu() }.WithIcon(MenuParts.Volume);
+            foreach (int percent in SoundChoices)
+                sound.DropDownItems.Add(StayingOpen.Keep(new ToolStripMenuItem(percent == 0 ? T("menu.background.soundOff") : $"{percent}%", null,
+                    (_, _) => WithTarget(window => setSound(window, percent))) { Tag = new SoundChoice(percent) }.OneOf()));
+            experimental.DropDownItems.Add(sound);
+        }
+        if (EditBackground is { } editBackground)
+            experimental.DropDownItems.Add(new ToolStripMenuItem(T("menu.background.edit"), MenuParts.Icon(MenuParts.Picture),
+                (_, _) => WithTarget(editBackground)) { Tag = new BackgroundEdit() });
         items.Add(experimental);
 
         items.Add(new ToolStripSeparator());
@@ -207,6 +230,21 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
                 item.Enabled = command == AppCommand.RestoreAll || window != 0 && enabled(command, window);
                 MenuParts.ShowKeys(item, Hotkey?.Invoke(command));
             }
+            else if (item.Tag is SoundMenu)
+            {
+                BackgroundSound? sound = window == 0 ? null : BackgroundSoundOf?.Invoke(window);
+                item.Available = sound is not null;
+                if (sound is { } now)
+                {
+                    item.Text = now.EveryApp ? T("menu.background.soundEveryApp") : T("menu.background.sound");
+                    int nearest = SoundChoices.MinBy(percent => Math.Abs(percent - now.Percent));
+                    foreach (ToolStripMenuItem choice in item.DropDownItems.OfType<ToolStripMenuItem>())
+                        choice.Checked = choice.Tag is SoundChoice { Percent: var percent } && percent == nearest;
+                }
+                continue;
+            }
+            else if (item.Tag is BackgroundEdit)
+                item.Available = window != 0 && HasBackground?.Invoke(window) == true;
             else if (item.Tag is Utility utility)
                 item.Enabled = window != 0 && (!utility.NeedsPath || WindowInfo.ExecutablePath(window).Length > 0);
             else if (item.Tag is Resize)

@@ -7,6 +7,12 @@ public sealed record BackgroundPreferences
     public BackgroundChoice Everywhere { get; init; } = new();
     public List<AppBackground> Apps { get; init; } = [];
 
+    // As a desktop wallpaper app does it: sound only while that app is in front, and videos held still behind a
+    // full-screen game or while Windows saves battery.
+    public bool SoundOnlyInFront { get; init; } = true;
+    public bool PauseInFullScreen { get; init; } = true;
+    public bool PauseOnBatterySaver { get; init; } = true;
+
     internal BackgroundPreferences Validated()
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -16,7 +22,7 @@ public sealed record BackgroundPreferences
             if (app is null || ProgramKey(app.Program) is not { Length: > 0 } program || !seen.Add(program)) continue;
             apps.Add(new AppBackground { Program = program, Background = (app.Background ?? new()).Validated() });
         }
-        return new BackgroundPreferences { Everywhere = (Everywhere ?? new()).Validated(), Apps = apps };
+        return this with { Everywhere = (Everywhere ?? new()).Validated(), Apps = apps };
     }
 
     internal BackgroundChoice? OwnOf(string program)

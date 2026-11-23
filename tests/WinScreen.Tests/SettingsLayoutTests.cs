@@ -292,6 +292,30 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    // From a window's Effects menu: Settings opens on Backgrounds with that app chosen, listed with nothing of its own
+    // yet, so Its own background is there to turn on.
+    [Fact]
+    public void A_windows_background_opens_with_its_app_chosen()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            using var window = new SettingsWindow(new AppSettings { Language = "en", ExperimentalFeatures = true }, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+            window.Show();
+            Application.DoEvents();
+            window.ShowBackgroundOf("Notes.exe");
+            Application.DoEvents();
+            TabControl tabs = Descendants(window).OfType<TabControl>().Single();
+            Assert.Equal(UiText.T("settings.backgrounds"), tabs.SelectedTab!.Text);
+            BackgroundList list = Descendants(window).OfType<BackgroundList>().Single();
+            Assert.Equal("Notes", (list.SelectedItem as BackgroundEntry)?.Program);
+            SwitchBox own = Descendants(window).OfType<SwitchBox>().Single(box => box.Text == UiText.T("settings.apps.ownBackground"));
+            Assert.True(own.Visible);
+            Assert.False(own.Checked);
+            window.Close();
+        });
+    }
+
     // The owner, 23 Nov: Glass had a card of its own above the list of apps. Now Every app's card holds the levels every
     // app starts from, with the switch for Glass that fades the page; an app's card holds its own instead.
     [Fact]

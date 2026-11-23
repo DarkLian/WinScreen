@@ -25,8 +25,34 @@ internal sealed class ContentEffects : IDisposable
     private readonly Dictionary<nint, string> _programs = [];
     private readonly HashSet<string> _reported = new(StringComparer.OrdinalIgnoreCase);
     // Sound comes from one window at a time, the one with sound that was in front last: two windows playing the same
-    // video would otherwise be heard twice, out of step.
+    // video would otherwise be heard twice, out of step. With SoundOnlyInFront, only while its app is the one in front.
     private nint _audible;
+    private bool _front = true;
+    private bool _soundOnlyInFront = true;
+    private bool _held;
+
+    public bool SoundOnlyInFront
+    {
+        get => _soundOnlyInFront;
+        set
+        {
+            if (_soundOnlyInFront == value) return;
+            _soundOnlyInFront = value;
+            Hear();
+        }
+    }
+
+    // Every background stops where it is, and is quiet, until let go.
+    public void Hold(bool held)
+    {
+        if (_held == held) return;
+        _held = held;
+        foreach (ContentOverlay overlay in _overlays.Values) overlay.SetHeld(held);
+    }
+
+    public bool Held => _held;
+
+    internal bool Hearing => _audible != 0 && (!_soundOnlyInFront || _front);
 
     public bool LeaveAlreadyDark { get; set; } = true;
 
@@ -112,15 +138,26 @@ internal sealed class ContentEffects : IDisposable
 
     private void CameForward(nint window)
     {
-        if (window == _audible || !HasSound(window)) return;
+        if (!HasSound(window)) return;
         _audible = window;
+        _front = true;
         Hear();
     }
+
+    private void FrontMoved(nint window, bool front)
+    {
+        if (window != _audible || _front == front) return;
+        _front = front;
+        Hear();
+    }
+
+    // The window's background is the one heard, as when its sound was just turned up from its menu.
+    public void HearFrom(nint window) => CameForward(window);
 
     private void Hear()
     {
         foreach ((nint window, ContentOverlay overlay) in _overlays)
-            overlay.SetAudible(window == _audible);
+            overlay.SetAudible(window == _audible && (!_soundOnlyInFront || _front));
     }
 
     public bool Toggle(nint window, ContentLook look, bool plain = false)
@@ -172,9 +209,12 @@ internal sealed class ContentEffects : IDisposable
                 ? Localization.UiText.T("errors.glass.backdropMissing") : Localization.UiText.T("errors.glass.backdropNamed"), name));
         };
         overlay.CameForward += () => CameForward(window);
+        overlay.FrontChanged += front => FrontMoved(window, front);
+        overlay.SetHeld(_held);
         if (HasSound(window))
         {
             _audible = window; // Just turned on: what the person is looking at.
+            _front = true;
             Hear();
         }
         Created?.Invoke(overlay.Handle);

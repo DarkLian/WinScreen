@@ -225,6 +225,10 @@ hotkeys.modifierRequired C45EEC45E4F634F7
 hotkeys.someUnavailable 0AB94515051F1A1E
 keptAreas.instructions CC1E22E19AEC5BB6
 keptAreas.title D8FE117F7D7B35E2
+menu.background.edit 7DF12D1077012012
+menu.background.sound 2EB16AAD64B7984C
+menu.background.soundEveryApp 29901D1946D40371
+menu.background.soundOff CA7981B46ECF2C17
 menu.effects 358511C8C09805C9
 menu.group.elsewhere EC5923A70B6B7436
 menu.group.look A0DE5719F595FBF5
@@ -464,12 +468,15 @@ settings.backgrounds.none DC937B59892604F5
 settings.backgrounds.order 6BE090825C997103
 settings.backgrounds.order.inOrder 736C88B52C613B8E
 settings.backgrounds.order.shuffle 317CB3A7EFADD989
+settings.backgrounds.pauseFullScreen 79C200F49431EC84
+settings.backgrounds.pauseSaver B05DD12BD70FBB0A
 settings.backgrounds.pictureMinutes 89CF47F0FE18F1C6
 settings.backgrounds.pictures 1E6245009D677035
 settings.backgrounds.preview 324B134F57C70C72
 settings.backgrounds.setHelp D73F4FDDB43BB089
 settings.backgrounds.sound CEFF3A60169A7454
 settings.backgrounds.soundHelp 7D76A6E4F8265379
+settings.backgrounds.soundInFront ABD4DA03668F3AA5
 settings.backgrounds.speed F0FFD6E05E733952
 settings.backgrounds.stretch A33FBCF83F7BE3BA
 settings.backgrounds.tile 6EA3C1948E8295CC

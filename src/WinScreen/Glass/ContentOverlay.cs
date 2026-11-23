@@ -50,6 +50,7 @@ internal sealed unsafe class ContentOverlay : Form
     private volatile BackdropChoice? _showing;
     private volatile bool _hidden;
     private volatile bool _audible;
+    private volatile bool _held;
     private Thread? _renderer;
 
     private ID3D11Device? _device;
@@ -85,6 +86,10 @@ internal sealed unsafe class ContentOverlay : Form
     public event Action<string>? BackdropFailed;
 
     public event Action? CameForward;
+
+    // Whether the app this window belongs to is the one in front, each time another window comes to the front;
+    // WinScreen's own windows (its menus, Settings) change nothing.
+    public event Action<bool>? FrontChanged;
 
     public BackdropSet? Background => _backdrop;
 
@@ -141,6 +146,14 @@ internal sealed unsafe class ContentOverlay : Form
         if (!_stopping) _arrived.Set();
     }
 
+    // Held: videos and moving pictures stop where they are, as for a full-screen game.
+    public void SetHeld(bool held)
+    {
+        if (_held == held) return;
+        _held = held;
+        if (!_stopping) _arrived.Set();
+    }
+
     public void SetOpacity(byte alpha)
     {
         if (IsHandleCreated) User32.SetLayeredWindowAttributes(Handle, 0, alpha, User32.LWA_ALPHA);
@@ -183,6 +196,9 @@ internal sealed unsafe class ContentOverlay : Form
             Follow();
         if (kind == Foreground && window == _source && !_stopping)
             CameForward?.Invoke();
+        if (kind == Foreground && window != 0 && !_stopping && User32.GetWindowThreadProcessId(window, out uint front) != 0 &&
+            front != Environment.ProcessId && User32.GetWindowThreadProcessId(_source, out uint mine) != 0)
+            FrontChanged?.Invoke(front == mine);
     }
 
     private void Follow()
@@ -409,8 +425,8 @@ internal sealed unsafe class ContentOverlay : Form
                 {
                     try
                     {
-                        backdrop.Pause(_hidden);
-                        backdrop.Sound(_audible && !_hidden ? _showing?.Volume ?? 0 : 0);
+                        backdrop.Pause(_hidden || _held);
+                        backdrop.Sound(_audible && !_hidden && !_held ? _showing?.Volume ?? 0 : 0);
                         backdrop.Speed(_showing?.Speed ?? 100);
                         if (backdrop.Update(_device!, _context!))
                         {
