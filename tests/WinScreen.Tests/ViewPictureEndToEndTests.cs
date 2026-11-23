@@ -307,24 +307,8 @@ public sealed class ViewPictureEndToEndTests(Xunit.Abstractions.ITestOutputHelpe
                         if (view.KeepsUpdating != hidden) view.Run(AppCommand.ViewKeepHidden);
                         view.SetCovers([cover]);
                         pump(500);
-                        object selector = Field<object>(view, "_thumbnail");
-                        object? dwm = selector.GetType().GetField("_dwm", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(selector);
-                        object pieces = dwm!.GetType().GetField("_thumbnail", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(dwm)!;
-                        int count = ((System.Collections.ICollection)pieces.GetType().GetField("_thumbnails", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(pieces)!).Count;
-                        var map = new System.Text.StringBuilder();
-                        for (int y = 0; y < view.Height; y += 12)
-                        {
-                            for (int x = 0; x < view.Width; x += 8)
-                            {
-                                Color c = OnScreen(view.PointToScreen(new Point(x, y)));
-                                map.Append(Black(c) ? '#' : Red(c) ? 'r' : Blue(c) ? 'b' : '.');
-                            }
-                            map.AppendLine();
-                        }
-                        output.WriteLine($"hidden {hidden}, {count} thumbnails, {view.BackendKind}, shown {Field<Rectangle>(view, "_lastShown")}, whole {Field<Rectangle>(view, "_whole")}");
-                        output.WriteLine(map.ToString());
                         Point onScreen = ScreenSpot(view, middle)!.Value;
-                        Assert.True(Black(OnScreen(onScreen)), $"hidden {hidden}: {OnScreen(onScreen)} over the cover");
+                        if (!Black(OnScreen(onScreen))) Assert.Fail($"hidden {hidden}: {OnScreen(onScreen)} over the cover{Environment.NewLine}{Map(view)}");
                         Point red = ScreenSpot(view, new Point(cover.Right + 40, 160))!.Value;
                         Assert.True(Red(OnScreen(red)), $"hidden {hidden}: {OnScreen(red)} beside the cover");
                         view.SetCovers([]);
@@ -341,21 +325,10 @@ public sealed class ViewPictureEndToEndTests(Xunit.Abstractions.ITestOutputHelpe
                     foreach (int wait in new[] { 0, 300, 1500 })
                     {
                         pump(wait);
-                        var map = new System.Text.StringBuilder();
-                        for (int y = 0; y < view.Height; y += 12)
-                        {
-                            for (int x = 0; x < view.Width; x += 8)
-                            {
-                                Color c = OnScreen(view.PointToScreen(new Point(x, y)));
-                                map.Append(Black(c) ? '#' : Red(c) ? 'r' : Blue(c) ? 'b' : '.');
-                            }
-                            map.AppendLine();
-                        }
-                        output.WriteLine($"after switching, {wait} ms more, {view.BackendKind}, {view.BackendState}");
-                        output.WriteLine(map.ToString());
+                        Point spot = ScreenSpot(view, middle)!.Value;
+                        if (!Black(OnScreen(spot)))
+                            Assert.Fail($"switched to Windows' thumbnail, {wait} ms more: {OnScreen(spot)} over the cover{Environment.NewLine}{Map(view)}");
                     }
-                    Point spot = ScreenSpot(view, middle)!.Value;
-                    Assert.True(Black(OnScreen(spot)), $"switched to Windows' thumbnail: {OnScreen(spot)} over the cover");
                 }
                 finally { app.ExitThread(); pump(200); }
             });
