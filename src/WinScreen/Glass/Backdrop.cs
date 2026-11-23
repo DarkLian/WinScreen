@@ -327,6 +327,7 @@ internal sealed class LinkedPicture : Backdrop
 internal sealed class VideoBackdrop(string file, bool once = false, int speed = 100) : Backdrop
 {
     private const int Poll = 8;
+    private const int StallMilliseconds = 20_000;
     private static readonly Lazy<bool> Started = new(() => MediaFactory.MFStartup().Success);
     private IMFDXGIDeviceManager? _manager;
     private IMFMediaEngine? _engine;
@@ -336,6 +337,8 @@ internal sealed class VideoBackdrop(string file, bool once = false, int speed = 
     private bool _paused;
     private int _percent = -1;
     private int _speed = speed;
+    private double _at = -1;
+    private long _movedAt, _lookedAt;
 
     public bool Failed => _failed;
 
@@ -378,6 +381,7 @@ internal sealed class VideoBackdrop(string file, bool once = false, int speed = 
             Start(device);
             return false;
         }
+        if (Stalled()) throw new NotSupportedException("The video stopped coming.");
         // Until the file's first details are read there is no size, and asking fails. A new frame is S_OK; S_FALSE, also a
         // success, means none.
         if (_engine.ReadyState < MediaEngineReady.HaveMetadata || _engine.OnVideoStreamTick_(out _).Code != 0) return false;
@@ -394,6 +398,16 @@ internal sealed class VideoBackdrop(string file, bool once = false, int speed = 
         context.CopySubresourceRegion(Texture!, 0, 0, 0, 0, _frame, 0, null);
         context.GenerateMips(View!);
         return true;
+    }
+
+    // A link that stops sending reports no error: the player just waits. Time paused, or asleep with the PC, doesn't count.
+    private bool Stalled()
+    {
+        long now = Environment.TickCount64;
+        double at = _engine!.CurrentTime;
+        if (_paused || _ended || at != _at || now - _lookedAt > 2000) _movedAt = now;
+        (_at, _lookedAt) = (at, now);
+        return now - _movedAt > StallMilliseconds;
     }
 
     private void Start(ID3D11Device device)

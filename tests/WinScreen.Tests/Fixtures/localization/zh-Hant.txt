@@ -454,8 +454,8 @@ settings.backgrounds.fit B0352A944F496DC2
 settings.backgrounds.fitWhole 9FB67D089230A8F8
 settings.backgrounds.help A02A8ADF6C3195AE
 settings.backgrounds.items E181BAAD64DF4374
-settings.backgrounds.link.help DEEDCE41CA9ED77E
-settings.backgrounds.link.invalid 2E8470D06517006E
+settings.backgrounds.link.help 244C352B81238ACD
+settings.backgrounds.link.invalid 9580B65F2BEB4D44
 settings.backgrounds.link.label E9B3CEC969218909
 settings.backgrounds.link.title 36FE280CB60B7D88
 settings.backgrounds.linkPreview 06A91D320E35FADA

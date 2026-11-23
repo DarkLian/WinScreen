@@ -82,8 +82,8 @@ internal sealed unsafe class ContentOverlay : Form
 
     public event Action<string>? Failed;
 
-    // With the file or link that couldn't be opened or stopped playing.
-    public event Action<string>? BackdropFailed;
+    // With the file or link that couldn't be opened or stopped playing, and whether it is a file that isn't there.
+    public event Action<string, bool>? BackdropFailed;
 
     public event Action? CameForward;
 
@@ -399,6 +399,9 @@ internal sealed unsafe class ContentOverlay : Form
             while (true)
             {
                 int wait = backdrop?.Wait ?? Timeout.Infinite;
+                // Nothing could be opened: a drive or the internet may come back, so it is tried again now and then.
+                if (backdrop is null && !_hidden && !_held && turns.RetryAt != long.MaxValue)
+                    wait = (int)Math.Clamp(turns.RetryAt - Environment.TickCount64, 1, int.MaxValue);
                 // Hidden or held, nothing changes until it shows again.
                 if (backdrop is not null && !_hidden && !_held && turns.ChangeAt != long.MaxValue)
                 {
@@ -433,6 +436,11 @@ internal sealed unsafe class ContentOverlay : Form
                     shown = chosen;
                     redraw = true;
                 }
+                if (backdrop is null && shown is not null && !_hidden && !_held && Environment.TickCount64 >= turns.RetryAt)
+                {
+                    turns.Failed = 0;
+                    backdrop = OpenNext(shown, turns);
+                }
                 // The next of a set: the video played through, or its time is up. The last one's picture stays until the
                 // next has one, so no plain Glass shows in between.
                 if (backdrop is not null && shown is { Items.Count: > 1 } && !_hidden && !_held &&
@@ -460,6 +468,15 @@ internal sealed unsafe class ContentOverlay : Form
                         {
                             redraw = true;
                             turns.Failed = 0;
+                            turns.RetryWait = Turns.FirstRetry;
+                            // Its time counts from when it shows, not from when its link was asked for.
+                            if (!turns.Seen)
+                            {
+                                turns.Seen = true;
+                                turns.Since = Environment.TickCount64;
+                                if (shown is not null && _showing is { } item)
+                                    turns.ChangeAt = shown.StayMilliseconds(item) is { } stay ? turns.Since + stay : long.MaxValue;
+                            }
                         }
                         if (backdrop is VideoBackdrop { Failed: true }) throw new NotSupportedException();
                         if (leaving is not null && backdrop.View is not null)
@@ -474,11 +491,10 @@ internal sealed unsafe class ContentOverlay : Form
                     {
                         Diagnostics.Log.Error("effect.backdropFailed", failure);
                         backdrop.Dispose();
-                        Report(_showing?.File);
+                        Report(_showing, failure);
                         turns.Failed++;
                         // With others in the set, the next one shows instead.
-                        backdrop = shown is { Items.Count: > 1 } ? OpenNext(shown, turns) : null;
-                        if (backdrop is null) _showing = null;
+                        backdrop = shown is null ? null : OpenNext(shown, turns);
                         redraw = true;
                     }
                 }
@@ -524,7 +540,7 @@ internal sealed unsafe class ContentOverlay : Form
                                 BeginInvoke(() => { if (!IsDisposed) ClientSize = newSize; });
                             }
 
-                            using (var texture = WgcInterop.Texture(next.Surface))
+                            using (var texture = WgcInterop.Texture(next))
                                 _context!.CopySubresourceRegion(cache, 0, 0, 0, 0, texture, 0, new Vortice.Mathematics.Box(0, 0, 0, size.Width, size.Height, 1));
                             Process(size, cacheView!, tilesView!, tiles!, staging!, outputView!);
                             Frames++;
@@ -557,19 +573,25 @@ internal sealed unsafe class ContentOverlay : Form
         }
     }
 
-    // Where the drawing thread is in a set: which shows, when the next is due, and how many failed in a row, so a set
-    // where nothing opens stops trying until it changes.
+    // Where the drawing thread is in a set: which shows, when the next is due, how many failed in a row, and when to try
+    // again once none opened, each time after twice as long.
     private sealed class Turns(BackdropSequence? sequence = null)
     {
         public BackdropSequence? Sequence => sequence;
         public int Showing = -1;
+        public bool Seen;
         public long Since;
+        public const int FirstRetry = 5_000, LongestRetry = 300_000;
+        public int RetryWait = FirstRetry;
+        public long RetryAt = long.MaxValue;
         public long ChangeAt = long.MaxValue;
         public int Failed;
     }
 
     private Backdrop? OpenNext(BackdropSet set, Turns turns)
     {
+        turns.Seen = false;
+        turns.RetryAt = long.MaxValue;
         while (turns.Sequence is { } sequence && turns.Failed < set.Items.Count)
         {
             turns.Showing = sequence.Next();
@@ -585,19 +607,26 @@ internal sealed unsafe class ContentOverlay : Form
                                                 or NotSupportedException or ExternalException)
             {
                 Diagnostics.Log.Error("effect.backdropFailed", failure);
-                Report(item.File);
+                Report(item, failure);
                 turns.Failed++;
             }
         }
         _showing = null;
         turns.ChangeAt = long.MaxValue;
+        if (turns.Sequence is not null)
+        {
+            turns.RetryAt = Environment.TickCount64 + turns.RetryWait;
+            turns.RetryWait = Math.Min(turns.RetryWait * 2, Turns.LongestRetry);
+        }
         return null;
     }
 
-    private void Report(string? file)
+    private void Report(BackdropChoice? item, Exception failure)
     {
-        if (file is null || _stopping) return;
-        try { BeginInvoke(() => BackdropFailed?.Invoke(file)); }
+        if (item is null || _stopping) return;
+        // Looked at here, not on the thread that answers clicks: a share that is gone takes seconds to say so.
+        bool missing = failure is FileNotFoundException or DirectoryNotFoundException || item.IsMissing;
+        try { BeginInvoke(() => BackdropFailed?.Invoke(item.File, missing)); }
         catch (InvalidOperationException closed) { Diagnostics.Log.Swallowed(closed); }
     }
 
@@ -766,6 +795,9 @@ internal sealed unsafe class ContentOverlay : Form
         try { _pool?.Dispose(); } catch (COMException caught) { Diagnostics.Log.Swallowed(caught); }
         _session = null;
         _pool = null;
+        // It holds the graphics device and the driver's threads, and a garbage collection can be a long way off.
+        _captureDevice?.Dispose();
+        _captureDevice = null;
         if (_visual != 0) Marshal.Release(_visual);
         if (_target != 0) Marshal.Release(_target);
         if (_composition != 0) Marshal.Release(_composition);

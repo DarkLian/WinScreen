@@ -267,6 +267,8 @@ public sealed class SettingsLayoutTests
                 Pump();
                 ThemedList items = Descendants(window).OfType<ThemedList>().Single(list => list.AccessibleName == UiText.T("settings.backgrounds.items"));
                 Assert.True(items.Visible);
+                // Whether a file is there is looked up away from the window, which fills in the answer.
+                for (int i = 0; i < 100 && !((string)items.Items[1]).Contains(string.Format(UiText.T("settings.backgrounds.missing"), "sea.mp4")); i++) Pump();
                 Assert.Equal([Path.GetFileName(picture), string.Format(UiText.T("settings.backgrounds.withSound"),
                         string.Format(UiText.T("settings.backgrounds.missing"), "sea.mp4"), 40), "https://example.com/hill.jpg"],
                     items.Items.Cast<string>());

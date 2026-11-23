@@ -206,12 +206,14 @@ internal sealed class ContentEffects : IDisposable
             TurnOff(window);
             Problem?.Invoke(message);
         };
-        overlay.BackdropFailed += file =>
+        // Turned on again: a file or link that fails again is named again.
+        if (overlay.Background is { } set) foreach (BackdropChoice item in set.Items) _reported.Remove(item.File);
+        overlay.BackdropFailed += (file, missing) =>
         {
             // Once for each file, until the backgrounds change.
             if (!_reported.Add(file)) return;
             string name = BackdropChoice.IsLinkText(file) ? file : Path.GetFileName(file);
-            Problem?.Invoke(string.Format(new BackdropChoice(file, BackdropFit.Fill).IsMissing
+            Problem?.Invoke(string.Format(missing
                 ? Localization.UiText.T("errors.glass.backdropMissing") : Localization.UiText.T("errors.glass.backdropNamed"), name));
         };
         overlay.CameForward += () => CameForward(window);

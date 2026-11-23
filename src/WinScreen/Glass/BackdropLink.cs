@@ -7,8 +7,12 @@ internal static class BackdropLink
     private const long Largest = 64L * 1024 * 1024;
     private static readonly HttpClient Web = new() { Timeout = TimeSpan.FromSeconds(30) };
 
-    internal static async Task<byte[]> Fetch(string link, CancellationToken cancel)
+    internal static async Task<byte[]> Fetch(string link, CancellationToken wanted)
     {
+        // HttpClient's own limit ends with the headers; a body that trickles in is limited here.
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(wanted);
+        limit.CancelAfter(TimeSpan.FromSeconds(60));
+        CancellationToken cancel = limit.Token;
         using HttpResponseMessage answer = await Web.GetAsync(link, HttpCompletionOption.ResponseHeadersRead, cancel);
         answer.EnsureSuccessStatusCode();
         if (answer.Content.Headers.ContentLength > Largest) throw new InvalidDataException("The picture is too big.");

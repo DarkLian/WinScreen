@@ -291,7 +291,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                     }
                     else
                     {
-                        using var texture = WgcInterop.Texture(frame.Surface);
+                        using var texture = WgcInterop.Texture(frame);
                         var description = texture.Description;
                         if (content.Width > description.Width || content.Height > description.Height)
                         {

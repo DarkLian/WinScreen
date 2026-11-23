@@ -664,6 +664,50 @@ public sealed class ContentEffectTests
         finally { Directory.Delete(folder, true); }
     }
 
+    // Each time Glass was turned off, its graphics device and the driver's threads stayed until a garbage collection
+    // came by: 5 GB and 500 threads in 100 s of turning effects on and off (found 24 Nov).
+    [GraphicsCardTheory]
+    [InlineData("Glass")]
+    [InlineData("Dark")]
+    [InlineData("Video")]
+    public void Turning_an_effect_off_lets_its_graphics_device_go(string kind)
+    {
+        if (kind == "Video" && !WinScreen.Pip.ViewRecording.Supported) { Skipped.Because("Windows' video encoder isn't on this PC (an N edition)."); return; }
+        ContentLook look = kind == "Dark" ? ContentLook.Dark : ContentLook.Glass;
+        string folder = Directory.CreateTempSubdirectory("WinScreen background ").FullName;
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            if (kind == "Video") effects.SetBackgrounds(_ => new BackdropSet([new(ColourVideo(folder, "red.mp4", Color.Red), BackdropFit.Fill)]));
+            int Threads() { using var self = System.Diagnostics.Process.GetCurrentProcess(); return self.Threads.Count; }
+            void OnAndOff(int times)
+            {
+                for (int i = 0; i < times; i++)
+                {
+                    Assert.True(effects.Toggle(target.Handle, look));
+                    for (int k = 0; k < 25; k++) { Application.DoEvents(); Thread.Sleep(20); }
+                    effects.TurnOff(target.Handle);
+                }
+            }
+            try
+            {
+                OnAndOff(2);
+                int before = Threads();
+                OnAndOff(10);
+                Pump(() => Threads() < before + 12, 4000);
+                Assert.True(Threads() < before + 12, $"{before} threads, then {Threads()} after ten more.");
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+        Directory.Delete(folder, true);
+    }
+
     // A picture given as a link is fetched and shown; one that isn't there is named like a missing file.
     [GraphicsCardFact]
     public void A_picture_from_a_link_shows_and_a_dead_link_is_named()

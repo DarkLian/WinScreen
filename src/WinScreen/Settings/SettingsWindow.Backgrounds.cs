@@ -371,13 +371,23 @@ public sealed partial class SettingsWindow
 
     private static bool IsVideo(string file) => BackdropChoice.IsVideoText(file);
 
-    // Looked up once each time the list fills, never while it draws: a file on a share that is gone can take seconds.
+    // Looked up away from this thread, once each time the list fills: a file on a share that is gone takes seconds to say
+    // so. Until the answer comes, a file counts as there.
     private readonly Dictionary<string, bool> _gone = new(StringComparer.OrdinalIgnoreCase);
 
     private bool Gone(string file)
     {
-        if (!_gone.TryGetValue(file, out bool gone)) _gone[file] = gone = new BackdropChoice(file, BackdropFit.Fill).IsMissing;
-        return gone;
+        if (_gone.TryGetValue(file, out bool gone)) return gone;
+        _gone[file] = false;
+        _ = LookFor(file);
+        return false;
+    }
+
+    private async Task LookFor(string file)
+    {
+        if (!await Task.Run(() => new BackdropChoice(file, BackdropFit.Fill).IsMissing) || IsDisposed) return;
+        _gone[file] = true;
+        ShowBackground(controls: false);
     }
 
     // A file by its name, a link as it is, and either marked when it can't be found.

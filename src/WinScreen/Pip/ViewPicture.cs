@@ -138,7 +138,7 @@ internal static class ViewPicture
             session.StartCapture();
             frame = await arrived.Task.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             if (frame is null) return null;
-            using ID3D11Texture2D texture = WgcInterop.Texture(frame.Surface);
+            using ID3D11Texture2D texture = WgcInterop.Texture(frame);
             int width = Math.Min(frame.ContentSize.Width, (int)texture.Description.Width);
             int height = Math.Min(frame.ContentSize.Height, (int)texture.Description.Height);
             if (width <= 0 || height <= 0) return null;

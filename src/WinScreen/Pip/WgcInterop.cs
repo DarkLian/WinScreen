@@ -54,14 +54,20 @@ internal static unsafe partial class WgcInterop
         finally { Marshal.Release(pointer); }
     }
 
-    internal static ID3D11Texture2D Texture(IDirect3DSurface surface)
+    // Through the frame's own pointer: its Surface as a managed object would hold the texture, and with it the whole
+    // graphics device and the driver's threads, until a garbage collection came by.
+    internal static ID3D11Texture2D Texture(Direct3D11CaptureFrame frame)
     {
-        nint pointer = WinRT.MarshalInterface<IDirect3DSurface>.FromManaged(surface);
-        nint access = 0;
+        nint pointer = WinRT.MarshalInspectable<Direct3D11CaptureFrame>.FromManaged(frame);
+        nint own = 0, surface = 0, access = 0;
         try
         {
-            Guid iid = new("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1");
-            Marshal.ThrowExceptionForHR(Marshal.QueryInterface(pointer, in iid, out access));
+            Guid iid = new("FA50C623-38DA-4B32-ACF3-FA9734AD800E");
+            Marshal.ThrowExceptionForHR(Marshal.QueryInterface(pointer, in iid, out own));
+            var surfaceOf = (delegate* unmanaged[Stdcall]<nint, nint*, int>)(*(nint**)own)[6];
+            Marshal.ThrowExceptionForHR(surfaceOf(own, &surface));
+            iid = new("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1");
+            Marshal.ThrowExceptionForHR(Marshal.QueryInterface(surface, in iid, out access));
             iid = typeof(ID3D11Texture2D).GUID;
             nint texture = 0;
             var get = (delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)(*(nint**)access)[3];
@@ -71,6 +77,8 @@ internal static unsafe partial class WgcInterop
         finally
         {
             if (access != 0) Marshal.Release(access);
+            if (surface != 0) Marshal.Release(surface);
+            if (own != 0) Marshal.Release(own);
             Marshal.Release(pointer);
         }
     }
