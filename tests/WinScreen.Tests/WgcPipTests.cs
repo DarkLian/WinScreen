@@ -391,14 +391,23 @@ public sealed class WgcPipTests(ITestOutputHelper output)
                 // itself again.
                 Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == other.Handle, 2000, () => pump(20)),
                     $"Minimized, the focus went to {WindowInfo.ClassName(User32.GetForegroundWindow())}, not the window used before.");
+                // What Alt+Tab goes by: the order of windows from the top, and the original's styles.
+                var order = new List<string>();
+                for (nint w = User32.GetWindow(other.Handle, 0); w != 0 && order.Count < 400; w = User32.GetWindow(w, 2)) // GW_HWNDFIRST, GW_HWNDNEXT
+                    if (w == source.Handle || w == other.Handle || w == pip.Handle) order.Add(w == source.Handle ? "original" : w == other.Handle ? "other" : "view");
+                string before = $"order {string.Join(">", order)}; original ex 0x{Desktop.ExStyle(source.Handle):X} visible {User32.IsWindowVisible(source.Handle)} " +
+                    $"at {Desktop.BoundsOf(source.Handle)} alpha {Desktop.Alpha(source.Handle)}; view ex 0x{Desktop.ExStyle(pip.Handle):X}";
+                long pressedAt = Environment.TickCount64;
                 Desktop.Key(Keys.Menu, true);
                 Thread.Sleep(30);
                 Desktop.Key(Keys.Tab, true);
                 Desktop.Key(Keys.Tab, false);
                 Thread.Sleep(30);
                 Desktop.Key(Keys.Menu, false);
-                Assert.True(Desktop.WaitFor(() => !windows.IsHidden(source.Handle) && User32.GetForegroundWindow() == source.Handle, 3000, () => pump(20)),
-                    $"Picked in Alt+Tab, it wasn't shown: hidden {windows.IsHidden(source.Handle)}, front {WindowInfo.ClassName(User32.GetForegroundWindow())}, {pip.LastArrival}.");
+                bool picked = Desktop.WaitFor(() => !windows.IsHidden(source.Handle) && User32.GetForegroundWindow() == source.Handle, 3000, () => pump(20));
+                string listed = picked ? "" : string.Join(" | ", SwitcherListTests.Names());
+                Assert.True(picked,
+                    $"Picked in Alt+Tab, it wasn't shown (Alt+Tab lists '{listed}'): hidden {windows.IsHidden(source.Handle)}, front '{WindowInfo.Title(User32.GetForegroundWindow())}' {Desktop.FrontDescription()}, {pip.LastArrival}; Alt+Tab pressed at {pressedAt}; before: {before}.");
                 Assert.True(!pip.HiddenWhileMinimized && !pip.KeepsUpdating, pip.StateDescription);
                 Assert.Equal(PipStateProblem.None, pip.FirstStateProblem);
             }

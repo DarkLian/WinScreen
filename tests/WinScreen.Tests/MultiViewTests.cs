@@ -363,39 +363,41 @@ public sealed class SwitcherListTests
             }
             finally { windows.RestoreAll(); }
         });
-
-        static List<string> Names()
-        {
-            List<string> names = [];
-            var reader = new Thread(() =>
-            {
-                Desktop.Key(Keys.Menu, true);
-                try
-                {
-                    Desktop.Press(Keys.Tab);
-                    nint switcher = 0;
-                    Desktop.WaitFor(() =>
-                    {
-                        foreach (string kind in new[] { "MultitaskingViewFrame", "XamlExplorerHostIslandWindow", "TaskSwitcherWnd" })
-                        {
-                            nint found = Desktop.FindWindow(kind, null);
-                            if (found != 0 && Desktop.IsWindowVisible(found)) switcher = found;
-                        }
-                        return switcher != 0;
-                    }, 2000);
-                    Thread.Sleep(600);
-                    if (switcher != 0)
-                        names.AddRange(BrowserAccessibility.Read(switcher).Select(control => control.Name));
-                    Desktop.Press(Keys.Escape);
-                }
-                finally { Desktop.Key(Keys.Menu, false); }
-            });
-            reader.Start();
-            while (reader.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
-            Thread.Sleep(300);
-            return names;
-        }
     }
+
+    /// <summary>The names in Windows 10's Alt+Tab list, read while it is open; Windows 11's gives none.</summary>
+    internal static List<string> Names()
+    {
+        List<string> names = [];
+        var reader = new Thread(() =>
+        {
+            Desktop.Key(Keys.Menu, true);
+            try
+            {
+                Desktop.Press(Keys.Tab);
+                nint switcher = 0;
+                Desktop.WaitFor(() =>
+                {
+                    foreach (string kind in new[] { "MultitaskingViewFrame", "XamlExplorerHostIslandWindow", "TaskSwitcherWnd" })
+                    {
+                        nint found = Desktop.FindWindow(kind, null);
+                        if (found != 0 && Desktop.IsWindowVisible(found)) switcher = found;
+                    }
+                    return switcher != 0;
+                }, 2000);
+                Thread.Sleep(600);
+                if (switcher != 0)
+                    names.AddRange(BrowserAccessibility.Read(switcher).Select(control => control.Name));
+                Desktop.Press(Keys.Escape);
+            }
+            finally { Desktop.Key(Keys.Menu, false); }
+        });
+        reader.Start();
+        while (reader.IsAlive) { Application.DoEvents(); Thread.Sleep(5); }
+        Thread.Sleep(300);
+        return names;
+    }
+
     /// <summary>
     /// Windows 11's switcher can't be read through accessibility, so its text is read off the screen. Keep updating's own
     /// steps are taken on a window with no title bar, with no view, so the window's title shows nowhere but in the switcher:

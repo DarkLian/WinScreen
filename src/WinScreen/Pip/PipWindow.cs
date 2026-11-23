@@ -2221,6 +2221,7 @@ public sealed partial class PipWindow : Form
             if (_seenDesktop is not null) _desktopSwitchedAt = Environment.TickCount64;
             _seenDesktop = desktop;
         }
+        AltKeyWatch.Start();
         nint foreground = User32.GetForegroundWindow();
         // Held now, or pressed since the last look: a quick Alt+Tab can fall between two ticks (Windows 10).
         if ((User32.GetAsyncKeyState(0x12 /* Alt */) & 0x8001) != 0) _altSeenAt = Environment.TickCount64;
@@ -2244,7 +2245,8 @@ public sealed partial class PipWindow : Form
             JustAfterDesktopSwitch: _desktopSwitchedAt != 0 && now - _desktopSwitchedAt < SwitchFocusGrace,
             Minimized: _minimizedOriginal);
         ViewState.Arrival answer = ViewState.OriginalArrived(facts);
-        LastArrival = $"{answer}: before {WindowInfo.ClassName(before)}, picked {facts.Picked}";
+        LastArrival = $"{answer}: before {WindowInfo.ClassName(before)}, picked {facts.Picked} (Alt {now - Math.Max(_altSeenAt, AltKeyWatch.LastAltAt)} ms ago, " +
+            $"off the taskbar {_windows.IsOffTaskbar(_source)}, tool window {(User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE) & User32.WS_EX_TOOLWINDOW) != 0})";
         switch (answer)
         {
             case ViewState.Arrival.PassFocusOn:
@@ -2285,7 +2287,7 @@ public sealed partial class PipWindow : Form
         // Windows 10 hands the focus on through its staging window, which can take longer; without Alt it may be a
         // desktop switch, which isn't a pick.
         string beforeClass = before != 0 ? WindowInfo.ClassName(before) : "";
-        long sinceAlt = Environment.TickCount64 - _altSeenAt;
+        long sinceAlt = Environment.TickCount64 - Math.Max(_altSeenAt, AltKeyWatch.LastAltAt);
         bool switcher = SwitcherClasses.Contains(beforeClass) || sinceAlt < AltSwitchGrace ||
                         beforeClass == "ForegroundStaging" && sinceAlt < AltStagingGrace;
         Point pointer = Cursor.Position;
