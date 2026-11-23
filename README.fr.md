@@ -55,10 +55,10 @@ Rognez une vue sur la partie qui vous intéresse et zoomez. Une vue d'une partie
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Rognez une vue sur la partie qui vous intéresse et zoomez. Une vue d'une partie de l'écran fonctionne de la même façon.">
 </p>
 
-L'effet verre n'atténue que l'arrière-plan. Réglez une fenêtre une fois, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.
+L'effet verre n'atténue que l'arrière-plan. Épinglez une fenêtre, rendez-la translucide ou ouvrez-en une vue, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="L'effet verre n'atténue que l'arrière-plan. Réglez une fenêtre une fois, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="L'effet verre n'atténue que l'arrière-plan. Épinglez une fenêtre, rendez-la translucide ou ouvrez-en une vue, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.">
 </p>
 
 L'effet verre avec une vidéo derrière : chaque fenêtre d'application peut avoir son propre fond animé.
@@ -87,6 +87,7 @@ Activez l'effet verre sur une fenêtre (**Ctrl+Alt+G**) et elle peut afficher un
 derrière son texte. Dans **Settings → Backgrounds**, choisissez-en un pour toutes les applications, ou donnez à une
 application le sien. Une vidéo peut jouer son son, et elle se met en pause quand sa fenêtre est réduite ou sur un
 autre bureau.
+Plusieurs peuvent se relayer, et elles peuvent aussi venir d'un lien web.
 
 ## Fonctions
 
@@ -104,6 +105,7 @@ autre bureau.
 - Rogner sur la partie d'une fenêtre sur laquelle vous cliquez, et la garder quand la fenêtre est redimensionnée
 - Garder l'original caché et la vue à jour
 - Couper le son de l'original depuis la vue
+- Copier l'image ou le texte d'une vue, en garder une copie figée, l'enregistrer en vidéo ou masquer des parties privées
 - Utiliser des applications dans une vue : Chrome, Edge, Brave, Vivaldi, Firefox, applications Electron et Explorateur de fichiers, ainsi que les autres applications, Enhanced hover et le défilement par clic du milieu *(expérimental)*
 - Limite d'images par seconde, opacité, verrouillage de position et clics traversants pour chaque vue
 - Réduire les vues dans la barre des tâches, aperçu au survol et loupe de lecture
@@ -133,10 +135,12 @@ autre bureau.
 **Arrière-plans** *(expérimental)*
 - Une image, un GIF animé ou une vidéo derrière le texte d'une fenêtre, grâce à l'effet verre
 - Un arrière-plan pour toutes les applications, et des applications avec le leur ou sans
+- Plusieurs images et vidéos qui se relaient, chacune avec son ajustement, son volume, sa vitesse et sa luminosité
+- Des images et des vidéos depuis un lien web
 - Remplir, ajuster, étirer, mosaïque ou centrer
 - Un grand aperçu : cliquez pour choisir un fichier, ou déposez-en un dessus
-- Le son d'une vidéo, avec son propre volume, depuis la dernière fenêtre utilisée
-- Les vidéos se mettent en pause quand leur fenêtre est réduite ou sur un autre bureau
+- Le son d'une vidéo, avec son propre volume, depuis la dernière fenêtre utilisée, tant que son application est au premier plan
+- Les vidéos se mettent en pause quand leur fenêtre est réduite ou sur un autre bureau, derrière un jeu ou une application en plein écran, et quand Windows économise la batterie
 
 **Au quotidien**
 - Une barre d'outils sur les barres de titre, un menu de fenêtre par Ctrl+clic droit et un menu complet dans la zone de notification

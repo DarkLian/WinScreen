@@ -68,4 +68,5 @@ dotnet test WinScreen.slnx -c Release --filter 'Category!=RealWindows&Category!=
 The first command includes isolated test windows to check Settings, menus, PiP, Anchors, and error text in all three
 languages. Validation rejects missing or unused keys, duplicate keys, invalid JSON, empty translations, and changed
 format arguments. A digest test records each catalog's exact text, including spaces and accelerators.
-For an intentional wording change, review the catalog diff and update the affected expected digest in `LocalizationTests.cs`.
+For an intentional wording change, review the catalog diff, then run the tests once with `WINSCREEN_UPDATE_REVIEWED=1` to
+update the digests in `tests/WinScreen.Tests/Fixtures/localization`.

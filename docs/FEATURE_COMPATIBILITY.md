@@ -1,7 +1,7 @@
 # WinScreen feature compatibility
 
 What each WinScreen feature does with each kind of window, as the code behaves today (last checked
-2026-11-22, after version 1.3.0). Where the code and its tests don't settle a case, it says
+2026-11-24, for version 1.5.0). Where the code and its tests don't settle a case, it says
 **Unverified** rather than guessing.
 
 Paths are relative to `src/WinScreen/` unless they start with `tests/`.
@@ -23,7 +23,9 @@ Paths are relative to `src/WinScreen/` unless they start with `tests/`.
   covered. Protected video may show as black.
 - **Smooth mode** shows Windows' yellow capture border on Windows 10; on Windows 11 WinScreen asks to leave it off.
 - **Screenshots and screen sharing** don't show views of a display or region, or Anchors that move off content.
-- **Dark, Glass and Crop** depend on how each app draws itself.
+- **Dark, Glass and Crop** depend on how each app draws itself. Crop, Roll up, Borderless and Fill display can't be turned
+  on while Dark or Glass is on (see "Under Dark or Glass").
+- **Saved setups** don't remember Glass.
 - **Using apps through a view**: Chrome, Edge, Brave, Vivaldi, Firefox, Electron apps and File Explorer without experimental features; other apps, Enhanced hover and
   middle-click scrolling *(experimental)*:
   - Some newer controls, in Store apps and parts of File Explorer, take clicks, right-clicks and scrolling, but not
@@ -83,9 +85,9 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **Programs not on the work-on list**, when that list isn't empty | Refused with the program's name. | same |
 | **Administrator (elevated) apps**, when WinScreen isn't elevated | Windows' UIPI blocks WinScreen from tagging the window, so effects are refused with a message saying to start WinScreen as administrator. Mouse gestures, the title-bar toolbar and automatic Anchors check for elevation first and leave the app alone. With **Run as administrator** on, WinScreen itself keeps running as you and starts a small helper, the same program elevated, that acts only on administrator apps' windows: a command for one of them (hotkey, menu, command line) is handed to the helper, and their toolbar, gestures, rules and Anchors are the helper's own; it has no tray icon, says what it has to say through WinScreen's, and closes with it. Each keeps its own record of what it changed, so a crash of either puts back only its own windows; drops onto a view of an administrator app stay impossible (Windows' rule). Where the helper can't run (UAC off, a standard account), or with `"AdministratorHelper": false` in settings.json, WinScreen runs as administrator as one copy, as before (`AppRoles.Reaches`, `Tray/HelperLink.cs`, `AdministratorHelperTests`, `AdministratorHelperEndToEndTests`). | `WindowIdentity.Capture`, `Windows/WindowIdentity.cs`; `TrayApplication.CanReach` |
 | **App not responding** | Most changes wait half a second for an answer, then say "The window isn't responding right now." | `WindowController.EnsureResponsive` |
-| **Full-screen app or game running** (Settings → General → "Pause new commands during games and full-screen apps", on by default) | Hotkeys and toolbar commands are refused, except the ones that only take something away: Put back, Put every window back, the commands for every window (below), and turning Borderless off. Views follow their own rules (see Picture-in-Picture). | `FullScreenPolicy.Decide`, `Windows/FullScreen.cs` |
+| **Full-screen app or game running** (Settings → General → "Pause new commands during games and full-screen apps", on by default) | Hotkeys and toolbar commands are refused, except the ones that only take something away: Restore this window, Restore all windows, the commands for every window (below), turning Borderless or Fill display off, the commands for a window's view, tile or Anchor that already exists, and a view's own commands. Opening a view follows its own rules (see Picture-in-Picture). | `FullScreenPolicy.Decide`, `Windows/FullScreen.cs` |
 | **PC locked or the user is away** | The mouse hook is removed, so gestures and Ctrl+Alt+wheel stop. | `ModifierHookPolicy`, `FullScreen.IsAway` |
-| **Experimental features off** | Dark, Glass, Shrink, Crop and Roll up are refused with "Turn on experimental features in Settings". Turning experimental off while they're in use undoes them. | `CommandCatalog.IsExperimental`, `Settings/AppSettings.cs`; `TrayApplication.ApplyPreferences` |
+| **Experimental features off** | Dark, Glass, Shrink, Crop, Roll up, Keep areas as they are and Glass levels are refused with "Turn on experimental features in Settings". Turning experimental off while they're in use undoes them. | `CommandCatalog.IsExperimental`, `Settings/AppSettings.cs`; `TrayApplication.ApplyPreferences` |
 
 ## Window states used in the tables
 
@@ -110,15 +112,15 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **Opacity** (Ctrl+Alt+Up/Down, O) | ✅ | ✅ | ✅ ¹³ | ✅ | ⚠️ ² | ✅ | ✅ ³ | ✅ |
 | **Click-through** (Ctrl+Alt+C) | ✅ | ✅ | ✅ ¹³ | ✅ | ⚠️ ² | ✅ | ✅ | — |
 | **Send to bottom** | ✅ | ✅ | ✅ ¹³ | ✅ | ⚠️ ² | ✅ ⁴ | ❌ ⁵ | ✅ |
-| **Borderless / Fill display** | ✅ | ⚠️ ⁶ | ✅ ¹⁸ | — | ❌ ⁷ | ✅ | ❌ | ✅ |
+| **Borderless / Fill display** | ✅ | ⚠️ ⁶ | ✅ ¹⁸ | — | ⚠️ ² ⁷ | ✅ | ❌ ⁶ | ✅ |
 | **Dark title bar** | ✅ | ✅ | ✅ ¹³ | ❌ ¹⁴ | ⚠️ ² | ✅ | ✅ | ✅ |
 | **Roll up** 🧪 | ✅ ⁸ | ✅ ¹⁹ | ✅ ¹⁹ | ❌ | ❌ | ✅ | ❌ | ✅ |
 | **Crop** 🧪 | ✅ ¹⁵ | ✅ ¹⁵ | ⚠️ ¹⁷ | ❌ ⁹ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
-| **Dark** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ⚠️ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
-| **Glass** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ⚠️ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
-| **Shrink to a tile** 🧪 | ✅ | ✅ | ⚠️ ¹¹ | ❌ ⁹ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
-| **Put this window back** (Ctrl+Alt+U) | ✅ | ✅ | ✅ | ✅ | ✅ ¹² | ✅ | ✅ | ✅ |
-| **Put every window back** (Ctrl+Alt+R) | ✅ | ✅ | ✅ | ✅ | ✅ ¹² | ✅ | ✅ | ✅ |
+| **Dark mode** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ⚠️ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
+| **Glass mode** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ⚠️ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
+| **Shrink** 🧪 | ✅ | ✅ | ⚠️ ¹¹ | ❌ ⁹ | ⚠️ ² | ✅ | ✅ ²⁰ | ✅ |
+| **Restore this window** (Ctrl+Alt+U) | ✅ | ✅ | ✅ | ✅ | ✅ ¹² | ✅ | ✅ | ✅ |
+| **Restore all windows** (Ctrl+Alt+R) | ✅ | ✅ | ✅ | ✅ | ✅ ¹² | ✅ | ✅ | ✅ |
 
 1. **Pause pinning while a pinned window is maximized** (Settings → Appearance) takes the window off the top while it's maximized and puts it
    back after (`WindowController.FollowMaximized`, `Windows/WindowController.cs`).
@@ -130,16 +132,18 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 5. "Show this window first, then try again." A hidden window is parked out of sight, so Crop, Dark and Glass,
    which work from what is on screen, wait for it to be shown.
 6. **Borderless** needs a normal window ("Show this window normally first"). **Fill display** works from maximized.
+   Neither works on a hidden, cropped or rolled-up window, with the same message.
    Both also work on apps that draw their own title bar, such as browsers: Borderless keeps the window as big as it
    shows. Borderless is refused for a window with no frame at all ("This window has no frame to take away"); Fill
    display still works there. Both are refused while any game uses exclusive full screen (`WindowAppearance.cs`).
    **Dark title bar** only changes a title bar Windows draws ("This window draws its own title bar").
-7. A game in exclusive full screen: "Borderless mode isn't available while a game uses exclusive full screen."
+7. A game in exclusive full screen: "Borderless mode isn't available while a game uses exclusive full screen." A window
+   that fills the screen usually has no frame, so Borderless says so; Fill display still works.
 8. Needs a standard title bar, and refuses an app that keeps its own minimum height (`errors.rollUp.*`).
 9. "Turn off borderless mode first." Crop is also refused for **custom-shape** windows.
 10. The effect stops drawing while the window is minimized and comes back with it (`Glass/ContentOverlay.cs`).
 11. A minimized window is restored first, then shrunk (`Pip/ShrinkTile.cs`).
-12. Put back always runs, even during a full-screen app.
+12. Both always run, even during a full-screen app.
 13. The window stays minimized, and the change is there when it comes back.
 14. Borderless takes the title bar away, so there is none to darken.
 15. Some apps put their own shape straight back (Windows Forms ones with a frame, for example). Crop then says
@@ -153,6 +157,26 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
     note 6.
 19. The window comes back to its usual size first, then rolls up. One that was maximized is maximized again when
     it's rolled down.
+20. A window with a view: its view closes and the tile takes its place. A tile's own window comes back.
+
+### Under Dark or Glass
+
+On a PC with a graphics card, Dark mode and Glass hide the window and draw it again on top, where it still takes every
+click. WinScreen treats it as a window on screen, with these exceptions. (On a PC without one, Dark mode's plain filter
+and one-color Glass leave the window itself on screen, and nothing here applies.)
+
+| Feature | While Dark or Glass is on |
+|---|---|
+| Opacity, Click-through, Send to bottom, Dark title bar | ✅ The effect is drawn at the opacity chosen. |
+| Arrange window, Move to display, exact position, Back to previous position | ✅ |
+| Alt+drag, Alt+right drag, snapping, Ctrl+Alt+wheel, the window menu gesture | ✅ (Alt+drag and Ctrl+Alt+wheel since 1.5.0) (`WindowController.GestureBlocked`, `ModifierGestureTests.Alt_drags_and_the_opacity_wheel_work_on_a_window_under_an_effect`) |
+| Anchors, the toolbar, Keep areas as they are, Glass levels | ✅ |
+| Pin on top | ⚠️ Stays on top, but the colored border isn't shown, Pause pinning while maximized doesn't apply, and a pin another program takes isn't put back, until the effect is off (`WindowController.RefreshRecords`, `VisiblePinnedWindows`). |
+| Make see-through windows solid while the mouse is over them | ❌ Waits until the effect is off. |
+| Crop, Roll up, Borderless, Fill display | ❌ Turn the effect off first. A window that is already cropped or rolled up can get Dark or Glass; a borderless or filled one can't ("Turn off borderless mode first"). |
+| Shrink | ✅ The effect is off while it's a tile and comes back with the window. |
+| Picture-in-Picture | ⚠️ The effect is turned off first. |
+| Remember setup | ⚠️ Remembers Dark mode, not Glass. |
 
 **Own transparency** windows (the app made itself see-through): Opacity, Click-through, hiding and Glass are refused
 with "This window draws its own transparency…" (`EnsureLayeringSafe`, `Windows/WindowController.cs`).
@@ -163,9 +187,9 @@ another program undoes a change, it either puts it back or lets go of it, and sa
 | What happened | What WinScreen does | Where |
 |---|---|---|
 | Another program took "always on top" from a pinned window | Pins it again. If it is taken more than three times within ten seconds, WinScreen lets go of the pin and says "Another program keeps taking…". It leaves the window alone while it covers its display (the app's own full screen, unless WinScreen filled the display with it), is minimized, isn't answering, or while the pin is paused for a maximized window. | `WindowController.StillPinned` |
-| The app rewrote its own transparency or click-through | Seen on two checks in a row (a moment in passing doesn't count), WinScreen lets go of its opacity, Glass colour and click-through on that window and says so. Put back then leaves the app's own transparency alone. | `WindowController.StillLayered` |
+| The app rewrote its own transparency or click-through | Seen on two checks in a row (a moment in passing doesn't count), WinScreen lets go of its opacity, Glass colour and click-through on that window and says so. Restore this window then leaves the app's own transparency alone. | `WindowController.StillLayered` |
 | The app took the crop off itself | The window is no longer shown as cropped. Otherwise a crop keeps its rectangle through a resize. | `WindowController.StillCropped` |
-| A window with Dark or Glass stops taking clicks | Four times a second, each window with a look is asked where a press at its middle would go. If presses keep going elsewhere for a second, that look is turned off and the person is told. A cropped window is asked at the middle of the part it keeps. Windows that are cloaked, on another virtual desktop, made click-through or hidden behind a tile or a view aren't judged, nor a spot where something of the person's is above the window. | `Windows/PressWatch.cs` |
+| A window with Dark or Glass lets clicks through | Four times a second, each window with a look is asked where a press at its middle would go. If presses keep going elsewhere for a second, that look is turned off and the person is told. A cropped window is asked at the middle of the part it keeps. Only the press going to a window below, or to the look's own window, counts. Windows that are cloaked, on another virtual desktop, disabled by their app, made click-through or hidden behind a tile or a view aren't judged, nor a spot where anything else is in front, Windows' own boxes such as Start and Open with included. | `Windows/PressWatch.cs` |
 | Fade range, Glass levels for each app or window, and areas kept as they are (Glass and Dark mode) | All need a graphics card: on a PC without one, Glass makes one colour see-through and Dark mode uses its plain filter, and none of these settings change them. Kept areas are saved per app and scaled with the window's display scaling. With fading Glass off, an app with kept areas gets plain Glass drawn by the graphics card instead of the colour-key kind; its see-through page then takes clicks rather than passing them to what is behind. | `Glass/ContentOverlay.cs`, `Glass/ContentShaders.cs`, `Settings/KeptAreaPreferences.cs` |
 | A window with Glass has a video behind it (Settings → Backgrounds) | It plays while the window shows and pauses while the window is minimized or cloaked, as on another virtual desktop. Sound, when turned up, comes from one window at a time: the last one in front whose background has sound, and (unless turned off) only while its app is in front. Videos also hold still behind a game or full-screen app (not when the full-screen window is the one with Glass) and while Windows saves battery (each can be turned off). Changing the fit, volume, speed or brightness doesn't start the video over. Several pictures and videos take turns, in order or shuffled, when each video ends or on a timer; the last one's picture stays until the next has one. A file that was moved or deleted, or a link that doesn't open, is named once and passed over for the next. When nothing can be opened, it is tried again after 5 seconds, then less and less often, up to every 5 minutes. A video that stops coming for 20 seconds gives way to the next. A link to a picture is fetched over the web; a link to a video is played by Windows' own player, so what it can play depends on that. | `Glass/ContentEffects.cs`, `Glass/ContentOverlay.cs`, `Glass/Backdrop.cs` |
 
@@ -239,10 +263,10 @@ something away, so they also work while a full-screen app runs (`CommandCatalog.
 | Minimized | ⚠️ | WinScreen asks first, then restores it, because Windows doesn't draw minimized windows (`TrayApplication.OpenViewOf`). |
 | Hidden by WinScreen (Keep hidden) | ✅ | That's how Keep hidden works: the original is invisible but still drawn. |
 | Shown (Keep hidden off) and fully covered | ✅ / ⚠️ | Browsers and Electron apps stop drawing once nothing of their window shows. While another window covers all of it, the original is made see-through and click-through and put above the rest, where it can't be seen either, so it goes on drawing; it keeps its place, its taskbar button and Alt+Tab, and Keep hidden stays off. As soon as a part of it would show, it goes back under the windows still over it. Picked or brought forward by its app, it comes to the front as usual. When the window in front is minimized (its button or the taskbar) and Windows passes the see-through original over for a window below it, the original gets the focus, as it would have; while another window still covers it, the focus goes on to the next window. One that stops answering stays see-through until it answers, without holding WinScreen up. Nothing is lifted while an app is full screen. On minimizing the window over it, what's under the original showed for one look in 144, 14 ms in (Windows 11). A popup of its own appearing (it would go up with it) puts it back. It isn't done for a window WinScreen pinned, filled, cropped, rolled up or drew with Glass, one that refuses to be see-through, or one Windows won't put on top because it was never used; those stop drawing while covered as before, and nothing is said. Recorded first, so a crash puts the window back (`WindowController.LiftWhileCovered`, `PipWindow.Cover.cs`, `CoverLiftTests`: a covered Chrome keeps drawing, measured against the same Chrome freezing without it). |
-| Shrunk, Dark or Glass | ⚠️ | Those are turned off first; if one can't be, "Show this window first". |
+| Shrunk, Dark or Glass | ⚠️ | A tile, and Dark or Glass drawn by the graphics card, are turned off first; if one can't be, "Show this window first". |
 | Elevated | ❌ | Refused with a message saying to start WinScreen as administrator, unless it already runs that way (`WindowIdentity.Capture`). |
 | Game in exclusive full screen | ❌ | "Views can't appear over a game in exclusive full screen." |
-| Any app in full screen, with Pause new commands during games and full-screen apps on | ⚠️ | Allowed only with **Allow Picture-in-Picture in full screen** on, and only for borderless full screen (`FullScreenPolicy`, `Windows/FullScreen.cs`). Pressing the view hotkey in a game closes the newest view instead. |
+| Any app in full screen, with Pause new commands during games and full-screen apps on | ⚠️ | Allowed only with **Still allow opening Picture-in-Picture in full-screen apps** on, and only for borderless full screen (`FullScreenPolicy`, `Windows/FullScreen.cs`). Pressing the view hotkey in a game closes the newest view instead. |
 | A window Windows won't make a thumbnail of | ❌ | "This window can't be shown in Picture-in-Picture." (`Pip/DwmThumbnailBackend.cs`) |
 | A whole display, or a region of one | ✅ | The view keeps itself out of screen capture so it never shows itself; that's also why screenshots and screen sharing leave it out. If Windows refuses that, the view isn't opened ("This version of Windows can't show a view of the screen."). |
 
@@ -377,16 +401,19 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 | **Anchor** (manual) | ✅ | ✅ | ✅ ¹ | ⚠️ ² | ❌ | ❌ ⁶ |
 | **Automatic Anchors** | ✅ | ✅ | ✅ ¹ | ⚠️ ² | ⚠️ ³ | ❌ ⁶ |
 | **Title-bar toolbar** | ✅ | ✅ | — | ❌ | ❌ | ❌ ⁶ |
-| **Window menu gesture** (Ctrl+right click) | ✅ | ✅ | ❌ | ❌ | ⚠️ ⁴ | ⚠️ ⁷ |
+| **Window menu gesture** (Ctrl+right click) | ✅ | ✅ | ❌ | ❌ | ❌ ⁴ | ⚠️ ⁷ |
 | **Ctrl+Alt+wheel opacity** | ✅ | ✅ | ❌ | ❌ | ❌ | ⚠️ ⁷ |
 | **Saved setups** | ✅ ⁵ | ✅ | — | ⚠️ ² | ❌ | ❌ |
 
 1. Clicking the Anchor brings a minimized window back (`Anchors/AnchorButton.cs`).
 2. Paused with the rest of WinScreen while a full-screen app runs.
 3. Has its own **Only** and **Never** lists on the Anchors page, on top of the main lists.
-4. Has its own leave-alone list on the Mouse gestures page.
-5. Applied once, the first time a main window of that program comes forward; changes after that stay. Dark from a
-   saved setup needs experimental on.
+4. Has its own leave-alone list on the Mouse gestures page too.
+5. Applied once, the first time a main window of that program comes forward, or each time it does with **Every time the
+   window comes forward** on; changes after that stay. It remembers the pin, opacity, Dark mode and the view, and can
+   add a place, a display, Borderless, an Anchor and what the toolbar does; Glass, Crop and Roll up aren't remembered.
+   Dark mode from a saved setup needs experimental on, and can't be combined with Borderless on a PC with a graphics
+   card.
 6. Unless WinScreen runs as administrator too. Then the toolbar isn't shown on the app and no automatic Anchor is
    made for it, as mouse gestures leave it alone; a manual Anchor says to start WinScreen as administrator. Tested
    with a real administrator app on Windows 11.
@@ -404,7 +431,8 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 | Borderless + Crop, Hide, Roll up or a view | Refused: "Turn off borderless mode first." |
 | Cropped / rolled up / hidden + Borderless | Refused: "Show this window normally first." |
 | Shrunk + a view of the same window | The tile is closed first, then the view opens. |
-| Dark or Glass + a view of the same window | The effect is turned off first. |
+| Dark or Glass (drawn by the graphics card) + a view of the same window | The effect is turned off first. |
+| A view of a window + Shrink | The view closes first. |
 | Dark mode + Glass | Never both: turning one on turns the other off first. If the new one fails or is refused (a window that is dark already), the old one is put back (`TrayApplication.SwitchLook`). |
 | Arrange (a place or exact position) + maximized | The window comes back to its usual size in the place chosen; Back to previous position maximizes it again. |
 | View open + its source pinned or see-through | Allowed; the view shows the window as it is. |
@@ -416,8 +444,8 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 
 | Problem | Fix |
 |---|---|
-| A window is invisible or can't be clicked | **Ctrl+Alt+R** (Put every window back), or the same item in the tray menu. |
-| One window looks wrong | **Ctrl+Alt+U** on it, or **Put this window back** in its window menu. |
+| A window is invisible or can't be clicked | **Ctrl+Alt+R** (Restore all windows), or the same item in the tray menu. |
+| One window looks wrong | **Ctrl+Alt+U** on it, or **Restore this window** in its window menu. |
 | A window moved somewhere you didn't want | **Back to previous position** (Arrange window) goes back up to five steps. |
 | A drag went wrong | **Esc** before letting go. |
 | WinScreen crashed | Start it again; it puts windows back from its journal. If the journal is damaged it says where a copy was saved. |

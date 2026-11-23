@@ -53,10 +53,10 @@ Crop a view to the part you want and zoom in. A view of a region of the screen w
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Crop a view to the part you want and zoom in. A view of a region of the screen works the same way.">
 </p>
 
-Glass fades only the background. Set a window up once, press Ctrl+Alt+Shift+S, and it opens that way next time.
+Glass fades only the background. Pin a window, make it see-through or open a view of it, press Ctrl+Alt+Shift+S, and it opens that way next time.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glass fades only the background. Set a window up once, press Ctrl+Alt+Shift+S, and it opens that way next time.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glass fades only the background. Pin a window, make it see-through or open a view of it, press Ctrl+Alt+Shift+S, and it opens that way next time.">
 </p>
 
 Glass with a video behind it: any app's window can have its own live background.
@@ -81,6 +81,7 @@ again when you switch away. [What works where](docs/FEATURE_COMPATIBILITY.md) li
 Turn on Glass for a window (**Ctrl+Alt+G**) and it can show a picture, animated GIF or video behind its text. Choose
 one in **Settings → Backgrounds** for every app, or give an app its own. A video can play its sound, and it pauses
 while its window is minimized or on another desktop.
+Several can take turns, and they can come from a web link too.
 
 ## Features
 
@@ -98,6 +99,7 @@ while its window is minimized or on another desktop.
 - Crop to a part of a window you click, and keep it when the window is resized
 - Keep the original hidden and the view updating
 - Mute the original's sound from the view
+- Copy a view's picture or its text, keep a frozen copy, record it, or cover private parts
 - Use apps through a view: Chrome, Edge, Brave, Vivaldi, Firefox, Electron apps and File Explorer, and other apps, Enhanced hover and middle-click scrolling *(experimental)*
 - Per-view frame limit, opacity, position lock and click-through
 - Minimize views to the taskbar, hover preview and reading lens
@@ -127,10 +129,12 @@ while its window is minimized or on another desktop.
 **Backgrounds** *(experimental)*
 - A picture, animated GIF or video behind a window's text, through Glass
 - One background for every app, and apps with their own or with none
+- Several pictures and videos that take turns, each with its own fit, sound, speed and brightness
+- Pictures and videos from a web link
 - Fill, fit, stretch, tile or center
 - A large preview: click it to choose a file, or drop one onto it
-- A video's sound, with its own volume, from the window you used last
-- Videos pause while their window is minimized or on another desktop
+- A video's sound, with its own volume, from the window you used last, while its app is in front
+- Videos pause while their window is minimized or on another desktop, behind a game or full-screen app, and while Windows saves battery
 
 **Everyday use**
 - A toolbar on title bars, a window menu on Ctrl+right-click, and a full tray menu

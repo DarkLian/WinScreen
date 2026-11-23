@@ -55,10 +55,10 @@ Corte uma visualização na parte que você quer e amplie. Uma visualização de
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Corte uma visualização na parte que você quer e amplie. Uma visualização de parte da tela funciona do mesmo jeito.">
 </p>
 
-Vidro esmaece só o fundo. Ajuste uma janela uma vez, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.
+Vidro esmaece só o fundo. Fixe uma janela, deixe-a translúcida ou abra uma visualização dela, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Vidro esmaece só o fundo. Ajuste uma janela uma vez, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Vidro esmaece só o fundo. Fixe uma janela, deixe-a translúcida ou abra uma visualização dela, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.">
 </p>
 
 Vidro com um vídeo atrás: a janela de qualquer app pode ter seu próprio fundo animado.
@@ -85,6 +85,7 @@ trazer a janela real de volta, e ela se esconde de novo quando você muda para o
 Ative o Vidro em uma janela (**Ctrl+Alt+G**) e ela pode mostrar uma imagem, um GIF animado ou um vídeo atrás do texto.
 Em **Settings → Backgrounds**, escolha um para todos os apps ou dê a um app o seu próprio. Um vídeo pode tocar com som
 e pausa enquanto a janela está minimizada ou em outra área de trabalho.
+Vários podem se revezar, e também podem vir de um link da web.
 
 ## Recursos
 
@@ -102,6 +103,7 @@ e pausa enquanto a janela está minimizada ou em outra área de trabalho.
 - Cortar na parte de uma janela em que você clica, e manter o corte quando a janela é redimensionada
 - Manter o original escondido e a visualização atualizada
 - Silenciar o som do original pela visualização
+- Copiar a imagem ou o texto de uma visualização, guardar uma cópia congelada, gravá-la ou cobrir partes privadas
 - Usar aplicativos por uma visualização: Chrome, Edge, Brave, Vivaldi, Firefox, aplicativos Electron e Explorador de Arquivos, além de outros aplicativos, Enhanced hover e rolagem com o botão do meio *(experimental)*
 - Limite de quadros, opacidade, trava de posição e cliques passantes para cada visualização
 - Minimizar visualizações para a barra de tarefas, prévia ao passar o mouse e lupa de leitura
@@ -131,10 +133,12 @@ e pausa enquanto a janela está minimizada ou em outra área de trabalho.
 **Fundos** *(experimental)*
 - Uma imagem, um GIF animado ou um vídeo atrás do texto de uma janela, com o Vidro
 - Um fundo para todos os apps, e apps com o seu próprio ou sem nenhum
+- Várias imagens e vídeos que se revezam, cada um com seu ajuste, som, velocidade e brilho
+- Imagens e vídeos de um link da web
 - Preencher, ajustar, ampliar, lado a lado ou centralizar
 - Uma visualização grande: clique para escolher um arquivo ou solte um nela
-- O som de um vídeo, com volume próprio, da última janela que você usou
-- Os vídeos pausam enquanto a janela está minimizada ou em outra área de trabalho
+- O som de um vídeo, com volume próprio, da última janela que você usou, enquanto o app dela está na frente
+- Os vídeos pausam enquanto a janela está minimizada ou em outra área de trabalho, atrás de um jogo ou app em tela cheia, e enquanto o Windows economiza bateria
 
 **No dia a dia**
 - Uma barra de ferramentas nas barras de título, um menu da janela com Ctrl+clique direito e um menu completo na bandeja do sistema

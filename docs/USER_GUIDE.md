@@ -266,7 +266,7 @@ last until the window closes, and **Save for this app** keeps them for all its w
 
 Set a window up the way you like it: pinned, see-through, dark, with a view open if you want one. Then press
 **Ctrl+Alt+Shift+S**. From then on, that program's windows start the same way, even after a restart.
-Press it again on a plain window to forget the setup, or remove it in **Settings → Saved setups**.
+Press it again on a plain window to forget the setup, or remove it in **Settings → Saved setups**. Glass isn't part of a setup.
 
 Choose **Change** there to keep a setup to windows whose title contains some text, to put the window in a place or on
 a display, to make it borderless, give it an Anchor or keep the toolbar off it. For an app that draws its own title
@@ -286,19 +286,19 @@ Changes take effect as soon as you make them. The mouse wheel only scrolls; clic
 | Page | What you'll find |
 | --- | --- |
 | General | Language, light or dark look, notifications, starting with Windows, running as administrator, updates, experimental features, and moving your settings to another PC |
-| Actions and shortcuts | Everything WinScreen can do, with its shortcut. Select an action to change its shortcut |
+| Picture-in-Picture | How views look and behave, and where pictures and recordings are saved |
+| Backgrounds | How Glass looks, and a picture or video behind it, for every app or for each app |
+| Anchors | Automatic Anchors and how Anchors look |
+| Appearance | Opacity, pinned windows and Dark mode |
 | Mouse gestures | Move and resize with a key, and the mouse menu |
 | Toolbar | Where the toolbar appears, how quickly, and which buttons it shows |
-| Anchors | Automatic Anchors and how Anchors look |
-| Appearance | Opacity, pin border and Dark mode |
-| Backgrounds | How Glass looks, and a picture or video behind it, for every app or for each app |
-| Picture-in-Picture | How views look and behave, and where copied pictures are saved |
+| Actions and shortcuts | Everything WinScreen can do, with its shortcut. Select an action to change its shortcut |
 | Programs | Programs WinScreen should leave alone, or the only ones it should work on |
 | Saved setups | Program setups you've remembered |
 
 ## Putting things back
 
-- **Ctrl+Alt+U** puts the window you're using back to normal.
+- **Ctrl+Alt+U**, or **Restore this window** in its menu, puts the window you're using back to normal.
 - **Ctrl+Alt+R**, or **Restore all windows** in the tray menu, puts every window back.
 - **Turn off click-through everywhere** and **Unpin all windows** in the tray menu undo just that, for every window. Turn off click-through everywhere also makes click-through views take clicks again.
 - Closing WinScreen puts every window back too.

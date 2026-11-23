@@ -55,10 +55,10 @@ Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein. Eine A
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein. Eine Ansicht eines Bildschirmausschnitts funktioniert genauso.">
 </p>
 
-Glas blendet nur den Hintergrund aus. Richte ein Fenster einmal ein, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.
+Glas blendet nur den Hintergrund aus. Halte ein Fenster oben, mach es durchsichtig oder öffne eine Ansicht davon, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glas blendet nur den Hintergrund aus. Richte ein Fenster einmal ein, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glas blendet nur den Hintergrund aus. Halte ein Fenster oben, mach es durchsichtig oder öffne eine Ansicht davon, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.">
 </p>
 
 Glas mit einem Video dahinter: Jedes App-Fenster kann seinen eigenen bewegten Hintergrund haben.
@@ -85,6 +85,7 @@ echte Fenster zurückholen, und es versteckt sich wieder, sobald du wegwechselst
 Schalte Glas für ein Fenster ein (**Strg+Alt+G**), und hinter seinem Text kann ein Bild, ein animiertes GIF oder ein
 Video erscheinen. Unter **Settings → Backgrounds** wählst du eins für alle Apps oder gibst einer App ihr eigenes. Ein
 Video kann mit Ton laufen und pausiert, solange sein Fenster minimiert oder auf einem anderen Desktop ist.
+Mehrere können sich abwechseln, und sie können auch von einem Weblink kommen.
 
 ## Funktionen
 
@@ -102,6 +103,7 @@ Video kann mit Ton laufen und pausiert, solange sein Fenster minimiert oder auf 
 - Auf einen angeklickten Teil eines Fensters zuschneiden, auch wenn das Fenster seine Größe ändert
 - Das Original versteckt halten und die Ansicht trotzdem aktualisieren
 - Den Ton des Originals aus der Ansicht stummschalten
+- Das Bild oder den Text einer Ansicht kopieren, eine eingefrorene Kopie behalten, sie aufnehmen oder private Stellen abdecken
 - Apps über eine Ansicht benutzen: Chrome, Edge, Brave, Vivaldi, Firefox, Electron-Apps und Datei-Explorer, dazu andere Apps, Enhanced hover und Scrollen mit der mittleren Maustaste *(experimentell)*
 - Bildraten-Grenze, Deckkraft, Positionssperre und Klick-Durchlass pro Ansicht
 - Ansichten in die Taskleiste minimieren, Vorschau beim Darüberfahren und eine Leselupe
@@ -131,10 +133,12 @@ Video kann mit Ton laufen und pausiert, solange sein Fenster minimiert oder auf 
 **Hintergründe** *(experimentell)*
 - Ein Bild, animiertes GIF oder Video hinter dem Text eines Fensters, durch Glas
 - Ein Hintergrund für alle Apps, dazu Apps mit eigenem oder ganz ohne
+- Mehrere Bilder und Videos im Wechsel, jedes mit eigener Anpassung, eigenem Ton, Tempo und eigener Helligkeit
+- Bilder und Videos von einem Weblink
 - Ausfüllen, Anpassen, Strecken, Kacheln oder Zentrieren
 - Eine große Vorschau: Klick darauf, um eine Datei zu wählen, oder zieh eine Datei darauf
-- Der Ton eines Videos mit eigener Lautstärke, aus dem zuletzt benutzten Fenster
-- Videos pausieren, solange ihr Fenster minimiert oder auf einem anderen Desktop ist
+- Der Ton eines Videos mit eigener Lautstärke, aus dem zuletzt benutzten Fenster, solange seine App vorn ist
+- Videos pausieren, solange ihr Fenster minimiert oder auf einem anderen Desktop ist, hinter einem Spiel oder einer Vollbild-App und während Windows Akku spart
 
 **Im Alltag**
 - Eine Symbolleiste auf Titelleisten, ein Fenstermenü per Strg+Rechtsklick und ein vollständiges Infobereich-Menü

@@ -55,10 +55,10 @@ Recorta una vista a la parte que quieres y amplíala. Una vista de parte de la p
   <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Recorta una vista a la parte que quieres y amplíala. Una vista de parte de la pantalla funciona igual.">
 </p>
 
-Cristal difumina solo el fondo. Configura una ventana una vez, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.
+Cristal difumina solo el fondo. Fija una ventana, hazla translúcida o abre una vista de ella, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Cristal difumina solo el fondo. Configura una ventana una vez, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Cristal difumina solo el fondo. Fija una ventana, hazla translúcida o abre una vista de ella, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.">
 </p>
 
 Cristal con un vídeo detrás: la ventana de cualquier aplicación puede tener su propio fondo animado.
@@ -85,6 +85,7 @@ puede traer de vuelta la ventana real, que se vuelve a ocultar cuando cambias a 
 Activa Cristal en una ventana (**Ctrl+Alt+G**) y podrá mostrar una imagen, un GIF animado o un vídeo detrás de su
 texto. En **Settings → Backgrounds** elige uno para todas las aplicaciones o dale a una aplicación el suyo propio. Un
 vídeo puede sonar, y se pausa mientras su ventana está minimizada o en otro escritorio.
+Varios pueden turnarse, y también pueden venir de un enlace web.
 
 ## Funciones
 
@@ -102,6 +103,7 @@ vídeo puede sonar, y se pausa mientras su ventana está minimizada o en otro es
 - Recortar a la parte de una ventana en la que haces clic, y mantenerlo aunque la ventana cambie de tamaño
 - Mantener oculta la original y la vista actualizándose
 - Silenciar el sonido de la original desde la vista
+- Copiar la imagen o el texto de una vista, guardar una copia congelada, grabarla o tapar partes privadas
 - Usar aplicaciones desde una vista: Chrome, Edge, Brave, Vivaldi, Firefox, aplicaciones Electron y el Explorador de archivos, y otras aplicaciones, Enhanced hover y desplazamiento con el botón central *(experimental)*
 - Límite de fotogramas, opacidad, bloqueo de posición y paso de clics para cada vista
 - Minimizar vistas a la barra de tareas, vista previa al pasar el ratón y lupa de lectura
@@ -131,10 +133,12 @@ vídeo puede sonar, y se pausa mientras su ventana está minimizada o en otro es
 **Fondos** *(experimental)*
 - Una imagen, un GIF animado o un vídeo detrás del texto de una ventana, con Cristal
 - Un fondo para todas las aplicaciones, y aplicaciones con el suyo propio o sin ninguno
+- Varias imágenes y vídeos que se turnan, cada uno con su ajuste, sonido, velocidad y brillo
+- Imágenes y vídeos desde un enlace web
 - Rellenar, ajustar, expandir, mosaico o centrar
 - Una vista previa grande: haz clic para elegir un archivo o suelta uno encima
-- El sonido de un vídeo, con su propio volumen, desde la última ventana que usaste
-- Los vídeos se pausan mientras su ventana está minimizada o en otro escritorio
+- El sonido de un vídeo, con su propio volumen, desde la última ventana que usaste, mientras su aplicación está delante
+- Los vídeos se pausan mientras su ventana está minimizada o en otro escritorio, detrás de un juego o una aplicación a pantalla completa, y mientras Windows ahorra batería
 
 **Uso diario**
 - Una barra de herramientas en las barras de título, un menú de ventana con Ctrl+clic derecho y un menú completo en la bandeja
