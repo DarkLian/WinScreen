@@ -178,15 +178,18 @@ internal sealed class ViewRecording
                 // Sound is written a little behind the pictures, so packets still on their way fit where they belong.
                 if (sound is not null) timeline.Write(sound, start, (long)((elapsed - 0.25) * VideoFileWriter.SoundRate));
             }
-            // The newest picture, if one came after the last tick, ends the video.
+            // The newest picture ends the video, at the time it was stopped: an encoder that fell behind (a slow processor at
+            // a high rate) leaves fewer frames, never a shorter video.
+            long stopped = (long)Math.Floor(Stopwatch.GetElapsedTime(start).TotalSeconds * rate);
             if (TakeNewest() is { } last)
             {
                 Return(current);
                 current = last;
                 writer.Frame(current);
-                writer.Write(tick++);
-                frames++;
             }
+            writer.Write(tick = Math.Max(tick, stopped));
+            tick++;
+            frames++;
             Return(current);
             if (sound is not null) timeline.Write(sound, start, tick * VideoFileWriter.SoundRate / rate);
             writer.Finish();
