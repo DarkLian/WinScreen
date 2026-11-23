@@ -181,6 +181,15 @@ internal sealed class TargetProcess : IDisposable
             throw new InvalidOperationException("Test target didn't start its sound.");
     }
 
+    /// <summary>Plays a quiet tone on a loop, for a recording of the program's sound.</summary>
+    internal void PlayTone()
+    {
+        _process.StandardInput.WriteLine("tone");
+        _process.StandardInput.Flush();
+        if (NextReport() != "tone")
+            throw new InvalidOperationException("Test target didn't start its tone.");
+    }
+
     internal int ProcessId => _process.Id;
 
     /// <summary>Gives the window a new size; it keeps its top-left corner.</summary>

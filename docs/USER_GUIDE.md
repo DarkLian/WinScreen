@@ -35,7 +35,7 @@ You can change or clear any of these in **Settings → Actions and shortcuts**. 
 | Put this window back | Ctrl+Alt+U |
 | Put every window back | Ctrl+Alt+R |
 
-Other commands, like moving a window to a corner, have no shortcut until you give them one. So do the view's own: Keep hidden, Interactive or Watch only, Use or go to the original, Mute, Freeze, Rotate or mirror, Reset crop and zoom, Minimize or restore, Copy picture, Freeze a copy, Copy text and Cover parts. They work on the view of the window in front, or else on the view under the pointer, or the one it was last on; a minimized view comes back with its key.
+Other commands, like moving a window to a corner, have no shortcut until you give them one. So do the view's own: Keep hidden, Interactive or Watch only, Use or go to the original, Mute, Freeze, Rotate or mirror, Reset crop and zoom, Minimize or restore, Copy picture, Freeze a copy, Copy text, Record and Cover parts. They work on the view of the window in front, or else on the view under the pointer, or the one it was last on; a minimized view comes back with its key.
 
 <p align="center"><img src="assets/screenshots/settings-actions.png" width="880" alt="Settings, Actions and shortcuts page"></p>
 
@@ -105,6 +105,12 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 - **Copy text:** drag over the text you want, or click to take all of it, and the words are copied. It reads the text in
   the picture, so it also works on video, games, remote desktops and pages that won't let you select. It uses Windows'
   own text recognition for your languages.
+- **Record:** makes a video of what the view shows, cropped, zoomed and turned as it is, with covered parts black in
+  every frame. A red dot on the view shows it's recording. Choose **Stop recording**, then click the note on the view to
+  see the file. Minimizing or closing the view stops it and saves the video too. Like the Snipping Tool, it saves to
+  Screen Recordings in your Videos folder; in **Settings → Picture-in-Picture** you can choose another folder and
+  record the app's sound. It works whatever covers the view, and on views of a display or part of the screen (without
+  sound). On Windows 10, a view can't record while its original is hidden.
 - **Cover parts:** drag over anything private, such as an email address or a chat, and it's blacked out in the view.
   Copies, frozen copies, the text reader and sharing the view in a call never show it. Covers stay through zoom, crop,
   turning, Freeze, Keep hidden, minimizing and everything else, and are saved with a preset. Click a cover in the

@@ -13,11 +13,15 @@ public sealed record PipViewPreferences
     // Copy picture also saves a file, as Windows' Snipping Tool does; null folder is Windows' Screenshots folder.
     public bool SavePictures { get; init; } = true;
     public string? PictureFolder { get; init; }
+    // Null is Windows' Screen Recordings folder under Videos, where the Snipping Tool saves.
+    public string? RecordingFolder { get; init; }
+    public bool RecordSound { get; init; }
 
     internal PipViewPreferences Validated() => this with
     {
         HoverPreview = Enum.IsDefined(HoverPreview) ? HoverPreview : PipHoverPreview.Off,
         HoverDelayMilliseconds = Math.Clamp(HoverDelayMilliseconds, 250, 2000),
         PictureFolder = string.IsNullOrWhiteSpace(PictureFolder) ? null : PictureFolder.Trim(),
+        RecordingFolder = string.IsNullOrWhiteSpace(RecordingFolder) ? null : RecordingFolder.Trim(),
     };
 }

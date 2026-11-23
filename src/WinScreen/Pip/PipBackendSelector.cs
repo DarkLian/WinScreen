@@ -34,6 +34,8 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     private long _lastDisplayCheck;
     private PipDiagnostics _lastDiagnostics = new();
     private readonly Queue<string> _failures = new();
+    // Handed to the capture once it draws the view; whenever that capture ends, for whatever reason, so does this.
+    private ViewRecording? _recording;
     internal event Action<string>? Problem;
     internal bool CaptureBorderVisible => _active && _advanced is { } capture &&
         Interlocked.Read(ref capture.Diagnostics.Received) > 0 && !capture.Diagnostics.CaptureBorderHidden;
@@ -138,6 +140,25 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     internal (Task<Bitmap?> Picture, Point Origin)? TakePicture() =>
         _active && _advanced is { } capture ? (capture.TakePicture(), _source.CaptureOrigin(_visibleSource)) : null;
 
+    internal void Record(ViewRecording? recording)
+    {
+        if (recording == _recording) return;
+        EndRecording();
+        if (recording is null) return;
+        if (_disposed || _policy.Pinned && _advanced is null) { recording.Finish(); return; }
+        _recording = recording;
+        UpdateAdvanced();
+    }
+
+    private void EndRecording()
+    {
+        _recording?.Finish();
+        _recording = null;
+    }
+
+    // Recording needs a capture: false when this view can't have one now.
+    internal bool CanCapture => !_disposed && !(_policy.Pinned && (_advanced is null || _advanced.Completion.IsCompleted));
+
     public void SetSelection(Rectangle? selection)
     {
         _selection = selection;
@@ -158,6 +179,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
             return;
         }
         UseDwm();
+        EndRecording();
         _advanced?.Dispose();
         _retiring = _advanced is not null;
         _restart = _preferences.Backend != PipBackendPreference.Dwm;
@@ -191,7 +213,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
             _sourceHz = _source.RefreshRate; _targetHz = PipDisplay.CachedRefresh(_hwnd);
             if (_monitor != 0 && _monitor != monitor && _advanced is not null && !_policy.Pinned)
             {
-                UseDwm(); _advanced.Dispose(); _retiring = true; _restart = true;
+                UseDwm(); EndRecording(); _advanced.Dispose(); _retiring = true; _restart = true;
             }
             _monitor = monitor;
         }
@@ -207,7 +229,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         }
         if (!advanced.Completion.IsCompleted && Stopwatch.GetElapsedTime(advanced.LastProgress).TotalSeconds > 7)
         {
-            UseDwm(); advanced.Dispose(); _retiring = true; _restart = true;
+            UseDwm(); EndRecording(); advanced.Dispose(); _retiring = true; _restart = true;
             _lastDiagnostics = advanced.Diagnostics;
             _lastDiagnostics.Failure = "Capture/render worker exceeded its progress deadline.";
             Diagnostics.Log.Event("capture.hung", ("software", _software));
@@ -220,6 +242,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         {
             _lastDiagnostics = advanced.Diagnostics;
             UseDwm();
+            EndRecording();
             if (_failures.Count == 4) _failures.Dequeue();
             _failures.Enqueue($"{_lastDiagnostics.Failure}\n{_lastDiagnostics.Exception?.StackTrace}");
             bool recreate = _policy.Fail(Stopwatch.GetTimestamp());
@@ -249,6 +272,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         else if (advanced.Completion.IsCompleted)
         {
             UseDwm();
+            EndRecording();
             _advanced = null;
         }
         else if (advanced.State is PipSessionState.Live or PipSessionState.SourcePaused)
@@ -279,6 +303,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or ExternalException or NotSupportedException or InvalidOperationException)
         {
             Diagnostics.Log.Error("capture.startFailed", e);
+            EndRecording();
             _policy.Pin(Stopwatch.GetTimestamp());
             _lastDiagnostics.Failure = $"{e.GetType().Name} 0x{e.HResult:X8}";
             if (!_warned && _dwm is not null) { _warned = true; Problem?.Invoke(T("errors.pip.advancedUnavailable")); }
@@ -296,6 +321,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         advanced.SetVisible(_visible);
         advanced.SetFrozen(_frozen);
         advanced.SetTurn(_turn);
+        advanced.SetRecording(_active ? _recording : null);
         // WGC starts at the extended frame bounds; DWM's surface can include invisible resize borders.
         // Translate the shared DWM crop once, so click and crop geometry remain in their existing coordinate space.
         if (_visibleSource.IsEmpty || !_source.IsMinimized)
@@ -337,6 +363,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
     {
         if (_disposed) return;
         _disposed = true;
+        EndRecording();
         _advanced?.Dispose();
         _dwm?.Dispose();
     }

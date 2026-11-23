@@ -1593,6 +1593,8 @@ public sealed partial class TrayApplication : ApplicationContext
         _modifierDrag.Dispose();
         foreach (Form form in Application.OpenForms.Cast<Form>().ToArray())
             form.Close();
+        // The views have let go of their recordings; each file is completed before WinScreen goes.
+        if (!Pip.ViewRecording.FinishAll(TimeSpan.FromSeconds(10))) Diagnostics.Log.Event("recording.unfinishedAtExit");
         _toolbar.Dispose();
         _flash.Dispose();
         _snapPreview.Dispose();
@@ -1929,6 +1931,8 @@ public sealed partial class TrayApplication : ApplicationContext
         {
             Saves = () => _settings.PipViews.SavePictures,
             Folder = () => _settings.PipViews.Validated().PictureFolder,
+            RecordingFolder = () => _settings.PipViews.Validated().RecordingFolder,
+            RecordsSound = () => _settings.PipViews.RecordSound,
         };
         set;
     }

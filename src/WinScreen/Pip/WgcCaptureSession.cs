@@ -41,6 +41,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
     private volatile PipSessionState _state = PipSessionState.Starting;
     private int _generation;
     private TaskCompletionSource<Bitmap?>? _pictureWanted;
+    private ViewRecording? _recording;
     private Size _sourceSize;
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public Task Completion => _completion.Task;
@@ -103,6 +104,19 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
             _pictureWanted ??= new TaskCompletionSource<Bitmap?>(TaskCreationOptions.RunContinuationsAsynchronously);
             _wake.Set();
             return _pictureWanted.Task;
+        }
+    }
+
+    // This capture's frames go to the recording until it finishes or the capture ends, which finishes it.
+    public void SetRecording(ViewRecording? recording)
+    {
+        lock (_viewGate)
+        {
+            if (_recording == recording) return;
+            if (_stopping || _signalGone) { recording?.Finish(); return; }
+            _recording?.Finish();
+            _recording = recording;
+            _wake.Set();
         }
     }
 
@@ -205,10 +219,17 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
             long cachedTimestamp = 0, cachedArrival = 0;
             long? mismatchedSince = null;
             bool newCachedFrame = false, needsPresent = false, everPresented = false, readingBack = false;
+            // Recording: a frame is drawn for it when the picture changes, at most at its rate; it repeats the last one
+            // meanwhile.
+            ViewRecording? recordingFor = null;
+            bool recordPending = false;
+            long lastRecorded = 0;
             session.StartCapture();
             while (!_stopping && Volatile.Read(ref closed) == 0 && _state != PipSessionState.Failed)
             {
-                _wake.Wait(needsPresent || readingBack || _frames.HasPending ? Math.Max(1, 1000 / Math.Max(15, previousRate)) : 100);
+                bool recordingNow = Volatile.Read(ref _recording) is not null;
+                _wake.Wait(needsPresent || readingBack || _frames.HasPending ? Math.Max(1, 1000 / Math.Max(15, previousRate))
+                    : recordingNow ? 1000 / RecordingGeometry.Rate / 2 : 100);
                 if (_stopping || Volatile.Read(ref closed) != 0) break;
                 View view;
                 bool dirty;
@@ -226,7 +247,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                 }
                 bool sourcePaused = _source.IsMinimized;
                 bool ready = renderer.ReadyForWork(), submitted = false;
-                if (renderer.SetCovers(view.Covers)) { submitted = true; needsPresent = true; }
+                if (renderer.SetCovers(view.Covers)) { submitted = true; needsPresent = true; recordPending = true; }
                 // Retain the capture buffer until EndWork has flushed its copy commands.
                 Frame? taken = ready ? _frames.Take() : null;
                 // A session started while frozen still takes its first frame, so there is a picture to keep.
@@ -288,6 +309,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                             cachedArrival = owned.Arrival;
                             newCachedFrame = true;
                             needsPresent = true;
+                            recordPending = true;
                         }
                     }
                 }
@@ -324,6 +346,33 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                         if (!wanted.TrySetResult(picture)) picture.Dispose();
                     }
                 }
+                ViewRecording? recording;
+                lock (_viewGate)
+                {
+                    if (_recording is { Finished: true }) _recording = null;
+                    recording = _recording;
+                }
+                if (recording != recordingFor)
+                {
+                    renderer.StopRecording();
+                    recordingFor = recording;
+                    recordPending = true;
+                }
+                recordPending |= dirty;
+                if (recording is not null && renderer.HasFrame)
+                {
+                    renderer.CollectRecording(recording);
+                    if (ready && recordPending && Stopwatch.GetTimestamp() - lastRecorded >= ViewRecording.Period)
+                    {
+                        Rectangle shown = PipRenderGeometry.Crop(view.Crop, renderer.SourceSize);
+                        if (renderer.DrawRecording(recording.FrameSize(view.Turn.Oriented(shown.Size)), view.Crop))
+                        {
+                            recordPending = false;
+                            lastRecorded = Stopwatch.GetTimestamp();
+                            submitted = true;
+                        }
+                    }
+                }
                 if (submitted) renderer.EndWork();
                 if (!everPresented && Stopwatch.GetElapsedTime(Started).TotalSeconds > 5)
                     throw new TimeoutException("No presentable WGC frame within five seconds.");
@@ -346,6 +395,11 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
         finally
         {
             lock (_captureGate) _stopping = true;
+            lock (_viewGate)
+            {
+                _recording?.Finish();
+                _recording = null;
+            }
             void Release(Action dispose)
             {
                 try { dispose(); }

@@ -276,6 +276,109 @@ internal sealed class D3D11Renderer : IDisposable
         }
     }
 
+    // A recording's frames: the cache (covers in) drawn at the recording's own size with black around the picture, then
+    // read back through a few staging copies, each taken once the graphics card has finished it.
+    private ID3D11Texture2D? _recordTarget;
+    private ID3D11RenderTargetView? _recordView;
+    private readonly ID3D11Texture2D?[] _recordStaging = new ID3D11Texture2D?[3];
+    private readonly long[] _recordIssued = new long[3];
+    private long _recordSequence;
+    private Size _recordSize;
+
+    internal bool IsRecording => _recordTarget is not null;
+
+    internal void StopRecording()
+    {
+        _recordView?.Dispose(); _recordView = null;
+        _recordTarget?.Dispose(); _recordTarget = null;
+        for (int i = 0; i < _recordStaging.Length; i++)
+        {
+            _recordStaging[i]?.Dispose();
+            _recordStaging[i] = null;
+            _recordIssued[i] = 0;
+        }
+        _recordSize = Size.Empty;
+    }
+
+    // False when every staging copy is still waiting to be read: that frame is left out.
+    internal bool DrawRecording(Size frame, Rectangle requestedCrop)
+    {
+        if (_cache is null || frame.Width <= 0 || frame.Height <= 0) return false;
+        if (frame != _recordSize)
+        {
+            StopRecording();
+            _recordTarget = Device.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)frame.Width,
+                (uint)frame.Height, 1, 1, BindFlags.RenderTarget | BindFlags.ShaderResource));
+            _recordView = Device.CreateRenderTargetView(_recordTarget);
+            _recordSize = frame;
+        }
+        int slot = Array.IndexOf(_recordIssued, 0L);
+        if (slot < 0) return false;
+        Rectangle crop = PipRenderGeometry.Crop(requestedCrop, SourceSize);
+        Rectangle destination = RecordingGeometry.Letterbox(Turn.Oriented(crop.Size), frame);
+        Size upright = Turn.Oriented(destination.Size);
+        var constants = new Constants
+        {
+            Crop = new(crop.X, crop.Y, crop.Width, crop.Height),
+            Viewport = new(destination.X, destination.Y, destination.Width, destination.Height),
+            Surface = new(SourceSize.Width, SourceSize.Height, frame.Width, frame.Height),
+            Selection = Vector4.Zero,
+            Options = new(1, ViewScaling == PipScaling.Auto && _software ? 3 : (int)ViewScaling, 0, 0),
+            Orient = new(Turn.Turns, Turn.Mirrored ? 1 : 0, upright.Width, upright.Height),
+        };
+        _context.UpdateSubresource(in constants, _constants!);
+        _context.ClearRenderTargetView(_recordView!, new Color4(0, 0, 0, 1));
+        _context.OMSetRenderTargets(_recordView!);
+        // Drawn only inside the picture: the shader paints outside its viewport in the view's own colour.
+        _context.RSSetViewport(new Viewport(destination.X, destination.Y, destination.Width, destination.Height));
+        _context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        _context.VSSetShader(_vertex);
+        _context.PSSetShader(_pixel);
+        _context.PSSetConstantBuffer(0, _constants);
+        _context.PSSetShaderResource(0, _sourceView!);
+        _context.PSSetSampler(0, _sampler);
+        _context.Draw(3, 0);
+        _context.PSSetShaderResource(0, null!);
+        _context.OMSetRenderTargets(0, Array.Empty<ID3D11RenderTargetView>(), null);
+        _recordStaging[slot] ??= Device.CreateTexture2D(new Texture2DDescription(Format.B8G8R8A8_UNorm, (uint)frame.Width,
+            (uint)frame.Height, 1, 1, BindFlags.None, ResourceUsage.Staging, CpuAccessFlags.Read));
+        _context.CopyResource(_recordStaging[slot]!, _recordTarget!);
+        _recordIssued[slot] = ++_recordSequence;
+        return true;
+    }
+
+    // Hands the recording every frame the graphics card has finished, oldest first; never waits for one.
+    internal unsafe void CollectRecording(ViewRecording recording)
+    {
+        while (true)
+        {
+            int slot = -1;
+            for (int i = 0; i < _recordIssued.Length; i++)
+                if (_recordIssued[i] != 0 && (slot < 0 || _recordIssued[i] < _recordIssued[slot])) slot = i;
+            if (slot < 0) return;
+            ID3D11Texture2D staging = _recordStaging[slot]!;
+            Result mapped = _context.Map(staging, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.DoNotWait, out MappedSubresource map);
+            if (mapped.Code == unchecked((int)0x887A000A)) return; // Still copying.
+            mapped.CheckError();
+            try
+            {
+                if (recording.Rent() is { } buffer)
+                {
+                    int row = _recordSize.Width * 4;
+                    fixed (byte* target = buffer)
+                        for (int y = 0; y < _recordSize.Height; y++)
+                            Buffer.MemoryCopy((byte*)map.DataPointer + (long)y * map.RowPitch, target + (long)y * row, row, row);
+                    recording.Deliver(buffer);
+                }
+            }
+            finally
+            {
+                _context.Unmap(staging, 0);
+                _recordIssued[slot] = 0;
+            }
+        }
+    }
+
     internal bool ReadyForWork()
     {
         if (!_gpuPending) return true;
@@ -400,6 +503,7 @@ internal sealed class D3D11Renderer : IDisposable
         }
         catch (Exception e) when (e is SharpGenException or ExternalException) { Log.Swallowed(e); }
         _context?.ClearState();
+        StopRecording();
         _sourceView?.Dispose(); _cacheTarget?.Dispose(); _cache?.Dispose(); _whole?.Dispose(); _staging?.Dispose(); _clearing?.Dispose();
         _scaledOutput?.Dispose(); _scaledView?.Dispose(); _scaled?.Dispose();
         _renderTarget?.Dispose(); _swapChain?.Dispose();

@@ -21,7 +21,7 @@ public sealed class ViewCommandMatrixTests(Xunit.Abstractions.ITestOutputHelper 
     // the picture commands copy or open a window of their own (ViewPictureEndToEndTests).
     private static readonly AppCommand[] Visible = CommandCatalog.View
         .Where(command => command is not (AppCommand.ViewGoToOriginal or AppCommand.ViewUseOriginal or AppCommand.ViewMute or
-            AppCommand.ViewCopyPicture or AppCommand.ViewFreezeCopy or AppCommand.ViewCopyText or AppCommand.ViewCover)).ToArray();
+            AppCommand.ViewCopyPicture or AppCommand.ViewFreezeCopy or AppCommand.ViewCopyText or AppCommand.ViewCover or AppCommand.ViewRecord)).ToArray();
 
     private static void OnUiThread(Action<Action<int>> test)
     {
@@ -74,7 +74,8 @@ public sealed class ViewCommandMatrixTests(Xunit.Abstractions.ITestOutputHelper 
                     ExperimentalFeatures = true, PipMiddleClickScroll = true, HighlightPinned = true,
                     PipViews = new PipViewPreferences { HoverPreview = WinScreen.Settings.PipHoverPreview.Lens, KeepHiddenOnNewViews = false } };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
-                app.Pictures = new PictureShelf { Saves = () => false, PutPicture = _ => { }, PutText = _ => { }, ShowFile = _ => { } };
+                app.Pictures = new PictureShelf { Saves = () => false, PutPicture = _ => { }, PutText = _ => { }, ShowFile = _ => { },
+                    RecordingFolder = () => Path.Combine(folder, "recordings") };
                 MethodInfo run = typeof(TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;
                 void Run(AppCommand command, nint window) { run.Invoke(app, [command, window]); pump(150); }
                 try

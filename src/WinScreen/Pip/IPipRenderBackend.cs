@@ -43,4 +43,7 @@ internal interface IPipCaptureBackend : IPipRenderBackend
     void SetCovers(Rectangle[] covers) { }
 
     Task<Bitmap?> TakePicture() => Task.FromResult<Bitmap?>(null);
+
+    // Its frames go to the recording; ending, the capture finishes it.
+    void SetRecording(ViewRecording? recording) => recording?.Finish();
 }

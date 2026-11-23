@@ -153,6 +153,24 @@ internal static class Program
                             Console.WriteLine("sound");
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "tone")
+                        window.BeginInvoke(() =>
+                        {
+                            // A quiet 440 Hz tone, looped: sound for a recording to hear, barely audible in the room.
+                            var wave = new MemoryStream();
+                            var writer = new BinaryWriter(wave);
+                            const int rate = 48000, samples = rate, bytes = samples * 2;
+                            writer.Write("RIFF"u8); writer.Write(36 + bytes); writer.Write("WAVEfmt "u8); writer.Write(16);
+                            writer.Write((short)1); writer.Write((short)1); writer.Write(rate); writer.Write(rate * 2);
+                            writer.Write((short)2); writer.Write((short)16); writer.Write("data"u8); writer.Write(bytes);
+                            for (int i = 0; i < samples; i++) writer.Write((short)(Math.Sin(2 * Math.PI * 440 * i / rate) * 32767 * 0.02));
+                            wave.Position = 0;
+                            var player = new System.Media.SoundPlayer(wave);
+                            player.PlayLooping();
+                            window.Tag = player;
+                            Console.WriteLine("tone");
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "corner")
                         window.BeginInvoke(() =>
                         {

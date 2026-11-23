@@ -82,7 +82,9 @@ public sealed partial class PipWindow
         _copyTextItem = new ToolStripMenuItem(T("pip.picture.copyText"), null, (_, _) => CopyText());
         _coverItem = new ToolStripMenuItem(T("pip.picture.cover"), null, (_, _) => EditCovers());
         _uncoverItem = new ToolStripMenuItem(T("pip.picture.uncover"), null, (_, _) => SetCovers([]));
-        _menu.Items.AddRange([_copyPictureItem, _freezeCopyItem, _copyTextItem, _coverItem, _uncoverItem]);
+        _recordItem = new ToolStripMenuItem(T("pip.picture.record"), null, (_, _) => ToggleRecording());
+        _recordNote = new NoteRow(T("pip.record.noCapture"));
+        _menu.Items.AddRange([_copyPictureItem, _freezeCopyItem, _copyTextItem, _recordItem, _recordNote, _coverItem, _uncoverItem]);
         _menu.Items.Add(options);
         _menu.Items.Add(presets);
 
@@ -108,6 +110,7 @@ public sealed partial class PipWindow
         _keyed[AppCommand.ViewFreezeCopy] = _freezeCopyItem;
         _keyed[AppCommand.ViewCopyText] = _copyTextItem;
         _keyed[AppCommand.ViewCover] = _coverItem;
+        _keyed[AppCommand.ViewRecord] = _recordItem;
         _menu.Opening += (_, _) =>
         {
             PauseInput(true, keepTitleBar: true);
@@ -163,6 +166,12 @@ public sealed partial class PipWindow
         bool picture = _thumbnail is not null;
         _copyPictureItem.Enabled = _freezeCopyItem.Enabled = _copyTextItem.Enabled = _coverItem.Enabled = picture;
         _uncoverItem.Available = _covers.Count > 0;
+        // Greyed with the reason beneath it, never in a tooltip.
+        string? refused = _recording is null && picture ? RecordingRefusedBecause() : null;
+        _recordItem.Text = _recording is null ? T("pip.picture.record") : T("pip.picture.stopRecording");
+        _recordItem.Enabled = picture && refused is null;
+        _recordNote.Text = refused ?? "";
+        _recordNote.Available = refused is not null;
         // Only a captured picture can be turned.
         _turnItem.Enabled = CanTurn || !_turn.IsUpright;
         RefreshTurnItems();
@@ -170,7 +179,9 @@ public sealed partial class PipWindow
     }
 
     private readonly Dictionary<AppCommand, ToolStripMenuItem> _keyed = [];
-    private ToolStripMenuItem _copyPictureItem = null!, _freezeCopyItem = null!, _copyTextItem = null!, _coverItem = null!, _uncoverItem = null!;
+    private ToolStripMenuItem _copyPictureItem = null!, _freezeCopyItem = null!, _copyTextItem = null!, _coverItem = null!, _uncoverItem = null!,
+        _recordItem = null!;
+    private NoteRow _recordNote = null!;
 
     // The keys set for the view commands, shown beside the items they do.
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -187,7 +198,7 @@ public sealed partial class PipWindow
             if (_suspended) return;
         }
         // A minimized view shows no picture to copy, read or cover: the key brings it back first, as its menu would.
-        if (command is AppCommand.ViewCopyPicture or AppCommand.ViewFreezeCopy or AppCommand.ViewCopyText or AppCommand.ViewCover && _suspended)
+        if (command is AppCommand.ViewCopyPicture or AppCommand.ViewFreezeCopy or AppCommand.ViewCopyText or AppCommand.ViewCover or AppCommand.ViewRecord && _suspended)
         {
             ResumeView();
             if (_suspended) return;
@@ -198,6 +209,7 @@ public sealed partial class PipWindow
             case AppCommand.ViewFreezeCopy when _thumbnail is not null: FreezeCopy(); break;
             case AppCommand.ViewCopyText when _thumbnail is not null: CopyText(); break;
             case AppCommand.ViewCover when _thumbnail is not null: EditCovers(); break;
+            case AppCommand.ViewRecord when _thumbnail is not null: ToggleRecording(); break;
             case AppCommand.ViewKeepHidden when there && !_interactiveItem.Checked: SetOriginalHidden(!_hideItem.Checked); break;
             case AppCommand.ViewInteractive when there && CanInteract: SetInteractive(!_interactiveItem.Checked); break;
             case AppCommand.ViewUseOriginal when there && _hideItem.Checked: UseOriginal(); break;
@@ -223,6 +235,7 @@ public sealed partial class PipWindow
         AppCommand.ViewFreeze => Frozen,
         AppCommand.ViewMinimize => _suspended,
         AppCommand.ViewCover => _covers.Count > 0,
+        AppCommand.ViewRecord => _recording is not null,
         _ => false,
     };
 

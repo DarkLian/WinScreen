@@ -12,8 +12,34 @@ internal sealed class PictureShelf
     internal Action<string> PutText { get; init; } = CopyText;
     internal Action<string> ShowFile { get; init; } = OpenFileLocation;
     internal Func<DateTime> Now { get; init; } = static () => DateTime.Now;
+    internal Func<string?> RecordingFolder { get; init; } = static () => null;
+    internal Func<bool> RecordsSound { get; init; } = static () => false;
 
     internal string FolderInUse => Folder() ?? DefaultFolder();
+
+    internal string RecordingFolderInUse => RecordingFolder() ?? DefaultRecordingFolder();
+
+    // Named as the Snipping Tool names recordings. The empty file holds the name until the recording is written there.
+    internal string NewRecordingPath()
+    {
+        string folder = RecordingFolderInUse;
+        Directory.CreateDirectory(folder);
+        string name = $"Screen Recording {Now():yyyy-MM-dd HHmmss}";
+        for (int number = 1; ; number++)
+        {
+            string path = Path.Combine(folder, number == 1 ? name + ".mp4" : $"{name} ({number}).mp4");
+            if (File.Exists(path)) continue;
+            try
+            {
+                using (new FileStream(path, FileMode.CreateNew, FileAccess.Write)) { }
+                return path;
+            }
+            catch (IOException taken) when (File.Exists(path) && number < 1000)
+            {
+                Diagnostics.Log.Swallowed(taken);
+            }
+        }
+    }
 
     // The file it was saved to, if any; a copy that can't be saved is still copied, and the reason comes back.
     internal (string? File, string? Problem) Keep(Bitmap picture)
@@ -75,4 +101,8 @@ internal sealed class PictureShelf
     // Windows' own Screenshots folder, wherever the person keeps their Pictures (OneDrive too).
     internal static string DefaultFolder() => Native.KnownFolders.Screenshots() ??
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Screenshots");
+
+    // Windows has no folder of its own for these: the Snipping Tool's Screen Recordings, in Videos wherever that is.
+    internal static string DefaultRecordingFolder() => Path.Combine(Native.KnownFolders.Videos() ??
+        Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), "Screen Recordings");
 }

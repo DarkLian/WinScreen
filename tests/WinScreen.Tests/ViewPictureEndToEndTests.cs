@@ -44,6 +44,7 @@ public sealed class ViewPictureEndToEndTests(Xunit.Abstractions.ITestOutputHelpe
         internal PictureShelf Make() => new()
         {
             Saves = () => false, PutPicture = picture => Pictures.Add(new Bitmap(picture)), PutText = Texts.Add, ShowFile = _ => { },
+            RecordingFolder = () => Path.Combine(Path.GetTempPath(), "winscreen-picture-recordings"),
         };
     }
 

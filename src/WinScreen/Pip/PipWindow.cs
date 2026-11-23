@@ -321,6 +321,7 @@ public sealed partial class PipWindow : Form
         _titleBar?.Dismiss();
         _chip?.Hide();
         _autoMove.Stop();
+        LetGoOfRecording(reconfigure: false);
         _thumbnail?.Dispose();
         _retiringCapture = _thumbnail?.Retirement ?? Task.CompletedTask;
         _thumbnail = null;
@@ -468,6 +469,7 @@ public sealed partial class PipWindow : Form
         PipPreferences result = _preferences.With(_overrides.ClickThrough ? new PipOverrides(OpacityPercent: 100) : new PipOverrides());
         result.RequireHiddenBorder = _origin.IsWindow && _windows.IsParked(_source);
         if (_parkedCaptureFallback) result.Backend = PipBackendPreference.Dwm;
+        else if (_recording is not null && result.Backend == PipBackendPreference.Dwm) result.Backend = PipBackendPreference.Wgc;
         return result;
     }
 
@@ -770,7 +772,8 @@ public sealed partial class PipWindow : Form
 
     // Windows 10 can't capture a window once it is out of Alt+Tab and the taskbar; Windows 11 can.
     private bool SwitcherHidingStopsView =>
-        Environment.OSVersion.Version.Build < FirstBuildCapturingSwitcherHiddenWindows && _preferences.Backend != PipBackendPreference.Dwm;
+        Environment.OSVersion.Version.Build < FirstBuildCapturingSwitcherHiddenWindows &&
+        (_preferences.Backend != PipBackendPreference.Dwm || _recording is not null);
 
     private const int FirstBuildCapturingSwitcherHiddenWindows = 22000;
 
@@ -1119,6 +1122,7 @@ public sealed partial class PipWindow : Form
         // Teardown must never submit another draw: the source or destination HWND may already be gone.
         _selecting = false;
         if (!EndLift(CoverEnd.ViewClosed)) SettleWhenItAnswers();
+        LetGoOfRecording(reconfigure: false);
         _thumbnail?.Dispose();
         _thumbnail = null;
         if ((_hideItem.Checked || _awayFrom != Guid.Empty || _minimizedOriginal) && _origin.IsAvailable)
@@ -2461,7 +2465,7 @@ public sealed partial class PipWindow : Form
             (_popups ??= CreateSourcePopups()).Sweep(null);
         if (_pressed && MouseButtons == MouseButtons.None)
             CancelPress();
-        try { FollowPointer(); ShowState(); }
+        try { FollowPointer(); ShowState(); FollowRecordingMark(); }
         catch (WindowOperationException failure)
         {
             Problem?.Invoke(failure.Message);
@@ -2564,12 +2568,14 @@ public sealed partial class PipWindow : Form
     {
         base.OnMove(e);
         PositionTitleBar();
+        if (_recording is not null) FollowRecordingMark();
     }
 
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
         PositionTitleBar();
+        if (_recording is not null) FollowRecordingMark();
         if (_thumbnail is not null && !_lastShown.IsEmpty && ClientSize.Width > 4 && ClientSize.Height > 4)
         {
             if (!_fitting) _longSide = Math.Max(Width, Height);

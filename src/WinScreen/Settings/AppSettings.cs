@@ -67,6 +67,7 @@ public enum AppCommand
     ViewFreezeCopy,
     ViewCopyText,
     ViewCover,
+    ViewRecord,
 }
 
 public enum ModifierKey { Alt, Win }
@@ -199,6 +200,7 @@ public static class CommandCatalog
         AppCommand.ViewMute, AppCommand.ViewFreeze, AppCommand.ViewRotateRight, AppCommand.ViewRotateLeft,
         AppCommand.ViewMirrorAcross, AppCommand.ViewMirrorDown, AppCommand.ViewUpright, AppCommand.ViewResetZoom,
         AppCommand.ViewMinimize, AppCommand.ViewCopyPicture, AppCommand.ViewFreezeCopy, AppCommand.ViewCopyText, AppCommand.ViewCover,
+        AppCommand.ViewRecord,
     ];
 
     public static bool ForView(AppCommand command) => View.Contains(command);
@@ -304,6 +306,7 @@ public static class CommandCatalog
         AppCommand.ViewFreezeCopy => T("view.command.freezeCopy"),
         AppCommand.ViewCopyText => T("view.command.copyText"),
         AppCommand.ViewCover => T("view.command.cover"),
+        AppCommand.ViewRecord => T("view.command.record"),
         _ => command.ToString(),
     };
 }

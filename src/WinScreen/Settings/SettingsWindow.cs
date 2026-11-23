@@ -75,6 +75,12 @@ public sealed partial class SettingsWindow : Form
     private SettingRowPanel? _pictureFolderRow;
     // Null is Windows' Screenshots folder.
     private string? _pictureFolder;
+    private readonly PlainButton _recordingFolderChange = new() { Text = T("settings.pip.pictures.change") };
+    private readonly PlainButton _recordingFolderOpen = new() { Text = T("settings.pip.pictures.open") };
+    private SettingRowPanel? _recordingFolderRow;
+    // Null is the Screen Recordings folder under Videos.
+    private string? _recordingFolder;
+    private readonly CheckBox _recordSound = new SwitchBox { Text = T("settings.pip.recordings.sound"), AutoSize = true };
     private readonly CheckBox _pipCaptureBorder = new SwitchBox { Text = T("pip.captureBorder.hide"), AutoSize = true };
     private readonly CheckBox _pipDiagnostics = new SwitchBox { Text = T("pip.diagnostics.includeHardware"), AutoSize = true };
     private readonly List<int> _pipRates = [.. PipPreferences.FrameRates];
@@ -343,7 +349,7 @@ private readonly ErrorProvider _errors = new();
             [_windowMenuGesture] = '\uE962',
             [_pipBackend] = '\uE7F4', [_pipRate] = '\uE916', [_pipScaling] = '\uE9A6', [_pipOpacity] = '\uE706',
             [_pipCaptureBorder] = '\uE7A8', [_pipDiagnostics] = '\uE9D9', [_pipAutoMove] = '\uE7C2', [_pipMiddleScroll] = '\uE962',
-            [_hoverAutomatic] = '\uE713', [_pipTaskbar] = '\uE7C4', [_pipTitleBar] = '\uE8A0', [_pipKeepHidden] = '\uED1A', [_pipMinimizedOriginals] = '\uE921',[_pipPreview] = '\uE890', [_pictureSave] = '\uE722', [_pictureFolderChange] = '\uE8B7',
+            [_hoverAutomatic] = '\uE713', [_pipTaskbar] = '\uE7C4', [_pipTitleBar] = '\uE8A0', [_pipKeepHidden] = '\uED1A', [_pipMinimizedOriginals] = '\uE921',[_pipPreview] = '\uE890', [_pictureSave] = '\uE722', [_pictureFolderChange] = '\uE8B7', [_recordingFolderChange] = '\uE714', [_recordSound] = '\uE767',
             [_defaultOpacity] = '\uE706', [_opacityStep] = '\uE9E9', [_opacityWheel] = '\uE962', [_opaqueOnHover] = '\uE890',
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
@@ -861,6 +867,7 @@ private readonly ErrorProvider _errors = new();
         draft.PipViews = new PipViewPreferences { MinimizeToTaskbar = _pipTaskbar.Checked, AlwaysShowTitleBar = _pipTitleBar.Checked,
             KeepHiddenOnNewViews = _pipKeepHidden.Checked, KeepMinimizedOriginalsOnTaskbar = _pipMinimizedOriginals.Checked,
             SavePictures = _pictureSave.SelectedIndex != 1, PictureFolder = _pictureFolder,
+            RecordingFolder = _recordingFolder, RecordSound = _recordSound.Checked,
             HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
             HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds }.Validated();
         return draft;
@@ -1296,6 +1303,9 @@ private readonly ErrorProvider _errors = new();
         _pictureSave.SelectedIndex = values.PipViews.SavePictures ? 0 : 1;
         _pictureFolder = values.PipViews.Validated().PictureFolder;
         ShowPictureFolder();
+        _recordingFolder = values.PipViews.Validated().RecordingFolder;
+        _recordSound.Checked = values.PipViews.RecordSound;
+        ShowRecordingFolder();
         _opacityStep.Value = Math.Clamp(values.OpacityStepPercent, 1, 25);
         EffectPreferences effects = values.Effects.Validated();
         _layeredGlass.Checked = effects.LayeredGlass;
@@ -1501,14 +1511,39 @@ private readonly ErrorProvider _errors = new();
         folderButtons.Controls.Add(_pictureFolderChange);
         folderButtons.Controls.Add(_pictureFolderOpen);
         _pictureFolderRow = (SettingRowPanel)SettingRow(T("settings.pip.pictures.folder"), folderButtons);
+        _recordingFolderChange.Click += (_, _) =>
+        {
+            using var dialog = new FolderBrowserDialog { SelectedPath = RecordingFolderInUse, UseDescriptionForTitle = true,
+                Description = T("settings.pip.recordings.folder") };
+            if (dialog.ShowDialog(this) != DialogResult.OK || dialog.SelectedPath.Length == 0) return;
+            _recordingFolder = string.Equals(dialog.SelectedPath, Pip.PictureShelf.DefaultRecordingFolder(), StringComparison.OrdinalIgnoreCase)
+                ? null : dialog.SelectedPath;
+            ShowRecordingFolder();
+        };
+        _recordingFolderOpen.Click += (_, _) => Pip.PictureShelf.OpenFolder(RecordingFolderInUse);
+        _recordingFolderChange.Margin = new Padding(0, 0, 8, 0);
+        _recordingFolderOpen.Margin = Padding.Empty;
+        var recordingButtons = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
+            Margin = Padding.Empty, BackColor = SettingsStyle.Card };
+        recordingButtons.Controls.Add(_recordingFolderChange);
+        recordingButtons.Controls.Add(_recordingFolderOpen);
+        _recordingFolderRow = (SettingRowPanel)SettingRow(T("settings.pip.recordings.folder"), recordingButtons);
         page.Controls.Add(Section(T("settings.pip.pictures"), Row(T("settings.pip.pictures.after"), _pictureSave), _pictureFolderRow,
-            Note(T("settings.pip.pictures.help"))));
+            _recordingFolderRow, _recordSound, Note(T("settings.pip.pictures.help"))));
         ShowPictureFolder();
+        ShowRecordingFolder();
         page.Controls.Add(Section(T("pip.hover.title"), _pipKeepHidden, _pipMinimizedOriginals, _pipTaskbar, _pipTitleBar, Row(T("pip.hover.mode"), _pipPreview), Note(T("pip.hover.windowsOnly"))));
         return page;
     }
 
     private string PictureFolderInUse => _pictureFolder ?? Pip.PictureShelf.DefaultFolder();
+
+    private string RecordingFolderInUse => _recordingFolder ?? Pip.PictureShelf.DefaultRecordingFolder();
+
+    private void ShowRecordingFolder()
+    {
+        if (_recordingFolderRow is not null) _recordingFolderRow.Description = RecordingFolderInUse;
+    }
 
     private void ShowPictureFolder()
     {
@@ -1903,6 +1938,7 @@ private readonly ErrorProvider _errors = new();
         Option(_pipTitleBar.Text, none, _pipTitleBar.Checked, "pip");
         Option(_pipKeepHidden.Text, none, _pipKeepHidden.Checked, "pip");
         Option(_pipMinimizedOriginals.Text, none, _pipMinimizedOriginals.Checked, "pip");
+        Option(_recordSound.Text, none, _recordSound.Checked, "pip");
         Option(T("pip.hover.mode"), none, _pipPreview.SelectedIndex > 0, "pip");
         _features.EndUpdate();
         _fillingFeatures = false;

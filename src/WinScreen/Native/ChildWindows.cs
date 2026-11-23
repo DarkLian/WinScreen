@@ -25,4 +25,16 @@ internal static class ChildWindows
         }, 0);
         return found;
     }
+
+    internal static List<nint> Of(nint parent, int most = 64)
+    {
+        var found = new List<nint>();
+        if (parent == 0) return found;
+        EnumChildWindows(parent, (child, _) =>
+        {
+            found.Add(child);
+            return found.Count < most;
+        }, 0);
+        return found;
+    }
 }
