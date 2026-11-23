@@ -344,7 +344,7 @@ private readonly ErrorProvider _errors = new();
         var icons = new Dictionary<Control, char>
         {
             [_language] = '\uE774', [_theme] = '\uE790', [_menuTransparency] = '\uE706', [_startWithWindows] = '\uE7E8', [_runAsAdministrator] = '\uE7EF',
-            [_showNotifications] = '\uEA8F', [_updateMode] = '\uE896', [_pauseInFullScreen] = '\uE7FC', [_allowPip] = '\uE8A7',
+            [_showNotifications] = '\uEA8F', [_updateMode] = '\uE896', [_checkUpdates] = '\uE895', [_pauseInFullScreen] = '\uE7FC', [_allowPip] = '\uE8A7',
             [_experimental] = '\uE945',
             [_modifierDrag] = '\uE7C2', [_modifierKey] = '\uE765', [_snapWhileDragging] = '\uE90C', [_windowMenu] = '\uE712',
             [_windowMenuGesture] = '\uE962',
@@ -1186,7 +1186,11 @@ private readonly ErrorProvider _errors = new();
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Action? RestartToUpdate { get; init; }
 
-    private readonly PlainButton _restartToUpdate = new() { AutoSize = true, Visible = false };
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Action? CheckForUpdates { get; init; }
+
+    private readonly PlainButton _restartToUpdate = new() { AutoSize = true, Visible = false, Margin = Padding.Empty };
+    private readonly PlainButton _checkUpdates = new() { Text = T("updates.check"), AutoSize = true, Margin = new Padding(0, 0, 8, 0) };
 
     internal void SetOption(string option, bool on)
     {
@@ -1392,7 +1396,12 @@ private readonly ErrorProvider _errors = new();
         _restartToUpdate.Text = T("updates.restart");
         _restartToUpdate.Size = _restartToUpdate.GetPreferredSize(Size.Empty); // Hidden until needed, so laid out by nobody before.
         _restartToUpdate.Click += (_, _) => RestartToUpdate?.Invoke();
-        startup.Add(_restartToUpdate);
+        _checkUpdates.Enabled = VelopackUpdateSession.IsConfigured;
+        _checkUpdates.Click += (_, _) => CheckForUpdates?.Invoke();
+        var updateButtons = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty, BackColor = SettingsStyle.Card };
+        updateButtons.Controls.Add(_checkUpdates);
+        updateButtons.Controls.Add(_restartToUpdate);
+        startup.Add(SettingRow(string.Format(T("app.version"), AppInfo.Version), updateButtons));
         // Shown each time Settings comes forward: an update can finish downloading while it is open.
         Activated += (_, _) => _restartToUpdate.Visible = UpdateReady?.Invoke() == true;
         if (!VelopackUpdateSession.IsConfigured)

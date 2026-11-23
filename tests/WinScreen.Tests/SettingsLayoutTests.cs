@@ -178,6 +178,66 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    // A check shows each step in its own window: a moving bar while looking, the download's share, then Restart now.
+    [Fact]
+    public void The_update_window_shows_each_step_and_offers_the_restart_at_the_end()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            using var window = new UpdateWindow();
+            window.Say(UiText.T("updates.checking"), UpdateWindow.Busy);
+            window.Show();
+            Application.DoEvents();
+            Assert.Equal(UpdateWindow.Busy, window.Percent);
+            Assert.Null(window.Offered);
+            window.Say(string.Format(UiText.T("updates.downloading"), "9.9.9", 40), 40);
+            Application.DoEvents();
+            Evidence(window, "update-downloading");
+            Assert.Equal(40, window.Percent);
+            int restarts = 0;
+            window.Offer(string.Format(UiText.T("updates.readyNamed"), "9.9.9"), UiText.T("updates.restartNow"), () => restarts++);
+            Application.DoEvents();
+            Evidence(window, "update-ready");
+            Assert.Null(window.Percent);
+            Assert.Equal("Restart now", window.Offered);
+            Descendants(window).OfType<Button>().Single(button => button.Text == "Restart now").PerformClick();
+            Assert.Equal(1, restarts);
+            window.Close();
+        });
+        static void Evidence(Form window, string name)
+        {
+            if (Environment.GetEnvironmentVariable("WINSCREEN_LAYOUT_EVIDENCE") is not { } folder) return;
+            Directory.CreateDirectory(folder);
+            using var image = new Bitmap(window.Width, window.Height);
+            window.DrawToBitmap(image, new Rectangle(Point.Empty, window.Size));
+            image.Save(Path.Combine(folder, name + ".png"));
+        }
+    }
+
+    // The owner, 23 Nov: General has a button to check for updates, beside the version; it opens the tray's check.
+    [Fact]
+    public void General_has_a_button_to_check_for_updates()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            int checks = 0;
+            using var window = new SettingsWindow(new AppSettings { Language = "en" }, new StartWithWindows(tasks: NoTasks.Instance), _ => [])
+                { CheckForUpdates = () => checks++ };
+            window.Show();
+            Application.DoEvents();
+            SettingRowPanel row = Descendants(window).OfType<SettingRowPanel>().Single(row => row.Text.StartsWith("WinScreen version "));
+            Button check = Descendants(row).OfType<Button>().Single(button => button.Text == UiText.T("updates.check"));
+            if (check.Enabled)
+            {
+                check.PerformClick();
+                Assert.Equal(1, checks);
+            }
+            window.Close();
+        });
+    }
+
     // The owner, 23 Nov: Glass had a card of its own above the list of apps. Now Every app's card holds the levels every
     // app starts from, with the switch for Glass that fades the page; an app's card holds its own instead.
     [Fact]

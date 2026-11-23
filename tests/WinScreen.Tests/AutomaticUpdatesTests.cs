@@ -22,9 +22,12 @@ public sealed class AutomaticUpdatesTests
             return Answer ?? Task.FromResult(Newer);
         }
 
-        public Task<bool> Download(CancellationToken cancellation)
+        internal UpdateProgress[] Steps = [];
+
+        public Task<bool> Download(CancellationToken cancellation, Action<UpdateProgress>? progress = null)
         {
             Downloads++;
+            foreach (UpdateProgress step in Steps) progress?.Invoke(step);
             return Fetch(cancellation);
         }
 
@@ -115,6 +118,43 @@ public sealed class AutomaticUpdatesTests
         Assert.StartsWith("Update check failed", await updates.CheckNow());
         session.Fetch = _ => Task.FromResult(true);
         Assert.StartsWith("Update ready", await updates.CheckNow());
+    }
+
+    // The owner, 23 Nov: a check showed nothing until "close WinScreen to install"; now each step is told as it comes.
+    [Fact]
+    public async Task A_check_tells_each_step_and_names_the_version_that_is_ready()
+    {
+        var session = new Session
+        {
+            Steps = [new(UpdateStage.Checking), new(UpdateStage.Downloading, "9.9.9", 0), new(UpdateStage.Downloading, "9.9.9", 60),
+                new(UpdateStage.Downloading, "9.9.9", 100), new(UpdateStage.Verifying, "9.9.9")],
+        };
+        var heard = new List<UpdateProgress>();
+        using var updates = new AutomaticUpdates(_ => session, _ => { });
+        updates.Progress += heard.Add;
+        Assert.Null(updates.ReadyVersion);
+        Assert.StartsWith("Update ready", await updates.CheckNow());
+        Assert.Equal(UpdateStage.Checking, heard[0].Stage);
+        Assert.Equal([0, 60, 100], heard.Where(step => step.Stage == UpdateStage.Downloading).Select(step => step.Percent));
+        Assert.Equal(UpdateStage.Verifying, heard[^1].Stage);
+        Assert.Equal("9.9.9", updates.ReadyVersion);
+    }
+
+    // A second click while a check runs waits for it and answers, rather than saying a check is already under way.
+    [Fact]
+    public async Task A_check_asked_for_while_one_runs_waits_for_it_and_answers()
+    {
+        var finish = new TaskCompletionSource<bool>();
+        var session = new Session { Fetch = _ => finish.Task };
+        using var updates = new AutomaticUpdates(_ => session, _ => { });
+        updates.SetEnabled(true);
+        Task timed = updates.Check();
+        Task<string> asked = updates.CheckNow();
+        Assert.False(asked.IsCompleted);
+        finish.SetResult(true);
+        await timed;
+        Assert.StartsWith("Update ready", await asked);
+        Assert.Equal(1, session.Downloads);
     }
 
     [Fact]

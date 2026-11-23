@@ -102,6 +102,12 @@ public sealed partial class TrayApplication : ApplicationContext
         }, TellAboutVersion);
         _toolbar = new WindowToolbar(CanUseToolbar, IsOn, IsAvailable, Run) { OpenMenu = ShowToolbarMenu, ByPosition = ToolbarByPosition };
         _ = _toolbar.Handle;
+        _updates.Progress += step =>
+        {
+            if (!_toolbar.IsHandleCreated || _toolbar.IsDisposed) return;
+            try { _toolbar.BeginInvoke(() => ShowUpdateProgress(step)); }
+            catch (InvalidOperationException closing) { Diagnostics.Log.Swallowed(closing); }
+        };
         _modifierDrag.MenuEligible = CanOpenWindowMenu;
         // A hook lost in the middle of a drag is put back at once, not at the watch's next look two seconds later.
         _modifierDrag.HookSilent = () => _toolbar.BeginInvoke(() => { if (_modifierDrag.Active) _modifierDrag.Reinstall(); });
@@ -1476,7 +1482,10 @@ public sealed partial class TrayApplication : ApplicationContext
         // the other colours: nothing was asked of the view.
         if (!reopening) EndVisits();
         _settingsWindow = new SettingsWindow(_settings, _startup, Apply, command => _hotkeys.IsRegistered((int)command))
-            { TopMost = !quietly, PageIndex = page, Quiet = quietly, UpdateReady = () => _updates.Ready, RestartToUpdate = RestartToUpdate };
+            {
+                TopMost = !quietly, PageIndex = page, Quiet = quietly, UpdateReady = () => _updates.Ready, RestartToUpdate = RestartToUpdate,
+                CheckForUpdates = () => _ = CheckForUpdates(),
+            };
         _settingsWindow.TakeUnsaved(unsaved);
         if (bounds is { } where) { _settingsWindow.StartPosition = FormStartPosition.Manual; _settingsWindow.Bounds = where; }
         SettingsWindow opened = _settingsWindow;
@@ -1501,21 +1510,65 @@ public sealed partial class TrayApplication : ApplicationContext
         }
     }
 
+    private UpdateWindow? _updateWindow;
+
+    private UpdateWindow ShowUpdateWindow()
+    {
+        if (_updateWindow is not { IsDisposed: false } window)
+        {
+            _updateWindow = window = new UpdateWindow();
+            window.FormClosed += (_, _) => { if (_updateWindow == window) _updateWindow = null; };
+            window.Say(T("updates.checking"), UpdateWindow.Busy);
+            window.Show();
+        }
+        window.Activate();
+        return window;
+    }
+
+    // A check the person asked for shows in its own window, step by step, rather than in notifications.
     private async Task CheckForUpdates()
     {
+        UpdateWindow window = ShowUpdateWindow();
         if (!VelopackUpdateSession.IsConfigured)
         {
-            Balloon(T("updates.title"), T("updates.repositoryRequired"), ToolTipIcon.Info);
+            window.Say(T("updates.repositoryRequired"));
             return;
         }
         if (!VelopackUpdateSession.IsInstalled)
         {
+            window.Say(T("updates.checking"), UpdateWindow.Busy);
             (string? version, bool failed) = await _updates.LookNow();
-            if (version is not null) TellAboutVersion(version);
-            else Balloon(T("updates.title"), failed ? T("updates.checkFailed") : T("updates.upToDate"), ToolTipIcon.Info);
+            if (window.IsDisposed) return;
+            if (version is null) window.Say(failed ? T("updates.checkFailed") : T("updates.upToDate"));
+            else window.Offer(string.Format(T("updates.outPortable"), version), T("updates.openPage"), () => OpenReleasePage(version));
             return;
         }
-        Balloon(T("updates.title"), await _updates.CheckNow(), ToolTipIcon.Info);
+        if (!_updates.Ready)
+        {
+            window.Say(T("updates.checking"), UpdateWindow.Busy);
+            string result = await _updates.CheckNow();
+            if (window.IsDisposed) return;
+            if (!_updates.Ready)
+            {
+                window.Say(result);
+                return;
+            }
+        }
+        OfferRestart(window);
+    }
+
+    private void OfferRestart(UpdateWindow window) =>
+        window.Offer(string.Format(T("updates.readyNamed"), _updates.ReadyVersion ?? ""), T("updates.restartNow"), RestartToUpdate);
+
+    private void ShowUpdateProgress(UpdateProgress step)
+    {
+        if (_updateWindow is not { IsDisposed: false } window || _updates.Ready) return;
+        switch (step.Stage)
+        {
+            case UpdateStage.Checking: window.Say(T("updates.checking"), UpdateWindow.Busy); break;
+            case UpdateStage.Downloading: window.Say(string.Format(T("updates.downloading"), step.Version, step.Percent), step.Percent); break;
+            case UpdateStage.Verifying: window.Say(string.Format(T("updates.verifying"), step.Version), UpdateWindow.Busy); break;
+        }
     }
 
     // Shown even with notifications off: telling is what the person chose.
@@ -1554,7 +1607,7 @@ public sealed partial class TrayApplication : ApplicationContext
         if (!Exiting) _restartForUpdate = false; // Something couldn't be put back: still running, still waiting.
     }
 
-    private async Task DownloadToldVersion() => Balloon(T("updates.title"), await _updates.CheckNow(), ToolTipIcon.Info);
+    private Task DownloadToldVersion() => CheckForUpdates();
 
     private void OpenReleasePage(string version)
     {

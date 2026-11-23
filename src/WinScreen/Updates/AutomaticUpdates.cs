@@ -19,10 +19,15 @@ internal static class AppInfo
     }
 }
 
+internal enum UpdateStage { Checking, Downloading, Verifying }
+
+// Percent is the download's, 0 to 100.
+internal readonly record struct UpdateProgress(UpdateStage Stage, string? Version = null, int Percent = 0);
+
 internal interface IUpdateSession : IDisposable
 {
     Task<string?> NewerVersion(CancellationToken cancellation);
-    Task<bool> Download(CancellationToken cancellation);
+    Task<bool> Download(CancellationToken cancellation, Action<UpdateProgress>? progress = null);
     Task ApplyOnExit(CancellationToken cancellation, bool restart);
 }
 
@@ -39,6 +44,13 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
     private TaskCompletionSource? _idle;
     private bool _disposed;
     private bool _lastCheckFailed;
+    private string? _downloading;
+
+    // Raised on whatever thread the download reports from.
+    internal event Action<UpdateProgress>? Progress;
+
+    // The version downloaded and waiting to install, when it is known.
+    internal string? ReadyVersion => Ready ? _downloading : null;
 
     private void Begin()
     {
@@ -127,7 +139,13 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
             session = createSession(generation.Token);
             if (session is null)
                 return;
-            if (await session.Download(generation.Token) && _generation == generation &&
+            _downloading = null;
+            Progress?.Invoke(new UpdateProgress(UpdateStage.Checking));
+            if (await session.Download(generation.Token, step =>
+                {
+                    if (step.Version is not null) _downloading = step.Version;
+                    Progress?.Invoke(step);
+                }) && _generation == generation &&
                 !generation.IsCancellationRequested)
             {
                 _pending = session;
@@ -181,10 +199,11 @@ internal sealed class AutomaticUpdates(Func<CancellationToken, IUpdateSession?> 
         }
     }
 
+    // A check already under way, the timer's or one asked for before, is waited for, then this one gives the answer.
     internal async Task<string> CheckNow()
     {
-        if (_busy)
-            return UiText.T("updates.alreadyChecking");
+        while (_busy && !_disposed && _idle is { } running)
+            await running.Task;
         await Run(quiet: true);
         if (_pending is not null)
             return UiText.T("updates.ready");
@@ -276,10 +295,11 @@ internal sealed class VelopackUpdateSession : IUpdateSession
     internal static string? Repository => typeof(VelopackUpdateSession).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
         .FirstOrDefault(metadata => metadata.Key == "UpdateRepository")?.Value is { Length: > 0 } repository ? repository : null;
 
-    public async Task<bool> Download(CancellationToken cancellation)
+    public async Task<bool> Download(CancellationToken cancellation, Action<UpdateProgress>? progress = null)
     {
         if (!_manager.IsInstalled)
             return false;
+        progress?.Invoke(new UpdateProgress(UpdateStage.Checking));
         var update = await _manager.CheckForUpdatesAsync();
         cancellation.ThrowIfCancellationRequested();
         if (update is null)
@@ -288,7 +308,10 @@ internal sealed class VelopackUpdateSession : IUpdateSession
         UpdateSecurity.ValidateAsset(asset);
         if (asset.Version <= _manager.CurrentVersion)
             throw new InvalidDataException("Update must be newer than the installed version.");
-        await _manager.DownloadUpdatesAsync(update, cancelToken: cancellation);
+        string version = asset.Version.ToString();
+        progress?.Invoke(new UpdateProgress(UpdateStage.Downloading, version));
+        await _manager.DownloadUpdatesAsync(update, percent => progress?.Invoke(new UpdateProgress(UpdateStage.Downloading, version, percent)), cancellation);
+        progress?.Invoke(new UpdateProgress(UpdateStage.Verifying, version));
         await UpdateSecurity.VerifyPackage(PackagePath(asset), asset, cancellation);
         _pending = asset;
         return true;
