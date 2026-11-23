@@ -1763,7 +1763,9 @@ public sealed class AppEndToEndTests : IDisposable
             var inside = new Point(view.Left + view.Width / 2, view.Top + view.Height / 2);
             var outside = new Point(view.Left - 40, view.Top + view.Height / 2);
             TargetProcess[] others = [first, second];
-            for (int i = 0; i < 4; i++)
+            // Three visits that end within 300 ms are needed in 10 s. In a whole run a visit can start after the focus has
+            // moved on, and then never starts at all: four tries weren't always enough (3 of 3 whole runs on 23 Nov).
+            for (int i = 0; i < 8; i++)
             {
                 Desktop.GainForegroundRights();
                 Desktop.Activate(others[i % 2].Handle);
