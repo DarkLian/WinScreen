@@ -196,9 +196,19 @@ internal sealed unsafe class ContentOverlay : Form
             Follow();
         if (kind == Foreground && window == _source && !_stopping)
             CameForward?.Invoke();
-        if (kind == Foreground && window != 0 && !_stopping && User32.GetWindowThreadProcessId(window, out uint front) != 0 &&
-            front != Environment.ProcessId && User32.GetWindowThreadProcessId(_source, out uint mine) != 0)
-            FrontChanged?.Invoke(front == mine);
+        if (kind == Foreground && !_stopping && AppInFront(_source, window) is { } front)
+            FrontChanged?.Invoke(front);
+    }
+
+    // Null when that can't be said: nothing in front, or a window of WinScreen's own.
+    internal static bool? AppInFront(nint source) => AppInFront(source, User32.GetForegroundWindow());
+
+    private static bool? AppInFront(nint source, nint front)
+    {
+        if (front == 0 || User32.GetWindowThreadProcessId(front, out uint shown) == 0 || shown == Environment.ProcessId ||
+            User32.GetWindowThreadProcessId(source, out uint mine) == 0)
+            return null;
+        return shown == mine;
     }
 
     private void Follow()
@@ -379,7 +389,8 @@ internal sealed unsafe class ContentOverlay : Form
         ID3D11Texture2D? cache = null, tiles = null, output = null, staging = null, final = null;
         ID3D11ShaderResourceView? cacheView = null, outputRead = null;
         ID3D11UnorderedAccessView? tilesView = null, outputView = null, finalView = null;
-        Backdrop? backdrop = null;
+        Backdrop? backdrop = null, leaving = null;
+        BackdropChoice? left = null;
         BackdropSet? shown = null;
         var turns = new Turns();
         bool drawn = false;
@@ -388,10 +399,11 @@ internal sealed unsafe class ContentOverlay : Form
             while (true)
             {
                 int wait = backdrop?.Wait ?? Timeout.Infinite;
-                if (backdrop is not null && turns.ChangeAt != long.MaxValue)
+                // Hidden or held, nothing changes until it shows again.
+                if (backdrop is not null && !_hidden && !_held && turns.ChangeAt != long.MaxValue)
                 {
-                    int left = (int)Math.Clamp(turns.ChangeAt - Environment.TickCount64, 1, int.MaxValue);
-                    wait = wait == Timeout.Infinite ? left : Math.Min(wait, left);
+                    int due = (int)Math.Clamp(turns.ChangeAt - Environment.TickCount64, 1, int.MaxValue);
+                    wait = wait == Timeout.Infinite ? due : Math.Min(wait, due);
                 }
                 if (WaitHandle.WaitAny([_arrived, _stop], wait) == 1)
                     break;
@@ -406,18 +418,34 @@ internal sealed unsafe class ContentOverlay : Form
                     if (!(chosen?.SameItems(shown) ?? shown is null))
                     {
                         backdrop?.Dispose();
+                        leaving?.Dispose();
+                        leaving = null;
                         turns = new Turns(chosen is { Items.Count: > 0 } && _look == ContentLook.Glass
                             ? new BackdropSequence(chosen.Items.Count, chosen.Order, Random.Shared) : null);
                         backdrop = chosen is null ? null : OpenNext(chosen, turns);
                     }
-                    else if (turns.Showing >= 0 && chosen is not null) _showing = chosen.Items[turns.Showing];
+                    else if (backdrop is not null && chosen is not null)
+                    {
+                        BackdropChoice now = chosen.Items[turns.Showing];
+                        _showing = now;
+                        turns.ChangeAt = chosen.StayMilliseconds(now) is { } stay ? turns.Since + stay : long.MaxValue;
+                    }
                     shown = chosen;
                     redraw = true;
                 }
-                // The next of a set: the video played through, or the picture's time is up.
-                if (backdrop is not null && shown is { Items.Count: > 1 } && (backdrop.Ended || Environment.TickCount64 >= turns.ChangeAt))
+                // The next of a set: the video played through, or its time is up. The last one's picture stays until the
+                // next has one, so no plain Glass shows in between.
+                if (backdrop is not null && shown is { Items.Count: > 1 } && !_hidden && !_held &&
+                    (backdrop.Ended || Environment.TickCount64 >= turns.ChangeAt))
                 {
-                    backdrop.Dispose();
+                    if (backdrop.View is not null)
+                    {
+                        leaving?.Dispose();
+                        (leaving, left) = (backdrop, _showing);
+                        leaving.Sound(0);
+                        leaving.Pause(true);
+                    }
+                    else backdrop.Dispose();
                     backdrop = OpenNext(shown, turns);
                     redraw = true;
                 }
@@ -434,6 +462,12 @@ internal sealed unsafe class ContentOverlay : Form
                             turns.Failed = 0;
                         }
                         if (backdrop is VideoBackdrop { Failed: true }) throw new NotSupportedException();
+                        if (leaving is not null && backdrop.View is not null)
+                        {
+                            leaving.Dispose();
+                            leaving = null;
+                            redraw = true;
+                        }
                     }
                     catch (Exception failure) when (failure is SharpGen.Runtime.SharpGenException or COMException or NotSupportedException
                                                         or InvalidOperationException or ArgumentException)
@@ -447,6 +481,12 @@ internal sealed unsafe class ContentOverlay : Form
                         if (backdrop is null) _showing = null;
                         redraw = true;
                     }
+                }
+                if (backdrop is null && leaving is not null)
+                {
+                    leaving.Dispose();
+                    leaving = null;
+                    redraw = true;
                 }
 
                 Direct3D11CaptureFrame? next = null;
@@ -501,7 +541,7 @@ internal sealed unsafe class ContentOverlay : Form
                 }
 
                 if (drawn && redraw)
-                    Present(size, output!, outputRead!, final!, finalView!, backdrop);
+                    Present(size, output!, outputRead!, final!, finalView!, leaving ?? backdrop, leaving is not null ? left : _showing);
             }
         }
         catch (Exception failure) when (failure is SharpGen.Runtime.SharpGenException or COMException or ObjectDisposedException or InvalidOperationException)
@@ -512,6 +552,7 @@ internal sealed unsafe class ContentOverlay : Form
         finally
         {
             backdrop?.Dispose();
+            leaving?.Dispose();
             DisposeAll(cache, tiles, output, staging, final, cacheView, outputRead, tilesView, outputView, finalView);
         }
     }
@@ -522,6 +563,7 @@ internal sealed unsafe class ContentOverlay : Form
     {
         public BackdropSequence? Sequence => sequence;
         public int Showing = -1;
+        public long Since;
         public long ChangeAt = long.MaxValue;
         public int Failed;
     }
@@ -533,11 +575,11 @@ internal sealed unsafe class ContentOverlay : Form
             turns.Showing = sequence.Next();
             BackdropChoice item = set.Items[turns.Showing];
             _showing = item;
-            bool several = set.Items.Count > 1;
-            turns.ChangeAt = several && !item.IsVideo ? Environment.TickCount64 + Math.Max(1, set.PictureMinutes) * 60_000L : long.MaxValue;
+            turns.Since = Environment.TickCount64;
+            turns.ChangeAt = set.StayMilliseconds(item) is { } stay ? turns.Since + stay : long.MaxValue;
             try
             {
-                return Backdrop.Open(item, once: several);
+                return Backdrop.Open(item, once: set.PlaysOnce);
             }
             catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or ArgumentException or OutOfMemoryException
                                                 or NotSupportedException or ExternalException)
@@ -560,11 +602,11 @@ internal sealed unsafe class ContentOverlay : Form
     }
 
     private void Present(Size size, ID3D11Texture2D output, ID3D11ShaderResourceView outputRead, ID3D11Texture2D final,
-        ID3D11UnorderedAccessView finalView, Backdrop? backdrop)
+        ID3D11UnorderedAccessView finalView, Backdrop? backdrop, BackdropChoice? item)
     {
         var context = _context!;
         ID3D11Texture2D shown = output;
-        if (backdrop?.View is { } picture && _showing is { } choice)
+        if (backdrop?.View is { } picture && item is { } choice)
         {
             RectangleF place = BackdropChoice.Place(choice.Fit, backdrop.Size, size);
             float detail = choice.Fit == BackdropFit.Tile ? 0

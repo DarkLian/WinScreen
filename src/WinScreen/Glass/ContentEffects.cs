@@ -105,7 +105,7 @@ internal sealed class ContentEffects : IDisposable
         foreach ((nint window, ContentOverlay overlay) in _overlays)
             overlay.SetBackdrop(BackgroundOf(window));
         if (_audible != 0 && !HasSound(_audible)) _audible = 0;
-        if (_audible == 0) _audible = _overlays.Keys.FirstOrDefault(HasSound);
+        if (_audible == 0) TakeOver();
         Hear();
     }
 
@@ -142,6 +142,12 @@ internal sealed class ContentEffects : IDisposable
         _audible = window;
         _front = true;
         Hear();
+    }
+
+    private void TakeOver()
+    {
+        _audible = _overlays.Keys.FirstOrDefault(HasSound);
+        _front = _audible != 0 && ContentOverlay.AppInFront(_audible) == true;
     }
 
     private void FrontMoved(nint window, bool front)
@@ -213,8 +219,8 @@ internal sealed class ContentEffects : IDisposable
         overlay.SetHeld(_held);
         if (HasSound(window))
         {
-            _audible = window; // Just turned on: what the person is looking at.
-            _front = true;
+            _audible = window; // Just turned on: what the person is looking at, unless another app is in front.
+            _front = ContentOverlay.AppInFront(window) ?? true;
             Hear();
         }
         Created?.Invoke(overlay.Handle);
@@ -246,7 +252,7 @@ internal sealed class ContentEffects : IDisposable
         _ownLevels.Remove(window);
         _plain.Remove(window);
         if (window != _audible) return;
-        _audible = _overlays.Keys.FirstOrDefault(HasSound);
+        TakeOver();
         Hear();
     }
 

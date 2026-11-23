@@ -89,8 +89,9 @@ public sealed record BackgroundChoice
     public List<BackgroundItem> More { get; init; } = [];
     public Glass.BackdropOrder Order { get; init; }
 
-    // How long each picture of a set shows; each video plays once.
+    // How long each picture of a set shows; also each video, when Switch is Timed.
     public int PictureMinutes { get; init; } = 5;
+    public Glass.BackdropSwitch Switch { get; init; }
 
     internal const int MostPictureMinutes = 24 * 60;
 
@@ -114,14 +115,15 @@ public sealed record BackgroundChoice
         return tidied with
         {
             Order = Enum.IsDefined(Order) ? Order : Glass.BackdropOrder.InOrder,
+            Switch = Enum.IsDefined(Switch) ? Switch : Glass.BackdropSwitch.VideoEnds,
             PictureMinutes = Math.Clamp(PictureMinutes, 1, MostPictureMinutes),
         };
     }
 
-    internal Glass.BackdropSet? Backdrop => Items.Count == 0 ? null : new([.. Items.Select(item => item.Backdrop)], Order, PictureMinutes);
+    internal Glass.BackdropSet? Backdrop => Items.Count == 0 ? null : new([.. Items.Select(item => item.Backdrop)], Order, PictureMinutes, Switch);
 
     public bool Equals(BackgroundChoice? other) => other is not null && File == other.File && Fit == other.Fit && Volume == other.Volume &&
-        Speed == other.Speed && Brightness == other.Brightness && Order == other.Order && PictureMinutes == other.PictureMinutes &&
+        Speed == other.Speed && Brightness == other.Brightness && Order == other.Order && PictureMinutes == other.PictureMinutes && Switch == other.Switch &&
         (More ?? []).SequenceEqual(other.More ?? []);
 
     public override int GetHashCode() => HashCode.Combine(File, Fit, Volume, Speed, Brightness, Order, PictureMinutes, More?.Count ?? 0);

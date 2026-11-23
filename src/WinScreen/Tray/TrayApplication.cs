@@ -1423,14 +1423,15 @@ public sealed partial class TrayApplication : ApplicationContext
         string program = WindowInfo.ProgramOf(window);
         if (program.Length == 0 || _content.ShowingOf(window) is not { } showing) return;
         BackgroundPreferences before = _settings.Backgrounds;
+        BackgroundPreferences Louder(BackgroundPreferences backgrounds) => backgrounds.Change(program, choice => choice.WithItems(choice.Items.Select(item =>
+            string.Equals(item.File, showing.File, StringComparison.OrdinalIgnoreCase) ? item with { Volume = percent } : item)));
         try
         {
-            _settings.Backgrounds = before.Change(program, choice => choice.WithItems(choice.Items.Select(item =>
-                string.Equals(item.File, showing.File, StringComparison.OrdinalIgnoreCase) ? item with { Volume = percent } : item)));
+            _settings.Backgrounds = Louder(before);
             SaveSettings(_settings);
             _content.SetBackgrounds(_settings.Backgrounds.For);
             _content.HearFrom(window);
-            if (_settingsWindow is { IsDisposed: false } open) open.BackgroundsSaved(_settings.Backgrounds);
+            if (_settingsWindow is { IsDisposed: false } open) open.BackgroundsSaved(Louder);
         }
         catch (Exception failure) when (IsExpected(failure))
         {
@@ -1458,7 +1459,8 @@ public sealed partial class TrayApplication : ApplicationContext
     {
         if (_content.Count == 0) return;
         BackgroundPreferences backgrounds = _settings.Backgrounds;
-        _content.Hold(backgrounds.PauseInFullScreen && FullScreenNow() != FullScreenState.None ||
+        // A window with Glass that is itself full screen is the one being watched: its background goes on.
+        _content.Hold(backgrounds.PauseInFullScreen && FullScreenNow() != FullScreenState.None && !_content.Has(User32.GetForegroundWindow()) ||
                       backgrounds.PauseOnBatterySaver && BatterySaverOn());
     }
 

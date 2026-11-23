@@ -136,6 +136,7 @@ public class InvariantTests
     {
         ["WinScreen.Glass.BackdropFit"] = "Fill=0 Fit=1 Stretch=2 Tile=3 Center=4",
         ["WinScreen.Glass.BackdropOrder"] = "InOrder=0 Shuffle=1",
+        ["WinScreen.Glass.BackdropSwitch"] = "VideoEnds=0 Timed=1",
         ["WinScreen.Glass.GlassText"] = "AsItIs=0 Light=1 Dark=2",
         ["WinScreen.Settings.AppCommand"] =
             "TogglePin=1 OpacityUp=2 OpacityDown=3 ToggleClickThrough=4 OpenPip=5 RestoreAll=6 ToggleDark=7 " +

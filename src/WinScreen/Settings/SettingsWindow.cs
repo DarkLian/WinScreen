@@ -356,7 +356,7 @@ private readonly ErrorProvider _errors = new();
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
             [_glassText] = '\uE8D2', [_glassFade] = '\uE790', [_appGlassBackground] = '\uE706', [_appGlassText] = '\uE8D2',
             [_appGlassFade] = '\uE790', [_glassTextColor] = '\uE8D3', [_appGlassTextColor] = '\uE8D3', [_glassShadow] = '\uE81E',
-            [_appGlassShadow] = '\uE81E', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767', [_soundInFront] = '\uE995', [_pauseFullScreen] = '\uE7FC', [_pauseSaver] = '\uE863', [_backgroundSpeed] = '\uEC4A', [_backgroundBrightness] = '\uE706', [_backgroundOrder] = '\uE8B1', [_pictureMinutes] = '\uE823',
+            [_appGlassShadow] = '\uE81E', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767', [_soundInFront] = '\uE995', [_pauseFullScreen] = '\uE7FC', [_pauseSaver] = '\uE863', [_backgroundSpeed] = '\uEC4A', [_backgroundBrightness] = '\uE706', [_backgroundOrder] = '\uE8B1', [_backgroundSwitch] = '\uE893', [_pictureMinutes] = '\uE823',
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
             [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
             [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',

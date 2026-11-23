@@ -43,6 +43,7 @@ public sealed partial class SettingsWindow
     private readonly NumericUpDown _backgroundSpeed = new() { Minimum = BackgroundItem.SlowestSpeed, Maximum = BackgroundItem.FastestSpeed, Increment = 5, Width = 70 };
     private readonly NumericUpDown _backgroundBrightness = new() { Minimum = BackgroundItem.DimmestBrightness, Maximum = 100, Width = 70 };
     private readonly ComboBox _backgroundOrder = new ThemedCombo { Width = 200 };
+    private readonly ComboBox _backgroundSwitch = new ThemedCombo { Width = 200 };
     private readonly ComboBox _pictureMinutes = new ThemedCombo { Width = 120 };
     private static readonly int[] PictureMinuteChoices = [1, 2, 5, 10, 15, 30, 60, 120, 240, 1440];
     // The pictures and videos of the background shown, when there is more than one; the rows under it edit the one chosen.
@@ -66,6 +67,7 @@ public sealed partial class SettingsWindow
         _backgroundFit.Items.AddRange([T("settings.backgrounds.fill"), T("settings.backgrounds.fitWhole"),
             T("settings.backgrounds.stretch"), T("settings.backgrounds.tile"), T("settings.backgrounds.center")]);
         _backgroundOrder.Items.AddRange([T("settings.backgrounds.order.inOrder"), T("settings.backgrounds.order.shuffle")]);
+        _backgroundSwitch.Items.AddRange([T("settings.backgrounds.switch.videoEnds"), T("settings.backgrounds.switch.timed")]);
         _pictureMinutes.Items.AddRange([.. PictureMinuteChoices.Select(minutes => (object)minutes.ToString(System.Globalization.CultureInfo.CurrentCulture))]);
         _backgroundList.SelectedIndexChanged += (_, _) => { _itemAt = 0; ShowBackground(controls: true); };
         _backgroundList.KeyDown += (_, e) =>
@@ -128,6 +130,8 @@ public sealed partial class SettingsWindow
         _backgroundBrightness.TextChanged += (_, _) => ChangeItem(item => item with { Brightness = Typed(_backgroundBrightness) });
         _backgroundOrder.SelectedIndexChanged += (_, _) =>
             ChangeBackground(choice => choice with { Order = (BackdropOrder)Math.Max(0, _backgroundOrder.SelectedIndex) });
+        _backgroundSwitch.SelectedIndexChanged += (_, _) =>
+            ChangeBackground(choice => choice with { Switch = (BackdropSwitch)Math.Max(0, _backgroundSwitch.SelectedIndex) });
         _pictureMinutes.SelectedIndexChanged += (_, _) =>
             ChangeBackground(choice => choice with { PictureMinutes = PictureMinuteChoices[Math.Max(0, _pictureMinutes.SelectedIndex)] });
         _backgroundRemoveApp.Click += (_, _) => RemoveBackgroundApp();
@@ -138,9 +142,11 @@ public sealed partial class SettingsWindow
         buttons.Controls.AddRange([_backgroundChoose, _backgroundLink, _backgroundClear, _itemUp, _itemDown]);
         _backgroundFileRow = (SettingRowPanel)SettingRow(T("settings.backgrounds.file"), buttons);
         _setRows.AddRange([_itemFrame, SettingRow(T("settings.backgrounds.order"), _backgroundOrder),
+            SettingRow(T("settings.backgrounds.switch"), _backgroundSwitch), Note(T("settings.backgrounds.switch.help")),
             SettingRow(T("settings.backgrounds.pictureMinutes"), _pictureMinutes), Note(T("settings.backgrounds.setHelp"))]);
         _backgroundRows.AddRange([_backgroundPreview, _backgroundFileRow, .. _setRows, SettingRow(T("settings.backgrounds.fit"), _backgroundFit),
-            SettingRow(T("settings.backgrounds.sound"), _backgroundVolume), SettingRow(T("settings.backgrounds.speed"), _backgroundSpeed),
+            SettingRow(T("settings.backgrounds.sound"), _backgroundVolume), Note(T("settings.backgrounds.soundHelp")),
+            SettingRow(T("settings.backgrounds.speed"), _backgroundSpeed),
             SettingRow(T("settings.backgrounds.brightness"), _backgroundBrightness)]);
         _ownBackground.CheckedChanged += (_, _) => SetOwnBackground(_ownBackground.Checked);
         _ownGlass.CheckedChanged += (_, _) => SetOwnGlass(_ownGlass.Checked);
@@ -176,7 +182,7 @@ public sealed partial class SettingsWindow
             Note(T("settings.effects.help"))]);
         _appGlassNote = Note(T("settings.apps.glassHelp"));
         _backgroundEditor = Card(T("settings.backgrounds.everyApp"), false,
-            [_ownBackground, .. _backgroundRows, Note(T("settings.backgrounds.soundHelp")), .. _mainGlassRows, _ownGlass, _appGlassNote, .. _appGlassRows]);
+            [_ownBackground, .. _backgroundRows, .. _mainGlassRows, _ownGlass, _appGlassNote, .. _appGlassRows]);
 
         foreach (SwitchBox rule in new[] { _soundInFront, _pauseFullScreen, _pauseSaver })
             rule.CheckedChanged += (_, _) =>
@@ -189,6 +195,13 @@ public sealed partial class SettingsWindow
                 QueueApplyRefresh();
             };
 
+        // Back from File Explorer, say, where a file may have been moved or put back.
+        Activated += (_, _) =>
+        {
+            if (_gone.Count == 0) return;
+            _gone.Clear();
+            ShowBackground(controls: false);
+        };
         FlowLayoutPanel page = ScrollingPage();
         _backgroundsScroll = page;
         page.Controls.Add(Card(T("settings.backgrounds.title"), true, Note(T("settings.backgrounds.help")), _backgroundFrame, adding,
@@ -358,15 +371,24 @@ public sealed partial class SettingsWindow
 
     private static bool IsVideo(string file) => BackdropChoice.IsVideoText(file);
 
+    // Looked up once each time the list fills, never while it draws: a file on a share that is gone can take seconds.
+    private readonly Dictionary<string, bool> _gone = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool Gone(string file)
+    {
+        if (!_gone.TryGetValue(file, out bool gone)) _gone[file] = gone = new BackdropChoice(file, BackdropFit.Fill).IsMissing;
+        return gone;
+    }
+
     // A file by its name, a link as it is, and either marked when it can't be found.
-    internal static string NameOf(string file)
+    private string NameOf(string file)
     {
         if (BackdropChoice.IsLinkText(file)) return file.Trim();
         string name = Path.GetFileName(file);
-        return new BackdropChoice(file, BackdropFit.Fill).IsMissing ? string.Format(T("settings.backgrounds.missing"), name) : name;
+        return Gone(file) ? string.Format(T("settings.backgrounds.missing"), name) : name;
     }
 
-    private static string ItemText(BackgroundItem item) =>
+    private string ItemText(BackgroundItem item) =>
         item.Volume > 0 && IsVideo(item.File) ? string.Format(T("settings.backgrounds.withSound"), NameOf(item.File), item.Volume) : NameOf(item.File);
 
     private string DetailOf(string? program)
@@ -453,16 +475,12 @@ public sealed partial class SettingsWindow
         ListBackgrounds(ShownApp);
     }
 
-    // Saved from a window's menu (its background's sound): the rest being edited here stays.
-    internal void BackgroundsSaved(BackgroundPreferences saved)
+    // Saved from a window's menu (its background's sound): the same change here, so what is being edited stays.
+    internal void BackgroundsSaved(Func<BackgroundPreferences, BackgroundPreferences> change)
     {
         bool wasPending = _pending;
         string? shown = ShownApp;
-        _backgroundEdit = _backgroundEdit with
-        {
-            Everywhere = saved.Everywhere,
-            Apps = [.. _backgroundEdit.Apps.Select(app => saved.OwnOf(app.Program) is { } own ? app with { Background = own } : app)],
-        };
+        _backgroundEdit = change(_backgroundEdit);
         ListBackgrounds(shown);
         if (!wasPending) MarkSaved();
         else RefreshApply();
@@ -484,6 +502,7 @@ public sealed partial class SettingsWindow
     {
         BackgroundEntry Entry(string? program) =>
             new(program, program ?? T("settings.backgrounds.everyApp"), () => ChoiceOf(program), () => DetailOf(program));
+        _gone.Clear();
         _backgroundList.BeginUpdate();
         _backgroundList.Items.Clear();
         _backgroundList.Items.Add(Entry(null));
@@ -520,6 +539,7 @@ public sealed partial class SettingsWindow
                 _backgroundSpeed.Value = Math.Clamp(item.Speed, BackgroundItem.SlowestSpeed, BackgroundItem.FastestSpeed);
                 _backgroundBrightness.Value = Math.Clamp(item.Brightness, BackgroundItem.DimmestBrightness, 100);
                 _backgroundOrder.SelectedIndex = (int)choice.Order;
+                _backgroundSwitch.SelectedIndex = (int)choice.Switch;
                 // The nearest choice to a number from elsewhere.
                 _pictureMinutes.SelectedIndex = Array.IndexOf(PictureMinuteChoices,
                     PictureMinuteChoices.MinBy(minutes => Math.Abs(minutes - choice.PictureMinutes)));
@@ -554,10 +574,14 @@ public sealed partial class SettingsWindow
         _showingBackground = true;
         try
         {
-            _itemList.BeginUpdate();
-            _itemList.Items.Clear();
-            foreach (BackgroundItem item in items) _itemList.Items.Add(ItemText(item));
-            _itemList.EndUpdate();
+            string[] texts = [.. items.Select(ItemText)];
+            if (!texts.SequenceEqual(_itemList.Items.Cast<string>()))
+            {
+                _itemList.BeginUpdate();
+                _itemList.Items.Clear();
+                _itemList.Items.AddRange([.. texts]);
+                _itemList.EndUpdate();
+            }
             if (items.Count > 0) _itemList.SelectedIndex = _itemAt;
         }
         finally { _showingBackground = false; }
@@ -565,7 +589,7 @@ public sealed partial class SettingsWindow
         _backgroundFileRow.Description = DetailOf(app);
         if (shown is null) _backgroundPreview.Show("", BackdropFit.Fill, T("settings.backgrounds.drop"));
         else if (BackdropChoice.IsLinkText(shown.File)) _backgroundPreview.Show("", shown.Fit, string.Format(T("settings.backgrounds.linkPreview"), shown.File));
-        else if (new BackdropChoice(shown.File, shown.Fit).IsMissing)
+        else if (Gone(shown.File))
             _backgroundPreview.Show("", shown.Fit, string.Format(T("settings.backgrounds.missingPreview"), Path.GetFileName(shown.File)));
         else _backgroundPreview.Show(shown.File, shown.Fit, T("settings.backgrounds.drop"));
         _backgroundList.Invalidate();

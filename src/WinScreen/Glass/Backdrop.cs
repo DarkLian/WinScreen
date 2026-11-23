@@ -10,6 +10,9 @@ public enum BackdropFit { Fill = 0, Fit = 1, Stretch = 2, Tile = 3, Center = 4 }
 
 public enum BackdropOrder { InOrder = 0, Shuffle = 1 }
 
+// When a set goes on to its next: as a media player does, or after the minutes chosen.
+public enum BackdropSwitch { VideoEnds = 0, Timed = 1 }
+
 // One picture or video, a file or a link to one. Volume, Speed and Brightness are percents; sound is heard only from
 // the one window ContentEffects lets play it.
 internal sealed record BackdropChoice(string File, BackdropFit Fit, int Volume = 0, int Speed = 100, int Brightness = 100)
@@ -60,20 +63,27 @@ internal sealed record BackdropChoice(string File, BackdropFit Fit, int Volume =
     }
 }
 
-// What a window shows behind Glass: one picture or video, or several taking turns. With several, a video plays once
-// and the next follows; a picture stays for PictureMinutes.
-internal sealed record BackdropSet(IReadOnlyList<BackdropChoice> Items, BackdropOrder Order = BackdropOrder.InOrder, int PictureMinutes = 5)
+// What a window shows behind Glass: one picture or video, or several taking turns. With several, a picture stays for
+// Minutes; a video plays once, or with Timed plays round and round for Minutes.
+internal sealed record BackdropSet(IReadOnlyList<BackdropChoice> Items, BackdropOrder Order = BackdropOrder.InOrder, int Minutes = 5,
+    BackdropSwitch Switch = BackdropSwitch.VideoEnds)
 {
+    public bool PlaysOnce => Items.Count > 1 && Switch == BackdropSwitch.VideoEnds;
+
+    // How long the item stays before the next, or null to wait for its end.
+    public long? StayMilliseconds(BackdropChoice item) =>
+        Items.Count < 2 || PlaysOnce && item.IsVideo ? null : Math.Max(1, Minutes) * 60_000L;
+
     public bool HasSound => Items.Any(item => item.Volume > 0 && item.IsVideo);
 
     // The same pictures and videos in the same order: what shows can carry on, with any new fit, sound or speed.
-    public bool SameItems(BackdropSet? other) => other is not null && Order == other.Order && Items.Count == other.Items.Count &&
+    public bool SameItems(BackdropSet? other) => other is not null && Order == other.Order && Switch == other.Switch && Items.Count == other.Items.Count &&
         Items.Zip(other.Items).All(pair => pair.First.SameFile(pair.Second));
 
     public bool Equals(BackdropSet? other) =>
-        other is not null && Order == other.Order && PictureMinutes == other.PictureMinutes && Items.SequenceEqual(other.Items);
+        other is not null && Order == other.Order && Minutes == other.Minutes && Switch == other.Switch && Items.SequenceEqual(other.Items);
 
-    public override int GetHashCode() => HashCode.Combine(Order, PictureMinutes, Items.Count, Items.FirstOrDefault());
+    public override int GetHashCode() => HashCode.Combine(Order, Minutes, Switch, Items.Count, Items.FirstOrDefault());
 }
 
 // Which of a set shows next: in order, or shuffled so that each shows once a round and none twice running.
@@ -304,7 +314,11 @@ internal sealed class LinkedPicture : Backdrop
     {
         _cancel.Cancel();
         if (_picture is not null) _picture.Dispose();
-        else _fetching.ContinueWith(done => { if (done.IsCompletedSuccessfully) done.Result.Dispose(); }, TaskScheduler.Default);
+        else _fetching.ContinueWith(done =>
+        {
+            if (done.IsCompletedSuccessfully) done.Result.Dispose();
+            else if (done.Exception is { } failure) Diagnostics.Log.Swallowed(failure);
+        }, TaskScheduler.Default);
         _cancel.Dispose();
         base.Dispose();
     }
@@ -327,7 +341,7 @@ internal sealed class VideoBackdrop(string file, bool once = false, int speed = 
 
     public override bool Ended => _ended;
 
-    public override int Wait => _paused || _failed ? Timeout.Infinite : Poll;
+    public override int Wait => _paused && !_failed ? Timeout.Infinite : Poll;
 
     public override void Pause(bool paused)
     {

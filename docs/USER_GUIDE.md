@@ -223,8 +223,8 @@ In **Settings → Backgrounds**, choose pictures, GIFs or videos to show behind 
 give it its own, or to show none in it. The preview shows how it will fit, and you can drop a file onto it. To see
 more of the picture, lower **Background** in Every app's card.
 
-Add more than one and they take turns, **In order** or **Shuffle**: each video plays once, and each picture shows for
-the minutes you choose. Each has its own **Fit**, **Sound**, **Speed** and **Brightness**. If a file was moved or
+Add more than one and they take turns, **In order** or **Shuffle**. With **Switch** on **When a video ends**, each video
+plays once and each picture stays for the minutes you choose; on **On a timer**, each stays for those minutes. Each has its own **Fit**, **Sound**, **Speed** and **Brightness**. If a file was moved or
 deleted, Settings marks it **(not found)** and Glass shows the next one.
 
 Videos play without sound until you turn **Sound** up, also with **Background sound** under **Effects** in the window's

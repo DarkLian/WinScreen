@@ -240,12 +240,13 @@ public sealed class SettingsLayoutTests
 
     // The owner, 23 Nov: a background can be several pictures and videos taking turns, and a file that was moved or
     // deleted says so in the list instead of failing quietly.
-    [Fact]
-    public void A_background_set_lists_its_items_and_marks_one_that_is_gone()
+    [Theory]
+    [InlineData("en")] [InlineData("zh-Hans")] [InlineData("zh-Hant")]
+    public void A_background_set_lists_its_items_and_marks_one_that_is_gone(string language)
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
-            UiText.Initialize("en");
+            UiText.Initialize(language);
             string picture = Path.Combine(Path.GetTempPath(), "WinScreen set " + Guid.NewGuid().ToString("N") + ".png");
             using (var bitmap = new Bitmap(32, 18)) { using (Graphics g = Graphics.FromImage(bitmap)) g.Clear(Color.SteelBlue); bitmap.Save(picture); }
             try
@@ -253,7 +254,7 @@ public sealed class SettingsLayoutTests
                 var choice = new BackgroundChoice().WithItems([new BackgroundItem { File = picture },
                     new BackgroundItem { File = @"C:\gone\sea.mp4", Volume = 40 }, new BackgroundItem { File = "https://example.com/hill.jpg" }]);
                 AppSettings? applied = null;
-                using var window = new SettingsWindow(new AppSettings { Language = "en", ExperimentalFeatures = true,
+                using var window = new SettingsWindow(new AppSettings { Language = language, ExperimentalFeatures = true,
                     Backgrounds = new BackgroundPreferences { Everywhere = choice } }, new StartWithWindows(tasks: NoTasks.Instance), chosen =>
                 {
                     applied = chosen;
@@ -266,18 +267,40 @@ public sealed class SettingsLayoutTests
                 Pump();
                 ThemedList items = Descendants(window).OfType<ThemedList>().Single(list => list.AccessibleName == UiText.T("settings.backgrounds.items"));
                 Assert.True(items.Visible);
-                Assert.Equal([Path.GetFileName(picture), "sea.mp4 (not found), sound 40%", "https://example.com/hill.jpg"],
+                Assert.Equal([Path.GetFileName(picture), string.Format(UiText.T("settings.backgrounds.withSound"),
+                        string.Format(UiText.T("settings.backgrounds.missing"), "sea.mp4"), 40), "https://example.com/hill.jpg"],
                     items.Items.Cast<string>());
-                SettingRowPanel order = Descendants(window).OfType<SettingRowPanel>().Single(row => row.Text == "Order");
+                SettingRowPanel order = Descendants(window).OfType<SettingRowPanel>().Single(row => row.Text == UiText.T("settings.backgrounds.order"));
                 Assert.True(order.Visible);
-                if (order.Parent?.Parent?.Parent is ScrollableControl scroller) scroller.ScrollControlIntoView(items);
+                // The row with every button, in the narrowest window, in each language, and its sound row with its own note.
+                window.WindowState = FormWindowState.Normal;
+                window.Size = window.MinimumSize;
+                items.SelectedIndex = 1;
+                Pump();
+                Button[] buttons = [.. Descendants(window).OfType<SettingRowPanel>().Single(row => row.Text == UiText.T("settings.backgrounds.file"))
+                    .Controls.OfType<FlowLayoutPanel>().SelectMany(panel => panel.Controls.OfType<Button>()).Where(button => button.Visible)];
+                Assert.Equal(5, buttons.Length);
+                SettingRowPanel files = Descendants(window).OfType<SettingRowPanel>().Single(row => row.Text == UiText.T("settings.backgrounds.file"));
+                Rectangle room = files.RectangleToScreen(files.ClientRectangle);
+                // Room is left for the row's own name, and no button runs past its end.
+                Assert.All(buttons, button => Assert.True(button.RectangleToScreen(button.ClientRectangle) is var at &&
+                    at.Left >= room.Left + 140 && at.Right <= room.Right, $"{language}: {button.Text} at {at}, in {room}"));
+                SettingRowPanel Row(string key) => Descendants(window).OfType<SettingRowPanel>().Single(row => row.Visible && row.Text == UiText.T(key));
+                Assert.Equal(UiText.T("settings.backgrounds.soundHelp"), Row("settings.backgrounds.sound").Description);
+                Assert.True(Row("settings.backgrounds.switch").Visible);
+                if (Descendants(window).OfType<ScrollPage>().Single(page => page.Contains(items)) is { } scroller)
+                    scroller.ScrollControlIntoView(Row("settings.backgrounds.brightness"));
                 Pump();
                 if (Environment.GetEnvironmentVariable("WINSCREEN_LAYOUT_EVIDENCE") is { } folder)
                 {
                     Directory.CreateDirectory(folder);
                     using var image = new Bitmap(window.Width, window.Height);
                     window.DrawToBitmap(image, new Rectangle(Point.Empty, window.Size));
-                    image.Save(Path.Combine(folder, "background-set.png"));
+                    image.Save(Path.Combine(folder, $"background-set-{language}.png"));
+                    (Descendants(window).OfType<ScrollPage>().Single(page => page.Contains(items))).ScrollControlIntoView(files);
+                    Pump();
+                    window.DrawToBitmap(image, new Rectangle(Point.Empty, window.Size));
+                    image.Save(Path.Combine(folder, $"background-set-files-{language}.png"));
                 }
                 // The list's choice is the one the rows under it change; moving it down keeps it chosen.
                 items.SelectedIndex = 1;
@@ -288,7 +311,7 @@ public sealed class SettingsLayoutTests
                 Assert.Equal(2, items.SelectedIndex);
                 window.Close();
             }
-            finally { File.Delete(picture); }
+            finally { File.Delete(picture); UiText.Initialize("en"); }
         });
     }
 

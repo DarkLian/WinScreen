@@ -200,7 +200,7 @@ public sealed class BackdropTests
         Assert.Equal(choice, read);
         BackdropSet set = read.Backdrop!;
         Assert.Equal(3, set.Items.Count);
-        Assert.Equal((BackdropOrder.Shuffle, 2), (set.Order, set.PictureMinutes));
+        Assert.Equal((BackdropOrder.Shuffle, 2), (set.Order, set.Minutes));
         Assert.Equal(new BackdropChoice(@"C:\p\hill.png", BackdropFit.Fit, 0, 100, 60), set.Items[1]);
         Assert.True(set.HasSound);
         // Taking the first away moves the next up.
@@ -240,6 +240,28 @@ public sealed class BackdropTests
         var set = new BackdropSet([new(@"C:\a.mp4", BackdropFit.Fill), new(@"C:\b.png", BackdropFit.Fill)]);
         Assert.True(set.SameItems(set with { Items = [new(@"c:\A.mp4", BackdropFit.Tile, 40, 200), new(@"C:\b.png", BackdropFit.Fit)] }));
         Assert.False(set.SameItems(set with { Order = BackdropOrder.Shuffle }));
+        Assert.False(set.SameItems(set with { Switch = BackdropSwitch.Timed }));
+    }
+
+    // The owner, 24 Nov: like a media player, a video stays until it ends and a picture for its minutes; on a timer,
+    // both for theirs. Alone, it stays.
+    [Fact]
+    public void A_set_goes_on_when_a_video_ends_or_on_a_timer()
+    {
+        var set = new BackdropSet([new(@"C:\a.mp4", BackdropFit.Fill), new(@"C:\b.png", BackdropFit.Fill)]);
+        Assert.True(set.PlaysOnce);
+        Assert.Equal(new long?[] { null, 300_000 }, set.Items.Select(set.StayMilliseconds));
+        BackdropSet timed = set with { Switch = BackdropSwitch.Timed, Minutes = 2 };
+        Assert.False(timed.PlaysOnce);
+        Assert.Equal(new long?[] { 120_000, 120_000 }, timed.Items.Select(timed.StayMilliseconds));
+        BackdropSet alone = set with { Items = [set.Items[0]] };
+        Assert.False(alone.PlaysOnce);
+        Assert.Null(alone.StayMilliseconds(alone.Items[0]));
+        BackgroundChoice saved = AppSettings.Parse(System.Text.Json.JsonSerializer.Serialize(new AppSettings
+        {
+            Backgrounds = new BackgroundPreferences { Everywhere = new BackgroundChoice { File = @"C:\a.mp4", Switch = BackdropSwitch.Timed } },
+        })).Backgrounds.Everywhere;
+        Assert.Equal(BackdropSwitch.Timed, saved.Switch);
         Assert.False(set.SameItems(set with { Items = [new(@"C:\b.png", BackdropFit.Fill), new(@"C:\a.mp4", BackdropFit.Fill)] }));
         Assert.Equal(set, new BackdropSet([new(@"C:\a.mp4", BackdropFit.Fill), new(@"C:\b.png", BackdropFit.Fill)]));
     }
@@ -571,6 +593,134 @@ public sealed class ContentEffectTests
             });
         }
         finally { Directory.Delete(folder, true); }
+    }
+
+    private static string ColourVideo(string folder, string name, Color colour)
+    {
+        string path = Path.Combine(folder, name);
+        var size = new Size(320, 240);
+        var frame = new byte[size.Width * size.Height * 4];
+        for (int i = 0; i < frame.Length; i += 4) (frame[i], frame[i + 1], frame[i + 2], frame[i + 3]) = (colour.B, colour.G, colour.R, 255);
+        using var writer = WinScreen.Pip.VideoFileWriter.Open(path, size, 30, sound: false, softwareOnly: true, frame);
+        for (int tick = 1; tick < writer.Rate; tick++) writer.Write(tick);
+        writer.Finish();
+        return path;
+    }
+
+    // The owner, 24 Nov: like a media player, the next shows when a video ends. Nothing plain shows in between, and
+    // held still (a full-screen game) it stays where it is.
+    [GraphicsCardFact]
+    public void Videos_of_a_set_follow_one_another_when_each_ends()
+    {
+        if (!WinScreen.Pip.ViewRecording.Supported) { Skipped.Because("Windows' video encoder isn't on this PC (an N edition)."); return; }
+        string folder = Path.Combine(Path.GetTempPath(), "WinScreen background " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        try
+        {
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                string red = ColourVideo(folder, "red.mp4", Color.FromArgb(0xC8, 0x1E, 0x1E)), blue = ColourVideo(folder, "blue.mp4", Color.FromArgb(0x1E, 0x1E, 0xC8));
+                var windows = new WindowController([]);
+                using var effects = new ContentEffects(windows);
+                effects.SetLevels(new ContentLevels(0, 1, Shadow: false));
+                effects.SetBackgrounds(_ => new BackdropSet([new(red, BackdropFit.Fill), new(Path.Combine(folder, "gone.mp4"), BackdropFit.Fill), new(blue, BackdropFit.Fill)]));
+                try
+                {
+                    Assert.True(effects.Toggle(target.Handle, ContentLook.Glass));
+                    char Seen() => Middle(bounds) is var now && now.R > now.B + 80 ? 'r' : now.B > now.R + 80 ? 'b' : '-';
+                    Pump(() => Seen() == 'r', 5000);
+                    var order = new List<char>();
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+                    while (clock.ElapsedMilliseconds < 5200)
+                    {
+                        Application.DoEvents();
+                        char now = Seen();
+                        if (order.Count == 0 || order[^1] != now) order.Add(now);
+                        Thread.Sleep(5);
+                    }
+                    Assert.StartsWith("rbrb", new string([.. order]));
+                    effects.Hold(true);
+                    for (int i = 0; i < 10; i++) { Application.DoEvents(); Thread.Sleep(20); }
+                    char held = Seen();
+                    for (int i = 0; i < 130; i++)
+                    {
+                        Application.DoEvents();
+                        Assert.Equal(held, Seen());
+                        Thread.Sleep(20);
+                    }
+                    effects.Hold(false);
+                    Pump(() => Seen() != held, 4000);
+                    Assert.NotEqual(held, Seen());
+                }
+                finally
+                {
+                    effects.TurnAllOff();
+                    windows.RestoreAll();
+                }
+            });
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    // A picture given as a link is fetched and shown; one that isn't there is named like a missing file.
+    [GraphicsCardFact]
+    public void A_picture_from_a_link_shows_and_a_dead_link_is_named()
+    {
+        using var listener = new System.Net.HttpListener();
+        int port;
+        using (var free = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0)) { free.Start(); port = ((System.Net.IPEndPoint)free.LocalEndpoint).Port; }
+        string at = $"http://localhost:{port}/";
+        listener.Prefixes.Add(at);
+        listener.Start();
+        byte[] png;
+        using (var picture = new Bitmap(64, 64))
+        {
+            using (Graphics g = Graphics.FromImage(picture)) g.Clear(Color.FromArgb(0x20, 0xB0, 0x40));
+            using var bytes = new MemoryStream();
+            picture.Save(bytes, System.Drawing.Imaging.ImageFormat.Png);
+            png = bytes.ToArray();
+        }
+        var serving = Task.Run(async () =>
+        {
+            while (listener.IsListening)
+            {
+                System.Net.HttpListenerContext asked;
+                try { asked = await listener.GetContextAsync(); }
+                catch (Exception stopped) when (stopped is System.Net.HttpListenerException or ObjectDisposedException) { return; }
+                bool there = asked.Request.Url!.AbsolutePath == "/green.png";
+                asked.Response.StatusCode = there ? 200 : 404;
+                if (there) asked.Response.OutputStream.Write(png);
+                asked.Response.Close();
+            }
+        });
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            var problems = new List<string>();
+            effects.Problem += problems.Add;
+            effects.SetLevels(new ContentLevels(0, 1, Shadow: false));
+            effects.SetBackgrounds(_ => new BackdropSet([new(at + "gone.png", BackdropFit.Fill), new(at + "green.png", BackdropFit.Fill)]));
+            try
+            {
+                Assert.True(effects.Toggle(target.Handle, ContentLook.Glass));
+                Color green = Color.FromArgb(0x20, 0xB0, 0x40);
+                Pump(() => Desktop.IsNear(Middle(bounds), green, 24) && problems.Count > 0, 8000);
+                Assert.True(Desktop.IsNear(Middle(bounds), green, 24), $"{Middle(bounds)} rather than the linked picture");
+                Assert.Contains("gone.png", Assert.Single(problems));
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+                listener.Stop();
+            }
+        });
+        Assert.True(serving.Wait(5000));
     }
 
     // The owner, 23 Nov, after Lively: a background's sound plays only while its app is in front, unless the person
