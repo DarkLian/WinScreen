@@ -29,6 +29,7 @@ public sealed class AppEndToEndTests : IDisposable
     /// <summary>Starts the program with its own data folder, so tests never touch real settings.</summary>
     private Process Start()
     {
+        Setup.QuietNotices(_data);
         var start = new ProcessStartInfo(Program) { UseShellExecute = false };
         start.Environment["WINSCREEN_DATA"] = _data;
         return Process.Start(start)!;
@@ -502,6 +503,7 @@ public sealed class AppEndToEndTests : IDisposable
         int previous = _app.Id;
         _app.Dispose();
         new AppSettings { WelcomeShown = true, Language = "zh-Hans" }.Save(Path.Combine(_data, "settings.json"));
+        Setup.QuietNotices(_data);
 
         var start = new ProcessStartInfo(Program) { UseShellExecute = false };
         start.Environment["WINSCREEN_DATA"] = _data;

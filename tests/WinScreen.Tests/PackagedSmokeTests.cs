@@ -30,6 +30,7 @@ public sealed class PackagedSmokeTests(ITestOutputHelper output)
         var settings = new AppSettings { ShowToolbar = false, WelcomeShown = true };
         foreach (AppCommand command in CommandCatalog.All) settings.Hotkeys[command] = "";
         settings.Save(Path.Combine(data, "settings.json"));
+        Setup.QuietNotices(data);
         var start = new ProcessStartInfo(program!) { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
         start.Environment["WINSCREEN_DATA"] = data;
         using Process process = Process.Start(start)!;

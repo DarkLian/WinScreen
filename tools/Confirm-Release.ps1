@@ -5,7 +5,8 @@
 .DESCRIPTION
   Refuses (exit code 1, with every reason) unless TestResults holds, for the commit, built from it with nothing
   uncommitted:
-  - a full pair run in the Windows 10 VMs (tools\testvm\Invoke-TestVmPair.ps1) with no failures;
+  - a full pair run in the Windows 10 VMs (tools\testvm\Invoke-TestVmPair.ps1) with no failures, or whose every
+    failure passed again in a later run on the same VM for the same commit (a targeted rerun of just those);
   - a Windows 11 run of every desktop test on this PC (tools\Invoke-HostRun.ps1 -All) with no failures, or whose
     every failure passed again in a later run on this PC for the same commit (a targeted rerun of just those);
   - a logic run (tools\Invoke-LogicRun.ps1) with no failures.
@@ -138,6 +139,33 @@ function Get-PassedAgain([string]$HostFolder, $Full) {
     return $passed
 }
 
+# Failures of one half of a pair run that passed again in the VMs (owner, 23 Nov 2026: a stray failure cost a whole
+# pair run): in a later run on the same VM and checkpoint, for the same commit, built clean, not elevated, that
+# finished with no failures of its own; the same test in the same suite, really run.
+function Get-VmPassedAgain([string]$VmFolder, $Half) {
+    $failed = @(Get-RunOutcomes $Half.FullName | ForEach-Object { $suite = $_.Suite; $_.FailedTests | ForEach-Object { "$suite|$_" } })
+    $passed = @{}
+    if ($failed.Count -eq 0) { return $passed }
+    $first = Read-Record $Half.FullName
+    foreach ($later in @(Get-ChildItem -LiteralPath $VmFolder -Directory | Where-Object { $_.Name -notlike 'pair-*' -and $_.Name -notlike '_*' })) {
+        $record = Read-Record $later.FullName
+        if (-not $record -or $record.commit -ne $Commit -or -not $record.clean -or $record.elevated) { continue }
+        if (-not $first.vm -or $record.vm -ne $first.vm -or $record.checkpoint -ne $first.checkpoint) { continue }
+        if (-not $record.recorded -or -not $first.recorded -or [datetime]$record.recorded -le [datetime]$first.recorded) { continue }
+        if ((Get-ExitCode $later.FullName) -ne '0') { continue }
+        $outcomes = @(Get-RunOutcomes $later.FullName)
+        if (@($outcomes | Where-Object { $_.Failed -gt 0 }).Count -gt 0) { continue }
+        foreach ($outcome in $outcomes) {
+            foreach ($test in $outcome.PassedTests) {
+                if ($outcome.EarlyTests -contains ($test -split '\(', 2)[0]) { continue }
+                $key = "$($outcome.Suite)|$test"
+                if ($failed -contains $key -and -not $passed.ContainsKey($key)) { $passed[$key] = $later.Name }
+            }
+        }
+    }
+    return $passed
+}
+
 function Sum($Outcomes) {
     $parts = foreach ($group in $Outcomes | Group-Object Suite | Sort-Object Name) {
         $passed = ($group.Group | Measure-Object Passed -Sum).Sum
@@ -159,16 +187,20 @@ else {
     $record = Read-Record $pair.FullName
     if (-not $record.clean) { $problems.Add("Windows 10: built with uncommitted changes ($($pair.FullName)).") }
     $all = @()
+    $vmAgain = @{}
     $halves = @(Get-ChildItem -LiteralPath $pair.FullName -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'source.json') })
     if ($halves.Count -ne 2) { $problems.Add("Windows 10: $($halves.Count) VM results in $($pair.FullName), not 2.") }
     foreach ($half in $halves) {
         $run = Read-Record $half.FullName
         if ($run -and $run.filter) { $problems.Add("Windows 10: $($half.Name) ran only $($run.filter).") }
-        $all += @(Test-Run "Windows 10 ($($half.Name))" $half.FullName @('packaged'))
+        $again = Get-VmPassedAgain (Join-Path $ResultsRoot 'vm') $half
+        foreach ($key in $again.Keys) { $vmAgain["$($half.Name)|$key"] = $again[$key] }
+        $all += @(Test-Run "Windows 10 ($($half.Name))" $half.FullName @('packaged') @($again.Keys))
         Add-NotRun "Windows 10 ($($half.Name))" @(Get-RunOutcomes $half.FullName)
     }
     if (-not ($all | Where-Object Suite -eq 'desktop')) { $problems.Add("Windows 10: neither VM ran the desktop suite ($($pair.FullName)).") }
-    $gate.Add("Release-Gate-Windows-10: $($pair.Name) ($(Sum $all))")
+    $vmPassedAgain = if ($vmAgain.Count -gt 0) { "; $($vmAgain.Count) failed, passed again in $(@($vmAgain.Values | Sort-Object -Unique) -join ', ')" } else { '' }
+    $gate.Add("Release-Gate-Windows-10: $($pair.Name) ($(Sum $all)$vmPassedAgain)")
 }
 
 # Windows 11: every desktop test on this PC. The newest full run counts; a later targeted run can only pass again

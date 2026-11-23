@@ -218,6 +218,40 @@ public sealed class ConfirmReleaseTests : IDisposable
         if (!passes) Assert.DoesNotContain("Release-Gate:", output);
     }
 
+    /// <summary>
+    /// The owner's rule (23 Nov 2026), as on Windows 11: a pair run's failure counts only when it passed again in a later
+    /// run on the same VM and checkpoint, for the same commit, really run, in a run with no failures of its own.
+    /// </summary>
+    [Theory]
+    [InlineData("passed again later", true, "(desktop 1 passed, packaged 2 passed; 1 failed, passed again in WinScreen-Win10-20261114-103000)")]
+    [InlineData("on the other VM", false, "1 desktop tests failed")]
+    [InlineData("a rerun with a failure of its own", false, "1 desktop tests failed")]
+    [InlineData("a rerun before the pair", false, "1 desktop tests failed")]
+    [InlineData("a rerun for another commit", false, "1 desktop tests failed")]
+    public void A_pair_runs_failures_count_only_when_they_passed_again_later_in_the_same_vm(string change, bool passes, string said)
+    {
+        Ready();
+        string win10 = Path.Combine(Pair, "WinScreen-Win10");
+        Json(win10, new { commit = Commit, clean = true, tool = "vm", filter = (string?)null, vm = "WinScreen-Win10", checkpoint = "clean",
+            elevated = false, recorded = "2026-11-14T10:20:00+08:00" });
+        Trx(win10, "desktop", ("A.One", "Passed"), ("A.Two", "Failed"), ("A.Displays", "NotExecuted"));
+        Finished(win10, 1);
+        string rerun = Directory.CreateDirectory(Path.Combine(Results, "vm", "WinScreen-Win10-20261114-103000")).FullName;
+        Json(rerun, new
+        {
+            commit = change == "a rerun for another commit" ? "fedcba9876543210fedcba9876543210fedcba98" : Commit, clean = true, tool = "vm",
+            vm = change == "on the other VM" ? "WinScreen-Rework" : "WinScreen-Win10", checkpoint = "clean", elevated = false,
+            recorded = change == "a rerun before the pair" ? "2026-11-14T10:10:00+08:00" : "2026-11-14T10:30:00+08:00",
+        });
+        bool ownFailure = change == "a rerun with a failure of its own";
+        Trx(rerun, "desktop", ownFailure ? [("A.Two", "Passed"), ("A.Five", "Failed")] : [("A.Two", "Passed")]);
+        Finished(rerun, ownFailure ? 1 : 0);
+        (int code, string output) = Confirm();
+        Assert.True(code == (passes ? 0 : 1), output);
+        Assert.Contains(said, output);
+        if (!passes) Assert.DoesNotContain("Release-Gate:", output);
+    }
+
     [Fact]
     public void A_version_that_isnt_a_release_version_is_refused()
     {

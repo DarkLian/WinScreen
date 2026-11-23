@@ -8,6 +8,8 @@ public sealed partial class WindowController
     private const uint ReturnDestroyEvent = 0x8001, ReturnLocationEvent = 0x800B;
     private readonly Dictionary<nint, (WindowPlacement Home, nint[] Hooks)> _returning = [];
     private User32.WinEventProc? _returnEvent;
+    private readonly Dictionary<nint, System.Threading.Timer> _returnSettles = [];
+    private const int ReturnSettleMilliseconds = 300;
 
     internal bool IsWatchingReturn(nint window)
     {
@@ -36,6 +38,7 @@ public sealed partial class WindowController
     private void StopWatchingReturn(nint window)
     {
         if (_returning.Remove(window, out var watch)) Unhook(watch.Hooks);
+        if (_returnSettles.Remove(window, out var settle)) settle.Dispose();
     }
 
     private static void Unhook(nint[] hooks)
@@ -49,8 +52,22 @@ public sealed partial class WindowController
         if (item != 0 || child != 0) return;
         lock (_gate)
         {
-            if (!_returning.TryGetValue(window, out var watch)) return;
+            if (!_returning.TryGetValue(window, out _)) return;
             if (kind == ReturnDestroyEvent || !User32.IsWindow(window)) { StopWatchingReturn(window); return; }
+            // Leaving full screen, a browser can pass through a size on the screen before it reaches the spot it
+            // remembers: where it ends up is judged once it has been still for a moment.
+            if (_returnSettles.Remove(window, out var earlier)) earlier.Dispose();
+            _returnSettles[window] = new System.Threading.Timer(_ => SettleReturn(window), null, ReturnSettleMilliseconds, Timeout.Infinite);
+        }
+    }
+
+    private void SettleReturn(nint window)
+    {
+        lock (_gate)
+        {
+            if (!_returning.TryGetValue(window, out var watch)) return;
+            if (_returnSettles.Remove(window, out var settle)) settle.Dispose();
+            if (!User32.IsWindow(window)) { StopWatchingReturn(window); return; }
             if (User32.IsIconic(window) || !User32.GetWindowRect(window, out Rect bounds)) return;
             Rectangle now = Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
             Rectangle[] monitors = Screen.AllScreens.Select(screen => screen.Bounds).ToArray();

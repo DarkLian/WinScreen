@@ -60,6 +60,27 @@ internal sealed class PipInteraction : IDisposable
     private readonly Queue<string> _diagnostics = new();
     internal string[] InputDiagnostics { get { lock (_diagnostics) return _diagnostics.ToArray(); } }
 
+    // The last button events, for a test whose press went astray: what the hook saw and kept, what the worker did.
+    private readonly (long At, int What, int Data)[] _buttonTrail = new (long, int, int)[32];
+    private int _trailNext;
+
+    private void Trail(int what, int data) =>
+        _buttonTrail[(Interlocked.Increment(ref _trailNext) - 1) & 31] = (Environment.TickCount64, what, data);
+
+    internal string ButtonTrail
+    {
+        get
+        {
+            int next = Volatile.Read(ref _trailNext);
+            return string.Join(" ", Enumerable.Range(Math.Max(0, next - 32), Math.Min(next, 32))
+                .Select(i => _buttonTrail[i & 31])
+                .Select(e => $"{e.At % 100000}:" + (e.What switch
+                {
+                    -1 => "press", -2 => "release", -3 => "dragPickedUp", _ => $"hook{e.What:X}",
+                }) + $"/{e.Data}"));
+        }
+    }
+
     private const int WH_MOUSE_LL = 14;
     private const int WM_QUIT = 0x12, WM_MOUSEMOVE = 0x200, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202,
         WM_RBUTTONDOWN = 0x204, WM_RBUTTONUP = 0x205, WM_MBUTTONDOWN = 0x207, WM_MBUTTONUP = 0x208, WM_MOUSEWHEEL = 0x20A,
@@ -368,6 +389,7 @@ internal sealed class PipInteraction : IDisposable
         bool swallow;
         try { swallow = Decide(message, data); }
         finally { Timing.Stop(started); }
+        if ((int)message != WM_MOUSEMOVE) Trail((int)message, swallow ? 1 : 0);
         return swallow ? 1 : CallNextHookEx(0, code, message, data);
     }
 
@@ -594,8 +616,8 @@ internal sealed class PipInteraction : IDisposable
         {
             case EventKind.Record: Record(input.Outcome, input.At, 0); break;
             case EventKind.Move: MoveArrived(input.At); break;
-            case EventKind.Press: PressArrived(input.At, input.Button, input.Alt, input.EndsScroll, input.OnLink); break;
-            case EventKind.Release: ReleaseArrived(input.At, input.Button); break;
+            case EventKind.Press: Trail(-1, (int)input.Button >> 20); PressArrived(input.At, input.Button, input.Alt, input.EndsScroll, input.OnLink); break;
+            case EventKind.Release: Trail(-2, (int)input.Button >> 20); ReleaseArrived(input.At, input.Button); break;
             case EventKind.Wheel:
                 StopScroll();
                 PipMapping map = Geometry();
@@ -627,6 +649,7 @@ internal sealed class PipInteraction : IDisposable
             for (long until = Environment.TickCount64 + ItemAnswerWait; _pressOnItem < 0 && Environment.TickCount64 < until;) Thread.Sleep(5);
             if (_pressOnItem == 1)
             {
+                Trail(-3, 0);
                 _pressHandedOver = true;
                 DragPickedUp?.Invoke(_pressAt);
                 return;

@@ -31,6 +31,7 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
 
     private Process Start()
     {
+        Setup.QuietNotices(_data);
         var start = new ProcessStartInfo(Program) { UseShellExecute = false };
         start.Environment[AppRoles.DataFolderVariable] = _data;
         return Process.Start(start)!;

@@ -16,6 +16,19 @@ internal static class Setup
     /// saving Settings on a PC whose WinScreen runs as administrator wrote the person's sign-in entry and tried to remove
     /// their task (23 Nov 2026). <see cref="AdministratorStartTests"/> checks that every test passes it.
     /// </summary>
+    /// <summary>
+    /// Before WinScreen is started on a test data folder: no notifications. Windows keeps one on the screen while it sees
+    /// no input from a person, in front, and every later test that needs the focus failed (21 on 23 Nov 2026).
+    /// </summary>
+    internal static void QuietNotices(string dataFolder)
+    {
+        string file = Path.Combine(dataFolder, "settings.json");
+        WinScreen.Settings.AppSettings settings = File.Exists(file) ? WinScreen.Settings.AppSettings.Load(file) : new() { WelcomeShown = true };
+        if (!settings.ShowNotifications) return;
+        settings.ShowNotifications = false;
+        settings.Save(file);
+    }
+
     internal static WinScreen.Tray.StartWithWindows OwnStartup() =>
         new(@"Software\WinScreenTests\TrayStartup", NoTasks.Instance);
 }

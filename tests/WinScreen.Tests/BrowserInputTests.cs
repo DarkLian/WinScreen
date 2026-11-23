@@ -722,7 +722,14 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                     Desktop.SlideMouse(anchor + new Size(0, 40)); Thread.Sleep(400);
                     mouse_event(middle ? 0x20u : 2u, 0, 0, 0, 0); Thread.Sleep(40);
                     mouse_event(middle ? 0x40u : 4u, 0, 0, 0, 0);
-                    Assert.True(Desktop.WaitFor(() => view.LiveInteraction?.Scrolling == false, 500));
+                    if (!Desktop.WaitFor(() => view.LiveInteraction?.Scrolling == false, 500))
+                    {
+                        var late = System.Diagnostics.Stopwatch.StartNew();
+                        bool ended = Desktop.WaitFor(() => view.LiveInteraction?.Scrolling == false, 5000);
+                        Assert.Fail($"Scrolling went on after the {(middle ? "middle" : "left")} click: " +
+                            (ended ? $"stopped {500 + late.ElapsedMilliseconds} ms after it" : "still after 5.5 s") +
+                            $"; buttons {view.LiveInteraction?.ButtonTrail}");
+                    }
                     Thread.Sleep(600);
                     stopped = WindowInfo.Title(window); Thread.Sleep(400);
                     Assert.Equal(stopped, WindowInfo.Title(window));
@@ -1394,7 +1401,7 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
                     Thread.Sleep(2);
                     if (i % 150 == 75) { mouse_event(0x800, 0, 0, unchecked((uint)-120), 0); Thread.Sleep(5); mouse_event(0x800, 0, 0, 120, 0); }
                     if (i % 300 == 150) { mouse_event(2, 0, 0, 0, 0); Thread.Sleep(30); mouse_event(4, 0, 0, 0, 0); }
-                    if (view.LiveInteraction is null) { l.AppendLine("EXC visit ended early: " + view.LastVisitEnd + " at " + i); break; }
+                    if (view.LiveInteraction is null) { l.AppendLine("EXC visit ended early: " + view.LastVisitEnd + " at " + i + "; buttons " + live.ButtonTrail); break; }
                 }
                 timing = live.Timing.ToString();
                 l.AppendLine(timing);
