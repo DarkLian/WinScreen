@@ -218,21 +218,28 @@ Dark mode or Glass ever stops taking clicks, WinScreen turns the effect off and 
 
 ### A picture or video behind Glass
 
-In **Settings → Backgrounds**, choose a picture, GIF or video to show behind the text of windows with Glass.
-**Every app** sets one for all of them. Add an app to give it its own, or to show none in it. The preview shows
-how it will fit, and you can drop a file onto it. To see more of the picture, lower **Background** at the top of
-the same page.
+In **Settings → Backgrounds**, choose pictures, GIFs or videos to show behind the text of windows with Glass, or
+**Add a link** to one on the web. **Every app** sets the background and the Glass levels for all of them. Add an app to
+give it its own, or to show none in it. The preview shows how it will fit, and you can drop a file onto it. To see
+more of the picture, lower **Background** in Every app's card.
 
-Videos play without sound until you turn **Sound** up. Only the window you used last plays sound, and a video
-pauses while its window is minimized or on another desktop.
+Add more than one and they take turns, **In order** or **Shuffle**: each video plays once, and each picture shows for
+the minutes you choose. Each has its own **Fit**, **Sound**, **Speed** and **Brightness**. If a file was moved or
+deleted, Settings marks it **(not found)** and Glass shows the next one.
+
+Videos play without sound until you turn **Sound** up, also with **Background sound** under **Effects** in the window's
+menu; **Change background** there opens these settings for its app. Only the window you used last plays sound, and only
+while its app is in front. Videos pause while their window is minimized or on another desktop, behind a game or
+full-screen app, and while Windows saves battery. Each of these can be turned off under **App backgrounds**.
 
 ### Keep pictures and video solid
 
 Glass fades every color close to the page's own, so dark scenes on a dark page, or bright skies on a light one, fade
 a little too. Two settings help:
 
-- **Fade range** at the top of **Settings → Backgrounds**: lower it and only colors very near the page's fade, so
-  pictures and videos stay solid. Text edges look a little sharper.
+- **Fade range** in Every app's card in **Settings → Backgrounds**: lower it and only colors very near the page's fade,
+  so pictures and videos stay solid. Text edges look a little sharper. Raise it past 100% and colors further from the
+  page fade too; at the top, all of them.
 - **Keep areas as they are**, under **Effects** in a window's menu: drag over a video or picture, or click a
   highlighted part, and Glass and Dark mode leave it as it is. Click a marked area to remove it, and press Enter when
   you're done. An app can have up to eight, and they're kept for all its windows and follow them when you resize
@@ -242,7 +249,7 @@ a little too. Two settings help:
 ### Text over a busy background
 
 Glass keeps a soft shadow of the page's color around text, so it stays readable over what's behind. Two settings in
-the **Glass** card of **Settings → Backgrounds** change that:
+Every app's card in **Settings → Backgrounds** change that:
 
 - **Text color**: **Light** or **Dark** turns the page the other way round when it needs to, as Dark mode does. You
   get light text with a dark shadow, or dark text with a light one. Pictures turn too, as in Dark mode, unless you
@@ -251,7 +258,7 @@ the **Glass** card of **Settings → Backgrounds** change that:
 
 ### Glass for each app or window
 
-Under **Apps** in **Settings → Backgrounds**, add an app to give it its own background and its own Background, Text,
+Under **App backgrounds** in **Settings → Backgrounds**, add an app to give it its own background and its own Background, Text,
 Fade range, text color and shadow. Both start as every app has them, and either can be turned off for that app. To change just one window, choose **Glass levels** under **Effects** in its menu: the changes show at once and
 last until the window closes, and **Save for this app** keeps them for all its windows.
 
@@ -305,7 +312,8 @@ In **Settings → General → New versions**, choose **Off** (the default: WinSc
 about them**, or **Install them for me**, which downloads a new version in the background and installs it when you
 close WinScreen. Either of the last two only asks GitHub which version is newest, and sends nothing else. A portable
 copy can't update itself: it tells you, and a click opens the new version's page. You can also choose **Check for
-updates** from the tray menu at any time. To update by hand, close WinScreen and run the newer installer. Your
+updates** from the tray menu, or **Check now** in **Settings → General**, at any time: a small window shows each step,
+and when the new version is ready, **Restart now** installs it. To update by hand, close WinScreen and run the newer installer. Your
 settings stay as they are.
 
 After an update, WinScreen offers once to show what's new. **What's new** is also in the tray menu and at the end of

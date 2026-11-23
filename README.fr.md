@@ -269,7 +269,7 @@ demande qu'un projet soit d'abord plus largement utilisé, nous referons donc un
   d'agents d'IA, et approuve chaque version. Personne d'autre ne peut modifier le code ni publier une version.
 - **Confidentialité :** WinScreen n'envoie rien sur vous ou votre PC nulle part. Il ne se connecte que lorsque vous
   demandez à être prévenu des nouvelles versions ou à les faire installer, ou quand vous choisissez
-  **Check for updates**, et il demande alors seulement à GitHub quelle version est la plus récente. Il garde un court
+  **Check for updates**, et il demande alors seulement à GitHub quelle version est la plus récente. Une image ou une vidéo donnée à Glass sous forme de lien web est chargée depuis cette adresse. Il garde un court
   journal sur votre PC pour aider à résoudre les problèmes, qui ne quitte jamais votre PC à moins que vous ne
   l'envoyiez vous-même.
 

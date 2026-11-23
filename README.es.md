@@ -264,7 +264,7 @@ un proyecto se use más ampliamente primero, así que volveremos a solicitarla m
   agentes de IA, y aprueba cada versión. Nadie más puede cambiar el código ni publicar una versión.
 - **Privacidad:** WinScreen no envía nada sobre ti ni sobre tu PC a ningún sitio. Solo se conecta a internet cuando
   pides que te avise de nuevas versiones o que las instale, o cuando eliges **Check for updates**, y entonces solo
-  pregunta a GitHub cuál es la versión más reciente. Guarda un registro breve en tu PC para ayudar a resolver problemas,
+  pregunta a GitHub cuál es la versión más reciente. Una imagen o un vídeo que le des a Glass como enlace web se descarga de esa dirección. Guarda un registro breve en tu PC para ayudar a resolver problemas,
   que nunca sale de tu PC a menos que lo envíes tú.
 
 ## Licencia

@@ -266,7 +266,7 @@ voraus, dass ein Projekt schon weiter verbreitet ist, also bewerben wir uns spä
   von KI-Agenten, und gibt jede Version frei. Niemand sonst kann den Code ändern oder eine Version veröffentlichen.
 - **Datenschutz:** WinScreen sendet nichts über dich oder deinen PC irgendwohin. Es geht nur online, wenn du von neuen
   Versionen hören oder sie installieren lassen willst oder **Check for updates** wählst, und fragt dann nur GitHub, welche
-  Version die neueste ist. Es führt ein kurzes Protokoll auf deinem PC, um Probleme zu beheben, das deinen PC nie
+  Version die neueste ist. Ein Bild oder Video, das du Glass als Weblink gibst, wird von dieser Adresse geladen. Es führt ein kurzes Protokoll auf deinem PC, um Probleme zu beheben, das deinen PC nie
   verlässt, außer du schickst es selbst.
 
 ## Lizenz

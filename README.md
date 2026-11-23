@@ -255,7 +255,7 @@ more widely used first, so we'll apply again later.
   agents, and approves every release. Nobody else can change the code or publish a release.
 - **Privacy:** WinScreen doesn't send anything about you or your PC anywhere. It only goes online when you ask to hear
   about new versions or have them installed, or choose **Check for updates**, and then it just asks GitHub which version
-  is newest. It keeps a short
+  is newest. A picture or video you give Glass as a web link is fetched from that address. It keeps a short
   log on your PC to help fix problems, which never leaves your PC unless you send it yourself.
 
 ## License
