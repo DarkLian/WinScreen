@@ -200,8 +200,11 @@ public sealed class ViewCommandTests(Xunit.Abstractions.ITestOutputHelper output
                     PressFreezeOver(region);
                     Assert.True(Desktop.WaitFor(() => region.Frozen, 3000, () => pump(20)), "The key didn't reach the region view under the pointer.");
                     Assert.False(view.Frozen);
-                    if (!view.KeepsUpdating) Run(AppCommand.ViewKeepHidden, target.Handle);
-                    Assert.True(Desktop.WaitFor(() => view.KeepsUpdating && view.Frozen == false && view.CanTurn, 15000, () => pump(20)), view.StateDescription);
+                    // On Windows 10 a hidden original has only Windows' own thumbnail, which can't be frozen: there the
+                    // original stays shown.
+                    bool hide = Environment.OSVersion.Version.Build >= 22000;
+                    if (view.KeepsUpdating != hide) Run(AppCommand.ViewKeepHidden, target.Handle);
+                    Assert.True(Desktop.WaitFor(() => view.KeepsUpdating == hide && view.Frozen == false && view.CanTurn, 15000, () => pump(20)), view.StateDescription);
                     PressFreezeOver(view);
                     Assert.True(Desktop.WaitFor(() => view.Frozen, 3000, () => pump(20)), "The key didn't reach the window's view under the pointer.");
                     Run(AppCommand.ViewFreeze, view.Handle);

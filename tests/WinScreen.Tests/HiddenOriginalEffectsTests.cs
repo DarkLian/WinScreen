@@ -74,7 +74,11 @@ public sealed class HiddenOriginalEffectsTests(Xunit.Abstractions.ITestOutputHel
                     {
                         Run(AppCommand.OpenPip, target.Handle);
                         PipWindow view = Field<Dictionary<nint, PipWindow>>(app, "_pips")[target.Handle];
-                        Assert.True(Desktop.WaitFor(() => view.CanTurn && view.KeepsUpdating, 15000, () => pump(20)), view.DiagnosticSnapshot);
+                        // Captured, the picture is settled. On Windows 10 a hidden original has only Windows' own
+                        // thumbnail, never captured.
+                        bool captures = Environment.OSVersion.Version.Build >= 22000;
+                        Assert.True(Desktop.WaitFor(() => view.KeepsUpdating && (view.CanTurn || !captures), 15000, () => pump(20)), view.DiagnosticSnapshot);
+                        if (!captures) pump(500);
                         string status = "";
                         try { Run(command, target.Handle); }
                         catch (TargetInvocationException failure) { problems.Add($"{command}: escaped {failure.InnerException}"); }
