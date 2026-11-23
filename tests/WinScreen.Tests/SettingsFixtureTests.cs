@@ -59,9 +59,9 @@ public class SettingsFixtureTests
             Assert.Equal("Ctrl+Alt+Shift+R", settings.Hotkeys[AppCommand.ToggleRollUp]);
             Assert.Equal("Ctrl+Alt+Down", settings.Hotkeys[AppCommand.OpacityDown]);
 
-            Assert.Equal(["csgo", "cs2", "valorant", "eldenring", "fixture-game"], settings.ExcludedPrograms);
+            Assert.Equal(["fixture-game"], settings.ExcludedPrograms); // The first versions' sample programs are gone.
             Assert.Equal(["fixture-included"], settings.IncludedPrograms);
-            Assert.Contains("fixture-paint", settings.ModifierExclusions);
+            Assert.Equal(["fixture-paint"], settings.ModifierExclusions);
             Assert.Equal(["fixture-menu"], settings.WindowMenuExclusions);
             using (JsonDocument saved = JsonDocument.Parse(Fixture(version)))
                 if (saved.RootElement.TryGetProperty(nameof(AppSettings.PipOriginalPrograms), out _))

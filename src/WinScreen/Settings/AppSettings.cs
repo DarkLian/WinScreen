@@ -310,14 +310,34 @@ public sealed class AppSettings
     private static readonly JsonSerializerOptions Format = new() { WriteIndented = true };
 
     // Raise it only together with a new step in Migrations.
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     // Step n turns format n into n + 1, on the file's JSON alone. Files from before the format was numbered are 0.
     internal static readonly Action<JsonObject>[] Migrations =
     [
         OfferWindowMenuButton, // 0 → 1
         ChooseUpdates, // 1 → 2
+        DropFirstSuggestions, // 2 → 3
     ];
+
+    // The first versions filled both lists with sample programs nobody chose.
+    private static readonly string[] FirstExcluded = ["csgo", "cs2", "valorant", "eldenring"];
+    private static readonly string[] FirstGestureExclusions = ["blender", "maya", "3dsmax", "Photoshop", "krita", "gimp"];
+
+    private static void DropFirstSuggestions(JsonObject root)
+    {
+        Drop(nameof(ExcludedPrograms), FirstExcluded);
+        Drop(nameof(ModifierExclusions), FirstGestureExclusions);
+
+        void Drop(string list, string[] names)
+        {
+            if (root[list] is not JsonArray programs) return;
+            foreach (JsonNode? program in programs.ToArray())
+                if (program is JsonValue value && value.TryGetValue(out string? name) &&
+                    names.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    programs.Remove(program);
+        }
+    }
 
     private static void ChooseUpdates(JsonObject root)
     {
@@ -399,7 +419,7 @@ public sealed class AppSettings
         [AppCommand.RestoreWindow] = "Ctrl+Alt+U",
     };
 
-    public List<string> ExcludedPrograms { get; set; } = ["csgo", "cs2", "valorant", "eldenring"];
+    public List<string> ExcludedPrograms { get; set; } = [];
 
     public List<string> IncludedPrograms { get; set; } = [];
 
@@ -437,7 +457,7 @@ public sealed class AppSettings
     public WindowMenuGesture WindowMenuGesture { get; set; }
     public List<string> WindowMenuExclusions { get; set; } = [];
 
-    public List<string> ModifierExclusions { get; set; } = ["blender", "maya", "3dsmax", "Photoshop", "krita", "gimp"];
+    public List<string> ModifierExclusions { get; set; } = [];
 
     [JsonConverter(typeof(PipPreferencesConverter))]
     public PipPreferences Pip { get; set; } = new();

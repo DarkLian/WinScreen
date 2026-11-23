@@ -109,7 +109,7 @@ public sealed class ModifierHookPolicyTests
         File.WriteAllText(path, "{\"ModifierKey\":9,\"ModifierExclusions\":null}");
         AppSettings loaded = AppSettings.Load(path);
         Assert.Equal(ModifierKey.Alt, loaded.ModifierKey);
-        Assert.NotEmpty(loaded.ModifierExclusions);
+        Assert.Empty(loaded.ModifierExclusions);
     }
 }
 

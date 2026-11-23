@@ -38,7 +38,7 @@ public sealed class DiagnosticsFileTests : IDisposable
         Assert.Contains("\"Language\": \"zh-Hans\"", shrunk);
         Assert.Contains("\"TogglePin\": \"Ctrl\\u002BShift\\u002BF9\"", shrunk);
         Assert.Contains("\"OpenPip\"", shrunk);
-        Assert.Contains("\"ExcludedPrograms\": {\n    \"count\": 5\n  }".Replace("\n", Environment.NewLine), shrunk);
+        Assert.Contains("\"ExcludedPrograms\": {\n    \"count\": 1\n  }".Replace("\n", Environment.NewLine), shrunk);
         Assert.Contains("\"ModifierDrag\": true", shrunk);
     }
 

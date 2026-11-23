@@ -182,8 +182,9 @@ public sealed class SettingsSchemaTests : IDisposable
 
     private static string Document(string name) => name switch
     {
-        "fixture" => SettingsFixtureTests.Fixture(SettingsFixtureTests.VersionNames()
-            .MaxBy(version => Version.Parse(version.Split('-')[0]))!),
+        // As this version writes it back: a newer version's file has been through this version's format steps.
+        "fixture" => JsonSerializer.Serialize(AppSettings.Parse(SettingsFixtureTests.Fixture(SettingsFixtureTests.VersionNames()
+            .MaxBy(version => Version.Parse(version.Split('-')[0]))!))),
         // Lists of objects aren't in the defaults: one entry's newer value must cost that entry at most.
         "backgrounds" => JsonSerializer.Serialize(new AppSettings
         {
@@ -423,5 +424,22 @@ public sealed class SettingsSchemaTests : IDisposable
     public void An_unknown_update_choice_from_a_newer_version_is_off()
     {
         Assert.Equal(UpdateMode.Off, AppSettings.Parse("""{ "SchemaVersion": 2, "Updates": 9 }""").Updates);
+    }
+
+    [Fact]
+    public void The_first_versions_sample_programs_go_and_the_persons_own_stay()
+    {
+        Assert.Empty(new AppSettings().ExcludedPrograms);
+        Assert.Empty(new AppSettings().ModifierExclusions);
+
+        AppSettings loaded = AppSettings.Parse("""
+            { "SchemaVersion": 2, "ExcludedPrograms": ["csgo", "CS2", "mygame", "valorant", "eldenring"],
+              "ModifierExclusions": ["blender", "maya", "3dsmax", "photoshop", "krita", "gimp", "mypaint"] }
+            """);
+        Assert.Equal(["mygame"], loaded.ExcludedPrograms);
+        Assert.Equal(["mypaint"], loaded.ModifierExclusions);
+
+        // Added again after the change, they stay.
+        Assert.Equal(["cs2"], AppSettings.Parse("""{ "SchemaVersion": 3, "ExcludedPrograms": ["cs2"] }""").ExcludedPrograms);
     }
 }
