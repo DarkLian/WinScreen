@@ -71,7 +71,7 @@ public sealed class ViewCommandMatrixTests(Xunit.Abstractions.ITestOutputHelper 
                 var settings = new AppSettings { ShowToolbar = true, ShowNotifications = false, WelcomeShown = true, ModifierDrag = true, WindowMenu = true,
                     ExperimentalFeatures = true, PipMiddleClickScroll = true, HighlightPinned = true,
                     PipViews = new PipViewPreferences { HoverPreview = WinScreen.Settings.PipHoverPreview.Lens, KeepHiddenOnNewViews = false } };
-                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 MethodInfo run = typeof(TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;
                 void Run(AppCommand command, nint window) { run.Invoke(app, [command, window]); pump(150); }
                 try

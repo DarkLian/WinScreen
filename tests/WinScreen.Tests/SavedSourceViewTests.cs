@@ -47,7 +47,7 @@ public sealed class SavedSourceViewTests
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
-                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 var views = (List<PipWindow>)typeof(TrayApplication)
                     .GetField("_viewsInOrder", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(app)!;
                 MethodInfo openScreen = typeof(TrayApplication).GetMethod("OpenScreenView", BindingFlags.Instance | BindingFlags.NonPublic)!;

@@ -57,7 +57,7 @@ public sealed class ProgramSoundRealTests
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
                 };
                 var sound = new ProgramSound(AudioSessions.Instance, journal);
-                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), sound);
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), sound, startup: Setup.OwnStartup());
                 MethodInfo open = typeof(TrayApplication).GetMethod("OpenViewOf", BindingFlags.Instance | BindingFlags.NonPublic)!;
                 MethodInfo putBack = typeof(TrayApplication).GetMethod("PutBack", BindingFlags.Instance | BindingFlags.NonPublic, [typeof(nint)])!;
                 PipWindow Open()

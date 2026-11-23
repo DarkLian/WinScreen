@@ -54,7 +54,7 @@ public sealed class LanguageRestartTests
         {
             var started = new List<int>();
             bool asked = false;
-            var app = new TrayApplication(new WindowController([]), Quiet(), path)
+            var app = new TrayApplication(new WindowController([]), Quiet(), path, startup: Setup.OwnStartup())
                 { StartCopy = page => { started.Add(page); return true; }, AskToRestart = (_, _) => asked = true };
             try
             {
@@ -82,7 +82,7 @@ public sealed class LanguageRestartTests
             bool answer = false;
             var asked = new List<(int Views, int Windows)>();
             var windows = new WindowController([]);
-            var app = new TrayApplication(windows, Quiet(), path)
+            var app = new TrayApplication(windows, Quiet(), path, startup: Setup.OwnStartup())
                 { StartCopy = page => { started.Add(page); return true; }, AskToRestart = (views, changed) => { asked.Add((views, changed)); return answer; } };
             try
             {
@@ -118,7 +118,7 @@ public sealed class LanguageRestartTests
     {
         InFolder(path =>
         {
-            var app = new TrayApplication(new WindowController([]), Quiet(), path, settingsPage: 3);
+            var app = new TrayApplication(new WindowController([]), Quiet(), path, settingsPage: 3, startup: Setup.OwnStartup());
             try
             {
                 Assert.True(Desktop.WaitFor(() =>

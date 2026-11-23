@@ -12,11 +12,10 @@ internal static class Setup
     internal static void UseRealPixels() => Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
 
     /// <summary>
-    /// A tray app made in a test starts with Windows through a key and task list of its own. With the real ones, saving
-    /// Settings on a PC whose WinScreen runs as administrator wrote the person's sign-in entry and tried to remove their
-    /// task (23 Nov 2026).
+    /// For every tray app a test makes: starting with Windows through a key and task list of its own. With the real ones,
+    /// saving Settings on a PC whose WinScreen runs as administrator wrote the person's sign-in entry and tried to remove
+    /// their task (23 Nov 2026). <see cref="AdministratorStartTests"/> checks that every test passes it.
     /// </summary>
-    [ModuleInitializer]
-    internal static void KeepSignInStartToTests() =>
-        WinScreen.Tray.TrayApplication.NewStartup = () => new WinScreen.Tray.StartWithWindows(@"Software\WinScreenTests\TrayStartup", NoTasks.Instance);
+    internal static WinScreen.Tray.StartWithWindows OwnStartup() =>
+        new(@"Software\WinScreenTests\TrayStartup", NoTasks.Instance);
 }

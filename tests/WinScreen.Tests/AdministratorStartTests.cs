@@ -21,6 +21,35 @@ public sealed class AdministratorStartTests : IDisposable
 
     public void Dispose() => Registry.CurrentUser.DeleteSubKeyTree(_key, throwOnMissingSubKey: false);
 
+    /// <summary>
+    /// A tray app a test makes with the real Run key and Task Scheduler changes how this PC's own WinScreen starts at
+    /// sign-in when it saves Settings (23 Nov 2026), so every one is given <see cref="Setup.OwnStartup"/>.
+    /// </summary>
+    [Fact]
+    public void Every_tray_app_a_test_makes_starts_with_windows_through_its_own_key()
+    {
+        var assembly = typeof(AdministratorStartTests).Assembly;
+        var missing = new List<string>();
+        int seen = 0;
+        string made = "new Tray" + "Application("; // Not written whole, or this file would match itself.
+        foreach (string name in assembly.GetManifestResourceNames().Where(n => n.StartsWith("TestSource.", StringComparison.Ordinal)))
+        {
+            using var reader = new StreamReader(assembly.GetManifestResourceStream(name)!);
+            string text = reader.ReadToEnd();
+            for (int at = text.IndexOf(made, StringComparison.Ordinal); at >= 0;
+                 at = text.IndexOf(made, at + 1, StringComparison.Ordinal))
+            {
+                int depth = 0, end = at + made.Length - 1;
+                do { depth += text[end] == '(' ? 1 : text[end] == ')' ? -1 : 0; end++; } while (depth > 0);
+                seen++;
+                if (!text[at..end].Contains("startup: Setup.OwnStartup()", StringComparison.Ordinal))
+                    missing.Add($"{name["TestSource.".Length..]}: {text[at..end].ReplaceLineEndings(" ")}");
+            }
+        }
+        Assert.True(seen > 10, $"Only {seen} tray apps found in the tests' sources.");
+        Assert.True(missing.Count == 0, string.Join(Environment.NewLine, missing));
+    }
+
     private sealed class FakeTasks : ITaskScheduler
     {
         public Dictionary<string, string> Made { get; } = [];

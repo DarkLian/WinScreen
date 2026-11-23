@@ -50,7 +50,7 @@ public sealed class ViewCommandTests(Xunit.Abstractions.ITestOutputHelper output
             {
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true };
-                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try
                 {
                     ContextMenuStrip menu = Field<NotifyIcon>(app, "_tray").ContextMenuStrip!;
@@ -110,7 +110,7 @@ public sealed class ViewCommandTests(Xunit.Abstractions.ITestOutputHelper output
                 Dictionary<AppCommand, string> keys = CommandCatalog.All.ToDictionary(command => command, _ => "");
                 keys[AppCommand.ViewFreeze] = FreezeKeys;
                 var settings = new AppSettings { ShowToolbar = true, ShowNotifications = false, WelcomeShown = true, Hotkeys = keys, ModifierDrag = true, WindowMenu = true, ExperimentalFeatures = true, PipMiddleClickScroll = true, HighlightPinned = true, PipViews = new PipViewPreferences { HoverPreview = WinScreen.Settings.PipHoverPreview.Lens, KeepHiddenOnNewViews = false } };
-                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 MethodInfo run = typeof(TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;
                 MethodInfo isOn = typeof(TrayApplication).GetMethod("IsOn", BindingFlags.Instance | BindingFlags.NonPublic)!;
                 void Run(AppCommand command, nint window) { run.Invoke(app, [command, window]); pump(150); }

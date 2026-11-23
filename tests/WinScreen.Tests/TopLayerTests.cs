@@ -22,7 +22,7 @@ public sealed class TopLayerTests
             {
                 var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
-                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try
                 {
                     var tray = (NotifyIcon)typeof(TrayApplication).GetField("_tray", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(app)!;

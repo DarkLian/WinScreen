@@ -22,7 +22,7 @@ public sealed class ThemeChangeTests
                 MenuStyle.UseTheme("light");
                 var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false, Theme = "light",
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
-                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try
                 {
                     Image lightIcon = MenuParts.Icon(MenuParts.Pin)!;
@@ -80,7 +80,7 @@ public sealed class ThemeChangeTests
                 MenuStyle.UseTheme("light");
                 var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false, Theme = "light",
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
-                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try
                 {
                     Open(app);

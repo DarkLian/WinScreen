@@ -41,7 +41,7 @@ public sealed class EffectExclusivityTests
                 var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false, ExperimentalFeatures = true,
                     DetectAlreadyDark = false, Effects = new EffectPreferences { LayeredGlass = layeredGlass },
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
-                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 nint window = target.Handle;
                 try
                 {
@@ -85,7 +85,7 @@ public sealed class EffectExclusivityTests
             {
                 var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false, ExperimentalFeatures = true,
                     DetectAlreadyDark = true, Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
-                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 nint window = target.Handle;
                 try
                 {

@@ -130,7 +130,7 @@ public sealed class CustomizationTests : IDisposable
                 WelcomeShown = true, ShowNotifications = false, ShowToolbar = false,
                 Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
             };
-            using var app = new TrayApplication(new WindowController([]), settings, settingsFile);
+            using var app = new TrayApplication(new WindowController([]), settings, settingsFile, startup: Setup.OwnStartup());
             try
             {
             string before = File.ReadAllText(settingsFile);

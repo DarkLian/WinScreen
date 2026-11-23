@@ -44,7 +44,7 @@ public sealed class RuleWindowTests
                         Borderless = true, NoToolbar = true,
                     }],
                 };
-                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try
                 {
                     Rectangle inboxBefore = Desktop.BoundsOf(inbox.Handle);
@@ -92,7 +92,7 @@ public sealed class RuleWindowTests
                     ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
                 };
-                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try
                 {
                     Rectangle bounds = Desktop.BoundsOf(target.Handle);
@@ -158,7 +158,7 @@ public sealed class RuleWindowTests
                 {
                     Program = "WinScreen.TestTarget", TitleContains = "rule change", NoToolbar = noToolbar, Pinned = pinned, Off = off,
                 };
-                using var app = new TrayApplication(controller, With(Rule(noToolbar: true)), Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(controller, With(Rule(noToolbar: true)), Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 void ComeForward(nint window)
                 {
                     Desktop.Activate(window);
@@ -215,7 +215,7 @@ public sealed class RuleWindowTests
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
                     SavedSetups = [new ProgramSetup { Program = "WinScreen.TestTarget", TitleContains = "ready", Pinned = true }],
                 };
-                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try
                 {
                     Apply(app, target.Handle);

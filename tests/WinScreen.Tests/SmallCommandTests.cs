@@ -53,7 +53,7 @@ public sealed class SmallCommandTests
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
-                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 MethodInfo run = typeof(TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;
                 MethodInfo isOn = typeof(TrayApplication).GetMethod("IsOn", BindingFlags.Instance | BindingFlags.NonPublic)!;
                 try

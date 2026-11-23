@@ -32,10 +32,7 @@ public sealed partial class TrayApplication : ApplicationContext
     private readonly string _settingsPath;
     private readonly HotkeyHost _hotkeys;
     private readonly NotifyIcon _tray = new();
-    private readonly StartWithWindows _startup = NewStartup();
-
-    // Tests give theirs a key and task list of their own: this PC's sign-in entry and task are the person's.
-    internal static Func<StartWithWindows> NewStartup { get; set; } = () => new StartWithWindows();
+    private readonly StartWithWindows _startup;
     private readonly DarkMode _dark = new();
     private readonly AnchorSet _anchors = new();
     private readonly AutomaticAnchors _automaticAnchors;
@@ -80,8 +77,10 @@ public sealed partial class TrayApplication : ApplicationContext
     private WindowMenuHost? _windowMenu;
 
     internal TrayApplication(WindowController windows, AppSettings settings, string settingsPath, ProgramSound? sound = null,
-        int? settingsPage = null, AppRole? role = null)
+        int? settingsPage = null, AppRole? role = null, StartWithWindows? startup = null)
     {
+        // Tests pass a key and task list of their own: this PC's sign-in entry and task are the person's.
+        _startup = startup ?? new StartWithWindows();
         _role = role ?? (ProcessInfo.SelfElevated ? AppRole.Elevated : AppRole.Ordinary);
         _hotkeys = new HotkeyHost(AppRoles.HostTitle(_role));
         _recoveryWatcher = _role == AppRole.Helper ? new RecoveryWatcher([AppRoles.HelperArgument]) : new RecoveryWatcher();

@@ -4,6 +4,7 @@ using WinScreen.Settings;
 using WinScreen.Tray;
 using WinScreen.Windows;
 using Xunit;
+using WinScreen.Tests.Support;
 
 namespace WinScreen.Tests;
 
@@ -20,7 +21,7 @@ public sealed class WorkflowRegressionTests
                 string path = Path.Combine(folder, "settings.json");
                 var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
-                using var app = new TrayApplication(new WindowController([]), settings, path);
+                using var app = new TrayApplication(new WindowController([]), settings, path, startup: Setup.OwnStartup());
                 try
                 {
                     File.Delete(path);
@@ -53,7 +54,7 @@ public sealed class WorkflowRegressionTests
                 var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 settings.Hotkeys[AppCommand.ToggleDark] = "Ctrl+Shift+F20";
-                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 using var other = new HotkeyHost();
                 try
                 {
@@ -121,7 +122,7 @@ public sealed class ConcealmentOwnershipTests
                 var settings = new AppSettings { ExperimentalFeatures = true, ShowToolbar = false,
                     ShowNotifications = false, WelcomeShown = true,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
-                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"));
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try
                 {
                     // OpenViewOf has said whether to hide the original since 17 Nov: a view the person opens does.
