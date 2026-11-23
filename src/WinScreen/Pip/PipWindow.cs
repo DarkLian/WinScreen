@@ -1756,6 +1756,7 @@ public sealed partial class PipWindow : Form
     }
 
     internal string LastVisitEnd { get; private set; } = "";
+    private string? _endReason; // Said by whatever ends the visit; without it, the caller is named.
 
     internal Rectangle? TitleBarBounds => _titleBar is { Visible: true } bar ? bar.Bounds : null;
 
@@ -1855,7 +1856,7 @@ public sealed partial class PipWindow : Form
         live.MiddleClickScroll = MiddleScrollOn;
         live.AppScrollsWithHover = AppScrollsWithHover;
         live.EnhancedHover = HoverOn;
-        live.Left += () => BeginInvokeIfAlive(() => { LastVisitEnd = "the pointer left"; EndLive(); });
+        live.Left += () => BeginInvokeIfAlive(() => { _endReason = "the pointer left"; EndLive(); });
         live.Pressed += _pressOutcomes.Enqueue;
         live.Answered += outcome => BeginInvokeIfAlive(() => OnAnswered(outcome));
         live.ViewDragged += moved => BeginInvokeIfAlive(() => DragLiveView(moved));
@@ -1905,11 +1906,15 @@ public sealed partial class PipWindow : Form
 
     // In this order: the source stops taking clicks, goes home, the hook goes, the view takes input, keys come back.
     // keepFocus: a drag handed to the original keeps the focus it has, or the drag would be cancelled.
-    private void EndLive(bool keepFocus = false)
+    private void EndLive(bool keepFocus = false, [System.Runtime.CompilerServices.CallerMemberName] string caller = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
     {
         ClaimEscape(_selecting); // Scrolling must not keep a global Escape claim after a visit/suspension ends.
+        string? reason = _endReason;
+        _endReason = null;
         if (_live is not { } live)
             return;
+        LastVisitEnd = reason ?? $"{caller} ({line})";
         ViewState.Modes before = CurrentModes();
         _live = null;
         _liveEndedAt = Environment.TickCount64;
@@ -2055,7 +2060,7 @@ public sealed partial class PipWindow : Form
     // A question nobody can see mustn't wait, so the original is shown.
     private void OnQuestion()
     {
-        LastVisitEnd = "the original asked something";
+        _endReason = "the original asked something";
         EndLive();
         if (_origin.IsAvailable) GoToSource();
     }
@@ -2467,7 +2472,7 @@ public sealed partial class PipWindow : Form
             // Windows drops a hook it thinks is slow. The source must not stay clickable if that happens.
             if (switchedAway || hookLost || !Bounds.Contains(Cursor.Position) && MouseButtons == MouseButtons.None && !_live.InPopup)
             {
-                LastVisitEnd = switchedAway ? $"switched to 0x{foreground:X} ({WindowInfo.ClassName(foreground)})"
+                _endReason = switchedAway ? $"switched to 0x{foreground:X} ({WindowInfo.ClassName(foreground)})"
                     : hookLost ? "the hook stopped seeing the pointer" : "the pointer was outside";
                 EndLive();
             }
