@@ -20,12 +20,12 @@ internal sealed class VideoFileWriter : IDisposable
     private readonly IMFSinkWriter _writer;
     private readonly int _video, _sound = -1;
     private readonly Size _size;
-    private readonly long _frameDuration;
     private readonly ID3D11Device? _device;
     private readonly IMFDXGIDeviceManager? _manager;
     private IMFMediaBuffer? _frame;
     private bool _finished;
     internal bool Hardware { get; }
+    internal int Rate { get; }
     internal bool HasSound => _sound >= 0;
 
     // Windows N editions come without Windows' video encoders.
@@ -61,7 +61,7 @@ internal sealed class VideoFileWriter : IDisposable
                 try
                 {
                     var size = new Size(640, 360);
-                    using var writer = new VideoFileWriter(path, size, RecordingGeometry.Rate, sound: false, hardware: true);
+                    using var writer = new VideoFileWriter(path, size, 30, sound: false, hardware: true);
                     writer.Frame(new byte[size.Width * size.Height * 4]);
                     for (int tick = 0; tick < 15; tick++) writer.Write(tick);
                     writer.Finish();
@@ -95,8 +95,8 @@ internal sealed class VideoFileWriter : IDisposable
     {
         if (!Started.Value) throw new InvalidOperationException("Media Foundation didn't start.");
         _size = size;
-        _frameDuration = 10_000_000L / rate;
         Hardware = hardware;
+        Rate = rate;
         try
         {
             using IMFAttributes attributes = MediaFactory.MFCreateAttributes(3);
@@ -181,7 +181,24 @@ internal sealed class VideoFileWriter : IDisposable
 
     // Hardware first where there is a hardware encoder; Windows' own encoder otherwise, or if the hardware one won't
     // take these frames. The first frame is written here, so a writer that would fail on it isn't kept.
+    // Windows' own encoder refuses some rates (240 at any size, 120 at 4K): the next usual rate below is used then.
     internal static VideoFileWriter Open(string path, Size size, int rate, bool sound, bool softwareOnly, byte[] first)
+    {
+        int[] rates = [.. RecordingGeometry.RatesFrom(rate)];
+        for (int i = 0; ; i++)
+        {
+            try { return OpenAt(path, size, rates[i], sound, softwareOnly, first); }
+            catch (SharpGenException refused) when (refused.HResult == InvalidMediaType && i + 1 < rates.Length)
+            {
+                Diagnostics.Log.Event("recording.rateRefused", ("rate", rates[i]), ("next", rates[i + 1]));
+                try { File.Delete(path); } catch (Exception gone) when (gone is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(gone); }
+            }
+        }
+    }
+
+    private const int InvalidMediaType = unchecked((int)0xC00D36B4);
+
+    private static VideoFileWriter OpenAt(string path, Size size, int rate, bool sound, bool softwareOnly, byte[] first)
     {
         if (!softwareOnly && HardwareProven)
         {
@@ -253,8 +270,9 @@ internal sealed class VideoFileWriter : IDisposable
         if (_frame is null) return;
         using IMFSample sample = MediaFactory.MFCreateSample();
         sample.AddBuffer(_frame);
-        sample.SampleTime = tick * _frameDuration;
-        sample.SampleDuration = _frameDuration;
+        // From the tick each time: 1/144 s isn't a whole number of 100 ns units, and adding a rounded step drifts.
+        sample.SampleTime = tick * 10_000_000L / Rate;
+        sample.SampleDuration = (tick + 1) * 10_000_000L / Rate - sample.SampleTime;
         _writer.WriteSample(_video, sample);
     }
 

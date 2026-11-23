@@ -100,6 +100,22 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
         return result;
     }
 
+    // The view's own capture rate (its display's refresh for "match"; Windows' software renderer draws at most 30), as
+    // the recording takes it.
+    private static int ExpectedRate(PipWindow view, Size frame)
+    {
+        int rate = view.EffectivePreferences.FrameRate;
+        if (rate == 0) rate = PipDisplay.CachedRefresh(view.Handle);
+        if (view.BackendKind == PipBackendKind.WgcSoftware) rate = Math.Min(rate, 30);
+        return RecordingGeometry.RateFor(rate, frame);
+    }
+
+    private static void SteadyAt(VideoFile video, int rate)
+    {
+        for (int i = 1; i < video.Times.Count; i++)
+            Assert.InRange(video.Times[i] - video.Times[i - 1], 10_000_000 / rate - 2, 10_000_000 / rate + 2);
+    }
+
     // Where a point of the source (from the window's visible corner) is in a recorded frame, as the view showed it.
     private static Point FrameSpot(PipWindow view, Point source, Size frame)
     {
@@ -143,7 +159,9 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
             // Every frame: nothing under a cover may ever show.
             using VideoFile video = VideoFile.Read(result.File!, _ => true);
             Assert.Equal(expected, video.Size);
-            Assert.InRange(video.Frames, (int)(seconds * 30 * 0.7), (int)(seconds * 30) + 3);
+            Assert.Equal(ExpectedRate(view, expected), result.Rate);
+            SteadyAt(video, result.Rate);
+            Assert.InRange(video.Frames, (int)(seconds * result.Rate * 0.7), (int)(seconds * result.Rate) + 3);
             Point covered = FrameSpot(view, new Point(cover.X + cover.Width / 2, cover.Y + cover.Height / 2), video.Size);
             Point left = FrameSpot(view, new Point(100, 150), video.Size), right = FrameSpot(view, new Point(380, 250), video.Size);
             bool sawRed = false, sawGreen = false;
@@ -218,7 +236,35 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
             RecordingResult result = Finished(scene, recording);
             using VideoFile video = VideoFile.Read(result.File!, index => index == 5);
             Assert.Equal(first, video.Size);
-            Assert.InRange(video.Frames, 50, 90);
+            Assert.InRange(video.Frames, (int)(1.6 * result.Rate), (int)(3 * result.Rate));
+        });
+    }
+
+    // Owner, 23 Nov: the recording's rate matches the view's.
+    [WgcTheory]
+    [InlineData(24)]
+    [InlineData(60)]
+    [InlineData(144)]
+    public void A_recording_has_the_views_frame_rate(int viewRate)
+    {
+        WithView(scene =>
+        {
+            scene.View.Overrides = scene.View.Overrides with { FrameRate = viewRate };
+            scene.Pump(300);
+            Size frame = RecordingGeometry.FrameSize(Field<Rectangle>(scene.View, "_lastShown").Size);
+            int expected = ExpectedRate(scene.View, frame);
+            var clock = Stopwatch.StartNew();
+            ViewRecording recording = Start(scene);
+            scene.Target.Animate(viewRate);
+            scene.Pump(2000);
+            scene.View.Run(AppCommand.ViewRecord);
+            double seconds = clock.Elapsed.TotalSeconds;
+            RecordingResult result = Finished(scene, recording);
+            using VideoFile video = VideoFile.Read(result.File!);
+            output.WriteLine($"view {viewRate}, recorded {result.Rate}, {video.Frames} frames in {seconds:0.00} s, {scene.View.BackendKind}");
+            Assert.Equal(expected, result.Rate);
+            SteadyAt(video, result.Rate);
+            Assert.InRange(video.Frames, (int)(seconds * result.Rate * 0.7), (int)(seconds * result.Rate) + 3);
         });
     }
 
@@ -249,7 +295,7 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
             }
             using VideoFile video = VideoFile.Read(result.File!);
             output.WriteLine($"{ending}: {result}, read {video.Frames} frames of {video.Size}");
-            Assert.InRange(video.Frames, 25, 70);
+            Assert.InRange(video.Frames, (int)(0.8 * result.Rate), (int)(2.3 * result.Rate));
         });
     }
 
@@ -346,7 +392,7 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
             using VideoFile video = VideoFile.Read(result.File!);
             output.WriteLine($"{video.Frames} frames, sound {video.SoundSeconds:0.00} s at level {video.SoundLevel:0.0000}");
             Assert.True(video.HasSound);
-            Assert.InRange(video.SoundSeconds, video.Frames / 30.0 - 0.6, video.Frames / 30.0 + 0.6);
+            Assert.InRange(video.SoundSeconds, video.Frames / (double)result.Rate - 0.6, video.Frames / (double)result.Rate + 0.6);
             Assert.True(video.SoundLevel > 0.003, $"The tone isn't in the recording (level {video.SoundLevel}).");
         }, sound: true);
     }

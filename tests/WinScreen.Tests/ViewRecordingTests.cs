@@ -43,6 +43,25 @@ public sealed class ViewRecordingTests(Xunit.Abstractions.ITestOutputHelper outp
         Assert.Equal(10, RecordingGeometry.NextTick(10, 1.2, 30));
         Assert.Equal(60, RecordingGeometry.NextTick(10, 2.0, 30));
         Assert.InRange(RecordingGeometry.Bitrate(new Size(1920, 1080), 30), 7_000_000, 8_000_000);
+        Assert.InRange(RecordingGeometry.Bitrate(new Size(1920, 1080), 120), 15_000_000, 16_000_000);
+    }
+
+    // Owner, 23 Nov: the recording's rate is the view's own (its frame rate, or its display's refresh for "match"), as far
+    // as H.264 allows at the size; an encoder that still refuses it gets the next usual rate below.
+    [Theory]
+    [InlineData(60, 1920, 1080, 60)]
+    [InlineData(24, 1920, 1080, 24)]
+    [InlineData(144, 1920, 1080, 144)]
+    [InlineData(165, 2560, 1440, 144)]
+    [InlineData(144, 3840, 2160, 60)]
+    [InlineData(480, 1280, 720, 240)]
+    [InlineData(0, 1280, 720, 60)]
+    [InlineData(5, 1280, 720, 15)]
+    public void A_recording_takes_the_views_rate_as_far_as_HD_video_allows(int viewRate, int width, int height, int expected)
+    {
+        Assert.Equal(expected, RecordingGeometry.RateFor(viewRate, new Size(width, height)));
+        Assert.Equal([240, 144, 120, 60, 30], RecordingGeometry.RatesFrom(240));
+        Assert.Equal([75, 60, 30], RecordingGeometry.RatesFrom(75));
     }
 
     [Fact]
@@ -102,9 +121,11 @@ public sealed class ViewRecordingTests(Xunit.Abstractions.ITestOutputHelper outp
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Frames_handed_in_become_a_video_at_a_steady_rate_that_Windows_reads_back(bool softwareOnly)
+    [InlineData(true, 60)]
+    [InlineData(false, 60)]
+    [InlineData(true, 144)]
+    [InlineData(true, 240)]
+    public async Task Frames_handed_in_become_a_video_at_a_steady_rate_that_Windows_reads_back(bool softwareOnly, int viewRate)
     {
         if (!ViewRecording.Supported) { Skipped.Because("Windows' video encoder isn't on this PC (an N edition)."); return; }
         string folder = Directory.CreateTempSubdirectory("winscreen-recordings-").FullName;
@@ -121,7 +142,7 @@ public sealed class ViewRecordingTests(Xunit.Abstractions.ITestOutputHelper outp
             string path = new PictureShelf { RecordingFolder = () => folder }.NewRecordingPath();
             var recording = new ViewRecording(path, softwareOnly: softwareOnly);
             // 420 isn't a multiple of 16, as encoders' rows are: a frame read or written at the wrong pitch shows sheared.
-            Size size = recording.FrameSize(new Size(421, 301));
+            Size size = recording.FrameSize(new Size(421, 301), viewRate);
             Assert.Equal(new Size(420, 300), size);
             // Red on the left, grey on the right, a white bar at the top (so a turned or flipped frame shows), then green,
             // then blue, a second each,
@@ -146,11 +167,16 @@ public sealed class ViewRecordingTests(Xunit.Abstractions.ITestOutputHelper outp
             Assert.Equal(hardware, result.Hardware);
             using VideoFile video = VideoFile.Read(path, index => index % 10 == 5);
             Assert.Equal(size, video.Size);
-            Assert.InRange(video.Frames, 80, 100);
+            // Windows' own encoder takes up to 144 a second; asked for 240, it gets the next usual rate it takes.
+            int rate = viewRate == 240 && !result.Hardware ? 144 : viewRate;
+            Assert.Equal(rate, result.Rate);
+            Assert.InRange(video.Frames, rate * 3 - rate / 3, rate * 3 + rate / 10 + 2);
             Assert.Equal(result.Frames, video.Frames);
-            // Steady: one frame every 1/30 s.
+            // Steady: one frame every 1/rate s.
             for (int i = 1; i < video.Times.Count; i++)
-                Assert.InRange(video.Times[i] - video.Times[i - 1], 333_000, 334_000);
+                Assert.InRange(video.Times[i] - video.Times[i - 1], 10_000_000 / rate - 2, 10_000_000 / rate + 2);
+            // And no drift: the last frame is where its number says.
+            Assert.InRange(video.Times[^1] - video.Times[0], (video.Times.Count - 1) * 10_000_000L / rate - 2, (video.Times.Count - 1) * 10_000_000L / rate + 2);
             Assert.False(video.HasSound);
             var seen = new HashSet<string>();
             foreach ((int index, Bitmap picture) in video.Kept)

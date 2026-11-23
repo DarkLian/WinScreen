@@ -227,9 +227,9 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
             session.StartCapture();
             while (!_stopping && Volatile.Read(ref closed) == 0 && _state != PipSessionState.Failed)
             {
-                bool recordingNow = Volatile.Read(ref _recording) is not null;
+                ViewRecording? recordingNow = Volatile.Read(ref _recording);
                 _wake.Wait(needsPresent || readingBack || _frames.HasPending ? Math.Max(1, 1000 / Math.Max(15, previousRate))
-                    : recordingNow ? 1000 / RecordingGeometry.Rate / 2 : 100);
+                    : recordingNow is not null ? Math.Max(1, 500 / recordingNow.Rate) : 100);
                 if (_stopping || Volatile.Read(ref closed) != 0) break;
                 View view;
                 bool dirty;
@@ -362,10 +362,11 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                 if (recording is not null && renderer.HasFrame)
                 {
                     renderer.CollectRecording(recording);
-                    if (ready && recordPending && Stopwatch.GetTimestamp() - lastRecorded >= ViewRecording.Period)
+                    // A little early is fine: the recording takes the newest frame at each of its own ticks.
+                    if (ready && recordPending && Stopwatch.GetTimestamp() - lastRecorded >= recording.Period * 3 / 4)
                     {
                         Rectangle shown = PipRenderGeometry.Crop(view.Crop, renderer.SourceSize);
-                        if (renderer.DrawRecording(recording.FrameSize(view.Turn.Oriented(shown.Size)), view.Crop))
+                        if (renderer.DrawRecording(recording.FrameSize(view.Turn.Oriented(shown.Size), rate), view.Crop))
                         {
                             recordPending = false;
                             lastRecorded = Stopwatch.GetTimestamp();

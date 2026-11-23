@@ -26,9 +26,11 @@ internal sealed partial class PipWorkerSignal : IDisposable
         _handles = [_changed, _deadline];
     }
     internal void Set() => _changed.Set();
-    internal void Wait(int milliseconds)
+    internal void Wait(int milliseconds) => Wait(TimeSpan.FromMilliseconds(milliseconds));
+
+    internal void Wait(TimeSpan time)
     {
-        long due = -Math.Max(1, milliseconds) * 10_000L;
+        long due = -Math.Max(1, time.Ticks);
         if (!SetWaitableTimerEx(_deadline.SafeWaitHandle, in due, 0, 0, 0, 0, 0))
             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
         WaitHandle.WaitAny(_handles);

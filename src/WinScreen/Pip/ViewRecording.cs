@@ -4,7 +4,7 @@ using SharpGen.Runtime;
 namespace WinScreen.Pip;
 
 // File: the finished video, null when nothing was recorded. Problem: the error code when writing failed.
-internal sealed record RecordingResult(string? File, long Frames, bool Hardware, bool Sound, bool SoundRefused, int Problem = 0);
+internal sealed record RecordingResult(string? File, long Frames, bool Hardware, bool Sound, bool SoundRefused, int Problem = 0, int Rate = 0);
 
 // A view's picture as a video. The capture's worker hands in finished frames without ever waiting; the recording's own
 // thread keeps a steady rate, writing the newest frame each tick or the last one again, and is the only one to touch
@@ -18,12 +18,14 @@ internal sealed class ViewRecording
     private readonly uint _soundProcess;
     private readonly bool _softwareOnly;
     private readonly object _gate = new();
-    private readonly AutoResetEvent _signal = new(false);
+    // High resolution: at 144 a second a tick is 7 ms, less than Windows' ordinary 15.6 ms wait.
+    private readonly PipWorkerSignal _signal = new();
     private readonly Stack<byte[]> _free = new();
     private readonly TaskCompletionSource<RecordingResult> _done = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _allocated;
     private byte[]? _newest;
     private Size _size;
+    private int _rate;
     private bool _finished;
     private volatile bool _muted;
 
@@ -47,14 +49,20 @@ internal sealed class ViewRecording
     internal string Path => _path;
     internal Task<RecordingResult> Completion => _done.Task;
     internal bool Finished { get { lock (_gate) return _finished; } }
-    internal static long Period => Stopwatch.Frequency / RecordingGeometry.Rate;
+    // Frames a second: the view's capture rate when the first frame came, kept for the whole file.
+    internal int Rate { get { lock (_gate) return _rate == 0 ? RecordingGeometry.DefaultRate : _rate; } }
+    internal long Period => Stopwatch.Frequency / Rate;
 
-    // Fixed by the first frame offered; every later one is drawn into this size.
-    internal Size FrameSize(Size shown)
+    // Fixed by the first frame offered, with the view's rate then; every later frame is drawn into this size.
+    internal Size FrameSize(Size shown, int viewRate)
     {
         lock (_gate)
         {
-            if (_size.IsEmpty) _size = RecordingGeometry.FrameSize(shown);
+            if (_size.IsEmpty)
+            {
+                _size = RecordingGeometry.FrameSize(shown);
+                _rate = RecordingGeometry.RateFor(viewRate, _size);
+            }
             return _size;
         }
     }
@@ -130,25 +138,32 @@ internal sealed class ViewRecording
             while ((current = TakeNewest()) is null)
             {
                 if (Finished) { result = new(null, 0, false, false, false); return; }
-                _signal.WaitOne(250);
+                _signal.Wait(250);
             }
             bool soundRefused = sound is not null && !sound.WaitUntilReady(TimeSpan.FromSeconds(3));
             if (soundRefused) { sound!.Dispose(); sound = null; }
             Size size;
-            lock (_gate) size = _size;
-            writer = VideoFileWriter.Open(_path, size, RecordingGeometry.Rate, sound is not null, _softwareOnly, current);
+            int wanted;
+            lock (_gate) { size = _size; wanted = _rate == 0 ? RecordingGeometry.DefaultRate : _rate; }
+            writer = VideoFileWriter.Open(_path, size, wanted, sound is not null, _softwareOnly, current);
+            int rate = writer.Rate;
+            lock (_gate) _rate = rate;
             // The clock starts with the file, so waiting for the sound or the encoder never leaves a gap.
             long start = Stopwatch.GetTimestamp();
             Diagnostics.Log.Event("recording.started", ("hardware", writer.Hardware), ("sound", sound is not null),
-                ("width", size.Width), ("height", size.Height));
+                ("width", size.Width), ("height", size.Height), ("rate", rate));
             long tick = 1;
             frames = 1;
             var timeline = new SoundTimeline(writer);
             while (true)
             {
-                long due = start + tick * Period;
-                long wait = (due - Stopwatch.GetTimestamp()) * 1000 / Stopwatch.Frequency;
-                if (wait > 0 && !Finished) { _signal.WaitOne((int)Math.Min(wait, 100)); continue; }
+                long due = start + tick * Stopwatch.Frequency / rate;
+                long wait = due - Stopwatch.GetTimestamp();
+                if (wait > 0 && !Finished)
+                {
+                    _signal.Wait(TimeSpan.FromSeconds(Math.Min(wait, Stopwatch.Frequency / 10) / (double)Stopwatch.Frequency));
+                    continue;
+                }
                 if (Finished) break;
                 if (TakeNewest() is { } newest)
                 {
@@ -159,7 +174,7 @@ internal sealed class ViewRecording
                 writer.Write(tick);
                 frames++;
                 double elapsed = Stopwatch.GetElapsedTime(start).TotalSeconds;
-                tick = RecordingGeometry.NextTick(tick + 1, elapsed, RecordingGeometry.Rate);
+                tick = RecordingGeometry.NextTick(tick + 1, elapsed, rate);
                 // Sound is written a little behind the pictures, so packets still on their way fit where they belong.
                 if (sound is not null) timeline.Write(sound, start, (long)((elapsed - 0.25) * VideoFileWriter.SoundRate));
             }
@@ -173,9 +188,9 @@ internal sealed class ViewRecording
                 frames++;
             }
             Return(current);
-            if (sound is not null) timeline.Write(sound, start, tick * VideoFileWriter.SoundRate / RecordingGeometry.Rate);
+            if (sound is not null) timeline.Write(sound, start, tick * VideoFileWriter.SoundRate / rate);
             writer.Finish();
-            result = new(_path, frames, writer.Hardware, sound is not null, soundRefused);
+            result = new(_path, frames, writer.Hardware, sound is not null, soundRefused, Rate: rate);
             Diagnostics.Log.Event("recording.saved", ("frames", frames), ("hardware", writer.Hardware), ("sound", sound is not null));
         }
         // Its own thread: anything uncaught here would end WinScreen.
