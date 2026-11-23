@@ -222,7 +222,7 @@ something away, so they also work while a full-screen app runs (`CommandCatalog.
 
 | Situation | Behavior | Where |
 |---|---|---|
-| Program on **Leave these programs alone** (gestures) | Not moved; the click reaches the app. Defaults include Blender, Maya, 3ds Max, Photoshop, Krita and GIMP. | `AppSettings.ModifierExclusions`; `TrayApplication.CanDrag` |
+| Program on **Leave these programs alone** (gestures) | Not moved; the click reaches the app. Empty by default. | `AppSettings.ModifierExclusions`; `TrayApplication.CanDrag` |
 | App that's slow to redraw | Moves are sent one at a time; the next waits until the app has caught up (up to 50 ms), so the window can't keep moving after you let go. | `MouseGestures.Send`; tested by `A_fast_drag_of_a_slow_app_catches_up_as_soon_as_its_let_go_and_then_stays` |
 | App that's hung | Moves are still asked for but not waited on. Coming out of maximized and snapping are skipped. | `IsHungAppWindow` checks in `MouseGestures` |
 | **Esc**, with or without Alt or Win still held | Puts the window back where it started, maximized again if it was. | `EscapeModifiers` in `MouseGestures` |
