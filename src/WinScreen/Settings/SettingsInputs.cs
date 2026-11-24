@@ -378,7 +378,7 @@ internal sealed class ThemedCombo : ComboBox
         }
         string text = (SelectedIndex >= 0 ? GetItemText(SelectedItem) : Text) ?? "";
         Native.DirectText.DrawText(g, text, Font, new Rectangle(Unit(11), 0, Width - Unit(44), Height), Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
         SettingsStyle.Chevron(g, new Point(Width - Unit(18), Height / 2), Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, this);
         if (SettingsStyle.ShowsFocus(this) && !DroppedDown) SettingsStyle.FocusRing(g, area, Unit(4), this);
     }
@@ -402,7 +402,7 @@ internal sealed class ThemedCombo : ComboBox
         // choice made before it opened, as in Windows 11, instead of being left on every row the pointer passed.
         if (e.Index == (DroppedDown ? _chosen : SelectedIndex)) SettingsStyle.SelectionBar(g, row, this);
         Native.DirectText.DrawText(g, GetItemText(Items[e.Index]), Font, new Rectangle(row.Left + Unit(10), row.Top, row.Width - Unit(12), row.Height),
-            SettingsStyle.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            SettingsStyle.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
     }
 
     protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Invalidate(); }

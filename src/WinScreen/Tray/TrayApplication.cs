@@ -2137,6 +2137,7 @@ public sealed partial class TrayApplication : ApplicationContext
         get => field ??= new Pip.PictureShelf
         {
             Saves = () => _settings.PipViews.SavePictures,
+            Copies = () => _settings.PipViews.Validated().CopyPictures,
             Folder = () => _settings.PipViews.Validated().PictureFolder,
             RecordingFolder = () => _settings.PipViews.Validated().RecordingFolder,
             RecordsSound = () => _settings.PipViews.RecordSound,

@@ -7,6 +7,7 @@ namespace WinScreen.Pip;
 internal sealed class PictureShelf
 {
     internal Func<bool> Saves { get; init; } = static () => false;
+    internal Func<bool> Copies { get; init; } = static () => true;
     internal Func<string?> Folder { get; init; } = static () => null;
     internal Action<Bitmap> PutPicture { get; init; } = CopyPicture;
     internal Action<string> PutText { get; init; } = CopyText;
@@ -43,10 +44,11 @@ internal sealed class PictureShelf
         }
     }
 
-    // The file it was saved to, if any; a copy that can't be saved is still copied, and the reason comes back.
+    // The file it was saved to, if any; a picture that can't be saved is still copied, unless it is only saved, and the
+    // reason comes back.
     internal (string? File, string? Problem) Keep(Bitmap picture)
     {
-        PutPicture(picture);
+        if (Copies()) PutPicture(picture);
         if (!Saves()) return (null, null);
         try { return (Save(picture), null); }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.ExternalException or ArgumentException or NotSupportedException)

@@ -181,6 +181,38 @@ public sealed class ViewPictureTests
     }
 
     [Fact]
+    public void Save_only_leaves_the_clipboard_alone_and_is_one_of_three_choices()
+    {
+        string folder = Directory.CreateTempSubdirectory("winscreen-pictures-").FullName;
+        try
+        {
+            var shelf = new PictureShelf { Saves = () => true, Copies = () => false, Folder = () => folder, PutPicture = _ => Assert.Fail("Copied.") };
+            using var picture = new Bitmap(8, 8);
+            (string? file, string? problem) = shelf.Keep(picture);
+            Assert.True(File.Exists(file));
+            Assert.Null(problem);
+        }
+        finally { Directory.Delete(folder, true); }
+        // Settings from before the choice copy, and one of the two is always on.
+        Assert.True(AppSettings.Parse("""{ "PipViews": { "SavePictures": false } }""").PipViews.Validated().CopyPictures);
+        Assert.True(new PipViewPreferences { SavePictures = false, CopyPictures = false }.Validated().CopyPictures);
+        Assert.False(new PipViewPreferences { CopyPictures = false }.Validated().CopyPictures);
+
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            foreach ((bool save, bool copy, string key) in new[] { (true, true, "copySave"), (true, false, "saveOnly"), (false, true, "copyOnly") })
+            {
+                using var window = new SettingsWindow(new AppSettings { PipViews = new() { SavePictures = save, CopyPictures = copy } },
+                    new WinScreen.Tray.StartWithWindows(tasks: NoTasks.Instance), _ => []);
+                var choice = (ComboBox)typeof(SettingsWindow).GetField("_pictureSave", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(window)!;
+                string[] names = [.. new[] { "copySave", "saveOnly", "copyOnly" }.Select(each => WinScreen.Localization.UiText.T("settings.pip.pictures." + each))];
+                Assert.Equal(names, choice.Items.Cast<string>());
+                Assert.Equal(WinScreen.Localization.UiText.T("settings.pip.pictures." + key), choice.SelectedItem);
+            }
+        });
+    }
+
+    [Fact]
     public void Windows_screenshots_folder_is_the_default()
     {
         string folder = PictureShelf.DefaultFolder();

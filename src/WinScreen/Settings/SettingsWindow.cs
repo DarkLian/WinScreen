@@ -70,6 +70,7 @@ public sealed partial class SettingsWindow : Form
     private readonly CheckBox _pipMinimizedOriginals = new SwitchBox { Text = T("pip.minimizedOriginals.taskbar"), AutoSize = true };
     private readonly ComboBox _pipPreview = new ThemedCombo { Width = 240 };
     private readonly ComboBox _pictureSave = new ThemedCombo { Width = 240 };
+    private const int SaveOnly = 1, CopyOnly = 2; // As _pictureSave lists them, after both.
     private readonly PlainButton _pictureFolderChange = new() { Text = T("settings.pip.pictures.change") };
     private readonly PlainButton _pictureFolderOpen = new() { Text = T("settings.pip.pictures.open") };
     private SettingRowPanel? _pictureFolderRow;
@@ -865,7 +866,7 @@ private readonly ErrorProvider _errors = new();
         draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
         draft.PipViews = new PipViewPreferences { MinimizeToTaskbar = _pipTaskbar.Checked, AlwaysShowTitleBar = _pipTitleBar.Checked,
             KeepHiddenOnNewViews = _pipKeepHidden.Checked, KeepMinimizedOriginalsOnTaskbar = _pipMinimizedOriginals.Checked,
-            SavePictures = _pictureSave.SelectedIndex != 1, PictureFolder = _pictureFolder,
+            SavePictures = _pictureSave.SelectedIndex != CopyOnly, CopyPictures = _pictureSave.SelectedIndex != SaveOnly, PictureFolder = _pictureFolder,
             RecordingFolder = _recordingFolder, RecordSound = _recordSound.Checked,
             RecordingFrameRate = Pip.RecordingGeometry.ChoosableRates[Math.Max(0, _recordingRate.SelectedIndex)],
             HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
@@ -1304,7 +1305,7 @@ private readonly ErrorProvider _errors = new();
         _pipKeepHidden.Checked = values.PipViews.KeepHiddenOnNewViews;
         _pipMinimizedOriginals.Checked = values.PipViews.KeepMinimizedOriginalsOnTaskbar;
         _pipPreview.SelectedIndex = (int)values.PipViews.Validated().HoverPreview;
-        _pictureSave.SelectedIndex = values.PipViews.SavePictures ? 0 : 1;
+        _pictureSave.SelectedIndex = !values.PipViews.SavePictures ? CopyOnly : values.PipViews.CopyPictures ? 0 : SaveOnly;
         _pictureFolder = values.PipViews.Validated().PictureFolder;
         ShowPictureFolder();
         _recordingFolder = values.PipViews.Validated().RecordingFolder;
@@ -1503,7 +1504,7 @@ private readonly ErrorProvider _errors = new();
         var parts = new List<Control> { Note(T("settings.pip.apps.help")), _hoverAutomatic, _appRows, adding, Note(T("settings.pip.hover.programsHelp")) };
         if (!Pip.PipEnhancedHover.Supported) parts.Add(Note(T("settings.pip.hover.unsupported")));
         page.Controls.Add(Card(T("settings.pip.apps"), true, parts.ToArray()));
-        _pictureSave.Items.AddRange([T("settings.pip.pictures.copySave"), T("settings.pip.pictures.copyOnly")]);
+        _pictureSave.Items.AddRange([T("settings.pip.pictures.copySave"), T("settings.pip.pictures.saveOnly"), T("settings.pip.pictures.copyOnly")]);
         _pictureSave.SelectedIndexChanged += (_, _) => ShowPictureFolder();
         _pictureFolderChange.Click += (_, _) =>
         {
@@ -1561,7 +1562,7 @@ private readonly ErrorProvider _errors = new();
     {
         if (_pictureFolderRow is null) return;
         _pictureFolderRow.Description = PictureFolderInUse;
-        _pictureFolderChange.Enabled = _pictureSave.SelectedIndex != 1;
+        _pictureFolderChange.Enabled = _pictureSave.SelectedIndex != CopyOnly;
     }
 
     private FlowLayoutPanel BuildPrograms()

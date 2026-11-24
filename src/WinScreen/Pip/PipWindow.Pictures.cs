@@ -117,8 +117,10 @@ public sealed partial class PipWindow
             if (picture is null) { Problem?.Invoke(T("errors.pip.noPicture")); return; }
             (string? file, string? problem) = Pictures.Keep(picture);
             if (problem is not null) Problem?.Invoke(string.Format(T("errors.pip.saveFailed"), problem));
-            Say(file is null ? T("pip.state.pictureCopied") : T("pip.state.pictureSaved"), file);
-            Diagnostics.Log.Event("view.pictureCopied", ("saved", file is not null), ("covers", _covers.Count));
+            bool copied = Pictures.Copies();
+            if (copied || file is not null)
+                Say(file is null ? T("pip.state.pictureCopied") : copied ? T("pip.state.pictureSaved") : T("pip.state.pictureOnlySaved"), file);
+            Diagnostics.Log.Event("view.pictureCopied", ("copied", copied), ("saved", file is not null), ("covers", _covers.Count));
         }
         catch (System.Runtime.InteropServices.ExternalException failure)
         {

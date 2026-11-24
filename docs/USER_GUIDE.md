@@ -97,7 +97,7 @@ turn on **Always show title bar** in **Size and options**, or for every new view
   puts the view back. Saved with a preset.
 - **Copy picture**, under **Picture:** copies what the view shows, cropped, zoomed and turned as it is, at the
   window's own sharpness. Like Windows' Snipping Tool, it also saves a file to your Screenshots folder; in
-  **Settings → Picture-in-Picture** you can choose another folder, or copy only. It works the same whatever covers the
+  **Settings → Picture-in-Picture** you can choose another folder, **Save only** or **Copy only**. It works the same whatever covers the
   view, at any opacity, and on views of a display or part of the screen, which screenshots can't take.
 - **Freeze a copy:** keeps the picture in a small window of its own beside the view, while the view goes on. Move it,
   resize it with the wheel, Ctrl+drag to crop and Ctrl+wheel to zoom. Right-click it to copy or save the picture, copy

@@ -370,6 +370,7 @@ pip.state.noText E22BBBC6E3A161E4
 pip.state.nothingRecorded 1F5476B543E6AF59
 pip.state.originalHidden 48F2CA96E0447E08
 pip.state.pictureCopied 99C7832F9B228176
+pip.state.pictureOnlySaved 3B0733B12D375AE3
 pip.state.pictureSaved 160AE1685FD135FB
 pip.state.pressNotDelivered 28E8779EB953D246
 pip.state.pressNotDeliveredAgain 3E88C1CEDB64BAAF
@@ -554,11 +555,12 @@ settings.pip.moving 06322883C6CF51AD
 settings.pip.pictures FF1896D1C93DFE82
 settings.pip.pictures.after 28D3894A6C0FD9A8
 settings.pip.pictures.change 6B01FCE4DBEAEEB9
-settings.pip.pictures.copyOnly 19B50D5E8588F517
+settings.pip.pictures.copyOnly 3186A2BF792059AF
 settings.pip.pictures.copySave 86CEB11152E5CF30
 settings.pip.pictures.folder E098D62465ED3F78
 settings.pip.pictures.help 899620310CD7CD14
 settings.pip.pictures.open FCF8B4BFF0DF782D
+settings.pip.pictures.saveOnly 0ADADA7D466C8E0D
 settings.pip.recordings.folder B56BD6EB13F8C5F9
 settings.pip.recordings.rate 24B7087935F0ED5E
 settings.pip.recordings.rate.view CEC5514F244EB334

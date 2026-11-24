@@ -10,8 +10,10 @@ public sealed record PipViewPreferences
     public bool KeepMinimizedOriginalsOnTaskbar { get; init; } = true;
     public bool AlwaysShowTitleBar { get; init; }
     public bool KeepHiddenOnNewViews { get; init; } = true;
-    // Copy picture also saves a file, as Windows' Snipping Tool does; null folder is Windows' Screenshots folder.
+    // Copy picture also saves a file, as Windows' Snipping Tool does, or only saves it; null folder is Windows'
+    // Screenshots folder.
     public bool SavePictures { get; init; } = true;
+    public bool CopyPictures { get; init; } = true;
     public string? PictureFolder { get; init; }
     // Null is Windows' Screen Recordings folder under Videos, where the Snipping Tool saves.
     public string? RecordingFolder { get; init; }
@@ -23,6 +25,7 @@ public sealed record PipViewPreferences
     {
         HoverPreview = Enum.IsDefined(HoverPreview) ? HoverPreview : PipHoverPreview.Off,
         HoverDelayMilliseconds = Math.Clamp(HoverDelayMilliseconds, 250, 2000),
+        CopyPictures = CopyPictures || !SavePictures, // One of the two.
         PictureFolder = string.IsNullOrWhiteSpace(PictureFolder) ? null : PictureFolder.Trim(),
         RecordingFolder = string.IsNullOrWhiteSpace(RecordingFolder) ? null : RecordingFolder.Trim(),
         RecordingFrameRate = Pip.RecordingGeometry.ChoosableRates.Contains(RecordingFrameRate) ? RecordingFrameRate : 0,
