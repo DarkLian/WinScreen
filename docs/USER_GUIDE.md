@@ -186,8 +186,7 @@ The toolbar's **Arrange window** button has everything that moves a window:
 On a maximized window, a place or an exact position brings it back to its usual size there.
 
 The toolbar's **Window menu** button has the rest of the window menu: the **Opacity** slider and whatever isn't already a
-button on your toolbar, such as **Borderless**, **Fill display**, **Dark title bar**, **Copy** and **Open file location**.
-Most of these can be buttons too: tick them in **Settings → Toolbar**.
+button on your toolbar, such as **Copy** and **Open file location**. Choose which buttons it shows in **Settings → Toolbar**.
 
 Turn on **Settings → Mouse gestures → Move and resize** to hold Alt (or Win) and drag anywhere in a window: the left button
 moves it, the right button resizes it. It works on maximized windows too, and Esc puts the window back. Drag a window to the

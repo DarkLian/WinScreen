@@ -15,19 +15,25 @@ public sealed class ToolbarPreferencesTests
         Assert.Equal(ToolbarPlacement.Centre, loaded.Toolbar.Placement);
         Assert.Equal(ToolbarTrigger.TitleBar, loaded.Toolbar.Trigger);
         Assert.Equal(500, loaded.Toolbar.HoverDelayMilliseconds);
-        Assert.Equal([.. CommandCatalog.Ordered.Where(command => command != AppCommand.RestoreAll), AppCommand.ShowWindowMenu], loaded.Toolbar.Buttons);
+        Assert.Equal(CommandCatalog.ToolbarButtons, loaded.Toolbar.Buttons);
     }
 
-    // The window menu's other commands can be buttons too. They start off, and one that is chosen stays in its place.
+    // The window menu's other commands are buttons too (owner, 24 Nov: on). A bar with every button there was before gets
+    // them once; one someone took a button off, or that has had them and lost them since, stays.
     [Fact]
-    public void The_optional_buttons_start_off_and_stay_once_chosen()
+    public void Every_button_is_on_and_only_an_untouched_bar_gets_the_added_ones_once()
     {
-        Assert.Empty(new AppSettings().Toolbar.Buttons.Intersect(CommandCatalog.OptionalToolbarButtons));
-        Assert.Empty(CommandCatalog.OptionalToolbarButtons.Except(CommandCatalog.ToolbarButtons));
+        Assert.Equal(CommandCatalog.ToolbarButtons, new AppSettings().Toolbar.Buttons);
         Assert.Equal(CommandCatalog.ToolbarButtons.Length, CommandCatalog.ToolbarButtons.Distinct().Count());
-        var chosen = new AppSettings { Toolbar = new() { Buttons = [AppCommand.ToggleBorderless, AppCommand.TogglePin, AppCommand.MinimizeToAnchor] } };
-        Assert.Equal([AppCommand.TogglePin, AppCommand.MinimizeToAnchor, AppCommand.ToggleBorderless],
-            AppSettings.Parse(System.Text.Json.JsonSerializer.Serialize(chosen)).Toolbar.Validated().Buttons);
+        Assert.Empty(CommandCatalog.AddedToolbarButtons.Except(CommandCatalog.ToolbarButtons));
+        AppCommand[] before = [.. CommandCatalog.ToolbarButtons.Except(CommandCatalog.AddedToolbarButtons)];
+        string Saved(int schema, IEnumerable<string> buttons) =>
+            $$"""{ "SchemaVersion": {{schema}}, "Toolbar": { "WindowMenuOffered": true, "Buttons": [{{string.Join(",", buttons)}}] } }""";
+        string[] names = [.. before.Select(command => $"\"{command}\"")], numbers = [.. before.Select(command => ((int)command).ToString())];
+        Assert.Equal(CommandCatalog.ToolbarButtons, AppSettings.Parse(Saved(3, names)).Toolbar.Validated().Buttons);
+        Assert.Equal(CommandCatalog.ToolbarButtons, AppSettings.Parse(Saved(3, numbers)).Toolbar.Validated().Buttons);
+        Assert.Equal(before[1..], AppSettings.Parse(Saved(3, names[1..])).Toolbar.Validated().Buttons);
+        Assert.Equal(before, AppSettings.Parse(Saved(4, names)).Toolbar.Validated().Buttons);
     }
 
     /// <summary>

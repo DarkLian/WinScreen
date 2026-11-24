@@ -190,7 +190,7 @@ public static class CommandCatalog
         AppCommand.RestoreWindow, AppCommand.RestoreAll,
     ];
 
-    // Every button the toolbar can have, in its order; OptionalToolbarButtons start off.
+    // Every button the toolbar can have, in its order. All start on.
     public static readonly AppCommand[] ToolbarButtons =
     [
         AppCommand.TogglePin, AppCommand.OpacityDown, AppCommand.ToggleDefaultOpacity, AppCommand.OpacityUp,
@@ -200,7 +200,8 @@ public static class CommandCatalog
         AppCommand.SaveWindowSetup, AppCommand.RestoreWindow, AppCommand.ShowWindowMenu,
     ];
 
-    public static readonly AppCommand[] OptionalToolbarButtons =
+    // Buttons since format 4; a bar that had every button before gets them once.
+    internal static readonly AppCommand[] AddedToolbarButtons =
     [
         AppCommand.MinimizeToAnchor, AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleDarkTitleBar,
         AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill,
@@ -334,7 +335,7 @@ public sealed class AppSettings
     private static readonly JsonSerializerOptions Format = new() { WriteIndented = true };
 
     // Raise it only together with a new step in Migrations.
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     // Step n turns format n into n + 1, on the file's JSON alone. Files from before the format was numbered are 0.
     internal static readonly Action<JsonObject>[] Migrations =
@@ -342,6 +343,7 @@ public sealed class AppSettings
         OfferWindowMenuButton, // 0 → 1
         ChooseUpdates, // 1 → 2
         DropFirstSuggestions, // 2 → 3
+        AddToolbarButtons, // 3 → 4
     ];
 
     // The first versions filled both lists with sample programs nobody chose.
@@ -361,6 +363,24 @@ public sealed class AppSettings
                     names.Contains(name, StringComparer.OrdinalIgnoreCase))
                     programs.Remove(program);
         }
+    }
+
+    // Only a bar nobody took a button off: someone who chose a short one keeps it.
+    private static void AddToolbarButtons(JsonObject root)
+    {
+        if (root[nameof(Toolbar)] is not JsonObject toolbar || toolbar[nameof(ToolbarPreferences.Buttons)] is not JsonArray buttons) return;
+        var shown = new HashSet<AppCommand>();
+        foreach (JsonNode? button in buttons)
+        {
+            if (button is not JsonValue value) continue;
+            if (value.TryGetValue(out string? name) && Enum.TryParse(name, true, out AppCommand named)) shown.Add(named);
+            else if (value.TryGetValue(out JsonElement element) && element.ValueKind == JsonValueKind.String &&
+                     Enum.TryParse(element.GetString(), true, out AppCommand read)) shown.Add(read);
+            else if (value.TryGetValue(out JsonElement number) && number.ValueKind == JsonValueKind.Number && number.TryGetInt32(out int known))
+                shown.Add((AppCommand)known);
+        }
+        if (!CommandCatalog.ToolbarButtons.Except(CommandCatalog.AddedToolbarButtons).All(shown.Contains)) return;
+        foreach (AppCommand added in CommandCatalog.AddedToolbarButtons.Where(added => !shown.Contains(added))) buttons.Add(added.ToString());
     }
 
     private static void ChooseUpdates(JsonObject root)

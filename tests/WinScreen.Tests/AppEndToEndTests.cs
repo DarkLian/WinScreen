@@ -389,17 +389,17 @@ public sealed class AppEndToEndTests : IDisposable
 
     // The bar never takes the focus, so what the buttons open has to come to the front by itself.
     [Fact]
-    public void The_optional_toolbar_buttons_work_from_the_bar()
+    public void The_added_toolbar_buttons_work_from_the_bar()
     {
         if (!Glass.ContentOverlay.GraphicsCardPresent) { Skipped.Because("Glass levels needs layered Glass, which needs a graphics card."); return; }
         RestartWith(new AppSettings
         {
             WelcomeShown = true, ExperimentalFeatures = true,
-            Toolbar = new ToolbarPreferences { Buttons = [AppCommand.ToggleGlass, .. CommandCatalog.OptionalToolbarButtons] },
+            Toolbar = new ToolbarPreferences { Buttons = [AppCommand.ToggleGlass, .. CommandCatalog.AddedToolbarButtons] },
         });
         using var target = new TargetProcess(Spot, "E8E8E8");
         target.UseFrame();
-        AppCommand[] shown = [.. CommandCatalog.ToolbarButtons.Where(command => command == AppCommand.ToggleGlass || CommandCatalog.OptionalToolbarButtons.Contains(command))];
+        AppCommand[] shown = [.. CommandCatalog.ToolbarButtons.Where(command => command == AppCommand.ToggleGlass || CommandCatalog.AddedToolbarButtons.Contains(command))];
         int firstOfNext = Array.IndexOf(shown, AppCommand.ToggleDarkTitleBar);
         void Press(AppCommand command)
         {

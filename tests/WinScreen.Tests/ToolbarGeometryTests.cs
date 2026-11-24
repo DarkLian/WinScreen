@@ -31,9 +31,9 @@ public class ToolbarLayoutTests
     {
         OnUiThread(() =>
         {
-            const int buttons = 13, size = 34;
+            const int size = 34;
             using var toolbar = new WindowToolbar(_ => true, (_, _) => false, _ => true, (_, _) => { });
-            Assert.True(toolbar.ClientSize.Width >= buttons * size);
+            Assert.True(toolbar.ClientSize.Width >= Settings.CommandCatalog.ToolbarButtons.Length * size);
             Assert.Equal(size, toolbar.ClientSize.Height);
         });
     }
@@ -46,7 +46,7 @@ public class ToolbarLayoutTests
             using var all = new WindowToolbar(_ => true, (_, _) => false, _ => true, (_, _) => { });
             using var some = new WindowToolbar(_ => true, (_, _) => false,
                 command => !Settings.CommandCatalog.IsExperimental(command), (_, _) => { });
-            Assert.Equal(all.ClientSize.Width - 4 * 34, some.ClientSize.Width);
+            Assert.Equal(all.ClientSize.Width - Settings.CommandCatalog.ToolbarButtons.Count(Settings.CommandCatalog.IsExperimental) * 34, some.ClientSize.Width);
         });
     }
 }

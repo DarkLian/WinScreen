@@ -76,7 +76,7 @@ public sealed class WindowMenuBuilderTests
     }
 
     /// <summary>
-    /// The toolbar's Window menu offers what the window menu has that the bar doesn't: with the buttons it starts with,
+    /// The toolbar's Window menu offers what the window menu has that the bar doesn't: without the added buttons,
     /// the opacity slider, Minimize to an Anchor, the title bar and frame choices and the window's details. Anything
     /// shown as a button is left out, and so is the grid Arrange window covers; with fewer buttons, more stays.
     /// </summary>
@@ -100,7 +100,7 @@ public sealed class WindowMenuBuilderTests
                 Commands(every).Select(item => item.Tag).OfType<AppCommand>());
             Assert.Contains(every.Cast<ToolStripItem>(), item => item is OpacityRow);
             Assert.Contains(every.Cast<ToolStripItem>(), item => item.Text == UiText.T("common.copy"));
-            ToolStripItemCollection all = Built(ToolbarPreferences.DefaultButtons().ToHashSet());
+            ToolStripItemCollection all = Built(CommandCatalog.ToolbarButtons.Except(CommandCatalog.AddedToolbarButtons).ToHashSet());
             AppCommand[] left = Commands(all).Select(item => item.Tag).OfType<AppCommand>().ToArray();
             Assert.Equal([AppCommand.MinimizeToAnchor, AppCommand.ToggleDarkTitleBar, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.GlassLevels, AppCommand.KeepAreas], left);
             Assert.DoesNotContain(all.Cast<ToolStripItem>(), item => item is PlacementRow);

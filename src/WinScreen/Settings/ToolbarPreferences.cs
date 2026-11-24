@@ -18,7 +18,7 @@ public sealed record ToolbarPreferences
     // off.
     public bool WindowMenuOffered { get; init; } = true;
 
-    internal static List<AppCommand> DefaultButtons() => [.. CommandCatalog.ToolbarButtons.Except(CommandCatalog.OptionalToolbarButtons)];
+    internal static List<AppCommand> DefaultButtons() => [.. CommandCatalog.ToolbarButtons];
 
     internal ToolbarPreferences Validated() => this with
     {
