@@ -551,7 +551,7 @@
   "settings.pip.middleScrollHelp": "会替代应用自己的中键动作。每个视图的菜单仍可单独开关。",
   "settings.pip.moving": "自动避让",
   "settings.pip.pictures": "视图的画面和录制",
-  "settings.pip.pictures.after": "复制画面",
+  "settings.pip.pictures.after": "截取",
   "settings.pip.pictures.change": "更改",
   "settings.pip.pictures.copyOnly": "仅复制",
   "settings.pip.pictures.copySave": "复制并保存",

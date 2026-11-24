@@ -551,7 +551,7 @@
   "settings.pip.middleScrollHelp": "會取代應用程式自己的中鍵動作。每個檢視的選單仍可個別開關。",
   "settings.pip.moving": "自動避讓",
   "settings.pip.pictures": "檢視的畫面和錄製",
-  "settings.pip.pictures.after": "複製畫面",
+  "settings.pip.pictures.after": "擷取",
   "settings.pip.pictures.change": "變更",
   "settings.pip.pictures.copyOnly": "僅複製",
   "settings.pip.pictures.copySave": "複製並儲存",

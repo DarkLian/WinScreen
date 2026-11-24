@@ -551,7 +551,7 @@
   "settings.pip.middleScrollHelp": "It replaces the app's own middle-click action. Each view's menu can still turn it on or off.",
   "settings.pip.moving": "Moving out of the way",
   "settings.pip.pictures": "Pictures and recordings from views",
-  "settings.pip.pictures.after": "Copy picture",
+  "settings.pip.pictures.after": "Capture",
   "settings.pip.pictures.change": "Change",
   "settings.pip.pictures.copyOnly": "Copy only",
   "settings.pip.pictures.copySave": "Copy & Save",
