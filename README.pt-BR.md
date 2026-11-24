@@ -107,7 +107,7 @@ Vários podem se revezar, e também podem vir de um link da web.
 - Usar aplicativos por uma visualização: Chrome, Edge, Brave, Vivaldi, Firefox, aplicativos Electron e Explorador de Arquivos, além de outros aplicativos, Enhanced hover e rolagem com o botão do meio *(experimental)*
 - Limite de quadros, opacidade, trava de posição e cliques passantes para cada visualização
 - Minimizar visualizações para a barra de tarefas, prévia ao passar o mouse e lupa de leitura
-- Visualizações que saem de cima de textos e imagens *(experimental)*
+- Visualizações que saem de cima de textos e imagens
 
 **Âncoras**
 - Botões flutuantes que trazem uma janela de volta com um clique
@@ -120,17 +120,17 @@ Vários podem se revezar, e também podem vir de um link da web.
 **Organizar**
 - Nove posições na tela, a próxima tela, uma posição e um tamanho exatos, a posição anterior
 - Mover e redimensionar segurando Alt ou Win e arrastando, com encaixe nas bordas
-- Enrolar até a barra de título *(experimental)*, mandar para trás
+- Enrolar até a barra de título, mandar para trás
 
-**Efeitos** *(experimental)*
-- Modo escuro para qualquer app, que mantém o tom de cada cor
+**Efeitos**
+- Modo escuro para qualquer app, que mantém o tom de cada cor *(experimental)*
 - Vidro que esmaece só o fundo
 - Quanto o Vidro esmaece, para cada app ou para uma só janela
 - Texto claro ou escuro sobre o Vidro, com ou sem uma sombra suave
 - Áreas das janelas de um app, como um vídeo, que o Vidro e o modo escuro deixam como estão
 - Cortar uma janela, ou encolhê-la para um bloco ao vivo
 
-**Fundos** *(experimental)*
+**Fundos**
 - Uma imagem, um GIF animado ou um vídeo atrás do texto de uma janela, com o Vidro
 - Um fundo para todos os apps, e apps com o seu próprio ou sem nenhum
 - Várias imagens e vídeos que se revezam, cada um com seu ajuste, som, velocidade e brilho

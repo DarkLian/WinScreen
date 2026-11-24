@@ -103,7 +103,7 @@ Several can take turns, and they can come from a web link too.
 - Use apps through a view: Chrome, Edge, Brave, Vivaldi, Firefox, Electron apps and File Explorer, and other apps, Enhanced hover and middle-click scrolling *(experimental)*
 - Per-view frame limit, opacity, position lock and click-through
 - Minimize views to the taskbar, hover preview and reading lens
-- Views that move away from text and pictures *(experimental)*
+- Views that move away from text and pictures
 
 **Anchors**
 - Floating buttons that bring a window back with a click
@@ -116,17 +116,17 @@ Several can take turns, and they can come from a web link too.
 **Arrange**
 - Nine places on the screen, the next display, an exact position and size, the previous position
 - Move and resize by holding Alt or Win and dragging, with edge snapping
-- Roll up to the title bar *(experimental)*, send to the back
+- Roll up to the title bar, send to the back
 
-**Effects** *(experimental)*
-- Dark mode for any app, keeping each color's hue
+**Effects**
+- Dark mode for any app, keeping each color's hue *(experimental)*
 - Glass that fades only the background
 - How much Glass fades, for each app or for a single window
 - Light or dark text over Glass, with or without a soft shadow
 - Areas of an app's windows, such as a video, that Glass and Dark mode leave as they are
 - Crop a window, or shrink it to a live tile
 
-**Backgrounds** *(experimental)*
+**Backgrounds**
 - A picture, animated GIF or video behind a window's text, through Glass
 - One background for every app, and apps with their own or with none
 - Several pictures and videos that take turns, each with its own fit, sound, speed and brightness

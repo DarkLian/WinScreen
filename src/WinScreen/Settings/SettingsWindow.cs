@@ -199,7 +199,7 @@ private readonly ErrorProvider _errors = new();
         _errors.ContainerControl = this;
         _experimental.CheckedChanged += (_, _) =>
         {
-            _pipAutoMove.Enabled = _pipMiddleScroll.Enabled = _experimental.Checked;
+            _pipMiddleScroll.Enabled = _experimental.Checked;
             _hoverOptions?.Enabled = _experimental.Checked && Pip.PipEnhancedHover.Supported;
             if (_hotkeys.Count > 0) RefreshFeatures();
         };
@@ -302,7 +302,7 @@ private readonly ErrorProvider _errors = new();
 
         GiveIcons();
         LoadValues();
-        _pipAutoMove.Enabled = _pipMiddleScroll.Enabled = _experimental.Checked;
+        _pipMiddleScroll.Enabled = _experimental.Checked;
         _hoverOptions?.Enabled = _experimental.Checked && Pip.PipEnhancedHover.Supported;
         WatchForChanges(this);
         foreach ((AppCommand command, TextBox box) in _hotkeys)
@@ -1461,7 +1461,7 @@ private readonly ErrorProvider _errors = new();
             Note(T("pip.rendering.compatibilityHelp")), Note(T("pip.rendering.captureIndicatorHelp")),
             Row(T("pip.scaling"), _pipScaling), Note(T("pip.scaling.help")), Row(T("pip.opacityPercent"), _pipOpacity), _pipCaptureBorder, _pipDiagnostics,
             Note(T("pip.diagnostics.retryHelp"))));
-        page.Controls.Add(Card(T("settings.pip.moving"), true, _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
+        page.Controls.Add(Section(T("settings.pip.moving"), _pipAutoMove, Note(T("settings.pip.autoMoveHelp"))));
         page.Controls.Add(Card(T("pip.interactive"), true, _pipMiddleScroll, Note(T("settings.pip.middleScrollHelp"))));
         _hoverOptions = new Control();
         _hoverOptions.EnabledChanged += (_, _) => { ShowHoverChoices(); RebuildApps(); };

@@ -186,7 +186,6 @@ public sealed class PipScreenViewTests
             Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(Middle(pip)), Color.FromArgb(0x1E, 0x64, 0xC8)), 4000, () => pump(20)), pip.DiagnosticSnapshot);
             Assert.True(User32.GetWindowDisplayAffinity(pip.Handle, out uint affinity));
             Assert.Equal(User32.WDA_EXCLUDEFROMCAPTURE, affinity);
-            pip.AllowAutoMove = true;
             pip.SetAutoMove(true);
             pip.SetAutoMove(false);
             Assert.True(User32.GetWindowDisplayAffinity(pip.Handle, out affinity));

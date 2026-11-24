@@ -204,10 +204,10 @@ public sealed partial class SettingsWindow
         };
         FlowLayoutPanel page = ScrollingPage();
         _backgroundsScroll = page;
-        page.Controls.Add(Card(T("settings.backgrounds.title"), true, Note(T("settings.backgrounds.help")), _backgroundFrame, adding,
+        page.Controls.Add(Section(T("settings.backgrounds.title"), Note(T("settings.backgrounds.help")), _backgroundFrame, adding,
             _soundInFront, _pauseFullScreen, _pauseSaver));
         page.Controls.Add(_backgroundEditor);
-        page.Controls.Add(Card(T("settings.keptAreas.title"), true, Note(T("settings.keptAreas.help")), _keptFrame, keptButtons));
+        page.Controls.Add(Section(T("settings.keptAreas.title"), Note(T("settings.keptAreas.help")), _keptFrame, keptButtons));
         ListBackgrounds(null);
         ListKept();
         return page;

@@ -273,9 +273,7 @@ public static class CommandCatalog
     public static bool EndsGroup(AppCommand command) =>
         command is AppCommand.ToggleClickThrough or AppCommand.ToggleCrop or AppCommand.SaveWindowSetup or AppCommand.RestoreWindow;
 
-    public static bool IsExperimental(AppCommand command) =>
-        command is AppCommand.ToggleDark or AppCommand.ToggleGlass or AppCommand.ToggleShrink or AppCommand.ToggleCrop
-            or AppCommand.ToggleRollUp or AppCommand.KeepAreas or AppCommand.GlassLevels;
+    public static bool IsExperimental(AppCommand command) => command == AppCommand.ToggleDark;
 
     public static string Name(AppCommand command) => command switch
     {

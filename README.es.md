@@ -107,7 +107,7 @@ Varios pueden turnarse, y también pueden venir de un enlace web.
 - Usar aplicaciones desde una vista: Chrome, Edge, Brave, Vivaldi, Firefox, aplicaciones Electron y el Explorador de archivos, y otras aplicaciones, Enhanced hover y desplazamiento con el botón central *(experimental)*
 - Límite de fotogramas, opacidad, bloqueo de posición y paso de clics para cada vista
 - Minimizar vistas a la barra de tareas, vista previa al pasar el ratón y lupa de lectura
-- Vistas que se apartan del texto y las imágenes *(experimental)*
+- Vistas que se apartan del texto y las imágenes
 
 **Anclas**
 - Botones flotantes que traen de vuelta una ventana con un clic
@@ -120,17 +120,17 @@ Varios pueden turnarse, y también pueden venir de un enlace web.
 **Organizar**
 - Nueve posiciones en la pantalla, la siguiente pantalla, una posición y un tamaño exactos, la posición anterior
 - Mover y cambiar el tamaño manteniendo Alt o Win y arrastrando, con ajuste a los bordes
-- Enrollar hasta la barra de título *(experimental)*, enviar al fondo
+- Enrollar hasta la barra de título, enviar al fondo
 
-**Efectos** *(experimental)*
-- Modo oscuro para cualquier app, que conserva el tono de cada color
+**Efectos**
+- Modo oscuro para cualquier app, que conserva el tono de cada color *(experimental)*
 - Cristal que difumina solo el fondo
 - Cuánto difumina Cristal, para cada aplicación o para una sola ventana
 - Texto claro u oscuro sobre Cristal, con o sin una sombra suave
 - Zonas de las ventanas de una aplicación, como un vídeo, que Cristal y el modo oscuro dejan como están
 - Recortar una ventana, o reducirla a un mosaico en vivo
 
-**Fondos** *(experimental)*
+**Fondos**
 - Una imagen, un GIF animado o un vídeo detrás del texto de una ventana, con Cristal
 - Un fondo para todas las aplicaciones, y aplicaciones con el suyo propio o sin ninguno
 - Varias imágenes y vídeos que se turnan, cada uno con su ajuste, sonido, velocidad y brillo

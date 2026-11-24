@@ -58,6 +58,9 @@ public sealed class MenuIconTests
             using var menu = new ContextMenuStrip();
             Builder().Populate(menu.Items, false);
             Assert.NotNull(menu.Items.OfType<OpacityRow>().Single().Image);
+            ToolStripMenuItem effects = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == Localization.UiText.T("menu.effects"));
+            Assert.False(MenuParts.IsExperimental(effects));
+            Assert.Equal([AppCommand.ToggleDark], effects.DropDownItems.OfType<ToolStripMenuItem>().Where(MenuParts.IsExperimental).Select(item => (AppCommand)item.Tag!));
             ToolStripMenuItem borderless = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == Localization.UiText.T("window.borderless"));
             Image?[] frames = [.. borderless.DropDownItems.Cast<ToolStripItem>().Select(item => item.Image)];
             Assert.All(frames, Assert.NotNull);

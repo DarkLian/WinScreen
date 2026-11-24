@@ -72,7 +72,7 @@ public sealed partial class PipWindow : Form
     private ViewTurn _turn, _appliedTurn;
     private ToolStripMenuItem _viewOnlyItem;
     private ToolStripMenuItem _helpItem;
-    private ToolStripItem _useHeader, _originalHeader;
+    private ToolStripItem _originalHeader;
     private readonly ContextMenuStrip _menu = new() { ShowItemToolTips = true };
     private PipTitleBar? _titleBar;
     private PipHoverPreview? _hoverPreview;
@@ -129,9 +129,6 @@ public sealed partial class PipWindow : Form
     private int _popupTick;
     private bool _liveStartedZoomed;
     private System.Windows.Forms.Timer? _closeCheck;
-
-    [System.ComponentModel.DefaultValue(false)]
-    public bool AllowAutoMove { get; set; }
 
     [System.ComponentModel.DefaultValue(false)]
     public bool AllowInteractive

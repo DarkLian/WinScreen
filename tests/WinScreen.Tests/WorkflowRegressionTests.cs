@@ -107,6 +107,47 @@ public sealed class WorkflowRegressionTests
 [Trait("Category", "RealWindows")]
 public sealed class ConcealmentOwnershipTests
 {
+    // The owner, 24 Nov: of the commands only Dark mode is experimental. The rest work without the switch, and turning
+    // it off leaves them.
+    [Fact]
+    public void Only_dark_mode_is_experimental_and_the_switch_leaves_the_rest()
+    {
+        Assert.Equal([AppCommand.ToggleDark], Enum.GetValues<AppCommand>().Where(CommandCatalog.IsExperimental));
+        string folder = Directory.CreateTempSubdirectory("winscreen-experimental-").FullName;
+        try
+        {
+            using var target = new Support.TargetProcess(new Rectangle(200, 200, 400, 300));
+            target.UseFrame();
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false,
+                    Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
+                var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
+                using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
+                try
+                {
+                    static string Field(TrayApplication app) => (string)typeof(TrayApplication).GetField("_lastStatus", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(app)!;
+                    void Run(AppCommand command) => typeof(TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(app, [command, target.Handle]);
+                    Run(AppCommand.ToggleRollUp);
+                    Assert.True(controller.IsRolledUp(target.Handle), Field(app));
+                    foreach (bool on in new[] { true, false })
+                    {
+                        var changed = settings.Clone();
+                        changed.ExperimentalFeatures = on;
+                        Assert.Empty((IReadOnlyList<HotkeyProblem>)typeof(TrayApplication)
+                            .GetMethod("Apply", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(app, [changed])!);
+                    }
+                    Assert.False(settings.ExperimentalFeatures);
+                    Assert.True(controller.IsRolledUp(target.Handle));
+                    Run(AppCommand.ToggleRollUp);
+                    Assert.False(controller.IsRolledUp(target.Handle));
+                }
+                finally { app.ExitThread(); }
+            });
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

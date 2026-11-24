@@ -87,24 +87,24 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         fillItem.Tag = AppCommand.ToggleBorderlessFill;
         borderless.DropDownItems.Add(fillItem);
         items.Add(borderless);
-        var experimental = new ToolStripMenuItem(T("menu.effects")) { Tag = new Group() }.WithIcon(MenuParts.Repair).Experimental();
+        var effects = new ToolStripMenuItem(T("menu.effects")) { Tag = new Group() }.WithIcon(MenuParts.Repair);
         foreach (AppCommand command in new[] { AppCommand.ToggleDark, AppCommand.ToggleGlass, AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleShrink, AppCommand.ToggleCrop })
-            experimental.DropDownItems.Add(Command(command));
+            effects.DropDownItems.Add(CommandCatalog.IsExperimental(command) ? Command(command).Experimental() : Command(command));
         if (BackgroundSoundOf is not null && SetBackgroundSound is { } setSound)
         {
             var sound = new ToolStripMenuItem(T("menu.background.sound")) { Tag = new SoundMenu() }.WithIcon(MenuParts.Volume);
             foreach (int percent in SoundChoices)
                 sound.DropDownItems.Add(StayingOpen.Keep(new ToolStripMenuItem(percent == 0 ? T("menu.background.soundOff") : $"{percent}%", null,
                     (_, _) => WithTarget(window => setSound(window, percent))) { Tag = new SoundChoice(percent) }.OneOf()));
-            experimental.DropDownItems.Add(sound);
+            effects.DropDownItems.Add(sound);
         }
         if (NextBackground is { } nextBackground)
-            experimental.DropDownItems.Add(StayingOpen.Keep(new ToolStripMenuItem(T("menu.background.next"), MenuParts.Icon(MenuParts.Rotate),
+            effects.DropDownItems.Add(StayingOpen.Keep(new ToolStripMenuItem(T("menu.background.next"), MenuParts.Icon(MenuParts.Rotate),
                 (_, _) => WithTarget(nextBackground)) { Tag = new BackgroundNext() }));
         if (EditBackground is { } editBackground)
-            experimental.DropDownItems.Add(new ToolStripMenuItem(T("menu.background.edit"), MenuParts.Icon(MenuParts.Picture),
+            effects.DropDownItems.Add(new ToolStripMenuItem(T("menu.background.edit"), MenuParts.Icon(MenuParts.Picture),
                 (_, _) => WithTarget(editBackground)) { Tag = new BackgroundEdit() });
-        items.Add(experimental);
+        items.Add(effects);
 
         items.Add(new ToolStripSeparator());
         var more = new ToolStripMenuItem(T("menu.more")) { Tag = new MoreGroup() }.WithIcon(MenuParts.More);

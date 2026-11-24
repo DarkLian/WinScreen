@@ -181,7 +181,7 @@ The toolbar's **Arrange window** button has everything that moves a window:
 - Type an exact position and size.
 - Go back to the previous position.
 - Send to the back, behind every other window.
-- Roll up to the title bar *(experimental)*.
+- Roll up to the title bar.
 
 On a maximized window, a place or an exact position brings it back to its usual size there.
 
@@ -198,9 +198,9 @@ changes a title bar that Windows draws.
 
 <p align="center"><img src="assets/screenshots/window-menu.png" width="360" alt="A window's menu, with the Effects menu open"></p>
 
-## Effects *(experimental)*
+## Effects
 
-- **Dark mode** swaps light and dark. Windows that are already dark are left alone.
+- **Dark mode** *(experimental)* swaps light and dark. Windows that are already dark are left alone.
 - **Glass** makes a window's background see-through.
 
 A window has Dark mode or Glass, not both: turning one on turns the other off.

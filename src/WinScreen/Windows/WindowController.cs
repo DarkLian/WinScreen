@@ -1509,7 +1509,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    public int EndExperimentalEffects()
+    public int EndSwitcherHiding()
     {
         lock (_gate)
         {
@@ -1519,15 +1519,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 if (!state.Identity.Matches()) continue;
                 try
                 {
-                    if (state.Cropped) ClearCrop(window, state);
                     if (state.SwitcherBits is not null) RestoreSwitcher(window, state);
-                    if (state.PlacementBeforeRollUp is not null) RollDown(window, state);
-                    if (state.GlassColor is not null)
-                    {
-                        Prepare(window, state, User32.WS_EX_LAYERED);
-                        state.GlassColor = null;
-                        WriteLayered(window, state, state.SolidWhileHovered ? (byte)255 : state.Alpha);
-                    }
                 }
                 catch (WindowOperationException)
                 {

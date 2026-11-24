@@ -233,7 +233,7 @@ public sealed class WindowToolbar : Form
 
         int dpi = Dpi.Of(foreground);
         Arrange(dpi);
-        // The chosen buttons can all be unavailable, such as only effects with Experimental off.
+        // The chosen buttons can all be unavailable, such as only Dark mode with Experimental off.
         if (!HasButtons)
         {
             _hoverTime = 0;

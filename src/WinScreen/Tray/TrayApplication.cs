@@ -498,7 +498,7 @@ public sealed partial class TrayApplication : ApplicationContext
         }
         foreach (nint source in _content.Sources)
         {
-            var item = new ToolStripMenuItem(MenuText(WindowInfo.Title(source)) + " - " + T("settings.effects.title")).Experimental();
+            var item = new ToolStripMenuItem(MenuText(WindowInfo.Title(source)) + " - " + T("settings.effects.title"));
             item.DropDownItems.Add(T("window.restore"), null, (_, _) => Run(AppCommand.RestoreWindow, source));
             items.Add(item);
         }
@@ -511,7 +511,7 @@ public sealed partial class TrayApplication : ApplicationContext
         }
         foreach (HelperLink.HelperItem effect in _helperState?.Effects ?? [])
         {
-            var item = new ToolStripMenuItem(MenuText(effect.Title) + " - " + T("settings.effects.title")).Experimental();
+            var item = new ToolStripMenuItem(MenuText(effect.Title) + " - " + T("settings.effects.title"));
             item.DropDownItems.Add(T("window.restore"), null, (_, _) => Run(AppCommand.RestoreWindow, (nint)effect.Source));
             items.Add(item);
         }
@@ -817,22 +817,19 @@ public sealed partial class TrayApplication : ApplicationContext
             if (!experimentalChanged) continue;
             Part(() =>
             {
-                pip.AllowAutoMove = _settings.ExperimentalFeatures;
                 // Ends direct use, unless this kind of app may be used without the switch; then it only loses
                 // Enhanced hover and middle-click scrolling.
                 pip.AllowInteractive = _settings.ExperimentalFeatures;
                 pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;
-                if (!_settings.ExperimentalFeatures) pip.SetAutoMove(false);
             });
         }
 
         if (experimentalBefore && !_settings.ExperimentalFeatures)
         {
-            CancelCrop();
             _dark.TurnAllOff();
-            _content.TurnAllOff();
-            foreach (var tile in _shrunk.Values.ToArray()) tile.Close();
-            if (_windows.EndExperimentalEffects() > 0)
+            foreach (nint window in _content.Sources.ToArray())
+                if (_content.Has(window, Glass.ContentLook.Dark)) _content.TurnOff(window);
+            if (_windows.EndSwitcherHiding() > 0)
                 Alert(T("recovery.attention"), T("errors.recovery.someFailed"));
         }
     }
@@ -1333,7 +1330,8 @@ public sealed partial class TrayApplication : ApplicationContext
         tile.FormClosed += (_, _) =>
         {
             _shrunk.Remove(window);
-            if (look is not { } back || !tile.BringBack || !_settings.ExperimentalFeatures || !User32.IsWindow(window) || _content.Has(window))
+            if (look is not { } back || !tile.BringBack || !User32.IsWindow(window) || _content.Has(window) ||
+                back == Glass.ContentLook.Dark && !IsAvailable(AppCommand.ToggleDark))
                 return;
             try { _content.Toggle(window, back); }
             catch (WindowOperationException failure) { Alert(T("errors.operation.title"), failure.Message); }
@@ -2165,7 +2163,6 @@ public sealed partial class TrayApplication : ApplicationContext
     private void OpenView(PipWindow pip)
     {
         pip.Pictures = Pictures;
-        pip.AllowAutoMove = _settings.ExperimentalFeatures;
         pip.AllowInteractive = _settings.ExperimentalFeatures;
         pip.AllowSwitcherHiding = _settings.ExperimentalFeatures;
         _viewsInOrder.Add(pip);
@@ -2192,7 +2189,7 @@ public sealed partial class TrayApplication : ApplicationContext
         pip.ShowOnTop();
         if (pip.IsDisposed) return;
         _dark.Ignore(pip.Handle);
-        if (_settings.ExperimentalFeatures && _settings.PipAutoMove)
+        if (_settings.PipAutoMove)
             pip.SetAutoMove(true);
         if (_settings.ExperimentalFeatures && _settings.PipMiddleClickScroll)
             pip.SetMiddleClickScroll(true);

@@ -87,7 +87,7 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **App not responding** | Most changes wait half a second for an answer, then say "The window isn't responding right now." | `WindowController.EnsureResponsive` |
 | **Full-screen app or game running** (Settings → General → "Pause new commands during games and full-screen apps", on by default) | Hotkeys and toolbar commands are refused, except the ones that only take something away: Restore this window, Restore all windows, the commands for every window (below), turning Borderless or Fill display off, the commands for a window's view, tile or Anchor that already exists, and a view's own commands. Opening a view follows its own rules (see Picture-in-Picture). | `FullScreenPolicy.Decide`, `Windows/FullScreen.cs` |
 | **PC locked or the user is away** | The mouse hook is removed, so gestures and Ctrl+Alt+wheel stop. | `ModifierHookPolicy`, `FullScreen.IsAway` |
-| **Experimental features off** | Dark, Glass, Shrink, Crop, Roll up, Keep areas as they are and Glass and background are refused with "Turn on experimental features in Settings". Turning experimental off while they're in use undoes them. | `CommandCatalog.IsExperimental`, `Settings/AppSettings.cs`; `TrayApplication.ApplyPreferences` |
+| **Experimental features off** | Dark mode is refused with "Turn on experimental features in Settings". Turning experimental off while it's in use undoes it. Glass, backgrounds, kept areas, Shrink, Crop, Roll up and views that move out of the way work either way. | `CommandCatalog.IsExperimental`, `Settings/AppSettings.cs`; `TrayApplication.ApplyPreferences` |
 
 ## Window states used in the tables
 
@@ -114,11 +114,11 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **Send to bottom** | ✅ | ✅ | ✅ ¹³ | ✅ | ⚠️ ² | ✅ ⁴ | ❌ ⁵ | ✅ |
 | **Borderless / Fill display** | ✅ | ⚠️ ⁶ | ✅ ¹⁸ | — | ⚠️ ² ⁷ | ✅ | ❌ ⁶ | ✅ |
 | **Dark title bar** | ✅ | ✅ | ✅ ¹³ | ❌ ¹⁴ | ⚠️ ² | ✅ | ✅ | ✅ |
-| **Roll up** 🧪 | ✅ ⁸ | ✅ ¹⁹ | ✅ ¹⁹ | ❌ | ❌ | ✅ | ❌ | ✅ |
-| **Crop** 🧪 | ✅ ¹⁵ | ✅ ¹⁵ | ⚠️ ¹⁷ | ❌ ⁹ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
+| **Roll up** | ✅ ⁸ | ✅ ¹⁹ | ✅ ¹⁹ | ❌ | ❌ | ✅ | ❌ | ✅ |
+| **Crop** | ✅ ¹⁵ | ✅ ¹⁵ | ⚠️ ¹⁷ | ❌ ⁹ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
 | **Dark mode** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ✅ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
-| **Glass mode** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ✅ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
-| **Shrink** 🧪 | ✅ | ✅ | ⚠️ ¹¹ | ❌ ⁹ | ⚠️ ² | ✅ | ✅ ²⁰ | ✅ |
+| **Glass mode** | ✅ | ✅ | ⚠️ ¹⁰ | ✅ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
+| **Shrink** | ✅ | ✅ | ⚠️ ¹¹ | ❌ ⁹ | ⚠️ ² | ✅ | ✅ ²⁰ | ✅ |
 | **Restore this window** (Ctrl+Alt+U) | ✅ | ✅ | ✅ | ✅ | ✅ ¹² | ✅ | ✅ | ✅ |
 | **Restore all windows** (Ctrl+Alt+R) | ✅ | ✅ | ✅ | ✅ | ✅ ¹² | ✅ | ✅ | ✅ |
 
@@ -276,7 +276,7 @@ something away, so they also work while a full-screen app runs (`CommandCatalog.
 |---|---|---|
 | A click on a view | ✅ | Does nothing to the original; dragging moves the view. **Go to it** is under **Original window** in the view's menu. "Interactive PiP" is the one way to use the original through its view. |
 | WinScreen's tray menu, window menu and Settings | ✅ | From the top down: WinScreen's tips, its menus and Settings, the taskbar and its hidden-icons panel, then views and other pinned windows. While a WinScreen menu or the hidden-icons panel is open, views stop taking input and stay below it. A click on a view while its own menu is open closes the menu. |
-| Move away from text and images | 🧪 ⚠️ | Experimental. On from the view's menu, or for new views with **Move Picture-in-Picture views away from text and images** in Settings → Picture-in-Picture. The view leaves itself out of screen capture so it can see what is under it, so it doesn't show in screenshots; where Windows can't do that, it says so (`errors.pip.autoMoveUnsupported`). |
+| Move away from text and images | ⚠️ | On from the view's menu, or for new views with **Move Picture-in-Picture views away from text and images** in Settings → Picture-in-Picture. The view leaves itself out of screen capture so it can see what is under it, so it doesn't show in screenshots; where Windows can't do that, it says so (`errors.pip.autoMoveUnsupported`). |
 | Keep hidden, taskbar and Alt+Tab | ✅ / ⚠️ | Keep hidden takes the original off the shell's task list where supported and changes nothing else about the window, so the view keeps showing its own minimize, maximize and close buttons. Its taskbar button goes, and it also leaves Alt+Tab, on Windows 10 and 11. The entry comes back when the original is shown or the view closes, and after a forced exit. Store apps keep the taskbar button and Alt+Tab entry Windows owns; picking either shows the original, a quick Alt+Tab included (`StoreAppInputTests.A_hidden_store_app_picked_from_the_taskbar_or_switcher_is_shown_and_its_taskbar_button_stays`, real clicks and keys). On Windows 10 with smooth capture the button stays, to keep the view updating. The separate option that also takes a window out of Alt+Tab gives it a tool window's frame, which has a small close button only. |
 | Other virtual desktops | ✅ / ⚠️ | A view shows on every desktop. Many apps stop drawing while their window's desktop isn't shown, so while you're on another desktop the view hides its original for that time and shows it again when you're back (`Pip/AwayFromDesktop.cs`). The view's menu says "Hidden while you're on another desktop" meanwhile; it isn't Keep hidden, so a saved setup doesn't keep it. A desktop switch doesn't change a view's Keep hidden or Interactive, and Go to it from another desktop lands on the window. It doesn't do this when something else already hid the original. An original that the view hid and that is shown again from another desktop goes back to its own (`Native/VirtualDesktopsInternal.cs`): this uses an undocumented Windows interface, each move is checked afterwards, and where it can't be done the window stays where Windows put it. |
 | Rendering | ⚠️ | Auto, Standard (compositor thumbnail) or Smooth (screen capture). Auto tries Smooth first. Smooth falls back to Standard when it isn't available. Frame rate and scaling only apply to Smooth. Scaling **Best** (the default) shows the window's own pixels at its own size. Down to two thirds of that it uses a sharper filter kept within the pixels each view pixel covers, and smaller still it averages them. When bigger it enlarges along edges and sharpens within the nearest pixels. Either way text and lines stay crisp without halos. On Windows' software renderer, or a graphics card without compute shaders, it averages and blends instead. **Pixelated** keeps whole pixels when bigger and averages when smaller; **Soft** blends, and averages below half size. Dragging an edge or turning the wheel stops at the window's own size when it comes close (`PipShaders`, `PipEnlargeTests`, `PipScalingRenderingTests`). |
@@ -439,7 +439,7 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 | Dark mode + Glass | Never both: turning one on turns the other off first. If the new one fails or is refused (a window that is dark already), the old one is put back (`TrayApplication.SwitchLook`). |
 | Arrange (a place or exact position) + maximized | The window comes back to its usual size in the place chosen; Back to previous position maximizes it again. |
 | View open + its source pinned or see-through | Allowed; the view shows the window as it is. |
-| Experimental turned off with effects in use | Crops, tiles, Dark and Glass are undone; any that fail are listed in one notice. |
+| Experimental turned off with effects in use | Dark is undone; Glass, crops, tiles and rolled-up windows stay. |
 | Settings import | Applies at once; the old settings are kept as a backup (five kept). Other changes in Settings apply as they are made, once they settle; a shortcut that is taken goes back to the one in use, and the rest still applies. |
 | WinScreen closes or crashes with changes in place | The change journal puts windows back on the next start. Hidden windows are watched and brought back if WinScreen stops (`RecoveryWatcher`). |
 

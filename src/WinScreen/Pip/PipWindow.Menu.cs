@@ -10,14 +10,14 @@ namespace WinScreen.Pip;
 public sealed partial class PipWindow
 {
     [MemberNotNull(nameof(_hideItem), nameof(_awayItem), nameof(_goToItem), nameof(_muteItem), nameof(_useOriginalItem), nameof(_autoMoveItem), nameof(_removeCropItem), nameof(_viewOnlyItem),
-        nameof(_helpItem), nameof(_useHeader), nameof(_originalHeader), nameof(_interactiveItem), nameof(_middleScrollItem),
+        nameof(_helpItem), nameof(_originalHeader), nameof(_interactiveItem), nameof(_middleScrollItem),
         nameof(_enhancedHoverItem), nameof(_freezeItem), nameof(_turnItem), nameof(_uprightItem))]
     private void BuildMenu()
     {
         _hideItem = new ToolStripMenuItem(T("menu.original.keepHidden"), null,
             (_, _) => SetOriginalHidden(!_hideItem!.Checked));
         _autoMoveItem = new ToolStripMenuItem(T("pip.autoMove"), null,
-            (_, _) => SetAutoMove(!_autoMoveItem!.Checked)).Experimental();
+            (_, _) => SetAutoMove(!_autoMoveItem!.Checked));
         _interactiveItem = new ToolStripMenuItem(T("menu.view.interactive"), null,
             (_, _) => SetInteractive(!_interactiveItem!.Checked));
         // Tagged Experimental unless this kind of app was verified for it. Its two options are experimental for every
@@ -41,7 +41,7 @@ public sealed partial class PipWindow
         _menu.Items.Add(new ToolStripMenuItem { Name = "inputStatus", Enabled = false });
         _menu.Items.Add(new ToolStripSeparator());
 
-        _menu.Items.Add(_useHeader = MenuParts.Header(T("menu.group.use")));
+        _menu.Items.Add(MenuParts.Header(T("menu.group.use")));
         _menu.Items.Add(_viewOnlyItem);
         _menu.Items.Add(_interactiveItem);
         _menu.Items.Add(_enhancedHoverItem);
@@ -133,7 +133,6 @@ public sealed partial class PipWindow
         _menu.Items["inputStatus"]!.Text = MenuTitle;
         FillHelp();
         _retryItem.Available = CanRetryCapture;
-        _autoMoveItem.Available = AllowAutoMove;
         bool canInteract = CanInteract;
         _viewOnlyItem.Available = _interactiveItem.Available = canInteract;
         _viewOnlyItem.Checked = !_interactiveItem.Checked;
@@ -142,7 +141,6 @@ public sealed partial class PipWindow
         bool showInteractionOptions = canInteract && _interactiveItem.Checked && _allowInteractive;
         _middleScrollItem.Available = showInteractionOptions;
         _enhancedHoverItem.Available = showInteractionOptions;
-        _useHeader.Available = canInteract || AllowAutoMove;
         _enhancedHoverItem.Enabled = _enhancedHoverItem.Checked || PipEnhancedHover.CanAttempt(_source);
         // With Enhanced hover on, a browser's own middle-click scrolling works and is the better one.
         _middleScrollItem.Enabled = !(showInteractionOptions && _enhancedHoverItem.Checked && AppScrollsWithHover);

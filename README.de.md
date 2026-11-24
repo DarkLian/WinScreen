@@ -107,7 +107,7 @@ Mehrere können sich abwechseln, und sie können auch von einem Weblink kommen.
 - Apps über eine Ansicht benutzen: Chrome, Edge, Brave, Vivaldi, Firefox, Electron-Apps und Datei-Explorer, dazu andere Apps, Enhanced hover und Scrollen mit der mittleren Maustaste *(experimentell)*
 - Bildraten-Grenze, Deckkraft, Positionssperre und Klick-Durchlass pro Ansicht
 - Ansichten in die Taskleiste minimieren, Vorschau beim Darüberfahren und eine Leselupe
-- Ansichten, die Text und Bildern ausweichen *(experimentell)*
+- Ansichten, die Text und Bildern ausweichen
 
 **Anker**
 - Schwebende Schaltflächen, die ein Fenster mit einem Klick zurückholen
@@ -120,17 +120,17 @@ Mehrere können sich abwechseln, und sie können auch von einem Weblink kommen.
 **Anordnen**
 - Neun Stellen auf dem Bildschirm, der nächste Bildschirm, eine genaue Position und Größe, die vorherige Position
 - Verschieben und Größe ändern mit gedrückter Alt- oder Win-Taste beim Ziehen, mit Einrasten an Kanten
-- Bis zur Titelleiste aufrollen *(experimentell)*, nach hinten schicken
+- Bis zur Titelleiste aufrollen, nach hinten schicken
 
-**Effekte** *(experimentell)*
-- Dunkelmodus für jede App, der den Farbton jeder Farbe behält
+**Effekte**
+- Dunkelmodus für jede App, der den Farbton jeder Farbe behält *(experimentell)*
 - Glas, das nur den Hintergrund ausblendet
 - Wie stark Glas ausblendet, für jede App oder für ein einzelnes Fenster
 - Helle oder dunkle Schrift über Glas, mit oder ohne weichen Schatten
 - Bereiche eines App-Fensters, etwa ein Video, die Glas und Dunkelmodus unverändert lassen
 - Ein Fenster zuschneiden oder zu einer Live-Kachel verkleinern
 
-**Hintergründe** *(experimentell)*
+**Hintergründe**
 - Ein Bild, animiertes GIF oder Video hinter dem Text eines Fensters, durch Glas
 - Ein Hintergrund für alle Apps, dazu Apps mit eigenem oder ganz ohne
 - Mehrere Bilder und Videos im Wechsel, jedes mit eigener Anpassung, eigenem Ton, Tempo und eigener Helligkeit

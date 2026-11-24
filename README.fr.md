@@ -109,7 +109,7 @@ Plusieurs peuvent se relayer, et elles peuvent aussi venir d'un lien web.
 - Utiliser des applications dans une vue : Chrome, Edge, Brave, Vivaldi, Firefox, applications Electron et Explorateur de fichiers, ainsi que les autres applications, Enhanced hover et le défilement par clic du milieu *(expérimental)*
 - Limite d'images par seconde, opacité, verrouillage de position et clics traversants pour chaque vue
 - Réduire les vues dans la barre des tâches, aperçu au survol et loupe de lecture
-- Des vues qui s'écartent du texte et des images *(expérimental)*
+- Des vues qui s'écartent du texte et des images
 
 **Ancres**
 - Des boutons flottants qui ramènent une fenêtre d'un clic
@@ -122,17 +122,17 @@ Plusieurs peuvent se relayer, et elles peuvent aussi venir d'un lien web.
 **Disposition**
 - Neuf emplacements à l'écran, l'écran suivant, une position et une taille exactes, la position précédente
 - Déplacer et redimensionner en maintenant Alt ou Win et en faisant glisser, avec aimantation aux bords
-- Enrouler jusqu'à la barre de titre *(expérimental)*, envoyer à l'arrière-plan
+- Enrouler jusqu'à la barre de titre, envoyer à l'arrière-plan
 
-**Effets** *(expérimental)*
-- Un mode sombre pour n'importe quelle appli, qui garde la teinte de chaque couleur
+**Effets**
+- Un mode sombre pour n'importe quelle appli, qui garde la teinte de chaque couleur *(expérimental)*
 - Un effet verre qui n'atténue que l'arrière-plan
 - L'intensité de l'effet verre, pour chaque application ou pour une seule fenêtre
 - Un texte clair ou foncé avec l'effet verre, avec ou sans ombre douce
 - Des zones des fenêtres d'une application, comme une vidéo, que l'effet verre et le mode sombre laissent telles quelles
 - Rogner une fenêtre, ou la réduire en vignette en direct
 
-**Arrière-plans** *(expérimental)*
+**Arrière-plans**
 - Une image, un GIF animé ou une vidéo derrière le texte d'une fenêtre, grâce à l'effet verre
 - Un arrière-plan pour toutes les applications, et des applications avec le leur ou sans
 - Plusieurs images et vidéos qui se relaient, chacune avec son ajustement, son volume, sa vitesse et sa luminosité
