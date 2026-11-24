@@ -38,11 +38,14 @@ internal static class MenuStyle
 
     internal static readonly string Face =
         FontFamily.Families.Any(family => family.Name == "Segoe UI Variable Text") ? "Segoe UI Variable Text" : "Segoe UI";
+    // Windows 11's face for text of 12 pixels and less, a little taller and wider than the one for body text.
+    internal static readonly string SmallFace =
+        FontFamily.Families.Any(family => family.Name == "Segoe UI Variable Small") ? "Segoe UI Variable Small" : Face;
     internal static readonly Font Font = new(Face, 9.75f);
-    internal static readonly Font SmallFont = new(Face, 8.25f);
+    internal static readonly Font SmallFont = new(SmallFace, 9f);
     internal static readonly Font TitleFont = new(Face, 9.75f, FontStyle.Bold);
     internal static readonly Font MenuFont = new(Face, 10.5f);
-    internal static readonly Font MenuHeaderFont = new(Face, 9f);
+    internal static readonly Font MenuHeaderFont = new(SmallFace, 9f);
     private static readonly Dictionary<(Font, int), Font> Fitted = [];
 
     // WinScreen's text is drawn at the system's DPI, so on a display at another scale the font is made that much larger

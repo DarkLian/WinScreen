@@ -24,7 +24,8 @@ internal static class SettingsStyle
 
     // A little short of pure white in the dark theme: full white on dark grey glares at reading size.
     internal static Color Text => Contrast ? SystemColors.WindowText : Dark ? Rgb(0xEDEDED) : Rgb(0x1B1B1B);
-    internal static Color Secondary => Contrast ? SystemColors.WindowText : Dark ? Rgb(0xC5C5C5) : Rgb(0x5F5F5F);
+    // Windows' own: white at 77% in the dark theme, black at 62% in the light one.
+    internal static Color Secondary => Contrast ? SystemColors.WindowText : Dark ? Rgb(0xCFCFCF) : Rgb(0x5F5F5F);
     internal static Color Tertiary => Contrast ? SystemColors.WindowText : Dark ? Rgb(0x9E9E9E) : Rgb(0x6E6E6E);
     internal static Color Disabled => Contrast ? SystemColors.GrayText : Dark ? Rgb(0x8A8A8A) : Rgb(0x9A9A9A);
     internal static Color Error => Dark ? Rgb(0xFF99A4) : Rgb(0xC42B1C);
@@ -73,7 +74,7 @@ internal static class SettingsStyle
     // Windows 11's type sizes, measured against its own Settings: body 14 pixels, captions 12, section headings 14 in
     // semibold and page titles 28. Settings and the window for a new view use them; menus keep their own.
     internal static readonly Font BodyFont = new(MenuStyle.Face, 10.5f);
-    internal static readonly Font CaptionFont = new(MenuStyle.Face, 9f);
+    internal static readonly Font CaptionFont = new(MenuStyle.SmallFace, 9f);
     internal static readonly Font HeadingFont = new(Face("Segoe UI Variable Text Semib", "Segoe UI Semibold"), 10.5f);
     internal static readonly Font PageTitleFont = new(Face("Segoe UI Variable Display Semib", "Segoe UI Semibold"), 21f);
 
