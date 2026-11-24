@@ -32,10 +32,13 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     internal Action<nint, int>? SetBackgroundSound { get; init; }
     internal Func<nint, bool>? HasBackground { get; init; }
     internal Action<nint>? EditBackground { get; init; }
+    internal Func<nint, bool>? HasNextBackground { get; init; }
+    internal Action<nint>? NextBackground { get; init; }
     internal static readonly int[] SoundChoices = [0, 25, 50, 75, 100];
     private sealed record SoundMenu;
     private sealed record SoundChoice(int Percent);
     private sealed record BackgroundEdit;
+    private sealed record BackgroundNext;
 
     private sealed record Group;
     private sealed record MoreGroup;
@@ -96,6 +99,9 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
                     (_, _) => WithTarget(window => setSound(window, percent))) { Tag = new SoundChoice(percent) }.OneOf()));
             experimental.DropDownItems.Add(sound);
         }
+        if (NextBackground is { } nextBackground)
+            experimental.DropDownItems.Add(StayingOpen.Keep(new ToolStripMenuItem(T("menu.background.next"), MenuParts.Icon(MenuParts.Rotate),
+                (_, _) => WithTarget(nextBackground)) { Tag = new BackgroundNext() }));
         if (EditBackground is { } editBackground)
             experimental.DropDownItems.Add(new ToolStripMenuItem(T("menu.background.edit"), MenuParts.Icon(MenuParts.Picture),
                 (_, _) => WithTarget(editBackground)) { Tag = new BackgroundEdit() });
@@ -246,6 +252,8 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
             }
             else if (item.Tag is BackgroundEdit)
                 item.Available = window != 0 && HasBackground?.Invoke(window) == true;
+            else if (item.Tag is BackgroundNext)
+                item.Available = window != 0 && HasNextBackground?.Invoke(window) == true;
             else if (item.Tag is Utility utility)
                 item.Enabled = window != 0 && (!utility.NeedsPath || WindowInfo.ExecutablePath(window).Length > 0);
             else if (item.Tag is Resize)

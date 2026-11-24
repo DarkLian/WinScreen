@@ -38,11 +38,14 @@ public sealed class WindowMenuBuilderTests
             bool glass = true;
             int? set = null;
             nint edited = 0;
+            int nexts = 0;
+            bool several = true;
             using var menu = new ContextMenuStrip();
             var builder = new WindowMenuBuilder(() => identity, (_, _) => { }, (_, _) => { }, _ => true, (_, _) => true, (_, _) => false, () => { })
             {
                 BackgroundSoundOf = _ => sound, SetBackgroundSound = (_, percent) => set = percent,
                 HasBackground = _ => glass, EditBackground = window => edited = window,
+                HasNextBackground = _ => several, NextBackground = window => nexts++,
             };
             builder.Populate(menu.Items, false);
             builder.Refresh(menu.Items);
@@ -54,6 +57,12 @@ public sealed class WindowMenuBuilderTests
             Assert.Equal(0, set);
             edit.PerformClick();
             Assert.Equal(form.Handle, edited);
+            ToolStripMenuItem next = Commands(menu.Items).Single(item => item.Text == UiText.T("menu.background.next"));
+            next.PerformClick();
+            Assert.Equal(1, nexts);
+            several = false;
+            builder.Refresh(menu.Items);
+            Assert.False(next.Available); // Only a set has a next one.
 
             sound = new(75, false);
             builder.Refresh(menu.Items);

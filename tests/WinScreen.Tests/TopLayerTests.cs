@@ -362,13 +362,15 @@ public sealed class TopLayerTests
         WindowMenuBuilderTests.OnUiThread(() =>
         {
             Rectangle screen = Screen.PrimaryScreen!.WorkingArea;
-            using var dialog = new GlassLevelsWindow("test", new AppGlassLevels { Program = "test" }, _ => { }, _ => { },
-                () => new AppGlassLevels { Program = "test" }, () => true);
+            using var dialog = new GlassLevelsWindow("test", new AppGlassLevels { Program = "test" }, new BackgroundChoice(), new GlassPanelActions(_ => { }, _ => { })
+            {
+                Save = (_, _) => { }, Reset = () => (new AppGlassLevels { Program = "test" }, new BackgroundChoice()), StillOn = () => true,
+            });
             try
             {
                 dialog.ShowAt(new Point(screen.Left + 200, screen.Top + 200));
                 Pump(200);
-                ComboBox list = Every(dialog).OfType<ComboBox>().Single();
+                ComboBox list = Every(dialog).OfType<ComboBox>().First();
                 TopLayer.Above = () => [dialog.Handle];
                 Point home = Desktop.CursorPosition();
                 Rectangle box = list.RectangleToScreen(list.ClientRectangle);

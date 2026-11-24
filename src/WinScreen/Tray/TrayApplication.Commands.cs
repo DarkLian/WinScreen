@@ -102,7 +102,7 @@ public sealed partial class TrayApplication
         Define(AppCommand.KeepAreas, window => KeepAreas(window))
             with { IsOn = window => _settings.KeptAreas.For(WindowInfo.ProgramOf(window)).Count > 0, Undoes = [WindowPart.CropChoice], Opens = Always },
         Define(AppCommand.GlassLevels, window => OpenGlassLevels(window))
-            with { IsOn = window => _content.HasOwnLevels(window), Undoes = [WindowPart.ContentEffect], Opens = Always },
+            with { IsOn = window => _content.HasOwnLevels(window) || _content.HasOwnBackground(window), Undoes = [WindowPart.ContentEffect], Opens = Always },
     ];
 
     private IEnumerable<CommandDefinition> AnchorCommands() =>

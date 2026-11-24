@@ -49,6 +49,9 @@ internal sealed unsafe class ContentOverlay : Form
     private readonly bool _leaveAlreadyDark;
     private volatile BackdropSet? _backdrop;
     private volatile BackdropChoice? _showing;
+    private volatile int _showingAt = -1;
+    private const int NoJump = -1, NextOne = int.MaxValue;
+    private int _jump = NoJump;
     private volatile bool _hidden;
     private volatile bool _audible;
     private volatile bool _held;
@@ -96,6 +99,15 @@ internal sealed unsafe class ContentOverlay : Form
 
     // The one of the set showing now.
     public BackdropChoice? Showing => _showing;
+
+    public int ShowingAt => _showing is null ? -1 : _showingAt;
+
+    // One of the set now, or its next one for null.
+    public void Jump(int? index)
+    {
+        Interlocked.Exchange(ref _jump, index ?? NextOne);
+        if (!_stopping) _arrived.Set();
+    }
 
     public nint Source => _source;
 
@@ -467,10 +479,13 @@ internal sealed unsafe class ContentOverlay : Form
                     turns.Failed = 0;
                     backdrop = OpenNext(shown, turns);
                 }
+                int jump = shown is { Items.Count: > 1 } && !_hidden && !_held ? Interlocked.Exchange(ref _jump, NoJump) : NoJump;
+                bool jumped = jump == NextOne || jump >= 0 && jump < shown!.Items.Count && jump != turns.Showing;
+                if (jumped && jump != NextOne) turns.Sequence?.Ask(jump);
                 // The next of a set: the video played through, or its time is up. The last one's picture stays until the
                 // next has one, so no plain Glass shows in between.
                 if (backdrop is not null && shown is { Items.Count: > 1 } && !_hidden && !_held &&
-                    (backdrop.Ended || Environment.TickCount64 >= turns.ChangeAt))
+                    (jumped || backdrop.Ended || Environment.TickCount64 >= turns.ChangeAt))
                 {
                     if (backdrop.View is not null)
                     {
@@ -641,6 +656,7 @@ internal sealed unsafe class ContentOverlay : Form
         {
             turns.Showing = sequence.Next();
             BackdropChoice item = set.Items[turns.Showing];
+            _showingAt = turns.Showing;
             _showing = item;
             turns.Since = Environment.TickCount64;
             turns.ChangeAt = set.StayMilliseconds(item) is { } stay ? turns.Since + stay : long.MaxValue;

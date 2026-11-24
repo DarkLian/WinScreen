@@ -229,7 +229,7 @@ plays once and each picture stays for the minutes you choose; on **On a timer**,
 deleted, Settings marks it **(not found)** and Glass shows the next one. It shows again by itself once it's back.
 
 Videos play without sound until you turn **Sound** up, also with **Background sound** under **Effects** in the window's
-menu; **Change background** there opens these settings for its app. Only the window you used last plays sound, and only
+menu; **Next background** there goes on to the next of several, and **Change background** opens these settings for its app. Only the window you used last plays sound, and only
 while its app is in front. Videos pause while their window is minimized or on another desktop, behind a game or
 full-screen app, and while Windows saves battery. Each of these can be turned off under **App backgrounds**.
 
@@ -260,8 +260,14 @@ Every app's card in **Settings → Backgrounds** change that:
 ### Glass for each app or window
 
 Under **App backgrounds** in **Settings → Backgrounds**, add an app to give it its own background and its own Background, Text,
-Fade range, text color and shadow. Both start as every app has them, and either can be turned off for that app. To change just one window, choose **Glass levels** under **Effects** in its menu: the changes show at once and
-last until the window closes, and **Save for this app** keeps them for all its windows.
+Fade range, text color and shadow. Both start as every app has them, and either can be turned off for that app.
+
+To try things out on a window itself, choose **Glass and background** under **Effects** in its menu. Its levels are on the left
+and its picture or video on the right: add or remove them, and set the fit, sound, speed, brightness, order and timing.
+The changes show on that window at once and last until it closes; **Save for this app** keeps them for all its windows.
+
+**Background** is how much of the page's own color covers the picture, and **Brightness** is how bright the picture itself
+is. On a dark page both make the picture dimmer. On a light page, a higher Background makes it paler instead.
 
 ## Remember a program's setup
 

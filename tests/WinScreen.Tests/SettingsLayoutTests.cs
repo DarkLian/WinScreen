@@ -231,6 +231,85 @@ public sealed class SettingsLayoutTests
         }
     }
 
+    // The owner, 24 Nov: most of a background's settings in the window's own panel, since Settings' preview stands still.
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-Hans")]
+    [InlineData("zh-Hant")]
+    public void The_glass_panel_changes_levels_and_background_live_and_saves_what_changed(string language)
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize(language);
+            try
+            {
+                AppGlassLevels? levels = null;
+                BackgroundChoice? live = null;
+                (AppGlassLevels? Levels, BackgroundChoice? Background)? saved = null;
+                int shown = -1, showing = -1;
+                var set = new BackgroundChoice().WithItems([new BackgroundItem { File = @"C:\a\sea.mp4" }, new BackgroundItem { File = @"C:\a\hills.jpg" }]);
+                GlassLevelsWindow Panel(BackgroundChoice background) => new("claude", new AppGlassLevels { Program = "claude", BackgroundPercent = 66 }, background,
+                    new GlassPanelActions(now => levels = now, now => live = now)
+                    {
+                        Save = (glass, picture) => saved = (glass, picture), StillOn = () => true, Showing = () => showing, Show = index => shown = index,
+                        Reset = () => (new AppGlassLevels { Program = "claude", BackgroundPercent = 15 }, new BackgroundChoice()),
+                    });
+                using var panel = Panel(set);
+                panel.ShowAt(new Point(100, 100));
+                Application.DoEvents();
+                Rectangle area = Screen.FromControl(panel).WorkingArea;
+                Assert.True(area.Contains(panel.Bounds), $"{panel.Bounds} in {area}");
+                Assert.True(panel.Height <= 560, $"{panel.Height} tall."); // Fits a 1366 by 768 screen at 125%.
+                if (Environment.GetEnvironmentVariable("WINSCREEN_LAYOUT_EVIDENCE") is { } folder)
+                {
+                    Directory.CreateDirectory(folder);
+                    using var image = new Bitmap(panel.Width, panel.Height);
+                    panel.DrawToBitmap(image, new Rectangle(Point.Empty, panel.Size));
+                    image.Save(Path.Combine(folder, $"glass-panel-{language}.png"));
+                }
+                NumberSlider Slider(string key) => Descendants(panel).OfType<NumberSlider>().Single(slider => slider.AccessibleName == UiText.T(key));
+                ComboBox items = Descendants(panel).OfType<ComboBox>().Single(box => box.AccessibleName == UiText.T("settings.backgrounds.items"));
+                Assert.Equal(["sea.mp4", "hills.jpg"], items.Items.Cast<string>());
+                Assert.True(Slider("settings.backgrounds.sound").Number.Enabled);
+
+                Slider("settings.backgrounds.brightness").Number.Value = 40;
+                Assert.Equal(40, live!.Items[0].Brightness);
+                Assert.Null(levels);
+                items.SelectedIndex = 1;
+                Assert.Equal(1, shown); // What is being changed is what shows.
+                Assert.False(Slider("settings.backgrounds.sound").Number.Enabled); // A picture has none.
+                Assert.Equal(100, Slider("settings.backgrounds.brightness").Number.Value);
+                panel.Add([@"C:\a\forest.png"]);
+                Assert.Equal([@"C:\a\sea.mp4", @"C:\a\hills.jpg", @"C:\a\forest.png"], live.Items.Select(item => item.File));
+                Assert.Equal(2, shown);
+                Button(panel, "settings.backgrounds.clear").PerformClick();
+                Assert.Equal(2, live.Items.Count);
+
+                Button(panel, "glassLevels.save").PerformClick();
+                Assert.Null(saved!.Value.Levels); // Left alone, so they stay every app's.
+                Assert.Equal(live, saved.Value.Background);
+
+                using var plain = Panel(new BackgroundChoice());
+                plain.ShowAt(new Point(100, 100));
+                Descendants(plain).OfType<NumberSlider>().Single(slider => slider.AccessibleName == UiText.T("settings.effects.text")).Number.Value = 70;
+                Assert.Equal(70, levels!.TextPercent);
+                Button(plain, "glassLevels.save").PerformClick();
+                Assert.Equal(70, saved!.Value.Levels!.TextPercent);
+                Assert.Null(saved.Value.Background);
+
+                using var undone = Panel(set);
+                undone.ShowAt(new Point(100, 100));
+                Button(undone, "glassLevels.reset").PerformClick();
+                Assert.Equal(UiText.T("settings.backgrounds.none"), Descendants(undone).OfType<ComboBox>()
+                    .Single(box => box.AccessibleName == UiText.T("settings.backgrounds.items")).Text);
+                undone.Close();
+            }
+            finally { UiText.Initialize("en"); }
+        });
+
+        static Button Button(Control window, string key) => Descendants(window).OfType<Button>().Single(button => button.Text == UiText.T(key));
+    }
+
     // The owner, 23 Nov: General has a button to check for updates under New versions; it opens the tray's check.
     [Fact]
     public void General_has_a_button_to_check_for_updates()

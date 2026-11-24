@@ -87,7 +87,7 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **App not responding** | Most changes wait half a second for an answer, then say "The window isn't responding right now." | `WindowController.EnsureResponsive` |
 | **Full-screen app or game running** (Settings → General → "Pause new commands during games and full-screen apps", on by default) | Hotkeys and toolbar commands are refused, except the ones that only take something away: Restore this window, Restore all windows, the commands for every window (below), turning Borderless or Fill display off, the commands for a window's view, tile or Anchor that already exists, and a view's own commands. Opening a view follows its own rules (see Picture-in-Picture). | `FullScreenPolicy.Decide`, `Windows/FullScreen.cs` |
 | **PC locked or the user is away** | The mouse hook is removed, so gestures and Ctrl+Alt+wheel stop. | `ModifierHookPolicy`, `FullScreen.IsAway` |
-| **Experimental features off** | Dark, Glass, Shrink, Crop, Roll up, Keep areas as they are and Glass levels are refused with "Turn on experimental features in Settings". Turning experimental off while they're in use undoes them. | `CommandCatalog.IsExperimental`, `Settings/AppSettings.cs`; `TrayApplication.ApplyPreferences` |
+| **Experimental features off** | Dark, Glass, Shrink, Crop, Roll up, Keep areas as they are and Glass and background are refused with "Turn on experimental features in Settings". Turning experimental off while they're in use undoes them. | `CommandCatalog.IsExperimental`, `Settings/AppSettings.cs`; `TrayApplication.ApplyPreferences` |
 
 ## Window states used in the tables
 
@@ -171,7 +171,7 @@ and one-color Glass leave the window itself on screen, and nothing here applies.
 | Send to bottom | ✅ The effect goes down with its window (`ContentEffectTests.Sent_to_the_bottom_an_effect_goes_down_with_its_window`). |
 | Arrange window, Move to display, exact position, Back to previous position | ✅ |
 | Alt+drag, Alt+right drag, snapping, Ctrl+Alt+wheel, the window menu gesture | ✅ (Alt+drag and Ctrl+Alt+wheel since 1.5.0) (`WindowController.GestureBlocked`, `ModifierGestureTests.Alt_drags_and_the_opacity_wheel_work_on_a_window_under_an_effect`) |
-| Anchors, the toolbar, Keep areas as they are, Glass levels | ✅ |
+| Anchors, the toolbar, Keep areas as they are, Glass and background | ✅ |
 | Pin on top | ✅ With its colored border, Pause pinning while maximized, and the pin put back when another program takes it (since 1.5.0, `ContentEffectTests.A_pinned_window_under_an_effect_keeps_its_border_and_its_pin`). |
 | Make see-through windows solid while the mouse is over them | ❌ Waits until the effect is off. |
 | Borderless, Fill display | ✅ Since 1.5.0. |

@@ -361,9 +361,11 @@ public sealed partial class TrayApplication : ApplicationContext
             ResizeTo = (window, size) => Attempt(() => ResizeWindow(window, size)),
             Hotkey = command => MenuHotkey(command) ?? "",
             BackgroundSoundOf = window => GlassLook(window) == Look.LayeredGlass && _content.ShowingOf(window) is { IsVideo: true } item
-                ? new WindowMenuBuilder.BackgroundSound(item.Volume, _settings.Backgrounds.OwnOf(WindowInfo.ProgramOf(window)) is null) : null,
+                ? new WindowMenuBuilder.BackgroundSound(item.Volume, !_content.HasOwnBackground(window) && _settings.Backgrounds.OwnOf(WindowInfo.ProgramOf(window)) is null) : null,
             SetBackgroundSound = (window, percent) => SetBackgroundSound(window, percent),
             HasBackground = window => GlassLook(window) == Look.LayeredGlass,
+            HasNextBackground = window => GlassLook(window) == Look.LayeredGlass && _content.BackdropOf(window) is { Items.Count: > 1 },
+            NextBackground = window => _content.ShowBackground(window, null),
             EditBackground = window => OpenBackgroundOf(WindowInfo.ProgramOf(window)),
             OpacityPercent = window => (int)Math.Round(_windows.OpacityOf(window) * 100.0 / 255),
             SetOpacityPercent = (window, percent) => Attempt(() =>
@@ -1429,6 +1431,16 @@ public sealed partial class TrayApplication : ApplicationContext
     }
 
     private Settings.GlassLevelsWindow? _glassLevels;
+    // As chosen in the panel; what it shows is ContentEffects' own.
+    private readonly Dictionary<nint, BackgroundChoice> _ownBackgrounds = [];
+
+    private void SetWindowBackground(nint window, BackgroundChoice? own)
+    {
+        foreach (nint gone in _ownBackgrounds.Keys.Where(known => !_content.HasOwnBackground(known)).ToArray()) _ownBackgrounds.Remove(gone);
+        if (own is null) _ownBackgrounds.Remove(window);
+        else _ownBackgrounds[window] = own;
+        _content.SetWindowBackground(window, own is null ? null : own.Backdrop ?? new Glass.BackdropSet([]));
+    }
 
     private void OpenGlassLevels(nint window)
     {
@@ -1444,15 +1456,22 @@ public sealed partial class TrayApplication : ApplicationContext
             FadeRangePercent = (int)Math.Round(now.FadeRange * 100), TextColor = now.TextColor, TextShadow = now.Shadow,
         };
         var identity = WindowIdentity.Capture(window);
-        var panel = new Settings.GlassLevelsWindow(program, levels,
+        BackgroundChoice saved = _settings.Backgrounds.OwnOf(program) ?? _settings.Backgrounds.Everywhere;
+        var panel = new Settings.GlassLevelsWindow(program, levels, _content.HasOwnBackground(window) ? _ownBackgrounds.GetValueOrDefault(window, saved) : saved, new GlassPanelActions(
             changed => { if (identity.Matches()) _content.SetWindowLevels(window, changed.Levels); },
-            save => SaveAppGlass(window, program, save),
-            () =>
+            changed => { if (identity.Matches()) SetWindowBackground(window, changed); })
+        {
+            Save = (glass, background) => SaveAppGlass(window, program, glass, background),
+            Reset = () =>
             {
                 _content.SetWindowLevels(window, null);
-                return _settings.Effects.LevelsOf(program);
+                SetWindowBackground(window, null);
+                return (_settings.Effects.LevelsOf(program), _settings.Backgrounds.OwnOf(program) ?? _settings.Backgrounds.Everywhere);
             },
-            () => identity.Matches() && GlassLook(window) == Look.LayeredGlass);
+            StillOn = () => identity.Matches() && GlassLook(window) == Look.LayeredGlass,
+            Showing = () => _content.ShowingAt(window),
+            Show = index => _content.ShowBackground(window, index),
+        }, _content.HasOwnLevels(window), _content.HasOwnBackground(window));
         panel.FormClosed += (_, _) => { if (_glassLevels == panel) _glassLevels = null; };
         _glassLevels = panel;
         panel.ShowAt(Cursor.Position);
@@ -1463,9 +1482,16 @@ public sealed partial class TrayApplication : ApplicationContext
     {
         string program = WindowInfo.ProgramOf(window);
         if (program.Length == 0 || _content.ShowingOf(window) is not { } showing) return;
+        BackgroundChoice Loud(BackgroundChoice choice) => choice.WithItems(choice.Items.Select(item =>
+            string.Equals(item.File, showing.File, StringComparison.OrdinalIgnoreCase) ? item with { Volume = percent } : item));
+        // A background of the window's own, from its panel, is only the window's to change.
+        if (_content.HasOwnBackground(window) && _ownBackgrounds.TryGetValue(window, out BackgroundChoice? own))
+        {
+            SetWindowBackground(window, Loud(own));
+            return;
+        }
         BackgroundPreferences before = _settings.Backgrounds;
-        BackgroundPreferences Louder(BackgroundPreferences backgrounds) => backgrounds.Change(program, choice => choice.WithItems(choice.Items.Select(item =>
-            string.Equals(item.File, showing.File, StringComparison.OrdinalIgnoreCase) ? item with { Volume = percent } : item)));
+        BackgroundPreferences Louder(BackgroundPreferences backgrounds) => backgrounds.Change(program, Loud);
         try
         {
             _settings.Backgrounds = Louder(before);
@@ -1517,20 +1543,32 @@ public sealed partial class TrayApplication : ApplicationContext
         }
     }
 
-    private void SaveAppGlass(nint window, string program, AppGlassLevels levels)
+    private void SaveAppGlass(nint window, string program, AppGlassLevels? levels, BackgroundChoice? background)
     {
         EffectPreferences before = _settings.Effects;
+        BackgroundPreferences beforeBackgrounds = _settings.Backgrounds;
         try
         {
-            _settings.Effects = before.With(program, levels);
+            if (levels is not null) _settings.Effects = before.With(program, levels);
+            if (background is not null) _settings.Backgrounds = beforeBackgrounds.With(program, background);
             SaveSettings(_settings);
-            _content.SetLevels(_settings.Effects.LevelsFor);
-            _content.SetWindowLevels(window, null);
-            if (_settingsWindow is { IsDisposed: false } open) open.AppGlassChanged(program);
+            if (levels is not null)
+            {
+                _content.SetLevels(_settings.Effects.LevelsFor);
+                _content.SetWindowLevels(window, null);
+                if (_settingsWindow is { IsDisposed: false } open) open.AppGlassChanged(program);
+            }
+            if (background is not null)
+            {
+                _content.SetBackgrounds(_settings.Backgrounds.For);
+                SetWindowBackground(window, null); // The same as its app's now, so nothing is opened again.
+                if (_settingsWindow is { IsDisposed: false } open) open.BackgroundsSaved(backgrounds => backgrounds.With(program, background));
+            }
         }
         catch (Exception failure) when (IsExpected(failure))
         {
             _settings.Effects = before;
+            _settings.Backgrounds = beforeBackgrounds;
             Alert(T("errors.operation.title"), failure.Message);
         }
     }

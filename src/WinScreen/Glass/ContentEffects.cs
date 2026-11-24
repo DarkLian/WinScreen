@@ -18,6 +18,8 @@ internal sealed class ContentEffects : IDisposable
     private Func<string, ContentLevels> _levelsOf = _ => new(0.15f, 1);
     // Set from a window's own Glass panel, for that window only, until it closes or its app's levels are saved.
     private readonly Dictionary<nint, ContentLevels> _ownLevels = [];
+    // As _ownLevels, for what shows behind it. Empty for none.
+    private readonly Dictionary<nint, BackdropSet> _ownBackgrounds = [];
     // Glass that makes only the page colour see-through, drawn here so the kept areas stay as they are.
     private readonly HashSet<nint> _plain = [];
     private Func<string, BackdropSet?> _backgroundOf = _ => null;
@@ -92,6 +94,31 @@ internal sealed class ContentEffects : IDisposable
 
     public bool HasOwnLevels(nint window) => _ownLevels.ContainsKey(window);
 
+    // Null goes back to the background of the window's app; a set of nothing shows none.
+    public void SetWindowBackground(nint window, BackdropSet? own)
+    {
+        if (own is null) _ownBackgrounds.Remove(window);
+        else _ownBackgrounds[window] = own;
+        if (!_overlays.TryGetValue(window, out ContentOverlay? overlay) || overlay.Look != ContentLook.Glass) return;
+        overlay.SetBackdrop(BackgroundOf(window));
+        if (HasSound(window)) CameForward(window);
+        else if (_audible == window)
+        {
+            TakeOver();
+            Hear();
+        }
+    }
+
+    public bool HasOwnBackground(nint window) => _ownBackgrounds.ContainsKey(window);
+
+    internal int ShowingAt(nint window) => _overlays.TryGetValue(window, out ContentOverlay? overlay) ? overlay.ShowingAt : -1;
+
+    // One of the window's set now, or its next for null.
+    public void ShowBackground(nint window, int? index)
+    {
+        if (_overlays.TryGetValue(window, out ContentOverlay? overlay)) overlay.Jump(index);
+    }
+
     public bool IsPlain(nint window) => _plain.Contains(window);
 
     internal ContentLevels LevelsOf(nint window) =>
@@ -131,7 +158,8 @@ internal sealed class ContentEffects : IDisposable
         return program;
     }
 
-    private BackdropSet? BackgroundOf(nint window) => ProgramOf(window) is { Length: > 0 } program ? _backgroundOf(program) : null;
+    private BackdropSet? BackgroundOf(nint window) => _ownBackgrounds.TryGetValue(window, out BackdropSet? own) ? own.Items.Count > 0 ? own : null :
+        ProgramOf(window) is { Length: > 0 } program ? _backgroundOf(program) : null;
 
     private bool HasSound(nint window) =>
         _overlays.TryGetValue(window, out ContentOverlay? overlay) && overlay.Look == ContentLook.Glass && overlay.Background is { HasSound: true };
@@ -252,6 +280,7 @@ internal sealed class ContentEffects : IDisposable
         _overlays.Remove(window);
         _programs.Remove(window);
         _ownLevels.Remove(window);
+        _ownBackgrounds.Remove(window);
         _plain.Remove(window);
         if (window != _audible) return;
         TakeOver();

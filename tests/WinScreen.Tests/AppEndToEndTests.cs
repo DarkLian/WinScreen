@@ -387,6 +387,69 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(toolbar)), "The toolbar didn't hide.");
     }
 
+    // The bar never takes the focus, so what the buttons open has to come to the front by itself.
+    [Fact]
+    public void The_optional_toolbar_buttons_work_from_the_bar()
+    {
+        if (!Glass.ContentOverlay.GraphicsCardPresent) { Skipped.Because("Glass levels needs layered Glass, which needs a graphics card."); return; }
+        RestartWith(new AppSettings
+        {
+            WelcomeShown = true, ExperimentalFeatures = true,
+            Toolbar = new ToolbarPreferences { Buttons = [AppCommand.ToggleGlass, .. CommandCatalog.OptionalToolbarButtons] },
+        });
+        using var target = new TargetProcess(Spot, "E8E8E8");
+        target.UseFrame();
+        AppCommand[] shown = [.. CommandCatalog.ToolbarButtons.Where(command => command == AppCommand.ToggleGlass || CommandCatalog.OptionalToolbarButtons.Contains(command))];
+        int firstOfNext = Array.IndexOf(shown, AppCommand.ToggleDarkTitleBar);
+        void Press(AppCommand command)
+        {
+            Desktop.MoveMouse(new Point(Spot.Left + 40, Spot.Bottom - 40));
+            Focus(target);
+            Assert.True(Desktop.WaitFor(() => Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar") is var old && (old == 0 || !Desktop.IsWindowVisible(old)), 3000));
+            Rectangle now = Desktop.BoundsOf(target.Handle);
+            Desktop.MoveMouse(new Point(now.Left + now.Width / 2, now.Top + 12));
+            nint bar = 0;
+            Assert.True(Desktop.WaitFor(() => (bar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar")) != 0 && Desktop.IsWindowVisible(bar), 4000),
+                $"No toolbar for {command}.");
+            Rectangle at = Desktop.BoundsOf(bar);
+            int index = Array.IndexOf(shown, command);
+            int left = at.Left + index * at.Height + (index >= firstOfNext ? at.Height * 8 / 34 : 0);
+            Desktop.ClickOn(new Point(left + at.Height / 2, at.Top + at.Height / 2), bar);
+        }
+        void OpensInFront(AppCommand command)
+        {
+            Press(command);
+            nint front = 0;
+            Assert.True(Desktop.WaitFor(() => User32.GetWindowThreadProcessId(front = User32.GetForegroundWindow(), out uint pid) != 0 && pid == _app.Id, 3000),
+                $"{command} didn't come to the front: {WinScreen.Windows.WindowInfo.Title(User32.GetForegroundWindow())}.");
+            Desktop.Press(Keys.Escape);
+            Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(front), 3000), $"{command} didn't take Esc.");
+        }
+
+        Press(AppCommand.ToggleGlass);
+        Assert.True(Desktop.WaitFor(() => WinScreen.Windows.WindowInfo.IsConcealed(target.Handle), 3000), "The Glass button did nothing.");
+        OpensInFront(AppCommand.GlassLevels);
+        OpensInFront(AppCommand.KeepAreas);
+        Press(AppCommand.ToggleGlass);
+        Assert.True(Desktop.WaitFor(() => !WinScreen.Windows.WindowInfo.IsConcealed(target.Handle), 3000));
+
+        long Frame() => User32.GetWindowLongPtr(target.Handle, User32.GWL_STYLE) & WinScreen.Windows.WindowController.BorderlessMask;
+        Press(AppCommand.ToggleDarkTitleBar);
+        Assert.True(Desktop.WaitFor(() => Native.Dwmapi.DwmGetWindowAttribute(target.Handle, 20, out int dark, sizeof(int)) == 0 && dark != 0, 3000), "No dark title bar.");
+        long frame = Frame();
+        Press(AppCommand.ToggleBorderless);
+        Assert.True(Desktop.WaitFor(() => Frame() == 0, 3000), "Not borderless.");
+        Hotkey(Keys.R, target); // With no title bar there is no bar to press.
+        Assert.True(Desktop.WaitFor(() => Frame() == frame, 3000), "Restore left it borderless.");
+        Press(AppCommand.ToggleBorderlessFill);
+        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(target.Handle) == Screen.PrimaryScreen!.Bounds, 3000), "Not filled.");
+        Hotkey(Keys.R, target);
+        Assert.True(Desktop.WaitFor(() => Frame() == frame, 3000), "Restore left it filled.");
+        Press(AppCommand.MinimizeToAnchor);
+        Assert.True(Desktop.WaitFor(() => User32.IsIconic(target.Handle), 3000), "Not minimized to an Anchor.");
+        Assert.True(Desktop.IsWindowVisible(target.Handle));
+    }
+
     /// <summary>
     /// A real administrator app, with WinScreen running without administrator rights: no toolbar on its title bar, no
     /// automatic Anchor when it's covered (while an ordinary window covered beside it gets one), and a manual Anchor or

@@ -45,7 +45,7 @@ public sealed partial class SettingsWindow
     private readonly ComboBox _backgroundOrder = new ThemedCombo { Width = 200 };
     private readonly ComboBox _backgroundSwitch = new ThemedCombo { Width = 200 };
     private readonly ComboBox _pictureMinutes = new ThemedCombo { Width = 120 };
-    private static readonly int[] PictureMinuteChoices = [1, 2, 5, 10, 15, 30, 60, 120, 240, 1440];
+    private static int[] PictureMinuteChoices => BackgroundChoice.MinuteChoices;
     // The pictures and videos of the background shown, when there is more than one; the rows under it edit the one chosen.
     private readonly ThemedList _itemList = new() { AccessibleName = T("settings.backgrounds.items") };
     private InputFrame? _itemFrame;

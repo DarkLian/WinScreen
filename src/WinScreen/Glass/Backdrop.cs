@@ -93,10 +93,20 @@ internal sealed class BackdropSequence(int count, BackdropOrder order, Random ra
 {
     private readonly List<int> _round = [];
     private int _last = -1;
+    private int _asked = -1;
+
+    // The next is this one, wherever the order had got to; the order goes on from it.
+    public void Ask(int index) => _asked = index;
 
     public int Next()
     {
         if (count <= 1) return _last = 0;
+        if (_asked >= 0 && _asked < count)
+        {
+            (_last, _asked) = (_asked, -1);
+            _round.Remove(_last);
+            return _last;
+        }
         if (order == BackdropOrder.InOrder) return _last = (_last + 1) % count;
         if (_round.Count == 0)
         {

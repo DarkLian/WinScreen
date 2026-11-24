@@ -229,6 +229,8 @@ public sealed class BackdropTests
         for (int round = 0; round < 10; round++)
             Assert.Equal([0, 1, 2, 3], turns.Skip(round * 4).Take(4).Order());
         Assert.All(turns.Zip(turns.Skip(1)), pair => Assert.NotEqual(pair.First, pair.Second));
+        inOrder.Ask(0);
+        Assert.Equal([0, 1, 2], new[] { inOrder.Next(), inOrder.Next(), inOrder.Next() }); // On from the one asked for.
         var one = new BackdropSequence(1, BackdropOrder.Shuffle, new Random(1));
         Assert.Equal([0, 0], new[] { one.Next(), one.Next() });
     }
@@ -1024,6 +1026,76 @@ public sealed class ContentEffectTests
             }
         });
         Assert.True(serving.Wait(5000));
+    }
+
+    // The owner, 24 Nov: the window's own panel changes its background live, for that window only, and shows the one of a
+    // set that is being changed.
+    [GraphicsCardFact]
+    public void A_window_can_have_its_own_background_and_show_any_of_its_set()
+    {
+        string folder = Directory.CreateTempSubdirectory("winscreen-own-background-").FullName;
+        string Picture(string name, Color color)
+        {
+            string file = Path.Combine(folder, name + ".png");
+            using var picture = new Bitmap(64, 64);
+            using (Graphics g = Graphics.FromImage(picture)) g.Clear(color);
+            picture.Save(file, System.Drawing.Imaging.ImageFormat.Png);
+            return file;
+        }
+        Color red = Color.FromArgb(0xC0, 0x20, 0x20), green = Color.FromArgb(0x20, 0xB0, 0x40), blue = Color.FromArgb(0x20, 0x40, 0xC0);
+        string r = Picture("red", red), g = Picture("green", green), b = Picture("blue", blue);
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        using var other = new TargetProcess(new Rectangle(800, 220, 420, 300), "FFFFFF");
+        try
+        {
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                var windows = new WindowController([]);
+                using var effects = new ContentEffects(windows);
+                effects.SetLevels(new ContentLevels(0, 1, Shadow: false));
+                effects.SetBackgrounds(_ => new BackdropSet([new(r, BackdropFit.Fill)]));
+                void Shows(TargetProcess window, Color color)
+                {
+                    Color Now() => Middle(Desktop.BoundsOf(window.Handle));
+                    Pump(() => Desktop.IsNear(Now(), color, 16), 5000);
+                    Assert.True(Desktop.IsNear(Now(), color, 16), $"{Now()} rather than {color}");
+                }
+                try
+                {
+                    Assert.True(effects.Toggle(target.Handle, ContentLook.Glass));
+                    Assert.True(effects.Toggle(other.Handle, ContentLook.Glass));
+                    Shows(target, red);
+                    effects.SetWindowBackground(target.Handle, new BackdropSet([new(g, BackdropFit.Fill), new(b, BackdropFit.Fill)]));
+                    Shows(target, green);
+                    Shows(other, red);
+                    Assert.True(effects.HasOwnBackground(target.Handle));
+                    effects.ShowBackground(target.Handle, 1);
+                    Shows(target, blue);
+                    Assert.Equal(1, effects.ShowingAt(target.Handle));
+                    effects.ShowBackground(target.Handle, null);
+                    Shows(target, green);
+                    // Dimmed as it shows, without starting over.
+                    effects.SetWindowBackground(target.Handle, new BackdropSet([new(g, BackdropFit.Fill, Brightness: 50), new(b, BackdropFit.Fill)]));
+                    Shows(target, Color.FromArgb(0x10, 0x58, 0x20));
+                    // A change to every app's leaves it alone; none at all is a choice too.
+                    effects.SetBackgrounds(_ => new BackdropSet([new(b, BackdropFit.Fill)]));
+                    Shows(other, blue);
+                    Shows(target, Color.FromArgb(0x10, 0x58, 0x20));
+                    effects.SetWindowBackground(target.Handle, new BackdropSet([]));
+                    Pump(() => effects.BackdropOf(target.Handle) is null);
+                    Assert.Null(effects.BackdropOf(target.Handle));
+                    effects.SetWindowBackground(target.Handle, null);
+                    Shows(target, blue);
+                    Assert.False(effects.HasOwnBackground(target.Handle));
+                }
+                finally
+                {
+                    effects.TurnAllOff();
+                    windows.RestoreAll();
+                }
+            });
+        }
+        finally { Directory.Delete(folder, true); }
     }
 
     // The owner, 23 Nov, after Lively: a background's sound plays only while its app is in front, unless the person

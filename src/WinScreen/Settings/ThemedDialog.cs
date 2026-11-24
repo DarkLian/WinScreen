@@ -4,7 +4,10 @@ namespace WinScreen.Settings;
 
 internal class ThemedDialog : Form
 {
-    private readonly TableLayoutPanel _table = new() { ColumnCount = 2, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, BackColor = SettingsStyle.Page };
+    private TableLayoutPanel _table = NewTable();
+    private readonly FlowLayoutPanel _columns = new() { AutoSize = true, WrapContents = false, Margin = Padding.Empty, BackColor = SettingsStyle.Page };
+    private readonly FlowLayoutPanel _body = new() { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill,
+        BackColor = SettingsStyle.Page };
     private readonly FlowLayoutPanel _buttons = new() { AutoSize = true, FlowDirection = FlowDirection.RightToLeft, WrapContents = false,
         Dock = DockStyle.Bottom, Padding = new Padding(0, 14, 0, 0), BackColor = SettingsStyle.Page };
 
@@ -27,12 +30,33 @@ internal class ThemedDialog : Form
         BackColor = SettingsStyle.Page;
         ForeColor = SettingsStyle.Text;
         Padding = new Padding(20, 16, 20, 16);
-        var body = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Dock = DockStyle.Fill,
-            BackColor = SettingsStyle.Page };
-        body.Controls.Add(_table);
-        body.Controls.Add(_buttons);
-        Controls.Add(body);
+        _columns.Controls.Add(_table);
+        _body.Controls.Add(_columns);
+        _body.Controls.Add(_buttons);
+        Controls.Add(_body);
         ResumeLayout(false);
+    }
+
+    private static TableLayoutPanel NewTable() =>
+        new() { ColumnCount = 2, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, BackColor = SettingsStyle.Page };
+
+    // What is added after goes in a column of its own, to the right.
+    protected void Column()
+    {
+        _table = NewTable();
+        _table.Margin = new Padding(32, 3, 3, 3);
+        _columns.Controls.Add(_table);
+    }
+
+    protected void Heading(string text) =>
+        Whole(new SoftLabel { Text = text, AutoSize = true, UseMnemonic = false, Font = SettingsStyle.HeadingFont });
+
+    // Under every column.
+    protected void Below(string text)
+    {
+        _body.Controls.Add(new SoftLabel { Text = text, AutoSize = true, UseMnemonic = false, ForeColor = SettingsStyle.Secondary,
+            Margin = new Padding(3, 8, 3, 0), MaximumSize = new Size(760, 0) });
+        _body.Controls.SetChildIndex(_buttons, _body.Controls.Count - 1);
     }
 
     protected void Row(string label, Control control)

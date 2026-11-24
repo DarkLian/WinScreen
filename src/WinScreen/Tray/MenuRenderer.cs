@@ -45,7 +45,7 @@ internal static class MenuStyle
     internal static readonly Font SmallFont = new(SmallFace, 9f);
     internal static readonly Font TitleFont = new(Face, 9.75f, FontStyle.Bold);
     internal static readonly Font MenuFont = new(Face, 10.5f);
-    internal static readonly Font MenuHeaderFont = new(SmallFace, 9f);
+    internal static readonly Font MenuHeaderFont = new(Face, 9f);
     private static readonly Dictionary<(Font, int), Font> Fitted = [];
 
     // WinScreen's text is drawn at the system's DPI, so on a display at another scale the font is made that much larger

@@ -45,6 +45,16 @@ public sealed record BackgroundPreferences
         };
     }
 
+    internal BackgroundPreferences With(string program, BackgroundChoice own)
+    {
+        string key = ProgramKey(program);
+        return this with
+        {
+            Apps = [.. Apps.Where(app => !string.Equals(app.Program, key, StringComparison.OrdinalIgnoreCase)),
+                new AppBackground { Program = key, Background = own.Validated() }],
+        };
+    }
+
     internal static string ProgramKey(string? program)
     {
         string name = program?.Trim() ?? "";
@@ -94,6 +104,7 @@ public sealed record BackgroundChoice
     public Glass.BackdropSwitch Switch { get; init; }
 
     internal const int MostPictureMinutes = 24 * 60;
+    internal static readonly int[] MinuteChoices = [1, 2, 5, 10, 15, 30, 60, 120, 240, MostPictureMinutes];
 
     internal IReadOnlyList<BackgroundItem> Items => File.Length == 0 ? [] :
         [new BackgroundItem { File = File, Fit = Fit, Volume = Volume, Speed = Speed, Brightness = Brightness }, .. More];
