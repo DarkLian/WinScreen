@@ -63,7 +63,7 @@ internal sealed class StillPicture : Form
 
     private void BuildMenu()
     {
-        _menu.Items.Add(T("pip.picture.copy") + "\tCtrl+C", null, (_, _) => CopyPicture());
+        _menu.Items.Add(T("still.copy") + "\tCtrl+C", null, (_, _) => CopyPicture());
         _menu.Items.Add(T("still.save") + "\tCtrl+S", null, (_, _) => SavePicture());
         _menu.Items.Add(T("pip.picture.copyText"), null, (_, _) => CopyText());
         var opacity = new ToolStripMenuItem(T("pip.opacity"));

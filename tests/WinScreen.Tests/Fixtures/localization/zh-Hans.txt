@@ -304,7 +304,7 @@ pip.minimizedOriginals.taskbar 9D1840E7152122F6
 pip.opacity 04405E4A9FFD2A3D
 pip.opacityPercent B8BAE845991D26AF
 pip.open 850875A7534D2AE8
-pip.picture.copy 28D3894A6C0FD9A8
+pip.picture.copy 043A57F12FB2C8B7
 pip.picture.copyText 29636E43FDB4F595
 pip.picture.cover DCC666E59BDC62B1
 pip.picture.freezeCopy 0C8E75DA173319B4
@@ -558,7 +558,7 @@ settings.pip.pictures.change 6B01FCE4DBEAEEB9
 settings.pip.pictures.copyOnly 3186A2BF792059AF
 settings.pip.pictures.copySave 86CEB11152E5CF30
 settings.pip.pictures.folder E098D62465ED3F78
-settings.pip.pictures.help 899620310CD7CD14
+settings.pip.pictures.help B16B51A1C5EA79A1
 settings.pip.pictures.open FCF8B4BFF0DF782D
 settings.pip.pictures.saveOnly 0ADADA7D466C8E0D
 settings.pip.recordings.folder B56BD6EB13F8C5F9
@@ -610,6 +610,7 @@ status.clickThroughOn 446492A9C2747789
 status.pinned FB47DB5E65FF7FA0
 status.unpinned B45A48730DD4F8BA
 still.close 3FD47EDCE45B3603
+still.copy 28D3894A6C0FD9A8
 still.save 9035B0D15EA60EB7
 still.saved 1BD91A7D0C53C936
 still.titlePrefix EF3A6B059607A863
@@ -657,7 +658,7 @@ updates.restartNow E2B004FFE87FCC2B
 updates.title EB819EA9ED97F0F2
 updates.upToDate D3474430AEDF927D
 updates.verifying BDE05691F568604F
-view.command.copyPicture 0D65A475315CC11F
+view.command.copyPicture 528F4A2F0CEFCC64
 view.command.copyText 846AD5E4B483CEEB
 view.command.cover 3B8E8C7DC006EA19
 view.command.freeze DCAE6CDFCC9C7AF2
