@@ -88,7 +88,8 @@ public sealed class RuleWindowTests
         finally { app.ExitThread(); }
     });
 
-    [Fact]
+    // Without a graphics card Dark is the magnifier's, which works only on the thread DarkModeTests first uses it on.
+    [GraphicsCardFact]
     public void A_rule_with_Dark_and_Borderless_applies_both_without_a_word()
     {
         string folder = Directory.CreateTempSubdirectory("winscreen-rules-").FullName;
