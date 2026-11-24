@@ -140,7 +140,7 @@ public sealed partial class TrayApplication : ApplicationContext
             _toolbar.BeginInvoke(() =>
             {
                 if (!_settings.OpacityWheel || !identity.Matches() || !CanChangeOpacity(window)) return;
-                try { ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(steps))); }
+                try { ShowOpacity(window, _windows.ChangeOpacity(window, steps * WindowController.OpacityStep)); }
                 catch (Exception failure) when (IsExpected(failure)) { Alert(T("errors.operation.title"), failure.Message); }
             });
         };
@@ -430,6 +430,11 @@ public sealed partial class TrayApplication : ApplicationContext
         if (command == AppCommand.Arrange)
         {
             ShowHostedMenu(window, point, AppCommand.Arrange, (menu, builder) => builder.PopulateArrange(menu.Items));
+            return;
+        }
+        if (command == AppCommand.ToggleDefaultOpacity)
+        {
+            ShowHostedMenu(window, point, command, (menu, builder) => builder.PopulateOpacity(menu.Items));
             return;
         }
         IReadOnlySet<AppCommand> onBar = _toolbar.ShownButtons;
@@ -2450,8 +2455,6 @@ public sealed partial class TrayApplication : ApplicationContext
             Alert(T("errors.operation.title"), string.Format(T("errors.effects.stoppedPresses"), WindowInfo.Title(window)));
         }
     }
-
-    private int OpacityDelta(int steps) => steps * (int)Math.Round(Math.Clamp(_settings.OpacityStepPercent, 1, 25) * 255 / 100.0);
 
     private void ShowOpacity(nint window, byte alpha)
     {

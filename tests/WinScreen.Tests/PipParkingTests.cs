@@ -82,8 +82,8 @@ public sealed class PipParkingGeometryTests
         try
         {
             string file = Path.Combine(folder, "settings.json");
-            File.WriteAllText(file, """{"PipCompatibleInputPrograms":["C:/Apps/One.exe"],"PipClickForwarding":true,"OpacityStepPercent":7}""");
-            Assert.Equal(7, AppSettings.Load(file).OpacityStepPercent);
+            File.WriteAllText(file, """{"PipCompatibleInputPrograms":["C:/Apps/One.exe"],"PipClickForwarding":true,"DefaultOpacityPercent":70}""");
+            Assert.Equal(70, AppSettings.Load(file).DefaultOpacityPercent);
         }
         finally { Directory.Delete(folder, true); }
     }

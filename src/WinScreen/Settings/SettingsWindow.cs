@@ -14,7 +14,6 @@ public sealed partial class SettingsWindow : Form
 
     private readonly AppSettings _settings;
     private AppSettings? _pendingImport;
-    private readonly NumericUpDown _opacityStep = new() { Minimum = 1, Maximum = 25, Width = 70 };
     private readonly CheckBox _opacityWheel = new SwitchBox { Text = T("settings.opacity.wheel"), AutoSize = true };
     private readonly CheckBox _layeredGlass = new SwitchBox { Text = T("settings.effects.layeredGlass"), AutoSize = true };
     private readonly NumericUpDown _glassBackground = new() { Minimum = 0, Maximum = 100, Width = 70 };
@@ -58,7 +57,7 @@ public sealed partial class SettingsWindow : Form
 
     private sealed record ToolbarChoice(AppCommand Command)
     {
-        public override string ToString() => CommandCatalog.Name(Command).Replace("&", "");
+        public override string ToString() => CommandCatalog.ButtonName(Command).Replace("&", "");
     }
     private readonly ComboBox _pipBackend = new ThemedCombo { Width = 240 };
     private readonly ComboBox _pipRate = new ThemedCombo { Width = 160 };
@@ -350,7 +349,7 @@ private readonly ErrorProvider _errors = new();
             [_pipBackend] = '\uE7F4', [_pipRate] = '\uE916', [_pipScaling] = '\uE9A6', [_pipOpacity] = '\uE706',
             [_pipCaptureBorder] = '\uE7A8', [_pipDiagnostics] = '\uE9D9', [_pipAutoMove] = '\uE7C2', [_pipMiddleScroll] = '\uE962',
             [_hoverAutomatic] = '\uE713', [_pipTaskbar] = '\uE7C4', [_pipTitleBar] = '\uE8A0', [_pipKeepHidden] = '\uED1A', [_pipMinimizedOriginals] = '\uE921',[_pipPreview] = '\uE890', [_pictureSave] = '\uE722', [_pictureFolderChange] = '\uE8B7', [_recordingFolderChange] = '\uE714', [_recordSound] = '\uE767', [_recordingRate] = '\uE916',
-            [_defaultOpacity] = '\uE706', [_opacityStep] = '\uE9E9', [_opacityWheel] = '\uE962', [_opaqueOnHover] = '\uE890',
+            [_defaultOpacity] = '\uE706', [_opacityWheel] = '\uE962', [_opaqueOnHover] = '\uE890',
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
             [_glassText] = '\uE8D2', [_glassFade] = '\uE790', [_appGlassBackground] = '\uE706', [_appGlassText] = '\uE8D2',
@@ -843,7 +842,6 @@ private readonly ErrorProvider _errors = new();
             FileExplorer = _hoverExplorer.Checked,
         };
         draft.DefaultOpacityPercent = Number(_defaultOpacity);
-        draft.OpacityStepPercent = Number(_opacityStep);
         draft.Effects = new EffectPreferences
         {
             LayeredGlass = _layeredGlass.Checked,
@@ -1312,7 +1310,6 @@ private readonly ErrorProvider _errors = new();
         _recordSound.Checked = values.PipViews.RecordSound;
         _recordingRate.SelectedIndex = Math.Max(0, Array.IndexOf(Pip.RecordingGeometry.ChoosableRates, values.PipViews.Validated().RecordingFrameRate));
         ShowRecordingFolder();
-        _opacityStep.Value = Math.Clamp(values.OpacityStepPercent, 1, 25);
         EffectPreferences effects = values.Effects.Validated();
         _layeredGlass.Checked = effects.LayeredGlass;
         _glassBackground.Value = effects.BackgroundPercent;
@@ -1626,7 +1623,7 @@ private readonly ErrorProvider _errors = new();
     {
         FlowLayoutPanel page = ScrollingPage();
         page.Controls.Add(Section(T("settings.opacity.title"), SettingRow(T("settings.opacity.default"), _defaultOpacity),
-            SettingRow(T("settings.opacity.step"), _opacityStep), _opacityWheel, _opaqueOnHover));
+            _opacityWheel, _opaqueOnHover));
         var color = new InputFrame(_borderColor) { Width = NumberWidth + 10, Swatch = () => HexColor(_borderColor.Text) };
         _borderColor.TextChanged += (_, _) => color.Invalidate();
         page.Controls.Add(Section(T("settings.pin.border"), _pausePin, _highlightPinned, SettingRow(T("settings.pin.color"), color),

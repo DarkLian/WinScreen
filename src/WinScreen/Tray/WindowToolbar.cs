@@ -67,7 +67,7 @@ public sealed class WindowToolbar : Form
 
         foreach (AppCommand command in CommandCatalog.ToolbarButtons)
         {
-            string name = CommandCatalog.Name(command);
+            string name = CommandCatalog.ButtonName(command);
             var button = new Button
             {
                 FlatStyle = FlatStyle.Flat,
@@ -87,7 +87,7 @@ public sealed class WindowToolbar : Form
                     return;
                 }
 
-                if (command is AppCommand.Arrange or AppCommand.ShowWindowMenu && OpenMenu is { } open)
+                if (CommandCatalog.OpensMenuOnToolbar(command) && OpenMenu is { } open)
                 {
                     Rectangle shown = button.RectangleToScreen(button.ClientRectangle);
                     open(command, _window, new Point(shown.Left, shown.Bottom));

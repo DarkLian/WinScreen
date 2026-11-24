@@ -523,7 +523,6 @@
   "settings.notifications.enable": "操作成功時顯示訊息（問題一律會提示）",
   "settings.opacity.default": "預設不透明度：",
   "settings.opacity.solidOnHover": "滑鼠停留時使透明視窗不透明",
-  "settings.opacity.step": "調整幅度（%）",
   "settings.opacity.title": "不透明度",
   "settings.opacity.wheel": "Ctrl+Alt+滾輪調整游標下視窗的不透明度",
   "settings.pages": "頁面",

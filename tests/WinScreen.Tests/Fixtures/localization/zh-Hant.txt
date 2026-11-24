@@ -525,7 +525,6 @@ settings.menus.transparency.windows11 707DB1D0CB0A177C
 settings.notifications.enable 5367BFF731345217
 settings.opacity.default E123D29F50CA08EE
 settings.opacity.solidOnHover D20E2D9214296F1A
-settings.opacity.step A105CA34282AE7E8
 settings.opacity.title 04405E4A9FFD2A3D
 settings.opacity.wheel 510A32922742063C
 settings.pages 15143D6DD2037B57

@@ -42,7 +42,7 @@ Other commands, like moving a window to a corner, have no shortcut until you giv
 ## Pin and see-through
 
 - **Ctrl+Alt+T** keeps a window above the others.
-- **Ctrl+Alt+Up/Down** changes how solid it is. It never goes below 20%.
+- **Ctrl+Alt+Up/Down** changes how solid it is, 10% at a time. It never goes below 20%.
 - **Ctrl+Alt+O** switches between solid and your default see-through level, set in Settings → Appearance.
 - **Ctrl+Alt+C** lets clicks pass through the window to whatever is behind it. Press it again to turn it off.
 
@@ -51,7 +51,7 @@ If you can't reach a click-through window, press **Ctrl+Alt+R** to put every win
 If another program takes "always on top" away from a pinned window, WinScreen pins it again. If an app changes its
 own transparency, WinScreen lets go of the opacity and click-through it set, and tells you.
 
-In **Settings → Appearance** you can change the opacity step, give pinned windows a colored border, and turn on
+In **Settings → Appearance** you can change the default opacity, give pinned windows a colored border, and turn on
 **Ctrl+Alt+wheel**, which changes the opacity of the window under the pointer.
 
 ## Picture-in-Picture views
@@ -185,8 +185,8 @@ The toolbar's **Arrange window** button has everything that moves a window:
 
 On a maximized window, a place or an exact position brings it back to its usual size there.
 
-The toolbar's **Window menu** button has the rest of the window menu: the **Opacity** slider and whatever isn't already a
-button on your toolbar, such as **Copy** and **Open file location**. Choose which buttons it shows in **Settings → Toolbar**.
+The toolbar's **Opacity** button opens a slider, with **Use default opacity** under it. Its **Window menu** button has the
+rest of the window menu, whatever isn't already a button on your toolbar, such as **Copy** and **Open file location**. Choose which buttons it shows in **Settings → Toolbar**.
 
 Turn on **Settings → Mouse gestures → Move and resize** to hold Alt (or Win) and drag anywhere in a window: the left button
 moves it, the right button resizes it. It works on maximized windows too, and Esc puts the window back. Drag a window to the

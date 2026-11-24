@@ -26,14 +26,42 @@ public sealed class ToolbarPreferencesTests
         Assert.Equal(CommandCatalog.ToolbarButtons, new AppSettings().Toolbar.Buttons);
         Assert.Equal(CommandCatalog.ToolbarButtons.Length, CommandCatalog.ToolbarButtons.Distinct().Count());
         Assert.Empty(CommandCatalog.AddedToolbarButtons.Except(CommandCatalog.ToolbarButtons));
-        AppCommand[] before = [.. CommandCatalog.ToolbarButtons.Except(CommandCatalog.AddedToolbarButtons)];
+        AppCommand[] before =
+        [
+            AppCommand.TogglePin, AppCommand.OpacityDown, AppCommand.ToggleDefaultOpacity, AppCommand.OpacityUp,
+            AppCommand.ToggleClickThrough, AppCommand.OpenPip, AppCommand.ToggleAnchor, AppCommand.ToggleDark, AppCommand.ToggleGlass,
+            AppCommand.ToggleShrink, AppCommand.ToggleCrop, AppCommand.Arrange, AppCommand.SaveWindowSetup, AppCommand.RestoreWindow,
+            AppCommand.ShowWindowMenu,
+        ];
+        AppCommand[] now = [.. CommandCatalog.ToolbarButtons.Except(CommandCatalog.AddedToolbarButtons)];
         string Saved(int schema, IEnumerable<string> buttons) =>
             $$"""{ "SchemaVersion": {{schema}}, "Toolbar": { "WindowMenuOffered": true, "Buttons": [{{string.Join(",", buttons)}}] } }""";
         string[] names = [.. before.Select(command => $"\"{command}\"")], numbers = [.. before.Select(command => ((int)command).ToString())];
         Assert.Equal(CommandCatalog.ToolbarButtons, AppSettings.Parse(Saved(3, names)).Toolbar.Validated().Buttons);
         Assert.Equal(CommandCatalog.ToolbarButtons, AppSettings.Parse(Saved(3, numbers)).Toolbar.Validated().Buttons);
-        Assert.Equal(before[1..], AppSettings.Parse(Saved(3, names[1..])).Toolbar.Validated().Buttons);
-        Assert.Equal(before, AppSettings.Parse(Saved(4, names)).Toolbar.Validated().Buttons);
+        Assert.Equal(now[1..], AppSettings.Parse(Saved(3, names[1..])).Toolbar.Validated().Buttons);
+        Assert.Equal(now, AppSettings.Parse(Saved(3, names.Where(name => !name.Contains("OpacityUp")))).Toolbar.Validated().Buttons);
+        Assert.Equal(now, AppSettings.Parse(Saved(4, names)).Toolbar.Validated().Buttons);
+    }
+
+    // More see-through, More opaque and Use default opacity are one button, Opacity (owner, 24 Nov). A bar that had any
+    // of them has it; one that had none doesn't get it.
+    [Theory]
+    [InlineData("\"OpacityDown\"", true)]
+    [InlineData("\"OpacityUp\"", true)]
+    [InlineData("\"ToggleDefaultOpacity\"", true)]
+    [InlineData("3,10,2", true)]
+    [InlineData("\"OpenPip\"", false)]
+    public void The_three_opacity_buttons_became_one(string saved, bool opacity)
+    {
+        foreach (int schema in new[] { 2, 3, 4 })
+        {
+            List<AppCommand> buttons = AppSettings.Parse(
+                $$"""{ "SchemaVersion": {{schema}}, "Toolbar": { "WindowMenuOffered": true, "Buttons": ["TogglePin",{{saved}}] } }""").Toolbar.Buttons;
+            Assert.Equal([AppCommand.TogglePin, opacity ? AppCommand.ToggleDefaultOpacity : AppCommand.OpenPip], buttons);
+        }
+        Assert.Equal(WinScreen.Localization.UiText.T("pip.opacity"), CommandCatalog.ButtonName(AppCommand.ToggleDefaultOpacity));
+        Assert.Equal(WinScreen.Localization.UiText.T("window.opacity.toggleDefault"), CommandCatalog.Name(AppCommand.ToggleDefaultOpacity));
     }
 
     /// <summary>

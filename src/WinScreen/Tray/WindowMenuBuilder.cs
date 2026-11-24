@@ -46,8 +46,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     public void Populate(ToolStripItemCollection items, bool tray)
     {
         items.Add(Command(AppCommand.TogglePin));
-        if (OpacityPercent is not null && SetOpacityPercent is { } setOpacity)
-            items.Add(new OpacityRow(T("pip.opacity"), percent => WithTarget(window => setOpacity(window, percent))));
+        AddOpacityRow(items);
         items.Add(Command(AppCommand.ToggleClickThrough));
 
         items.Add(MenuParts.Header(T("menu.group.elsewhere")));
@@ -133,6 +132,18 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         items.Add(Command(AppCommand.RestoreWindow));
     }
 
+    private void AddOpacityRow(ToolStripItemCollection items)
+    {
+        if (OpacityPercent is not null && SetOpacityPercent is { } setOpacity)
+            items.Add(new OpacityRow(T("pip.opacity"), percent => WithTarget(window => setOpacity(window, percent))));
+    }
+
+    internal void PopulateOpacity(ToolStripItemCollection items)
+    {
+        AddOpacityRow(items);
+        items.Add(Command(AppCommand.ToggleDefaultOpacity));
+    }
+
     internal void PopulateArrange(ToolStripItemCollection items, bool places = true)
     {
         IEnumerable<AppCommand?> actions = places ? CommandCatalog.ArrangeMenu
@@ -166,6 +177,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         bool Shown(ToolStripItem item) => item switch
         {
             PlacementRow => onBar.Contains(AppCommand.Arrange),
+            OpacityRow => onBar.Contains(AppCommand.ToggleDefaultOpacity),
             // With several displays the menu asks which one; the button fills the one the window is on.
             ToolStripMenuItem { Tag: AppCommand.ToggleBorderlessFill, HasDropDownItems: true } => false,
             { Tag: AppCommand command } => onBar.Contains(command),

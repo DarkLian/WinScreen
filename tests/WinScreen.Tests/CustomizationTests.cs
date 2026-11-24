@@ -20,7 +20,7 @@ public sealed class CustomizationTests : IDisposable
         string file = Path.Combine(_folder, "export.json");
         var source = new AppSettings
         {
-            OpacityStepPercent = 3, OpacityWheel = true, DetectAlreadyDark = false, StartWithWindows = true,
+            DefaultOpacityPercent = 63, OpacityWheel = true, DetectAlreadyDark = false, StartWithWindows = true,
             WelcomeShown = false, PinBorder = new() { ColorHex = "#2368AB", OpacityPercent = 45, Thickness = 6 },
             SavedSetups = [new() { Program = "example", ExecutablePath = @"C:\Apps\example.exe", Pinned = true }],
         };
@@ -33,7 +33,7 @@ public sealed class CustomizationTests : IDisposable
         Assert.False(imported.StartWithWindows);
         Assert.True(imported.WelcomeShown);
         Assert.True(imported.Imported);
-        Assert.Equal(3, imported.OpacityStepPercent);
+        Assert.Equal(63, imported.DefaultOpacityPercent);
         Assert.True(imported.OpacityWheel);
         Assert.False(imported.DetectAlreadyDark);
         Assert.Equal(source.PinBorder, imported.PinBorder);
@@ -52,21 +52,20 @@ public sealed class CustomizationTests : IDisposable
     {
         string file = Path.Combine(_folder, "import.json");
         File.WriteAllText(file, json);
-        var current = new AppSettings { OpacityStepPercent = 4 };
+        var current = new AppSettings { DefaultOpacityPercent = 64 };
         Assert.Throws<JsonException>(() => SettingsTransfer.Import(file, current));
-        Assert.Equal(4, current.OpacityStepPercent);
+        Assert.Equal(64, current.DefaultOpacityPercent);
     }
 
     [Fact]
     public void Import_and_startup_use_the_same_range_and_enum_validation()
     {
-        const string json = """{"OpacityStepPercent":200,"PinBorder":{"ColorHex":"bad","Thickness":0,"OpacityPercent":400},"ModifierKey":300,"DefaultOpacityPercent":0}""";
+        const string json = """{"PinBorder":{"ColorHex":"bad","Thickness":0,"OpacityPercent":400},"ModifierKey":300,"DefaultOpacityPercent":0}""";
         string file = Path.Combine(_folder, "settings.json");
         File.WriteAllText(file, json);
         AppSettings loaded = AppSettings.Load(file);
         File.WriteAllText(file, "{\"FormatVersion\":1,\"Settings\":" + json + "}");
         AppSettings imported = SettingsTransfer.Import(file, new());
-        Assert.Equal(25, imported.OpacityStepPercent);
         Assert.Equal("#E82020", imported.PinBorder.ColorHex);
         Assert.Equal(1, imported.PinBorder.Thickness);
         Assert.Equal(100, imported.PinBorder.OpacityPercent);
@@ -135,7 +134,7 @@ public sealed class CustomizationTests : IDisposable
             {
             string before = File.ReadAllText(settingsFile);
             var changed = settings.Clone();
-            changed.OpacityStepPercent = 4;
+            changed.DefaultOpacityPercent = 64;
             if (duplicateHotkeys)
             {
                 changed.Hotkeys[AppCommand.TogglePin] = "Ctrl+Shift+F19";
@@ -150,15 +149,15 @@ public sealed class CustomizationTests : IDisposable
                 Assert.NotEmpty(problems);
                 Assert.Equal(before, File.ReadAllText(settingsFile));
                 Assert.Empty(Directory.GetFiles(_folder, "settings.json.before-import-*"));
-                Assert.Equal(10, settings.OpacityStepPercent);
+                Assert.Equal(80, settings.DefaultOpacityPercent);
             }
             else
             {
                 Assert.Empty(problems);
                 string backup = Assert.Single(Directory.GetFiles(_folder, "settings.json.before-import-*"));
                 Assert.Equal(before, File.ReadAllText(backup));
-                Assert.Equal(4, AppSettings.Load(settingsFile).OpacityStepPercent);
-                Assert.Equal(4, settings.OpacityStepPercent);
+                Assert.Equal(64, AppSettings.Load(settingsFile).DefaultOpacityPercent);
+                Assert.Equal(64, settings.DefaultOpacityPercent);
             }
             }
             finally { app.ExitThread(); }

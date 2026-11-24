@@ -77,7 +77,7 @@ public sealed class WindowMenuBuilderTests
 
     /// <summary>
     /// The toolbar's Window menu offers what the window menu has that the bar doesn't: without the added buttons,
-    /// the opacity slider, Minimize to an Anchor, the title bar and frame choices and the window's details. Anything
+    /// Minimize to an Anchor, the title bar and frame choices and the window's details. Anything
     /// shown as a button is left out, and so is the grid Arrange window covers; with fewer buttons, more stays.
     /// </summary>
     [Fact]
@@ -94,17 +94,17 @@ public sealed class WindowMenuBuilderTests
                 WindowMenuBuilder.LeaveOut(menu.Items, onBar);
                 return menu.Items;
             }
-            // The bar, its menus and the slider have everything the window menu has.
+            // The bar and its menus have everything the window menu has.
             ToolStripItemCollection every = Built(CommandCatalog.ToolbarButtons.ToHashSet());
             Assert.Equal(Screen.AllScreens.Length > 1 ? [AppCommand.ToggleBorderlessFill] : Array.Empty<AppCommand>(),
                 Commands(every).Select(item => item.Tag).OfType<AppCommand>());
-            Assert.Contains(every.Cast<ToolStripItem>(), item => item is OpacityRow);
+            Assert.DoesNotContain(every.Cast<ToolStripItem>(), item => item is OpacityRow);
             Assert.Contains(every.Cast<ToolStripItem>(), item => item.Text == UiText.T("common.copy"));
             ToolStripItemCollection all = Built(CommandCatalog.ToolbarButtons.Except(CommandCatalog.AddedToolbarButtons).ToHashSet());
             AppCommand[] left = Commands(all).Select(item => item.Tag).OfType<AppCommand>().ToArray();
             Assert.Equal([AppCommand.MinimizeToAnchor, AppCommand.ToggleDarkTitleBar, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.GlassLevels, AppCommand.KeepAreas], left);
             Assert.DoesNotContain(all.Cast<ToolStripItem>(), item => item is PlacementRow);
-            Assert.Contains(all.Cast<ToolStripItem>(), item => item is OpacityRow);
+            Assert.DoesNotContain(all.Cast<ToolStripItem>(), item => item is OpacityRow);
             Assert.Contains(all.Cast<ToolStripItem>(), item => item.Text == UiText.T("window.openLocation"));
             Assert.Contains(all.Cast<ToolStripItem>(), item => item.Text == UiText.T("common.copy"));
             Assert.DoesNotContain(all.Cast<ToolStripItem>(), item => item.Text == UiText.T("menu.more"));
@@ -124,7 +124,7 @@ public sealed class WindowMenuBuilderTests
             Assert.Contains(few.Cast<ToolStripItem>(), item => item is OpacityRow);
             Assert.Contains(few.Cast<ToolStripItem>(), item => item is PlacementRow);
             Assert.DoesNotContain(Commands(few), item => Equals(item.Tag, AppCommand.TogglePin));
-            foreach (AppCommand command in new[] { AppCommand.Arrange, AppCommand.ToggleDark, AppCommand.RestoreWindow, AppCommand.SaveWindowSetup })
+            foreach (AppCommand command in new[] { AppCommand.Arrange, AppCommand.ToggleDark, AppCommand.RestoreWindow, AppCommand.SaveWindowSetup, AppCommand.ToggleDefaultOpacity })
                 Assert.Contains(Commands(few), item => Equals(item.Tag, command));
         });
     }

@@ -193,12 +193,30 @@ public static class CommandCatalog
     // Every button the toolbar can have, in its order. All start on.
     public static readonly AppCommand[] ToolbarButtons =
     [
-        AppCommand.TogglePin, AppCommand.OpacityDown, AppCommand.ToggleDefaultOpacity, AppCommand.OpacityUp,
-        AppCommand.ToggleClickThrough, AppCommand.OpenPip, AppCommand.ToggleAnchor, AppCommand.MinimizeToAnchor, AppCommand.ToggleDark,
+        AppCommand.TogglePin, AppCommand.ToggleDefaultOpacity, AppCommand.ToggleClickThrough,
+        AppCommand.OpenPip, AppCommand.ToggleAnchor, AppCommand.MinimizeToAnchor, AppCommand.ToggleDark,
         AppCommand.ToggleGlass, AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleShrink, AppCommand.ToggleCrop,
         AppCommand.ToggleDarkTitleBar, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.Arrange,
         AppCommand.SaveWindowSetup, AppCommand.RestoreWindow, AppCommand.ShowWindowMenu,
     ];
+
+    // On the bar, default opacity's button opens the slider with default opacity under it.
+    public static string ButtonName(AppCommand command) =>
+        command == AppCommand.ToggleDefaultOpacity ? T("pip.opacity") : Name(command);
+
+    public static bool OpensMenuOnToolbar(AppCommand command) =>
+        command is AppCommand.ToggleDefaultOpacity or AppCommand.Arrange or AppCommand.ShowWindowMenu;
+
+    // Every button there was before format 4; a saved bar is compared with it, so it stays as it was.
+    private static readonly AppCommand[] FirstToolbarButtons =
+    [
+        AppCommand.TogglePin, AppCommand.OpacityDown, AppCommand.ToggleDefaultOpacity, AppCommand.OpacityUp,
+        AppCommand.ToggleClickThrough, AppCommand.OpenPip, AppCommand.ToggleAnchor, AppCommand.ToggleDark, AppCommand.ToggleGlass,
+        AppCommand.ToggleShrink, AppCommand.ToggleCrop, AppCommand.Arrange, AppCommand.SaveWindowSetup, AppCommand.RestoreWindow,
+        AppCommand.ShowWindowMenu,
+    ];
+
+    internal static bool HadEveryFirstButton(IReadOnlySet<AppCommand> bar) => FirstToolbarButtons.All(bar.Contains);
 
     // Buttons since format 4; a bar that had every button before gets them once.
     internal static readonly AppCommand[] AddedToolbarButtons =
@@ -379,7 +397,7 @@ public sealed class AppSettings
             else if (value.TryGetValue(out JsonElement number) && number.ValueKind == JsonValueKind.Number && number.TryGetInt32(out int known))
                 shown.Add((AppCommand)known);
         }
-        if (!CommandCatalog.ToolbarButtons.Except(CommandCatalog.AddedToolbarButtons).All(shown.Contains)) return;
+        if (!CommandCatalog.HadEveryFirstButton(shown)) return;
         foreach (AppCommand added in CommandCatalog.AddedToolbarButtons.Where(added => !shown.Contains(added))) buttons.Add(added.ToString());
     }
 
@@ -521,7 +539,6 @@ public sealed class AppSettings
     public bool WelcomeShown { get; set; }
 
     public int DefaultOpacityPercent { get; set; } = 80;
-    public int OpacityStepPercent { get; set; } = 10;
     public bool OpacityWheel { get; set; }
 
     public bool HideCaptureBorder { get; set; } = true;
@@ -614,7 +631,6 @@ public sealed class AppSettings
 
         loaded.PipPresets ??= [];
         loaded.PipBookmarks ??= [];
-        loaded.OpacityStepPercent = Math.Clamp(loaded.OpacityStepPercent, 1, 25);
         loaded.PinBorder = (loaded.PinBorder ?? new()).Validated();
         loaded.PipViews = (loaded.PipViews ?? new()).Validated();
         loaded.PipHover = (loaded.PipHover ?? new()).Validated();

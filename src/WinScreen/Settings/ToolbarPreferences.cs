@@ -25,8 +25,12 @@ public sealed record ToolbarPreferences
         Placement = Enum.IsDefined(Placement) ? Placement : ToolbarPlacement.Centre,
         Trigger = Enum.IsDefined(Trigger) ? Trigger : ToolbarTrigger.TitleBar,
         HoverDelayMilliseconds = Math.Clamp(HoverDelayMilliseconds, 100, 2000),
-        Buttons = [.. CommandCatalog.ToolbarButtons.Where((Buttons ?? DefaultButtons()).Contains)],
+        Buttons = [.. CommandCatalog.ToolbarButtons.Where((Buttons ?? DefaultButtons()).Select(Current).Contains)],
     };
+
+    // More see-through and More opaque were buttons of their own; Opacity has both.
+    private static AppCommand Current(AppCommand button) =>
+        button is AppCommand.OpacityUp or AppCommand.OpacityDown ? AppCommand.ToggleDefaultOpacity : button;
 }
 
 // Saves button names, so reordering commands can't change someone's choice. A name this version doesn't know is

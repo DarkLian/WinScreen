@@ -523,7 +523,6 @@
   "settings.notifications.enable": "Show a message when something works (problems always show)",
   "settings.opacity.default": "Default opacity:",
   "settings.opacity.solidOnHover": "Make see-through windows solid while the mouse is over them",
-  "settings.opacity.step": "Step (%)",
   "settings.opacity.title": "Opacity",
   "settings.opacity.wheel": "Ctrl+Alt+wheel changes opacity under the pointer",
   "settings.pages": "Pages",

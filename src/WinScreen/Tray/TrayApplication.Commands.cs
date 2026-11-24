@@ -21,8 +21,8 @@ public sealed partial class TrayApplication
         Define(AppCommand.TogglePin, window =>
             Confirm(_windows.TogglePin(window) ? T("status.pinned") : T("status.unpinned"), WindowInfo.Title(window)))
             with { IsOn = window => _windows.IsPinned(window), Undoes = [WindowPart.WindowChanges] },
-        Define(AppCommand.OpacityUp, window => ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(1)))) with { Undoes = [WindowPart.WindowChanges] },
-        Define(AppCommand.OpacityDown, window => ShowOpacity(window, _windows.ChangeOpacity(window, OpacityDelta(-1)))) with { Undoes = [WindowPart.WindowChanges] },
+        Define(AppCommand.OpacityUp, window => ShowOpacity(window, _windows.ChangeOpacity(window, WindowController.OpacityStep))) with { Undoes = [WindowPart.WindowChanges] },
+        Define(AppCommand.OpacityDown, window => ShowOpacity(window, _windows.ChangeOpacity(window, -WindowController.OpacityStep))) with { Undoes = [WindowPart.WindowChanges] },
         Define(AppCommand.ToggleDefaultOpacity, window => ShowOpacity(window, _windows.ToggleDefaultOpacity(window)))
             with { IsOn = window => _windows.OpacityOf(window) < 255, Undoes = [WindowPart.WindowChanges] },
         Define(AppCommand.ToggleClickThrough, window =>

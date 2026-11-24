@@ -714,6 +714,52 @@ public sealed class AppEndToEndTests : IDisposable
         }
     }
 
+    // The slider and Use default opacity are in the menu of one button (owner, 24 Nov), and both work from there.
+    [Fact]
+    public void The_toolbars_opacity_button_opens_the_slider()
+    {
+        RestartWith(new AppSettings { WelcomeShown = true, DefaultOpacityPercent = 60, Toolbar = new() { Buttons = [AppCommand.ToggleDefaultOpacity], Placement = ToolbarPlacement.Left } });
+        using var target = new TargetProcess(Spot);
+        target.UseTitleBar();
+        Focus(target);
+        var rest = new Point(Spot.Left + Dpi.Scale(34, Dpi.Of(target.Handle)) + 12, Spot.Top + 12);
+        Desktop.RequireWindowAt(rest, target.Handle);
+        Desktop.MoveMouse(new Point(rest.X + 30, rest.Y));
+        Desktop.MoveMouse(rest);
+        nint toolbar = 0;
+        Assert.True(Desktop.WaitFor(() => (toolbar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar")) != 0, 4000), "The toolbar didn't appear.");
+        Rectangle bar = Desktop.BoundsOf(toolbar);
+        Desktop.ClickOn(new Point(bar.Left + bar.Width / 2, bar.Top + bar.Height / 2), toolbar);
+        nint menu = 0;
+        Assert.True(Desktop.WaitFor(() =>
+        {
+            Desktop.EachProcessWindow(_app.Id, window =>
+            {
+                if (window != toolbar && Desktop.BoundsOf(window) is { Width: > 120, Height: > 50 }) menu = window;
+            });
+            return menu != 0;
+        }, 2000), "The Opacity button opened no menu.");
+        Thread.Sleep(900);
+        Assert.True(Desktop.IsWindowVisible(menu), "The menu closed by itself.");
+        Assert.InRange(Desktop.BoundsOf(menu).Top, bar.Bottom - 4, bar.Bottom + 40);
+        Assert.InRange(Desktop.BoundsOf(menu).Height, 50, 200); // The slider and one command, nothing else.
+
+        byte Alpha() => Desktop.Alpha(target.Handle) ?? 255;
+        Assert.Equal(255, Alpha());
+        Desktop.Press(Keys.Down);
+        Desktop.Press(Keys.Left);
+        Assert.True(Desktop.WaitFor(() => Alpha() is < 255 and > 200, 2000), $"The slider didn't change the window: {Alpha()}.");
+        Desktop.Press(Keys.Down);
+        Desktop.Press(Keys.Enter);
+        Assert.True(Desktop.WaitFor(() => Alpha() == 255, 2000), $"Use default opacity didn't make it solid: {Alpha()}.");
+        Assert.True(Desktop.IsWindowVisible(menu), "The menu closed on a choice.");
+        Desktop.Press(Keys.Enter);
+        Assert.True(Desktop.WaitFor(() => Alpha() == 153, 2000), $"Use default opacity didn't use the default: {Alpha()}.");
+        Desktop.Press(Keys.Escape);
+        Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(menu)));
+        Assert.True(Desktop.WaitFor(() => User32.GetForegroundWindow() == target.Handle), "The window didn't get the keyboard back.");
+    }
+
     /// <summary>
     /// On a window WinScreen filled with Fill display, the toolbar still shows and its menu stays open. Windows reports
     /// such a window as a full-screen app, and WinScreen used to pause for it as for a game (the owner, F5).
@@ -2356,7 +2402,7 @@ public sealed class AppEndToEndTests : IDisposable
     [Fact]
     public void Opacity_wheel_changes_the_pointed_window_and_passes_ordinary_scrolling_through()
     {
-        var settings = new AppSettings { OpacityWheel = true, OpacityStepPercent = 3 };
+        var settings = new AppSettings { OpacityWheel = true };
         RestartWith(settings);
         using var target = new TargetProcess(Spot);
         Focus(target);
@@ -2370,8 +2416,8 @@ public sealed class AppEndToEndTests : IDisposable
             finally { Desktop.Key(Keys.Menu, false); Desktop.Key(Keys.ControlKey, false); }
             return Desktop.WaitFor(() => Desktop.Alpha(target.Handle) is not null, 400);
         }, 5000);
-        Assert.True(applied && Desktop.Alpha(target.Handle) == 247,
-            $"The opacity wheel didn't apply the configured 3% step: alpha={Desktop.Alpha(target.Handle)}.");
+        Assert.True(applied && Desktop.Alpha(target.Handle) == 229,
+            $"The opacity wheel didn't apply a 10% step: alpha={Desktop.Alpha(target.Handle)}.");
         while (target.NextReport(100) is not null) { } // Wheels sent before the hook was there.
         Assert.Null(target.NextReport(150));
         Desktop.Wheel(target.Center, -1, target.Handle);
