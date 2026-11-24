@@ -228,6 +228,9 @@ internal static class MenuParts
         AppCommand.MinimizeToAnchor => ColorIcons.ToAnchor,
         AppCommand.MoveToNextDisplay => Monitor,
         AppCommand.RestorePlacement => History,
+        AppCommand.PlaceExactly => ColorIcons.Exact,
+        AppCommand.ToggleRollUp => ColorIcons.RollUp,
+        AppCommand.SendToBottom => ColorIcons.ToBottom,
         AppCommand.ToggleBorderless => ColorIcons.Borderless,
         AppCommand.ToggleBorderlessFill => FullScreen,
         AppCommand.ViewKeepHidden => View,
@@ -245,7 +248,7 @@ internal static class MenuParts
         AppCommand.ViewCopyText => Text,
         AppCommand.ViewCover => Hide,
         AppCommand.ViewRecord => Record,
-        _ => null,
+        _ => CommandCatalog.AnchorOf(command) is { } place ? ColorIcons.Place(place) : null,
     };
 }
 
@@ -293,6 +296,7 @@ internal sealed class OpacityRow : ToolStripControlHost
         AutoSize = false;
         Size = _slider.Size = new Size(MenuParts.Scale(236), MenuParts.Scale(46));
         Margin = Padding.Empty;
+        Image = MenuParts.Icon(MenuParts.Brightness); // Drawn by MenuRenderer, beside the slider's name.
         _slider.ValueChanged += () => { if (!_setting) changed(_slider.Value); };
     }
 
@@ -307,6 +311,8 @@ internal sealed class OpacityRow : ToolStripControlHost
             finally { _setting = false; }
         }
     }
+
+    internal static int TitleHeight => MenuParts.Scale(22);
 
     private sealed class Slider : Control
     {
@@ -352,7 +358,7 @@ internal sealed class OpacityRow : ToolStripControlHost
             g.Clear(MenuStyle.Ground);
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             Color text = Enabled ? MenuStyle.Text : MenuStyle.Disabled, accent = Enabled ? MenuStyle.Accent : MenuStyle.Disabled;
-            var top = new Rectangle(Left0 - MenuParts.Scale(4), 0, Right0 - Left0 + MenuParts.Scale(8), MenuParts.Scale(22));
+            var top = new Rectangle(Left0 - MenuParts.Scale(4), 0, Right0 - Left0 + MenuParts.Scale(8), TitleHeight);
             Native.DirectText.DrawText(g, _title, MenuStyle.ForDpi(MenuStyle.MenuFont, DeviceDpi), top, text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             Native.DirectText.DrawText(g, _value + "%", MenuStyle.ForDpi(MenuStyle.MenuFont, DeviceDpi), top, Enabled ? MenuStyle.Muted : MenuStyle.Disabled,
                 TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);

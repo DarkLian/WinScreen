@@ -239,7 +239,19 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         Native.DirectText.DrawText(e.Graphics, e.Text, e.TextFont ?? MenuStyle.MenuFont, area, e.TextColor, e.TextFormat);
     }
 
-    protected override void OnRenderImageMargin(ToolStripRenderEventArgs e) { }
+    // A row that is a control of its own starts beside the icons, so its icon is drawn here.
+    protected override void OnRenderImageMargin(ToolStripRenderEventArgs e)
+    {
+        int size = MenuParts.Scale(16);
+        foreach (OpacityRow row in e.ToolStrip.Items.OfType<OpacityRow>())
+        {
+            if (!row.Available || row.Image is null) continue;
+            var at = new Rectangle(MenuParts.Scale(15), row.Bounds.Top + (OpacityRow.TitleHeight - size) / 2, size, size);
+            if (row.Enabled) { e.Graphics.DrawImage(row.Image, at); continue; }
+            using Image faded = CreateDisabledImage(row.Image);
+            e.Graphics.DrawImage(faded, at);
+        }
+    }
 
     protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
     {

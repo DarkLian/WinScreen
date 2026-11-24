@@ -8,6 +8,10 @@ internal static class ColorIcons
     internal const char Effects = '', DarkMode = '', Glass = '', Shrink = '', Move = '',
         Plus = '', Minus = '', ToAnchor = '', Borderless = '';
 
+    internal const char Displays = '\uF8E9', WindowSize = '\uF8EA', Exact = '\uF8EB', RollUp = '\uF8EC', ToBottom = '\uF8ED', FirstPlace = '\uF8F0';
+
+    internal static char Place(WinScreen.Windows.WindowAnchor place) => (char)(FirstPlace + (int)place);
+
     private static readonly Dictionary<(char, int), Image> Made = [];
 
     private static readonly (Color Top, Color Bottom) Blue = (Rgb(0x6CCBFF), Rgb(0x0F6CBD)), DeepBlue = (Rgb(0x3A9BE6), Rgb(0x10529F)),
@@ -148,7 +152,7 @@ internal static class ColorIcons
 
     private static readonly Color Ink = Rgb(0x2B2F36), Light = Color.White;
 
-    private static readonly Dictionary<char, Action<Painter>> Drawings = new()
+    private static readonly Dictionary<char, Action<Painter>> Drawings = WithPlaces(new()
     {
         [MenuParts.Pin] = p => p.Turned(30, () =>
         {
@@ -483,10 +487,64 @@ internal static class ColorIcons
             p.Line(Light, 1.6f, 8, 4.8f, 8, 11.2f);
             p.Line(Light, 1.6f, 4.8f, 8, 11.2f, 8);
         },
+        [Displays] = p =>
+        {
+            p.Box(1, 1.5f, 9, 7, 1.2f, Grey);
+            p.Box(2, 2.5f, 7, 5, 0.6f, Slate);
+            p.Box(9, 12, 3, 2.4f, 0.3f, Grey);
+            p.Box(7.6f, 13.6f, 5.8f, 1.4f, 0.7f, Grey);
+            p.Box(5.5f, 5, 10, 8, 1.4f, DeepBlue);
+            p.Box(6.6f, 6.1f, 7.8f, 5.8f, 0.8f, (Rgb(0x55B4F2), Rgb(0x1F72C6)));
+        },
+        [WindowSize] = p =>
+        {
+            p.Box(1, 1, 14, 14, 3, Purple);
+            p.Line(Light, 1.5f, 4.6f, 11.4f, 11.4f, 4.6f);
+            p.Line(Light, 1.5f, 8, 4.4f, 11.6f, 4.4f, 11.6f, 8);
+            p.Line(Light, 1.5f, 8, 11.6f, 4.4f, 11.6f, 4.4f, 8);
+        },
+        [Exact] = p =>
+        {
+            p.Ring(Rgb(0x3A9BE6), 1.5f, 3, 3, 10);
+            foreach (float from in new[] { 0.9f, 11.4f })
+            {
+                p.Line(Rgb(0x3A9BE6), 1.5f, 8, from, 8, from + 3.7f);
+                p.Line(Rgb(0x3A9BE6), 1.5f, from, 8, from + 3.7f, 8);
+            }
+            p.Circle(6.2f, 6.2f, 3.6f, Red);
+        },
+        [RollUp] = p =>
+        {
+            p.Box(1, 1.2f, 14, 13.6f, 1.6f, (Color.FromArgb(110, 0x6C, 0xCB, 0xFF), Color.FromArgb(110, 0x0F, 0x6C, 0xBD)));
+            p.Box(1, 1.2f, 14, 4, 1.4f, Blue);
+            p.Line(Light, 1.5f, 8, 8.4f, 8, 13);
+            p.Line(Light, 1.5f, 5.4f, 10.4f, 8, 7.8f, 10.6f, 10.4f);
+        },
+        [ToBottom] = p =>
+        {
+            p.Box(1.5f, 1.2f, 13, 3.6f, 1.2f, Grey);
+            p.Box(1.5f, 6.2f, 13, 3.6f, 1.2f, Mid);
+            p.Box(1.5f, 11.2f, 13, 3.6f, 1.2f, Blue);
+        },
         [Minus] = p =>
         {
             p.Circle(1.5f, 1.5f, 13, (Color.FromArgb(150, 0x6C, 0xCB, 0xFF), Color.FromArgb(150, 0x0F, 0x6C, 0xBD)));
             p.Line(Light, 1.6f, 4.8f, 8, 11.2f, 8);
         },
-    };
+    });
+
+    // A screen with the window where the command puts it.
+    private static Dictionary<char, Action<Painter>> WithPlaces(Dictionary<char, Action<Painter>> drawings)
+    {
+        foreach (WinScreen.Windows.WindowAnchor place in Enum.GetValues<WinScreen.Windows.WindowAnchor>())
+        {
+            int column = (int)place % 3, row = (int)place / 3;
+            drawings[Place(place)] = p =>
+            {
+                p.Box(0.8f, 2, 14.4f, 12, 1.8f, Slate);
+                p.Box(2 + column * 2.7f, 3.2f + row * 2.3f, 6.6f, 5, 0.8f, Blue);
+            };
+        }
+        return drawings;
+    }
 }

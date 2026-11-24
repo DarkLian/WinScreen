@@ -185,6 +185,9 @@ internal static partial class User32
     [LibraryImport("user32.dll")]
     public static partial nint WindowFromPoint(NativePoint point);
 
+    [LibraryImport("user32.dll", EntryPoint = "GetClassLongPtrW")]
+    public static partial nint GetClassLongPtr(nint window, int index);
+
     [LibraryImport("user32.dll", EntryPoint = "SendMessageTimeoutW", SetLastError = true)]
     public static partial nint SendMessageTimeout(nint window, uint message, nint wParam, nint lParam, uint flags,
         uint timeout, out nint result);

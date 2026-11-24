@@ -62,9 +62,9 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
 
         items.Add(MenuParts.Header(T("menu.group.look")));
         items.Add(Command(AppCommand.ToggleDarkTitleBar));
-        var borderless = new ToolStripMenuItem(T("window.borderless")).WithIcon(MenuParts.FullScreen);
+        var borderless = new ToolStripMenuItem(T("window.borderless")).WithIcon(ColorIcons.Borderless);
         borderless.DropDownItems.Add(Command(AppCommand.ToggleBorderless));
-        var fillItem = new ToolStripMenuItem(T("window.fillDisplay"), null, (_, _) =>
+        var fillItem = new ToolStripMenuItem(T("window.fillDisplay"), MenuParts.Icon(MenuParts.FullScreen), (_, _) =>
         {
             Screen[] screens = Screen.AllScreens;
             if (screens.Length == 1) WithTarget(window => fill(window, screens[0].Bounds));
@@ -153,7 +153,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
                 : CommandCatalog.IsExperimental(entry) ? Command(entry).Experimental() : Command(entry));
         if (MoveToDisplay is { } move)
         {
-            var displays = new ToolStripMenuItem(T("placement.moveToDisplay"));
+            var displays = new ToolStripMenuItem(T("placement.moveToDisplay")).WithIcon(ColorIcons.Displays);
             foreach (Screen screen in Screen.AllScreens)
             {
                 string device = screen.DeviceName;
@@ -164,7 +164,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         }
         if (ResizeTo is { } resize)
         {
-            var sizes = new ToolStripMenuItem(T("placement.size"));
+            var sizes = new ToolStripMenuItem(T("placement.size")).WithIcon(ColorIcons.WindowSize);
             foreach (Size size in PresetSizes)
                 sizes.DropDownItems.Add($"{size.Width} × {size.Height}", null,
                     (_, _) => WithTarget(window => resize(window, size))).Tag = new Resize(size);

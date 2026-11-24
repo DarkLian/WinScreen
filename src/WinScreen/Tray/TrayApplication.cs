@@ -325,6 +325,7 @@ public sealed partial class TrayApplication : ApplicationContext
             _menuWindow = _menuIdentity?.Window ?? 0;
             _targetTitle.Text = _menuWindow == 0 ? T("tray.noTarget") : MenuText(WindowInfo.Title(_menuWindow));
             _targetTitle.Enabled = _menuWindow != 0;
+            ShowTargetIcon();
             builder.Refresh(_targetTitle.DropDownItems);
             newView.ShortcutKeyDisplayString = MenuHotkey(AppCommand.PickPipSource);
             foreach ((AppCommand command, ToolStripMenuItem item) in everywhere)
@@ -345,6 +346,16 @@ public sealed partial class TrayApplication : ApplicationContext
         };
         MenuRenderer.Apply(menu);
         return menu;
+    }
+
+    private Bitmap? _targetIcon;
+
+    private void ShowTargetIcon()
+    {
+        Bitmap? icon = _menuWindow == 0 ? null : WindowIcons.Of(_menuWindow, MenuParts.Scale(16));
+        _targetTitle.Image = icon ?? MenuParts.Icon(MenuParts.Page);
+        _targetIcon?.Dispose();
+        _targetIcon = icon;
     }
 
     private string? MenuHotkey(AppCommand command) =>
