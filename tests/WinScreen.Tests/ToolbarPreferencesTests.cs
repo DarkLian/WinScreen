@@ -18,6 +18,18 @@ public sealed class ToolbarPreferencesTests
         Assert.Equal([.. CommandCatalog.Ordered.Where(command => command != AppCommand.RestoreAll), AppCommand.ShowWindowMenu], loaded.Toolbar.Buttons);
     }
 
+    // The window menu's other commands can be buttons too. They start off, and one that is chosen stays in its place.
+    [Fact]
+    public void The_optional_buttons_start_off_and_stay_once_chosen()
+    {
+        Assert.Empty(new AppSettings().Toolbar.Buttons.Intersect(CommandCatalog.OptionalToolbarButtons));
+        Assert.Empty(CommandCatalog.OptionalToolbarButtons.Except(CommandCatalog.ToolbarButtons));
+        Assert.Equal(CommandCatalog.ToolbarButtons.Length, CommandCatalog.ToolbarButtons.Distinct().Count());
+        var chosen = new AppSettings { Toolbar = new() { Buttons = [AppCommand.ToggleBorderless, AppCommand.TogglePin, AppCommand.MinimizeToAnchor] } };
+        Assert.Equal([AppCommand.TogglePin, AppCommand.MinimizeToAnchor, AppCommand.ToggleBorderless],
+            AppSettings.Parse(System.Text.Json.JsonSerializer.Serialize(chosen)).Toolbar.Validated().Buttons);
+    }
+
     /// <summary>
     /// Settings saved before the Window menu button existed get it once, after their other buttons; once it has been
     /// offered, taking it off stays off.

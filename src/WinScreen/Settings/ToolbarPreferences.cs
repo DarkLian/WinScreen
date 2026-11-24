@@ -18,14 +18,14 @@ public sealed record ToolbarPreferences
     // off.
     public bool WindowMenuOffered { get; init; } = true;
 
-    internal static List<AppCommand> DefaultButtons() => [.. CommandCatalog.ToolbarButtons];
+    internal static List<AppCommand> DefaultButtons() => [.. CommandCatalog.ToolbarButtons.Except(CommandCatalog.OptionalToolbarButtons)];
 
     internal ToolbarPreferences Validated() => this with
     {
         Placement = Enum.IsDefined(Placement) ? Placement : ToolbarPlacement.Centre,
         Trigger = Enum.IsDefined(Trigger) ? Trigger : ToolbarTrigger.TitleBar,
         HoverDelayMilliseconds = Math.Clamp(HoverDelayMilliseconds, 100, 2000),
-        Buttons = [.. DefaultButtons().Where(command => (Buttons ?? DefaultButtons()).Contains(command))],
+        Buttons = [.. CommandCatalog.ToolbarButtons.Where((Buttons ?? DefaultButtons()).Contains)],
     };
 }
 

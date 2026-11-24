@@ -6,7 +6,7 @@ namespace WinScreen.Tray;
 internal static class ColorIcons
 {
     internal const char Effects = '', DarkMode = '', Glass = '', Shrink = '', Move = '',
-        Plus = '', Minus = '';
+        Plus = '', Minus = '', ToAnchor = '', Borderless = '';
 
     private static readonly Dictionary<(char, int), Image> Made = [];
 
@@ -459,6 +459,23 @@ internal static class ColorIcons
         {
             p.Box(1, 2.5f, 14, 11, 1.8f, Slate);
             p.Line(Rgb(0x72E39A), 1.3f, 3, 8.5f, 5.4f, 8.5f, 6.9f, 5, 9, 11.2f, 10.5f, 8.5f, 13, 8.5f);
+        },
+        [ToAnchor] = p =>
+        {
+            p.Circle(1, 1, 14, Orange);
+            p.Line(Light, 1.6f, 8, 3.6f, 8, 8.4f);
+            p.Shape(White, 4.8f, 7.4f, 11.2f, 7.4f, 8, 10.8f);
+            p.Line(Light, 1.5f, 5, 12.4f, 11, 12.4f);
+        },
+        [Borderless] = p =>
+        {
+            p.Box(3, 3, 10, 10, 1.2f, Teal);
+            foreach (float at in new[] { 1.4f, 14.6f })
+                foreach (float from in new[] { 1.4f, 6.6f, 11.8f })
+                {
+                    p.Line(Rgb(0x868B93), 1.1f, from, at, from + 2.6f, at);
+                    p.Line(Rgb(0x868B93), 1.1f, at, from, at, from + 2.6f);
+                }
         },
         [Plus] = p =>
         {

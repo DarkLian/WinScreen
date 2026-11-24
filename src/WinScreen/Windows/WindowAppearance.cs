@@ -145,7 +145,7 @@ public sealed partial class WindowController
             }
             if (FullScreen.Current() == FullScreenState.Exclusive)
                 throw new WindowOperationException(T("errors.borderless.exclusive"));
-            if (state.Hidden || state.PlacementBeforePeek is not null || state.Cropped ||
+            if (state.Hidden && !state.HiddenButUsable || state.PlacementBeforePeek is not null || state.Cropped ||
                 state.PlacementBeforeRollUp is not null)
                 throw new WindowOperationException(T("errors.window.showNormally"));
             EnsureResponsive(window);
@@ -201,6 +201,7 @@ public sealed partial class WindowController
                         User32.SWP_FRAMECHANGED | User32.SWP_NOACTIVATE | User32.SWP_NOZORDER) ||
                     ((long)User32.GetWindowLongPtr(window, User32.GWL_STYLE) & BorderlessMask) != 0)
                     throw new WindowOperationException(T("errors.borderless.frameRestored"));
+                state.RepaintsLeft = 2;
                 SaveJournal();
                 return true;
             }

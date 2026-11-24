@@ -9,6 +9,14 @@ namespace WinScreen.Tests;
 public sealed class MenuIconTests
 {
     [Fact]
+    public void No_two_toolbar_buttons_look_the_same()
+    {
+        var same = CommandCatalog.ToolbarButtons.GroupBy(command => MenuParts.IconOf(command) ?? MenuParts.More).Where(group => group.Count() > 1);
+        Assert.Empty(same.Select(group => string.Join(", ", group)));
+        Assert.All(CommandCatalog.ToolbarButtons, command => Assert.True(ColorIcons.Has(MenuParts.IconOf(command) ?? MenuParts.More)));
+    }
+
+    [Fact]
     public void Every_command_with_an_icon_has_a_coloured_one()
     {
         AppCommand[] commands = Enum.GetValues<AppCommand>();

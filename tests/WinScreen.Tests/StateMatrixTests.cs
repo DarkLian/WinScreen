@@ -279,8 +279,9 @@ public sealed class StateMatrixTests
     // ---- WinScreen's Borderless ----
 
     /// <summary>
-    /// Borderless takes the title bar away, so there's none to darken. Hiding, which Shrink, a view's Keep updating,
-    /// layered Glass and picture-safe Dark all need, says to turn Borderless off first. Opacity and colour Glass work.
+    /// Borderless takes the title bar away, so there's none to darken. Hiding, which Shrink and a view's Keep hidden
+    /// need, says to turn Borderless off first. Opacity, colour Glass and the hiding layered Glass and picture-keeping
+    /// Dark use, which leaves the window where it is, work.
     /// </summary>
     [Fact]
     public void A_borderless_window_takes_opacity_and_colour_glass_but_not_a_dark_title_bar_or_hiding()
@@ -295,7 +296,11 @@ public sealed class StateMatrixTests
             Assert.True(windows.ToggleBorderless(window));
             Assert.Throws<WindowOperationException>(() => windows.ToggleDarkTitleBar(window));
             Assert.Throws<WindowOperationException>(() => windows.HideOwned(window, new object()));
-            Assert.Throws<WindowOperationException>(() => windows.HideOwned(window, new object(), solid: true));
+            Assert.False(windows.IsHidden(window));
+            var effect = new object();
+            windows.HideOwned(window, effect, solid: true);
+            Assert.True(windows.IsDrawnByEffect(window));
+            windows.ShowOwned(window, effect);
             Assert.False(windows.IsHidden(window));
             Assert.Equal((byte)128, windows.SetOpacity(window, 128));
             Assert.Equal((byte?)128, Desktop.Alpha(window));

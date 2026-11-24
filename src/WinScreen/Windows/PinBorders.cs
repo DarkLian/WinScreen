@@ -9,6 +9,10 @@ public sealed class PinBorders : IDisposable
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 33 };
     private PinBorderPreferences _preferences = new();
 
+    // What Dark or Glass draws over the window, or 0: it has to be the one just above the window, so the border goes
+    // just above it instead.
+    internal Func<nint, nint> OverlayOf { get; set; } = _ => 0;
+
     public void Configure(PinBorderPreferences preferences)
     {
         _preferences = preferences.Validated();
@@ -35,7 +39,7 @@ public sealed class PinBorders : IDisposable
         {
             if (!_borders.ContainsKey(window))
             {
-                var border = new PinBorder(window);
+                var border = new PinBorder(window, target => OverlayOf(target));
                 border.Configure(_preferences);
                 _borders[window] = border;
             }
@@ -63,11 +67,13 @@ internal sealed class PinBorder : Form
     private int _lastDpi;
 
     private readonly nint _target;
+    private readonly Func<nint, nint> _overlayOf;
     private readonly WindowIdentity _identity;
 
-    public PinBorder(nint target)
+    public PinBorder(nint target, Func<nint, nint>? overlayOf = null)
     {
         _target = target;
+        _overlayOf = overlayOf ?? (_ => 0);
         _identity = WindowIdentity.Capture(target);
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -143,7 +149,8 @@ internal sealed class PinBorder : Form
     // Just above rather than above everything, so a pinned window under another one doesn't show through.
     private void StayJustAboveTarget()
     {
-        nint above = User32.GetWindow(_target, User32.GW_HWNDPREV);
+        nint overlay = _overlayOf(_target);
+        nint above = User32.GetWindow(overlay != 0 && User32.IsWindowVisible(overlay) ? overlay : _target, User32.GW_HWNDPREV);
         if (above == Handle)
             return;
 

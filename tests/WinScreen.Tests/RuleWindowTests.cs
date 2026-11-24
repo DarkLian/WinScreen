@@ -72,6 +72,94 @@ public sealed class RuleWindowTests
         finally { Directory.Delete(folder, true); }
     }
 
+    private static T Field<T>(TrayApplication app, string name) =>
+        (T)typeof(TrayApplication).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(app)!;
+
+    private static void InApp(string folder, ProgramSetup rule, Action<TrayApplication, WindowController> test) => WindowMenuBuilderTests.OnUiThread(() =>
+    {
+        var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
+        var settings = new AppSettings
+        {
+            ShowToolbar = false, ShowNotifications = false, WelcomeShown = true, ExperimentalFeatures = true,
+            Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""), SavedSetups = [rule],
+        };
+        using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
+        try { test(app, controller); }
+        finally { app.ExitThread(); }
+    });
+
+    [Fact]
+    public void A_rule_with_Dark_and_Borderless_applies_both_without_a_word()
+    {
+        string folder = Directory.CreateTempSubdirectory("winscreen-rules-").FullName;
+        using var target = new TargetProcess(new Rectangle(300, 300, 420, 300), "FFFFFF", "WinScreen test target - both");
+        target.UseFrame();
+        Desktop.GainForegroundRights();
+        try
+        {
+            InApp(folder, new ProgramSetup { Program = "WinScreen.TestTarget", TitleContains = "both", Dark = true, Borderless = true, Pinned = true },
+                (app, controller) =>
+                {
+                    string said = Field<string>(app, "_lastStatus");
+                    Desktop.Activate(target.Handle);
+                    Apply(app, target.Handle);
+                    Assert.True(controller.IsPinned(target.Handle));
+                    Assert.True(controller.IsBorderless(target.Handle), "Not borderless: " + Field<string>(app, "_lastStatus"));
+                    Assert.True(Desktop.WaitFor(() => Desktop.IsNear(Desktop.ColorOnScreen(new Rectangle(target.Center.X - 20, target.Center.Y - 20, 40, 40)),
+                        Desktop.DarkPage), 5000, Application.DoEvents), "Not dark: " + Field<string>(app, "_lastStatus"));
+                    Assert.True(Field<Dictionary<nint, WindowIdentity>>(app, "_setupDone").ContainsKey(target.Handle));
+                    Assert.Equal(said, Field<string>(app, "_lastStatus"));
+                });
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    // A window with no frame for Borderless to take away: the rest still comes, and it is said once.
+    [Fact]
+    public void A_part_of_a_rule_that_is_refused_leaves_the_rest_and_is_said_once()
+    {
+        string folder = Directory.CreateTempSubdirectory("winscreen-rules-").FullName;
+        using var target = new TargetProcess(new Rectangle(300, 300, 420, 300), "FFFFFF", "WinScreen test target - frameless");
+        Desktop.GainForegroundRights();
+        try
+        {
+            InApp(folder, new ProgramSetup
+            {
+                Program = "WinScreen.TestTarget", TitleContains = "frameless", Pinned = true, Borderless = true, Place = WindowAnchor.TopRight, EveryTime = true,
+            }, (app, controller) =>
+            {
+                FieldInfo status = typeof(TrayApplication).GetField("_lastStatus", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                var retryAt = Field<Dictionary<nint, long>>(app, "_setupRetryAt");
+                string refused = WinScreen.Localization.UiText.T("errors.borderless.noFrame");
+                Desktop.Activate(target.Handle);
+                Apply(app, target.Handle);
+                Assert.True(controller.IsPinned(target.Handle), "The refusal held the pin back.");
+                Assert.True(WindowInfo.TryGetFrameBounds(target.Handle, out Rectangle frame, out _));
+                Assert.True(Math.Abs(frame.Right - Screen.FromHandle(target.Handle).WorkingArea.Right) <= 2, "The refusal held the place back.");
+                Assert.DoesNotContain(refused, Field<string>(app, "_lastStatus"));
+
+                // Only what was refused is tried again: what the person undid meanwhile stays undone.
+                Assert.False(controller.TogglePin(target.Handle));
+                retryAt[target.Handle] = 0;
+                Apply(app, target.Handle);
+                Assert.Contains(refused, Field<string>(app, "_lastStatus"));
+                Assert.False(controller.IsPinned(target.Handle), "Trying again undid what the person chose.");
+                Assert.True(Field<Dictionary<nint, WindowIdentity>>(app, "_setupDone").ContainsKey(target.Handle));
+
+                // Every time it comes forward, the rule again, but not the message.
+                status.SetValue(app, "quiet");
+                for (int visit = 0; visit < 2; visit++)
+                {
+                    Apply(app, 0);
+                    for (int look = 0; look < 3; look++) { retryAt[target.Handle] = 0; Apply(app, target.Handle); }
+                }
+                Assert.True(controller.IsPinned(target.Handle), "Every time didn't apply it again.");
+                Assert.Equal("quiet", Field<string>(app, "_lastStatus"));
+            });
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
     /// <summary>
     /// A crop made by clicking a control follows the control when the window is resized (roadmap P2-11, step 8.1),
     /// and a crop dragged out by hand keeps its rectangle.

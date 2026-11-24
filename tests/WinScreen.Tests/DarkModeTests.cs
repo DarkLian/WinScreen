@@ -302,6 +302,38 @@ public class DarkModeTests
         });
     }
 
+    [Fact]
+    public void A_pinned_window_under_the_filter_keeps_its_border_above_it()
+    {
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        OnUiThread(pump =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(target.Handle);
+            var windows = new WindowController([]);
+            using var dark = new DarkMode();
+            using var borders = new PinBorders { OverlayOf = dark.OverlayOf };
+            borders.Configure(new() { ColorHex = "#E82020", Thickness = 6, OpacityPercent = 100 });
+            try
+            {
+                windows.TogglePin(target.Handle);
+                Assert.True(dark.Toggle(target.Handle));
+                borders.Show(windows.VisiblePinnedWindows());
+                for (int i = 0; i < 20; i++) pump(20);
+                nint overlay = dark.OverlayOf(target.Handle);
+                // Both want to be just above the window, and used to take turns.
+                for (int i = 0; i < 60; i++)
+                {
+                    pump(20);
+                    nint border = Native.User32.GetWindow(overlay, Native.User32.GW_HWNDPREV);
+                    Assert.Equal("WinScreen pin border", WindowInfo.Title(border));
+                    Assert.Equal(overlay, Native.User32.GetWindow(target.Handle, Native.User32.GW_HWNDPREV));
+                }
+            }
+            finally { windows.RestoreAll(); }
+        });
+    }
+
     /// <summary>
     /// Dark mode's filter works on a window in WinScreen's Borderless, follows it when it's moved, and the window is
     /// still borderless once Dark is off.

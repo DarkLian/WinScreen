@@ -56,6 +56,9 @@ public sealed partial class TrayApplication : ApplicationContext
     private readonly Dictionary<nint, long> _setupRetryAt = [];
     // So a new window can draw before it's judged dark.
     private readonly Dictionary<nint, long> _setupFirstSeen = [];
+    // What a setup couldn't do the first time, tried once more; and what was said about it, said once.
+    private readonly Dictionary<nint, HashSet<SetupPart>> _setupLeft = [];
+    private readonly Dictionary<nint, HashSet<string>> _setupTold = [];
     private const long NewWindowDrawsWithin = 6000;
     private readonly ToolStripMenuItem _targetTitle = new();
     private readonly ToolStripMenuItem _statusItem = new();
@@ -143,6 +146,7 @@ public sealed partial class TrayApplication : ApplicationContext
         };
         _windows.ConcealmentChanged += _recoveryWatcher.Follow;
         _content = new Glass.ContentEffects(_windows);
+        _borders.OverlayOf = window => _content.OverlayOf(window) is var overlay and not 0 ? overlay : _dark.OverlayOf(window);
         _content.Problem += text => Alert(T("errors.operation.title"), text);
         _windows.ChangeUndone += (_, text) => Alert(T("errors.operation.title"), text, ToolTipIcon.Info);
         _content.Created += handle => _dark.Ignore(handle);
@@ -1087,6 +1091,8 @@ public sealed partial class TrayApplication : ApplicationContext
             _setupDone.Remove(stale);
             _setupRetryAt.Remove(stale);
             _setupFirstSeen.Remove(stale);
+            _setupLeft.Remove(stale);
+            _setupTold.Remove(stale);
             _ruleOf.Remove(stale);
             _ruleRenewed.Remove(stale);
         }
@@ -1094,6 +1100,11 @@ public sealed partial class TrayApplication : ApplicationContext
         {
             _setupNone.Remove(stale);
             _setupNoneTitle.Remove(stale);
+        }
+        foreach (nint gone in _setupTold.Keys.Concat(_setupLeft.Keys).Where(known => !User32.IsWindow(known)).ToArray())
+        {
+            _setupLeft.Remove(gone);
+            _setupTold.Remove(gone);
         }
 
         if (_settings.SetupForWindow(window) is not { } setup)
@@ -1119,24 +1130,43 @@ public sealed partial class TrayApplication : ApplicationContext
         try
         {
             var identity = WindowIdentity.Capture(window);
-            if (setup.Pinned && !_windows.IsPinned(window)) _windows.TogglePin(window);
-            identity.Require();
-            if (setup.Alpha < 255) _windows.SetOpacity(window, setup.Alpha);
-            identity.Require();
-            if (_settings.ExperimentalFeatures && setup.Dark && DarkLook(window) == Look.None) ToggleDark(window);
-            identity.Require();
-            // Borderless first: it keeps the inside of the window where it is, so the frame moves when it goes.
-            if (setup.Borderless && !_windows.IsBorderless(window)) _windows.ToggleBorderless(window, false, null);
-            identity.Require();
-            if (!string.IsNullOrEmpty(setup.Display) &&
-                Screen.AllScreens.Any(screen => string.Equals(screen.DeviceName, setup.Display, StringComparison.OrdinalIgnoreCase)))
-                _placer.MoveToDisplay(window, setup.Display);
-            identity.Require();
-            if (setup.Place is { } place) _placer.Align(window, place);
-            identity.Require();
-            if (setup.Anchor && !_anchors.Has(window)) _anchors.Toggle(window);
-            identity.Require();
-            RestoreSavedView(window, setup);
+            bool again = _setupLeft.Remove(window, out HashSet<SetupPart>? left);
+            var refused = new HashSet<SetupPart>();
+            var problems = new List<string>();
+            Do(SetupPart.Pin, setup.Pinned && !_windows.IsPinned(window), () => _windows.TogglePin(window));
+            Do(SetupPart.Opacity, setup.Alpha < 255, () => _windows.SetOpacity(window, setup.Alpha));
+            // Borderless before the place: it keeps the inside of the window where it is, so the frame moves when it goes.
+            Do(SetupPart.Borderless, setup.Borderless && !_windows.IsBorderless(window), () => _windows.ToggleBorderless(window, false, null));
+            Do(SetupPart.Display, !string.IsNullOrEmpty(setup.Display) &&
+                Screen.AllScreens.Any(screen => string.Equals(screen.DeviceName, setup.Display, StringComparison.OrdinalIgnoreCase)),
+                () => _placer.MoveToDisplay(window, setup.Display!));
+            Do(SetupPart.Place, setup.Place is not null, () => _placer.Align(window, setup.Place!.Value));
+            Do(SetupPart.Dark, _settings.ExperimentalFeatures && setup.Dark && DarkLook(window) == Look.None, () => ToggleDark(window));
+            Do(SetupPart.Anchor, setup.Anchor && !_anchors.Has(window), () => _anchors.Toggle(window));
+            Do(SetupPart.View, true, () => RestoreSavedView(window, setup));
+
+            // One part refused doesn't hold back the others. It may only have been the window starting up, so it is
+            // tried once more, then said, once.
+            void Do(SetupPart part, bool wanted, Action action)
+            {
+                identity.Require();
+                if (!wanted || left?.Contains(part) == false) return;
+                try { action(); }
+                catch (Exception failure) when (IsExpected(failure))
+                {
+                    Diagnostics.Log.Event("rule.partRefused", ("part", part), ("again", again), ("program", Diagnostics.LogValue.ProgramOf(window)));
+                    refused.Add(part);
+                    problems.Add(failure.Message);
+                }
+            }
+            if (refused.Count > 0 && !again)
+            {
+                _setupLeft[window] = refused;
+                _setupRetryAt[window] = Environment.TickCount64 + 5000;
+                return;
+            }
+            if (problems.Where(problem => Told(window, problem)).ToArray() is { Length: > 0 } news)
+                Alert(T("errors.operation.title"), string.Join(Environment.NewLine, news));
             _setupDone[window] = identity;
             _ruleOf[window] = setup;
             _ruleRenewed.Remove(window);
@@ -1147,8 +1177,17 @@ public sealed partial class TrayApplication : ApplicationContext
         catch (Exception failure) when (IsExpected(failure))
         {
             _setupRetryAt[window] = Environment.TickCount64 + 5000;
-            Alert(T("errors.operation.title"), failure.Message);
+            if (Told(window, failure.Message)) Alert(T("errors.operation.title"), failure.Message);
         }
+    }
+
+    private enum SetupPart { Pin, Opacity, Borderless, Display, Place, Dark, Anchor, View }
+
+    // Whether this hasn't been said about the window before.
+    private bool Told(nint window, string problem)
+    {
+        if (!_setupTold.TryGetValue(window, out HashSet<string>? told)) _setupTold[window] = told = [];
+        return told.Add(problem);
     }
 
     private readonly Dictionary<nint, ProgramSetup> _ruleOf = [];
@@ -1171,8 +1210,9 @@ public sealed partial class TrayApplication : ApplicationContext
                 continue;
             }
             _ruleOf[window] = now;
-            if (System.Text.Json.JsonSerializer.Serialize(now) != System.Text.Json.JsonSerializer.Serialize(old))
-                _ruleRenewed.Add(window);
+            if (System.Text.Json.JsonSerializer.Serialize(now) == System.Text.Json.JsonSerializer.Serialize(old)) continue;
+            _ruleRenewed.Add(window);
+            _setupTold.Remove(window);
         }
     }
     private readonly Dictionary<nint, string> _setupNoneTitle = [];
@@ -1243,6 +1283,7 @@ public sealed partial class TrayApplication : ApplicationContext
         }
 
         _setupNone.Clear();
+        _setupLeft.Remove(window);
         _setupDone[window] = WindowIdentity.Capture(window);
         if (_settingsWindow is { IsDisposed: false } open) open.SetupsChanged();
         Confirm(setup.ChangesAnything ? T("setups.saved") : T("setups.removed"),

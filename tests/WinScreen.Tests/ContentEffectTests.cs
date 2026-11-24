@@ -494,6 +494,209 @@ public sealed class ContentEffectTests
         });
     }
 
+    // The border and the effect each want to be the one just above the window: the effect stays, the border goes above
+    // it, and neither keeps moving. A pin another program takes comes back with the effect still on.
+    [GraphicsCardTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_pinned_window_under_an_effect_keeps_its_border_and_its_pin(bool dark)
+    {
+        using var target = new TargetProcess(Spot, "E8E8E8");
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(target.Handle);
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            using var borders = new PinBorders { OverlayOf = effects.OverlayOf };
+            borders.Configure(new() { ColorHex = "#E82020", Thickness = 6, OpacityPercent = 100 });
+            try
+            {
+                Assert.True(windows.TogglePin(target.Handle));
+                Assert.True(effects.Toggle(target.Handle, dark ? ContentLook.Dark : ContentLook.Glass));
+                Assert.Equal([target.Handle], windows.VisiblePinnedWindows());
+                borders.Show(windows.VisiblePinnedWindows());
+                Assert.True(WindowInfo.TryGetFrameBounds(target.Handle, out Rectangle frame, out _));
+                var edge = new Rectangle(frame.Left + frame.Width / 2 - 20, frame.Bottom - 5, 40, 3);
+                bool Border() => Desktop.IsNear(Desktop.ColorOnScreen(edge), Color.FromArgb(0xE8, 0x20, 0x20), 12);
+                Pump(Border);
+                Assert.True(Border(), $"No border: {Desktop.ColorOnScreen(edge)}.");
+                Pump(() => false, 500);
+                int before = effects.RestacksOf(target.Handle);
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                int wrong = 0;
+                Pump(() => { if (!Border()) wrong++; return clock.ElapsedMilliseconds > 2000; });
+                Assert.True(effects.RestacksOf(target.Handle) - before <= 1, $"Restacked {effects.RestacksOf(target.Handle) - before} times in two seconds.");
+                Assert.Equal(0, wrong);
+
+                User32.SetWindowPos(target.Handle, User32.HWND_NOTOPMOST, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+                Assert.Equal(0, Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST);
+                windows.Refresh(new Point(bounds.Left + 50, bounds.Top + 50), opaqueOnHover: true, pausePinWhenMaximized: false);
+                Assert.NotEqual(0, Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST);
+                Assert.True(windows.IsDrawnByEffect(target.Handle));
+                Assert.True(Desktop.Alpha(target.Handle) < 10, "The window itself shows through the effect.");
+                Pump(() => Border() && (Desktop.ExStyle(effects.OverlayOf(target.Handle)) & User32.WS_EX_TOPMOST) != 0);
+                Assert.True(Border(), "The border didn't come back with the pin.");
+                Assert.NotEqual(0, Desktop.ExStyle(effects.OverlayOf(target.Handle)) & User32.WS_EX_TOPMOST);
+
+                // Unpinned for real, not only in WinScreen's records.
+                Assert.Equal(0, windows.UnpinEverywhere());
+                Assert.Equal(0, Desktop.ExStyle(target.Handle) & User32.WS_EX_TOPMOST);
+                Assert.Empty(windows.VisiblePinnedWindows());
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
+    [GraphicsCardFact]
+    public void Pausing_pins_of_maximized_windows_works_under_an_effect()
+    {
+        using var target = new TargetProcess(Spot, "E8E8E8");
+        target.UseFrame();
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(target.Handle);
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            bool Topmost(nint window) => (Desktop.ExStyle(window) & User32.WS_EX_TOPMOST) != 0;
+            void Refresh() { windows.Refresh(Point.Empty, false, pausePinWhenMaximized: true); Pump(() => false, 300); }
+            try
+            {
+                windows.TogglePin(target.Handle);
+                Assert.True(effects.Toggle(target.Handle, ContentLook.Dark));
+                User32.ShowWindow(target.Handle, 3);
+                Refresh();
+                Assert.False(Topmost(target.Handle));
+                Assert.False(Topmost(effects.OverlayOf(target.Handle)));
+                User32.ShowWindow(target.Handle, User32.SW_RESTORE);
+                Desktop.Activate(target.Handle);
+                // As WinScreen does four times a second: Windows can refuse the first try.
+                Pump(() => { Refresh(); return Topmost(target.Handle) && Topmost(effects.OverlayOf(target.Handle)); });
+                Assert.True(Topmost(target.Handle), $"Not pinned again; in front: {WindowInfo.Title(User32.GetForegroundWindow())}.");
+                Assert.True(Topmost(effects.OverlayOf(target.Handle)));
+                int before = effects.RestacksOf(target.Handle);
+                Pump(() => false, 1000);
+                Assert.True(effects.RestacksOf(target.Handle) - before <= 2, $"Restacked {effects.RestacksOf(target.Handle) - before} times in a second.");
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
+    [GraphicsCardFact]
+    public void Turning_off_click_through_everywhere_reaches_a_window_under_an_effect()
+    {
+        using var target = new TargetProcess(Spot, "E8E8E8");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(target.Handle);
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            try
+            {
+                Assert.True(windows.ToggleClickThrough(target.Handle));
+                Assert.True(effects.Toggle(target.Handle, ContentLook.Dark));
+                Assert.NotEqual(0, Desktop.ExStyle(target.Handle) & User32.WS_EX_TRANSPARENT);
+                Assert.Equal(0, windows.TurnOffClickThroughEverywhere());
+                Assert.Equal(0, Desktop.ExStyle(target.Handle) & User32.WS_EX_TRANSPARENT);
+                Assert.False(windows.IsClickThrough(target.Handle));
+                Assert.Equal(255, windows.OpacityOf(target.Handle));
+                Assert.True(Desktop.Alpha(target.Handle) < 10, "The window itself shows through the effect.");
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
+    // Borderless and Fill display with Dark or Glass, in either order, and either one first off.
+    [GraphicsCardTheory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public void A_borderless_or_filled_window_takes_an_effect_in_either_order(bool dark, bool fill, bool effectFirst)
+    {
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        target.UseFrame();
+        long style = User32.GetWindowLongPtr(target.Handle, User32.GWL_STYLE);
+        Rectangle before = Desktop.BoundsOf(target.Handle);
+        using var behind = new TargetProcess(Screen.PrimaryScreen!.WorkingArea, "1E64C8");
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(target.Handle);
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            ContentLook look = dark ? ContentLook.Dark : ContentLook.Glass;
+            Color Shown() => Middle(Desktop.BoundsOf(target.Handle));
+            bool Drawn() => dark ? Desktop.IsNear(Shown(), Desktop.DarkPage) : Shown() is { R: > 45 and < 200 } shown && shown.B > shown.R + 20; // White page over blue, not the blue alone.
+            bool Covered() => WindowInfo.TryGetFrameBounds(target.Handle, out Rectangle frame, out _) &&
+                Desktop.BoundsOf(effects.OverlayOf(target.Handle)) == frame;
+            void Check(string when)
+            {
+                Pump(() =>
+                {
+                    windows.Refresh(Point.Empty, false, false); // As WinScreen does four times a second.
+                    Pump(() => false, 200);
+                    return Drawn() && Covered();
+                });
+                Assert.True(Drawn(), $"{when}: {Shown()}.");
+                Assert.True(Covered(), $"{when}: the effect is at {Desktop.BoundsOf(effects.OverlayOf(target.Handle))}, the window at {Desktop.BoundsOf(target.Handle)}.");
+            }
+            try
+            {
+                if (effectFirst) { Assert.True(effects.Toggle(target.Handle, look)); Check("The effect alone"); }
+                Assert.True(windows.ToggleBorderless(target.Handle, fill));
+                if (!effectFirst) Assert.True(effects.Toggle(target.Handle, look));
+                Check("Both");
+                Assert.True(windows.IsBorderless(target.Handle));
+                if (fill) Assert.Equal(Screen.FromHandle(target.Handle).Bounds, Desktop.BoundsOf(target.Handle));
+                Assert.Equal(0, User32.GetWindowLongPtr(target.Handle, User32.GWL_STYLE) & WindowController.BorderlessMask);
+
+                if (effectFirst)
+                {
+                    Assert.False(windows.ToggleBorderless(target.Handle, fill));
+                    Check("Its frame back");
+                    effects.TurnAllOff();
+                }
+                else
+                {
+                    effects.TurnAllOff();
+                    Pump(() => Desktop.IsNear(Shown(), Color.White, 12));
+                    Assert.True(Desktop.IsNear(Shown(), Color.White, 12), $"The window itself: {Shown()}.");
+                    Assert.True(windows.IsBorderless(target.Handle));
+                    Assert.False(windows.ToggleBorderless(target.Handle, fill));
+                }
+                Pump(() => Desktop.BoundsOf(target.Handle) == before);
+                Assert.Equal(before, Desktop.BoundsOf(target.Handle));
+                Assert.Equal(style, User32.GetWindowLongPtr(target.Handle, User32.GWL_STYLE));
+                Assert.Equal((byte)255, Desktop.Alpha(target.Handle) ?? 255);
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
     [GraphicsCardFact]
     public void Glass_shows_what_is_behind_through_the_page_and_turning_it_off_restores_the_window()
     {

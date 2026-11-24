@@ -73,6 +73,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         [NotJournalled("The colour key now set: recovery puts back OriginalColorKey and OriginalLayeredFlags, and OwnedStyles.")]
         public Color? GlassColor { get; set; }
         [NotJournalled(CurrentState)] public bool PinPaused { get; set; }
+        [NotJournalled("Transient: times it is still to be asked to paint anew.")] public int RepaintsLeft { get; set; }
         public bool Cropped { get; set; }
         [NotJournalled("Windows 11's backdrop and corners a crop turned off; after a crash the app's own come back when it next opens.")]
         public (int Backdrop, int Corners)? LookBeforeCrop { get; set; }
@@ -482,7 +483,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         {
             return _changed
                 .Where(pair =>
-                    pair.Value is { Pinned: true, PinPaused: false, Hidden: false, PlacementBeforePeek: null } &&
+                    pair.Value is { Pinned: true, PinPaused: false, PlacementBeforePeek: null } &&
+                    (!pair.Value.Hidden || pair.Value.HiddenButUsable) &&
                     pair.Value.Identity.Matches())
                 .Select(pair => pair.Key)
                 .ToArray();
@@ -512,16 +514,28 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
 
                 if (state.PlacementBeforeRollUp is not null) StillRolledUp(window, state);
                 if (state.BorderlessFilled) StillFilled(window, state);
+                // What a window painted just as its frame went can be lost, leaving the part it grew by empty, with what
+                // is behind showing there. Asked to paint again once Windows has settled it.
+                if (state.RepaintsLeft > 0)
+                {
+                    state.RepaintsLeft--;
+                    User32.RedrawWindow(window, 0, 0, User32.RDW_INVALIDATE | User32.RDW_ERASE | User32.RDW_ALLCHILDREN);
+                }
 
-                if (state.Hidden || state.PlacementBeforePeek is not null)
+                // Under Dark or Glass only the pin is the window's own to keep: its opacity is what hides it there.
+                bool drawnByEffect = state.Hidden && state.HiddenButUsable;
+                if (state.Hidden && !drawnByEffect || state.PlacementBeforePeek is not null)
                     continue;
 
                 try
                 {
-                    if (StillLayered(window, state) is { } layer) undone.Add((window, layer));
-                    StillCropped(window, state);
+                    if (!drawnByEffect)
+                    {
+                        if (StillLayered(window, state) is { } layer) undone.Add((window, layer));
+                        StillCropped(window, state);
+                        FollowHover(window, state, cursor, opaqueOnHover);
+                    }
                     if (StillPinned(window, state) is { } pin) undone.Add((window, pin));
-                    FollowHover(window, state, cursor, opaqueOnHover);
                     FollowMaximized(window, state, pausePinWhenMaximized);
                 }
                 catch (WindowOperationException caught)
@@ -573,7 +587,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     // something the app now owns. Seen on two checks in a row, so a moment in passing doesn't count.
     private string? StillLayered(nint window, ChangedWindow state)
     {
-        if (!state.Layered && !state.ClickThrough || state.HiddenButUsable) return null;
+        if (!state.Layered && !state.ClickThrough) return null;
         long style;
         try { style = ReadExStyle(window); }
         catch (WindowOperationException) { return null; }
@@ -842,15 +856,18 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 return;
             }
             // Hidden for a view: the window must stay click-through while hidden, so only what it goes back to changes.
-            if (state.AlphaFromClickThrough == state.AlphaBeforeHiding) state.AlphaBeforeHiding = 255;
+            bool brighter = state.AlphaFromClickThrough == state.AlphaBeforeHiding;
+            if (brighter) state.AlphaBeforeHiding = 255;
             state.AlphaFromClickThrough = null;
+            if (state.HiddenButUsable) WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
             state.ClickThrough = false;
+            if (brighter) OpacityChanged?.Invoke(window, 255);
         });
 
     public int UnpinEverywhere() =>
         Everywhere(PinnedHere, (window, state) =>
         {
-            if (state.Hidden) state.Pinned = false; // Hidden for a view: it goes back unpinned when shown.
+            if (state.Hidden && !state.HiddenButUsable) state.Pinned = false; // Hidden for a view: it goes back unpinned when shown.
             else TogglePin(window);
         });
 
@@ -933,8 +950,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             ChangedWindow state = Track(window);
             if (state.Hidden)
                 return;
-            if (state.PlacementBeforeBorderless is not null)
-                throw new WindowOperationException(T("errors.borderless.disableFirst"));
             EnsureLayeringSafe(state);
             if (TakeOverLift(state))
                 User32.SetWindowPos(window, User32.HWND_NOTOPMOST, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);

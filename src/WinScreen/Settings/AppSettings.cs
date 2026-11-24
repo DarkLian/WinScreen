@@ -190,8 +190,21 @@ public static class CommandCatalog
         AppCommand.RestoreWindow, AppCommand.RestoreAll,
     ];
 
+    // Every button the toolbar can have, in its order; OptionalToolbarButtons start off.
     public static readonly AppCommand[] ToolbarButtons =
-        [.. Ordered.Where(command => command != AppCommand.RestoreAll), AppCommand.ShowWindowMenu];
+    [
+        AppCommand.TogglePin, AppCommand.OpacityDown, AppCommand.ToggleDefaultOpacity, AppCommand.OpacityUp,
+        AppCommand.ToggleClickThrough, AppCommand.OpenPip, AppCommand.ToggleAnchor, AppCommand.MinimizeToAnchor, AppCommand.ToggleDark,
+        AppCommand.ToggleGlass, AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleShrink, AppCommand.ToggleCrop,
+        AppCommand.ToggleDarkTitleBar, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.Arrange,
+        AppCommand.SaveWindowSetup, AppCommand.RestoreWindow, AppCommand.ShowWindowMenu,
+    ];
+
+    public static readonly AppCommand[] OptionalToolbarButtons =
+    [
+        AppCommand.MinimizeToAnchor, AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleDarkTitleBar,
+        AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill,
+    ];
 
     // Before Extra, which includes them. Each acts on the view in front, or on the view of the window in front.
     public static readonly AppCommand[] View =

@@ -214,7 +214,7 @@ private readonly ErrorProvider _errors = new();
         MaximizeBox = true;
         MinimizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(984, 660); // Room for every entry in the table of actions at Windows 11's text size.
+        ClientSize = new Size(1000, 660); // Room for every entry in the table of actions at Windows 11's text size.
         // No narrower than this, the narrowest its rows fit: they grow in a wider window but never shrink.
         MinimumSize = new Size(Width, 400);
         Font = SettingsStyle.BodyFont;
@@ -1643,7 +1643,7 @@ private readonly ErrorProvider _errors = new();
     {
         _toolbarPlacement.Items.AddRange([T("toolbar.placement.left"), T("toolbar.placement.centre"), T("toolbar.placement.right")]);
         _toolbarTrigger.Items.AddRange([T("toolbar.trigger.titleBar"), T("toolbar.trigger.minimize"), T("toolbar.trigger.either")]);
-        foreach (AppCommand command in ToolbarPreferences.DefaultButtons()) _toolbarButtons.Items.Add(new ToolbarChoice(command));
+        foreach (AppCommand command in CommandCatalog.ToolbarButtons) _toolbarButtons.Items.Add(new ToolbarChoice(command));
         _toolbarButtons.Tagged = item => item is ToolbarChoice { Command: var command } && CommandCatalog.IsExperimental(command);
         _toolbarButtons.IconOf = (item, pixels) => item is ToolbarChoice { Command: var shown }
             ? Tray.ColorIcons.Of(MenuParts.IconOf(shown) ?? MenuParts.More, pixels) : null;

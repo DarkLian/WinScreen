@@ -116,8 +116,8 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **Dark title bar** | ✅ | ✅ | ✅ ¹³ | ❌ ¹⁴ | ⚠️ ² | ✅ | ✅ | ✅ |
 | **Roll up** 🧪 | ✅ ⁸ | ✅ ¹⁹ | ✅ ¹⁹ | ❌ | ❌ | ✅ | ❌ | ✅ |
 | **Crop** 🧪 | ✅ ¹⁵ | ✅ ¹⁵ | ⚠️ ¹⁷ | ❌ ⁹ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
-| **Dark mode** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ⚠️ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
-| **Glass mode** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ⚠️ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
+| **Dark mode** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ✅ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
+| **Glass mode** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ✅ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
 | **Shrink** 🧪 | ✅ | ✅ | ⚠️ ¹¹ | ❌ ⁹ | ⚠️ ² | ✅ | ✅ ²⁰ | ✅ |
 | **Restore this window** (Ctrl+Alt+U) | ✅ | ✅ | ✅ | ✅ | ✅ ¹² | ✅ | ✅ | ✅ |
 | **Restore all windows** (Ctrl+Alt+R) | ✅ | ✅ | ✅ | ✅ | ✅ ¹² | ✅ | ✅ | ✅ |
@@ -149,8 +149,7 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 15. Some apps put their own shape straight back (Windows Forms ones with a frame, for example). Crop then says
     the app draws its own shape, rather than showing as on. Taking a crop off a maximized window leaves it
     maximized.
-16. Picture-keeping Dark and layered Glass hide the window under their picture, so they say "Turn off
-    borderless mode first." Colour Glass and Dark mode's plain filter work, and the filter follows the window.
+16. In either order, since 1.5.0 (`ContentEffectTests.A_borderless_or_filled_window_takes_an_effect_in_either_order`).
 17. The window comes back first, so the part to keep can be chosen over it. A crop made while it's minimized (by
     a saved setup or recovery, say) is there when it comes back.
 18. The window comes back first, as its own Restore would bring it back. One that comes back maximized then follows
@@ -173,9 +172,10 @@ and one-color Glass leave the window itself on screen, and nothing here applies.
 | Arrange window, Move to display, exact position, Back to previous position | ✅ |
 | Alt+drag, Alt+right drag, snapping, Ctrl+Alt+wheel, the window menu gesture | ✅ (Alt+drag and Ctrl+Alt+wheel since 1.5.0) (`WindowController.GestureBlocked`, `ModifierGestureTests.Alt_drags_and_the_opacity_wheel_work_on_a_window_under_an_effect`) |
 | Anchors, the toolbar, Keep areas as they are, Glass levels | ✅ |
-| Pin on top | ⚠️ Stays on top, but the colored border isn't shown, Pause pinning while maximized doesn't apply, and a pin another program takes isn't put back, until the effect is off (`WindowController.RefreshRecords`, `VisiblePinnedWindows`). |
+| Pin on top | ✅ With its colored border, Pause pinning while maximized, and the pin put back when another program takes it (since 1.5.0, `ContentEffectTests.A_pinned_window_under_an_effect_keeps_its_border_and_its_pin`). |
 | Make see-through windows solid while the mouse is over them | ❌ Waits until the effect is off. |
-| Crop, Roll up, Borderless, Fill display | ❌ Turn the effect off first. A window that is already cropped or rolled up can get Dark or Glass; a borderless or filled one can't ("Turn off borderless mode first"). |
+| Borderless, Fill display | ✅ Since 1.5.0. |
+| Crop, Roll up | ❌ Turn the effect off first. A window that is already cropped or rolled up can get Dark or Glass. |
 | Shrink | ✅ The effect is off while it's a tile and comes back with the window. |
 | Picture-in-Picture | ⚠️ The effect is turned off first. |
 | Remember setup | ⚠️ Remembers Dark mode, not Glass. |
@@ -414,8 +414,9 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 5. Applied once, the first time a main window of that program comes forward, or each time it does with **Every time the
    window comes forward** on; changes after that stay. It remembers the pin, opacity, Dark mode and the view, and can
    add a place, a display, Borderless, an Anchor and what the toolbar does; Glass, Crop and Roll up aren't remembered.
-   Dark mode from a saved setup needs experimental on, and can't be combined with Borderless on a PC with a graphics
-   card.
+   Dark mode from a saved setup needs experimental on. A part the window refuses (Borderless on a window without a
+   frame, say) doesn't hold back the rest: it is tried once more five seconds later, and then said once
+   (`TrayApplication.ApplySavedSetup`).
 6. Unless WinScreen runs as administrator too. Then the toolbar isn't shown on the app and no automatic Anchor is
    made for it, as mouse gestures leave it alone; a manual Anchor says to start WinScreen as administrator. Tested
    with a real administrator app on Windows 11.
@@ -430,8 +431,8 @@ Tested: Windows 10 VM (test windows, Edge, Calculator, Settings, and at 150% sca
 | Pinned + maximized, with Pause pinning while a pinned window is maximized | Off the top while maximized, back on top when restored. |
 | Pinned + Alt-dragged out of maximized | The pin stays. With Pause pinning while a pinned window is maximized, it is back on top within a moment while it's the window in use; Alt+drag doesn't switch to the window, so one dragged from behind comes back on top once it's used. |
 | Click-through + pinned | Allowed, and the easiest way to lose a window: you can't click it. Ctrl+Alt+C again, or Ctrl+Alt+R, puts it back. |
-| Borderless + Crop, Hide, Roll up or a view | Refused: "Turn off borderless mode first." |
-| Cropped / rolled up / hidden + Borderless | Refused: "Show this window normally first." |
+| Borderless + Crop, Roll up, or hiding it behind a view or tile | Refused: "Turn off borderless mode first." |
+| Cropped, rolled up, or hidden behind a view or tile + Borderless | Refused: "Show this window normally first." |
 | Shrunk + a view of the same window | The tile is closed first, then the view opens. |
 | Dark or Glass (drawn by the graphics card) + a view of the same window | The effect is turned off first. |
 | A view of a window + Shrink | The view closes first. |

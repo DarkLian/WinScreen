@@ -159,8 +159,9 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     {
         bool Shown(ToolStripItem item) => item switch
         {
-            OpacityRow => onBar.Contains(AppCommand.OpacityUp) && onBar.Contains(AppCommand.OpacityDown),
             PlacementRow => onBar.Contains(AppCommand.Arrange),
+            // With several displays the menu asks which one; the button fills the one the window is on.
+            ToolStripMenuItem { Tag: AppCommand.ToggleBorderlessFill, HasDropDownItems: true } => false,
             { Tag: AppCommand command } => onBar.Contains(command),
             _ => false,
         };

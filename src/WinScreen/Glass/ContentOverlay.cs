@@ -38,9 +38,10 @@ internal sealed unsafe class ContentOverlay : Form
     private readonly List<nint> _hooks = [];
     private const uint NextBelow = 2; // GW_HWNDNEXT
     private const uint PreviousAbove = 3; // GW_HWNDPREV
-    private const int RetryMilliseconds = 500;
+    private const int RetryMilliseconds = 500, LongestRetryMilliseconds = 5000;
     private volatile bool _stopping;
     private long _retryAfter;
+    private int _retryWait = RetryMilliseconds;
     private System.Windows.Forms.Timer? _retry;
     private volatile StrongBox<ContentLevels> _levels;
     private volatile bool _changed;
@@ -114,6 +115,8 @@ internal sealed unsafe class ContentOverlay : Form
             CreateParams parameters = base.CreateParams;
             parameters.ExStyle |= (int)(NoRedirectionBitmap | User32.WS_EX_TOOLWINDOW | User32.WS_EX_NOACTIVATE |
                                         User32.WS_EX_TRANSPARENT | User32.WS_EX_LAYERED);
+            // Over a pinned window it is made always on top: Windows can refuse to make it so later.
+            if (_source != 0 && IsTopmost(_source)) parameters.ExStyle |= (int)User32.WS_EX_TOPMOST;
             return parameters;
         }
     }
@@ -228,23 +231,21 @@ internal sealed unsafe class ContentOverlay : Form
             Location = frame.Location;
         if (!Visible)
             Show();
-        bool topmost = (User32.GetWindowLongPtr(_source, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0;
-        bool raised = (User32.GetWindowLongPtr(Handle, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0;
+        bool topmost = IsTopmost(_source);
+        bool raised = IsTopmost(Handle);
         // Already just above the window, in the same band: leave the order alone. Every change of order is reported
         // to the whole desktop, this method's own included, so changing it anyway made it run again without end.
         // Hidden windows in between don't count: Windows keeps an input method's window right under ours.
         if (topmost == raised && NextShown(Handle) == _source)
+        {
+            _retryWait = RetryMilliseconds;
             return;
+        }
         // Each try is reported back as a change of order, so a try that can't succeed came straight back, hundreds of
         // times a second, and Windows dropped the gesture hook for the stalled thread.
         if (Environment.TickCount64 < _retryAfter)
         {
-            if (_retry is null)
-            {
-                _retry = new System.Windows.Forms.Timer { Interval = RetryMilliseconds };
-                _retry.Tick += RetryFollow;
-            }
-            _retry.Start();
+            RetryLater();
             return;
         }
         Restacks++;
@@ -254,29 +255,54 @@ internal sealed unsafe class ContentOverlay : Form
             User32.SetWindowPos(Handle, topmost ? User32.HWND_TOPMOST : User32.HWND_NOTOPMOST, 0, 0, 0, 0,
                 User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
         nint above = PreviousShown(_source);
-        if (above == Handle) return;
-        // Nothing above in its own band (the window is the band's first): the top of that band. Placing it after a
-        // window of the other band would move it into that band.
-        bool sameBand = above != 0 && ((User32.GetWindowLongPtr(above, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0) == topmost;
-        User32.SetWindowPos(Handle, sameBand ? above : topmost ? User32.HWND_TOPMOST : User32.HWND_TOP, 0, 0, 0, 0,
-            User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
-        if (sameBand || NextShown(Handle) == _source) return;
-        // Windows doesn't let a program that isn't in front put a window at the top, as after a toolbar button, which
-        // never takes the focus: the overlay stayed where it was made, under other windows. Going lower is always
-        // allowed, so the overlay goes just under the window, and the window just under the overlay: the window moves
-        // one place, past its own overlay, and nothing else changes.
+        if (above != Handle)
+        {
+            // Nothing above in its own band (the window is the band's first): the top of that band. Placing it after a
+            // window of the other band would move it into that band.
+            bool sameBand = above != 0 && IsTopmost(above) == topmost;
+            User32.SetWindowPos(Handle, sameBand ? above : topmost ? User32.HWND_TOPMOST : User32.HWND_TOP, 0, 0, 0, 0,
+                User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        }
+        bool InBand() => IsTopmost(Handle) == topmost;
+        bool InPlace() => InBand() && NextShown(Handle) == _source;
+        if (InPlace()) return;
+        // Windows doesn't let a program that isn't in front put a window at the top, or make it always on top, as after a
+        // toolbar button, which never takes the focus: the overlay stayed where it was made, under other windows. Going
+        // lower is always allowed, so the overlay goes just under the window, into its band, and the window just under
+        // the overlay: the window moves one place, past its own overlay, and nothing else changes. Only once the overlay
+        // is in that band: under one that isn't always on top, a pinned window lost its pin.
         User32.SetWindowPos(Handle, _source, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
-        User32.SetWindowPos(_source, Handle, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        if (InBand())
+            User32.SetWindowPos(_source, Handle, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        else
+            User32.SetWindowPos(Handle, User32.HWND_TOP, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
         nint between = NextShown(Handle);
-        if (between == _source)
+        if (InPlace())
         {
             Diagnostics.Log.Event("effect.raisedPastWindow", ("ok", true));
             return;
         }
 
-        _retryAfter = Environment.TickCount64 + RetryMilliseconds;
-        Diagnostics.Log.Event("effect.raisedPastWindow", ("ok", false), ("between", Diagnostics.LogValue.ClassOf(between)),
-            ("program", Diagnostics.LogValue.ProgramOf(between)));
+        if (_retryWait == RetryMilliseconds)
+            Diagnostics.Log.Event("effect.raisedPastWindow", ("ok", false), ("topmost", topmost), ("inBand", InBand()),
+                ("between", Diagnostics.LogValue.ClassOf(between)), ("program", Diagnostics.LogValue.ProgramOf(between)));
+        _retryAfter = Environment.TickCount64 + _retryWait;
+        _retryWait = Math.Min(_retryWait * 2, LongestRetryMilliseconds);
+        RetryLater();
+    }
+
+    private static bool IsTopmost(nint window) => (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & User32.WS_EX_TOPMOST) != 0;
+
+    private void RetryLater()
+    {
+        if (_retry is null)
+        {
+            _retry = new System.Windows.Forms.Timer();
+            _retry.Tick += RetryFollow;
+        }
+        if (_retry.Enabled) return;
+        _retry.Interval = (int)Math.Clamp(_retryAfter - Environment.TickCount64 + 10, 10, LongestRetryMilliseconds);
+        _retry.Start();
     }
 
     // A video behind a minimised window, or one on another desktop, stops playing.
