@@ -408,8 +408,30 @@ internal sealed class ThemedCombo : ComboBox
     protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hot = true; Invalidate(); }
     protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hot = false; Invalidate(); }
     protected override void OnSelectedIndexChanged(EventArgs e) { base.OnSelectedIndexChanged(e); Invalidate(); }
-    protected override void OnDropDown(EventArgs e) { _chosen = SelectedIndex; base.OnDropDown(e); Invalidate(); }
-    protected override void OnDropDownClosed(EventArgs e) { base.OnDropDownClosed(e); Invalidate(); }
+    protected override void OnDropDown(EventArgs e)
+    {
+        _chosen = SelectedIndex;
+        _opened = (Environment.TickCount64, Windows.TopLayer.LiftCount, Glass.ContentOverlay.AllRestacks, GlassLevelsWindow.Refreshes);
+        base.OnDropDown(e);
+        Invalidate();
+    }
+
+    protected override void OnDropDownClosed(EventArgs e)
+    {
+        base.OnDropDownClosed(e);
+        Invalidate();
+        // The owner saw lists close right after opening and it couldn't be made to happen here: what was going on then.
+        long openMs = Environment.TickCount64 - _opened.At;
+        if (openMs >= 1500 || SelectedIndex != _chosen) return;
+        nint front = Native.User32.GetForegroundWindow();
+        Diagnostics.Log.Event("list.closedSoon", ("openMs", openMs), ("front", Diagnostics.LogValue.ClassOf(front)),
+            ("frontProgram", Diagnostics.LogValue.ProgramOf(front)), ("dialogActive", FindForm() is { } form && Form.ActiveForm == form),
+            ("button", MouseButtons != MouseButtons.None), ("lifts", Windows.TopLayer.LiftCount - _opened.Lifts),
+            ("restacks", Glass.ContentOverlay.AllRestacks - _opened.Restacks), ("panelRefreshes", GlassLevelsWindow.Refreshes - _opened.Refreshes));
+    }
+
+    private (long At, long Lifts, long Restacks, long Refreshes) _opened;
+
     protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
     protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
     protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }

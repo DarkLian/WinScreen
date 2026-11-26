@@ -196,8 +196,12 @@ internal sealed class GlassLevelsWindow : ThemedDialog
 
     private int At => Math.Max(0, _items.SelectedIndex);
 
+    private static long _refreshes;
+    internal static long Refreshes => Interlocked.Read(ref _refreshes);
+
     private void ShowBackground(int at)
     {
+        Interlocked.Increment(ref _refreshes);
         IReadOnlyList<BackgroundItem> items = _choice.Items;
         _filling = true;
         try

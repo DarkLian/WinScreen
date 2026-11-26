@@ -117,6 +117,9 @@ internal sealed unsafe class ContentOverlay : Form
 
     internal int Restacks { get; private set; }
 
+    private static long _allRestacks;
+    internal static long AllRestacks => Interlocked.Read(ref _allRestacks);
+
 
     protected override bool ShowWithoutActivation => true;
 
@@ -261,6 +264,7 @@ internal sealed unsafe class ContentOverlay : Form
             return;
         }
         Restacks++;
+        Interlocked.Increment(ref _allRestacks);
         nint wasNext = NextShown(Handle), wasAbove = PreviousShown(_source);
         // The overlay goes to the window, never the window to the overlay: moving the window under the overlay sent it
         // down the stack, below other windows.
