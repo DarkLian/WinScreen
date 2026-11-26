@@ -225,12 +225,7 @@ hotkeys.conflictPrefix 40AB567773FD9C6C
 hotkeys.modifierRequired 2FBCFBE92D0FC5AF
 hotkeys.someUnavailable 0FA7F717D2B4CC07
 keptAreas.instructions 5546A4F83BCE74A8
-keptAreas.title 0FBC0D88E89EEE0B
-menu.background.edit 6E8E2511DFA8C3FA
-menu.background.next F20BFF103BE4D151
-menu.background.sound DC7A5DBF2B0104E3
-menu.background.soundEveryApp 58BA6DBD050891FC
-menu.background.soundOff C7FDDDF79EAA8C4F
+keptAreas.title E4C0A08BBBEA879F
 menu.effects 86A00CF74253C265
 menu.group.elsewhere 8875BE70B328E00F
 menu.group.look B70682D027CE5073
@@ -513,9 +508,9 @@ settings.fullScreen.pause 0533994D4EE99C8C
 settings.general 91E25F4DDC6F6CD8
 settings.hotkeys.captureHelp ED90BD3D0AD09FB7
 settings.keptAreas.empty ABB8BDE25543E3E3
-settings.keptAreas.help 456DB7514D9656A0
-settings.keptAreas.list B814BA1E96F8C057
-settings.keptAreas.title D2CCA911760FAAB6
+settings.keptAreas.help D70440E19F24BE81
+settings.keptAreas.list 6A7EA9BCADEC95D4
+settings.keptAreas.title D0E13EFC149AFFC9
 settings.language DF028FD6BD35363E
 settings.language.restart 99EF4C2F084CC15C
 settings.language.system 462FB40293FA5630
@@ -700,7 +695,7 @@ window.info.processId 4413D6DC97384239
 window.info.program 4A92B6E675A43482
 window.info.threadId F9E445E5EC7A3827
 window.info.title 6FE38ED1EE10422A
-window.keepAreas 5471AE4757C6898E
+window.keepAreas 264A8717B373A552
 window.menu 12B8DF5980298D8C
 window.minimize 1AAE174509FB56B5
 window.opacity.decrease 3E7E28F3CD537F1C

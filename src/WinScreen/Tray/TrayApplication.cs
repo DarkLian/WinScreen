@@ -371,13 +371,6 @@ public sealed partial class TrayApplication : ApplicationContext
             MoveToDisplay = (window, device) => Attempt(() => _placer.MoveToDisplay(window, device)),
             ResizeTo = (window, size) => Attempt(() => ResizeWindow(window, size)),
             Hotkey = command => MenuHotkey(command) ?? "",
-            BackgroundSoundOf = window => GlassLook(window) == Look.LayeredGlass && _content.ShowingOf(window) is { IsVideo: true } item
-                ? new WindowMenuBuilder.BackgroundSound(item.Volume, !_content.HasOwnBackground(window) && _settings.Backgrounds.OwnOf(WindowInfo.ProgramOf(window)) is null) : null,
-            SetBackgroundSound = (window, percent) => SetBackgroundSound(window, percent),
-            HasBackground = window => GlassLook(window) == Look.LayeredGlass,
-            HasNextBackground = window => GlassLook(window) == Look.LayeredGlass && _content.BackdropOf(window) is { Items.Count: > 1 },
-            NextBackground = window => _content.ShowBackground(window, null),
-            EditBackground = window => OpenBackgroundOf(WindowInfo.ProgramOf(window)),
             OpacityPercent = window => (int)Math.Round(_windows.OpacityOf(window) * 100.0 / 255),
             SetOpacityPercent = (window, percent) => Attempt(() =>
             {
@@ -1489,36 +1482,6 @@ public sealed partial class TrayApplication : ApplicationContext
         panel.FormClosed += (_, _) => { if (_glassLevels == panel) _glassLevels = null; };
         _glassLevels = panel;
         panel.ShowAt(Cursor.Position);
-    }
-
-    // The video showing now, wherever it is kept: the app's own background, or Every app's when it has none.
-    private void SetBackgroundSound(nint window, int percent)
-    {
-        string program = WindowInfo.ProgramOf(window);
-        if (program.Length == 0 || _content.ShowingOf(window) is not { } showing) return;
-        BackgroundChoice Loud(BackgroundChoice choice) => choice.WithItems(choice.Items.Select(item =>
-            string.Equals(item.File, showing.File, StringComparison.OrdinalIgnoreCase) ? item with { Volume = percent } : item));
-        // A background of the window's own, from its panel, is only the window's to change.
-        if (_content.HasOwnBackground(window) && _ownBackgrounds.TryGetValue(window, out BackgroundChoice? own))
-        {
-            SetWindowBackground(window, Loud(own));
-            return;
-        }
-        BackgroundPreferences before = _settings.Backgrounds;
-        BackgroundPreferences Louder(BackgroundPreferences backgrounds) => backgrounds.Change(program, Loud);
-        try
-        {
-            _settings.Backgrounds = Louder(before);
-            SaveSettings(_settings);
-            _content.SetBackgrounds(_settings.Backgrounds.For);
-            _content.HearFrom(window);
-            if (_settingsWindow is { IsDisposed: false } open) open.BackgroundsSaved(Louder);
-        }
-        catch (Exception failure) when (IsExpected(failure))
-        {
-            _settings.Backgrounds = before;
-            Alert(T("errors.operation.title"), failure.Message);
-        }
     }
 
     // Settings on the Backgrounds page with the app chosen, listed even when it has nothing of its own yet.

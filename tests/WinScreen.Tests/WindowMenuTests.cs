@@ -23,55 +23,22 @@ public sealed class WindowMenuBuilderTests
     private static IEnumerable<ToolStripMenuItem> Commands(ToolStripItemCollection items) =>
         items.OfType<ToolStripMenuItem>().SelectMany(item => new[] { item }.Concat(Commands(item.DropDownItems)));
 
-    // The owner, 23 Nov: Effects has the background's sound and a way to its settings. The sound shows only while a
-    // video plays behind the window's Glass, says when it is Every app's, and marks the nearest step.
+    // The owner, 26 Nov: the background's sound, next and change left Effects for the Glass and background panel,
+    // which has the same sliders as Settings. Effects holds the effects only.
     [Fact]
-    public void Effects_offers_the_backgrounds_sound_and_a_way_to_change_it()
+    public void Effects_holds_only_the_effects()
     {
         OnUiThread(() =>
         {
             UiText.Initialize("en");
-            using var form = new Form();
-            _ = form.Handle;
-            WindowIdentity identity = WindowIdentity.Capture(form.Handle);
-            WindowMenuBuilder.BackgroundSound? sound = new(40, true);
-            bool glass = true;
-            int? set = null;
-            nint edited = 0;
-            int nexts = 0;
-            bool several = true;
             using var menu = new ContextMenuStrip();
-            var builder = new WindowMenuBuilder(() => identity, (_, _) => { }, (_, _) => { }, _ => true, (_, _) => true, (_, _) => false, () => { })
-            {
-                BackgroundSoundOf = _ => sound, SetBackgroundSound = (_, percent) => set = percent,
-                HasBackground = _ => glass, EditBackground = window => edited = window,
-                HasNextBackground = _ => several, NextBackground = window => nexts++,
-            };
+            var builder = new WindowMenuBuilder(() => null, (_, _) => { }, (_, _) => { }, _ => true, (_, _) => true, (_, _) => false, () => { });
             builder.Populate(menu.Items, false);
-            builder.Refresh(menu.Items);
-            ToolStripMenuItem soundMenu = Commands(menu.Items).Single(item => item.Text == UiText.T("menu.background.soundEveryApp"));
-            ToolStripMenuItem edit = Commands(menu.Items).Single(item => item.Text == UiText.T("menu.background.edit"));
-            Assert.True(soundMenu.Available);
-            Assert.Equal("50%", Assert.Single(soundMenu.DropDownItems.OfType<ToolStripMenuItem>(), item => item.Checked).Text);
-            soundMenu.DropDownItems.OfType<ToolStripMenuItem>().First().PerformClick();
-            Assert.Equal(0, set);
-            edit.PerformClick();
-            Assert.Equal(form.Handle, edited);
-            ToolStripMenuItem next = Commands(menu.Items).Single(item => item.Text == UiText.T("menu.background.next"));
-            next.PerformClick();
-            Assert.Equal(1, nexts);
-            several = false;
-            builder.Refresh(menu.Items);
-            Assert.False(next.Available); // Only a set has a next one.
-
-            sound = new(75, false);
-            builder.Refresh(menu.Items);
-            Assert.Equal(UiText.T("menu.background.sound"), soundMenu.Text);
-            sound = null;
-            glass = false;
-            builder.Refresh(menu.Items);
-            Assert.False(soundMenu.Available);
-            Assert.False(edit.Available);
+            ToolStripMenuItem effects = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == UiText.T("menu.effects"));
+            Assert.Equal([AppCommand.ToggleDark, AppCommand.ToggleGlass, AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleShrink, AppCommand.ToggleCrop],
+                effects.DropDownItems.OfType<ToolStripItem>().Select(item => item.Tag is AppCommand command ? command : (AppCommand)(-1)));
+            Assert.Equal(UiText.T("window.keepAreas"), effects.DropDownItems.OfType<ToolStripMenuItem>().Single(item => item.Tag is AppCommand.KeepAreas).Text);
+            Assert.Equal("Select areas to keep", UiText.T("window.keepAreas"));
         });
     }
 

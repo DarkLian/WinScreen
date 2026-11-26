@@ -240,7 +240,7 @@ a little too. Two settings help:
 - **Fade range** in Every app's card in **Settings → Backgrounds**: lower it and only colors very near the page's fade,
   so pictures and videos stay solid. Text edges look a little sharper. Raise it past 100% and colors further from the
   page fade too; at the top, all of them.
-- **Keep areas as they are**, under **Effects** in a window's menu: drag over a video or picture, or click a
+- **Select areas to keep**, under **Effects** in a window's menu: drag over a video or picture, or click a
   highlighted part, and Glass and Dark mode leave it as it is. Click a marked area to remove it, and press Enter when
   you're done. An app can have up to eight, and they're kept for all its windows and follow them when you resize
   them. The list is at the bottom of **Settings → Backgrounds**, where you can remove an app's areas. Plain Glass
