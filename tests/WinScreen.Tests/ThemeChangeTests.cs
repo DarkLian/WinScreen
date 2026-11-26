@@ -20,7 +20,7 @@ public sealed class ThemeChangeTests
             WindowMenuBuilderTests.OnUiThread(() =>
             {
                 MenuStyle.UseTheme("light");
-                var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false, Theme = "light",
+                var settings = new AppSettings { WelcomeShown = true, Notifications = NotificationMode.Problems, ShowToolbar = false, Theme = "light",
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try
@@ -78,7 +78,7 @@ public sealed class ThemeChangeTests
             WindowMenuBuilderTests.OnUiThread(() =>
             {
                 MenuStyle.UseTheme("light");
-                var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false, Theme = "light",
+                var settings = new AppSettings { WelcomeShown = true, Notifications = NotificationMode.Problems, ShowToolbar = false, Theme = "light",
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try

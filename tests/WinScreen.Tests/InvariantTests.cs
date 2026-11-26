@@ -152,6 +152,7 @@ public class InvariantTests
         ["WinScreen.Settings.AnchorLook"] = "Dark=0 Light=1 NoBackground=2",
         ["WinScreen.Settings.AnchorSide"] = "Right=0 Left=1 NearWindow=2",
         ["WinScreen.Settings.ModifierKey"] = "Alt=0 Win=1",
+        ["WinScreen.Settings.NotificationMode"] = "All=0 Problems=1 Off=2",
         ["WinScreen.Settings.PipBackendPreference"] = "Auto=0 Dwm=1 Wgc=2",
         ["WinScreen.Settings.PipHoverPreview"] = "Off=0 WholeView=1 Lens=2",
         ["WinScreen.Settings.PipScaling"] = "Auto=0 Crisp=1 Smooth=2",

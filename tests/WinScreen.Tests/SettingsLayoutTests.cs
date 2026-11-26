@@ -69,7 +69,7 @@ public sealed class SettingsLayoutTests
             UiText.Initialize("en");
             var kept = new ProgramSetup { Program = "notepad" };
             var removed = new ProgramSetup { Program = "mspaint" };
-            var settings = new AppSettings { Language = "en", ShowNotifications = true, ExcludedPrograms = ["calc"], DefaultOpacityPercent = 80 };
+            var settings = new AppSettings { Language = "en", ExcludedPrograms = ["calc"], DefaultOpacityPercent = 80 };
             settings.SavedSetups.AddRange([kept, removed]);
             AppSettings? saved = null;
             IReadOnlyList<HotkeyProblem> Save(AppSettings draft) { saved = draft; return []; }
@@ -78,13 +78,13 @@ public sealed class SettingsLayoutTests
             using (var old = new SettingsWindow(settings, new StartWithWindows(tasks: NoTasks.Instance), Save))
             {
                 Assert.Null(old.Unsaved());
-                old.SetOption(nameof(AppSettings.ShowNotifications), false);
+                old.SetNotifications(NotificationMode.Off);
                 old.AddExcluded("notepad");
                 old.RemoveSetup(removed);
                 old.SetDefaultOpacity(55);
                 Assert.Null(old.Unsaved()); // Everything could go into effect, so nothing is left to carry over.
                 Assert.NotNull(saved);
-                Assert.False(saved.ShowNotifications);
+                Assert.Equal(NotificationMode.Off, saved.Notifications);
                 Assert.Equal(["calc", "notepad"], saved.ExcludedPrograms);
                 Assert.Equal(["notepad"], saved.SavedSetups.Select(setup => setup.Program));
                 Assert.Equal(55, saved.DefaultOpacityPercent);

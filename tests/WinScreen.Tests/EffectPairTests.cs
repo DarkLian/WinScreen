@@ -63,7 +63,7 @@ public sealed class EffectPairTests(Xunit.Abstractions.ITestOutputHelper output)
             OnUiThread(pump =>
             {
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
-                var settings = new AppSettings { ShowToolbar = true, ShowNotifications = false, WelcomeShown = true, ModifierDrag = true, WindowMenu = true,
+                var settings = new AppSettings { ShowToolbar = true, Notifications = NotificationMode.Problems, WelcomeShown = true, ModifierDrag = true, WindowMenu = true,
                     ExperimentalFeatures = true, HighlightPinned = true, PipViews = new PipViewPreferences { KeepHiddenOnNewViews = false } };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 MethodInfo run = typeof(TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -148,7 +148,7 @@ public sealed class EffectPairTests(Xunit.Abstractions.ITestOutputHelper output)
             OnUiThread(pump =>
             {
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
-                var settings = new AppSettings { ShowToolbar = true, ShowNotifications = false, WelcomeShown = true, ModifierDrag = true, WindowMenu = true,
+                var settings = new AppSettings { ShowToolbar = true, Notifications = NotificationMode.Problems, WelcomeShown = true, ModifierDrag = true, WindowMenu = true,
                     ExperimentalFeatures = true, HighlightPinned = true, PipViews = new PipViewPreferences { KeepHiddenOnNewViews = false } };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 MethodInfo run = typeof(TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;

@@ -38,7 +38,7 @@ public sealed class EffectExclusivityTests
             // Dark mode's filter works only on the first thread of a process that uses it: the one Dark mode's tests share.
             DarkModeTests.OnUiThread(_ =>
             {
-                var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false, ExperimentalFeatures = true,
+                var settings = new AppSettings { WelcomeShown = true, Notifications = NotificationMode.Problems, ShowToolbar = false, ExperimentalFeatures = true,
                     DetectAlreadyDark = false, Effects = new EffectPreferences { LayeredGlass = layeredGlass },
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
@@ -83,7 +83,7 @@ public sealed class EffectExclusivityTests
         {
             DarkModeTests.OnUiThread(_ =>
             {
-                var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false, ExperimentalFeatures = true,
+                var settings = new AppSettings { WelcomeShown = true, Notifications = NotificationMode.Problems, ShowToolbar = false, ExperimentalFeatures = true,
                     DetectAlreadyDark = true, Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 nint window = target.Handle;

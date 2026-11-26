@@ -70,7 +70,7 @@ public sealed class ViewCommandMatrixTests(Xunit.Abstractions.ITestOutputHelper 
             OnUiThread(pump =>
             {
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
-                var settings = new AppSettings { ShowToolbar = true, ShowNotifications = false, WelcomeShown = true, ModifierDrag = true, WindowMenu = true,
+                var settings = new AppSettings { ShowToolbar = true, Notifications = NotificationMode.Problems, WelcomeShown = true, ModifierDrag = true, WindowMenu = true,
                     ExperimentalFeatures = true, PipMiddleClickScroll = true, HighlightPinned = true,
                     PipViews = new PipViewPreferences { HoverPreview = WinScreen.Settings.PipHoverPreview.Lens, KeepHiddenOnNewViews = false } };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());

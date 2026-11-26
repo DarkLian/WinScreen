@@ -723,7 +723,7 @@ public sealed class ModifierGestureTests
                     while (Environment.TickCount64 < end) { Application.DoEvents(); Thread.Sleep(5); }
                 }
                 var windows = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
-                var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true, ModifierDrag = true,
+                var settings = new AppSettings { ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true, ModifierDrag = true,
                     OpacityWheel = true, ExperimentalFeatures = true, SnapWhileDragging = false };
                 using var app = new Tray.TrayApplication(windows, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 MethodInfo run = typeof(Tray.TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;

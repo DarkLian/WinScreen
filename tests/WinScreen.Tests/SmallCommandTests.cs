@@ -51,7 +51,7 @@ public sealed class SmallCommandTests
             WindowMenuBuilderTests.OnUiThread(() =>
             {
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
-                var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
+                var settings = new AppSettings { ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 MethodInfo run = typeof(TrayApplication).GetMethod("Run", BindingFlags.Instance | BindingFlags.NonPublic)!;

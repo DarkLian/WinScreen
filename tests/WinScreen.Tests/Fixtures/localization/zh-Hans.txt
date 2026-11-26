@@ -538,7 +538,11 @@ settings.language.system 217CFE7DB1E3D10A
 settings.menus.transparency E1B9731B026929E9
 settings.menus.transparency.help 038A14B6FC87BC99
 settings.menus.transparency.windows11 707DB1D0CB0A177C
-settings.notifications.enable 63989DFD0984BA86
+settings.notifications 4B6DED8A7F181397
+settings.notifications.all B1288E4AC09EE02B
+settings.notifications.help E290D01EDF46ED7B
+settings.notifications.off 3FD47EDCE45B3603
+settings.notifications.problems 581FE4D4A1003B64
 settings.opacity.default 1BA6318DA8CF27E0
 settings.opacity.solidOnHover 3A84372A64F19B29
 settings.opacity.title 04405E4A9FFD2A3D

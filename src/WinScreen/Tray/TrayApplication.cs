@@ -100,7 +100,7 @@ public sealed partial class TrayApplication : ApplicationContext
         // Update news stays out of Last result, where it could replace a failure someone needs to read.
         _updates = new AutomaticUpdates(VelopackUpdateSession.Create, message =>
         {
-            if (_settings.ShowNotifications)
+            if (_settings.Notifications == NotificationMode.All)
                 Balloon(T("updates.title"), message, ToolTipIcon.None);
         }, TellAboutVersion);
         _toolbar = new WindowToolbar(CanUseToolbar, IsOn, IsAvailable, Run) { OpenMenu = ShowToolbarMenu, ByPosition = ToolbarByPosition };
@@ -1709,7 +1709,7 @@ public sealed partial class TrayApplication : ApplicationContext
     private void OfferWhatsNew(bool firstRun)
     {
         string version = AppInfo.Version;
-        if (WhatsNew.ShouldOffer(version, _settings.LastSeenVersion, firstRun, WhatsNew.Published) && _settings.ShowNotifications)
+        if (WhatsNew.ShouldOffer(version, _settings.LastSeenVersion, firstRun, WhatsNew.Published) && _settings.Notifications == NotificationMode.All)
             Balloon(T("updates.title"), string.Format(T("whatsNew.offer"), version), ToolTipIcon.Info, WhatsNew.Show);
         string? remembered = WhatsNew.Remember(version, _settings.LastSeenVersion, WhatsNew.Published);
         if (_settings.LastSeenVersion == remembered) return;
@@ -2437,15 +2437,17 @@ public sealed partial class TrayApplication : ApplicationContext
     private void Confirm(string title, string text)
     {
         Remember(title, text);
-        if (_settings.ShowNotifications)
+        if (_settings.Notifications == NotificationMode.All)
             Balloon(title, text, ToolTipIcon.None);
     }
 
-    // Always shown, or it would look like nothing happened.
+    // Shown unless notifications are off, or it would look like nothing happened. A helper's go to the ordinary copy,
+    // which decides.
     private void Alert(string title, string text, ToolTipIcon icon = ToolTipIcon.Warning)
     {
         Remember(title, text);
-        Balloon(title, text, icon);
+        if (_role == AppRole.Helper || _settings.Notifications != NotificationMode.Off)
+            Balloon(title, text, icon);
     }
 
     private void Remember(string title, string text)

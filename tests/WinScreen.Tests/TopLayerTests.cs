@@ -20,7 +20,7 @@ public sealed class TopLayerTests
         {
             WindowMenuBuilderTests.OnUiThread(() =>
             {
-                var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false,
+                var settings = new AppSettings { WelcomeShown = true, Notifications = NotificationMode.Problems, ShowToolbar = false,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try

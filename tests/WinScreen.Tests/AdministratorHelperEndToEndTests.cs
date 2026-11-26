@@ -182,7 +182,7 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
         Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0 && HelperProcess() == 0, "Close the running WinScreen before these tests.");
         Dictionary<AppCommand, string> keys = CommandCatalog.All.ToDictionary(command => command, _ => "");
         keys[AppCommand.ViewFreeze] = "Ctrl+Alt+J";
-        new AppSettings { WelcomeShown = true, ShowToolbar = false, ShowNotifications = false, RunAsAdministrator = true, Hotkeys = keys }
+        new AppSettings { WelcomeShown = true, ShowToolbar = false, Notifications = NotificationMode.Problems, RunAsAdministrator = true, Hotkeys = keys }
             .Save(Path.Combine(_data, "settings.json"));
         using var ordinaryTarget = new TargetProcess(new Rectangle(140, 520, 420, 260), title: "WinScreen helper keys ordinary");
         nint adminTarget = ElevatedTarget("WinScreen helper keys admin", new Rectangle(620, 160, 420, 300));
@@ -319,7 +319,7 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
         if (!ElevatesWithoutAsking) { Skipped.Because("Windows asks before running as administrator here, and a test can't answer."); return; }
         if (ProcessInfo.SelfElevated || !ProcessInfo.CanElevate) { Skipped.Because("Needs an administrator account and a test run that isn't elevated."); return; }
         Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0 && HelperProcess() == 0, "Close the running WinScreen before these tests.");
-        new AppSettings { WelcomeShown = true, ShowToolbar = false, ShowNotifications = false, RunAsAdministrator = true, ExperimentalFeatures = true }
+        new AppSettings { WelcomeShown = true, ShowToolbar = false, Notifications = NotificationMode.Problems, RunAsAdministrator = true, ExperimentalFeatures = true }
             .Save(Path.Combine(_data, "settings.json"));
         const string ordinaryTitle = "WinScreen matrix ordinary", adminTitle = "WinScreen matrix admin";
         using var ordinaryTarget = new TargetProcess(new Rectangle(120, 150, 420, 300), "1E64C8", ordinaryTitle); // As ElevatedTarget: Dark judges colours.
@@ -435,7 +435,7 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
         if (ProcessInfo.SelfElevated || !ProcessInfo.CanElevate) { Skipped.Because("Needs an administrator account and a test run that isn't elevated."); return; }
         Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0 && HelperProcess() == 0, "Close the running WinScreen before these tests.");
         string settingsFile = Path.Combine(_data, "settings.json");
-        new AppSettings { WelcomeShown = true, ShowToolbar = false, ShowNotifications = false, RunAsAdministrator = true }.Save(settingsFile);
+        new AppSettings { WelcomeShown = true, ShowToolbar = false, Notifications = NotificationMode.Problems, RunAsAdministrator = true }.Save(settingsFile);
         using var plain = new TargetProcess(new Rectangle(140, 520, 420, 260), "1E64C8", "WinScreen setup plain");
         nint first = ElevatedTarget("WinScreen setup admin one", new Rectangle(620, 160, 420, 300));
         _app = Start();

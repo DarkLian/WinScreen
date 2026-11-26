@@ -24,8 +24,8 @@ internal static class Setup
     {
         string file = Path.Combine(dataFolder, "settings.json");
         WinScreen.Settings.AppSettings settings = File.Exists(file) ? WinScreen.Settings.AppSettings.Load(file) : new() { WelcomeShown = true };
-        if (!settings.ShowNotifications) return;
-        settings.ShowNotifications = false;
+        if (settings.Notifications != WinScreen.Settings.NotificationMode.All) return;
+        settings.Notifications = WinScreen.Settings.NotificationMode.Problems;
         settings.Save(file);
     }
 

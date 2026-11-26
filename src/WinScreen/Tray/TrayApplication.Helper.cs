@@ -206,7 +206,8 @@ public sealed partial class TrayApplication
         {
             case HelperLink.Alert when message.Title is { } title:
                 Remember(title, message.Text ?? "");
-                Balloon(title, message.Text ?? "", Enum.IsDefined((ToolTipIcon)message.Icon) ? (ToolTipIcon)message.Icon : ToolTipIcon.Info);
+                if (_settings.Notifications != NotificationMode.Off)
+                    Balloon(title, message.Text ?? "", Enum.IsDefined((ToolTipIcon)message.Icon) ? (ToolTipIcon)message.Icon : ToolTipIcon.Info);
                 break;
             case HelperLink.OpenSettings:
                 OpenBackgroundOf(message.Text ?? "");

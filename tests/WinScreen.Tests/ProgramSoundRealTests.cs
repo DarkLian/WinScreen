@@ -53,7 +53,7 @@ public sealed class ProgramSoundRealTests
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 var settings = new AppSettings
                 {
-                    ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
+                    ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
                 };
                 var sound = new ProgramSound(AudioSessions.Instance, journal);

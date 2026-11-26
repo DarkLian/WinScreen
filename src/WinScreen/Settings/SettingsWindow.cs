@@ -89,8 +89,7 @@ public sealed partial class SettingsWindow : Form
     private readonly CheckBox _pipDiagnostics = new SwitchBox { Text = T("pip.diagnostics.includeHardware"), AutoSize = true };
     private readonly List<int> _pipRates = [.. PipPreferences.FrameRates];
 
-    private readonly CheckBox _showNotifications = new SwitchBox
-        { Text = T("settings.notifications.enable"), AutoSize = true };
+    private readonly ComboBox _notifications = new ThemedCombo { Width = 240 };
 
     private readonly ComboBox _updateMode = new ThemedCombo { Width = 240 };
 
@@ -210,6 +209,7 @@ private readonly ErrorProvider _errors = new();
         _language.Items.AddRange([T("settings.language.system"), "English", "简体中文", "繁體中文"]);
         _theme.Items.AddRange([T("settings.theme.system"), T("settings.theme.light"), T("settings.theme.dark")]);
         _updateMode.Items.AddRange([T("updates.mode.off"), T("updates.mode.tellMe"), T("updates.mode.install")]);
+        _notifications.Items.AddRange([T("settings.notifications.all"), T("settings.notifications.problems"), T("settings.notifications.off")]);
 
         Text = T("settings.window.title");
         Icon = TrayApplication.LoadIcon();
@@ -345,7 +345,7 @@ private readonly ErrorProvider _errors = new();
         var icons = new Dictionary<Control, char>
         {
             [_language] = '\uE774', [_theme] = '\uE790', [_menuTransparency] = '\uE706', [_startWithWindows] = '\uE7E8', [_runAsAdministrator] = '\uE7EF',
-            [_showNotifications] = '\uEA8F', [_updateMode] = '\uE896', [_checkUpdates] = '\uE895', [_pauseInFullScreen] = '\uE7FC', [_allowPip] = '\uE8A7',
+            [_notifications] = '\uEA8F', [_updateMode] = '\uE896', [_checkUpdates] = '\uE895', [_pauseInFullScreen] = '\uE7FC', [_allowPip] = '\uE8A7',
             [_experimental] = '\uE945',
             [_modifierDrag] = '\uE7C2', [_modifierKey] = '\uE765', [_snapWhileDragging] = '\uE90C', [_windowMenu] = '\uE712',
             [_windowMenuGesture] = '\uE962',
@@ -831,6 +831,7 @@ private readonly ErrorProvider _errors = new();
         draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
         draft.Theme = Themes[Math.Max(0, _theme.SelectedIndex)];
         draft.Updates = (UpdateMode)Math.Max(0, _updateMode.SelectedIndex);
+        draft.Notifications = (NotificationMode)Math.Max(0, _notifications.SelectedIndex);
         draft.ModifierKey = (ModifierKey)Math.Max(0, _modifierKey.SelectedIndex);
         draft.WindowMenuGesture = (WindowMenuGesture)Math.Max(0, _windowMenuGesture.SelectedIndex);
         draft.WindowMenuExclusions = Programs(_windowMenuExclusions, _newMenuExclusion);
@@ -882,7 +883,6 @@ private readonly ErrorProvider _errors = new();
     private (CheckBox Box, Func<AppSettings, bool> Read, Action<AppSettings, bool> Write)[] Switches =>
     [
         (_showToolbar, settings => settings.ShowToolbar, (settings, on) => settings.ShowToolbar = on),
-        (_showNotifications, settings => settings.ShowNotifications, (settings, on) => settings.ShowNotifications = on),
         (_menuTransparency, settings => settings.MenuTransparency, (settings, on) => settings.MenuTransparency = on),
         (_experimental, settings => settings.ExperimentalFeatures, (settings, on) => settings.ExperimentalFeatures = on),
         (_runAsAdministrator, settings => settings.RunAsAdministrator, (settings, on) => settings.RunAsAdministrator = on),
@@ -1182,6 +1182,7 @@ private readonly ErrorProvider _errors = new();
     }
 
     internal void SetUpdateMode(UpdateMode mode) => _updateMode.SelectedIndex = (int)mode;
+    internal void SetNotifications(NotificationMode mode) => _notifications.SelectedIndex = (int)mode;
 
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<bool>? UpdateReady { get; init; }
@@ -1200,7 +1201,6 @@ private readonly ErrorProvider _errors = new();
         CheckBox box = option switch
         {
             nameof(AppSettings.ShowToolbar) => _showToolbar,
-            nameof(AppSettings.ShowNotifications) => _showNotifications,
             nameof(AppSettings.MenuTransparency) => _menuTransparency,
             nameof(AppSettings.ExperimentalFeatures) => _experimental,
             nameof(AppSettings.PauseInFullScreen) => _pauseInFullScreen,
@@ -1275,6 +1275,7 @@ private readonly ErrorProvider _errors = new();
         _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, values.Language));
         _theme.SelectedIndex = Math.Max(0, Array.IndexOf(Themes, values.Theme));
         _updateMode.SelectedIndex = (int)values.Updates;
+        _notifications.SelectedIndex = (int)values.Notifications;
         _modifierKey.SelectedIndex = (int)values.ModifierKey;
         _windowMenuGesture.SelectedIndex = (int)values.WindowMenuGesture;
         _windowMenuExclusions.Items.Clear();
@@ -1395,7 +1396,8 @@ private readonly ErrorProvider _errors = new();
         _menuTransparency.Enabled = blurWorks;
         var startup = new List<Control> { language, theme, _menuTransparency,
             Note(blurWorks ? T("settings.menus.transparency.help") : T("settings.menus.transparency.windows11")), _startWithWindows, _runAsAdministrator,
-            Note(adminWorks ? T("settings.admin.help") : T("settings.admin.unavailable")), _showNotifications,
+            Note(adminWorks ? T("settings.admin.help") : T("settings.admin.unavailable")),
+            SettingRow(T("settings.notifications"), _notifications), Note(T("settings.notifications.help")),
             SettingRow(T("updates.mode.label"), _updateMode), Note(T("updates.mode.help")) };
         _updateMode.Enabled = VelopackUpdateSession.IsConfigured;
         _restartToUpdate.Text = T("updates.restart");

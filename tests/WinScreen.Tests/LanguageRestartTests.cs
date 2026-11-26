@@ -36,7 +36,7 @@ public sealed class LanguageRestartTests
 
     private static AppSettings Quiet() => new()
     {
-        WelcomeShown = true, ShowNotifications = false, ShowToolbar = false, Language = "en",
+        WelcomeShown = true, Notifications = NotificationMode.Problems, ShowToolbar = false, Language = "en",
         Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
     };
 

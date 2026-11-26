@@ -36,7 +36,7 @@ public sealed class RuleWindowTests
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 var settings = new AppSettings
                 {
-                    ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
+                    ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
                     SavedSetups = [new ProgramSetup
                     {
@@ -80,7 +80,7 @@ public sealed class RuleWindowTests
         var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
         var settings = new AppSettings
         {
-            ShowToolbar = false, ShowNotifications = false, WelcomeShown = true, ExperimentalFeatures = true,
+            ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true, ExperimentalFeatures = true,
             Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""), SavedSetups = [rule],
         };
         using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
@@ -178,7 +178,7 @@ public sealed class RuleWindowTests
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 var settings = new AppSettings
                 {
-                    ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
+                    ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
                 };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
@@ -239,7 +239,7 @@ public sealed class RuleWindowTests
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 AppSettings With(params ProgramSetup[] rules) => new()
                 {
-                    ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
+                    ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
                     SavedSetups = [.. rules],
                 };
@@ -300,7 +300,7 @@ public sealed class RuleWindowTests
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 var settings = new AppSettings
                 {
-                    ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
+                    ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
                     SavedSetups = [new ProgramSetup { Program = "WinScreen.TestTarget", TitleContains = "ready", Pinned = true }],
                 };

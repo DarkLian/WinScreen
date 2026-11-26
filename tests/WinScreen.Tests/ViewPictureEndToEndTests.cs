@@ -111,7 +111,7 @@ public sealed class ViewPictureEndToEndTests(Xunit.Abstractions.ITestOutputHelpe
             {
                 Desktop.GainForegroundRights();
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
-                var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true, ExperimentalFeatures = true };
+                var settings = new AppSettings { ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true, ExperimentalFeatures = true };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 var shelf = new Shelf();
                 app.Pictures = shelf.Make();
@@ -290,7 +290,7 @@ public sealed class ViewPictureEndToEndTests(Xunit.Abstractions.ITestOutputHelpe
             {
                 Desktop.GainForegroundRights();
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
-                var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true,
+                var settings = new AppSettings { ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true,
                     Pip = new PipPreferences { Backend = PipBackendPreference.Dwm } };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 app.Pictures = new Shelf().Make();
@@ -349,7 +349,7 @@ public sealed class ViewPictureEndToEndTests(Xunit.Abstractions.ITestOutputHelpe
             {
                 Desktop.GainForegroundRights();
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
-                var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true };
+                var settings = new AppSettings { ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 var shelf = new Shelf();
                 app.Pictures = shelf.Make();
@@ -418,7 +418,7 @@ public sealed class ViewPictureEndToEndTests(Xunit.Abstractions.ITestOutputHelpe
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 var settings = new AppSettings
                 {
-                    ShowToolbar = false, ShowNotifications = false, WelcomeShown = true, ExperimentalFeatures = true,
+                    ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true, ExperimentalFeatures = true,
                     Backgrounds = new BackgroundPreferences { Everywhere = new BackgroundChoice { File = gif } },
                 };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());

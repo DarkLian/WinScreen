@@ -56,7 +56,7 @@ public sealed class ViewRecordingEndToEndTests(Xunit.Abstractions.ITestOutputHel
             {
                 Desktop.GainForegroundRights();
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
-                var settings = new AppSettings { ShowToolbar = false, ShowNotifications = false, WelcomeShown = true, ExperimentalFeatures = true,
+                var settings = new AppSettings { ShowToolbar = false, Notifications = NotificationMode.Problems, WelcomeShown = true, ExperimentalFeatures = true,
                     PipViews = new PipViewPreferences { KeepHiddenOnNewViews = false } };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 app.Pictures = new PictureShelf

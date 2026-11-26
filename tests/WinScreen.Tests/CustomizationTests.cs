@@ -126,7 +126,7 @@ public sealed class CustomizationTests : IDisposable
         {
             var settings = new AppSettings
             {
-                WelcomeShown = true, ShowNotifications = false, ShowToolbar = false,
+                WelcomeShown = true, Notifications = NotificationMode.Problems, ShowToolbar = false,
                 Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => ""),
             };
             using var app = new TrayApplication(new WindowController([]), settings, settingsFile, startup: Setup.OwnStartup());

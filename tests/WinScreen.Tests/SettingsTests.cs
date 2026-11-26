@@ -53,7 +53,7 @@ public class SettingsTests
         string path = NewPath();
         var settings = new AppSettings
         {
-            OpaqueOnHover = true, ExcludedPrograms = ["exampleprogram"], ShowNotifications = false,
+            OpaqueOnHover = true, ExcludedPrograms = ["exampleprogram"], Notifications = NotificationMode.Problems,
             Language = "zh-Hant", Updates = UpdateMode.TellMe
         };
         settings.Hotkeys[AppCommand.TogglePin] = "Ctrl+Shift+F9";
@@ -262,7 +262,7 @@ public sealed class SettingsWindowTests : IDisposable
             window.SetOption(nameof(AppSettings.HighlightPinned), true);
             window.SetOption(nameof(AppSettings.PipAutoMove), true);
             window.SetOption(nameof(AppSettings.PipMiddleClickScroll), true);
-            window.SetOption(nameof(AppSettings.ShowNotifications), false);
+            window.SetNotifications(NotificationMode.Problems);
             window.SetUpdateMode(UpdateMode.Install);
             window.AddIncluded("AnotherProgram.EXE");
             window.SetDefaultOpacity(60);
@@ -367,7 +367,7 @@ public sealed class SettingsWindowTests : IDisposable
             try
             {
                 UiText.Initialize(language);
-                var settings = new AppSettings { Language = language, ShowNotifications = false };
+                var settings = new AppSettings { Language = language, Notifications = NotificationMode.Problems };
                 using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), draft => { settings.CopyFrom(draft); return []; });
                 _ = window.Handle;
                 Control[] controls = Descendants(window).ToArray();
@@ -582,7 +582,7 @@ public sealed class SettingsWindowTests : IDisposable
                 return condition();
             }
 
-            window.SetOption(nameof(AppSettings.ShowNotifications), false);
+            window.SetNotifications(NotificationMode.Problems);
             window.SetOption(nameof(AppSettings.OpaqueOnHover), true);
             Assert.True(Within(SettingsWindow.SettleMilliseconds * 5, () => applied > 0), "The change wasn't put into effect.");
             Assert.False(Within(SettingsWindow.SettleMilliseconds * 2, () => applied > 1)); // Both, together, once.
@@ -597,7 +597,7 @@ public sealed class SettingsWindowTests : IDisposable
             Assert.True(Within(SettingsWindow.SettleMilliseconds * 5, () => applied > 1));
             Assert.Equal("#123456", settings.PinBorder.ColorHex);
 
-            settings.ShowNotifications = true; // As if changed from elsewhere.
+            settings.Notifications = NotificationMode.All; // As if changed from elsewhere.
             window.LoadValues(settings);
             Assert.False(window.HasChanges);
             Assert.False(Within(SettingsWindow.SettleMilliseconds * 3, () => applied > 2), "Showing what's in effect put it into effect again.");
@@ -622,7 +622,7 @@ public sealed class SettingsWindowTests : IDisposable
             });
             _ = window.Handle;
             window.CaptureHotkey(AppCommand.TogglePin, Keys.Control | Keys.Alt | Keys.F22);
-            window.SetOption(nameof(AppSettings.ShowNotifications), false);
+            window.SetNotifications(NotificationMode.Problems);
             Assert.True(window.ApplyChanges());
             Assert.False(settings.ShowNotifications);
             Assert.Equal("Ctrl+Alt+T", settings.Hotkeys[AppCommand.TogglePin]);
@@ -646,7 +646,7 @@ public sealed class SettingsWindowTests : IDisposable
             window.SetupsChanged();
             Assert.False(window.HasChanges);
             Assert.Contains(Descendants(window).OfType<ListBox>(), list => list.Items.OfType<ProgramSetup>().Any(setup => setup.Program == "notepad"));
-            window.SetOption(nameof(AppSettings.ShowNotifications), false);
+            window.SetNotifications(NotificationMode.Problems);
             Assert.True(window.ApplyChanges());
             Assert.Single(settings.SavedSetups);
         });
@@ -668,7 +668,7 @@ public sealed class SettingsWindowTests : IDisposable
             ListBox list = Descendants(window).OfType<ListBox>().First(box => box.Items.OfType<ProgramSetup>().Any());
             ProgramSetup shown = list.Items.OfType<ProgramSetup>().Single();
             // Something else saved first, as a shortcut set a moment before: what's in effect is a fresh copy after it.
-            window.SetOption(nameof(AppSettings.ShowNotifications), !settings.ShowNotifications);
+            window.SetNotifications(settings.Notifications == NotificationMode.All ? NotificationMode.Problems : NotificationMode.All);
             Assert.True(window.ApplyChanges());
             Assert.DoesNotContain(settings.SavedSetups, setup => ReferenceEquals(setup, shown));
             window.ReplaceSetup(shown, new ProgramSetup { Program = "chrome", Pinned = true, TitleContains = "Trip", Place = WinScreen.Windows.WindowAnchor.TopRight });
@@ -731,7 +731,7 @@ public sealed class SettingsWindowTests : IDisposable
                 [new HotkeyProblem(AppCommand.RestoreAll, "Ctrl+Alt+F21")]);
             window.CaptureHotkey(AppCommand.RestoreAll, Keys.Control | Keys.Alt | Keys.F21);
             window.SetOption("StartWithWindows", true);
-            window.SetOption(nameof(AppSettings.ShowNotifications), false);
+            window.SetNotifications(NotificationMode.Problems);
             window.AddExcluded("NewExclusion");
             Assert.False(window.SaveChanges());
             Assert.Equal("Ctrl+Alt+R", settings.Hotkeys[AppCommand.RestoreAll]);

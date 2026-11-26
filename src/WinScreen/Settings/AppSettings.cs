@@ -346,6 +346,8 @@ public static class CommandCatalog
 
 public enum UpdateMode { Off = 0, TellMe = 1, Install = 2 }
 
+public enum NotificationMode { All = 0, Problems = 1, Off = 2 }
+
 public sealed class AppSettings
 {
     public const int LowestOpacityPercent = 20;
@@ -354,7 +356,7 @@ public sealed class AppSettings
     private static readonly JsonSerializerOptions Format = new() { WriteIndented = true };
 
     // Raise it only together with a new step in Migrations.
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     // Step n turns format n into n + 1, on the file's JSON alone. Files from before the format was numbered are 0.
     internal static readonly Action<JsonObject>[] Migrations =
@@ -363,6 +365,7 @@ public sealed class AppSettings
         ChooseUpdates, // 1 → 2
         DropFirstSuggestions, // 2 → 3
         AddToolbarButtons, // 3 → 4
+        ChooseNotifications, // 4 → 5
     ];
 
     // The first versions filled both lists with sample programs nobody chose.
@@ -400,6 +403,13 @@ public sealed class AppSettings
         }
         if (!CommandCatalog.HadEveryFirstButton(shown)) return;
         foreach (AppCommand added in CommandCatalog.AddedToolbarButtons.Where(added => !shown.Contains(added))) buttons.Add(added.ToString());
+    }
+
+    private static void ChooseNotifications(JsonObject root)
+    {
+        if (root.ContainsKey(nameof(Notifications))) return;
+        bool all = root[nameof(ShowNotifications)] is not JsonValue value || !value.TryGetValue(out bool on) || on;
+        root[nameof(Notifications)] = (int)(all ? NotificationMode.All : NotificationMode.Problems);
     }
 
     private static void ChooseUpdates(JsonObject root)
@@ -489,7 +499,7 @@ public sealed class AppSettings
     public List<ProgramSetup> SavedSetups { get; set; } = [];
 
     public bool ShowToolbar { get; set; } = true;
-    public bool ShowNotifications { get; set; } = true;
+    public NotificationMode Notifications { get; set; }
     public bool MenuTransparency { get; set; } = true;
     public UpdateMode Updates { get; set; }
 
@@ -498,6 +508,9 @@ public sealed class AppSettings
     // Written for copies from before the three update choices, which know only this switch; read only from an older
     // file (ChooseUpdates).
     public bool AutomaticUpdates => Updates == UpdateMode.Install;
+
+    // The same for the switch before the three notification choices (ChooseNotifications).
+    public bool ShowNotifications => Notifications == NotificationMode.All;
     public string Language { get; set; } = "system";
 
     public string Theme { get; set; } = "system";
@@ -660,6 +673,7 @@ public sealed class AppSettings
         loaded.Language = loaded.Language is "en" or "zh-Hans" or "zh-Hant" ? loaded.Language : "system";
         loaded.Theme = loaded.Theme is "light" or "dark" ? loaded.Theme : "system";
         loaded.Updates = Enum.IsDefined(loaded.Updates) ? loaded.Updates : UpdateMode.Off;
+        loaded.Notifications = Enum.IsDefined(loaded.Notifications) ? loaded.Notifications : NotificationMode.All;
         loaded.DefaultOpacityPercent =
             Math.Clamp(loaded.DefaultOpacityPercent, LowestOpacityPercent, HighestOpacityPercent);
         foreach ((AppCommand command, string hotkey) in defaults.Hotkeys)

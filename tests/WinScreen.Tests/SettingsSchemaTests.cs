@@ -420,6 +420,31 @@ public sealed class SettingsSchemaTests : IDisposable
         Assert.Equal(UpdateMode.Off, AppSettings.Parse("""{ "SchemaVersion": 2, "Updates": 0, "AutomaticUpdates": true }""").Updates);
     }
 
+    [Theory]
+    [InlineData("true", NotificationMode.All)]
+    [InlineData("false", NotificationMode.Problems)]
+    [InlineData(null, NotificationMode.All)]
+    public void The_one_message_switch_becomes_the_three_notification_choices(string? shown, NotificationMode expected)
+    {
+        string json = $$"""{ "SchemaVersion": 4 {{(shown is null ? "" : $", \"ShowNotifications\": {shown}")}} }""";
+        Assert.Equal(expected, AppSettings.Parse(json).Notifications);
+    }
+
+    [Fact]
+    public void A_notification_choice_is_kept_and_older_copies_still_read_their_switch()
+    {
+        new AppSettings { Notifications = NotificationMode.Off }.Save(SettingsFile);
+        Assert.Equal(NotificationMode.Off, AppSettings.Load(SettingsFile).Notifications);
+        using (JsonDocument saved = JsonDocument.Parse(File.ReadAllText(SettingsFile)))
+            Assert.False(saved.RootElement.GetProperty("ShowNotifications").GetBoolean());
+
+        new AppSettings().Save(SettingsFile);
+        using (JsonDocument saved = JsonDocument.Parse(File.ReadAllText(SettingsFile)))
+            Assert.True(saved.RootElement.GetProperty("ShowNotifications").GetBoolean());
+        Assert.Equal(NotificationMode.Off, AppSettings.Parse("""{ "SchemaVersion": 5, "Notifications": 2, "ShowNotifications": true }""").Notifications);
+        Assert.Equal(NotificationMode.All, AppSettings.Parse("""{ "SchemaVersion": 5, "Notifications": 9 }""").Notifications);
+    }
+
     [Fact]
     public void An_unknown_update_choice_from_a_newer_version_is_off()
     {

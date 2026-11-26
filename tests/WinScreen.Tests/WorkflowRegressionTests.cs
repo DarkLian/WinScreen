@@ -19,7 +19,7 @@ public sealed class WorkflowRegressionTests
             WindowMenuBuilderTests.OnUiThread(() =>
             {
                 string path = Path.Combine(folder, "settings.json");
-                var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false,
+                var settings = new AppSettings { WelcomeShown = true, Notifications = NotificationMode.Problems, ShowToolbar = false,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 using var app = new TrayApplication(new WindowController([]), settings, path, startup: Setup.OwnStartup());
                 try
@@ -27,7 +27,7 @@ public sealed class WorkflowRegressionTests
                     File.Delete(path);
                     Directory.CreateDirectory(path); // The atomic file replacement must fail.
                     var draft = settings.Clone();
-                    draft.ShowNotifications = true;
+                    draft.Notifications = NotificationMode.All;
                     draft.Hotkeys[AppCommand.TogglePin] = "Ctrl+Shift+F19";
                     var failure = Assert.Throws<TargetInvocationException>(() => typeof(TrayApplication)
                         .GetMethod("Apply", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(app, [draft]));
@@ -52,7 +52,7 @@ public sealed class WorkflowRegressionTests
         {
             WindowMenuBuilderTests.OnUiThread(() =>
             {
-                var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false,
+                var settings = new AppSettings { WelcomeShown = true, Notifications = NotificationMode.Problems, ShowToolbar = false,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 settings.Hotkeys[AppCommand.ToggleDark] = "Ctrl+Shift+F20";
                 using var app = new TrayApplication(new WindowController([]), settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
@@ -114,7 +114,7 @@ public sealed class ConcealmentOwnershipTests
             target.UseFrame();
             WindowMenuBuilderTests.OnUiThread(() =>
             {
-                var settings = new AppSettings { WelcomeShown = true, ShowNotifications = false, ShowToolbar = false,
+                var settings = new AppSettings { WelcomeShown = true, Notifications = NotificationMode.Problems, ShowToolbar = false,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
@@ -155,7 +155,7 @@ public sealed class ConcealmentOwnershipTests
             {
                 var controller = new WindowController([], new ChangeJournal(Path.Combine(folder, "journal.json")));
                 var settings = new AppSettings { ExperimentalFeatures = true, ShowToolbar = false,
-                    ShowNotifications = false, WelcomeShown = true,
+                    Notifications = NotificationMode.Problems, WelcomeShown = true,
                     Hotkeys = CommandCatalog.All.ToDictionary(command => command, _ => "") };
                 using var app = new TrayApplication(controller, settings, Path.Combine(folder, "settings.json"), startup: Setup.OwnStartup());
                 try
