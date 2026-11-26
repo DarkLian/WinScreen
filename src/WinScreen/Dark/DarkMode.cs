@@ -8,6 +8,20 @@ public sealed class DarkMode : IDisposable
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = FollowInterval };
     private readonly HashSet<nint> _ignored = [];
     public bool DetectAlreadyDark { get; set; }
+    private Func<nint, Glass.ContentLevels> _levelsOf = _ => new(0.15f, 1);
+
+    // Called again after levels change, for every window with Dark.
+    internal void SetLevels(Func<nint, Glass.ContentLevels> levelsOf)
+    {
+        _levelsOf = levelsOf;
+        foreach ((nint window, DarkOverlay overlay) in _overlays) Level(window, overlay);
+    }
+
+    private void Level(nint window, DarkOverlay overlay)
+    {
+        Glass.ContentLevels levels = _levelsOf(window);
+        overlay.SetLevels(levels.DarkPage, levels.DarkText);
+    }
     public event Action<string>? Notice;
 
     public DarkMode()
@@ -55,6 +69,7 @@ public sealed class DarkMode : IDisposable
     {
         var overlay = new DarkOverlay(window, DarkOverlay.IsPinned(window));
         _overlays[window] = overlay;
+        Level(window, overlay);
         _ = overlay.Handle;
         UpdateFilters();
         return overlay;

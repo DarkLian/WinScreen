@@ -82,6 +82,7 @@ internal sealed class ContentEffects : IDisposable
         _levelsOf = levelsOf;
         foreach ((nint window, ContentOverlay overlay) in _overlays)
             overlay.SetLevels(LevelsOf(window));
+        LevelsChanged?.Invoke();
     }
 
     // Null goes back to the levels of the window's app.
@@ -90,7 +91,11 @@ internal sealed class ContentEffects : IDisposable
         if (levels is { } own) _ownLevels[window] = own;
         else _ownLevels.Remove(window);
         if (_overlays.TryGetValue(window, out ContentOverlay? overlay)) overlay.SetLevels(LevelsOf(window));
+        LevelsChanged?.Invoke();
     }
+
+    // Levels of a window or app changed, as Dark without a graphics card needs to know.
+    public event Action? LevelsChanged;
 
     public bool HasOwnLevels(nint window) => _ownLevels.ContainsKey(window);
 
@@ -295,6 +300,9 @@ internal sealed class ContentEffects : IDisposable
 
     public void DropClosed()
     {
+        // Dark without a graphics card has no overlay here but can have levels of its own.
+        foreach (nint window in _ownLevels.Keys.Where(window => !_overlays.ContainsKey(window) && !Native.User32.IsWindow(window)).ToArray())
+            _ownLevels.Remove(window);
         foreach (nint window in _overlays.Keys.Where(window => !Native.User32.IsWindow(window)).ToArray())
             if (_overlays.TryGetValue(window, out ContentOverlay? overlay))
             {

@@ -7,12 +7,21 @@ internal static class ContentShaders
     // flip their brightness and keep their colour. A white page becomes #191919 rather than black, as the filter kind
     // does; the rest is lifted in step.
     private const string Flip = """
-        float3 Flipped(float3 c, float3 across) {
+        float3 Turned(float3 c, float3 across) {
             float3 hue = across - dot(across, float3(0.3,0.59,0.11));
             float light = dot(c, float3(0.3,0.59,0.11));
             float coloured = smoothstep(0.04, 0.12, length(hue));
-            float3 flipped = saturate(lerp(1 - c + 2 * hue, c + (1 - 2 * light), coloured));
-            return 25.0 / 255 + flipped * (1 - 25.0 / 255);
+            return saturate(lerp(1 - c + 2 * hue, c + (1 - 2 * light), coloured));
+        }
+        float3 Flipped(float3 c, float3 across) { return 25.0 / 255 + Turned(c, across) * (1 - 25.0 / 255); }
+        // Dark mode's own levels: what white becomes, what black becomes, and how far clearly coloured pixels go back
+        // to their own colour. Greys (pages, text) always turn, so text stays readable at any setting. A colour kept
+        // is lifted to at least middle brightness: dark blue link text kept as it was couldn't be read on the dark page.
+        float3 Darkened(float3 c, float3 across, float page, float top, float keep) {
+            float3 hue = across - dot(across, float3(0.3,0.59,0.11));
+            float vivid = smoothstep(0.10, 0.30, length(hue));
+            float3 kept = saturate(c * max(1, 0.45 / max(dot(c, float3(0.3,0.59,0.11)), 0.02)));
+            return lerp(page + Turned(c, across) * (top - page), kept, keep * vivid);
         }
 
         """;
@@ -101,7 +110,7 @@ internal static class ContentShaders
             if (mode.x == 2 && mode.y == 1) {
                 result = float4(c, 1);
             } else if (mode.x == 2) {
-                result = float4(Flipped(c, Across(int2(id.xy), ow, oh)), 1);
+                result = float4(Darkened(c, Across(int2(id.xy), ow, oh), levels.x, levels.y, levels.z), 1);
             } else if (mode.x == 1) {
                 // Plain Glass: only the page colour itself is see-through, as the colour-key kind does it. The page
                 // colour here is an average, so it is matched to within about 2/255.

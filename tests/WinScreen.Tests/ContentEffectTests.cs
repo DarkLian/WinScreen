@@ -431,6 +431,26 @@ public sealed class PageReaderTests
         Assert.Equal(60, Assert.Single(effects.Apps).BackgroundPercent); // The original stays as it was.
     }
 
+    // The owner, 26 Nov: Dark mode "flips everything". It keeps working pixel by pixel, with levels as Glass has: what a
+    // white page becomes, what black text becomes, and how much clearly coloured parts keep their colour; each app its own.
+    [Fact]
+    public void Dark_levels_are_kept_in_range_and_each_app_can_have_its_own()
+    {
+        EffectPreferences defaults = new EffectPreferences().Validated();
+        Assert.Equal((0.1f, 1f, 0f), (defaults.Levels.DarkPage, defaults.Levels.DarkText, defaults.Levels.DarkColors));
+        EffectPreferences effects = AppSettings.Parse("""
+            {"Effects":{"DarkPagePercent":90,"DarkTextPercent":10,"DarkColorsPercent":-5,"Apps":[
+              {"Program":"chrome","DarkPagePercent":20,"DarkTextPercent":80,"DarkColorsPercent":60}]}}
+            """).Effects;
+        Assert.Equal((EffectPreferences.MostDarkPage, EffectPreferences.LeastDarkText, 0), (effects.DarkPagePercent, effects.DarkTextPercent, effects.DarkColorsPercent));
+        ContentLevels chrome = effects.LevelsFor("chrome");
+        Assert.Equal((0.2f, 0.8f, 0.6f), (chrome.DarkPage, chrome.DarkText, chrome.DarkColors));
+        Assert.Equal(EffectPreferences.MostDarkPage, effects.LevelsOf("notepad").DarkPagePercent); // A new app starts from the main levels.
+        // Saving an app's Glass levels from its panel keeps its Dark levels, and the other way round.
+        AppGlassLevels saved = effects.LevelsOf("chrome") with { BackgroundPercent = 40 };
+        Assert.Equal(60, Assert.Single(effects.With("chrome", saved).Apps).DarkColorsPercent);
+    }
+
     [Fact]
     public void A_window_set_on_its_own_goes_back_to_its_apps_levels_when_cleared()
     {
@@ -1225,6 +1245,44 @@ public sealed class ContentEffectTests
             }
 
             Assert.False(WindowInfo.IsConcealed(target.Handle));
+        });
+    }
+
+    // A white page (half the window, so it reads as the page), black text and a red picture side by side. The page and text levels set what white and black become;
+    // Keep colors brings the red back while the page and text still turn.
+    [GraphicsCardFact]
+    public void Dark_levels_set_the_page_and_text_and_keep_colours_brings_pictures_back()
+    {
+        using var target = new TargetProcess(new Rectangle(300, 220, 800, 300), "FFFFFF,FFFFFF,000000,E8453C");
+        User32.SetWindowPos(target.Handle, 0, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        Rectangle Stripe(int index) => new(bounds.Left + bounds.Width * (2 * index + 1) / 8 - 5, bounds.Top + bounds.Height / 2 - 5, 10, 10);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            effects.SetLevels(new ContentLevels(0.15f, 1, DarkPage: 0.3f, DarkText: 0.6f));
+            try
+            {
+                Assert.True(effects.Toggle(target.Handle, ContentLook.Dark));
+                Color page = Color.FromArgb(77, 77, 77), text = Color.FromArgb(153, 153, 153);
+                bool Levelled() => Desktop.IsNear(Desktop.ColorOnScreen(Stripe(0)), page, 12) && Desktop.IsNear(Desktop.ColorOnScreen(Stripe(2)), text, 12);
+                Pump(Levelled);
+                Assert.True(Levelled(), $"Page {Desktop.ColorOnScreen(Stripe(0))}, text {Desktop.ColorOnScreen(Stripe(2))}.");
+                Color red = Color.FromArgb(0xE8, 0x45, 0x3C); // Bright enough to be kept as it is; darker colours are lifted.
+                Assert.False(Desktop.IsNear(Desktop.ColorOnScreen(Stripe(3)), red, 30), $"Red at 0%: {Desktop.ColorOnScreen(Stripe(3))}.");
+
+                effects.SetLevels(new ContentLevels(0.15f, 1, DarkPage: 0.3f, DarkText: 0.6f, DarkColors: 1));
+                bool Kept() => Desktop.IsNear(Desktop.ColorOnScreen(Stripe(3)), red, 12);
+                Pump(Kept);
+                Assert.True(Kept(), $"Red at 100%: {Desktop.ColorOnScreen(Stripe(3))}.");
+                Assert.True(Levelled(), $"Page {Desktop.ColorOnScreen(Stripe(0))}, text {Desktop.ColorOnScreen(Stripe(2))} with colors kept.");
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
         });
     }
 

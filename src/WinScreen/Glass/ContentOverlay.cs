@@ -17,7 +17,7 @@ namespace WinScreen.Glass;
 internal enum ContentLook { Glass, Dark }
 
 internal readonly record struct ContentLevels(float Background, float Text, float FadeRange = 1, bool Plain = false,
-    GlassText TextColor = GlassText.AsItIs, bool Shadow = true);
+    GlassText TextColor = GlassText.AsItIs, bool Shadow = true, float DarkPage = 0.1f, float DarkText = 1, float DarkColors = 0);
 
 // Light or Dark flips a page that is the other way, as Dark mode does, before Glass.
 public enum GlassText { AsItIs, Light, Dark }
@@ -769,10 +769,12 @@ internal sealed unsafe class ContentOverlay : Form
 
         (float pr, float pg, float pb) = _page.Page;
         ContentLevels levels = _levels.Value;
+        bool dark = _look == ContentLook.Dark;
         var options = new Options
         {
-            Background = levels.Background, Text = levels.Text, FadeRange = levels.FadeRange, Shadow = levels.Shadow ? 1 : 0,
-            Mode = _look == ContentLook.Dark ? 2 : levels.Plain ? 1 : 0, AlreadyDark = _leaveAlreadyDark && _page.AlreadyDark ? 1 : 0,
+            Background = dark ? levels.DarkPage : levels.Background, Text = dark ? levels.DarkText : levels.Text,
+            FadeRange = dark ? levels.DarkColors : levels.FadeRange, Shadow = levels.Shadow ? 1 : 0,
+            Mode = dark ? 2 : levels.Plain ? 1 : 0, AlreadyDark = _leaveAlreadyDark && _page.AlreadyDark ? 1 : 0,
             PageR = pr, PageG = pg, PageB = pb, Flip = Flips(levels) ? 1 : 0,
         };
         Settings.KeptArea[] kept = _kept;

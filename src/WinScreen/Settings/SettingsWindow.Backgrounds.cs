@@ -19,6 +19,9 @@ public sealed partial class SettingsWindow
     private readonly NumericUpDown _appGlassFade = new CurvedNumber { Minimum = 1, Maximum = EffectPreferences.MostFadeRange, Width = 70, Curve = CurvedNumber.FadeCurve };
     private readonly ComboBox _appGlassTextColor = TextColorPicker();
     private readonly SwitchBox _appGlassShadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
+    private readonly NumericUpDown _appDarkPage = new() { Minimum = 0, Maximum = EffectPreferences.MostDarkPage, Width = 70 };
+    private readonly NumericUpDown _appDarkText = new() { Minimum = EffectPreferences.LeastDarkText, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _appDarkColors = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly List<Control> _appGlassRows = [];
     private readonly List<Control> _mainGlassRows = [];
     private Control? _appGlassNote;
@@ -166,7 +169,7 @@ public sealed partial class SettingsWindow
         var keptButtons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(4, 8, 3, 6), BackColor = SettingsStyle.Card };
         keptButtons.Controls.Add(_keptRemove);
 
-        foreach (NumericUpDown box in new[] { _appGlassBackground, _appGlassText, _appGlassFade })
+        foreach (NumericUpDown box in new[] { _appGlassBackground, _appGlassText, _appGlassFade, _appDarkPage, _appDarkText, _appDarkColors })
             box.TextChanged += (_, _) => ChangeGlassApp();
         _appGlassTextColor.SelectedIndexChanged += (_, _) => ChangeGlassApp();
         _appGlassShadow.CheckedChanged += (_, _) => ChangeGlassApp();
@@ -175,6 +178,9 @@ public sealed partial class SettingsWindow
         _appGlassRows.Add(SettingRow(T("settings.effects.fade"), _appGlassFade));
         _appGlassRows.Add(SettingRow(T("settings.effects.textColor"), _appGlassTextColor));
         _appGlassRows.Add(_appGlassShadow);
+        _appGlassRows.Add(SettingRow(T("settings.dark.page"), _appDarkPage));
+        _appGlassRows.Add(SettingRow(T("settings.dark.text"), _appDarkText));
+        _appGlassRows.Add(SettingRow(T("settings.dark.colors"), _appDarkColors));
         _mainGlassRows.AddRange([_layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.fade"), _glassFade), Note(T("settings.effects.fadeHelp")),
@@ -251,6 +257,7 @@ public sealed partial class SettingsWindow
     {
         Program = program, BackgroundPercent = Typed(_glassBackground), TextPercent = Typed(_glassText), FadeRangePercent = Typed(_glassFade),
         TextColor = TextColorOf(_glassTextColor), TextShadow = _glassShadow.Checked,
+        DarkPagePercent = Typed(_darkPage), DarkTextPercent = Typed(_darkText), DarkColorsPercent = Typed(_darkColors),
     };
 
     private static ComboBox TextColorPicker()
@@ -276,6 +283,9 @@ public sealed partial class SettingsWindow
             _appGlassFade.Value = shown.FadeRangePercent;
             _appGlassTextColor.SelectedIndex = (int)shown.TextColor;
             _appGlassShadow.Checked = shown.TextShadow;
+            _appDarkPage.Value = Math.Clamp(shown.DarkPagePercent, 0, EffectPreferences.MostDarkPage);
+            _appDarkText.Value = Math.Clamp(shown.DarkTextPercent, EffectPreferences.LeastDarkText, 100);
+            _appDarkColors.Value = Math.Clamp(shown.DarkColorsPercent, 0, 100);
         }
         finally { _showingGlassApp = false; }
         foreach (Control row in _appGlassRows) row.Enabled = own is not null;
@@ -289,6 +299,7 @@ public sealed partial class SettingsWindow
         {
             BackgroundPercent = Typed(_appGlassBackground), TextPercent = Typed(_appGlassText), FadeRangePercent = Typed(_appGlassFade),
             TextColor = TextColorOf(_appGlassTextColor), TextShadow = _appGlassShadow.Checked,
+            DarkPagePercent = Typed(_appDarkPage), DarkTextPercent = Typed(_appDarkText), DarkColorsPercent = Typed(_appDarkColors),
         };
         QueueApplyRefresh();
     }

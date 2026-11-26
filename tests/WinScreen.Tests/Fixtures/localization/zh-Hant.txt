@@ -90,6 +90,7 @@ crop.instructions F748C3D089AA6B9F
 crop.title 61A8D2B6522C1D3A
 dark.alreadyDark 5514D579D075FEE3
 dark.title 0666286E404BAD4F
+darkLevels.title 8CCEA91D2FCB1904
 errors.admin.task E2790C879060E9DA
 errors.app.alreadyRunning 5D732A1EE3575DAD
 errors.app.exitRestoreFailed A2112DFF19622DA1
@@ -107,7 +108,7 @@ errors.clipboard.busy 85BC58488EDE0EB2
 errors.crop.customShape 0BA2E720C778AD08
 errors.crop.empty 58153305216D97BF
 errors.dark.filterUnavailable 8F12437D7FC4DA35
-errors.effects.glassFirst FB3663FEA8BBD416
+errors.effects.glassFirst F9FCF51F574C617E
 errors.effects.otherStayed FCE6506B2D874405
 errors.effects.stoppedPresses 96916C86A448DF53
 errors.experimental.enableFirst 0730FC9732ACE6E6
@@ -433,9 +434,9 @@ settings.admin.help FBD765765CF75642
 settings.admin.helperFailed B59CADF2AE1366EC
 settings.admin.unavailable 466E0F9045803572
 settings.apps.everyBackground 14107FBF389E436E
-settings.apps.glassHelp B46BAFBD5AED4863
+settings.apps.glassHelp 02113F7F6F0E5D24
 settings.apps.ownBackground 0CCC50693D2B598D
-settings.apps.ownGlass 0B21A3AD3479B5F9
+settings.apps.ownGlass FEF77C851DFD4C49
 settings.backgrounds F4B669C55756180E
 settings.backgrounds.addLink 36FE280CB60B7D88
 settings.backgrounds.andMore 0138E751B9DC96A2
@@ -486,7 +487,11 @@ settings.backgrounds.title 1952BE6736CC3E39
 settings.backgrounds.videos C8F059689CD9651C
 settings.backgrounds.withSound 239CF820AAEF7DF7
 settings.customization B70682D027CE5073
+settings.dark.colors 077ACD0EF1472EA8
+settings.dark.colorsHelp 7788B29016068743
 settings.dark.detect 706DD5D92E45D86D
+settings.dark.page AB4B890DDC1B606E
+settings.dark.text 65B2A617A4F803AF
 settings.dark.title A6B75D0680322A61
 settings.effects.background 9D911AA2E0E4110B
 settings.effects.fade EE93D7FBF7CCFCB9
@@ -683,7 +688,7 @@ window.dark 94D2BD014DFD31BA
 window.darkTitleBar DD720E619F3E0627
 window.fillDisplay 2FC5A50C44330ACB
 window.glass 3A0AAC345C05FAF2
-window.glassLevels 3B3969957E72CBA5
+window.glassLevels 18E5180A3D6674C3
 window.info 9B4598F94D251C75
 window.info.class D1D858E719A55B3B
 window.info.display 213F1E9EE4EE3363

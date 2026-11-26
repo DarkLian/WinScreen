@@ -23,6 +23,9 @@ internal sealed class GlassLevelsWindow : ThemedDialog
     private readonly NumericUpDown _fade = new CurvedNumber { Minimum = 1, Maximum = EffectPreferences.MostFadeRange, Width = 70, Curve = CurvedNumber.FadeCurve };
     private readonly ComboBox _textColor = Picker(160);
     private readonly SwitchBox _shadow = new() { Compact = true, AccessibleName = T("settings.effects.shadow"), AutoSize = true };
+    private readonly NumericUpDown _darkPage = new() { Minimum = 0, Maximum = EffectPreferences.MostDarkPage, Width = 70 };
+    private readonly NumericUpDown _darkText = new() { Minimum = EffectPreferences.LeastDarkText, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _darkColors = new() { Minimum = 0, Maximum = 100, Width = 70 };
 
     private readonly ComboBox _items = Picker(250);
     private readonly PlainButton _remove = Small(T("settings.backgrounds.clear"));
@@ -40,8 +43,10 @@ internal sealed class GlassLevelsWindow : ThemedDialog
     private BackgroundChoice _choice;
     private bool _filling, _levelsChanged, _backgroundChanged;
 
+    // With dark, the window has Dark mode: only Dark's levels show, and the Glass levels and background are kept as they are.
     public GlassLevelsWindow(string program, AppGlassLevels levels, BackgroundChoice background, GlassPanelActions actions,
-        bool ownLevels = false, bool ownBackground = false) : base(string.Format(T("glassLevels.title"), program))
+        bool ownLevels = false, bool ownBackground = false, bool dark = false)
+        : base(string.Format(dark ? T("darkLevels.title") : T("glassLevels.title"), program))
     {
         (_program, _choice, _actions, _levelsChanged, _backgroundChanged) = (program, background, actions, ownLevels, ownBackground);
         StartPosition = FormStartPosition.Manual;
@@ -52,6 +57,50 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         _switch.Items.AddRange([T("settings.backgrounds.switch.videoEnds"), T("settings.backgrounds.switch.timed")]);
         _minutes.Items.AddRange([.. BackgroundChoice.MinuteChoices.Select(minutes => (object)minutes.ToString(System.Globalization.CultureInfo.CurrentCulture))]);
 
+        if (dark)
+        {
+            Heading(T("window.dark"));
+            Slider(T("settings.dark.page"), _darkPage);
+            Slider(T("settings.dark.text"), _darkText);
+            Slider(T("settings.dark.colors"), _darkColors);
+            Note(T("settings.dark.colorsHelp"));
+        }
+        else
+            BuildGlass();
+        Fill(levels);
+        ShowBackground(0);
+        foreach (NumericUpDown box in new[] { _background, _text, _fade, _darkPage, _darkText, _darkColors }) box.ValueChanged += (_, _) => ChangeLevels();
+        _textColor.SelectedIndexChanged += (_, _) => ChangeLevels();
+        _shadow.CheckedChanged += (_, _) => ChangeLevels();
+
+        Below(string.Format(T("glassLevels.help"), program));
+        CancelButton = AddAction(T("common.close"), false, Close);
+        AddAction(T("glassLevels.reset"), false, () =>
+        {
+            (AppGlassLevels saved, _choice) = _actions.Reset();
+            _levelsChanged = _backgroundChanged = false;
+            Fill(saved);
+            ShowBackground(0);
+        });
+        AddAction(T("glassLevels.save"), true, () =>
+        {
+            // Nothing changed: the levels as they are become the app's own, as the button says.
+            _actions.Save(_levelsChanged || !_backgroundChanged ? Current() : null, _backgroundChanged ? _choice : null);
+            Close();
+        });
+        _watch.Tick += (_, _) =>
+        {
+            // Closes with the window or its effect.
+            if (!_actions.StillOn()) { Close(); return; }
+            // A set goes on by itself: what shows is what the rows change.
+            if (_choice.Items.Count > 1 && MouseButtons == MouseButtons.None && !_items.DroppedDown && Environment.TickCount64 - _chosenAt > 2000 &&
+                _actions.Showing() is >= 0 and var showing && showing != At && showing < _items.Items.Count) ShowBackground(showing);
+        };
+        _watch.Start();
+    }
+
+    private void BuildGlass()
+    {
         Heading(T("glassLevels.glass"));
         Slider(T("settings.effects.background"), _background);
         Slider(T("settings.effects.text"), _text);
@@ -75,11 +124,6 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         Row(T("settings.backgrounds.switch"), _switch);
         Row(T("settings.backgrounds.pictureMinutes"), _minutes);
 
-        Fill(levels);
-        ShowBackground(0);
-        foreach (NumericUpDown box in new[] { _background, _text, _fade }) box.ValueChanged += (_, _) => ChangeLevels();
-        _textColor.SelectedIndexChanged += (_, _) => ChangeLevels();
-        _shadow.CheckedChanged += (_, _) => ChangeLevels();
         _items.SelectedIndexChanged += (_, _) =>
         {
             if (_filling) return;
@@ -97,31 +141,6 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         _switch.SelectedIndexChanged += (_, _) => Change(choice => choice with { Switch = (BackdropSwitch)Math.Max(0, _switch.SelectedIndex) });
         _minutes.SelectedIndexChanged += (_, _) =>
             Change(choice => choice with { PictureMinutes = BackgroundChoice.MinuteChoices[Math.Max(0, _minutes.SelectedIndex)] });
-
-        Below(string.Format(T("glassLevels.help"), program));
-        CancelButton = AddAction(T("common.close"), false, Close);
-        AddAction(T("glassLevels.reset"), false, () =>
-        {
-            (AppGlassLevels saved, _choice) = _actions.Reset();
-            _levelsChanged = _backgroundChanged = false;
-            Fill(saved);
-            ShowBackground(0);
-        });
-        AddAction(T("glassLevels.save"), true, () =>
-        {
-            // Nothing changed: the levels as they are become the app's own, as the button says.
-            _actions.Save(_levelsChanged || !_backgroundChanged ? Current() : null, _backgroundChanged ? _choice : null);
-            Close();
-        });
-        _watch.Tick += (_, _) =>
-        {
-            // Closes with the window or its Glass.
-            if (!_actions.StillOn()) { Close(); return; }
-            // A set goes on by itself: what shows is what the rows change.
-            if (_choice.Items.Count > 1 && MouseButtons == MouseButtons.None && !_items.DroppedDown && Environment.TickCount64 - _chosenAt > 2000 &&
-                _actions.Showing() is >= 0 and var showing && showing != At && showing < _items.Items.Count) ShowBackground(showing);
-        };
-        _watch.Start();
     }
 
     private long _chosenAt;
@@ -161,6 +180,9 @@ internal sealed class GlassLevelsWindow : ThemedDialog
             _fade.Value = Math.Clamp(levels.FadeRangePercent, 1, EffectPreferences.MostFadeRange);
             _textColor.SelectedIndex = (int)levels.TextColor;
             _shadow.Checked = levels.TextShadow;
+            _darkPage.Value = Math.Clamp(levels.DarkPagePercent, 0, EffectPreferences.MostDarkPage);
+            _darkText.Value = Math.Clamp(levels.DarkTextPercent, EffectPreferences.LeastDarkText, 100);
+            _darkColors.Value = Math.Clamp(levels.DarkColorsPercent, 0, 100);
         }
         finally { _filling = false; }
     }
@@ -169,6 +191,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
     {
         Program = _program, BackgroundPercent = (int)_background.Value, TextPercent = (int)_text.Value, FadeRangePercent = (int)_fade.Value,
         TextColor = (GlassText)Math.Max(0, _textColor.SelectedIndex), TextShadow = _shadow.Checked,
+        DarkPagePercent = (int)_darkPage.Value, DarkTextPercent = (int)_darkText.Value, DarkColorsPercent = (int)_darkColors.Value,
     };
 
     private int At => Math.Max(0, _items.SelectedIndex);

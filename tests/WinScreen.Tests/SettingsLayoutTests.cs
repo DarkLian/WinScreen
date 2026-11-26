@@ -310,6 +310,52 @@ public sealed class SettingsLayoutTests
         static Button Button(Control window, string key) => Descendants(window).OfType<Button>().Single(button => button.Text == UiText.T(key));
     }
 
+    // The owner, 26 Nov: Dark mode gets levels as Glass has. The same panel shows only Dark's for a window with Dark,
+    // and saving keeps the app's Glass levels as they were.
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-Hans")]
+    [InlineData("zh-Hant")]
+    public void The_panel_of_a_window_with_dark_mode_changes_only_its_dark_levels(string language)
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize(language);
+            try
+            {
+                AppGlassLevels? levels = null, saved = null;
+                using var panel = new GlassLevelsWindow("claude", new AppGlassLevels { Program = "claude", BackgroundPercent = 66, DarkPagePercent = 12 },
+                    new BackgroundChoice(), new GlassPanelActions(now => levels = now, _ => { })
+                    {
+                        Save = (dark, _) => saved = dark, StillOn = () => true,
+                        Reset = () => (new AppGlassLevels { Program = "claude" }, new BackgroundChoice()),
+                    }, dark: true);
+                panel.ShowAt(new Point(100, 100));
+                Application.DoEvents();
+                Assert.Equal(string.Format(UiText.T("darkLevels.title"), "claude"), panel.Text);
+                Rectangle area = Screen.FromControl(panel).WorkingArea;
+                Assert.True(area.Contains(panel.Bounds), $"{panel.Bounds} in {area}");
+                if (Environment.GetEnvironmentVariable("WINSCREEN_LAYOUT_EVIDENCE") is { } folder)
+                {
+                    Directory.CreateDirectory(folder);
+                    using var image = new Bitmap(panel.Width, panel.Height);
+                    panel.DrawToBitmap(image, new Rectangle(Point.Empty, panel.Size));
+                    image.Save(Path.Combine(folder, $"dark-panel-{language}.png"));
+                }
+                string[] sliders = [.. Descendants(panel).OfType<NumberSlider>().Select(slider => slider.AccessibleName ?? "")];
+                Assert.Equal([.. new[] { "settings.dark.page", "settings.dark.text", "settings.dark.colors" }.Select(key => UiText.T(key).TrimEnd(':', '：', ' '))], sliders);
+                Assert.Empty(Descendants(panel).OfType<ComboBox>()); // No background or text colour.
+                Assert.Equal(12, Descendants(panel).OfType<NumberSlider>().First().Number.Value);
+
+                Descendants(panel).OfType<NumberSlider>().Last().Number.Value = 70;
+                Assert.Equal((70, 66), (levels!.DarkColorsPercent, levels.BackgroundPercent));
+                Descendants(panel).OfType<Button>().Single(button => button.Text == UiText.T("glassLevels.save")).PerformClick();
+                Assert.Equal((70, 12, 66), (saved!.DarkColorsPercent, saved.DarkPagePercent, saved.BackgroundPercent));
+            }
+            finally { UiText.Initialize("en"); }
+        });
+    }
+
     // The owner, 23 Nov: General has a button to check for updates under New versions; it opens the tray's check.
     [Fact]
     public void General_has_a_button_to_check_for_updates()

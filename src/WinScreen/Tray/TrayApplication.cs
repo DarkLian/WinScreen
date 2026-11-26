@@ -150,6 +150,8 @@ public sealed partial class TrayApplication : ApplicationContext
         _content.Problem += text => Alert(T("errors.operation.title"), text);
         _windows.ChangeUndone += (_, text) => Alert(T("errors.operation.title"), text, ToolTipIcon.Info);
         _content.Created += handle => _dark.Ignore(handle);
+        _content.LevelsChanged += () => _dark.SetLevels(_content.LevelsOf);
+        _dark.SetLevels(_content.LevelsOf);
         _automaticAnchors = new AutomaticAnchors(_anchors, CanHaveAutomaticAnchor, () => Paused || FullScreenNow() != FullScreenState.None,
             _windows.LiftedWhileCovered);
         _anchors.Created += _dark.Ignore;
@@ -1451,7 +1453,8 @@ public sealed partial class TrayApplication : ApplicationContext
 
     private void OpenGlassLevels(nint window)
     {
-        if (GlassLook(window) != Look.LayeredGlass)
+        bool dark = DarkLook(window) != Look.None;
+        if (!dark && GlassLook(window) != Look.LayeredGlass)
             throw new WindowOperationException(T("errors.effects.glassFirst"));
         string program = WindowInfo.ProgramOf(window);
         if (program.Length == 0) return;
@@ -1461,6 +1464,8 @@ public sealed partial class TrayApplication : ApplicationContext
         {
             Program = program, BackgroundPercent = (int)Math.Round(now.Background * 100), TextPercent = (int)Math.Round(now.Text * 100),
             FadeRangePercent = (int)Math.Round(now.FadeRange * 100), TextColor = now.TextColor, TextShadow = now.Shadow,
+            DarkPagePercent = (int)Math.Round(now.DarkPage * 100), DarkTextPercent = (int)Math.Round(now.DarkText * 100),
+            DarkColorsPercent = (int)Math.Round(now.DarkColors * 100),
         };
         var identity = WindowIdentity.Capture(window);
         BackgroundChoice saved = _settings.Backgrounds.OwnOf(program) ?? _settings.Backgrounds.Everywhere;
@@ -1475,10 +1480,10 @@ public sealed partial class TrayApplication : ApplicationContext
                 SetWindowBackground(window, null);
                 return (_settings.Effects.LevelsOf(program), _settings.Backgrounds.OwnOf(program) ?? _settings.Backgrounds.Everywhere);
             },
-            StillOn = () => identity.Matches() && GlassLook(window) == Look.LayeredGlass,
+            StillOn = () => identity.Matches() && (dark ? DarkLook(window) != Look.None : GlassLook(window) == Look.LayeredGlass),
             Showing = () => _content.ShowingAt(window),
             Show = index => _content.ShowBackground(window, index),
-        }, _content.HasOwnLevels(window), _content.HasOwnBackground(window));
+        }, _content.HasOwnLevels(window), _content.HasOwnBackground(window), dark);
         panel.FormClosed += (_, _) => { if (_glassLevels == panel) _glassLevels = null; };
         _glassLevels = panel;
         panel.ShowAt(Cursor.Position);

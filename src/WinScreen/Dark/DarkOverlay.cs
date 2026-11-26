@@ -8,21 +8,22 @@ internal sealed class DarkOverlay : Form
     private const int WS_CHILD = 0x40000000;
     private const int WS_VISIBLE = 0x10000000;
 
-    // A white page becomes #191919 by choice, not black; everything darkened is lifted in step, so black text still
-    // becomes white.
-    internal const float Background = 25f / 255;
+    // Light and dark swap and colours keep their hue; then the result is scaled into page..top: white becomes the page
+    // level and black the top one. A colour matrix can't keep colours, so Dark's Keep colours needs the graphics card.
+    private static float[] SmartInversion(float page, float top)
+    {
+        float range = top - page;
+        return
+        [
+            0.3333f * range, -0.6667f * range, -0.6667f * range, 0, 0,
+            -0.6667f * range, 0.3333f * range, -0.6667f * range, 0, 0,
+            -0.6667f * range, -0.6667f * range, 0.3333f * range, 0, 0,
+            0, 0, 0, 1, 0,
+            top, top, top, 0, 1,
+        ];
+    }
 
-    private const float Range = 1 - Background;
-
-    // Light and dark swap and colours keep their hue; then the result is scaled into Background..1.
-    private static readonly float[] SmartInversion =
-    [
-        0.3333f * Range, -0.6667f * Range, -0.6667f * Range, 0, 0,
-        -0.6667f * Range, 0.3333f * Range, -0.6667f * Range, 0, 0,
-        -0.6667f * Range, -0.6667f * Range, 0.3333f * Range, 0, 0,
-        0, 0, 0, 1, 0,
-        1, 1, 1, 0, 1,
-    ];
+    private (float Page, float Top) _levels = (0.1f, 1);
 
     private static bool _initialized;
 
@@ -83,11 +84,20 @@ internal sealed class DarkOverlay : Form
             throw new Windows.WindowOperationException(
                 T("errors.dark.filterUnavailable"));
 
-        unsafe
-        {
-            fixed (float* matrix = SmartInversion)
-                Magnification.MagSetColorEffect(_magnifier, matrix);
-        }
+        ApplyLevels();
+    }
+
+    public void SetLevels(float page, float top)
+    {
+        if (_levels == (page, top)) return;
+        _levels = (page, top);
+        if (_magnifier != 0) ApplyLevels();
+    }
+
+    private unsafe void ApplyLevels()
+    {
+        fixed (float* matrix = SmartInversion(_levels.Page, _levels.Top))
+            Magnification.MagSetColorEffect(_magnifier, matrix);
     }
 
     public unsafe void SetIgnoredWindows(nint[] windows)

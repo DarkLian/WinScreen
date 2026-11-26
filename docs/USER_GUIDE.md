@@ -209,10 +209,12 @@ A window has Dark mode or Glass, not both: turning one on turns the other off.
 - **Shrink** turns a window into a small live tile. Click the tile to bring the window back. Dark mode or Glass is
   off while it's a tile and comes back with the window.
 
-Dark mode swaps light and dark and keeps each color's hue, so pictures and video turn too. To keep one as it is, see
-**Keep pictures and video solid** below. Glass fades the colors close to the page's own and keeps text readable. On a
+Dark mode swaps light and dark and keeps each color's hue, so pictures and video turn too. Its **Keep colors** level
+brings colored parts, such as pictures, back toward their own colors while pages and text still turn; colored text can
+look less clean when it's high. To keep one part exactly as it is, see **Keep pictures and video solid** below. Glass fades the colors close to the page's own and keeps text readable. On a
 PC without a graphics card, neither can keep areas as they are, and Glass makes one color see-through, where clicks go
-through to what's behind. Dark mode's setting is in **Settings → Appearance**. Glass's settings are in **Settings →
+through to what's behind. Dark mode's levels (page brightness, text brightness and Keep colors) are in **Settings →
+Appearance**, and an app can have its own on the Backgrounds page. Glass's settings are in **Settings →
 Backgrounds**. On Windows 10, a yellow border shows around a window while these two are working. If a window under
 Dark mode or Glass ever stops taking clicks, WinScreen turns the effect off and tells you.
 
@@ -261,8 +263,8 @@ Every app's card in **Settings → Backgrounds** change that:
 Under **App backgrounds** in **Settings → Backgrounds**, add an app to give it its own background and its own Background, Text,
 Fade range, text color and shadow. Both start as every app has them, and either can be turned off for that app.
 
-To try things out on a window itself, choose **Glass and background** under **Effects** in its menu. Its levels are on the left
-and its picture or video on the right: add or remove them, and set the fit, sound, speed, brightness, order and timing.
+To try things out on a window itself, choose **Effect settings** under **Effects** in its menu. On a window with Dark
+mode, it shows Dark mode's levels. With Glass, its levels are on the left and its picture or video on the right: add or remove them, and set the fit, sound, speed, brightness, order and timing.
 The changes show on that window at once and last until it closes; **Save for this app** keeps them for all its windows.
 
 **Background** is how much of the page's own color covers the picture, and **Brightness** is how bright the picture itself

@@ -22,6 +22,9 @@ public sealed partial class SettingsWindow : Form
     private readonly ComboBox _glassTextColor = TextColorPicker();
     private readonly SwitchBox _glassShadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
     private readonly CheckBox _detectDark = new SwitchBox { Text = T("settings.dark.detect"), AutoSize = true };
+    private readonly NumericUpDown _darkPage = new() { Minimum = 0, Maximum = EffectPreferences.MostDarkPage, Width = 70 };
+    private readonly NumericUpDown _darkText = new() { Minimum = EffectPreferences.LeastDarkText, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _darkColors = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly TextBox _borderColor = new() { Width = 90 };
     private readonly NumericUpDown _borderOpacity = new() { Minimum = 10, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _borderThickness = new() { Minimum = 1, Maximum = 12, Width = 70 };
@@ -353,6 +356,8 @@ private readonly ErrorProvider _errors = new();
             [_pausePin] = '\uE718', [_highlightPinned] = '\uE790', [_borderColor] = '\uE790', [_borderOpacity] = '\uE706',
             [_borderThickness] = '\uE9E9', [_detectDark] = '\uE708', [_layeredGlass] = '\uE706', [_glassBackground] = '\uE706',
             [_glassText] = '\uE8D2', [_glassFade] = '\uE790', [_appGlassBackground] = '\uE706', [_appGlassText] = '\uE8D2',
+            [_darkPage] = '\uE708', [_darkText] = '\uE8D2', [_darkColors] = '\uE790',
+            [_appDarkPage] = '\uE708', [_appDarkText] = '\uE8D2', [_appDarkColors] = '\uE790',
             [_appGlassFade] = '\uE790', [_glassTextColor] = '\uE8D3', [_appGlassTextColor] = '\uE8D3', [_glassShadow] = '\uE81E',
             [_appGlassShadow] = '\uE81E', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767', [_soundInFront] = '\uE995', [_pauseFullScreen] = '\uE7FC', [_pauseSaver] = '\uE863', [_backgroundSpeed] = '\uEC4A', [_backgroundBrightness] = '\uE706', [_backgroundOrder] = '\uE8B1', [_backgroundSwitch] = '\uE893', [_pictureMinutes] = '\uE823',
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
@@ -847,6 +852,7 @@ private readonly ErrorProvider _errors = new();
             LayeredGlass = _layeredGlass.Checked,
             BackgroundPercent = Number(_glassBackground), TextPercent = Number(_glassText), FadeRangePercent = Number(_glassFade),
             TextColor = TextColorOf(_glassTextColor), TextShadow = _glassShadow.Checked,
+            DarkPagePercent = Number(_darkPage), DarkTextPercent = Number(_darkText), DarkColorsPercent = Number(_darkColors),
             Apps = [.. _glassApps],
         }.Validated();
         draft.Backgrounds = _backgroundEdit.Validated();
@@ -1317,6 +1323,9 @@ private readonly ErrorProvider _errors = new();
         _glassFade.Value = effects.FadeRangePercent;
         _glassTextColor.SelectedIndex = (int)effects.TextColor;
         _glassShadow.Checked = effects.TextShadow;
+        _darkPage.Value = effects.DarkPagePercent;
+        _darkText.Value = effects.DarkTextPercent;
+        _darkColors.Value = effects.DarkColorsPercent;
         FillGlassApps(effects);
         FillBackgrounds(values.Backgrounds);
         PinBorderPreferences border = values.PinBorder.Validated();
@@ -1628,7 +1637,9 @@ private readonly ErrorProvider _errors = new();
         _borderColor.TextChanged += (_, _) => color.Invalidate();
         page.Controls.Add(Section(T("settings.pin.border"), _pausePin, _highlightPinned, SettingRow(T("settings.pin.color"), color),
             SettingRow(T("settings.pin.opacity"), _borderOpacity), SettingRow(T("settings.pin.thickness"), _borderThickness)));
-        page.Controls.Add(Card(T("settings.dark.title"), true, _detectDark, Note(T("settings.effects.help"))));
+        page.Controls.Add(Card(T("settings.dark.title"), true, _detectDark, SettingRow(T("settings.dark.page"), _darkPage),
+            SettingRow(T("settings.dark.text"), _darkText), SettingRow(T("settings.dark.colors"), _darkColors),
+            Note(T("settings.dark.colorsHelp")), Note(T("settings.effects.help"))));
         return page;
     }
 
