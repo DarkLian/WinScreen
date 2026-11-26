@@ -293,14 +293,21 @@ public sealed class BackdropTests
         Assert.Equal([0, 0], new[] { one.Next(), one.Next() });
     }
 
-    // Changing a fit, sound or speed carries on with what shows; a different set starts again.
+    // Changing a fit, sound or speed carries on with what shows; a different set starts again. The owner, 27 Nov: so do
+    // the order, the switch and the minutes, or the music playing starts over at each change.
     [Fact]
     public void Only_a_different_set_starts_over()
     {
         var set = new BackdropSet([new(@"C:\a.mp4", BackdropFit.Fill), new(@"C:\b.png", BackdropFit.Fill)]);
         Assert.True(set.SameItems(set with { Items = [new(@"c:\A.mp4", BackdropFit.Tile, 40, 200), new(@"C:\b.png", BackdropFit.Fit)] }));
-        Assert.False(set.SameItems(set with { Order = BackdropOrder.Shuffle }));
-        Assert.False(set.SameItems(set with { Switch = BackdropSwitch.Timed }));
+        Assert.True(set.SameItems(set with { Order = BackdropOrder.Shuffle }));
+        Assert.True(set.SameItems(set with { Switch = BackdropSwitch.Timed, Minutes = 2 }));
+        var inOrder = new BackdropSequence(3, BackdropOrder.InOrder, new Random(1));
+        inOrder.After(1);
+        Assert.Equal([2, 0], new[] { inOrder.Next(), inOrder.Next() }); // A new order goes on from the one showing.
+        var shuffled = new BackdropSequence(3, BackdropOrder.Shuffle, new Random(1));
+        shuffled.After(2);
+        Assert.NotEqual(2, shuffled.Next());
     }
 
     // The owner, 24 Nov: like a media player, a video stays until it ends and a picture for its minutes; on a timer,
@@ -1201,6 +1208,14 @@ public sealed class ContentEffectTests
                     Shows(other, red);
                     Assert.True(effects.HasOwnBackground(target.Handle));
                     effects.ShowBackground(target.Handle, 1);
+                    Shows(target, blue);
+                    Assert.Equal(1, effects.ShowingAt(target.Handle));
+                    // The owner, 27 Nov: a new order, switch or minutes leaves the one showing as it is.
+                    effects.SetWindowBackground(target.Handle, new BackdropSet([new(g, BackdropFit.Fill), new(b, BackdropFit.Fill)],
+                        BackdropOrder.Shuffle, 2, BackdropSwitch.Timed));
+                    Pump(() => false, 500); // Taken one at a time, or the drawing thread sees only the last.
+                    effects.SetWindowBackground(target.Handle, new BackdropSet([new(g, BackdropFit.Fill), new(b, BackdropFit.Fill)]));
+                    Pump(() => false, 1000);
                     Shows(target, blue);
                     Assert.Equal(1, effects.ShowingAt(target.Handle));
                     effects.ShowBackground(target.Handle, null);

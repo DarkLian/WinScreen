@@ -462,7 +462,8 @@ internal sealed unsafe class ContentOverlay : Form
                 bool changed = _changed;
                 _changed = false;
                 BackdropSet? chosen = _backdrop;
-                // A new fit, volume or speed is taken as it is: opening the file again would start a video over.
+                // A new fit, volume, speed, order, switch or minutes is taken as it is: opening the file again would start
+                // a video over.
                 if (!Equals(chosen, shown))
                 {
                     if (!(chosen?.SameItems(shown) ?? shown is null))
@@ -474,12 +475,25 @@ internal sealed unsafe class ContentOverlay : Form
                             ? new BackdropSequence(chosen.Items.Count, chosen.Order, Random.Shared) : null);
                         backdrop = chosen is null ? null : OpenNext(chosen, turns);
                     }
-                    else if (backdrop is not null && chosen is not null)
+                    else if (chosen is not null && shown is not null)
                     {
-                        BackdropChoice now = chosen.Items[turns.Showing];
-                        changed |= now.Glass != _showing?.Glass;
-                        _showing = now;
-                        turns.ChangeAt = chosen.StayMilliseconds(now) is { } stay ? turns.Since + stay : long.MaxValue;
+                        // What shows plays on; a new order or switch is for the ones after it.
+                        if (chosen.Order != shown.Order && turns.Sequence is not null)
+                        {
+                            turns.Sequence = new BackdropSequence(chosen.Items.Count, chosen.Order, Random.Shared);
+                            if (turns.Showing >= 0) turns.Sequence.After(turns.Showing);
+                        }
+                        if (backdrop is not null && turns.Showing >= 0)
+                        {
+                            BackdropChoice now = chosen.Items[turns.Showing];
+                            changed |= now.Glass != _showing?.Glass;
+                            _showing = now;
+                            if (chosen.PlaysOnce != shown.PlaysOnce) backdrop.PlayOnce(chosen.PlaysOnce);
+                            // New minutes count from now, so the one showing isn't cut off.
+                            if (turns.Seen && (chosen.Minutes != shown.Minutes || chosen.Switch != shown.Switch))
+                                turns.Since = Environment.TickCount64;
+                            turns.ChangeAt = chosen.StayMilliseconds(now) is { } stay ? turns.Since + stay : long.MaxValue;
+                        }
                     }
                     shown = chosen;
                     redraw = true;
@@ -646,7 +660,7 @@ internal sealed unsafe class ContentOverlay : Form
     // again once none opened, each time after twice as long.
     private sealed class Turns(BackdropSequence? sequence = null)
     {
-        public BackdropSequence? Sequence => sequence;
+        public BackdropSequence? Sequence = sequence;
         public int Showing = -1;
         public bool Seen;
         public (Backdrop? Backdrop, BackdropFit Fit, Size Displays) Asked;

@@ -81,8 +81,9 @@ internal sealed record BackdropSet(IReadOnlyList<BackdropChoice> Items, Backdrop
 
     public bool HasSound => Items.Any(item => item.Volume > 0 && item.IsVideo);
 
-    // The same pictures and videos in the same order: what shows can carry on, with any new fit, sound or speed.
-    public bool SameItems(BackdropSet? other) => other is not null && Order == other.Order && Switch == other.Switch && Items.Count == other.Items.Count &&
+    // The same pictures and videos in the same order: what shows carries on, with any new fit, sound, speed, order,
+    // switch or minutes.
+    public bool SameItems(BackdropSet? other) => other is not null && Items.Count == other.Items.Count &&
         Items.Zip(other.Items).All(pair => pair.First.SameFile(pair.Second));
 
     public bool Equals(BackdropSet? other) =>
@@ -100,6 +101,9 @@ internal sealed class BackdropSequence(int count, BackdropOrder order, Random ra
 
     // The next is this one, wherever the order had got to; the order goes on from it.
     public void Ask(int index) => _asked = index;
+
+    // A new order goes on from the one showing.
+    public void After(int index) => _last = index;
 
     public int Next()
     {
@@ -155,6 +159,10 @@ internal abstract class Backdrop : IDisposable
 
     // A video asked to play once, which has.
     public virtual bool Ended => false;
+
+    public virtual void PlayOnce(bool once)
+    {
+    }
 
     // The same source for a new fit or larger displays, or null when what it has will do.
     public virtual Backdrop? Again(BackdropChoice item) => null;
@@ -507,6 +515,7 @@ internal sealed class VideoBackdrop(string file, bool once = false, int speed = 
     private int _speed = speed;
     private double _at = -1;
     private long _movedAt, _lookedAt;
+    private bool _once = once;
 
     public bool Failed => _failed;
 
@@ -523,6 +532,12 @@ internal sealed class VideoBackdrop(string file, bool once = false, int speed = 
     }
 
     public override bool HasSound => true;
+
+    public override void PlayOnce(bool once)
+    {
+        _once = once;
+        if (_engine is not null) _engine.Loop = !once;
+    }
 
     public override void Sound(int percent)
     {
@@ -598,7 +613,7 @@ internal sealed class VideoBackdrop(string file, bool once = false, int speed = 
         _engine.Volume = 0;
         _engine.Muted = true;
         _percent = 0;
-        _engine.Loop = !once;
+        _engine.Loop = !_once;
         if (_speed != 100)
         {
             _engine.DefaultPlaybackRate = _speed / 100.0;
