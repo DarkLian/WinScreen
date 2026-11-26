@@ -108,7 +108,9 @@ public sealed class KeptAreaOverlay : Form
         }
         if (_pressed)
         {
+            // The border too: a cover's fill is as black as the overlay, so it alone shows nothing.
             e.Graphics.FillRectangle(brush, _selection);
+            if (_selection.Width > 0 && _selection.Height > 0) e.Graphics.DrawRectangle(pen, _selection);
             return;
         }
         if (_hint.Width > 0 && _hint.Height > 0 && !_areas.Any(area => area.Contains(_hint)))

@@ -96,6 +96,25 @@ public sealed class KeptAreaTests
         overlay.Choose(Rectangle.Empty, new Point(50, 50));
         Assert.Equal(new[] { new Rectangle(200, 200, 300, 150) }, overlay.Areas);
     }
+
+    // The owner, 26 Nov: Cover parts showed nothing while dragging; its black fill is the overlay's own colour, so the
+    // part being dragged needs its border.
+    [Fact]
+    public void The_part_being_dragged_shows_its_border_when_covering_in_black()
+    {
+        using var overlay = new KeptAreaOverlay(new Rectangle(0, 0, 400, 300), [], 4, "Cover", "Drag", Color.Black);
+        overlay.CreateControl();
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        void Mouse(string name, int x, int y) =>
+            typeof(KeptAreaOverlay).GetMethod(name, flags)!.Invoke(overlay, [new MouseEventArgs(MouseButtons.Left, 1, x, y, 0)]);
+        Mouse("OnMouseDown", 100, 80);
+        Mouse("OnMouseMove", 300, 220);
+        using var drawn = new Bitmap(400, 300);
+        overlay.DrawToBitmap(drawn, new Rectangle(0, 0, 400, 300));
+        Color edge = drawn.GetPixel(100, 150), inside = drawn.GetPixel(200, 150);
+        Assert.True(edge.GetBrightness() > 0.8f, $"The dragged part's edge is {edge}");
+        Assert.True(inside.GetBrightness() < 0.2f, $"Inside the dragged part is {inside}");
+    }
 }
 
 public sealed class BackdropTests
