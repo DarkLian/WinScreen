@@ -11,6 +11,7 @@ internal static class TopLayer
 {
     private const uint Flags = User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE;
     private const uint GW_HWNDNEXT = 2;
+    private const long ClickThroughOverlay = User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT | User32.WS_EX_NOACTIVATE;
 
     internal static Func<IEnumerable<nint>>? Above { get; set; }
 
@@ -302,9 +303,11 @@ internal static class TopLayer
             // A menu's drop shadow follows the menu on its own. Counting it as a window over the taskbar lifted the
             // taskbar over the menu and the menu back again, over and over.
             if (name == "SysShadow") continue;
-            // Nor pen input's handwriting canvas: on a PC with a pen it covers every screen, see-through and always on
-            // top in a layer nothing can be put over, so a menu "under" it was lifted again at every check.
-            if (name.StartsWith("ShellHandwritingCanvas", StringComparison.Ordinal)) continue;
+            // Nor another program's overlay that takes no clicks and no focus, such as pen input's handwriting canvas
+            // over every screen or AMD's recording overlay: they sit in a layer nothing can be put over, so a menu
+            // "under" one was lifted again at every check.
+            if ((style & ClickThroughOverlay) == ClickThroughOverlay && User32.GetWindowThreadProcessId(window, out uint owner) != 0 &&
+                owner != self) continue;
             // Nor does a window too small to cover anything, such as the tiny helpers Explorer keeps always-on-top.
             if (!User32.GetWindowRect(window, out Rect bounds) || bounds.Right - bounds.Left < 8 || bounds.Bottom - bounds.Top < 8) continue;
             order.Add(window);
