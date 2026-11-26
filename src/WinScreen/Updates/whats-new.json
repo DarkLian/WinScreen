@@ -1,4 +1,30 @@
 {
+  "1.5.0": {
+    "en": [
+      "Dark mode is no longer experimental, and it has its own levels: Page brightness, Text brightness and Keep colors.",
+      "Views can Capture a picture, Freeze a copy, Copy text, Cover parts and Record a video: look under Picture in a view's menu.",
+      "Glass can show a picture, a video or a link behind a window, or a set of them that take turns, each with its own sound, speed, brightness and Glass levels.",
+      "Select areas to keep, such as a video, and Glass and Dark mode leave them as they are.",
+      "Settings has an Effects page for backgrounds, Glass and Dark mode, and Check for updates in General.",
+      "7 other fixes."
+    ],
+    "zh-Hans": [
+      "深色模式不再是实验性功能，并有了自己的程度：页面亮度、文字亮度和保留颜色。",
+      "视图可以截取画面、冻结一份副本、复制文字、遮盖部分和录制视频：在视图菜单的“画面”中。",
+      "玻璃可以在窗口后面显示图片、视频或链接，也可以显示轮流播放的一组，每一个都有自己的声音、速度、亮度和玻璃程度。",
+      "选择要保留的区域（例如视频），玻璃和深色模式会让它们保持原样。",
+      "设置中新增“效果”页面，用于背景、玻璃和深色模式；“常规”中新增“检查更新”。",
+      "还有 7 项其他修正。"
+    ],
+    "zh-Hant": [
+      "深色模式不再是實驗性功能，並有了自己的程度：頁面亮度、文字亮度和保留顏色。",
+      "檢視可以擷取畫面、凍結一份副本、複製文字、遮蓋部分和錄製影片：在檢視選單的「畫面」中。",
+      "玻璃可以在視窗後面顯示圖片、影片或連結，也可以顯示輪流播放的一組，每一個都有自己的聲音、速度、亮度和玻璃程度。",
+      "選擇要保留的區域（例如影片），玻璃和深色模式會讓它們保持原樣。",
+      "設定中新增「效果」頁面，用於背景、玻璃和深色模式；「一般」中新增「檢查更新」。",
+      "還有 7 項其他修正。"
+    ]
+  },
   "1.4.1": {
     "en": [
       "Set your own keys for a view's actions, such as Keep hidden, Interactive, Mute, Freeze and Rotate, in Actions and shortcuts. They work on the view in front or under the pointer.",
