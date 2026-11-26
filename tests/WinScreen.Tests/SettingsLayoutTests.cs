@@ -284,6 +284,18 @@ public sealed class SettingsLayoutTests
                 Assert.Equal(2, shown);
                 Button(panel, "settings.backgrounds.clear").PerformClick();
                 Assert.Equal(2, live.Items.Count);
+                Slider("settings.backgrounds.brightness").Number.Value = 55;
+                Button(panel, "settings.backgrounds.applyAllButton").PerformClick();
+                Assert.All(live.Items, item => Assert.Equal(55, item.Brightness));
+                // The Glass rows for this picture or video alone: the window's levels stay as they were.
+                SwitchBox itemOwn = Descendants(panel).OfType<SwitchBox>().Single(box => box.AccessibleName == UiText.T("glassLevels.itemOwn"));
+                itemOwn.Checked = true;
+                Slider("settings.effects.background").Number.Value = 80;
+                Assert.Equal(80, live.Items[Descendants(panel).OfType<ComboBox>().Single(box => box.AccessibleName == UiText.T("settings.backgrounds.items")).SelectedIndex].GlassLevels!.PagePercent);
+                Assert.Null(levels);
+                itemOwn.Checked = false;
+                Assert.Equal(66, Slider("settings.effects.background").Number.Value);
+                Assert.All(live.Items, item => Assert.Null(item.GlassLevels));
 
                 Button(panel, "glassLevels.save").PerformClick();
                 Assert.Null(saved!.Value.Levels); // Left alone, so they stay every app's.
@@ -366,6 +378,8 @@ public sealed class SettingsLayoutTests
             UiText.Initialize("en");
             var settings = new AppSettings { Language = "en" };
             settings.Effects = settings.Effects with { Apps = [new AppGlassLevels { Program = "chrome", OwnGlass = false, OwnDark = true, DarkPagePercent = 25 }] };
+            settings.Backgrounds = settings.Backgrounds with { Everywhere = new BackgroundChoice().WithItems(
+                [new BackgroundItem { File = @"C:\a\sea.mp4", Volume = 30 }, new BackgroundItem { File = @"C:\a\waves.mp4" }]) };
             using var window = new SettingsWindow(settings, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
             window.Show();
             TabControl tabs = Descendants(window).OfType<TabControl>().Single();
@@ -374,6 +388,20 @@ public sealed class SettingsLayoutTests
             string[] Cards() => [.. Descendants(tabs.SelectedTab!).OfType<SettingsCard>().Select(card => card.Text)];
             Assert.Equal(["Apps", "Background for Every app", "Glass for Every app", "Dark mode for Every app", "Areas to keep"], Cards());
             Assert.Contains(Descendants(window).OfType<SwitchBox>(), box => box.Visible && box.Text == UiText.T("settings.dark.detect"));
+            // The first video's sound given to the whole set: the list then shows it on both.
+            ListBox items = Descendants(window).OfType<ThemedList>().Single(list => list.Visible && list.AccessibleName == UiText.T("settings.backgrounds.items"));
+            Assert.DoesNotContain("30", (string)items.Items[1]);
+            Descendants(window).OfType<Button>().Single(button => button.Visible && button.Text == UiText.T("settings.backgrounds.applyAllButton")).PerformClick();
+            Application.DoEvents();
+            Assert.Contains("30", (string)items.Items[1]);
+            // The chosen video's own Glass levels, starting from the app's.
+            SwitchBox itemOwn = Descendants(window).OfType<SwitchBox>().Single(box => box.Text == UiText.T("settings.backgrounds.ownGlass"));
+            NumberSlider itemPage = Descendants(Card("Background for")).OfType<NumberSlider>().Single(slider => slider.AccessibleName == UiText.T("settings.effects.background"));
+            Assert.False(itemPage.Enabled);
+            itemOwn.Checked = true;
+            Application.DoEvents();
+            Assert.True(itemPage.Enabled);
+            Assert.Equal(15, (int)itemPage.Number.Value);
 
             ListBox list = Descendants(window).OfType<BackgroundList>().Single();
             list.SelectedIndex = 1;
@@ -382,7 +410,9 @@ public sealed class SettingsLayoutTests
             SwitchBox Own(string key) => Descendants(window).OfType<SwitchBox>().Single(box => box.Text == UiText.T(key));
             Assert.False(Own("settings.apps.ownGlass").Checked);
             Assert.True(Own("settings.apps.ownDark").Checked);
-            NumberSlider Shown(string key) => Descendants(window).OfType<NumberSlider>().Single(slider => slider.Visible && slider.AccessibleName == UiText.T(key));
+            SettingsCard Card(string start) => Descendants(tabs.SelectedTab!).OfType<SettingsCard>().Single(card => card.Text.StartsWith(start, StringComparison.Ordinal));
+            NumberSlider Shown(string key) => new[] { "Glass for", "Dark mode for" }.SelectMany(start => Descendants(Card(start))).OfType<NumberSlider>()
+                .Single(slider => slider.Visible && slider.AccessibleName == UiText.T(key));
             Assert.Equal((25, true), ((int)Shown("settings.dark.page").Number.Value, Shown("settings.dark.page").Enabled));
             Assert.False(Shown("settings.effects.background").Enabled); // Every app's Glass, shown but not its own.
 

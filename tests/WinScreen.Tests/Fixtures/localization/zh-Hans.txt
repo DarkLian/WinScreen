@@ -108,7 +108,7 @@ errors.clipboard.busy 0CEB92F789ED3F3B
 errors.crop.customShape 44DF0CFCBC778971
 errors.crop.empty AD4A6E115CF73DB4
 errors.dark.filterUnavailable 4D9482839E403A4A
-errors.effects.glassFirst 7B26FDC1F773EA11
+errors.effects.glassFirst 3FC9DFE457F2A433
 errors.effects.otherStayed 9832F5B5ECFD260C
 errors.effects.stoppedPresses 61DEEE1D2A4CB857
 errors.experimental.enableFirst 1D1CB9169B652397
@@ -219,6 +219,7 @@ gestures.moveResize.title E01C15E971E9AB6E
 gestures.title CB4C2831C141A245
 glassLevels.glass 1CF9F76E181DA84D
 glassLevels.help 41933E925B7564C1
+glassLevels.itemOwn FB154813CE7D2EBB
 glassLevels.reset A2FCE9567BD186E7
 glassLevels.save B4B7BD28E654EF0E
 glassLevels.title B75CF4B0BBD13677
@@ -443,6 +444,9 @@ settings.backgrounds 86A00CF74253C265
 settings.backgrounds.addLink D6FF3CBA2A2DB39D
 settings.backgrounds.andMore D8C429AE6FF9CFAB
 settings.backgrounds.appNone EA5D48D43480989D
+settings.backgrounds.applyAll 525891B6B8E0B401
+settings.backgrounds.applyAllButton DE76AAFE97931C0E
+settings.backgrounds.applyAllHelp D7E979D467AC25E2
 settings.backgrounds.brightness 4D622E98A50A1D7E
 settings.backgrounds.center 4CC3885C182E419C
 settings.backgrounds.clear 6135D4159E892541
@@ -469,12 +473,14 @@ settings.backgrounds.none 484D55613910EB8C
 settings.backgrounds.order 9249CA6C2AAB5506
 settings.backgrounds.order.inOrder 16DFC3BFDAABF3FE
 settings.backgrounds.order.shuffle 75CA4F921437F9A8
+settings.backgrounds.ownGlass ECB6E20CA12FA630
+settings.backgrounds.ownGlassHelp 05EDE0A608B89540
 settings.backgrounds.pauseFullScreen C977060D78A8037D
 settings.backgrounds.pauseSaver 1BFD52F6E74A5E37
 settings.backgrounds.pictureMinutes 2AD6A7B9F5ED1EE5
 settings.backgrounds.pictures D24C10D37DB0FEEA
 settings.backgrounds.preview 13D61FEA9F174905
-settings.backgrounds.setHelp 04355FB1C102BF4E
+settings.backgrounds.setHelp D32D0B79012381F1
 settings.backgrounds.sound DB2C51409D7A65A5
 settings.backgrounds.soundHelp CF4CC743BB34FCF2
 settings.backgrounds.soundInFront ED3AF4305B04A9BF
@@ -504,7 +510,8 @@ settings.effects.fadeHelp 46DB5FCBDE8DB829
 settings.effects.glassAbout 6C32CF86C4AA02F9
 settings.effects.glassFor 2CB0936AD931A158
 settings.effects.help 3C20AB9FB87A1388
-settings.effects.layeredGlass 68C9FA520CC85924
+settings.effects.layeredGlass 64E518CE6528270C
+settings.effects.layeredGlassHelp 837EAD6DB79733FF
 settings.effects.shadow 490573C2281112E9
 settings.effects.text 2317E7A1901A6CD7
 settings.effects.textColor F21EF4ABA5AB4E55

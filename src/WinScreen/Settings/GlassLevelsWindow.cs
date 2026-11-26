@@ -33,6 +33,11 @@ internal sealed class GlassLevelsWindow : ThemedDialog
     private readonly NumericUpDown _volume = new() { Minimum = 0, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _speed = new() { Minimum = BackgroundItem.SlowestSpeed, Maximum = BackgroundItem.FastestSpeed, Width = 70 };
     private readonly NumericUpDown _brightness = new() { Minimum = BackgroundItem.DimmestBrightness, Maximum = 100, Width = 70 };
+    private readonly PlainButton _applyAll = Small(T("settings.backgrounds.applyAllButton"));
+    // On: the Glass rows are the chosen picture or video's own levels; off: the window's.
+    private readonly SwitchBox _itemOwn = new() { Compact = true, AccessibleName = T("glassLevels.itemOwn"), AutoSize = true };
+    private readonly bool _dark;
+    private AppGlassLevels _windowLevels;
     private readonly ComboBox _order = Picker(190);
     private readonly ComboBox _switch = Picker(190);
     private readonly ComboBox _minutes = Picker(100);
@@ -49,6 +54,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         : base(string.Format(dark ? T("darkLevels.title") : T("glassLevels.title"), program))
     {
         (_program, _choice, _actions, _levelsChanged, _backgroundChanged) = (program, background, actions, ownLevels, ownBackground);
+        (_dark, _windowLevels) = (dark, levels);
         StartPosition = FormStartPosition.Manual;
         _textColor.Items.AddRange([T("settings.effects.textColor.asItIs"), T("settings.effects.textColor.light"), T("settings.effects.textColor.dark")]);
         _fit.Items.AddRange([T("settings.backgrounds.fill"), T("settings.backgrounds.fitWhole"),
@@ -72,6 +78,16 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         foreach (NumericUpDown box in new[] { _background, _text, _fade, _darkPage, _darkText, _darkColors }) box.ValueChanged += (_, _) => ChangeLevels();
         _textColor.SelectedIndexChanged += (_, _) => ChangeLevels();
         _shadow.CheckedChanged += (_, _) => ChangeLevels();
+        _itemOwn.CheckedChanged += (_, _) =>
+        {
+            if (_filling || _choice.Items.Count == 0) return;
+            if (_itemOwn.Checked) ChangeItem(item => item with { GlassLevels = ItemGlass.From(Current()) });
+            else
+            {
+                ChangeItem(item => item with { GlassLevels = null });
+                Fill(_windowLevels);
+            }
+        };
 
         Below(string.Format(T("glassLevels.help"), program));
         CancelButton = AddAction(T("common.close"), false, Close);
@@ -79,6 +95,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         {
             (AppGlassLevels saved, _choice) = _actions.Reset();
             _levelsChanged = _backgroundChanged = false;
+            _windowLevels = saved;
             Fill(saved);
             ShowBackground(0);
         });
@@ -107,6 +124,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         Slider(T("settings.effects.fade"), _fade);
         Row(T("settings.effects.textColor"), _textColor);
         Row(T("settings.effects.shadow"), _shadow);
+        Row(T("glassLevels.itemOwn"), _itemOwn);
 
         Column();
         Heading(T("settings.backgrounds.file"));
@@ -114,7 +132,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         Whole(_items);
         PlainButton add = Small(T("common.add")), link = Small(T("settings.backgrounds.addLink"));
         var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, BackColor = SettingsStyle.Page };
-        buttons.Controls.AddRange([add, link, _remove]);
+        buttons.Controls.AddRange([add, link, _remove, _applyAll]);
         Whole(buttons);
         Row(T("settings.backgrounds.fit"), _fit);
         Slider(T("settings.backgrounds.sound"), _volume);
@@ -133,6 +151,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         add.Click += (_, _) => AddFiles();
         link.Click += (_, _) => { if (LinkDialog.Ask(this) is { } address) Add([address]); };
         _remove.Click += (_, _) => Remove();
+        _applyAll.Click += (_, _) => Change(choice => choice.WithLookOf(At));
         _fit.SelectedIndexChanged += (_, _) => ChangeItem(item => item with { Fit = (BackdropFit)Math.Max(0, _fit.SelectedIndex) });
         _volume.ValueChanged += (_, _) => ChangeItem(item => item with { Volume = (int)_volume.Value });
         _speed.ValueChanged += (_, _) => ChangeItem(item => item with { Speed = (int)_speed.Value });
@@ -166,6 +185,12 @@ internal sealed class GlassLevelsWindow : ThemedDialog
     private void ChangeLevels()
     {
         if (_filling) return;
+        if (!_dark && _itemOwn.Checked && _choice.Items.Count > 0)
+        {
+            ChangeItem(item => item with { GlassLevels = ItemGlass.From(Current()) });
+            return;
+        }
+        _windowLevels = Current();
         _levelsChanged = true;
         _actions.LevelsChanged(Current());
     }
@@ -203,6 +228,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
     {
         Interlocked.Increment(ref _refreshes);
         IReadOnlyList<BackgroundItem> items = _choice.Items;
+        ItemGlass? itemGlass = null;
         _filling = true;
         try
         {
@@ -225,12 +251,21 @@ internal sealed class GlassLevelsWindow : ThemedDialog
             _minutes.SelectedIndex = Array.IndexOf(BackgroundChoice.MinuteChoices,
                 BackgroundChoice.MinuteChoices.MinBy(minutes => Math.Abs(minutes - _choice.PictureMinutes)));
             bool chosen = items.Count > 0, video = chosen && BackdropChoice.IsVideoText(item.File);
-            _items.Enabled = _order.Enabled = _switch.Enabled = _minutes.Enabled = items.Count > 1;
+            _items.Enabled = _order.Enabled = _switch.Enabled = _minutes.Enabled = _applyAll.Enabled = items.Count > 1;
             _remove.Enabled = _fit.Enabled = _brightness.Enabled = chosen;
             _volume.Enabled = video;
             _speed.Enabled = video || chosen && BackdropChoice.Kind(item.File) == ".gif";
+            _itemOwn.Enabled = chosen;
+            _itemOwn.Checked = item.GlassLevels is not null;
+            itemGlass = item.GlassLevels;
         }
         finally { _filling = false; }
+        // The Glass rows show the levels in use over the one chosen.
+        if (!_dark) Fill(itemGlass is { } own ? _windowLevels with
+        {
+            BackgroundPercent = own.PagePercent, TextPercent = own.TextPercent, FadeRangePercent = own.FadeRangePercent,
+            TextColor = own.TextColor, TextShadow = own.TextShadow,
+        } : _windowLevels);
         _chosenAt = Environment.TickCount64;
     }
 

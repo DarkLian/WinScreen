@@ -522,8 +522,8 @@ public sealed class SettingsWindowTests : IDisposable
 
             string asItIs = Localization.UiText.T("settings.effects.textColor.asItIs");
             ComboBox[] pickers = [.. Descendants(window).OfType<ComboBox>().Where(combo => combo.Items.Contains(asItIs))];
-            Assert.Equal(2, pickers.Length); // Every app's, then the app's own.
-            pickers[1].SelectedIndex = (int)Glass.GlassText.Dark;
+            Assert.Equal(3, pickers.Length); // The chosen picture or video's, Every app's, then the app's own.
+            pickers[2].SelectedIndex = (int)Glass.GlassText.Dark;
             Descendants(window).OfType<SwitchBox>().Last(box => box.Text == Localization.UiText.T("settings.effects.shadow")).Checked = true;
             Assert.True(window.SaveChanges());
             notes = applied.Effects.OwnOf("Notes")!;

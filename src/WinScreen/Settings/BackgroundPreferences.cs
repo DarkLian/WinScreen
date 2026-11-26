@@ -80,9 +80,39 @@ public sealed record BackgroundItem
         Volume = Math.Clamp(Volume, 0, 100),
         Speed = Math.Clamp(Speed == 0 ? 100 : Speed, SlowestSpeed, FastestSpeed),
         Brightness = Math.Clamp(Brightness == 0 ? 100 : Brightness, DimmestBrightness, 100),
+        GlassLevels = GlassLevels?.Validated(),
     };
 
-    internal Glass.BackdropChoice Backdrop => new(File, Fit, Volume, Speed, Brightness);
+    // Null: the app's Glass levels.
+    public ItemGlass? GlassLevels { get; init; }
+
+    internal Glass.BackdropChoice Backdrop => new(File, Fit, Volume, Speed, Brightness, GlassLevels?.Over);
+}
+
+// A picture or video's own Glass levels, as an app's are.
+public sealed record ItemGlass
+{
+    public int PagePercent { get; init; } = 15;
+    public int TextPercent { get; init; } = 100;
+    public int FadeRangePercent { get; init; } = 100;
+    public Glass.GlassText TextColor { get; init; }
+    public bool TextShadow { get; init; } = true;
+
+    internal static ItemGlass From(AppGlassLevels levels) => new()
+    {
+        PagePercent = levels.BackgroundPercent, TextPercent = levels.TextPercent, FadeRangePercent = levels.FadeRangePercent,
+        TextColor = levels.TextColor, TextShadow = levels.TextShadow,
+    };
+
+    internal ItemGlass Validated() => this with
+    {
+        PagePercent = Math.Clamp(PagePercent, 0, 100),
+        TextPercent = Math.Clamp(TextPercent, 20, 100),
+        FadeRangePercent = Math.Clamp(FadeRangePercent, 1, EffectPreferences.MostFadeRange),
+        TextColor = Enum.IsDefined(TextColor) ? TextColor : WinScreen.Glass.GlassText.AsItIs,
+    };
+
+    internal Glass.GlassOver Over => new(PagePercent / 100f, TextPercent / 100f, FadeRangePercent / 100f, TextColor, TextShadow);
 }
 
 // A background is one picture or video, or several taking turns. The first is kept in File, Fit, Volume, Speed and
@@ -96,6 +126,8 @@ public sealed record BackgroundChoice
     public int Volume { get; init; }
     public int Speed { get; init; } = 100;
     public int Brightness { get; init; } = 100;
+    // The first one's own Glass levels; the rest keep theirs in More.
+    public ItemGlass? GlassLevels { get; init; }
     public List<BackgroundItem> More { get; init; } = [];
     public Glass.BackdropOrder Order { get; init; }
 
@@ -107,7 +139,19 @@ public sealed record BackgroundChoice
     internal static readonly int[] MinuteChoices = [1, 2, 5, 10, 15, 30, 60, 120, 240, MostPictureMinutes];
 
     internal IReadOnlyList<BackgroundItem> Items => File.Length == 0 ? [] :
-        [new BackgroundItem { File = File, Fit = Fit, Volume = Volume, Speed = Speed, Brightness = Brightness }, .. More];
+        [new BackgroundItem { File = File, Fit = Fit, Volume = Volume, Speed = Speed, Brightness = Brightness, GlassLevels = GlassLevels }, .. More];
+
+    // Every picture and video of the set takes the fit, sound, speed, brightness and Glass levels of the one at index.
+    internal BackgroundChoice WithLookOf(int index)
+    {
+        IReadOnlyList<BackgroundItem> items = Items;
+        if (index < 0 || index >= items.Count) return this;
+        BackgroundItem like = items[index];
+        return WithItems(items.Select(item => item with
+        {
+            Fit = like.Fit, Volume = like.Volume, Speed = like.Speed, Brightness = like.Brightness, GlassLevels = like.GlassLevels,
+        }));
+    }
 
     internal BackgroundChoice WithItems(IEnumerable<BackgroundItem> items)
     {
@@ -115,13 +159,14 @@ public sealed record BackgroundChoice
         BackgroundItem first = all.FirstOrDefault() ?? new BackgroundItem();
         return this with
         {
-            File = first.File, Fit = first.Fit, Volume = first.Volume, Speed = first.Speed, Brightness = first.Brightness, More = [.. all.Skip(1)],
+            File = first.File, Fit = first.Fit, Volume = first.Volume, Speed = first.Speed, Brightness = first.Brightness, GlassLevels = first.GlassLevels,
+            More = [.. all.Skip(1)],
         };
     }
 
     internal BackgroundChoice Validated()
     {
-        BackgroundChoice tidied = WithItems(new[] { new BackgroundItem { File = File ?? "", Fit = Fit, Volume = Volume, Speed = Speed, Brightness = Brightness } }
+        BackgroundChoice tidied = WithItems(new[] { new BackgroundItem { File = File ?? "", Fit = Fit, Volume = Volume, Speed = Speed, Brightness = Brightness, GlassLevels = GlassLevels } }
             .Concat((More ?? []).Where(item => item is not null)).Select(item => item.Validated()));
         return tidied with
         {
@@ -134,7 +179,7 @@ public sealed record BackgroundChoice
     internal Glass.BackdropSet? Backdrop => Items.Count == 0 ? null : new([.. Items.Select(item => item.Backdrop)], Order, PictureMinutes, Switch);
 
     public bool Equals(BackgroundChoice? other) => other is not null && File == other.File && Fit == other.Fit && Volume == other.Volume &&
-        Speed == other.Speed && Brightness == other.Brightness && Order == other.Order && PictureMinutes == other.PictureMinutes && Switch == other.Switch &&
+        Speed == other.Speed && Brightness == other.Brightness && GlassLevels == other.GlassLevels && Order == other.Order && PictureMinutes == other.PictureMinutes && Switch == other.Switch &&
         (More ?? []).SequenceEqual(other.More ?? []);
 
     public override int GetHashCode() => HashCode.Combine(File, Fit, Volume, Speed, Brightness, Order, PictureMinutes, More?.Count ?? 0);

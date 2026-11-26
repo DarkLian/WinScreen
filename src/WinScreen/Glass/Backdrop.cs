@@ -17,7 +17,10 @@ public enum BackdropSwitch { VideoEnds = 0, Timed = 1 }
 
 // One picture or video, a file or a link to one. Volume, Speed and Brightness are percents; sound is heard only from
 // the one window ContentEffects lets play it.
-internal sealed record BackdropChoice(string File, BackdropFit Fit, int Volume = 0, int Speed = 100, int Brightness = 100)
+// Glass levels a picture or video has of its own, used while it shows instead of the window's.
+internal readonly record struct GlassOver(float Page, float Text, float FadeRange, GlassText TextColor, bool Shadow);
+
+internal sealed record BackdropChoice(string File, BackdropFit Fit, int Volume = 0, int Speed = 100, int Brightness = 100, GlassOver? Glass = null)
 {
     public bool SameFile(BackdropChoice? other) => other is not null && string.Equals(File, other.File, StringComparison.OrdinalIgnoreCase);
 

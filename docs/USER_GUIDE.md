@@ -226,7 +226,7 @@ give it its own, or to show none in it. The preview shows how it will fit, and y
 more of the picture, lower **Page color** under Glass.
 
 Add more than one and they take turns, **In order** or **Shuffle**. With **Switch** on **When a video ends**, each video
-plays once and each picture stays for the minutes you choose; on **On a timer**, each stays for those minutes. Each has its own **Fit**, **Sound**, **Speed** and **Brightness**. If a file was moved or
+plays once and each picture stays for the minutes you choose; on **On a timer**, each stays for those minutes. Each has its own **Fit**, **Sound**, **Speed** and **Brightness**, and can have its own Glass levels (**Own Glass levels for this picture or video**), say more of the page over a bright picture. **Apply to all** gives every one in the list the same as the one chosen. If a file was moved or
 deleted, Settings marks it **(not found)** and Glass shows the next one. It shows again by itself once it's back.
 
 Videos play without sound until you turn **Sound** up. Only the window you used last plays sound, and only
@@ -263,7 +263,7 @@ Under **Apps** in **Settings → Effects**, add an app to give it its own backgr
 Each starts as every app has it, and each can be turned off for that app.
 
 To try things out on a window itself, choose **Effect settings** under **Effects** in its menu. On a window with Dark
-mode, it shows Dark mode's levels. With Glass, its levels are on the left and its picture or video on the right: add or remove them, and set the fit, sound, speed, brightness, order and timing.
+mode, it shows Dark mode's levels. With Glass, its levels are on the left and its picture or video on the right (turn on **This picture or video only** to give the one chosen its own Glass levels): add or remove them, and set the fit, sound, speed, brightness, order and timing.
 The changes show on that window at once and last until it closes; **Save for this app** keeps them for all its windows.
 
 **Page color** is how much of the page's own color covers the picture, and **Brightness** is how bright the picture itself

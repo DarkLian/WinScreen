@@ -477,6 +477,7 @@ internal sealed unsafe class ContentOverlay : Form
                     else if (backdrop is not null && chosen is not null)
                     {
                         BackdropChoice now = chosen.Items[turns.Showing];
+                        changed |= now.Glass != _showing?.Glass;
                         _showing = now;
                         turns.ChangeAt = chosen.StayMilliseconds(now) is { } stay ? turns.Since + stay : long.MaxValue;
                     }
@@ -666,6 +667,8 @@ internal sealed unsafe class ContentOverlay : Form
             turns.Showing = sequence.Next();
             BackdropChoice item = set.Items[turns.Showing];
             _showingAt = turns.Showing;
+            // Its own Glass levels are drawn from the next frame on, which a still window doesn't send.
+            if (item.Glass != _showing?.Glass) _changed = true;
             _showing = item;
             turns.Since = Environment.TickCount64;
             turns.ChangeAt = set.StayMilliseconds(item) is { } stay ? turns.Since + stay : long.MaxValue;
@@ -734,7 +737,7 @@ internal sealed unsafe class ContentOverlay : Form
                 X = place.X, Y = place.Y, Width = place.Width, Height = place.Height,
                 Tile = choice.Fit == BackdropFit.Tile ? 1 : 0, Detail = detail, Brightness = Math.Clamp(choice.Brightness, 0, 100) / 100f,
                 PageR = pr, PageG = pg, PageB = pb,
-                Flip = Flips(_levels.Value) ? 1 : 0,
+                Flip = Flips(Effective()) ? 1 : 0,
             };
             context.UpdateSubresource(in where, _place!);
             context.CSSetShader(_backdropShader);
@@ -772,7 +775,7 @@ internal sealed unsafe class ContentOverlay : Form
         ReadPage(staging, columns, rows);
 
         (float pr, float pg, float pb) = _page.Page;
-        ContentLevels levels = _levels.Value;
+        ContentLevels levels = Effective();
         bool dark = _look == ContentLook.Dark;
         var options = new Options
         {
@@ -829,6 +832,14 @@ internal sealed unsafe class ContentOverlay : Form
         }
 
         _page.Read(stats);
+    }
+
+    // The window's levels, or the ones of the picture or video showing when it has its own.
+    private ContentLevels Effective()
+    {
+        ContentLevels levels = _levels.Value;
+        if (_look != ContentLook.Glass || levels.Plain || _showing?.Glass is not { } own) return levels;
+        return levels with { Background = own.Page, Text = own.Text, FadeRange = own.FadeRange, TextColor = own.TextColor, Shadow = own.Shadow };
     }
 
     private bool Flips(ContentLevels levels) => _look == ContentLook.Glass && !levels.Plain && levels.TextColor switch

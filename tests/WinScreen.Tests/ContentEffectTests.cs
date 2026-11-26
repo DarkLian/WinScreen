@@ -219,6 +219,45 @@ public sealed class BackdropTests
         Assert.Empty(wild.More);
     }
 
+    // The owner, 26 Nov: with ten pictures for one app, set one up and give the other nine the same in one go. Fit, sound,
+    // speed and brightness belong to each picture or video; order, switching and minutes to the whole set.
+    [Fact]
+    public void One_picture_or_videos_look_can_be_given_to_the_whole_set()
+    {
+        BackgroundChoice set = new BackgroundChoice { Order = BackdropOrder.Shuffle, PictureMinutes = 10 }.WithItems([
+            new BackgroundItem { File = @"C:\a\sea.mp4", Fit = BackdropFit.Center, Volume = 40, Speed = 150, Brightness = 60 },
+            new BackgroundItem { File = @"C:\a\hills.jpg" }, new BackgroundItem { File = @"C:\a\city.gif", Fit = BackdropFit.Tile }]);
+        BackgroundChoice same = set.WithLookOf(0);
+        Assert.Equal([@"C:\a\sea.mp4", @"C:\a\hills.jpg", @"C:\a\city.gif"], same.Items.Select(item => item.File));
+        Assert.All(same.Items, item => Assert.Equal((BackdropFit.Center, 40, 150, 60), (item.Fit, item.Volume, item.Speed, item.Brightness)));
+        Assert.Equal((BackdropOrder.Shuffle, 10), (same.Order, same.PictureMinutes));
+        Assert.Same(set, set.WithLookOf(5));
+    }
+
+    // The owner, 26 Nov: each picture or video can have its own Glass levels too (a bright picture wanting more of the page
+    // over it, say); without them it uses the app's. The first one's are kept beside it, where the rest of it is saved.
+    [Fact]
+    public void A_picture_or_video_can_have_its_own_glass_levels_and_they_go_to_the_whole_set_with_the_rest()
+    {
+        var own = new ItemGlass { PagePercent = 70, TextPercent = 90, FadeRangePercent = 40, TextColor = GlassText.Dark, TextShadow = false };
+        BackgroundChoice set = new BackgroundChoice().WithItems([new BackgroundItem { File = @"C:\a\sea.mp4", GlassLevels = own },
+            new BackgroundItem { File = @"C:\a\hills.jpg" }]);
+        Assert.Equal(own, set.GlassLevels);
+        Assert.Equal([own, null], set.Items.Select(item => item.GlassLevels));
+        Assert.Equal([new GlassOver(0.7f, 0.9f, 0.4f, GlassText.Dark, false), (GlassOver?)null], set.Backdrop!.Items.Select(item => item.Glass));
+        Assert.All(set.WithLookOf(0).Items, item => Assert.Equal(own, item.GlassLevels));
+        Assert.All(set.WithLookOf(1).Items, item => Assert.Null(item.GlassLevels));
+        Assert.NotEqual(set, set.WithItems([set.Items[0] with { GlassLevels = own with { PagePercent = 10 } }, set.Items[1]]));
+
+        BackgroundChoice read = AppSettings.Parse("""
+            {"Backgrounds":{"Everywhere":{"File":"C:\\a.jpg","GlassLevels":{"PagePercent":150,"TextPercent":5},
+              "More":[{"File":"C:\\b.jpg","GlassLevels":{"FadeRangePercent":0}},{"File":"C:\\c.jpg"}]}}}
+            """).Backgrounds.Everywhere;
+        Assert.Equal((100, 20), (read.Items[0].GlassLevels!.PagePercent, read.Items[0].GlassLevels!.TextPercent));
+        Assert.Equal(1, read.Items[1].GlassLevels!.FadeRangePercent);
+        Assert.Null(read.Items[2].GlassLevels);
+    }
+
     [Fact]
     public void A_set_takes_turns_in_order_or_shuffled_with_none_twice_running()
     {
@@ -832,6 +871,50 @@ public sealed class ContentEffectTests
                 windows.RestoreAll();
             }
         });
+    }
+
+    // A picture with its own Glass levels is drawn with them while it shows: all of the page over it here, where the
+    // window's levels show all of the picture.
+    [GraphicsCardFact]
+    public void A_pictures_own_glass_levels_are_used_while_it_shows()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "WinScreen background " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        string red = Path.Combine(folder, "red.png");
+        using (var picture = new Bitmap(64, 64))
+        {
+            using (Graphics g = Graphics.FromImage(picture)) g.Clear(Color.FromArgb(0xD0, 0x20, 0x20));
+            picture.Save(red, System.Drawing.Imaging.ImageFormat.Png);
+        }
+        using var target = new TargetProcess(Spot, "FFFFFF");
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        try
+        {
+            WindowMenuBuilderTests.OnUiThread(() =>
+            {
+                var windows = new WindowController([]);
+                using var effects = new ContentEffects(windows);
+                effects.SetLevels(new ContentLevels(0, 1, Shadow: false));
+                effects.SetBackgrounds(_ => new BackdropSet([new(red, BackdropFit.Fill)]));
+                try
+                {
+                    Assert.True(effects.Toggle(target.Handle, ContentLook.Glass));
+                    Color picture = Color.FromArgb(0xD0, 0x20, 0x20);
+                    Pump(() => Desktop.IsNear(Middle(bounds), picture, 24));
+                    Assert.True(Desktop.IsNear(Middle(bounds), picture, 24), $"{Middle(bounds)} rather than the red picture");
+
+                    effects.SetBackgrounds(_ => new BackdropSet([new(red, BackdropFit.Fill, Glass: new GlassOver(1, 1, 1, GlassText.AsItIs, false))]));
+                    Pump(() => Desktop.IsNear(Middle(bounds), Color.White, 24));
+                    Assert.True(Desktop.IsNear(Middle(bounds), Color.White, 24), $"{Middle(bounds)} rather than the page over the picture");
+                }
+                finally
+                {
+                    effects.TurnAllOff();
+                    windows.RestoreAll();
+                }
+            });
+        }
+        finally { Directory.Delete(folder, true); }
     }
 
     // The owner, 23 Nov: a background file moved or deleted is passed over and named once; the next in the set shows,

@@ -46,6 +46,15 @@ public sealed partial class SettingsWindow
     private readonly PlainButton _backgroundClear = new() { Text = T("settings.backgrounds.clear"), AutoSize = true };
     private readonly PlainButton _itemUp = new() { Text = T("settings.backgrounds.moveUp"), AutoSize = true };
     private readonly PlainButton _itemDown = new() { Text = T("settings.backgrounds.moveDown"), AutoSize = true };
+    private readonly PlainButton _applyAll = new() { Text = T("settings.backgrounds.applyAllButton"), AutoSize = true };
+    private Control? _applyAllRow;
+    private readonly SwitchBox _itemOwnGlass = new() { Text = T("settings.backgrounds.ownGlass"), AutoSize = true };
+    private readonly NumericUpDown _itemPage = new() { Minimum = 0, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _itemText = new() { Minimum = 20, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _itemFade = new CurvedNumber { Minimum = 1, Maximum = EffectPreferences.MostFadeRange, Width = 70, Curve = CurvedNumber.FadeCurve };
+    private readonly ComboBox _itemTextColor = TextColorPicker();
+    private readonly SwitchBox _itemShadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
+    private readonly List<Control> _itemGlassRows = [];
     private readonly PlainButton _backgroundRemoveApp = new() { Text = T("common.remove"), Enabled = false };
     private readonly ComboBox _backgroundFit = new ThemedCombo { Width = 200 };
     private readonly NumericUpDown _backgroundVolume = new() { Minimum = 0, Maximum = 100, Width = 70 };
@@ -117,6 +126,12 @@ public sealed partial class SettingsWindow
         _backgroundClear.Click += (_, _) => RemoveItem();
         _itemUp.Click += (_, _) => MoveItem(-1);
         _itemDown.Click += (_, _) => MoveItem(1);
+        _applyAll.Click += (_, _) => ChangeBackground(choice => choice.WithLookOf(_itemAt));
+        _itemOwnGlass.CheckedChanged += (_, _) =>
+            ChangeItem(item => item with { GlassLevels = _itemOwnGlass.Checked ? ItemGlass.From(AppGlassShown(ShownApp)) : null });
+        foreach (NumericUpDown box in new[] { _itemPage, _itemText, _itemFade }) box.TextChanged += (_, _) => ChangeItemGlass();
+        _itemTextColor.SelectedIndexChanged += (_, _) => ChangeItemGlass();
+        _itemShadow.CheckedChanged += (_, _) => ChangeItemGlass();
         _itemList.SelectedIndexChanged += (_, _) =>
         {
             if (_showingBackground || _itemList.SelectedIndex < 0) return;
@@ -157,6 +172,10 @@ public sealed partial class SettingsWindow
             SettingRow(T("settings.backgrounds.sound"), _backgroundVolume), Note(T("settings.backgrounds.soundHelp")),
             SettingRow(T("settings.backgrounds.speed"), _backgroundSpeed),
             SettingRow(T("settings.backgrounds.brightness"), _backgroundBrightness)]);
+        _itemGlassRows.AddRange([SettingRow(T("settings.effects.background"), _itemPage), SettingRow(T("settings.effects.text"), _itemText),
+            SettingRow(T("settings.effects.fade"), _itemFade), SettingRow(T("settings.effects.textColor"), _itemTextColor), _itemShadow]);
+        _backgroundRows.AddRange([_itemOwnGlass, Note(T("settings.backgrounds.ownGlassHelp")), .. _itemGlassRows,
+            _applyAllRow = SettingRow(T("settings.backgrounds.applyAll"), _applyAll), Note(T("settings.backgrounds.applyAllHelp"))]);
         _ownBackground.CheckedChanged += (_, _) => SetOwnBackground(_ownBackground.Checked);
         _ownGlass.CheckedChanged += (_, _) => SetOwnPart(_ownGlass.Checked, dark: false);
         _ownDark.CheckedChanged += (_, _) => SetOwnPart(_ownDark.Checked, dark: true);
@@ -188,7 +207,7 @@ public sealed partial class SettingsWindow
         _appDarkRows.Add(SettingRow(T("settings.dark.page"), _appDarkPage));
         _appDarkRows.Add(SettingRow(T("settings.dark.text"), _appDarkText));
         _appDarkRows.Add(SettingRow(T("settings.dark.colors"), _appDarkColors));
-        _mainGlassRows.AddRange([_layeredGlass,
+        _mainGlassRows.AddRange([_layeredGlass, Note(T("settings.effects.layeredGlassHelp")),
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.fade"), _glassFade), Note(T("settings.effects.fadeHelp")),
             SettingRow(T("settings.effects.textColor"), _glassTextColor), Note(T("settings.effects.textColorHelp")), _glassShadow,
@@ -286,17 +305,58 @@ public sealed partial class SettingsWindow
 
     private static Glass.GlassText TextColorOf(ComboBox picker) => (Glass.GlassText)Math.Max(0, picker.SelectedIndex);
 
+    // Each part the app's own, or Every app's while it has none.
+    private AppGlassLevels AppGlassShown(string? program)
+    {
+        AppGlassLevels? own = GlassOf(program);
+        AppGlassLevels main = MainGlass(program ?? "");
+        if (own is null) return main;
+        AppGlassLevels shown = own.OwnGlass ? own : own.WithGlassOf(main);
+        return own.OwnDark ? shown : shown.WithDarkOf(main);
+    }
+
+    private void ChangeItemGlass()
+    {
+        if (!_itemOwnGlass.Checked) return;
+        ChangeItem(item => item with
+        {
+            GlassLevels = new ItemGlass
+            {
+                PagePercent = Typed(_itemPage), TextPercent = Typed(_itemText), FadeRangePercent = Typed(_itemFade),
+                TextColor = TextColorOf(_itemTextColor), TextShadow = _itemShadow.Checked,
+            },
+        });
+    }
+
+    // Its own Glass levels, or the app's, which it uses until it has its own.
+    private void ShowItemGlass(string? app, BackgroundItem? item, bool ownBackground)
+    {
+        ItemGlass glass = item?.GlassLevels ?? ItemGlass.From(AppGlassShown(app));
+        bool was = _showingBackground;
+        _showingBackground = true;
+        try
+        {
+            _itemOwnGlass.Checked = item?.GlassLevels is not null;
+            _itemPage.Value = glass.PagePercent;
+            _itemText.Value = glass.TextPercent;
+            _itemFade.Value = glass.FadeRangePercent;
+            _itemTextColor.SelectedIndex = (int)glass.TextColor;
+            _itemShadow.Checked = glass.TextShadow;
+        }
+        finally { _showingBackground = was; }
+        _itemOwnGlass.Visible = item is not null;
+        foreach (Control row in _itemGlassRows)
+        {
+            row.Visible = item is not null;
+            row.Enabled = ownBackground && item?.GlassLevels is not null;
+        }
+    }
+
     // Each part shows the app's own, or Every app's while it has none.
     private void ShowGlassApp(string? program)
     {
         AppGlassLevels? own = GlassOf(program);
-        AppGlassLevels main = MainGlass(program ?? "");
-        AppGlassLevels shown = main;
-        if (own is not null)
-        {
-            shown = own.OwnGlass ? own : own.WithGlassOf(main);
-            if (!own.OwnDark) shown = shown.WithDarkOf(main);
-        }
+        AppGlassLevels shown = AppGlassShown(program);
         _showingGlassApp = true;
         try
         {
@@ -620,6 +680,8 @@ public sealed partial class SettingsWindow
         _itemUp.Enabled = _itemAt > 0;
         _itemDown.Enabled = _itemAt < items.Count - 1;
         foreach (Control row in _setRows) row.Visible = several;
+        _applyAllRow?.Visible = several;
+        ShowItemGlass(app, shown, own);
         bool video = chosen && IsVideo(shown!.File);
         _backgroundVolume.Enabled = video;
         _backgroundSpeed.Enabled = video || chosen && BackdropChoice.Kind(shown!.File) == ".gif";
