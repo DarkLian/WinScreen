@@ -819,14 +819,8 @@ public sealed partial class TrayApplication : ApplicationContext
             });
         }
 
-        if (experimentalBefore && !_settings.ExperimentalFeatures)
-        {
-            _dark.TurnAllOff();
-            foreach (nint window in _content.Sources.ToArray())
-                if (_content.Has(window, Glass.ContentLook.Dark)) _content.TurnOff(window);
-            if (_windows.EndSwitcherHiding() > 0)
-                Alert(T("recovery.attention"), T("errors.recovery.someFailed"));
-        }
+        if (experimentalBefore && !_settings.ExperimentalFeatures && _windows.EndSwitcherHiding() > 0)
+            Alert(T("recovery.attention"), T("errors.recovery.someFailed"));
     }
 
     private static List<HotkeyProblem> ReadHotkeys(AppSettings settings,
@@ -1131,7 +1125,7 @@ public sealed partial class TrayApplication : ApplicationContext
         // already dark. The setup waits for it a few seconds.
         long now = Environment.TickCount64;
         if (!_setupFirstSeen.TryGetValue(window, out long firstSeen)) _setupFirstSeen[window] = firstSeen = now;
-        if (setup.Dark && _settings.ExperimentalFeatures && now - firstSeen < NewWindowDrawsWithin &&
+        if (setup.Dark && now - firstSeen < NewWindowDrawsWithin &&
             DarkLook(window) == Look.None && _dark.LooksDark(window))
         {
             _setupRetryAt[window] = now + 500;
@@ -1151,7 +1145,7 @@ public sealed partial class TrayApplication : ApplicationContext
                 Screen.AllScreens.Any(screen => string.Equals(screen.DeviceName, setup.Display, StringComparison.OrdinalIgnoreCase)),
                 () => _placer.MoveToDisplay(window, setup.Display!));
             Do(SetupPart.Place, setup.Place is not null, () => _placer.Align(window, setup.Place!.Value));
-            Do(SetupPart.Dark, _settings.ExperimentalFeatures && setup.Dark && DarkLook(window) == Look.None, () => ToggleDark(window));
+            Do(SetupPart.Dark, setup.Dark && DarkLook(window) == Look.None, () => ToggleDark(window));
             Do(SetupPart.Anchor, setup.Anchor && !_anchors.Has(window), () => _anchors.Toggle(window));
             Do(SetupPart.View, true, () => RestoreSavedView(window, setup));
 
@@ -1325,8 +1319,7 @@ public sealed partial class TrayApplication : ApplicationContext
         tile.FormClosed += (_, _) =>
         {
             _shrunk.Remove(window);
-            if (look is not { } back || !tile.BringBack || !User32.IsWindow(window) || _content.Has(window) ||
-                back == Glass.ContentLook.Dark && !IsAvailable(AppCommand.ToggleDark))
+            if (look is not { } back || !tile.BringBack || !User32.IsWindow(window) || _content.Has(window))
                 return;
             try { _content.Toggle(window, back); }
             catch (WindowOperationException failure) { Alert(T("errors.operation.title"), failure.Message); }

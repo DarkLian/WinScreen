@@ -123,7 +123,7 @@ Vários podem se revezar, e também podem vir de um link da web.
 - Enrolar até a barra de título, mandar para trás
 
 **Efeitos**
-- Modo escuro para qualquer app, que mantém o tom de cada cor *(experimental)*
+- Modo escuro para qualquer app, que mantém o tom de cada cor
 - Vidro que esmaece só o fundo
 - Quanto o Vidro esmaece, para cada app ou para uma só janela
 - Texto claro ou escuro sobre o Vidro, com ou sem uma sombra suave

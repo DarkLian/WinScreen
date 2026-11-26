@@ -123,7 +123,7 @@ Varios pueden turnarse, y también pueden venir de un enlace web.
 - Enrollar hasta la barra de título, enviar al fondo
 
 **Efectos**
-- Modo oscuro para cualquier app, que conserva el tono de cada color *(experimental)*
+- Modo oscuro para cualquier app, que conserva el tono de cada color
 - Cristal que difumina solo el fondo
 - Cuánto difumina Cristal, para cada aplicación o para una sola ventana
 - Texto claro u oscuro sobre Cristal, con o sin una sombra suave

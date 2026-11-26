@@ -123,7 +123,7 @@ Mehrere können sich abwechseln, und sie können auch von einem Weblink kommen.
 - Bis zur Titelleiste aufrollen, nach hinten schicken
 
 **Effekte**
-- Dunkelmodus für jede App, der den Farbton jeder Farbe behält *(experimentell)*
+- Dunkelmodus für jede App, der den Farbton jeder Farbe behält
 - Glas, das nur den Hintergrund ausblendet
 - Wie stark Glas ausblendet, für jede App oder für ein einzelnes Fenster
 - Helle oder dunkle Schrift über Glas, mit oder ohne weichen Schatten

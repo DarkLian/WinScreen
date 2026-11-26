@@ -200,7 +200,7 @@ changes a title bar that Windows draws.
 
 ## Effects
 
-- **Dark mode** *(experimental)* swaps light and dark. Windows that are already dark are left alone.
+- **Dark mode** swaps light and dark. Windows that are already dark are left alone.
 - **Glass** makes a window's background see-through.
 
 A window has Dark mode or Glass, not both: turning one on turns the other off.

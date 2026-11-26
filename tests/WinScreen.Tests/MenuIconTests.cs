@@ -60,7 +60,7 @@ public sealed class MenuIconTests
             Assert.NotNull(menu.Items.OfType<OpacityRow>().Single().Image);
             ToolStripMenuItem effects = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == Localization.UiText.T("menu.effects"));
             Assert.False(MenuParts.IsExperimental(effects));
-            Assert.Equal([AppCommand.ToggleDark], effects.DropDownItems.OfType<ToolStripMenuItem>().Where(MenuParts.IsExperimental).Select(item => (AppCommand)item.Tag!));
+            Assert.DoesNotContain(effects.DropDownItems.OfType<ToolStripMenuItem>(), MenuParts.IsExperimental); // Dark mode left experimental in 1.5.0.
             ToolStripMenuItem borderless = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == Localization.UiText.T("window.borderless"));
             Image?[] frames = [.. borderless.DropDownItems.Cast<ToolStripItem>().Select(item => item.Image)];
             Assert.All(frames, Assert.NotNull);

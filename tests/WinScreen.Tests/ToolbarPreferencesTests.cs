@@ -162,15 +162,16 @@ public sealed class ToolbarPreferencesTests
             Assert.Equal("Ctrl+Alt+T", pin.SubItems[3].Text);
             Assert.Equal("Ctrl+Alt+T", pin.SubItems[2].Text);
             var dark = table.Items.Cast<ListViewItem>().Single(row => Equals(row.Tag, AppCommand.ToggleDark));
-            Assert.Equal(UiText.T("features.disabled"), dark.SubItems[4].Text);
+            Assert.NotEqual(UiText.T("features.disabled"), dark.SubItems[4].Text); // Not experimental since 1.5.0.
             Assert.Contains(table.Items.Cast<ListViewItem>(), row => row.Text == UiText.T("features.opacityWheel") && row.SubItems[4].Text == UiText.T("features.enabled"));
             Assert.Contains(table.Items.Cast<ListViewItem>(), row => Equals(row.Tag, "toolbar") && row.SubItems[4].Text == UiText.T("features.disabled"));
             Assert.False(preferences.OpacityWheel);
         });
     }
 
+    // Dark mode was the one button that needed experimental features; since 1.5.0 a toolbar of it alone is on without them.
     [Fact]
-    public void Features_show_the_toolbar_off_when_every_chosen_button_is_unavailable()
+    public void Features_show_a_toolbar_of_dark_mode_alone_on_without_experimental_features()
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
@@ -179,7 +180,7 @@ public sealed class ToolbarPreferencesTests
             settings.RefreshFeatures();
             var table = Descendants(settings).OfType<ListView>().Single();
             string State() => table.Items.Cast<ListViewItem>().Single(row => Equals(row.Tag, "toolbar")).SubItems[4].Text;
-            Assert.Equal(UiText.T("features.disabled"), State());
+            Assert.Equal(UiText.T("features.enabled"), State());
             settings.SetOption(nameof(AppSettings.ExperimentalFeatures), true);
             settings.RefreshFeatures();
             Assert.Equal(UiText.T("features.enabled"), State());

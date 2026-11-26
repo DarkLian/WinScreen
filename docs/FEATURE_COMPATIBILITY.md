@@ -70,7 +70,6 @@ reads its own update feed (`Updates/UpdateChannel.cs`), and only the x64 feed is
 | ✅ Supported | Works, and a check in the code allows it. |
 | ⚠️ Conditional | Works only with a setting on, in some states, or with a catch described in the notes. |
 | ❌ Unsupported | WinScreen refuses on purpose and says why, or does nothing. |
-| 🧪 Experimental | Only with **Settings → General → Experimental** on (`AppSettings.ExperimentalFeatures`). |
 | ❔ Unverified | Nothing in the code refuses it, but no test covers it, so behavior depends on the app. |
 
 ## Rules that apply to every feature
@@ -87,7 +86,7 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **App not responding** | Most changes wait half a second for an answer, then say "The window isn't responding right now." | `WindowController.EnsureResponsive` |
 | **Full-screen app or game running** (Settings → General → "Pause new commands during games and full-screen apps", on by default) | Hotkeys and toolbar commands are refused, except the ones that only take something away: Restore this window, Restore all windows, the commands for every window (below), turning Borderless or Fill display off, the commands for a window's view, tile or Anchor that already exists, and a view's own commands. Opening a view follows its own rules (see Picture-in-Picture). | `FullScreenPolicy.Decide`, `Windows/FullScreen.cs` |
 | **PC locked or the user is away** | The mouse hook is removed, so gestures and Ctrl+Alt+wheel stop. | `ModifierHookPolicy`, `FullScreen.IsAway` |
-| **Experimental features off** | Dark mode is refused with "Turn on experimental features in Settings". Turning experimental off while it's in use undoes it. Glass, backgrounds, kept areas, Shrink, Crop, Roll up and views that move out of the way work either way. | `CommandCatalog.IsExperimental`, `Settings/AppSettings.cs`; `TrayApplication.ApplyPreferences` |
+| **Experimental features off** | Every command works either way: Dark mode left experimental in 1.5.0. The switch covers only using other apps through a view, Enhanced hover and middle-click scrolling (see Picture-in-Picture). | `CommandCatalog.IsExperimental`, `Settings/AppSettings.cs`; `TrayApplication.ApplyPreferences` |
 
 ## Window states used in the tables
 
@@ -116,7 +115,7 @@ These checks run before any feature-specific ones. If one of them refuses, nothi
 | **Dark title bar** | ✅ | ✅ | ✅ ¹³ | ❌ ¹⁴ | ⚠️ ² | ✅ | ✅ | ✅ |
 | **Roll up** | ✅ ⁸ | ✅ ¹⁹ | ✅ ¹⁹ | ❌ | ❌ | ✅ | ❌ | ✅ |
 | **Crop** | ✅ ¹⁵ | ✅ ¹⁵ | ⚠️ ¹⁷ | ❌ ⁹ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
-| **Dark mode** 🧪 | ✅ | ✅ | ⚠️ ¹⁰ | ✅ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
+| **Dark mode** | ✅ | ✅ | ⚠️ ¹⁰ | ✅ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
 | **Glass mode** | ✅ | ✅ | ⚠️ ¹⁰ | ✅ ¹⁶ | ⚠️ ² | ✅ | ❌ ⁵ | ✅ |
 | **Shrink** | ✅ | ✅ | ⚠️ ¹¹ | ❌ ⁹ | ⚠️ ² | ✅ | ✅ ²⁰ | ✅ |
 | **Restore this window** (Ctrl+Alt+U) | ✅ | ✅ | ✅ | ✅ | ✅ ¹² | ✅ | ✅ | ✅ |

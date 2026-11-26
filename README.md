@@ -119,7 +119,7 @@ Several can take turns, and they can come from a web link too.
 - Roll up to the title bar, send to the back
 
 **Effects**
-- Dark mode for any app, keeping each color's hue *(experimental)*
+- Dark mode for any app, keeping each color's hue
 - Glass that fades only the background
 - How much Glass fades, for each app or for a single window
 - Light or dark text over Glass, with or without a soft shadow

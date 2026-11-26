@@ -218,7 +218,7 @@ public sealed partial class SettingsWindow
             [Note(T("settings.effects.backgroundAbout")), _ownBackground, .. _backgroundRows]);
         _glassCard = Card(T("settings.backgrounds.everyApp"), false,
             [Note(T("settings.effects.glassAbout")), .. _mainGlassRows, _ownGlass, _appGlassNote, .. _appGlassRows]);
-        _darkCard = Card(T("settings.backgrounds.everyApp"), true,
+        _darkCard = Card(T("settings.backgrounds.everyApp"), false,
             [Note(T("settings.effects.darkAbout")), .. _mainDarkRows, _ownDark, _appDarkNote, .. _appDarkRows]);
 
         foreach (SwitchBox rule in new[] { _soundInFront, _pauseFullScreen, _pauseSaver })

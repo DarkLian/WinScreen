@@ -43,8 +43,9 @@ public sealed class WorkflowRegressionTests
         finally { Directory.Delete(folder, true); }
     }
 
+    // Dark mode left experimental in 1.5.0: its shortcut is taken with the switch off.
     [Fact]
-    public void Disabled_experimental_shortcuts_are_released_and_reenable_conflicts_are_atomic()
+    public void Dark_modes_shortcut_is_taken_without_experimental_features()
     {
         string folder = Directory.CreateTempSubdirectory("winscreen-shortcuts-").FullName;
         try
@@ -58,15 +59,8 @@ public sealed class WorkflowRegressionTests
                 using var other = new HotkeyHost();
                 try
                 {
-                    Assert.True(other.TryRegister(100, 2 | 4, Keys.F20, out string? failure), failure);
-                    var enabled = settings.Clone();
-                    enabled.ExperimentalFeatures = true;
-                    var problems = (IReadOnlyList<HotkeyProblem>)typeof(TrayApplication)
-                        .GetMethod("Apply", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(app, [enabled])!;
-                    Assert.Equal(AppCommand.ToggleDark, Assert.Single(problems).Command);
                     Assert.False(settings.ExperimentalFeatures);
-                    Assert.Equal("Ctrl+Shift+F20", settings.Hotkeys[AppCommand.ToggleDark]);
-                    Assert.False(AppSettings.Load(Path.Combine(folder, "settings.json")).ExperimentalFeatures);
+                    Assert.False(other.TryRegister(100, 2 | 4, Keys.F20, out _), "Dark mode's shortcut was left free.");
                 }
                 finally { app.ExitThread(); }
             });
@@ -107,12 +101,12 @@ public sealed class WorkflowRegressionTests
 [Trait("Category", "RealWindows")]
 public sealed class ConcealmentOwnershipTests
 {
-    // The owner, 24 Nov: of the commands only Dark mode is experimental. The rest work without the switch, and turning
-    // it off leaves them.
+    // The owner, 24 Nov: commands work without the experimental switch, and turning it off leaves them. Dark mode, the
+    // last experimental command, left it in 1.5.0.
     [Fact]
-    public void Only_dark_mode_is_experimental_and_the_switch_leaves_the_rest()
+    public void No_command_is_experimental_and_the_switch_leaves_them()
     {
-        Assert.Equal([AppCommand.ToggleDark], Enum.GetValues<AppCommand>().Where(CommandCatalog.IsExperimental));
+        Assert.DoesNotContain(Enum.GetValues<AppCommand>(), CommandCatalog.IsExperimental);
         string folder = Directory.CreateTempSubdirectory("winscreen-experimental-").FullName;
         try
         {

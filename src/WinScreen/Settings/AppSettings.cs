@@ -273,7 +273,10 @@ public static class CommandCatalog
     public static bool EndsGroup(AppCommand command) =>
         command is AppCommand.ToggleClickThrough or AppCommand.ToggleCrop or AppCommand.SaveWindowSetup or AppCommand.RestoreWindow;
 
-    public static bool IsExperimental(AppCommand command) => command == AppCommand.ToggleDark;
+    // None since Dark mode left it in 1.5.0; a command put here is tagged and needs the switch in Settings.
+    private static readonly HashSet<AppCommand> Experimental = [];
+
+    public static bool IsExperimental(AppCommand command) => Experimental.Contains(command);
 
     public static string Name(AppCommand command) => command switch
     {
