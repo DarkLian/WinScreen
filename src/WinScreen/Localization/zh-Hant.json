@@ -472,7 +472,7 @@
   "settings.backgrounds.order.inOrder": "依順序",
   "settings.backgrounds.order.shuffle": "隨機",
   "settings.backgrounds.ownGlass": "此圖片或影片使用自己的玻璃程度",
-  "settings.backgrounds.ownGlassHelp": "關閉時，它使用應用程式的玻璃程度。",
+  "settings.backgrounds.ownGlassHelp": "關閉時，它使用應用程式的玻璃程度，即下方玻璃卡片中的設定。",
   "settings.backgrounds.pauseFullScreen": "遊戲或全螢幕應用程式位於最前面時暫停影片",
   "settings.backgrounds.pauseSaver": "Windows 省電時暫停影片",
   "settings.backgrounds.pictureMinutes": "每個顯示的分鐘數",

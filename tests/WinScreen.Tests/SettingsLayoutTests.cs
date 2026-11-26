@@ -397,10 +397,10 @@ public sealed class SettingsLayoutTests
             // The chosen video's own Glass levels, starting from the app's.
             SwitchBox itemOwn = Descendants(window).OfType<SwitchBox>().Single(box => box.Text == UiText.T("settings.backgrounds.ownGlass"));
             NumberSlider itemPage = Descendants(Card("Background for")).OfType<NumberSlider>().Single(slider => slider.AccessibleName == UiText.T("settings.effects.background"));
-            Assert.False(itemPage.Enabled);
+            Assert.False(itemPage.Visible); // Hidden while it uses the app's, so they don't repeat the Glass card's.
             itemOwn.Checked = true;
             Application.DoEvents();
-            Assert.True(itemPage.Enabled);
+            Assert.True(itemPage.Visible && itemPage.Enabled);
             Assert.Equal(15, (int)itemPage.Number.Value);
 
             ListBox list = Descendants(window).OfType<BackgroundList>().Single();

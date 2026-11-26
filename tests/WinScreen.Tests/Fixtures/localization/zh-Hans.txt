@@ -474,7 +474,7 @@ settings.backgrounds.order 9249CA6C2AAB5506
 settings.backgrounds.order.inOrder 16DFC3BFDAABF3FE
 settings.backgrounds.order.shuffle 75CA4F921437F9A8
 settings.backgrounds.ownGlass ECB6E20CA12FA630
-settings.backgrounds.ownGlassHelp 05EDE0A608B89540
+settings.backgrounds.ownGlassHelp 42B2EF38562BD1ED
 settings.backgrounds.pauseFullScreen C977060D78A8037D
 settings.backgrounds.pauseSaver 1BFD52F6E74A5E37
 settings.backgrounds.pictureMinutes 2AD6A7B9F5ED1EE5

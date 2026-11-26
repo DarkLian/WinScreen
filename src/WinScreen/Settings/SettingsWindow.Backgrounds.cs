@@ -345,10 +345,11 @@ public sealed partial class SettingsWindow
         }
         finally { _showingBackground = was; }
         _itemOwnGlass.Visible = item is not null;
+        // Only while it has its own: otherwise they would repeat the Glass card's below.
         foreach (Control row in _itemGlassRows)
         {
-            row.Visible = item is not null;
-            row.Enabled = ownBackground && item?.GlassLevels is not null;
+            row.Visible = item?.GlassLevels is not null;
+            row.Enabled = ownBackground;
         }
     }
 

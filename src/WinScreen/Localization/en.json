@@ -472,7 +472,7 @@
   "settings.backgrounds.order.inOrder": "In order",
   "settings.backgrounds.order.shuffle": "Shuffle",
   "settings.backgrounds.ownGlass": "Own Glass levels for this picture or video",
-  "settings.backgrounds.ownGlassHelp": "Off, it uses the app's Glass levels.",
+  "settings.backgrounds.ownGlassHelp": "Off, it uses the app's Glass levels, in the Glass card below.",
   "settings.backgrounds.pauseFullScreen": "Pause videos while a game or full-screen app is in front",
   "settings.backgrounds.pauseSaver": "Pause videos while Windows saves battery",
   "settings.backgrounds.pictureMinutes": "Minutes for each",
