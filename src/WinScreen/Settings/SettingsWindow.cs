@@ -51,7 +51,7 @@ public sealed partial class SettingsWindow : Form
     private readonly HintTextBox _search = new();
     private readonly Label _pageTitle = new SoftLabel() { AutoSize = true, Font = SettingsStyle.PageTitleFont, UseMnemonic = false, Margin = new Padding(0, 0, 0, 14) };
     private readonly HintTextBox _actionSearch = new() { Dock = DockStyle.Top };
-    private readonly InputFrame _shortcutEditor = new(null) { Width = 240, ReserveEnd = 22, Anchor = AnchorStyles.Right };
+    private readonly InputFrame _shortcutEditor = new(null) { Width = 240, ReserveEnd = 22, Anchor = AnchorStyles.Top | AnchorStyles.Left };
     private readonly Label _shortcutLabel = new SoftLabel() { AutoSize = true, Anchor = AnchorStyles.Left, Font = SettingsStyle.HeadingFont, UseMnemonic = false, AutoEllipsis = true };
     private readonly Dictionary<AppCommand, string> _shortcutProblems = [];
     private bool _fillingFeatures;
@@ -262,26 +262,22 @@ private readonly ErrorProvider _errors = new();
         _nav.Chosen += chosen => { tabs.SelectedTab = (TabPage)chosen; ShowSearchMatch(); };
         _search.Hint = _search.AccessibleName = T("settings.search");
         _search.TextChanged += (_, _) => SearchSettings();
+        _goToPage = page => tabs.SelectedTab = page switch
+        {
+            "toolbar" => toolbarPage,
+            "anchors" => anchorsPage,
+            "gestures" => gesturePage,
+            "pip" => pipPage,
+            "appearance" => appearancePage,
+            _ => generalPage,
+        };
         _features.ItemActivate += (_, _) => // A double-click, or Enter from the keyboard.
         {
-            if (_features.SelectedItems.Count == 0) return;
-            object? tag = _features.SelectedItems[0].Tag;
-            if (tag is AppCommand command)
+            switch (SelectedFeature())
             {
-                tabs.SelectedTab = featuresPage;
-                ShowShortcutEditor();
-                _hotkeys[command].Focus();
-                return;
+                case AppCommand command: BeginShortcutEdit(command); break;
+                case string page: _goToPage(page); break;
             }
-            tabs.SelectedTab = (tag as string) switch
-            {
-                "toolbar" => toolbarPage,
-                "anchors" => anchorsPage,
-                "gestures" => gesturePage,
-                "pip" => pipPage,
-                "appearance" => appearancePage,
-                _ => generalPage,
-            };
         };
 
         var side = new Panel { Dock = DockStyle.Left, Width = 220, BackColor = SettingsStyle.Side, Padding = new Padding(10, 12, 10, 8) };
@@ -345,7 +341,7 @@ private readonly ErrorProvider _errors = new();
         var icons = new Dictionary<Control, char>
         {
             [_language] = '\uE774', [_theme] = '\uE790', [_menuTransparency] = '\uE706', [_startWithWindows] = '\uE7E8', [_runAsAdministrator] = '\uE7EF',
-            [_notifications] = '\uEA8F', [_updateMode] = '\uE896', [_checkUpdates] = '\uE895', [_pauseInFullScreen] = '\uE7FC', [_allowPip] = '\uE8A7',
+            [_notifications] = '\uEA8F', [_shortcutSheet] = MenuParts.Keyboard, [_updateMode] = '\uE896', [_checkUpdates] = '\uE895', [_pauseInFullScreen] = '\uE7FC', [_allowPip] = '\uE8A7',
             [_experimental] = '\uE945',
             [_modifierDrag] = '\uE7C2', [_modifierKey] = '\uE765', [_snapWhileDragging] = '\uE90C', [_windowMenu] = '\uE712',
             [_windowMenuGesture] = '\uE962',
@@ -557,7 +553,7 @@ private readonly ErrorProvider _errors = new();
                 case CheckBox box: box.CheckedChanged += (_, _) => QueueApplyRefresh(); break;
                 case NumericUpDown number: number.TextChanged += (_, _) => QueueApplyRefresh(); break;
                 case CheckedListBox list: list.ItemCheck += (_, _) => QueueApplyRefresh(); break;
-                case ComboBox combo:
+                case ComboBox combo when combo != _actionFilter:
                     combo.SelectedIndexChanged += (_, _) => QueueApplyRefresh();
                     combo.TextChanged += (_, _) => QueueApplyRefresh();
                     break;
@@ -700,9 +696,16 @@ private readonly ErrorProvider _errors = new();
     internal bool TakeShortcut(string combination)
     {
         if (string.IsNullOrEmpty(combination) || !ContainsFocus) return false;
+        if (_listeningForSearch && _actionSearch.Focused)
+        {
+            StopListening();
+            _actionSearch.Text = combination;
+            return true;
+        }
         if (_hotkeys.Values.FirstOrDefault(box => box.Focused) is not { } focused) return false;
         focused.Text = combination;
         _status.Text = "";
+        if (_editing is not null) EndShortcutEdit(cancel: false);
         return true;
     }
 
@@ -883,6 +886,7 @@ private readonly ErrorProvider _errors = new();
     private (CheckBox Box, Func<AppSettings, bool> Read, Action<AppSettings, bool> Write)[] Switches =>
     [
         (_showToolbar, settings => settings.ShowToolbar, (settings, on) => settings.ShowToolbar = on),
+        (_shortcutSheet, settings => settings.ShortcutSheet, (settings, on) => settings.ShortcutSheet = on),
         (_menuTransparency, settings => settings.MenuTransparency, (settings, on) => settings.MenuTransparency = on),
         (_experimental, settings => settings.ExperimentalFeatures, (settings, on) => settings.ExperimentalFeatures = on),
         (_runAsAdministrator, settings => settings.RunAsAdministrator, (settings, on) => settings.RunAsAdministrator = on),
@@ -1201,6 +1205,7 @@ private readonly ErrorProvider _errors = new();
         CheckBox box = option switch
         {
             nameof(AppSettings.ShowToolbar) => _showToolbar,
+            nameof(AppSettings.ShortcutSheet) => _shortcutSheet,
             nameof(AppSettings.MenuTransparency) => _menuTransparency,
             nameof(AppSettings.ExperimentalFeatures) => _experimental,
             nameof(AppSettings.PauseInFullScreen) => _pauseInFullScreen,
@@ -1687,285 +1692,4 @@ private readonly ErrorProvider _errors = new();
 
     private static Control ProgramRules(string title, ThemedList list, ComboBox picker) =>
         Programs(list, picker, title.TrimEnd(':', '：'), T("programs.empty.excluded"));
-
-    private Control BuildFeatures()
-    {
-        _features.HideSelection = false;
-        _features.Columns.Add(T("features.name"), 160);
-        _features.Columns.Add(T("actions.target"), 100);
-        _features.Columns.Add(T("actions.default"), 120);
-        _features.Columns.Add(T("actions.saved"), 120);
-        _features.Columns.Add(T("features.state"), 160);
-        foreach (AppCommand command in CommandCatalog.All)
-        {
-            var box = new TextBox { ReadOnly = true, ShortcutsEnabled = false, AccessibleName = CommandCatalog.Name(command) };
-            box.KeyDown += (_, e) =>
-            {
-                if (e.KeyCode == Keys.Tab) return;
-                e.SuppressKeyPress = true;
-                CaptureHotkey(command, e.KeyData, HotkeyText.WinKeyDown);
-            };
-            _hotkeys[command] = box;
-        }
-        var clear = new PlainButton { Text = T("actions.clear") };
-        var reset = new PlainButton { Text = T("actions.reset") };
-        void SetSelected(bool defaults)
-        {
-            if (_features.SelectedItems.Count == 0 || _features.SelectedItems[0].Tag is not AppCommand command) return;
-            _hotkeys[command].Text = defaults ? new AppSettings().Hotkeys.GetValueOrDefault(command, "") : "";
-            _hotkeys[command].Focus();
-        }
-        clear.Click += (_, _) => SetSelected(false);
-        reset.Click += (_, _) => SetSelected(true);
-
-        var editor = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 4, RowCount = 2, BackColor = SettingsStyle.Card };
-        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int i = 0; i < 3; i++) editor.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        _shortcutLabel.Margin = new Padding(2, 0, 8, 0);
-        _shortcutEditor.Margin = new Padding(0, 0, 8, 0);
-        clear.Margin = new Padding(0, 0, 6, 0);
-        reset.Margin = Padding.Empty;
-        clear.Anchor = reset.Anchor = AnchorStyles.Right;
-        editor.Controls.Add(_shortcutLabel, 0, 0);
-        editor.Controls.Add(_shortcutEditor, 1, 0);
-        editor.Controls.Add(clear, 2, 0);
-        editor.Controls.Add(reset, 3, 0);
-        Label help = Note(T("settings.hotkeys.captureHelp"));
-        help.Margin = new Padding(2, 8, 0, 0);
-        editor.Controls.Add(help, 0, 1);
-        editor.SetColumnSpan(help, 4);
-        var card = new CardPanel { Dock = DockStyle.Bottom, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(12, 10, 12, 10) };
-        card.Controls.Add(editor);
-        _features.SelectedIndexChanged += (_, _) => ShowShortcutEditor();
-        _actionSearch.AccessibleName = T("actions.search");
-        _actionSearch.Hint = T("actions.search");
-        _actionSearch.TextChanged += (_, _) => RefreshFeatures();
-
-        DrawFeatures();
-        var table = new InputFrame(_features, InputFrame.Look.List) { Dock = DockStyle.Fill };
-        var page = new ColumnPanel { Dock = DockStyle.Fill };
-        page.Controls.Add(table);
-        page.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 8 });
-        page.Controls.Add(card);
-        var intro = new SoftLabel { Text = T("features.help"), AutoSize = true, Dock = DockStyle.Top, ForeColor = SettingsStyle.Secondary, Padding = new Padding(1, 8, 0, 8) };
-        page.Controls.Add(intro);
-        page.Controls.Add(new InputFrame(_actionSearch) { Glyph = MenuParts.Search, Dock = DockStyle.Top, Height = BoxHeight.Standard });
-        page.Layout += (_, _) =>
-        {
-            var most = new Size(Math.Max(1, page.ClientSize.Width - page.Padding.Horizontal), 0);
-            if (intro.MaximumSize != most) intro.MaximumSize = most;
-        };
-        _features.Resize += (_, _) => FitFeatureColumns();
-        _features.ClientSizeChanged += (_, _) => FitFeatureColumns();
-        table.Resize += (_, _) => FitFeatureColumns();
-        return page;
-    }
-
-    // Windows draws the table's headings unreadable in the dark theme, and its chosen row hard to tell apart.
-    private void DrawFeatures()
-    {
-        _features.OwnerDraw = true;
-        _features.BackColor = SettingsStyle.Card;
-        _features.ForeColor = SettingsStyle.Text;
-        int Unit(int value) => SettingsStyle.Unit(_features, value);
-        // A list of tiny pictures is the way to set the height of a row.
-        void RowHeight() => _features.SmallImageList = new ImageList { ImageSize = new Size(1, Math.Max(Unit(32), _features.Font.Height + Unit(14))) };
-        _features.HandleCreated += (_, _) => RowHeight();
-        _features.DrawColumnHeader += (_, e) =>
-        {
-            Graphics g = e.Graphics;
-            SettingsStyle.SoftText(g);
-            using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, e.Bounds);
-            Native.DirectText.DrawText(g, e.Header?.Text, SettingsStyle.CaptionFont,
-                new Rectangle(e.Bounds.Left + Unit(FeatureInset(e.ColumnIndex)), e.Bounds.Top, e.Bounds.Width - Unit(FeatureInset(e.ColumnIndex) + 4), e.Bounds.Height),
-                SettingsStyle.Secondary, FeatureText);
-            using var line = new Pen(SettingsStyle.Divider);
-            g.DrawLine(line, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
-        };
-        // Each cell is drawn on its own, once, with its part of the row's background: Windows redraws only the first
-        // cell as the pointer passes, and a row drawn whole for each cell made the table lag.
-        _features.DrawItem += (_, _) => { };
-        _features.DrawSubItem += (_, e) => { if (e.Item is { } item) DrawFeatureRow(e.Graphics, item, e.ColumnIndex); };
-        void DrawFeatureRow(Graphics g, ListViewItem item, int only)
-        {
-            SettingsStyle.SoftText(g);
-            Rectangle row = item.Bounds;
-            int start = row.Left;
-            for (int index = 0; index < only && index < _features.Columns.Count; index++) start += _features.Columns[index].Width;
-            if (only >= _features.Columns.Count) return;
-            var part = new Rectangle(start, row.Top, only == _features.Columns.Count - 1 ? Math.Max(0, row.Right - start) : _features.Columns[only].Width, row.Height);
-            if (part.Width <= 0) return;
-            System.Drawing.Drawing2D.GraphicsState state = g.Save();
-            g.SetClip(part, System.Drawing.Drawing2D.CombineMode.Intersect);
-            using (var back = new SolidBrush(SettingsStyle.Card)) g.FillRectangle(back, part);
-            var wash = new Rectangle(row.Left + Unit(2), row.Top + Unit(1), row.Width - Unit(4), row.Height - Unit(2));
-            if (item.Selected)
-            {
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                using var path = SettingsStyle.Rounded(wash, Unit(4));
-                using var brush = new SolidBrush(SettingsStyle.RowSelectedOn(SettingsStyle.Card));
-                g.FillPath(brush, path);
-                SettingsStyle.SelectionBar(g, wash, _features);
-                if (item.Focused && SettingsStyle.ShowsFocus(_features)) SettingsStyle.FocusRing(g, Rectangle.Inflate(wash, Unit(1), Unit(1)), Unit(5), _features);
-            }
-            int left = row.Left;
-            for (int index = 0; index < _features.Columns.Count && index < item.SubItems.Count; index++)
-            {
-                var cell = new Rectangle(left, row.Top, _features.Columns[index].Width, row.Height);
-                left += cell.Width;
-                if (index != only) continue;
-                bool problem = index == 4 && item.Tag is AppCommand command && _shortcutProblems.ContainsKey(command);
-                Color color = problem ? SettingsStyle.Error : index is 0 or 3 ? SettingsStyle.Text : SettingsStyle.Secondary;
-                int inset = Unit(FeatureInset(index));
-                bool tagged = index == 0 && item.Tag is AppCommand action && CommandCatalog.IsExperimental(action);
-                int tag = tagged ? Unit(8) + MenuParts.TagSize(Unit).Width : 0;
-                const TextFormatFlags format = FeatureText;
-                string text = item.SubItems[index].Text;
-                var words = new Rectangle(cell.Left + inset, cell.Top, Math.Max(0, cell.Width - inset - Unit(4) - tag), cell.Height);
-                Native.DirectText.DrawText(g, text, _features.Font, words, color, format);
-                if (tagged && words.Width > 0)
-                {
-                    int width = Math.Min(words.Width, Native.DirectText.MeasureText(g, text, _features.Font, words.Size, format).Width);
-                    MenuParts.DrawTag(g, words.Left + width + Unit(8), cell.Top + cell.Height / 2, Unit);
-                }
-            }
-            g.Restore(state);
-        }
-    }
-
-    private const TextFormatFlags FeatureText = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
-        TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
-
-    private const TextFormatFlags FeatureMeasure = FeatureText & ~TextFormatFlags.EndEllipsis; // Measuring with it would cut them short.
-
-    private static int FeatureInset(int column) => column == 0 ? 18 : 12;
-
-    private void FitFeatureColumns()
-    {
-        // Sizes still change while the window closes, when the table's rows are already being taken apart.
-        if (_fillingFeatures || Disposing || IsDisposed || _features.Disposing || !_features.IsHandleCreated) return;
-        // What shows: Windows' scroll bar is hidden past the edge, so the table may be wider than that.
-        int width = Math.Min(_features.ClientSize.Width, _features.Parent?.ClientSize.Width ?? int.MaxValue);
-        width -= SettingsStyle.Unit(_features, ThinScrollBar.BarWidth);
-        if (width <= 0 || _features.Columns.Count < 5) return;
-        int pad = SettingsStyle.Unit(_features, FeatureInset(1) + 4);
-        var need = new int[5];
-        for (int column = 1; column < 5; column++)
-        {
-            int widest = Native.DirectText.MeasureText(_features.Columns[column].Text, SettingsStyle.CaptionFont, Size.Empty, FeatureMeasure).Width;
-            foreach (ListViewItem? item in _features.Items)
-                if (item is not null && column < item.SubItems.Count)
-                    widest = Math.Max(widest, Native.DirectText.MeasureText(item.SubItems[column].Text, _features.Font, Size.Empty, FeatureMeasure).Width);
-            need[column] = widest + pad;
-        }
-        need[4] = Math.Min(need[4], SettingsStyle.Unit(_features, 150));
-        int least = SettingsStyle.Unit(_features, 150);
-        int tag = SettingsStyle.Unit(_features, FeatureInset(0) + 8 + 4) + MenuParts.TagSize(value => SettingsStyle.Unit(_features, value)).Width;
-        foreach (ListViewItem? item in _features.Items)
-            if (item?.Tag is AppCommand command && CommandCatalog.IsExperimental(command))
-                least = Math.Max(least, Native.DirectText.MeasureText(item.Text, _features.Font, Size.Empty, FeatureMeasure).Width + tag);
-        int rest = need.Skip(1).Sum();
-        if (width - rest < least)
-        {
-            double share = Math.Max(0, width - least) / (double)rest;
-            for (int column = 1; column < 5; column++) need[column] = (int)(need[column] * share);
-        }
-        need[0] = width - need.Skip(1).Sum();
-        bool moved = false;
-        for (int column = 0; column < 5; column++)
-            if (_features.Columns[column].Width != need[column]) { _features.Columns[column].Width = need[column]; moved = true; }
-        // Windows redraws only part of a row whose columns moved, leaving words where the columns used to be.
-        if (moved) _features.Invalidate();
-        // The columns fit now, but a table that was wider a moment ago keeps the sideways scroll bar it showed then,
-        // drawn in Windows' own colours, until something else redraws it. Taking it away resizes the table, which
-        // fits the columns again: only while it shows, and not from within this.
-        const long WS_HSCROLL = 0x00100000;
-        if (!_hidingSideways && need.Sum() <= _features.ClientSize.Width &&
-            (Native.User32.GetWindowLongPtr(_features.Handle, Native.User32.GWL_STYLE) & WS_HSCROLL) != 0)
-        {
-            _hidingSideways = true;
-            try { Native.User32.ShowScrollBar(_features.Handle, Native.User32.SB_HORZ, false); }
-            finally { _hidingSideways = false; }
-        }
-    }
-
-    private bool _hidingSideways;
-
-    private void ShowShortcutEditor()
-    {
-        _shortcutLabel.Text = "";
-        if (_features.SelectedItems.Count == 0 || _features.SelectedItems[0].Tag is not AppCommand command)
-        {
-            _shortcutEditor.Host(null);
-            _shortcutEditor.Enabled = false;
-            return;
-        }
-        _shortcutLabel.Text = CommandCatalog.Name(command).Replace("&", "");
-        _shortcutEditor.Enabled = true;
-        _shortcutEditor.Host(_hotkeys[command]);
-    }
-
-    internal void RefreshFeatures()
-    {
-        object? selected = _features.SelectedItems.Count > 0 ? _features.SelectedItems[0].Tag : null;
-        _features.BeginUpdate();
-        _fillingFeatures = true; // The rows are half there until the end; the columns are fitted then.
-        _features.Items.Clear();
-        var defaults = new AppSettings();
-        foreach (AppCommand command in CommandCatalog.All)
-        {
-            string name = CommandCatalog.Name(command).Replace("&", "");
-            string target = CommandCatalog.ForAllWindows(command) ? T("actions.target.app")
-                : CommandCatalog.ForView(command) ? T("actions.target.view") : T("actions.target.window");
-            string saved = _settings.Hotkeys.GetValueOrDefault(command, "");
-            string state = _shortcutProblems.GetValueOrDefault(command) ??
-                (CommandCatalog.IsExperimental(command) && !_settings.ExperimentalFeatures ? T("features.disabled") :
-                 saved.Length == 0 ? T("features.unassigned") :
-                 _registered?.Invoke(command) == true ? T("actions.registered") : T("actions.unavailable"));
-            string[] values = [name, target, defaults.Hotkeys.GetValueOrDefault(command, ""), saved, state];
-            if (!string.IsNullOrWhiteSpace(_actionSearch.Text) && !values.Any(value =>
-                value.Contains(_actionSearch.Text, StringComparison.CurrentCultureIgnoreCase))) continue;
-            var row = new ListViewItem(values) { Tag = command };
-            _features.Items.Add(row);
-            if (Equals(selected, command)) row.Selected = true;
-        }
-        void Option(string name, string shortcut, bool enabled, string page)
-        {
-            string[] values = [name.Replace("&", ""), T("actions.target.app"), shortcut, shortcut,
-                enabled ? T("features.enabled") : T("features.disabled")];
-            if (!string.IsNullOrWhiteSpace(_actionSearch.Text) && !values.Any(value =>
-                value.Contains(_actionSearch.Text, StringComparison.CurrentCultureIgnoreCase))) return;
-            var row = new ListViewItem(values) { Tag = page };
-            _features.Items.Add(row);
-            if (Equals(selected, page)) row.Selected = true;
-        }
-        string none = T("features.noShortcut");
-        bool toolbarHasButtons = _toolbarButtons.CheckedItems.Cast<ToolbarChoice>().Any(choice =>
-            !CommandCatalog.IsExperimental(choice.Command) || _experimental.Checked);
-        Option(T("toolbar.settings.title"), none, _showToolbar.Checked && toolbarHasButtons, "toolbar");
-        Option(T("features.moveResize"), string.Format(T("features.dragShortcut"), _modifierKey.SelectedIndex == (int)ModifierKey.Win ? "Win" : "Alt"), _modifierDrag.Checked, "gestures");
-        string gesture = _windowMenuGesture.SelectedIndex switch
-        {
-            (int)WindowMenuGesture.CtrlShiftRightClick => T("gestures.menu.ctrlShiftRight"),
-            (int)WindowMenuGesture.CtrlMiddleClick => T("gestures.menu.ctrlMiddle"),
-            _ => T("gestures.menu.ctrlRight"),
-        };
-        Option(T("features.windowMenu"), gesture, _windowMenu.Checked, "gestures");
-        Option(T("features.autoAnchors"), none, _autoAnchors.Checked, "anchors");
-        Option(T("features.opacityWheel"), T("features.wheelShortcut"), _opacityWheel.Checked, "appearance");
-        Option(_detectDark.Text, none, _detectDark.Checked && _experimental.Checked, "appearance");
-        Option(_pipTaskbar.Text, none, _pipTaskbar.Checked, "pip");
-        Option(_pipTitleBar.Text, none, _pipTitleBar.Checked, "pip");
-        Option(_pipKeepHidden.Text, none, _pipKeepHidden.Checked, "pip");
-        Option(_pipMinimizedOriginals.Text, none, _pipMinimizedOriginals.Checked, "pip");
-        Option(_recordSound.Text, none, _recordSound.Checked, "pip");
-        Option(T("pip.hover.mode"), none, _pipPreview.SelectedIndex > 0, "pip");
-        _features.EndUpdate();
-        _fillingFeatures = false;
-        FitFeatureColumns();
-        // Filled as its page first shows, the table is fitted again once that page has its final size.
-        if (IsHandleCreated) BeginInvoke(() => { if (!IsDisposed) FitFeatureColumns(); });
-        if (_features.SelectedItems.Count == 0 && _features.Items.Count > 0) _features.Items[0].Selected = true;
-        ShowShortcutEditor();
-    }
 }

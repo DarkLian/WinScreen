@@ -46,6 +46,7 @@ public sealed partial class TrayApplication : ApplicationContext
     private readonly PinBorders _borders = new();
     private readonly ActionFlash _flash = new();
     private readonly SnapPreview _snapPreview = new();
+    private ShortcutSheet? _shortcutSheet;
     private readonly Dictionary<nint, ShrinkTile> _shrunk = [];
     private readonly Dictionary<nint, PipWindow> _pips = [];
     private readonly List<PipWindow> _viewsInOrder = [];
@@ -137,6 +138,7 @@ public sealed partial class TrayApplication : ApplicationContext
             WindowIdentity identity;
             try { identity = WindowIdentity.Capture(window); }
             catch (WindowOperationException) { return; }
+            _shortcutSheet?.Cancel();
             _toolbar.BeginInvoke(() =>
             {
                 if (!_settings.OpacityWheel || !identity.Matches() || !CanChangeOpacity(window)) return;
@@ -256,6 +258,11 @@ public sealed partial class TrayApplication : ApplicationContext
             await _updates.Check();
         };
         if (_role != AppRole.Helper) _updateTimer.Start(); // The ordinary copy updates both.
+        // The ordinary copy only: the helper has no tray of its own, and the two would show it twice.
+        if (_role != AppRole.Helper)
+            _shortcutSheet = new ShortcutSheet(_toolbar,
+                () => _settings.ShortcutSheet && FullScreenNow() == FullScreenState.None,
+                () => ShortcutSheetContents.Of(_settings, command => _hotkeys.IsRegistered((int)command))) { Opened = _dark.Ignore };
         if (_role == AppRole.Helper) StartAsHelper();
         else if (HelperWanted) StartHelper();
 
@@ -1780,6 +1787,7 @@ public sealed partial class TrayApplication : ApplicationContext
             form.Close();
         // The views have let go of their recordings; each file is completed before WinScreen goes.
         if (!Pip.ViewRecording.FinishAll(TimeSpan.FromSeconds(10))) Diagnostics.Log.Event("recording.unfinishedAtExit");
+        _shortcutSheet?.Dispose();
         _toolbar.Dispose();
         _flash.Dispose();
         _snapPreview.Dispose();

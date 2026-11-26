@@ -194,6 +194,7 @@ scoop install winscreen
 | 이 프로그램의 설정 기억 또는 잊기 | Ctrl+Alt+Shift+S |
 | 이 창을 원래대로 | Ctrl+Alt+U |
 | 모든 창을 원래대로 | Ctrl+Alt+R |
+| 단축키 목록 보기 | Ctrl+Alt 길게 누르기 |
 
 모든 기능은 **[사용자 가이드](docs/USER_GUIDE.md)**(영어)에서 설명합니다.
 

@@ -656,10 +656,11 @@ public sealed class SettingsLayoutTests
                 {
                     tabs.SelectedTab = page;
                     Pump();
-                    // The cards on a page that scrolls; the search box and the table on the page of actions.
+                    // The cards on a page that scrolls; the row of search and filter, and the table, on the page of actions.
                     Control[] column = Descendants(page).OfType<SettingsCard>().Where(card => card.Visible).Cast<Control>().ToArray();
                     if (column.Length == 0)
-                        column = Descendants(page).OfType<InputFrame>().Where(frame => frame.Dock is DockStyle.Top or DockStyle.Fill).ToArray();
+                        column = Descendants(page).Where(part => part is InputFrame { Dock: DockStyle.Fill, Parent: ColumnPanel } or
+                            TableLayoutPanel { Dock: DockStyle.Top, Parent: ColumnPanel }).ToArray();
                     Assert.NotEmpty(column);
                     Rectangle titleOnScreen = title.RectangleToScreen(title.ClientRectangle);
                     foreach (Control part in column)

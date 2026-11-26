@@ -159,31 +159,32 @@ public sealed class ToolbarPreferencesTests
             settings.RefreshFeatures();
             var table = Descendants(settings).OfType<ListView>().Single();
             var pin = table.Items.Cast<ListViewItem>().Single(row => Equals(row.Tag, AppCommand.TogglePin));
-            Assert.Equal("Ctrl+Alt+T", pin.SubItems[3].Text);
-            Assert.Equal("Ctrl+Alt+T", pin.SubItems[2].Text);
+            Assert.Equal("Ctrl+F9", pin.SubItems[SettingsWindow.ShortcutColumn].Text); // What goes into effect, not yet saved.
+            Assert.True(settings.ShortcutChanged(AppCommand.TogglePin));
             var dark = table.Items.Cast<ListViewItem>().Single(row => Equals(row.Tag, AppCommand.ToggleDark));
-            Assert.NotEqual(UiText.T("features.disabled"), dark.SubItems[4].Text); // Not experimental since 1.5.0.
-            Assert.Contains(table.Items.Cast<ListViewItem>(), row => row.Text == UiText.T("features.opacityWheel") && row.SubItems[4].Text == UiText.T("features.enabled"));
-            Assert.Contains(table.Items.Cast<ListViewItem>(), row => Equals(row.Tag, "toolbar") && row.SubItems[4].Text == UiText.T("features.disabled"));
+            Assert.NotEqual(UiText.T("actions.state.experimental"), dark.SubItems[SettingsWindow.StateColumn].Text); // Not experimental since 1.5.0.
+            Assert.Contains(table.Items.Cast<ListViewItem>(), row => row.Text == UiText.T("features.opacityWheel") &&
+                row.SubItems[SettingsWindow.StateColumn].Text == UiText.T("features.enabled"));
+            Assert.DoesNotContain(table.Items.Cast<ListViewItem>(), row => Equals(row.Tag, "toolbar")); // A setting, not a way to act.
+            Assert.DoesNotContain(UiText.T("actions.place.toolbar"), settings.AlsoIn(AppCommand.TogglePin)); // The toolbar is off.
             Assert.False(preferences.OpacityWheel);
         });
     }
 
-    // Dark mode was the one button that needed experimental features; since 1.5.0 a toolbar of it alone is on without them.
+    // Dark mode was the one button that needed experimental features; since 1.5.0 its button counts without them.
     [Fact]
-    public void Features_show_a_toolbar_of_dark_mode_alone_on_without_experimental_features()
+    public void Also_in_names_the_toolbar_only_for_the_buttons_it_has()
     {
         WindowMenuBuilderTests.OnUiThread(() =>
         {
-            var preferences = new AppSettings { Toolbar = new() { Buttons = [AppCommand.ToggleDark] } };
+            var preferences = new AppSettings { Toolbar = new() { Buttons = [AppCommand.ToggleDark, AppCommand.Arrange] } };
             using var settings = new SettingsWindow(preferences, new StartWithWindows(@"Software\WinScreenTests\Toolbar", NoTasks.Instance), _ => []);
-            settings.RefreshFeatures();
-            var table = Descendants(settings).OfType<ListView>().Single();
-            string State() => table.Items.Cast<ListViewItem>().Single(row => Equals(row.Tag, "toolbar")).SubItems[4].Text;
-            Assert.Equal(UiText.T("features.enabled"), State());
+            string toolbar = UiText.T("actions.place.toolbar");
+            Assert.Contains(toolbar, settings.AlsoIn(AppCommand.ToggleDark));
+            Assert.Contains(toolbar, settings.AlsoIn(AppCommand.PlaceExactly)); // In the menu the Arrange button opens.
+            Assert.DoesNotContain(toolbar, settings.AlsoIn(AppCommand.TogglePin));
             settings.SetOption(nameof(AppSettings.ExperimentalFeatures), true);
-            settings.RefreshFeatures();
-            Assert.Equal(UiText.T("features.enabled"), State());
+            Assert.Contains(toolbar, settings.AlsoIn(AppCommand.ToggleDark));
         });
     }
 
@@ -263,15 +264,12 @@ public sealed class ToolbarPreferencesTests
             settings.CreateControl();
             _ = table.Handle;
             Activate(AppCommand.TogglePin);
-            Assert.Equal(UiText.T("features.title"), tabs.SelectedTab!.Text);
-            Activate("toolbar");
-            Assert.Equal(UiText.T("toolbar.settings.title"), tabs.SelectedTab!.Text);
+            Assert.Equal(AppCommand.TogglePin, settings.EditingShortcut); // An action's shortcut is changed in its row.
+            settings.EndShortcutEdit(cancel: true);
             Activate("gestures");
             Assert.Equal(UiText.T("gestures.title"), tabs.SelectedTab!.Text);
             Activate("appearance");
             Assert.Equal(UiText.T("settings.customization"), tabs.SelectedTab!.Text);
-            Activate("pip");
-            Assert.Equal(UiText.T("pip.open"), tabs.SelectedTab!.Text);
         });
     }
 

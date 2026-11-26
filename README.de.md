@@ -197,6 +197,7 @@ scoop install winscreen
 | Einrichtung dieses Programms merken oder vergessen | Strg+Alt+Umschalt+S |
 | Dieses Fenster zurücksetzen | Strg+Alt+U |
 | Alle Fenster zurücksetzen | Strg+Alt+R |
+| Deine Tastenkürzel ansehen | Strg+Alt gedrückt halten |
 
 Die **[Anleitung](docs/USER_GUIDE.md)** (auf Englisch) erklärt jede Funktion.
 

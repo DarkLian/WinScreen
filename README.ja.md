@@ -193,6 +193,7 @@ scoop install winscreen
 | このプログラムの設定を記憶・解除 | Ctrl+Alt+Shift+S |
 | このウィンドウを元に戻す | Ctrl+Alt+U |
 | すべてのウィンドウを元に戻す | Ctrl+Alt+R |
+| ショートカットの一覧を見る | Ctrl+Alt を長押し |
 
 すべての機能は **[ユーザーガイド](docs/USER_GUIDE.md)**（英語）で説明しています。
 

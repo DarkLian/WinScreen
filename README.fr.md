@@ -200,6 +200,7 @@ scoop install winscreen
 | Retenir ou oublier la configuration de ce programme | Ctrl+Alt+Shift+S |
 | Remettre cette fenêtre en place | Ctrl+Alt+U |
 | Remettre toutes les fenêtres en place | Ctrl+Alt+R |
+| Voir vos raccourcis | Maintenir Ctrl+Alt |
 
 Le **[guide d'utilisation](docs/USER_GUIDE.md)** (en anglais) explique chaque fonction.
 

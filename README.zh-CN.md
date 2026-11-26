@@ -186,6 +186,7 @@ scoop install winscreen
 | 记住或忘记此程序的配置 | Ctrl+Alt+Shift+S |
 | 还原此窗口 | Ctrl+Alt+U |
 | 还原所有窗口 | Ctrl+Alt+R |
+| 查看你的快捷键 | 按住 Ctrl+Alt |
 
 **[用户指南](docs/USER_GUIDE.zh-CN.md)** 介绍了所有功能。
 

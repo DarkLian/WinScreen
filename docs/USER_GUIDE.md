@@ -17,7 +17,9 @@ Some features are marked *experimental*. Turn them on in **Settings → General 
 
 ## Shortcuts
 
-You can change or clear any of these in **Settings → Actions and shortcuts**. Select an action, click its box and press the keys, or press Delete to clear it.
+You can change or clear any of these in **Settings → Actions and shortcuts**. Click a shortcut and press the new keys, or press Delete to clear it. The mark after a changed shortcut puts the usual one back, and **Reset all shortcuts** does it for all of them. **Press keys** finds what some keys do, or tells you they are free. The list can show only the actions with a shortcut, the ones you changed, or the ones not working.
+
+Hold **Ctrl+Alt** for a moment, anywhere, to see your shortcuts. Keep holding them and press a key, or let go to close the list. You can turn this off on the same page.
 
 | Do this | Shortcut |
 | --- | --- |
@@ -299,7 +301,7 @@ Changes take effect as soon as you make them. The mouse wheel only scrolls; clic
 | Appearance | Opacity and pinned windows |
 | Mouse gestures | Move and resize with a key, and the mouse menu |
 | Toolbar | Where the toolbar appears, how quickly, and which buttons it shows |
-| Actions and shortcuts | Everything WinScreen can do, with its shortcut. Select an action to change its shortcut |
+| Actions and shortcuts | Everything WinScreen can do, in groups, with its shortcut and where else it is. Click a shortcut to change it |
 | Programs | Programs WinScreen should leave alone, or the only ones it should work on |
 | Saved setups | Program setups you've remembered |
 

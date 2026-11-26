@@ -191,6 +191,7 @@ scoop install winscreen
 | Remember or forget this program's setup | Ctrl+Alt+Shift+S |
 | Put this window back | Ctrl+Alt+U |
 | Put every window back | Ctrl+Alt+R |
+| See your shortcuts | Hold Ctrl+Alt |
 
 The **[User Guide](docs/USER_GUIDE.md)** explains every feature.
 

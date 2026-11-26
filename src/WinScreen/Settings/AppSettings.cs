@@ -71,6 +71,9 @@ public enum AppCommand
 }
 
 public enum ModifierKey { Alt, Win }
+
+// The groups of Settings' Actions and shortcuts, and of the shortcut sheet, in their order.
+public enum ActionGroup { Window, Place, Effects, Views, Everywhere }
 public enum WindowMenuGesture { CtrlRightClick, CtrlShiftRightClick, CtrlMiddleClick }
 
 // Click-through and Glass are left out on purpose: a window that opens unreachable, or with its colours removed, is
@@ -269,6 +272,28 @@ public static class CommandCatalog
             : null;
 
     public static IEnumerable<AppCommand> All => Ordered.Concat(Extra).Concat(Everywhere);
+
+    public static ActionGroup GroupOf(AppCommand command) => command switch
+    {
+        AppCommand.OpenPip or AppCommand.PickPipSource => ActionGroup.Views,
+        _ when ForView(command) => ActionGroup.Views,
+        AppCommand.RestoreAll => ActionGroup.Everywhere,
+        _ when Everywhere.Contains(command) => ActionGroup.Everywhere,
+        AppCommand.ToggleDark or AppCommand.ToggleGlass or AppCommand.GlassLevels or AppCommand.KeepAreas or
+            AppCommand.ToggleShrink or AppCommand.ToggleCrop or AppCommand.ToggleDarkTitleBar => ActionGroup.Effects,
+        AppCommand.Arrange or AppCommand.MoveToNextDisplay or AppCommand.PlaceExactly or AppCommand.RestorePlacement or
+            AppCommand.SendToBottom or AppCommand.ToggleRollUp or AppCommand.ToggleBorderless or AppCommand.ToggleBorderlessFill => ActionGroup.Place,
+        _ when AnchorOf(command) is not null => ActionGroup.Place,
+        _ => ActionGroup.Window,
+    };
+
+    // What a window's menu has (WindowMenuBuilder.Populate); a test builds the menu to keep the two the same.
+    public static bool InWindowMenu(AppCommand command) =>
+        command == AppCommand.OpenPip ||
+        GroupOf(command) is not (ActionGroup.Views or ActionGroup.Everywhere) && command != AppCommand.ShowWindowMenu;
+
+    public static bool InTrayMenu(AppCommand command) =>
+        command is AppCommand.RestoreAll or AppCommand.PickPipSource || Everywhere.Contains(command);
 
     public static bool EndsGroup(AppCommand command) =>
         command is AppCommand.ToggleClickThrough or AppCommand.ToggleCrop or AppCommand.SaveWindowSetup or AppCommand.RestoreWindow;
@@ -499,6 +524,7 @@ public sealed class AppSettings
     public List<ProgramSetup> SavedSetups { get; set; } = [];
 
     public bool ShowToolbar { get; set; } = true;
+    public bool ShortcutSheet { get; set; } = true;
     public NotificationMode Notifications { get; set; }
     public bool MenuTransparency { get; set; } = true;
     public UpdateMode Updates { get; set; }

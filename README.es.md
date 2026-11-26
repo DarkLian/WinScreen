@@ -196,6 +196,7 @@ scoop install winscreen
 | Recordar u olvidar la configuración de este programa | Ctrl+Alt+Shift+S |
 | Devolver esta ventana a su estado | Ctrl+Alt+U |
 | Devolver todas las ventanas a su estado | Ctrl+Alt+R |
+| Ver tus atajos | Mantener Ctrl+Alt |
 
 La **[guía del usuario](docs/USER_GUIDE.md)** (en inglés) explica todas las funciones.
 

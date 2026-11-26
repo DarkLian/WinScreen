@@ -4,8 +4,13 @@ namespace WinScreen.Native;
 
 // When Alt last went down or up, from raw input, which comes whatever is in front. Polling Alt misses a quick Alt+Tab
 // that falls between two looks, and the "pressed since" bit of GetAsyncKeyState is shared with every other caller.
+// A process has one keyboard registration for raw input, and a second takes it from the first: everything else that
+// needs the keys (the shortcut sheet) listens here.
 internal static class AltKeyWatch
 {
+    // Each key going down (true) or up, on this watch's own thread.
+    internal static event Action<int, bool>? Key;
+
     private const int WM_INPUT = 0x00FF, VK_MENU = 0x12, VK_LMENU = 0xA4, VK_RMENU = 0xA5;
     private const uint RID_INPUT = 0x10000003, RIDEV_INPUTSINK = 0x100, RIM_TYPEKEYBOARD = 1;
     private static readonly object Gate = new();
@@ -67,7 +72,9 @@ internal static class AltKeyWatch
                 if (GetRawInputData(input, RID_INPUT, buffer, ref size, header) != size) return;
                 if (Marshal.PtrToStructure<RawInputHeader>(buffer).Type != RIM_TYPEKEYBOARD) return;
                 ushort key = (ushort)Marshal.ReadInt16(buffer, (int)header + 6); // RAWKEYBOARD.VKey
+                ushort flags = (ushort)Marshal.ReadInt16(buffer, (int)header + 2); // RAWKEYBOARD.Flags: 1 is a key going up
                 if (key is VK_MENU or VK_LMENU or VK_RMENU) Interlocked.Exchange(ref s_lastAlt, Environment.TickCount64);
+                Key?.Invoke(key, (flags & 1) == 0);
             }
             finally { Marshal.FreeHGlobal(buffer); }
         }
