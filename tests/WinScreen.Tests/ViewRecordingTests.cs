@@ -157,13 +157,17 @@ public sealed class ViewRecordingTests(Xunit.Abstractions.ITestOutputHelper outp
                 Fill(pattern, size, rgb);
                 return pattern;
             })];
-            var clock = Stopwatch.StartNew();
+            // From the first frame taken, as the recording's own clock: on a slow PC (GitHub's ARM64 one) the encoder
+            // took its first frame after the red second had passed, and the video had no red.
+            var clock = new Stopwatch();
+            var waited = Stopwatch.StartNew();
             int handed = 0;
-            while (clock.Elapsed < TimeSpan.FromSeconds(3))
+            while (clock.Elapsed < TimeSpan.FromSeconds(3) && waited.Elapsed < TimeSpan.FromSeconds(20))
             {
                 int phase = (int)clock.Elapsed.TotalSeconds;
                 if (recording.Rent() is { } frame)
                 {
+                    clock.Start();
                     // Copied from patterns made once: painting each frame here took the processor the encoder needs on
                     // the two-core test VM (278 of 432 frames at 144 a second).
                     patterns[Math.Min(phase, 2)].CopyTo(frame, 0);
