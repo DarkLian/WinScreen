@@ -152,6 +152,21 @@ public sealed partial class PipWindow
 
     internal ViewAreaPicker? AreaPicker { get; private set; }
 
+    // Copy text's and Cover parts' overlays with their instructions, lowest first. Read from other threads (the tray's
+    // list of windows kept on top), so kept as handles. While one is open the view stays under it and leaves the
+    // pointer to it: no visit, title bar or preview.
+    private volatile nint[] _pickerWindows = [];
+    internal IReadOnlyList<nint> PickerWindows => _pickerWindows;
+    private bool Picking => AreaPicker is not null || CoverEditor is not null;
+
+    private void Picked(Form overlay)
+    {
+        _pickerWindows = [overlay.Handle, .. overlay.OwnedForms.Where(owned => owned.IsHandleCreated).Select(owned => owned.Handle)];
+        _titleBar?.Dismiss();
+        DropHoverPreview();
+        StayOnTop();
+    }
+
     // A part dragged over, or all the view's text for a click.
     internal void CopyText()
     {
@@ -159,7 +174,7 @@ public sealed partial class PipWindow
         CancelPress();
         Rectangle area = PictureArea;
         var picker = new ViewAreaPicker(RectangleToScreen(area), T("pip.copyText.title"), T("pip.copyText.instructions"));
-        picker.FormClosed += (_, _) => { if (AreaPicker == picker) AreaPicker = null; };
+        picker.FormClosed += (_, _) => { if (AreaPicker == picker) { AreaPicker = null; _pickerWindows = []; } };
         picker.Chosen += async part =>
         {
             try
@@ -178,6 +193,7 @@ public sealed partial class PipWindow
         };
         AreaPicker = picker;
         picker.ShowOnTop();
+        Picked(picker);
     }
 
     internal KeptAreaOverlay? CoverEditor { get; private set; }
@@ -201,7 +217,7 @@ public sealed partial class PipWindow
         }
         var editor = new KeptAreaOverlay(RectangleToScreen(area), shownAs.Keys, ViewCovers.Most - kept.Count,
             T("pip.covers.title"), T("pip.covers.instructions"), Color.Black);
-        editor.FormClosed += (_, _) => { if (CoverEditor == editor) CoverEditor = null; };
+        editor.FormClosed += (_, _) => { if (CoverEditor == editor) { CoverEditor = null; _pickerWindows = []; } };
         editor.Done += marked =>
         {
             if (IsDisposed || _thumbnail is null) return;
@@ -218,6 +234,7 @@ public sealed partial class PipWindow
         };
         CoverEditor = editor;
         editor.ShowOnTop();
+        Picked(editor);
     }
 
     // Covers for a preset: shares of the whole source, so they fit another window of another size.

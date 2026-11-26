@@ -1843,10 +1843,10 @@ public sealed partial class PipWindow : Form
         if (ViewState.Apply(before, ViewState.Request.VisitStarts) == before) { NoVisitBecause = "state " + before; return; }
         // A frozen picture isn't what the window shows now, so presses on it would land somewhere else.
         if (_thumbnail is null || !_origin.IsAvailable || !_windows.IsHidden(_source) ||
-            _menu.Visible || TopLayer.InputBlocked || ShowsOriginalOnly || Frozen)
+            _menu.Visible || TopLayer.InputBlocked || ShowsOriginalOnly || Frozen || Picking)
         {
             NoVisitBecause = $"picture {_thumbnail is not null}, available {_origin.IsAvailable}, hidden {_windows.IsHidden(_source)}, menu {_menu.Visible}, " +
-                $"blocked {TopLayer.InputBlocked}, original only {ShowsOriginalOnly}, frozen {Frozen}";
+                $"blocked {TopLayer.InputBlocked}, original only {ShowsOriginalOnly}, frozen {Frozen}, picking {Picking}";
             return;
         }
         Rectangle area = PictureArea;
@@ -2010,7 +2010,7 @@ public sealed partial class PipWindow : Form
     // A hidden original just went above other topmost windows too.
     private void StayOnTop()
     {
-        if (!_inputPaused && !_menu.Visible && !TopLayer.InputBlocked) TopLayer.Raise(Handle);
+        if (!_inputPaused && !_menu.Visible && !TopLayer.InputBlocked) TopLayer.RaiseGroup([Handle, .. _pickerWindows]);
     }
 
     private void PauseInput(bool paused, bool keepTitleBar = false)
@@ -2520,7 +2520,7 @@ public sealed partial class PipWindow : Form
         // Stepped aside, the view is out of sight for its original: its parts stay away too, even with the pointer
         // where the view was.
         bool unavailable = _suspended || _selecting || _overrides.ClickThrough || (_inputPaused && !_menu.Visible) ||
-            _steppedAside.Length > 0;
+            _steppedAside.Length > 0 || Picking;
         if (unavailable)
         {
             _titleBar?.Dismiss();
