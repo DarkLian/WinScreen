@@ -356,6 +356,45 @@ public sealed class SettingsLayoutTests
         });
     }
 
+    // The owner, 26 Nov: what Glass, a background and Dark mode each are was hard to tell on one page. The Effects page has
+    // a card for each, says what it is, and an app can have its own of each.
+    [Fact]
+    public void The_effects_page_has_a_card_each_for_background_glass_and_dark_mode()
+    {
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            var settings = new AppSettings { Language = "en" };
+            settings.Effects = settings.Effects with { Apps = [new AppGlassLevels { Program = "chrome", OwnGlass = false, OwnDark = true, DarkPagePercent = 25 }] };
+            using var window = new SettingsWindow(settings, new StartWithWindows(tasks: NoTasks.Instance), _ => []);
+            window.Show();
+            TabControl tabs = Descendants(window).OfType<TabControl>().Single();
+            tabs.SelectedIndex = tabs.TabPages.Cast<TabPage>().ToList().FindIndex(page => page.Text == "Effects");
+            Application.DoEvents();
+            string[] Cards() => [.. Descendants(tabs.SelectedTab!).OfType<SettingsCard>().Select(card => card.Text)];
+            Assert.Equal(["Apps", "Background for Every app", "Glass for Every app", "Dark mode for Every app", "Areas to keep"], Cards());
+            Assert.Contains(Descendants(window).OfType<SwitchBox>(), box => box.Visible && box.Text == UiText.T("settings.dark.detect"));
+
+            ListBox list = Descendants(window).OfType<BackgroundList>().Single();
+            list.SelectedIndex = 1;
+            Application.DoEvents();
+            Assert.Equal("Dark mode for chrome", Cards()[3]);
+            SwitchBox Own(string key) => Descendants(window).OfType<SwitchBox>().Single(box => box.Text == UiText.T(key));
+            Assert.False(Own("settings.apps.ownGlass").Checked);
+            Assert.True(Own("settings.apps.ownDark").Checked);
+            NumberSlider Shown(string key) => Descendants(window).OfType<NumberSlider>().Single(slider => slider.Visible && slider.AccessibleName == UiText.T(key));
+            Assert.Equal((25, true), ((int)Shown("settings.dark.page").Number.Value, Shown("settings.dark.page").Enabled));
+            Assert.False(Shown("settings.effects.background").Enabled); // Every app's Glass, shown but not its own.
+
+            Own("settings.apps.ownGlass").Checked = true;
+            Assert.True(Shown("settings.effects.background").Enabled);
+            Own("settings.apps.ownDark").Checked = false;
+            Assert.False(Shown("settings.dark.page").Enabled);
+            Assert.Equal(10, (int)Shown("settings.dark.page").Number.Value); // Back to Every app's.
+            window.Close();
+        });
+    }
+
     // The owner, 23 Nov: General has a button to check for updates under New versions; it opens the tray's check.
     [Fact]
     public void General_has_a_button_to_check_for_updates()
@@ -497,8 +536,8 @@ public sealed class SettingsLayoutTests
             void Pump() { for (int i = 0; i < 5; i++) { Application.DoEvents(); Thread.Sleep(10); } }
             Pump();
             SwitchBox Switch(string key) => Descendants(window).OfType<SwitchBox>().Single(box => box.Text == UiText.T(key));
-            Assert.DoesNotContain(Descendants(window).OfType<SettingsCard>(), card => card.Text == "Glass");
-            Assert.Contains(Descendants(window).OfType<SettingsCard>(), card => card.Text == "App backgrounds");
+            Assert.Contains(Descendants(window).OfType<SettingsCard>(), card => card.Text == "Glass for Every app");
+            Assert.Contains(Descendants(window).OfType<SettingsCard>(), card => card.Text == "Apps");
             Assert.True(Switch("settings.effects.layeredGlass").Visible);
             Assert.False(Switch("settings.apps.ownGlass").Visible);
             window.AddApp("Notes.exe");

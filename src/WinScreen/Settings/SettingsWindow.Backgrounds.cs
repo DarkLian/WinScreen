@@ -3,14 +3,20 @@ using WinScreen.Glass;
 
 namespace WinScreen.Settings;
 
-// The list holds Every app and the apps with their own background or Glass levels; the card under it edits the one
-// chosen in the list. Every app's card holds the Glass levels every other app starts from.
+// The list holds Every app and the apps with their own background, Glass or Dark levels; the three cards under it
+// (Background, Glass, Dark mode) edit the one chosen in the list. Every app's cards hold what every other app starts from.
 public sealed partial class SettingsWindow
 {
     private const int MostBackgroundRows = 5;
     private const int MostKeptRows = 4;
     private readonly SwitchBox _ownBackground = new() { Text = T("settings.apps.ownBackground"), AutoSize = true };
     private readonly SwitchBox _ownGlass = new() { Text = T("settings.apps.ownGlass"), AutoSize = true };
+    private readonly SwitchBox _ownDark = new() { Text = T("settings.apps.ownDark"), AutoSize = true };
+    private readonly List<Control> _appDarkRows = [];
+    private readonly List<Control> _mainDarkRows = [];
+    private readonly List<Control> _mainBackgroundRows = [];
+    private Control? _appDarkNote;
+    private SettingsCard? _glassCard, _darkCard;
     private readonly List<Control> _backgroundRows = [];
     // Added here and not yet given anything of their own: they stay in the list until it is filled again.
     private readonly List<string> _listedApps = [];
@@ -152,7 +158,8 @@ public sealed partial class SettingsWindow
             SettingRow(T("settings.backgrounds.speed"), _backgroundSpeed),
             SettingRow(T("settings.backgrounds.brightness"), _backgroundBrightness)]);
         _ownBackground.CheckedChanged += (_, _) => SetOwnBackground(_ownBackground.Checked);
-        _ownGlass.CheckedChanged += (_, _) => SetOwnGlass(_ownGlass.Checked);
+        _ownGlass.CheckedChanged += (_, _) => SetOwnPart(_ownGlass.Checked, dark: false);
+        _ownDark.CheckedChanged += (_, _) => SetOwnPart(_ownDark.Checked, dark: true);
 
         _keptFrame = new InputFrame(_keptList, InputFrame.Look.List) { Width = SwitchBox.RowWidth, Margin = new Padding(3, 6, 3, 4) };
         _keptList.FontChanged += (_, _) => FitKeptList();
@@ -178,17 +185,25 @@ public sealed partial class SettingsWindow
         _appGlassRows.Add(SettingRow(T("settings.effects.fade"), _appGlassFade));
         _appGlassRows.Add(SettingRow(T("settings.effects.textColor"), _appGlassTextColor));
         _appGlassRows.Add(_appGlassShadow);
-        _appGlassRows.Add(SettingRow(T("settings.dark.page"), _appDarkPage));
-        _appGlassRows.Add(SettingRow(T("settings.dark.text"), _appDarkText));
-        _appGlassRows.Add(SettingRow(T("settings.dark.colors"), _appDarkColors));
+        _appDarkRows.Add(SettingRow(T("settings.dark.page"), _appDarkPage));
+        _appDarkRows.Add(SettingRow(T("settings.dark.text"), _appDarkText));
+        _appDarkRows.Add(SettingRow(T("settings.dark.colors"), _appDarkColors));
         _mainGlassRows.AddRange([_layeredGlass,
             SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.fade"), _glassFade), Note(T("settings.effects.fadeHelp")),
             SettingRow(T("settings.effects.textColor"), _glassTextColor), Note(T("settings.effects.textColorHelp")), _glassShadow,
             Note(T("settings.effects.help"))]);
         _appGlassNote = Note(T("settings.apps.glassHelp"));
+        _appDarkNote = Note(T("settings.apps.darkHelp"));
+        _mainDarkRows.AddRange([_detectDark, SettingRow(T("settings.dark.page"), _darkPage), SettingRow(T("settings.dark.text"), _darkText),
+            SettingRow(T("settings.dark.colors"), _darkColors), Note(T("settings.dark.colorsHelp")), Note(T("settings.effects.help"))]);
+        _mainBackgroundRows.AddRange([_soundInFront, _pauseFullScreen, _pauseSaver]);
         _backgroundEditor = Card(T("settings.backgrounds.everyApp"), false,
-            [_ownBackground, .. _backgroundRows, .. _mainGlassRows, _ownGlass, _appGlassNote, .. _appGlassRows]);
+            [Note(T("settings.effects.backgroundAbout")), _ownBackground, .. _backgroundRows, .. _mainBackgroundRows]);
+        _glassCard = Card(T("settings.backgrounds.everyApp"), false,
+            [Note(T("settings.effects.glassAbout")), .. _mainGlassRows, _ownGlass, _appGlassNote, .. _appGlassRows]);
+        _darkCard = Card(T("settings.backgrounds.everyApp"), true,
+            [Note(T("settings.effects.darkAbout")), .. _mainDarkRows, _ownDark, _appDarkNote, .. _appDarkRows]);
 
         foreach (SwitchBox rule in new[] { _soundInFront, _pauseFullScreen, _pauseSaver })
             rule.CheckedChanged += (_, _) =>
@@ -210,9 +225,10 @@ public sealed partial class SettingsWindow
         };
         FlowLayoutPanel page = ScrollingPage();
         _backgroundsScroll = page;
-        page.Controls.Add(Section(T("settings.backgrounds.title"), Note(T("settings.backgrounds.help")), _backgroundFrame, adding,
-            _soundInFront, _pauseFullScreen, _pauseSaver));
+        page.Controls.Add(Section(T("settings.backgrounds.title"), Note(T("settings.backgrounds.help")), _backgroundFrame, adding));
         page.Controls.Add(_backgroundEditor);
+        page.Controls.Add(_glassCard);
+        page.Controls.Add(_darkCard);
         page.Controls.Add(Section(T("settings.keptAreas.title"), Note(T("settings.keptAreas.help")), _keptFrame, keptButtons));
         ListBackgrounds(null);
         ListKept();
@@ -270,14 +286,22 @@ public sealed partial class SettingsWindow
 
     private static Glass.GlassText TextColorOf(ComboBox picker) => (Glass.GlassText)Math.Max(0, picker.SelectedIndex);
 
+    // Each part shows the app's own, or Every app's while it has none.
     private void ShowGlassApp(string? program)
     {
         AppGlassLevels? own = GlassOf(program);
-        AppGlassLevels shown = own ?? MainGlass(program ?? "");
+        AppGlassLevels main = MainGlass(program ?? "");
+        AppGlassLevels shown = main;
+        if (own is not null)
+        {
+            shown = own.OwnGlass ? own : own.WithGlassOf(main);
+            if (!own.OwnDark) shown = shown.WithDarkOf(main);
+        }
         _showingGlassApp = true;
         try
         {
-            _ownGlass.Checked = own is not null;
+            _ownGlass.Checked = own is { OwnGlass: true };
+            _ownDark.Checked = own is { OwnDark: true };
             _appGlassBackground.Value = shown.BackgroundPercent;
             _appGlassText.Value = shown.TextPercent;
             _appGlassFade.Value = shown.FadeRangePercent;
@@ -288,7 +312,8 @@ public sealed partial class SettingsWindow
             _appDarkColors.Value = Math.Clamp(shown.DarkColorsPercent, 0, 100);
         }
         finally { _showingGlassApp = false; }
-        foreach (Control row in _appGlassRows) row.Enabled = own is not null;
+        foreach (Control row in _appGlassRows) row.Enabled = own is { OwnGlass: true };
+        foreach (Control row in _appDarkRows) row.Enabled = own is { OwnDark: true };
     }
 
     private void ChangeGlassApp()
@@ -304,13 +329,16 @@ public sealed partial class SettingsWindow
         QueueApplyRefresh();
     }
 
-    private void SetOwnGlass(bool on)
+    // A part made the app's own starts as Every app's, so nothing changes until it is changed.
+    private void SetOwnPart(bool on, bool dark)
     {
         if (_showingGlassApp || _showingBackground || _loading || ShownApp is not { } program) return;
         AppGlassLevels? own = GlassOf(program);
-        if (on == own is not null) return;
-        if (on) _glassApps.Add(MainGlass(program));
-        else _glassApps.Remove(own!);
+        if (on == (dark ? own is { OwnDark: true } : own is { OwnGlass: true })) return;
+        AppGlassLevels main = MainGlass(program), next = own ?? main with { OwnGlass = false };
+        next = dark ? next.WithDarkOf(main) with { OwnDark = on } : next.WithGlassOf(main) with { OwnGlass = on };
+        if (own is not null) _glassApps.Remove(own);
+        if (next.OwnGlass || next.OwnDark) _glassApps.Add(next);
         if (!_listedApps.Any(listed => SameApp(listed, program))) _listedApps.Add(program);
         ShowGlassApp(program);
         QueueApplyRefresh();
@@ -553,7 +581,10 @@ public sealed partial class SettingsWindow
             _showingBackground = true;
             try
             {
-                _backgroundEditor.Text = app ?? T("settings.backgrounds.everyApp");
+                string name = app ?? T("settings.backgrounds.everyApp");
+                _backgroundEditor.Text = string.Format(T("settings.effects.backgroundFor"), name);
+                _glassCard?.Text = string.Format(T("settings.effects.glassFor"), name);
+                _darkCard?.Text = string.Format(T("settings.effects.darkFor"), name);
                 BackgroundItem item = ShownItem(choice) ?? new BackgroundItem();
                 _backgroundFit.SelectedIndex = (int)item.Fit;
                 _backgroundVolume.Value = item.Volume;
@@ -568,10 +599,11 @@ public sealed partial class SettingsWindow
             finally { _showingBackground = false; }
             _backgroundRemoveApp.Enabled = app is not null; // Every app stays.
             // Every app's own Glass levels are the ones every app starts from.
-            _ownBackground.Visible = _ownGlass.Visible = app is not null;
+            _ownBackground.Visible = _ownGlass.Visible = _ownDark.Visible = app is not null;
             _appGlassNote?.Visible = app is not null;
-            foreach (Control row in _appGlassRows) row.Visible = app is not null;
-            foreach (Control row in _mainGlassRows) row.Visible = app is null;
+            _appDarkNote?.Visible = app is not null;
+            foreach (Control row in _appGlassRows.Concat(_appDarkRows)) row.Visible = app is not null;
+            foreach (Control row in _mainGlassRows.Concat(_mainDarkRows).Concat(_mainBackgroundRows)) row.Visible = app is null;
             ShowGlassApp(app);
         }
         bool own = app is null || _backgroundEdit.OwnOf(app) is not null;
@@ -649,7 +681,7 @@ public sealed partial class SettingsWindow
         foreach (string file in dialog.FileNames) AddItem(file);
     }
 
-    // A new app gets its own background and Glass levels at once, both as every app has them, so nothing changes until
+    // A new app gets its own background, Glass and Dark levels at once, all as every app has them, so nothing changes until
     // they are changed.
     private void AddBackgroundApp()
     {
@@ -659,7 +691,7 @@ public sealed partial class SettingsWindow
         if (!ListedApps().Any(listed => SameApp(listed, name)))
         {
             _backgroundEdit = _backgroundEdit with { Apps = [.. _backgroundEdit.Apps, new AppBackground { Program = name, Background = _backgroundEdit.Everywhere }] };
-            _glassApps.Add(MainGlass(name));
+            _glassApps.Add(MainGlass(name) with { OwnDark = true });
             _listedApps.Add(name);
         }
         ListBackgrounds(name);

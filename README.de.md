@@ -83,7 +83,7 @@ echte Fenster zurückholen, und es versteckt sich wieder, sobald du wegwechselst
 ## Ein Bild oder Video hinter jeder App
 
 Schalte Glas für ein Fenster ein (**Strg+Alt+G**), und hinter seinem Text kann ein Bild, ein animiertes GIF oder ein
-Video erscheinen. Unter **Settings → Backgrounds** wählst du eins für alle Apps oder gibst einer App ihr eigenes. Ein
+Video erscheinen. Unter **Settings → Effects** wählst du eins für alle Apps oder gibst einer App ihr eigenes. Ein
 Video kann mit Ton laufen und pausiert, solange sein Fenster minimiert oder auf einem anderen Desktop ist.
 Mehrere können sich abwechseln, und sie können auch von einem Weblink kommen.
 

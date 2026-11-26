@@ -83,7 +83,7 @@ trazer a janela real de volta, e ela se esconde de novo quando você muda para o
 ## Uma imagem ou vídeo atrás de qualquer app
 
 Ative o Vidro em uma janela (**Ctrl+Alt+G**) e ela pode mostrar uma imagem, um GIF animado ou um vídeo atrás do texto.
-Em **Settings → Backgrounds**, escolha um para todos os apps ou dê a um app o seu próprio. Um vídeo pode tocar com som
+Em **Settings → Effects**, escolha um para todos os apps ou dê a um app o seu próprio. Um vídeo pode tocar com som
 e pausa enquanto a janela está minimizada ou em outra área de trabalho.
 Vários podem se revezar, e também podem vir de um link da web.
 

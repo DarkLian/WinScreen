@@ -359,7 +359,7 @@ private readonly ErrorProvider _errors = new();
             [_darkPage] = '\uE708', [_darkText] = '\uE8D2', [_darkColors] = '\uE790',
             [_appDarkPage] = '\uE708', [_appDarkText] = '\uE8D2', [_appDarkColors] = '\uE790',
             [_appGlassFade] = '\uE790', [_glassTextColor] = '\uE8D3', [_appGlassTextColor] = '\uE8D3', [_glassShadow] = '\uE81E',
-            [_appGlassShadow] = '\uE81E', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767', [_soundInFront] = '\uE995', [_pauseFullScreen] = '\uE7FC', [_pauseSaver] = '\uE863', [_backgroundSpeed] = '\uEC4A', [_backgroundBrightness] = '\uE706', [_backgroundOrder] = '\uE8B1', [_backgroundSwitch] = '\uE893', [_pictureMinutes] = '\uE823',
+            [_appGlassShadow] = '\uE81E', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_ownDark] = '\uE708', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767', [_soundInFront] = '\uE995', [_pauseFullScreen] = '\uE7FC', [_pauseSaver] = '\uE863', [_backgroundSpeed] = '\uEC4A', [_backgroundBrightness] = '\uE706', [_backgroundOrder] = '\uE8B1', [_backgroundSwitch] = '\uE893', [_pictureMinutes] = '\uE823',
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
             [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
             [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',
@@ -1637,9 +1637,6 @@ private readonly ErrorProvider _errors = new();
         _borderColor.TextChanged += (_, _) => color.Invalidate();
         page.Controls.Add(Section(T("settings.pin.border"), _pausePin, _highlightPinned, SettingRow(T("settings.pin.color"), color),
             SettingRow(T("settings.pin.opacity"), _borderOpacity), SettingRow(T("settings.pin.thickness"), _borderThickness)));
-        page.Controls.Add(Card(T("settings.dark.title"), true, _detectDark, SettingRow(T("settings.dark.page"), _darkPage),
-            SettingRow(T("settings.dark.text"), _darkText), SettingRow(T("settings.dark.colors"), _darkColors),
-            Note(T("settings.dark.colorsHelp")), Note(T("settings.effects.help"))));
         return page;
     }
 

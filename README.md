@@ -79,7 +79,7 @@ again when you switch away. [What works where](docs/FEATURE_COMPATIBILITY.md) li
 ## A picture or video behind any app
 
 Turn on Glass for a window (**Ctrl+Alt+G**) and it can show a picture, animated GIF or video behind its text. Choose
-one in **Settings → Backgrounds** for every app, or give an app its own. A video can play its sound, and it pauses
+one in **Settings → Effects** for every app, or give an app its own. A video can play its sound, and it pauses
 while its window is minimized or on another desktop.
 Several can take turns, and they can come from a web link too.
 

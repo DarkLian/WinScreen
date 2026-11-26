@@ -1473,7 +1473,7 @@ public sealed partial class TrayApplication : ApplicationContext
             changed => { if (identity.Matches()) _content.SetWindowLevels(window, changed.Levels); },
             changed => { if (identity.Matches()) SetWindowBackground(window, changed); })
         {
-            Save = (glass, background) => SaveAppGlass(window, program, glass, background),
+            Save = (glass, background) => SaveAppGlass(window, program, glass, background, dark),
             Reset = () =>
             {
                 _content.SetWindowLevels(window, null);
@@ -1525,13 +1525,13 @@ public sealed partial class TrayApplication : ApplicationContext
         }
     }
 
-    private void SaveAppGlass(nint window, string program, AppGlassLevels? levels, BackgroundChoice? background)
+    private void SaveAppGlass(nint window, string program, AppGlassLevels? levels, BackgroundChoice? background, bool dark = false)
     {
         EffectPreferences before = _settings.Effects;
         BackgroundPreferences beforeBackgrounds = _settings.Backgrounds;
         try
         {
-            if (levels is not null) _settings.Effects = before.With(program, levels);
+            if (levels is not null) _settings.Effects = before.WithPart(program, levels, dark);
             if (background is not null) _settings.Backgrounds = beforeBackgrounds.With(program, background);
             SaveSettings(_settings);
             if (levels is not null)

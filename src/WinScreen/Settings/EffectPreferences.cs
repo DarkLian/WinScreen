@@ -16,7 +16,7 @@ public sealed record EffectPreferences
     public int DarkPagePercent { get; init; } = 10;
     public int DarkTextPercent { get; init; } = 100;
     public int DarkColorsPercent { get; init; }
-    // Apps with their own levels; every other app uses the ones above.
+    // Apps with their own Glass or Dark levels, or both; every other app, and the other part, use the ones above.
     public List<AppGlassLevels> Apps { get; init; } = [];
 
     internal EffectPreferences Validated()
@@ -24,7 +24,7 @@ public sealed record EffectPreferences
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var apps = new List<AppGlassLevels>();
         foreach (AppGlassLevels? app in Apps ?? [])
-            if (app is not null && BackgroundPreferences.ProgramKey(app.Program) is { Length: > 0 } program && seen.Add(program))
+            if (app is { OwnGlass: true } or { OwnDark: true } && BackgroundPreferences.ProgramKey(app.Program) is { Length: > 0 } program && seen.Add(program))
                 apps.Add(app.Validated() with { Program = program });
         return this with
         {
@@ -39,9 +39,7 @@ public sealed record EffectPreferences
         };
     }
 
-    internal Glass.ContentLevels Levels =>
-        new(BackgroundPercent / 100f, TextPercent / 100f, FadeRangePercent / 100f, TextColor: TextColor, Shadow: TextShadow,
-            DarkPage: DarkPagePercent / 100f, DarkText: DarkTextPercent / 100f, DarkColors: DarkColorsPercent / 100f);
+    internal Glass.ContentLevels Levels => Main("").Levels;
 
     internal AppGlassLevels? OwnOf(string program)
     {
@@ -49,18 +47,34 @@ public sealed record EffectPreferences
         return Apps.Find(app => string.Equals(app.Program, key, StringComparison.OrdinalIgnoreCase));
     }
 
-    internal Glass.ContentLevels LevelsFor(string program) => OwnOf(program)?.Levels ?? Levels;
+    internal Glass.ContentLevels LevelsFor(string program) => LevelsOf(program).Levels;
 
     // The app's own levels, or (with null) back to the ones every app has.
     internal EffectPreferences With(string program, AppGlassLevels? own)
     {
         string key = BackgroundPreferences.ProgramKey(program);
         var apps = Apps.Where(app => !string.Equals(app.Program, key, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (own is not null && key.Length > 0) apps.Add(own.Validated() with { Program = key });
+        if (own is { OwnGlass: true } or { OwnDark: true } && key.Length > 0) apps.Add(own.Validated() with { Program = key });
         return this with { Apps = apps };
     }
 
-    internal AppGlassLevels LevelsOf(string program) => OwnOf(program) ?? new AppGlassLevels
+    // One part, Glass's or Dark's, becomes the app's own; the other part stays as it was.
+    internal EffectPreferences WithPart(string program, AppGlassLevels levels, bool dark)
+    {
+        AppGlassLevels own = OwnOf(program) ?? Main(program) with { OwnGlass = false };
+        return With(program, dark ? own.WithDarkOf(levels) with { OwnDark = true } : own.WithGlassOf(levels) with { OwnGlass = true });
+    }
+
+    // As the app's windows get them: each part its own or every app's.
+    internal AppGlassLevels LevelsOf(string program)
+    {
+        AppGlassLevels main = Main(program);
+        if (OwnOf(program) is not { } own) return main with { OwnGlass = false };
+        AppGlassLevels glass = own.OwnGlass ? own : own.WithGlassOf(main);
+        return own.OwnDark ? glass : glass.WithDarkOf(main);
+    }
+
+    private AppGlassLevels Main(string program) => new()
     {
         Program = BackgroundPreferences.ProgramKey(program),
         BackgroundPercent = BackgroundPercent, TextPercent = TextPercent, FadeRangePercent = FadeRangePercent,
@@ -72,6 +86,8 @@ public sealed record EffectPreferences
 public sealed record AppGlassLevels
 {
     public string Program { get; init; } = "";
+    public bool OwnGlass { get; init; } = true;
+    public bool OwnDark { get; init; }
     public int BackgroundPercent { get; init; } = 15;
     public int TextPercent { get; init; } = 100;
     public int FadeRangePercent { get; init; } = 100;
@@ -91,6 +107,17 @@ public sealed record AppGlassLevels
         DarkPagePercent = Math.Clamp(DarkPagePercent, 0, EffectPreferences.MostDarkPage),
         DarkTextPercent = Math.Clamp(DarkTextPercent, EffectPreferences.LeastDarkText, 100),
         DarkColorsPercent = Math.Clamp(DarkColorsPercent, 0, 100),
+    };
+
+    internal AppGlassLevels WithGlassOf(AppGlassLevels other) => this with
+    {
+        BackgroundPercent = other.BackgroundPercent, TextPercent = other.TextPercent, FadeRangePercent = other.FadeRangePercent,
+        TextColor = other.TextColor, TextShadow = other.TextShadow,
+    };
+
+    internal AppGlassLevels WithDarkOf(AppGlassLevels other) => this with
+    {
+        DarkPagePercent = other.DarkPagePercent, DarkTextPercent = other.DarkTextPercent, DarkColorsPercent = other.DarkColorsPercent,
     };
 
     internal Glass.ContentLevels Levels =>

@@ -83,7 +83,7 @@ puede traer de vuelta la ventana real, que se vuelve a ocultar cuando cambias a 
 ## Una imagen o un vídeo detrás de cualquier aplicación
 
 Activa Cristal en una ventana (**Ctrl+Alt+G**) y podrá mostrar una imagen, un GIF animado o un vídeo detrás de su
-texto. En **Settings → Backgrounds** elige uno para todas las aplicaciones o dale a una aplicación el suyo propio. Un
+texto. En **Settings → Effects** elige uno para todas las aplicaciones o dale a una aplicación el suyo propio. Un
 vídeo puede sonar, y se pausa mientras su ventana está minimizada o en otro escritorio.
 Varios pueden turnarse, y también pueden venir de un enlace web.
 

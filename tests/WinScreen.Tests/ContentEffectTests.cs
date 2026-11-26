@@ -440,15 +440,24 @@ public sealed class PageReaderTests
         Assert.Equal((0.1f, 1f, 0f), (defaults.Levels.DarkPage, defaults.Levels.DarkText, defaults.Levels.DarkColors));
         EffectPreferences effects = AppSettings.Parse("""
             {"Effects":{"DarkPagePercent":90,"DarkTextPercent":10,"DarkColorsPercent":-5,"Apps":[
-              {"Program":"chrome","DarkPagePercent":20,"DarkTextPercent":80,"DarkColorsPercent":60}]}}
+              {"Program":"chrome","OwnGlass":false,"OwnDark":true,"BackgroundPercent":70,"DarkPagePercent":20,"DarkTextPercent":80,"DarkColorsPercent":60},
+              {"Program":"code","BackgroundPercent":40,"DarkPagePercent":30},
+              {"Program":"notes","OwnGlass":false}]}}
             """).Effects;
         Assert.Equal((EffectPreferences.MostDarkPage, EffectPreferences.LeastDarkText, 0), (effects.DarkPagePercent, effects.DarkTextPercent, effects.DarkColorsPercent));
-        ContentLevels chrome = effects.LevelsFor("chrome");
-        Assert.Equal((0.2f, 0.8f, 0.6f), (chrome.DarkPage, chrome.DarkText, chrome.DarkColors));
+        Assert.Equal(["chrome", "code"], effects.Apps.Select(app => app.Program)); // One with neither part of its own isn't kept.
+        // Each part is the app's own or Every app's: chrome has its own Dark levels and Every app's Glass, code the other way.
+        ContentLevels chrome = effects.LevelsFor("chrome"), code = effects.LevelsFor("code");
+        Assert.Equal((0.2f, 0.8f, 0.6f, 0.15f), (chrome.DarkPage, chrome.DarkText, chrome.DarkColors, chrome.Background));
+        Assert.Equal((0.4f, EffectPreferences.MostDarkPage / 100f), (code.Background, code.DarkPage));
         Assert.Equal(EffectPreferences.MostDarkPage, effects.LevelsOf("notepad").DarkPagePercent); // A new app starts from the main levels.
-        // Saving an app's Glass levels from its panel keeps its Dark levels, and the other way round.
-        AppGlassLevels saved = effects.LevelsOf("chrome") with { BackgroundPercent = 40 };
-        Assert.Equal(60, Assert.Single(effects.With("chrome", saved).Apps).DarkColorsPercent);
+        // Saving one part from a window's panel makes only that part the app's own and keeps the other as it was.
+        EffectPreferences glassSaved = effects.WithPart("chrome", effects.LevelsOf("chrome") with { BackgroundPercent = 55, DarkPagePercent = 0 }, dark: false);
+        AppGlassLevels both = Assert.Single(glassSaved.Apps, app => app.Program == "chrome");
+        Assert.Equal((true, true, 55, 20), (both.OwnGlass, both.OwnDark, both.BackgroundPercent, both.DarkPagePercent));
+        AppGlassLevels darkOnly = Assert.Single(effects.WithPart("notepad", effects.LevelsOf("notepad") with { DarkColorsPercent = 50 }, dark: true).Apps,
+            app => app.Program == "notepad");
+        Assert.Equal((false, true, 50), (darkOnly.OwnGlass, darkOnly.OwnDark, darkOnly.DarkColorsPercent));
     }
 
     [Fact]

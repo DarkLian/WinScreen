@@ -213,45 +213,44 @@ Dark mode swaps light and dark and keeps each color's hue, so pictures and video
 brings colored parts, such as pictures, back toward their own colors while pages and text still turn; colored text can
 look less clean when it's high. To keep one part exactly as it is, see **Keep pictures and video solid** below. Glass fades the colors close to the page's own and keeps text readable. On a
 PC without a graphics card, neither can keep areas as they are, and Glass makes one color see-through, where clicks go
-through to what's behind. Dark mode's levels (page brightness, text brightness and Keep colors) are in **Settings →
-Appearance**, and an app can have its own on the Backgrounds page. Glass's settings are in **Settings →
-Backgrounds**. On Windows 10, a yellow border shows around a window while these two are working. If a window under
+through to what's behind. Both have their settings in **Settings → Effects**: a
+**Background**, a **Glass** and a **Dark mode** card for every app, and for each app you add. Dark mode's are page
+brightness, text brightness and Keep colors. On Windows 10, a yellow border shows around a window while these two are working. If a window under
 Dark mode or Glass ever stops taking clicks, WinScreen turns the effect off and tells you.
 
 ### A picture or video behind Glass
 
-In **Settings → Backgrounds**, choose pictures, GIFs or videos to show behind the text of windows with Glass, or
-**Add a link** to one on the web. **Every app** sets the background and the Glass levels for all of them. Add an app to
+In **Settings → Effects**, choose pictures, GIFs or videos to show behind the text of windows with Glass, or
+**Add a link** to one on the web. **Every app** sets the background, Glass and Dark mode for all apps. Add an app to
 give it its own, or to show none in it. The preview shows how it will fit, and you can drop a file onto it. To see
-more of the picture, lower **Background** in Every app's card.
+more of the picture, lower **Page color** under Glass.
 
 Add more than one and they take turns, **In order** or **Shuffle**. With **Switch** on **When a video ends**, each video
 plays once and each picture stays for the minutes you choose; on **On a timer**, each stays for those minutes. Each has its own **Fit**, **Sound**, **Speed** and **Brightness**. If a file was moved or
 deleted, Settings marks it **(not found)** and Glass shows the next one. It shows again by itself once it's back.
 
-Videos play without sound until you turn **Sound** up, also with **Background sound** under **Effects** in the window's
-menu; **Next background** there goes on to the next of several, and **Change background** opens these settings for its app. Only the window you used last plays sound, and only
+Videos play without sound until you turn **Sound** up. Only the window you used last plays sound, and only
 while its app is in front. Videos pause while their window is minimized or on another desktop, behind a game or
-full-screen app, and while Windows saves battery. Each of these can be turned off under **App backgrounds**.
+full-screen app, and while Windows saves battery. Each of these can be turned off at the end of Every app's background.
 
 ### Keep pictures and video solid
 
 Glass fades every color close to the page's own, so dark scenes on a dark page, or bright skies on a light one, fade
 a little too. Two settings help:
 
-- **Fade range** in Every app's card in **Settings → Backgrounds**: lower it and only colors very near the page's fade,
+- **Fade range** under Glass in **Settings → Effects**: lower it and only colors very near the page's fade,
   so pictures and videos stay solid. Text edges look a little sharper. Raise it past 100% and colors further from the
   page fade too; at the top, all of them.
 - **Select areas to keep**, under **Effects** in a window's menu: drag over a video or picture, or click a
   highlighted part, and Glass and Dark mode leave it as it is. Click a marked area to remove it, and press Enter when
   you're done. An app can have up to eight, and they're kept for all its windows and follow them when you resize
-  them. The list is at the bottom of **Settings → Backgrounds**, where you can remove an app's areas. Plain Glass
+  them. The list is at the bottom of **Settings → Effects**, where you can remove an app's areas. Plain Glass
   keeps them too, on a PC with a graphics card.
 
 ### Text over a busy background
 
-Glass keeps a soft shadow of the page's color around text, so it stays readable over what's behind. Two settings in
-Every app's card in **Settings → Backgrounds** change that:
+Glass keeps a soft shadow of the page's color around text, so it stays readable over what's behind. Two settings
+under Glass in **Settings → Effects** change that:
 
 - **Text color**: **Light** or **Dark** turns the page the other way round when it needs to, as Dark mode does. You
   get light text with a dark shadow, or dark text with a light one. Pictures turn too, as in Dark mode, unless you
@@ -260,15 +259,15 @@ Every app's card in **Settings → Backgrounds** change that:
 
 ### Glass for each app or window
 
-Under **App backgrounds** in **Settings → Backgrounds**, add an app to give it its own background and its own Background, Text,
-Fade range, text color and shadow. Both start as every app has them, and either can be turned off for that app.
+Under **Apps** in **Settings → Effects**, add an app to give it its own background, Glass levels and Dark mode levels.
+Each starts as every app has it, and each can be turned off for that app.
 
 To try things out on a window itself, choose **Effect settings** under **Effects** in its menu. On a window with Dark
 mode, it shows Dark mode's levels. With Glass, its levels are on the left and its picture or video on the right: add or remove them, and set the fit, sound, speed, brightness, order and timing.
 The changes show on that window at once and last until it closes; **Save for this app** keeps them for all its windows.
 
-**Background** is how much of the page's own color covers the picture, and **Brightness** is how bright the picture itself
-is. On a dark page both make the picture dimmer. On a light page, a higher Background makes it paler instead.
+**Page color** is how much of the page's own color covers the picture, and **Brightness** is how bright the picture itself
+is. On a dark page both make the picture dimmer. On a light page, a higher Page color makes it paler instead.
 
 ## Remember a program's setup
 
@@ -293,11 +292,11 @@ Changes take effect as soon as you make them. The mouse wheel only scrolls; clic
 
 | Page | What you'll find |
 | --- | --- |
-| General | Language, light or dark look, notifications, starting with Windows, running as administrator, updates, experimental features, and moving your settings to another PC |
+| General | Language, light or dark theme, notifications, starting with Windows, running as administrator, updates, experimental features, and moving your settings to another PC |
 | Picture-in-Picture | How views look and behave, and where pictures and recordings are saved |
-| Backgrounds | How Glass looks, and a picture or video behind it, for every app or for each app |
+| Effects | A picture or video behind Glass, how Glass and Dark mode look, and areas to keep, for every app or for each app |
 | Anchors | Automatic Anchors and how Anchors look |
-| Appearance | Opacity, pinned windows and Dark mode |
+| Appearance | Opacity and pinned windows |
 | Mouse gestures | Move and resize with a key, and the mouse menu |
 | Toolbar | Where the toolbar appears, how quickly, and which buttons it shows |
 | Actions and shortcuts | Everything WinScreen can do, with its shortcut. Select an action to change its shortcut |

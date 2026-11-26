@@ -84,7 +84,7 @@ vraie fenêtre, qui se cache à nouveau quand vous passez à autre chose.
 ## Une image ou une vidéo derrière n'importe quelle application
 
 Activez l'effet verre sur une fenêtre (**Ctrl+Alt+G**) et elle peut afficher une image, un GIF animé ou une vidéo
-derrière son texte. Dans **Settings → Backgrounds**, choisissez-en un pour toutes les applications, ou donnez à une
+derrière son texte. Dans **Settings → Effects**, choisissez-en un pour toutes les applications, ou donnez à une
 application le sien. Une vidéo peut jouer son son, et elle se met en pause quand sa fenêtre est réduite ou sur un
 autre bureau.
 Plusieurs peuvent se relayer, et elles peuvent aussi venir d'un lien web.
