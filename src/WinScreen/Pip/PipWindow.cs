@@ -73,6 +73,7 @@ public sealed partial class PipWindow : Form
     private ToolStripMenuItem _viewOnlyItem;
     private ToolStripMenuItem _helpItem;
     private ToolStripItem _originalHeader;
+    private ToolStripItem _useHeader;
     private readonly ContextMenuStrip _menu = new() { ShowItemToolTips = true };
     private PipTitleBar? _titleBar;
     private PipHoverPreview? _hoverPreview;
@@ -95,7 +96,7 @@ public sealed partial class PipWindow : Form
     private RectangleF _zoom = PipGeometry.WholeView;
     private bool _panning;
     private Point _panFrom;
-    private ToolStripMenuItem _retryItem = null!;
+    private ToolStripMenuItem _retryItem;
     private Rectangle _crop = Rectangle.Empty;
     private Rectangle _whole = Rectangle.Empty;
     private Rectangle _lastShown = Rectangle.Empty;

@@ -193,14 +193,15 @@ public static class CommandCatalog
         AppCommand.RestoreWindow, AppCommand.RestoreAll,
     ];
 
-    // Every button the toolbar can have, in its order. All start on.
+    // Every button the toolbar can have, in its order, which is the window menu's order too. All start on. A saved bar
+    // is put in this order when it loads.
     public static readonly AppCommand[] ToolbarButtons =
     [
         AppCommand.TogglePin, AppCommand.ToggleDefaultOpacity, AppCommand.ToggleClickThrough,
-        AppCommand.OpenPip, AppCommand.ToggleAnchor, AppCommand.MinimizeToAnchor, AppCommand.ToggleDark,
-        AppCommand.ToggleGlass, AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleShrink, AppCommand.ToggleCrop,
-        AppCommand.ToggleDarkTitleBar, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill, AppCommand.Arrange,
-        AppCommand.SaveWindowSetup, AppCommand.RestoreWindow, AppCommand.ShowWindowMenu,
+        AppCommand.OpenPip, AppCommand.ToggleAnchor, AppCommand.MinimizeToAnchor,
+        AppCommand.ToggleGlass, AppCommand.ToggleDark, AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill,
+        AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleShrink, AppCommand.ToggleCrop, AppCommand.ToggleDarkTitleBar,
+        AppCommand.Arrange, AppCommand.SaveWindowSetup, AppCommand.RestoreWindow, AppCommand.ShowWindowMenu,
     ];
 
     // On the bar, default opacity's button opens the slider with default opacity under it.
@@ -228,14 +229,15 @@ public static class CommandCatalog
         AppCommand.ToggleBorderless, AppCommand.ToggleBorderlessFill,
     ];
 
-    // Before Extra, which includes them. Each acts on the view in front, or on the view of the window in front.
+    // Before Extra, which includes them. Each acts on the view in front, or on the view of the window in front. In the
+    // view menu's order (PipWindow.BuildMenu), which Settings' Actions and shortcuts follows.
     public static readonly AppCommand[] View =
     [
-        AppCommand.ViewKeepHidden, AppCommand.ViewInteractive, AppCommand.ViewUseOriginal, AppCommand.ViewGoToOriginal,
+        AppCommand.ViewInteractive, AppCommand.ViewKeepHidden, AppCommand.ViewUseOriginal, AppCommand.ViewGoToOriginal,
         AppCommand.ViewMute, AppCommand.ViewFreeze, AppCommand.ViewRotateRight, AppCommand.ViewRotateLeft,
         AppCommand.ViewMirrorAcross, AppCommand.ViewMirrorDown, AppCommand.ViewUpright, AppCommand.ViewResetZoom,
-        AppCommand.ViewMinimize, AppCommand.ViewCopyPicture, AppCommand.ViewFreezeCopy, AppCommand.ViewCopyText, AppCommand.ViewCover,
-        AppCommand.ViewRecord,
+        AppCommand.ViewCopyPicture, AppCommand.ViewCopyText, AppCommand.ViewFreezeCopy, AppCommand.ViewRecord, AppCommand.ViewCover,
+        AppCommand.ViewMinimize,
     ];
 
     public static bool ForView(AppCommand command) => View.Contains(command);
@@ -263,7 +265,7 @@ public static class CommandCatalog
         AppCommand.AlignTopLeft, AppCommand.AlignTop, AppCommand.AlignTopRight, AppCommand.AlignLeft,
         AppCommand.AlignCenter, AppCommand.AlignRight, AppCommand.AlignBottomLeft, AppCommand.AlignBottom,
         AppCommand.AlignBottomRight, null, AppCommand.MoveToNextDisplay, AppCommand.PlaceExactly,
-        AppCommand.RestorePlacement, null, AppCommand.ToggleRollUp, AppCommand.SendToBottom, null, AppCommand.ShowWindowInfo,
+        AppCommand.RestorePlacement, null, AppCommand.ToggleRollUp, AppCommand.SendToBottom,
     ];
 
     public static Windows.WindowAnchor? AnchorOf(AppCommand command) =>
@@ -280,9 +282,10 @@ public static class CommandCatalog
         AppCommand.RestoreAll => ActionGroup.Everywhere,
         _ when Everywhere.Contains(command) => ActionGroup.Everywhere,
         AppCommand.ToggleDark or AppCommand.ToggleGlass or AppCommand.GlassLevels or AppCommand.KeepAreas or
-            AppCommand.ToggleShrink or AppCommand.ToggleCrop or AppCommand.ToggleDarkTitleBar => ActionGroup.Effects,
+            AppCommand.ToggleShrink or AppCommand.ToggleCrop or AppCommand.ToggleDarkTitleBar or
+            AppCommand.ToggleBorderless or AppCommand.ToggleBorderlessFill => ActionGroup.Effects,
         AppCommand.Arrange or AppCommand.MoveToNextDisplay or AppCommand.PlaceExactly or AppCommand.RestorePlacement or
-            AppCommand.SendToBottom or AppCommand.ToggleRollUp or AppCommand.ToggleBorderless or AppCommand.ToggleBorderlessFill => ActionGroup.Place,
+            AppCommand.SendToBottom or AppCommand.ToggleRollUp => ActionGroup.Place,
         _ when AnchorOf(command) is not null => ActionGroup.Place,
         _ => ActionGroup.Window,
     };
@@ -296,7 +299,8 @@ public static class CommandCatalog
         command is AppCommand.RestoreAll or AppCommand.PickPipSource || Everywhere.Contains(command);
 
     public static bool EndsGroup(AppCommand command) =>
-        command is AppCommand.ToggleClickThrough or AppCommand.ToggleCrop or AppCommand.SaveWindowSetup or AppCommand.RestoreWindow;
+        command is AppCommand.ToggleClickThrough or AppCommand.MinimizeToAnchor or AppCommand.ToggleDarkTitleBar or
+            AppCommand.Arrange or AppCommand.RestoreWindow;
 
     // None since Dark mode left it in 1.5.0; a command put here is tagged and needs the switch in Settings.
     private static readonly HashSet<AppCommand> Experimental = [];

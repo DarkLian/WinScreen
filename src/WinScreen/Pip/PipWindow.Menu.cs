@@ -10,7 +10,7 @@ namespace WinScreen.Pip;
 public sealed partial class PipWindow
 {
     [MemberNotNull(nameof(_hideItem), nameof(_awayItem), nameof(_goToItem), nameof(_muteItem), nameof(_useOriginalItem), nameof(_autoMoveItem), nameof(_removeCropItem), nameof(_viewOnlyItem),
-        nameof(_helpItem), nameof(_originalHeader), nameof(_interactiveItem), nameof(_middleScrollItem),
+        nameof(_helpItem), nameof(_originalHeader), nameof(_useHeader), nameof(_retryItem), nameof(_interactiveItem), nameof(_middleScrollItem),
         nameof(_enhancedHoverItem), nameof(_freezeItem), nameof(_turnItem), nameof(_uprightItem))]
     private void BuildMenu()
     {
@@ -32,6 +32,8 @@ public sealed partial class PipWindow
         if (_interactiveWithoutSwitch) { _middleScrollItem.Experimental(); _enhancedHoverItem.Experimental(); }
         _viewOnlyItem = new ToolStripMenuItem(T("menu.view.watch"), null, (_, _) => SetInteractive(false)) { Name = "viewOnly" }.OneOf();
         _middleScrollItem.Margin = _enhancedHoverItem.Margin = new Padding(MenuParts.Scale(16), 0, 0, 0);
+        // Kept here and put back each time Options is filled.
+        StayingOpen.Keep(_autoMoveItem);
         var options = new ToolStripMenuItem(T("menu.picture.options")).WithIcon(MenuParts.Sliders);
         options.DropDownItems.Add(new ToolStripSeparator()); // Windows only draws the arrow with something inside.
         options.DropDownOpening += (_, _) => FillOptions(options);
@@ -40,13 +42,15 @@ public sealed partial class PipWindow
         presets.DropDownOpening += (_, _) => FillPresets(presets);
         _menu.Items.Add(new ToolStripMenuItem { Name = "inputStatus", Enabled = false });
         _menu.Items.Add(new ToolStripSeparator());
+        // On top while it applies: the view fell back to the compositor's picture.
+        _retryItem = new ToolStripMenuItem(T("pip.backend.retry"), MenuParts.Icon(MenuParts.Sync), (_, _) => RetryCapture());
+        _menu.Items.Add(_retryItem);
 
-        _menu.Items.Add(MenuParts.Header(T("menu.group.use")));
+        _menu.Items.Add(_useHeader = MenuParts.Header(T("menu.group.use")));
         _menu.Items.Add(_viewOnlyItem);
         _menu.Items.Add(_interactiveItem);
         _menu.Items.Add(_enhancedHoverItem);
         _menu.Items.Add(_middleScrollItem);
-        _menu.Items.Add(_autoMoveItem);
 
         _menu.Items.Add(_originalHeader = MenuParts.Header(T("menu.group.original")));
         _awayItem = new ToolStripMenuItem(T("menu.original.awayHidden"), MenuParts.Icon(MenuParts.View)) { Enabled = false };
@@ -61,7 +65,6 @@ public sealed partial class PipWindow
         _menu.Items.Add(MenuParts.Header(T("menu.group.picture")));
         _removeCropItem = new ToolStripMenuItem(T("pip.zoom.reset"), MenuParts.Icon(MenuParts.Crop),
             (_, _) => { ResetZoom(); SetCrop(Rectangle.Empty); });
-        _menu.Items.Add(_removeCropItem);
         _freezeItem = new ToolStripMenuItem(T("pip.freeze"), MenuParts.Icon(MenuParts.Pause), (_, _) => SetFrozen(!Frozen));
         _menu.Items.Add(_freezeItem);
         _turnItem = new ToolStripMenuItem(T("pip.turn")).WithIcon(MenuParts.Rotate);
@@ -77,6 +80,9 @@ public sealed partial class PipWindow
         _turnItem.DropDownItems.Add(_uprightItem);
         _turnItem.DropDownOpening += (_, _) => RefreshTurnItems();
         _menu.Items.Add(_turnItem);
+        _menu.Items.Add(_removeCropItem);
+
+        _menu.Items.Add(MenuParts.Header(T("menu.group.capture")));
         _copyPictureItem = new ToolStripMenuItem(T("pip.picture.copy"), MenuParts.Icon(MenuParts.Copy), (_, _) => CopyPicture());
         _freezeCopyItem = new ToolStripMenuItem(T("pip.picture.freezeCopy"), MenuParts.Icon(MenuParts.Picture), (_, _) => FreezeCopy());
         _copyTextItem = new ToolStripMenuItem(T("pip.picture.copyText"), MenuParts.Icon(MenuParts.Text), (_, _) => CopyText());
@@ -84,16 +90,22 @@ public sealed partial class PipWindow
         _uncoverItem = new ToolStripMenuItem(T("pip.picture.uncover"), MenuParts.Icon(MenuParts.View), (_, _) => SetCovers([]));
         _recordItem = new ToolStripMenuItem(T("pip.picture.record"), MenuParts.Icon(MenuParts.Record), (_, _) => ToggleRecording());
         _recordNote = new NoteRow(T("pip.record.noCapture"));
-        _menu.Items.AddRange([_copyPictureItem, _freezeCopyItem, _copyTextItem, _recordItem, _recordNote, _coverItem, _uncoverItem]);
+        _menu.Items.AddRange([_copyPictureItem, _copyTextItem, _freezeCopyItem, _recordItem, _recordNote, _coverItem, _uncoverItem]);
+
+        _menu.Items.Add(new ToolStripSeparator());
+        var size = new ToolStripMenuItem(T("pip.size")).WithIcon(ColorIcons.WindowSize);
+        size.DropDownItems.Add(T("pip.size.small"), null, (_, _) => ResizeTo(Dpi.Scale(SmallLongSide, DeviceDpi)));
+        size.DropDownItems.Add(T("pip.size.medium"), null, (_, _) => ResizeTo(Dpi.Scale(MediumLongSide, DeviceDpi)));
+        size.DropDownItems.Add(T("pip.size.large"), null, (_, _) => ResizeTo(Dpi.Scale(LargeLongSide, DeviceDpi)));
+        size.DropDownItems.Add(T("pip.size.fitSource"), null, (_, _) => FitToSourceSize());
+        _menu.Items.Add(size);
         _menu.Items.Add(options);
         _menu.Items.Add(presets);
 
         _menu.Items.Add(new ToolStripSeparator());
         _helpItem = new ToolStripMenuItem(T("menu.help")).WithIcon(MenuParts.Help);
-        _retryItem = new ToolStripMenuItem(T("pip.backend.retry"), MenuParts.Icon(MenuParts.Sync), (_, _) => RetryCapture());
         _helpItem.DropDownItems.Add(new ToolStripSeparator());
         _helpItem.DropDownItems.Add(T("pip.diagnostics.title"), MenuParts.Icon(MenuParts.Diagnostic), (_, _) => ShowDiagnostics());
-        _helpItem.DropDownItems.Add(_retryItem);
         _menu.Items.Add(_helpItem);
         var minimize = (ToolStripMenuItem)_menu.Items.Add(T("pip.minimize"), MenuParts.Icon(MenuParts.Minimize), (_, _) => SuspendView());
         _menu.Items.Add(T("pip.close"), MenuParts.Icon(MenuParts.Close), (_, _) => Close());
@@ -121,7 +133,7 @@ public sealed partial class PipWindow
             User32.SetForegroundWindow(Handle);
         };
         MenuRenderer.Apply(_menu);
-        foreach (ToolStripItem item in new ToolStripItem[] { _hideItem, _muteItem, _autoMoveItem, _interactiveItem, _viewOnlyItem, _middleScrollItem, _enhancedHoverItem, _freezeItem })
+        foreach (ToolStripItem item in new ToolStripItem[] { _hideItem, _muteItem, _interactiveItem, _viewOnlyItem, _middleScrollItem, _enhancedHoverItem, _freezeItem })
             StayingOpen.Keep(item);
         StayingOpen.Follow(_menu, RefreshMenuItems);
         _menu.Closed += (_, _) => { ReturnFocusAfterMenu(); PauseInput(TopLayer.InputBlocked); };
@@ -134,7 +146,7 @@ public sealed partial class PipWindow
         FillHelp();
         _retryItem.Available = CanRetryCapture;
         bool canInteract = CanInteract;
-        _viewOnlyItem.Available = _interactiveItem.Available = canInteract;
+        _useHeader.Available = _viewOnlyItem.Available = _interactiveItem.Available = canInteract;
         _viewOnlyItem.Checked = !_interactiveItem.Checked;
         // Available is what is asked for; Visible would also say whether the menu is open, and it isn't yet. The two
         // options are experimental, also for a kind of app that can be used directly without the switch.
@@ -265,7 +277,18 @@ public sealed partial class PipWindow
 
     private void FillOptions(ToolStripMenuItem options)
     {
+        // Clear removes without disposing, so the one Move away item goes back in each time.
         options.DropDownItems.Clear();
+        options.DropDownItems.Add(_autoMoveItem);
+        options.DropDownItems.Add(Toggle(T("pip.lockPosition"), _overrides.PositionLocked,
+            () => Overrides = _overrides with { PositionLocked = !_overrides.PositionLocked }));
+        options.DropDownItems.Add(Toggle(T("pip.keepAspectRatio"), _overrides.KeepAspectRatio,
+            () => Overrides = _overrides with { KeepAspectRatio = !_overrides.KeepAspectRatio }));
+        options.DropDownItems.Add(Toggle(T("pip.titleBarAlways"), TitleBarAlways,
+            () => Overrides = _overrides with { TitleBarAlways = !TitleBarAlways }));
+        options.DropDownItems.Add(new ToolStripMenuItem(T("pip.clickThrough"), null,
+            (_, _) => Overrides = _overrides with { ClickThrough = true }));
+        options.DropDownItems.Add(new ToolStripSeparator());
         options.DropDownItems.Add(new NoteRow(
             _overrides.FrameRate is null && _overrides.Scaling is null && _overrides.OpacityPercent is null
                 ? T("pip.defaults.inherited") : T("pip.defaults.overridden")));
@@ -283,21 +306,6 @@ public sealed partial class PipWindow
         options.DropDownItems.Add(Choices(T("pip.opacity"), _overrides.OpacityPercent,
             [(T("pip.useSettings"), null), ("100%", 100), ("75%", 75), ("50%", 50), ("25%", 25)],
             value => Overrides = _overrides with { OpacityPercent = value }));
-        options.DropDownItems.Add(Toggle(T("pip.keepAspectRatio"), _overrides.KeepAspectRatio,
-            () => Overrides = _overrides with { KeepAspectRatio = !_overrides.KeepAspectRatio }));
-        options.DropDownItems.Add(Toggle(T("pip.lockPosition"), _overrides.PositionLocked,
-            () => Overrides = _overrides with { PositionLocked = !_overrides.PositionLocked }));
-        options.DropDownItems.Add(Toggle(T("pip.titleBarAlways"), TitleBarAlways,
-            () => Overrides = _overrides with { TitleBarAlways = !TitleBarAlways }));
-        options.DropDownItems.Add(new ToolStripMenuItem(T("pip.clickThrough"), null,
-            (_, _) => Overrides = _overrides with { ClickThrough = true }));
-        options.DropDownItems.Add(new ToolStripSeparator());
-        var size = new ToolStripMenuItem(T("pip.size"));
-        size.DropDownItems.Add(T("pip.size.small"), null, (_, _) => ResizeTo(Dpi.Scale(SmallLongSide, DeviceDpi)));
-        size.DropDownItems.Add(T("pip.size.medium"), null, (_, _) => ResizeTo(Dpi.Scale(MediumLongSide, DeviceDpi)));
-        size.DropDownItems.Add(T("pip.size.large"), null, (_, _) => ResizeTo(Dpi.Scale(LargeLongSide, DeviceDpi)));
-        size.DropDownItems.Add(T("pip.size.fitSource"), null, (_, _) => FitToSourceSize());
-        options.DropDownItems.Add(size);
     }
 
     private void FillPresets(ToolStripMenuItem presets)

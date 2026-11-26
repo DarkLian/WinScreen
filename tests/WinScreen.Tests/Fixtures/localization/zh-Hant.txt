@@ -254,6 +254,7 @@ hotkeys.someUnavailable 0FA7F717D2B4CC07
 keptAreas.instructions 5546A4F83BCE74A8
 keptAreas.title E4C0A08BBBEA879F
 menu.effects 86A00CF74253C265
+menu.group.capture F727151B4FC36937
 menu.group.elsewhere 8875BE70B328E00F
 menu.group.look B70682D027CE5073
 menu.group.original FCCDBFDFF0951CCF
@@ -268,7 +269,7 @@ menu.original.keepHidden D447D4DDC4A888DA
 menu.original.mute 6B844C47F3A616D0
 menu.original.muteBrowser 5B9DE606A39E9D7D
 menu.original.use 7D3AFA1DE0168064
-menu.picture.options 7D05E30990E99BFF
+menu.picture.options 062CAE7F11675C68
 menu.tray.newView 316E755906199FF9
 menu.view.hover E5C5E1FCD37D96F9
 menu.view.interactive 73C40D84B6807070

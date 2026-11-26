@@ -47,7 +47,9 @@ param(
     [switch]$KeepRunning,
     # Runs the tests as administrator in the VM (the task runs at the highest level for this run only), for what
     # happens when WinScreen is elevated and the rest of the desktop isn't.
-    [switch]$Elevated
+    [switch]$Elevated,
+    # The pictures tests draw for checking by eye (WINSCREEN_LAYOUT_EVIDENCE) come back in the results, under evidence.
+    [switch]$Evidence
 )
 
 $ErrorActionPreference = 'Stop'
@@ -143,6 +145,12 @@ try {
         $steps += [ordered]@{ name = 'packaged'; filter = $interactive; env = @{ WINSCREEN_EXE = '{root}\program\WinScreen.exe' } }
         # The desktop step's packaged smoke test skips itself without the program; give it the one just published.
         foreach ($step in $steps | Where-Object { $_.name -eq 'desktop' }) { $step.env = @{ WINSCREEN_EXE = '{root}\program\WinScreen.exe' } }
+    }
+    if ($Evidence) {
+        foreach ($step in $steps) {
+            if (-not $step.Contains('env')) { $step['env'] = @{} }
+            $step['env']['WINSCREEN_LAYOUT_EVIDENCE'] = '{root}\out\evidence'
+        }
     }
     [ordered]@{ steps = $steps } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $staging 'run.json') -Encoding UTF8
     Copy-Item (Join-Path $PSScriptRoot 'guest') (Join-Path $staging 'guest') -Recurse

@@ -439,8 +439,9 @@ internal sealed class PlacementRow : ToolStripControlHost
         Margin = Padding.Empty;
         grid.Chosen += place =>
         {
-            // Close first: the command may move the window the menu belongs to.
-            (Owner as ToolStripDropDown)?.Close(ToolStripDropDownCloseReason.ItemClicked);
+            // Close first, the menus it sits in too: the command may move the window the menu belongs to.
+            for (ToolStripDropDown? menu = Owner as ToolStripDropDown; menu is not null; menu = menu.OwnerItem?.Owner as ToolStripDropDown)
+                menu.Close(ToolStripDropDownCloseReason.ItemClicked);
             chosen(place);
         };
     }

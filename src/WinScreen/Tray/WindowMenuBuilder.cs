@@ -31,8 +31,9 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
 
     public void Populate(ToolStripItemCollection items, bool tray)
     {
+        // The same groups and order as the toolbar's buttons (CommandCatalog.ToolbarButtons).
         items.Add(Command(AppCommand.TogglePin));
-        AddOpacityRow(items);
+        PopulateOpacity(items);
         items.Add(Command(AppCommand.ToggleClickThrough));
 
         items.Add(MenuParts.Header(T("menu.group.elsewhere")));
@@ -40,54 +41,22 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         items.Add(Command(AppCommand.ToggleAnchor));
         items.Add(Command(AppCommand.MinimizeToAnchor));
 
-        items.Add(MenuParts.Header(T("menu.group.place")));
-        items.Add(new PlacementRow(place => WithTarget(window => run(place, window)), command => Hotkey?.Invoke(command)) { Tag = AppCommand.AlignCenter });
-        ToolStripMenuItem arrange = Command(AppCommand.Arrange);
-        PopulateArrange(arrange.DropDownItems, places: false); // The grid above already offers the nine places.
-        items.Add(arrange);
-
         items.Add(MenuParts.Header(T("menu.group.look")));
-        items.Add(Command(AppCommand.ToggleDarkTitleBar));
-        var borderless = new ToolStripMenuItem(T("window.borderless")).WithIcon(ColorIcons.Borderless);
-        borderless.DropDownItems.Add(Command(AppCommand.ToggleBorderless));
-        var fillItem = new ToolStripMenuItem(T("window.fillDisplay"), MenuParts.Icon(MenuParts.FullScreen), (_, _) =>
-        {
-            Screen[] screens = Screen.AllScreens;
-            if (screens.Length == 1) WithTarget(window => fill(window, screens[0].Bounds));
-        });
-        void RefreshDisplays()
-        {
-            while (fillItem.DropDownItems.Count > 0) fillItem.DropDownItems[0].Dispose();
-            Screen[] screens = Screen.AllScreens;
-            if (screens.Length > 1)
-                foreach (Screen screen in screens)
-                    fillItem.DropDownItems.Add(screen.DeviceName, null, (_, _) => WithTarget(window =>
-                    {
-                        Screen? current = Screen.AllScreens.FirstOrDefault(item => item.DeviceName == screen.DeviceName);
-                        if (current is null || current.Bounds != screen.Bounds) { staleTarget(); return; }
-                        fill(window, current.Bounds);
-                    }));
-        }
-        RefreshDisplays();
-        borderless.DropDownOpening += (_, _) => RefreshDisplays();
-        fillItem.Tag = AppCommand.ToggleBorderlessFill;
-        borderless.DropDownItems.Add(fillItem);
-        items.Add(borderless);
+        items.Add(Entry(AppCommand.ToggleGlass));
+        items.Add(Entry(AppCommand.ToggleDark));
+        items.Add(Command(AppCommand.ToggleBorderless));
+        items.Add(new FillDisplay(WithTarget, fill, staleTarget, Hotkey?.Invoke(AppCommand.ToggleBorderlessFill)));
         var effects = new ToolStripMenuItem(T("menu.effects")) { Tag = new Group() }.WithIcon(MenuParts.Repair);
-        foreach (AppCommand command in new[] { AppCommand.ToggleDark, AppCommand.ToggleGlass, AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleShrink, AppCommand.ToggleCrop })
-            effects.DropDownItems.Add(CommandCatalog.IsExperimental(command) ? Command(command).Experimental() : Command(command));
+        foreach (AppCommand? command in new AppCommand?[] { AppCommand.GlassLevels, AppCommand.KeepAreas, AppCommand.ToggleShrink, AppCommand.ToggleCrop, null, AppCommand.ToggleDarkTitleBar })
+            effects.DropDownItems.Add(command is { } entry ? Entry(entry) : new ToolStripSeparator());
         items.Add(effects);
 
         items.Add(new ToolStripSeparator());
+        ToolStripMenuItem arrange = Command(AppCommand.Arrange);
+        PopulateArrange(arrange.DropDownItems);
+        items.Add(arrange);
         var more = new ToolStripMenuItem(T("menu.more")) { Tag = new MoreGroup() }.WithIcon(MenuParts.More);
-        if (OpacityPercent is null || SetOpacityPercent is null)
-        {
-            more.DropDownItems.Add(Command(AppCommand.OpacityDown));
-            more.DropDownItems.Add(Command(AppCommand.OpacityUp));
-        }
-        more.DropDownItems.Add(Command(AppCommand.ToggleDefaultOpacity));
-        more.DropDownItems.Add(Command(AppCommand.SaveWindowSetup));
-        more.DropDownItems.Add(new ToolStripSeparator());
+        more.DropDownItems.Add(Command(AppCommand.ShowWindowInfo));
         var copy = new ToolStripMenuItem(T("common.copy")).WithIcon(MenuParts.Copy);
         foreach (var (label, index) in new[] { (T("window.info.title"), 0), (T("window.info.hwnd"), 3), (T("window.info.processId"), 4), (T("window.info.path"), 2) })
         {
@@ -101,28 +70,29 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         more.DropDownItems.Add(new ToolStripMenuItem(T("window.openLocation"), MenuParts.Icon(MenuParts.Folder),
             (_, _) => WithTarget(WindowUtilities.OpenLocation)) { Tag = new Utility(true) });
         items.Add(more);
+        items.Add(new ToolStripSeparator());
+        items.Add(Command(AppCommand.SaveWindowSetup));
         items.Add(Command(AppCommand.RestoreWindow));
     }
 
-    private void AddOpacityRow(ToolStripItemCollection items)
+    // The slider, or the two steps where there is none, then default opacity.
+    internal void PopulateOpacity(ToolStripItemCollection items)
     {
         if (OpacityPercent is not null && SetOpacityPercent is { } setOpacity)
             items.Add(new OpacityRow(T("pip.opacity"), percent => WithTarget(window => setOpacity(window, percent))));
-    }
-
-    internal void PopulateOpacity(ToolStripItemCollection items)
-    {
-        AddOpacityRow(items);
+        else
+        {
+            items.Add(Command(AppCommand.OpacityDown));
+            items.Add(Command(AppCommand.OpacityUp));
+        }
         items.Add(Command(AppCommand.ToggleDefaultOpacity));
     }
 
-    internal void PopulateArrange(ToolStripItemCollection items, bool places = true)
+    // The grid of nine places, then the rest of CommandCatalog.ArrangeMenu.
+    internal void PopulateArrange(ToolStripItemCollection items)
     {
-        IEnumerable<AppCommand?> actions = places ? CommandCatalog.ArrangeMenu
-            : CommandCatalog.ArrangeMenu.SkipWhile(action => action is { } entry && CommandCatalog.AnchorOf(entry) is not null).Skip(1);
-        foreach (AppCommand? action in actions)
-            items.Add(action is not { } entry ? new ToolStripSeparator()
-                : CommandCatalog.IsExperimental(entry) ? Command(entry).Experimental() : Command(entry));
+        items.Add(new PlacementRow(place => WithTarget(window => run(place, window)), command => Hotkey?.Invoke(command)) { Tag = AppCommand.AlignCenter });
+        items.Add(new ToolStripSeparator());
         if (MoveToDisplay is { } move)
         {
             var displays = new ToolStripMenuItem(T("placement.moveToDisplay")).WithIcon(ColorIcons.Displays);
@@ -132,7 +102,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
                 displays.DropDownItems.Add($"{device} ({screen.Bounds.Width}×{screen.Bounds.Height})", null,
                     (_, _) => WithTarget(window => move(window, device))).Tag = new DisplayMove(device);
             }
-            items.Insert(places ? 10 : 0, displays);
+            items.Add(displays);
         }
         if (ResizeTo is { } resize)
         {
@@ -140,7 +110,52 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
             foreach (Size size in PresetSizes)
                 sizes.DropDownItems.Add($"{size.Width} × {size.Height}", null,
                     (_, _) => WithTarget(window => resize(window, size))).Tag = new Resize(size);
-            items.Insert(Math.Min(items.Count, (places ? 10 : 0) + (MoveToDisplay is null ? 0 : 1)), sizes);
+            items.Add(sizes);
+        }
+        foreach (AppCommand? action in CommandCatalog.ArrangeMenu.SkipWhile(action => action is { } place && CommandCatalog.AnchorOf(place) is not null).Skip(1))
+            items.Add(action is { } entry ? Entry(entry) : new ToolStripSeparator());
+    }
+
+    // Fill display asks which display when there are several; the list is made again each time the menu opens.
+    private sealed class FillDisplay : ToolStripMenuItem
+    {
+        private readonly Action<Action<nint>> _withTarget;
+        private readonly Action<nint, Rectangle> _fill;
+        private readonly Action _stale;
+
+        public FillDisplay(Action<Action<nint>> withTarget, Action<nint, Rectangle> fill, Action stale, string? keys)
+            : base(CommandCatalog.Name(AppCommand.ToggleBorderlessFill), MenuParts.Icon(MenuParts.FullScreen))
+        {
+            (_withTarget, _fill, _stale) = (withTarget, fill, stale);
+            Tag = AppCommand.ToggleBorderlessFill;
+            ShortcutKeyDisplayString = keys is { Length: > 0 } ? keys : null;
+            Click += (_, _) =>
+            {
+                Screen[] screens = Screen.AllScreens;
+                if (screens.Length == 1) _withTarget(window => _fill(window, screens[0].Bounds));
+            };
+            DropDownOpening += (_, _) => ListDisplays();
+            ListDisplays();
+        }
+
+        private string? _listed;
+
+        // Refresh calls this while the menu stays open, so the list is only made again when the displays changed.
+        public void ListDisplays()
+        {
+            Screen[] screens = Screen.AllScreens;
+            string now = string.Join("|", screens.Select(screen => $"{screen.DeviceName} {screen.Bounds}"));
+            if (now == _listed) return;
+            _listed = now;
+            while (DropDownItems.Count > 0) DropDownItems[0].Dispose();
+            if (screens.Length < 2) return;
+            foreach (Screen screen in screens)
+                DropDownItems.Add(screen.DeviceName, null, (_, _) => _withTarget(window =>
+                {
+                    Screen? current = Screen.AllScreens.FirstOrDefault(item => item.DeviceName == screen.DeviceName);
+                    if (current is null || current.Bounds != screen.Bounds) { _stale(); return; }
+                    _fill(window, current.Bounds);
+                }));
         }
     }
 
@@ -148,7 +163,6 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     {
         bool Shown(ToolStripItem item) => item switch
         {
-            PlacementRow => onBar.Contains(AppCommand.Arrange),
             OpacityRow => onBar.Contains(AppCommand.ToggleDefaultOpacity),
             // With several displays the menu asks which one; the button fills the one the window is on.
             ToolStripMenuItem { Tag: AppCommand.ToggleBorderlessFill, HasDropDownItems: true } => false,
@@ -188,6 +202,8 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         while (items.Count > 0 && items[0] is ToolStripSeparator first) { items.RemoveAt(0); first.Dispose(); }
     }
 
+    private ToolStripMenuItem Entry(AppCommand command) => CommandCatalog.IsExperimental(command) ? Command(command).Experimental() : Command(command);
+
     private ToolStripMenuItem Command(AppCommand command) => new(CommandCatalog.Name(command),
         MenuParts.IconOf(command) is { } glyph ? MenuParts.Icon(glyph) : null, (_, _) =>
     {
@@ -213,6 +229,8 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
             }
             else if (entry is PlacementRow places)
                 places.Enabled = window != 0 && enabled(AppCommand.AlignCenter, window);
+            else if (entry is FillDisplay displays)
+                displays.ListDisplays();
             if (entry is not ToolStripMenuItem item) continue;
             if (item.Tag is AppCommand command)
             {

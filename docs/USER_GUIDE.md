@@ -76,8 +76,8 @@ its size and place on the screen, crop and options. Open it again from **Saved s
 | Ctrl+drag | Crop to the part you want; Ctrl+double-click to remove the crop |
 | Right-click | Open the view's menu, with **Go to it** under **Original window** |
 
-Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. Drag an edge or corner to resize; close to the window's own size it stops there, and the view shows the window exactly as it is. **Keep aspect ratio** in **Size and options** is on by default. The bar fades away after you leave. To keep it showing,
-turn on **Always show title bar** in **Size and options**, or for every new view in **Settings → Picture-in-Picture**.
+Every view has a title bar above the picture, or below it near the top of the screen. Hover to show it; drag it to move the view. Its buttons minimize and close the view. Drag an edge or corner to resize; close to the window's own size it stops there, and the view shows the window exactly as it is. **Keep aspect ratio** in **Options** is on by default. The bar fades away after you leave. To keep it showing,
+turn on **Always show title bar** in **Options**, or for every new view in **Settings → Picture-in-Picture**.
 
 **Useful options in the view's menu**
 
@@ -90,7 +90,8 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 - **Mute the original:** silences the app's sound, and nothing else. For a browser it mutes the whole browser,
   so the item says **Mute the browser**. The sound comes back when you turn it off, restore the window, close the
   view or exit WinScreen. An app you had muted yourself stays muted.
-- **Size and options:** frame limit, scaling, opacity, size, position lock and click-through, just for this view.
+- **Size** and **Options:** the view's size, and its frame limit, scaling, opacity, position lock, click-through and
+  moving away from text and images, just for this view.
   For scaling, **Best** suits almost everything; **Pixelated** is for pixel art and **Soft** for video.
 - **Presets:** save how a view looks (crop, size, place and options) under a name, and use it on any view later.
 - **Freeze**, under **Picture:** the view keeps showing what it shows now while the window goes on changing. You can
@@ -98,7 +99,7 @@ turn on **Always show title bar** in **Size and options**, or for every new view
 - **Rotate or mirror**, under **Picture:** turn the view a quarter at a time, or mirror it. You can still use the app
   through it: clicks, drags and typing land where you see them. The app's own menus stay upright, and **Upright**
   puts the view back. Saved with a preset.
-- **Capture**, under **Picture:** copies what the view shows, cropped, zoomed and turned as it is, at the
+- **Capture**, under **Capture and record:** copies what the view shows, cropped, zoomed and turned as it is, at the
   window's own sharpness. Like Windows' Snipping Tool, it also saves a file to your Screenshots folder; in
   **Settings → Picture-in-Picture** you can choose another folder, and under **Capture**, **Save only** or **Copy only**. It works the same whatever covers the
   view, at any opacity, and on views of a display or part of the screen, which screenshots can't take.
@@ -195,7 +196,7 @@ Turn on **Settings → Mouse gestures → Move and resize** to hold Alt (or Win)
 moves it, the right button resizes it. It works on maximized windows too, and Esc puts the window back. Drag a window to the
 left or right edge of the screen to fill that half, to a corner for a quarter, or to the top to maximize it. Turn on **Window menu** there for a menu of commands on **Ctrl+right-click**.
 
-The tray and window menus also have an **Opacity** slider, a grid of nine places to put the window (so their **Arrange window** lists only the other commands), **Borderless**, **Fill display** and **Dark title bar**. **Copy** and **Open file location** are under **More**.
+The tray and window menus also have an **Opacity** slider, and under **Look**: **Glass mode**, **Dark mode**, **Borderless** and **Fill display**, with the other effects and **Dark title bar** under **Effects**. Their **Arrange window** starts with a grid of nine places. **Window information**, **Copy** and **Open file location** are under **More**.
 Borderless and Fill display also work on apps that draw their own title bar, such as browsers. Dark title bar only
 changes a title bar that Windows draws.
 

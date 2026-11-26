@@ -61,36 +61,56 @@ public sealed class MenuIconTests
             ToolStripMenuItem effects = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == Localization.UiText.T("menu.effects"));
             Assert.False(MenuParts.IsExperimental(effects));
             Assert.DoesNotContain(effects.DropDownItems.OfType<ToolStripMenuItem>(), MenuParts.IsExperimental); // Dark mode left experimental in 1.5.0.
-            ToolStripMenuItem borderless = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == Localization.UiText.T("window.borderless"));
-            Image?[] frames = [.. borderless.DropDownItems.Cast<ToolStripItem>().Select(item => item.Image)];
+            Image?[] frames = [.. menu.Items.OfType<ToolStripMenuItem>()
+                .Where(item => item.Tag is AppCommand.ToggleBorderless or AppCommand.ToggleBorderlessFill).Select(item => item.Image)];
+            Assert.Equal(2, frames.Length);
             Assert.All(frames, Assert.NotNull);
             Assert.Equal(frames.Length, frames.Distinct().Count());
-            foreach (bool places in new[] { true, false })
-            {
-                using var arrange = new ContextMenuStrip();
-                Builder().PopulateArrange(arrange.Items, places);
-                ToolStripMenuItem[] rows = [.. arrange.Items.OfType<ToolStripMenuItem>()];
-                Assert.Empty(rows.Where(row => row.Image is null).Select(row => row.Text));
-                Assert.Equal(rows.Length, rows.Select(row => row.Image).Distinct().Count());
-                Save(arrange, places ? "menu-arrange-places.png" : "menu-arrange.png");
-            }
-            using var opacity = new ContextMenuStrip();
-            Builder().PopulateOpacity(opacity.Items);
-            Save(opacity, "menu-opacity.png");
-            Save(menu, "menu-window.png");
-        });
-
-        static void Save(ToolStripDropDownMenu menu, string name)
-        {
+            using var arrange = new ContextMenuStrip();
+            Builder().PopulateArrange(arrange.Items);
+            ToolStripMenuItem[] rows = [.. arrange.Items.OfType<ToolStripMenuItem>()];
+            Assert.Empty(rows.Where(row => row.Image is null).Select(row => row.Text));
+            Assert.Equal(rows.Length, rows.Select(row => row.Image).Distinct().Count());
             MenuRenderer.Apply(menu);
+            MenuRenderer.Apply(arrange);
             if (Environment.GetEnvironmentVariable("WINSCREEN_LAYOUT_EVIDENCE") is not { } folder) return;
-            menu.CreateControl();
-            menu.PerformLayout();
-            using var picture = new Bitmap(menu.Width, menu.Height);
-            menu.DrawToBitmap(picture, new Rectangle(Point.Empty, menu.Size));
-            Directory.CreateDirectory(folder);
-            picture.Save(Path.Combine(folder, name));
-        }
+            // For checking by eye, in light and dark: the whole menu and its submenus, the toolbar's Window menu with
+            // the buttons it starts with, and its Arrange and opacity menus.
+            try
+            {
+                foreach (string theme in new[] { "light", "dark" })
+                {
+                    MenuStyle.UseTheme(theme);
+                    using var whole = new ContextMenuStrip();
+                    Builder().Populate(whole.Items, false);
+                    Save(whole, $"menu-window-{theme}.png");
+                    foreach (ToolStripMenuItem parent in whole.Items.OfType<ToolStripMenuItem>().Where(item => item.HasDropDownItems))
+                        Save(parent.DropDown, $"menu-window-{theme}-{(parent.Tag is AppCommand command ? command.ToString() : parent.Text)}.png");
+                    using var fromBar = new ContextMenuStrip();
+                    Builder().Populate(fromBar.Items, false);
+                    WindowMenuBuilder.LeaveOut(fromBar.Items, ToolbarPreferences.DefaultButtons().ToHashSet());
+                    Save(fromBar, $"menu-toolbar-{theme}.png");
+                    using var arranged = new ContextMenuStrip();
+                    Builder().PopulateArrange(arranged.Items);
+                    Save(arranged, $"menu-arrange-{theme}.png");
+                    using var opacity = new ContextMenuStrip();
+                    Builder().PopulateOpacity(opacity.Items);
+                    Save(opacity, $"menu-opacity-{theme}.png");
+                }
+            }
+            finally { MenuStyle.UseTheme("system"); }
+
+            void Save(ToolStripDropDown shown, string name)
+            {
+                MenuRenderer.Apply(shown);
+                shown.CreateControl();
+                shown.PerformLayout();
+                using var picture = new Bitmap(shown.Width, shown.Height);
+                shown.DrawToBitmap(picture, new Rectangle(Point.Empty, shown.Size));
+                Directory.CreateDirectory(folder);
+                picture.Save(Path.Combine(folder, string.Concat(name.Split(Path.GetInvalidFileNameChars()))));
+            }
+        });
     }
 
     // The tray's Last window shows the window's own icon, or its program's when it has none.

@@ -315,13 +315,13 @@ public sealed class LocalizationSurfaceTests
                 builder.Populate(menu.Items, false);
                 foreach (string key in new[] { "window.restore", "window.borderless", "pip.open", "menu.more", "menu.effects", "window.arrange" })
                     Assert.Contains(menu.Items.OfType<ToolStripMenuItem>(), item => item.Text == catalog[key]);
-                foreach (string key in new[] { "menu.group.elsewhere", "menu.group.place", "menu.group.look" })
+                foreach (string key in new[] { "menu.group.elsewhere", "menu.group.look" })
                     Assert.Contains(menu.Items.OfType<ToolStripLabel>(), item => item.Text == catalog[key]);
                 ToolStripMenuItem more = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == catalog["menu.more"]);
-                foreach (string key in new[] { "common.copy", "window.openLocation" })
+                foreach (string key in new[] { "window.info", "common.copy", "window.openLocation" })
                     Assert.Contains(more.DropDownItems.OfType<ToolStripMenuItem>(), item => item.Text == catalog[key]);
                 ToolStripMenuItem arrange = menu.Items.OfType<ToolStripMenuItem>().Single(item => item.Text == catalog["window.arrange"]);
-                Assert.Contains(arrange.DropDownItems.OfType<ToolStripMenuItem>(), item => item.Text == catalog["window.info"]);
+                Assert.Equal(catalog["menu.group.place"], arrange.DropDownItems.OfType<Tray.PlacementRow>().Single().Control.AccessibleName);
 
                 var windows = new Windows.WindowController([]);
                 using var pip = new Pip.PipWindow(target.Handle, windows);
