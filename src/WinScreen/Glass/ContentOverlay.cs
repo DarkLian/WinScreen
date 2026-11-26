@@ -261,6 +261,7 @@ internal sealed unsafe class ContentOverlay : Form
             return;
         }
         Restacks++;
+        nint wasNext = NextShown(Handle), wasAbove = PreviousShown(_source);
         // The overlay goes to the window, never the window to the overlay: moving the window under the overlay sent it
         // down the stack, below other windows.
         if (topmost != raised)
@@ -291,7 +292,11 @@ internal sealed unsafe class ContentOverlay : Form
         nint between = NextShown(Handle);
         if (InPlace())
         {
-            Diagnostics.Log.Event("effect.raisedPastWindow", ("ok", true));
+            // What came between, for a report of the window flickering: moving the window itself is the last resort.
+            Diagnostics.Log.Event("effect.raisedPastWindow", ("ok", true), ("next", Diagnostics.LogValue.ClassOf(wasNext)),
+                ("nextOwned", wasNext != 0 && WindowInfo.IsOwnedBy(wasNext, _source)), ("above", Diagnostics.LogValue.ClassOf(wasAbove)),
+                ("aboveOwned", wasAbove != 0 && WindowInfo.IsOwnedBy(wasAbove, _source)), ("topmost", topmost),
+                ("aboveTopmost", wasAbove != 0 && IsTopmost(wasAbove)), ("front", Diagnostics.LogValue.ClassOf(User32.GetForegroundWindow())));
             return;
         }
 
