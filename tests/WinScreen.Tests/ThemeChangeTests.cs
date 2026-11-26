@@ -84,7 +84,7 @@ public sealed class ThemeChangeTests
                 try
                 {
                     Open(app);
-                    var spot = new Rectangle(140, 90, 1000, 700);
+                    var spot = new Rectangle(140, 90, 1100, 700); // Wider than Settings' narrowest, its first width.
                     Current(app).Bounds = spot;
                     Pump();
                     Current(app).Close();
