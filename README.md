@@ -99,7 +99,8 @@ Several can take turns, and they can come from a web link too.
 - Crop to a part of a window you click, and keep it when the window is resized
 - Keep the original hidden and the view updating
 - Mute the original's sound from the view
-- Copy a view's picture or its text, keep a frozen copy, record it, or cover private parts
+- Freeze a view, copy its picture or text, keep a frozen copy, record it, or cover private parts
+- Drag files, pictures or text onto a view to drop them into its app, and drag files or links out of one
 - Use apps through a view: Chrome, Edge, Brave, Vivaldi, Firefox, Electron apps and File Explorer, and other apps, Enhanced hover and middle-click scrolling *(experimental)*
 - Per-view frame limit, opacity, position lock and click-through
 - Minimize views to the taskbar, hover preview and reading lens
@@ -120,6 +121,7 @@ Several can take turns, and they can come from a web link too.
 
 **Effects**
 - Dark mode for any app, keeping each color's hue
+- How bright Dark mode makes pages and text, and how much color it keeps, for every app or each app
 - Glass that fades only the background
 - How much Glass fades, for each app or for a single window
 - Light or dark text over Glass, with or without a soft shadow
@@ -182,6 +184,11 @@ scoop install winscreen
 | More or less see-through | Ctrl+Alt+Down / Up |
 | Switch default see-through on or off | Ctrl+Alt+O |
 | Click-through on or off | Ctrl+Alt+C |
+| Dark mode on or off | Ctrl+Alt+D |
+| Glass on or off | Ctrl+Alt+G |
+| Shrink to a live tile | Ctrl+Alt+W |
+| Crop or uncrop | Ctrl+Alt+X |
+| Remember or forget this program's setup | Ctrl+Alt+Shift+S |
 | Put this window back | Ctrl+Alt+U |
 | Put every window back | Ctrl+Alt+R |
 

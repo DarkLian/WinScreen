@@ -103,7 +103,8 @@ Mehrere können sich abwechseln, und sie können auch von einem Weblink kommen.
 - Auf einen angeklickten Teil eines Fensters zuschneiden, auch wenn das Fenster seine Größe ändert
 - Das Original versteckt halten und die Ansicht trotzdem aktualisieren
 - Den Ton des Originals aus der Ansicht stummschalten
-- Das Bild oder den Text einer Ansicht kopieren, eine eingefrorene Kopie behalten, sie aufnehmen oder private Stellen abdecken
+- Eine Ansicht einfrieren, ihr Bild oder ihren Text kopieren, eine eingefrorene Kopie behalten, sie aufnehmen oder private Stellen abdecken
+- Dateien, Bilder oder Text auf eine Ansicht ziehen, um sie in ihrer App abzulegen, und Dateien oder Links aus einer Ansicht herausziehen
 - Apps über eine Ansicht benutzen: Chrome, Edge, Brave, Vivaldi, Firefox, Electron-Apps und Datei-Explorer, dazu andere Apps, Enhanced hover und Scrollen mit der mittleren Maustaste *(experimentell)*
 - Bildraten-Grenze, Deckkraft, Positionssperre und Klick-Durchlass pro Ansicht
 - Ansichten in die Taskleiste minimieren, Vorschau beim Darüberfahren und eine Leselupe
@@ -124,6 +125,7 @@ Mehrere können sich abwechseln, und sie können auch von einem Weblink kommen.
 
 **Effekte**
 - Dunkelmodus für jede App, der den Farbton jeder Farbe behält
+- Wie hell der Dunkelmodus Seiten und Schrift macht und wie viel Farbe er behält, für alle Apps oder jede App einzeln
 - Glas, das nur den Hintergrund ausblendet
 - Wie stark Glas ausblendet, für jede App oder für ein einzelnes Fenster
 - Helle oder dunkle Schrift über Glas, mit oder ohne weichen Schatten
@@ -188,6 +190,11 @@ scoop install winscreen
 | Mehr oder weniger durchsichtig | Strg+Alt+Unten / Oben |
 | Standard-Durchsichtigkeit ein oder aus | Strg+Alt+O |
 | Klick-Durchlass ein oder aus | Strg+Alt+C |
+| Dunkelmodus ein oder aus | Strg+Alt+D |
+| Glas ein oder aus | Strg+Alt+G |
+| Zu einer Live-Kachel verkleinern | Strg+Alt+W |
+| Zuschneiden oder Zuschnitt aufheben | Strg+Alt+X |
+| Einrichtung dieses Programms merken oder vergessen | Strg+Alt+Umschalt+S |
 | Dieses Fenster zurücksetzen | Strg+Alt+U |
 | Alle Fenster zurücksetzen | Strg+Alt+R |
 

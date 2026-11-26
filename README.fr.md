@@ -105,7 +105,8 @@ Plusieurs peuvent se relayer, et elles peuvent aussi venir d'un lien web.
 - Rogner sur la partie d'une fenêtre sur laquelle vous cliquez, et la garder quand la fenêtre est redimensionnée
 - Garder l'original caché et la vue à jour
 - Couper le son de l'original depuis la vue
-- Copier l'image ou le texte d'une vue, en garder une copie figée, l'enregistrer en vidéo ou masquer des parties privées
+- Figer une vue, copier son image ou son texte, en garder une copie figée, l'enregistrer en vidéo ou masquer des parties privées
+- Glisser des fichiers, des images ou du texte sur une vue pour les déposer dans son application, et en faire sortir des fichiers ou des liens
 - Utiliser des applications dans une vue : Chrome, Edge, Brave, Vivaldi, Firefox, applications Electron et Explorateur de fichiers, ainsi que les autres applications, Enhanced hover et le défilement par clic du milieu *(expérimental)*
 - Limite d'images par seconde, opacité, verrouillage de position et clics traversants pour chaque vue
 - Réduire les vues dans la barre des tâches, aperçu au survol et loupe de lecture
@@ -126,6 +127,7 @@ Plusieurs peuvent se relayer, et elles peuvent aussi venir d'un lien web.
 
 **Effets**
 - Un mode sombre pour n'importe quelle appli, qui garde la teinte de chaque couleur
+- La luminosité des pages et du texte en mode sombre, et la part de couleur qu'il garde, pour toutes les applications ou chacune
 - Un effet verre qui n'atténue que l'arrière-plan
 - L'intensité de l'effet verre, pour chaque application ou pour une seule fenêtre
 - Un texte clair ou foncé avec l'effet verre, avec ou sans ombre douce
@@ -191,6 +193,11 @@ scoop install winscreen
 | Plus ou moins transparent | Ctrl+Alt+Bas / Haut |
 | Activer ou désactiver la transparence par défaut | Ctrl+Alt+O |
 | Activer ou désactiver les clics traversants | Ctrl+Alt+C |
+| Activer ou désactiver le mode sombre | Ctrl+Alt+D |
+| Activer ou désactiver l'effet verre | Ctrl+Alt+G |
+| Réduire en vignette en direct | Ctrl+Alt+W |
+| Rogner ou annuler le rognage | Ctrl+Alt+X |
+| Retenir ou oublier la configuration de ce programme | Ctrl+Alt+Shift+S |
 | Remettre cette fenêtre en place | Ctrl+Alt+U |
 | Remettre toutes les fenêtres en place | Ctrl+Alt+R |
 

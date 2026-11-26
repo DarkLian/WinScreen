@@ -103,7 +103,8 @@ Varios pueden turnarse, y también pueden venir de un enlace web.
 - Recortar a la parte de una ventana en la que haces clic, y mantenerlo aunque la ventana cambie de tamaño
 - Mantener oculta la original y la vista actualizándose
 - Silenciar el sonido de la original desde la vista
-- Copiar la imagen o el texto de una vista, guardar una copia congelada, grabarla o tapar partes privadas
+- Congelar una vista, copiar su imagen o su texto, guardar una copia congelada, grabarla o tapar partes privadas
+- Arrastrar archivos, imágenes o texto a una vista para soltarlos en su aplicación, y sacar de ella archivos o enlaces
 - Usar aplicaciones desde una vista: Chrome, Edge, Brave, Vivaldi, Firefox, aplicaciones Electron y el Explorador de archivos, y otras aplicaciones, Enhanced hover y desplazamiento con el botón central *(experimental)*
 - Límite de fotogramas, opacidad, bloqueo de posición y paso de clics para cada vista
 - Minimizar vistas a la barra de tareas, vista previa al pasar el ratón y lupa de lectura
@@ -124,6 +125,7 @@ Varios pueden turnarse, y también pueden venir de un enlace web.
 
 **Efectos**
 - Modo oscuro para cualquier app, que conserva el tono de cada color
+- Qué tan claras deja el modo oscuro las páginas y el texto, y cuánto color conserva, para todas las aplicaciones o cada una
 - Cristal que difumina solo el fondo
 - Cuánto difumina Cristal, para cada aplicación o para una sola ventana
 - Texto claro u oscuro sobre Cristal, con o sin una sombra suave
@@ -187,6 +189,11 @@ scoop install winscreen
 | Más o menos transparente | Ctrl+Alt+Abajo / Arriba |
 | Activar o desactivar la transparencia predeterminada | Ctrl+Alt+O |
 | Activar o desactivar el paso de clics | Ctrl+Alt+C |
+| Activar o desactivar el modo oscuro | Ctrl+Alt+D |
+| Activar o desactivar Cristal | Ctrl+Alt+G |
+| Reducir a un mosaico en vivo | Ctrl+Alt+W |
+| Recortar o quitar el recorte | Ctrl+Alt+X |
+| Recordar u olvidar la configuración de este programa | Ctrl+Alt+Shift+S |
 | Devolver esta ventana a su estado | Ctrl+Alt+U |
 | Devolver todas las ventanas a su estado | Ctrl+Alt+R |
 

@@ -103,7 +103,8 @@ Vários podem se revezar, e também podem vir de um link da web.
 - Cortar na parte de uma janela em que você clica, e manter o corte quando a janela é redimensionada
 - Manter o original escondido e a visualização atualizada
 - Silenciar o som do original pela visualização
-- Copiar a imagem ou o texto de uma visualização, guardar uma cópia congelada, gravá-la ou cobrir partes privadas
+- Congelar uma visualização, copiar sua imagem ou seu texto, guardar uma cópia congelada, gravá-la ou cobrir partes privadas
+- Arrastar arquivos, imagens ou texto para uma visualização para soltá-los no app dela, e tirar dela arquivos ou links
 - Usar aplicativos por uma visualização: Chrome, Edge, Brave, Vivaldi, Firefox, aplicativos Electron e Explorador de Arquivos, além de outros aplicativos, Enhanced hover e rolagem com o botão do meio *(experimental)*
 - Limite de quadros, opacidade, trava de posição e cliques passantes para cada visualização
 - Minimizar visualizações para a barra de tarefas, prévia ao passar o mouse e lupa de leitura
@@ -124,6 +125,7 @@ Vários podem se revezar, e também podem vir de um link da web.
 
 **Efeitos**
 - Modo escuro para qualquer app, que mantém o tom de cada cor
+- O quanto o modo escuro clareia páginas e texto, e quanto de cor ele mantém, para todos os apps ou cada um
 - Vidro que esmaece só o fundo
 - Quanto o Vidro esmaece, para cada app ou para uma só janela
 - Texto claro ou escuro sobre o Vidro, com ou sem uma sombra suave
@@ -187,6 +189,11 @@ scoop install winscreen
 | Mais ou menos transparente | Ctrl+Alt+Baixo / Cima |
 | Ligar ou desligar a transparência padrão | Ctrl+Alt+O |
 | Ligar ou desligar os cliques passantes | Ctrl+Alt+C |
+| Ligar ou desligar o modo escuro | Ctrl+Alt+D |
+| Ligar ou desligar o Vidro | Ctrl+Alt+G |
+| Encolher para um bloco ao vivo | Ctrl+Alt+W |
+| Cortar ou desfazer o corte | Ctrl+Alt+X |
+| Lembrar ou esquecer a configuração deste programa | Ctrl+Alt+Shift+S |
 | Voltar esta janela ao normal | Ctrl+Alt+U |
 | Voltar todas as janelas ao normal | Ctrl+Alt+R |
 
