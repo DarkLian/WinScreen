@@ -231,7 +231,7 @@ deleted, Settings marks it **(not found)** and Glass shows the next one. It show
 
 Videos play without sound until you turn **Sound** up. Only the window you used last plays sound, and only
 while its app is in front. Videos pause while their window is minimized or on another desktop, behind a game or
-full-screen app, and while Windows saves battery. Each of these can be turned off at the end of Every app's background.
+full-screen app, and while Windows saves battery. Each of these can be turned off under **For every app**.
 
 ### Keep pictures and video solid
 

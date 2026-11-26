@@ -482,7 +482,7 @@ settings.backgrounds.pictures D24C10D37DB0FEEA
 settings.backgrounds.preview 13D61FEA9F174905
 settings.backgrounds.setHelp D32D0B79012381F1
 settings.backgrounds.sound DB2C51409D7A65A5
-settings.backgrounds.soundHelp CF4CC743BB34FCF2
+settings.backgrounds.soundHelp 4492FD29815CDAF2
 settings.backgrounds.soundInFront ED3AF4305B04A9BF
 settings.backgrounds.speed BBB6A2F862F046BA
 settings.backgrounds.stretch 5D7D4DACA250EAC9
@@ -500,6 +500,8 @@ settings.dark.colorsHelp 1B62C3FAC2B20AF1
 settings.dark.detect 213E74467CBD6C29
 settings.dark.page 1186AB253623805A
 settings.dark.text 65B2A617A4F803AF
+settings.effects.allWindows 56FDE1D08306286C
+settings.effects.allWindowsHelp 739B7BF762F84AB6
 settings.effects.background BEE4E7F7A30860DF
 settings.effects.backgroundAbout 20D13AC8E4066768
 settings.effects.backgroundFor 6A6F08E9CF28E07D
@@ -511,7 +513,7 @@ settings.effects.glassAbout 6C32CF86C4AA02F9
 settings.effects.glassFor 2CB0936AD931A158
 settings.effects.help 3C20AB9FB87A1388
 settings.effects.layeredGlass 64E518CE6528270C
-settings.effects.layeredGlassHelp 837EAD6DB79733FF
+settings.effects.layeredGlassHelp 46513B0BDEDF88A4
 settings.effects.shadow 490573C2281112E9
 settings.effects.text 2317E7A1901A6CD7
 settings.effects.textColor F21EF4ABA5AB4E55

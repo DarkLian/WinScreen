@@ -14,7 +14,6 @@ public sealed partial class SettingsWindow
     private readonly SwitchBox _ownDark = new() { Text = T("settings.apps.ownDark"), AutoSize = true };
     private readonly List<Control> _appDarkRows = [];
     private readonly List<Control> _mainDarkRows = [];
-    private readonly List<Control> _mainBackgroundRows = [];
     private Control? _appDarkNote;
     private SettingsCard? _glassCard, _darkCard;
     private readonly List<Control> _backgroundRows = [];
@@ -207,18 +206,16 @@ public sealed partial class SettingsWindow
         _appDarkRows.Add(SettingRow(T("settings.dark.page"), _appDarkPage));
         _appDarkRows.Add(SettingRow(T("settings.dark.text"), _appDarkText));
         _appDarkRows.Add(SettingRow(T("settings.dark.colors"), _appDarkColors));
-        _mainGlassRows.AddRange([_layeredGlass, Note(T("settings.effects.layeredGlassHelp")),
-            SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
+        _mainGlassRows.AddRange([SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.fade"), _glassFade), Note(T("settings.effects.fadeHelp")),
             SettingRow(T("settings.effects.textColor"), _glassTextColor), Note(T("settings.effects.textColorHelp")), _glassShadow,
             Note(T("settings.effects.help"))]);
         _appGlassNote = Note(T("settings.apps.glassHelp"));
         _appDarkNote = Note(T("settings.apps.darkHelp"));
-        _mainDarkRows.AddRange([_detectDark, SettingRow(T("settings.dark.page"), _darkPage), SettingRow(T("settings.dark.text"), _darkText),
+        _mainDarkRows.AddRange([SettingRow(T("settings.dark.page"), _darkPage), SettingRow(T("settings.dark.text"), _darkText),
             SettingRow(T("settings.dark.colors"), _darkColors), Note(T("settings.dark.colorsHelp")), Note(T("settings.effects.help"))]);
-        _mainBackgroundRows.AddRange([_soundInFront, _pauseFullScreen, _pauseSaver]);
         _backgroundEditor = Card(T("settings.backgrounds.everyApp"), false,
-            [Note(T("settings.effects.backgroundAbout")), _ownBackground, .. _backgroundRows, .. _mainBackgroundRows]);
+            [Note(T("settings.effects.backgroundAbout")), _ownBackground, .. _backgroundRows]);
         _glassCard = Card(T("settings.backgrounds.everyApp"), false,
             [Note(T("settings.effects.glassAbout")), .. _mainGlassRows, _ownGlass, _appGlassNote, .. _appGlassRows]);
         _darkCard = Card(T("settings.backgrounds.everyApp"), true,
@@ -248,6 +245,9 @@ public sealed partial class SettingsWindow
         page.Controls.Add(_backgroundEditor);
         page.Controls.Add(_glassCard);
         page.Controls.Add(_darkCard);
+        // Shown whichever app is chosen above: they are the same for all of them.
+        page.Controls.Add(Section(T("settings.effects.allWindows"), Note(T("settings.effects.allWindowsHelp")),
+            _layeredGlass, Note(T("settings.effects.layeredGlassHelp")), _detectDark, _soundInFront, _pauseFullScreen, _pauseSaver));
         page.Controls.Add(Section(T("settings.keptAreas.title"), Note(T("settings.keptAreas.help")), _keptFrame, keptButtons));
         ListBackgrounds(null);
         ListKept();
@@ -663,7 +663,7 @@ public sealed partial class SettingsWindow
             _appGlassNote?.Visible = app is not null;
             _appDarkNote?.Visible = app is not null;
             foreach (Control row in _appGlassRows.Concat(_appDarkRows)) row.Visible = app is not null;
-            foreach (Control row in _mainGlassRows.Concat(_mainDarkRows).Concat(_mainBackgroundRows)) row.Visible = app is null;
+            foreach (Control row in _mainGlassRows.Concat(_mainDarkRows)) row.Visible = app is null;
             ShowGlassApp(app);
         }
         bool own = app is null || _backgroundEdit.OwnOf(app) is not null;

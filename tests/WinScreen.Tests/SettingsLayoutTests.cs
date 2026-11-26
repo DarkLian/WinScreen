@@ -386,7 +386,7 @@ public sealed class SettingsLayoutTests
             tabs.SelectedIndex = tabs.TabPages.Cast<TabPage>().ToList().FindIndex(page => page.Text == "Effects");
             Application.DoEvents();
             string[] Cards() => [.. Descendants(tabs.SelectedTab!).OfType<SettingsCard>().Select(card => card.Text)];
-            Assert.Equal(["Apps", "Background for Every app", "Glass for Every app", "Dark mode for Every app", "Areas to keep"], Cards());
+            Assert.Equal(["Apps", "Background for Every app", "Glass for Every app", "Dark mode for Every app", "For every app", "Areas to keep"], Cards());
             Assert.Contains(Descendants(window).OfType<SwitchBox>(), box => box.Visible && box.Text == UiText.T("settings.dark.detect"));
             // The first video's sound given to the whole set: the list then shows it on both.
             ListBox items = Descendants(window).OfType<ThemedList>().Single(list => list.Visible && list.AccessibleName == UiText.T("settings.backgrounds.items"));
@@ -407,6 +407,10 @@ public sealed class SettingsLayoutTests
             list.SelectedIndex = 1;
             Application.DoEvents();
             Assert.Equal("Dark mode for chrome", Cards()[3]);
+            // What is the same for every app stays in view with an app chosen.
+            Assert.True(Descendants(window).OfType<SwitchBox>().Single(box => box.Text == UiText.T("settings.dark.detect")).Visible);
+            Assert.True(Descendants(window).OfType<SwitchBox>().Single(box => box.Text == UiText.T("settings.effects.layeredGlass")).Visible);
+            Assert.True(Descendants(window).OfType<SwitchBox>().Single(box => box.Text == UiText.T("settings.backgrounds.pauseSaver")).Visible);
             SwitchBox Own(string key) => Descendants(window).OfType<SwitchBox>().Single(box => box.Text == UiText.T(key));
             Assert.False(Own("settings.apps.ownGlass").Checked);
             Assert.True(Own("settings.apps.ownDark").Checked);
@@ -572,7 +576,7 @@ public sealed class SettingsLayoutTests
             Assert.False(Switch("settings.apps.ownGlass").Visible);
             window.AddApp("Notes.exe");
             Pump();
-            Assert.False(Switch("settings.effects.layeredGlass").Visible);
+            Assert.True(Switch("settings.effects.layeredGlass").Visible); // The same for every app, so shown for each.
             Assert.True(Switch("settings.apps.ownGlass").Visible);
             Descendants(window).OfType<BackgroundList>().Single().SelectedIndex = 0;
             Pump();
