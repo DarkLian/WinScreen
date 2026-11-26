@@ -1608,8 +1608,11 @@ public sealed partial class TrayApplication : ApplicationContext
                 yield return dialog.Handle;
         foreach (PipWindow view in _viewsInOrder)
             if (!view.IsDisposed)
+            {
+                foreach (nint window in view.PickerWindows) yield return window;
                 foreach (nint window in WinScreen.Windows.TopLayer.OpenDropDowns(view.ContextMenuStrip))
                     yield return window;
+            }
         if (_windowMenu is { IsDisposed: false })
             foreach (nint window in WinScreen.Windows.TopLayer.OpenDropDowns(_windowMenu.Popup))
                 yield return window;
