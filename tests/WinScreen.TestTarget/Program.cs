@@ -386,6 +386,39 @@ internal sealed partial class TargetForm : Form
     private static partial nint CreateWindowEx(uint exStyle, string className, string title, uint style,
         int x, int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowClass
+    {
+        public uint Style;
+        public nint Procedure;
+        public int ClassExtra, WindowExtra;
+        public nint Instance, Icon, Cursor, Background, MenuName, ClassName;
+    }
+
+    [LibraryImport("user32.dll", EntryPoint = "RegisterClassW")]
+    private static partial ushort RegisterClass(in WindowClass windowClass);
+    [LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial nint GetModuleHandle(string? name);
+    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial nint GetProcAddress(nint module, string name);
+
+    private static string? _winUiContentClass;
+    private static string WinUiContentClass()
+    {
+        const string name = "Windows.UI.Composition.DesktopWindowContentBridge";
+        if (_winUiContentClass is null)
+        {
+            RegisterClass(new WindowClass
+            {
+                Procedure = GetProcAddress(GetModuleHandle("user32.dll"), "DefWindowProcW"),
+                Instance = GetModuleHandle(null),
+                ClassName = Marshal.StringToHGlobalUni(name), // Kept for the class's life, the process's.
+            });
+            _winUiContentClass = name;
+        }
+        return _winUiContentClass;
+    }
+
     /// <summary>A borderless window has no title bar to ask about, so the top strip claims to be one.</summary>
     public void RecordMessages()
     {
@@ -461,6 +494,10 @@ internal sealed partial class TargetForm : Form
         // A static control is transparent to the pointer, menu bar and all; the dialog class leaves hit tests to
         // Windows, as an ordinary app window does.
         nint plain = CreateWindowEx(0, menu ? "#32770" : "STATIC", "Plain test window", style, b[0], b[1], b[2], b[3], 0, 0, 0, 0);
+        // A child of the class WinUI puts its content in (Task Manager has them), drawing nothing of its own.
+        if (parts.Contains("winui"))
+            CreateWindowEx(0, WinUiContentClass(), "", 0x50000000 /* WS_CHILD | WS_VISIBLE */, 0, 0, b[2], b[3], plain, 0,
+                GetModuleHandle(null), 0);
         if (menu)
         {
             // A standard menu bar, as older desktop apps have: "File" and "Edit", each with one item.

@@ -33,6 +33,8 @@ public sealed record WindowRecord(
 
     public bool DisabledWhileHidden { get; init; }
 
+    public bool FrameDrawingOff { get; init; }
+
     // Only its height is used, so moves made since are kept.
     public int[]? RollUpPlacement { get; init; }
 }

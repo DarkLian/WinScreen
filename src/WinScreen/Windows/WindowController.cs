@@ -77,6 +77,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         public bool Cropped { get; set; }
         [NotJournalled("Windows 11's backdrop and corners a crop turned off; after a crash the app's own come back when it next opens.")]
         public (int Backdrop, int Corners)? LookBeforeCrop { get; set; }
+        public bool FrameDrawingOff { get; set; }
         [NotJournalled("Transient: how often another program took the pin away in the current run of takings.")]
         public int PinRestores { get; set; }
         [NotJournalled("Transient: when the current run of takings began.")]
@@ -334,10 +335,40 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_SYSTEMBACKDROP_TYPE, Dwmapi.DWMSBT_NONE, sizeof(int));
         Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_WINDOW_CORNER_PREFERENCE, Dwmapi.DWMWCP_DONOTROUND, sizeof(int));
         Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_BORDER_COLOR, Dwmapi.DWMWA_COLOR_NONE, sizeof(int));
+        StopFrameDrawing(window, state);
+    }
+
+    // Windows stops drawing the frame of a window with a shape, but not of a WinUI one that draws its own title bar
+    // (Task Manager): its whole frame showed around the part kept, in the title bar's colour with its buttons. Not for
+    // others: with Windows' title bar it would take on the old look and Windows puts its own shape over the crop, and
+    // Chrome does the same. A minimized window can't be told apart, so it waits until it comes back.
+    private static bool StopFrameDrawing(nint window, ChangedWindow state)
+    {
+        if (state.FrameDrawingOff || User32.IsIconic(window) || !DrawsOwnTitleBar(window) ||
+            User32.FindWindowEx(window, 0, WinUiContent, null) == 0 ||
+            Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_NCRENDERING_ENABLED, out int drawn, sizeof(int)) != 0 || drawn == 0 ||
+            Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_NCRENDERING_POLICY, Dwmapi.DWMNCRP_DISABLED, sizeof(int)) != 0)
+            return false;
+        state.FrameDrawingOff = true;
+        return true;
+    }
+
+    private const string WinUiContent = "Windows.UI.Composition.DesktopWindowContentBridge";
+
+    private static bool DrawsOwnTitleBar(nint window)
+    {
+        var corner = new NativePoint();
+        return User32.GetWindowRect(window, out Rect whole) && User32.ClientToScreen(window, ref corner) &&
+            corner.Y - whole.Top < User32.GetSystemMetricsForDpi(CaptionMetric, User32.GetDpiForWindow(window)) / 2;
     }
 
     private static void RestoreFrameLook(nint window, ChangedWindow state)
     {
+        if (state.FrameDrawingOff)
+        {
+            Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_NCRENDERING_POLICY, Dwmapi.DWMNCRP_USEWINDOWSTYLE, sizeof(int));
+            state.FrameDrawingOff = false;
+        }
         if (state.LookBeforeCrop is not { } look) return;
         state.LookBeforeCrop = null;
         Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_SYSTEMBACKDROP_TYPE, look.Backdrop, sizeof(int));
@@ -632,9 +663,14 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     }
 
     // A crop keeps its rectangle through a resize (one made from a control follows the control instead).
-    private static void StillCropped(nint window, ChangedWindow state)
+    private void StillCropped(nint window, ChangedWindow state)
     {
-        if (!state.Cropped || User32.IsIconic(window) || WindowInfo.ShapeOf(window) is not null) return;
+        if (!state.Cropped || User32.IsIconic(window)) return;
+        if (WindowInfo.ShapeOf(window) is not null)
+        {
+            if (StopFrameDrawing(window, state)) TrySaveJournal();
+            return;
+        }
         state.Cropped = false;
         RestoreFrameLook(window, state);
         Diagnostics.Log.Event("crop.ended",("program", Diagnostics.LogValue.ProgramOf(window)));
@@ -1106,6 +1142,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                     OriginalLayeredFlags = record.LayeredFlags,
                     Pinned = true,
                     Cropped = record.Cropped,
+                    FrameDrawingOff = record.FrameDrawingOff,
                     PlacementBeforePeek = record.Placement is null ? null : ToPlacement(record.Placement),
                     PlacementBeforeRollUp = record.RollUpPlacement is null ? null : ToPlacement(record.RollUpPlacement),
                     BorderlessBits = record.StyleBits,
@@ -1197,6 +1234,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             OriginalDarkTitleBar = state.OriginalDarkTitleBar,
             BorderHidden = state.BorderHidden,
             DisabledWhileHidden = state.DisabledWhileHidden,
+            FrameDrawingOff = state.FrameDrawingOff,
         };
     }
 

@@ -109,6 +109,7 @@ public sealed class WindowAppearanceTests
         {
             windows.Crop(window, new Rectangle(0, 0, 150, 100));
             Assert.Equal(Dwmapi.DWMSBT_NONE, Backdrop(window));
+            Assert.Equal(new Rectangle(0, 0, 150, 100), WindowInfo.ShapeOf(window));
             windows.RemoveCrop(window);
             Assert.Equal(2, Backdrop(window));
             windows.Crop(window, new Rectangle(0, 0, 150, 100));
@@ -119,6 +120,83 @@ public sealed class WindowAppearanceTests
 
         static int Backdrop(nint window) =>
             Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_SYSTEMBACKDROP_TYPE, out int value, sizeof(int)) == 0 ? value : -1;
+    }
+
+    /// <summary>
+    /// Windows stops drawing the frame of a window with a shape, but a cropped Task Manager kept its whole frame, in
+    /// the title bar's colour with its buttons, around the part kept (the owner, 27 Nov). A window without Windows'
+    /// title bar, with a WinUI content child and asking for its frame always, stands in for it: the frame is off while
+    /// cropped, and Windows' own choice is back after. Without the child it is left alone, as Chrome is.
+    /// </summary>
+    [Fact]
+    public void A_crop_stops_the_frame_a_window_would_keep_drawing_around_it()
+    {
+        using var target = new TargetProcess(Spot);
+        nint window = target.CreatePlainWindow(Spot, winUi: true);
+        // A second one, left alone, shows what Windows chooses for such a window: a crop's end goes back to that.
+        nint untouched = target.CreatePlainWindow(new Rectangle(Spot.X + 40, Spot.Y + 40, Spot.Width, Spot.Height), winUi: true);
+        nint other = target.CreatePlainWindow(new Rectangle(Spot.X + 80, Spot.Y + 80, Spot.Width, Spot.Height));
+        const int Enabled = 2; // DWMNCRP_ENABLED
+        foreach (nint each in new[] { window, other })
+            Assert.Equal(0, Dwmapi.DwmSetWindowAttribute(each, Dwmapi.DWMWA_NCRENDERING_POLICY, Enabled, sizeof(int)));
+        Assert.True(FrameDrawn(window));
+        var windows = new WindowController([]);
+        try
+        {
+            windows.Crop(window, new Rectangle(40, 40, 150, 100));
+            Assert.False(FrameDrawn(window));
+            Assert.Equal(new Rectangle(40, 40, 150, 100), WindowInfo.ShapeOf(window));
+            windows.RemoveCrop(window);
+            Assert.Equal(FrameDrawn(untouched), FrameDrawn(window));
+            windows.Crop(window, new Rectangle(40, 40, 150, 100));
+            Assert.False(FrameDrawn(window));
+            windows.RestoreAll();
+            Assert.Equal(FrameDrawn(untouched), FrameDrawn(window));
+            Assert.Null(WindowInfo.ShapeOf(window));
+
+            windows.Crop(other, new Rectangle(40, 40, 150, 100));
+            Assert.True(FrameDrawn(other));
+        }
+        finally { windows.RestoreAll(); }
+    }
+
+    private static bool FrameDrawn(nint window) =>
+        Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_NCRENDERING_ENABLED, out int value, sizeof(int)) == 0 && value != 0;
+
+    /// <summary>
+    /// Chrome draws its own title bar too, but answered its frame going by putting its own shape over the whole window
+    /// (27 Nov, this test, before the frame was turned off only for WinUI windows): it keeps its frame and its crop.
+    /// </summary>
+    [Fact]
+    public void A_cropped_browser_keeps_its_crop_and_its_frame()
+    {
+        string chrome = Path.Combine(AppContext.BaseDirectory, "chrome-win64", "chrome.exe");
+        if (!File.Exists(chrome)) { Skipped.Because("The portable Chrome isn't in the test output."); return; }
+        var (browser, window, root) = BrowserInputTests.Open("<!doctype html><title>CropFrame</title><body style='background:#1e6'>",
+            "CropFrame", app: false, chrome);
+        var windows = new WindowController([]);
+        try
+        {
+            if (User32.IsZoomed(window)) User32.ShowWindow(window, User32.SW_RESTORE);
+            User32.SetWindowPos(window, 0, Spot.Left, Spot.Top, Spot.Width, Spot.Height, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+            TestDesktop.Pump(500);
+            bool before = FrameDrawn(window);
+            var part = new Rectangle(60, 120, 200, 150);
+            windows.Crop(window, part);
+            TestDesktop.Pump(1500);
+            Assert.Equal(part, WindowInfo.ShapeOf(window));
+            Assert.True(windows.IsCropped(window));
+            Assert.Equal(before, FrameDrawn(window));
+            windows.RemoveCrop(window);
+            TestDesktop.Pump(500);
+            Assert.Null(WindowInfo.ShapeOf(window));
+            Assert.Equal(before, FrameDrawn(window));
+        }
+        finally
+        {
+            windows.RestoreAll();
+            BrowserInputTests.Close(browser, root);
+        }
     }
 
     [Theory]

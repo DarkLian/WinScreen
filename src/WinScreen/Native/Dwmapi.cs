@@ -26,6 +26,10 @@ internal static partial class Dwmapi
     public const uint DWM_TNP_RECTSOURCE = 0x2;
     public const uint DWM_TNP_OPACITY = 0x4;
     public const uint DWM_TNP_VISIBLE = 0x8;
+    public const int DWMWA_NCRENDERING_ENABLED = 1;
+    public const int DWMWA_NCRENDERING_POLICY = 2;
+    public const int DWMNCRP_USEWINDOWSTYLE = 0;
+    public const int DWMNCRP_DISABLED = 1;
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     public const int DWMWA_CLOAKED = 14;
     public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
