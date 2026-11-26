@@ -6,7 +6,8 @@
 
 After you install WinScreen, its icon sits in the system tray (look under the small arrow if you don't see it).
 
-- **Click** the icon to open Settings.
+- **Click** the icon to open Settings. You can also pin WinScreen to the taskbar or open it from Start: that opens
+  Settings too, and starts WinScreen first if it isn't running.
 - **Right-click** it for every command, including putting windows back and exiting. Menus stay open while you turn
   things on and off, so you can change several at once.
 - **Hotkeys** work on the window you're using. The tray menu works on the window named under **Last window**.

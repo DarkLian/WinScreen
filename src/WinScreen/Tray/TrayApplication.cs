@@ -183,6 +183,12 @@ public sealed partial class TrayApplication : ApplicationContext
             Run((AppCommand)id, TargetOf(User32.GetForegroundWindow()));
         };
         _hotkeys.CloseRequested += ExitThread;
+        // WinScreen started again, from its shortcut or the taskbar.
+        if (_role != AppRole.Helper)
+        {
+            Launch.LetIn(_hotkeys.Handle);
+            _hotkeys.OpenSettingsRequested += () => _toolbar.BeginInvoke(() => OpenSettings());
+        }
         // A command from the command line runs just after its message is answered, never inside it (see CommandLine).
         _hotkeys.CopyDataReceived = data =>
         {

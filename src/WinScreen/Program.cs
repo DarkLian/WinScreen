@@ -69,11 +69,18 @@ internal static class Program
 
         AppRole role = AppRoles.Choose(Native.ProcessInfo.SelfElevated, Native.ProcessInfo.SplitToken, settings.RunAsAdministrator,
             settings.AdministratorHelper, arguments.Contains(AppRoles.SingleArgument));
-        using var singleInstance = new Mutex(true, AppRoles.MutexName(role), out bool isFirstCopy);
+        bool fromShortcut = Launch.FromShortcut();
+        Mutex? singleInstance = null;
+        bool isFirstCopy;
+        // One made by a copy running as administrator may be closed to this one: that copy is running.
+        try { singleInstance = new Mutex(true, AppRoles.MutexName(role), out isFirstCopy); }
+        catch (UnauthorizedAccessException) { isFirstCopy = false; }
+        using Mutex? held = singleInstance;
         if (!isFirstCopy)
         {
             // A second helper (the sign-in task and the ordinary copy both started one) just goes.
-            if (role != AppRole.Helper) Settings.ThemedMessage.Show(null, T("errors.app.alreadyRunning"), "WinScreen");
+            if (role != AppRole.Helper && !Launch.AskRunningCopy())
+                Settings.ThemedMessage.Show(null, T("errors.app.alreadyRunning"), "WinScreen");
             return;
         }
 
@@ -82,7 +89,7 @@ internal static class Program
         // With the helper chosen this copy stays as it is and starts the helper instead (TrayApplication).
         if (settings.RunAsAdministrator && !Native.ProcessInfo.SelfElevated && Native.ProcessInfo.CanElevate &&
             !AppRoles.WantsHelper(role, settings.RunAsAdministrator, settings.AdministratorHelper, Native.ProcessInfo.CanElevate) &&
-            !arguments.Contains(Elevation.ElevatedArgument) && Elevation.StartElevatedCopy())
+            !arguments.Contains(Elevation.ElevatedArgument) && Elevation.StartElevatedCopy(fromShortcut))
             return;
 
         // Only the copy that carries on writes the log: not a second copy, nor one handing over to an elevated one.
@@ -120,7 +127,8 @@ internal static class Program
             Application.Exit();
         };
 
-        Application.Run(new TrayApplication(windows, settings, settingsPath, sound, Elevation.SettingsPage(arguments), role));
+        Application.Run(new TrayApplication(windows, settings, settingsPath, sound,
+            Elevation.SettingsPage(arguments) ?? (fromShortcut ? 0 : null), role));
     }
 
     private static bool RecoverLeftWindows(AppRole role)

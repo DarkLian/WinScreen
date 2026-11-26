@@ -582,6 +582,79 @@ public sealed class AppEndToEndTests : IDisposable
         Assert.False(_app.HasExited, "The new copy closed.");
     }
 
+    private static nint SettingsOf(Process app) =>
+        Desktop.FindProcessWindow(app.Id, text => text.Contains(
+            WinScreen.Localization.UiText.Translate("settings.window.title", WinScreen.Localization.UiText.GetCatalog("en"),
+                WinScreen.Localization.UiText.GetCatalog("en")), StringComparison.Ordinal));
+
+    /// <summary>
+    /// Started by hand from a shortcut (the taskbar, Start), WinScreen opens Settings; started without one (sign-in,
+    /// an update, the installer) it stays in the notification area. The owner pins WinScreen to the taskbar for this
+    /// (27 Nov).
+    /// </summary>
+    [Fact]
+    public void Started_from_a_shortcut_it_opens_Settings()
+    {
+        Assert.True(SettingsOf(_app) == 0, "Started without a shortcut, WinScreen opened Settings.");
+        Desktop.PostMessage(_appWindow, User32.WM_CLOSE, 0, 0);
+        Assert.True(_app.WaitForExit(4000));
+        _app.Dispose();
+        new AppSettings { WelcomeShown = true }.Save(Path.Combine(_data, "settings.json"));
+        Setup.QuietNotices(_data);
+
+        string link = Path.Combine(_data, "WinScreen.lnk");
+        using (var make = Process.Start(new ProcessStartInfo("powershell.exe",
+                   $"-NoProfile -Command \"$l = (New-Object -ComObject WScript.Shell).CreateShortcut('{link}'); $l.TargetPath = '{Program}'; $l.Save()\"")
+               { UseShellExecute = false, CreateNoWindow = true })!)
+            Assert.True(make.WaitForExit(20000) && File.Exists(link), "The shortcut wasn't made.");
+        // Opened the way the taskbar opens a pinned program, with this test's data folder passed on.
+        string? before = Environment.GetEnvironmentVariable("WINSCREEN_DATA");
+        Environment.SetEnvironmentVariable("WINSCREEN_DATA", _data);
+        try { Process.Start(new ProcessStartInfo(link) { UseShellExecute = true })?.Dispose(); }
+        finally { Environment.SetEnvironmentVariable("WINSCREEN_DATA", before); }
+
+        _appWindow = WaitForAppWindow();
+        User32.GetWindowThreadProcessId(_appWindow, out uint id);
+        _app = Process.GetProcessById((int)id);
+        Assert.True(Desktop.WaitFor(() => SettingsOf(_app) != 0, 8000), "Started from a shortcut, WinScreen didn't open Settings.");
+    }
+
+    /// <summary>
+    /// Started while it already runs, WinScreen opens Settings in the copy running and goes, instead of a box saying it
+    /// is running. Settings closed and minimized both come back.
+    /// </summary>
+    [Fact]
+    public void Started_again_it_opens_Settings_in_the_copy_running()
+    {
+        for (int round = 0; round < 2; round++)
+        {
+            var start = new ProcessStartInfo(Program) { UseShellExecute = false };
+            start.Environment["WINSCREEN_DATA"] = _data;
+            using (Process second = Process.Start(start)!)
+                Assert.True(second.WaitForExit(8000), $"Round {round}: the second copy stayed (a box saying WinScreen is running?).");
+            nint settings = 0;
+            Assert.True(Desktop.WaitFor(() => (settings = SettingsOf(_app)) != 0, 8000), $"Round {round}: Settings didn't open.");
+            if (round == 0) User32.ShowWindow(settings, 6); // SW_MINIMIZE
+            Assert.True(round == 1 || Desktop.WaitFor(() => IsIconic(settings), 3000), "Settings didn't minimize.");
+            if (round == 1) Assert.False(IsIconic(settings), "Started again, WinScreen left Settings minimized.");
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsIconic(nint window);
+
+    /// <summary>
+    /// A copy running as administrator still hears a copy that isn't, as from the taskbar: Windows keeps every other
+    /// message from that copy out.
+    /// </summary>
+    [Fact]
+    public void Started_again_without_administrator_rights_it_opens_Settings_in_an_administrator_copy()
+    {
+        if (!ProcessInfo.SelfElevated) { Skipped.Because("Only a run as administrator has an administrator copy to reach."); return; }
+        Assert.True(UnelevatedStart.Run(Program), "The copy without administrator rights didn't start.");
+        Assert.True(Desktop.WaitFor(() => SettingsOf(_app) != 0, 10000), "The administrator copy didn't open Settings.");
+    }
+
     /// <summary>
     /// Turning Glass or Dark on keeps the window where it is among the others: the effect is put above it, it isn't
     /// moved under the effect. Before, Windows sometimes placed the effect below other windows, and the window was

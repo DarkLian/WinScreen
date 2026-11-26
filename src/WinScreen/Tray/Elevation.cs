@@ -83,14 +83,15 @@ internal static class Elevation
     public const string ElevatedArgument = "--elevated";
     public const string AfterArgument = "--after";
 
-    public static bool StartElevatedCopy()
+    public static bool StartElevatedCopy(bool openSettings = false)
     {
         try
         {
             Process.Start(new ProcessStartInfo(Environment.ProcessPath!)
             {
                 UseShellExecute = true, Verb = "runas",
-                Arguments = $"{ElevatedArgument} {AfterArgument} {Environment.ProcessId}",
+                Arguments = $"{ElevatedArgument} {AfterArgument} {Environment.ProcessId}" +
+                            (openSettings ? $" {SettingsPageArgument} 0" : ""),
             })?.Dispose();
             return true;
         }

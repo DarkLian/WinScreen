@@ -25,6 +25,8 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
 
     internal Func<nint, nint?>? CopyDataReceived { get; set; }
 
+    internal event Action? OpenSettingsRequested;
+
     internal bool IsRegistered(int command) => _dispatch.ContainsValue(command);
 
     public bool TryRegister(int id, uint modifiers, Keys key, out string? failure)
@@ -155,6 +157,9 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
                 return;
             case User32.WM_COPYDATA when CopyDataReceived?.Invoke(m.LParam) is { } answer:
                 m.Result = answer;
+                return;
+            case var message when message == Tray.Launch.OpenSettings && message != 0:
+                OpenSettingsRequested?.Invoke();
                 return;
         }
 
