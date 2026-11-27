@@ -73,12 +73,6 @@ Die Symbolleiste auf der Titelleiste: das Fenster im Vordergrund fixieren, in ei
   <img src="docs/assets/demos/toolbar.gif" width="880" alt="Die Symbolleiste auf der Titelleiste: das Fenster im Vordergrund fixieren, in eine Ecke setzen, durchsichtig machen oder Klicks durchlassen und mit Alt+Ziehen verschieben.">
 </p>
 
-Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein, oder verkleinere ein Fenster zu einer kleinen Live-Kachel.
-
-<p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein, oder verkleinere ein Fenster zu einer kleinen Live-Kachel.">
-</p>
-
 ## Apps über eine kleine Ansicht benutzen
 
 Drück **Strg+Alt+P** auf einem Fenster, und du bekommst eine kleine Live-Ansicht davon, die immer im Vordergrund bleibt.

@@ -71,12 +71,6 @@
   <img src="docs/assets/demos/toolbar.gif" width="880" alt="視窗標題列上的工具列：置頂、放到角落、半透明或點擊穿透，按住 Alt 拖曳就能移動視窗。">
 </p>
 
-把檢視裁切到你要的部分並放大，或把視窗縮成一個小小的即時縮圖。
-
-<p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="把檢視裁切到你要的部分並放大，或把視窗縮成一個小小的即時縮圖。">
-</p>
-
 ## 透過小檢視使用應用程式
 
 在視窗上按 **Ctrl+Alt+P**，即可開啟一個置頂的小即時檢視。在檢視選單中開啟**互動**，就能直接在檢視裡使用應用程式：

@@ -73,12 +73,6 @@ La barra de herramientas en la barra de título: fija la ventana encima, colóca
   <img src="docs/assets/demos/toolbar.gif" width="880" alt="La barra de herramientas en la barra de título: fija la ventana encima, colócala en una esquina, hazla translúcida o deja pasar los clics, y muévela con Alt+arrastrar.">
 </p>
 
-Recorta una vista a la parte que quieres y amplíala, o reduce una ventana a un pequeño mosaico en vivo.
-
-<p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Recorta una vista a la parte que quieres y amplíala, o reduce una ventana a un pequeño mosaico en vivo.">
-</p>
-
 ## Usa aplicaciones desde una vista pequeña
 
 Pulsa **Ctrl+Alt+P** sobre una ventana para tener una pequeña vista en vivo de ella que se queda encima. Activa

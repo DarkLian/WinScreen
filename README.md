@@ -71,12 +71,6 @@ The toolbar on a window's title bar: pin it, put it in a corner, make it see-thr
   <img src="docs/assets/demos/toolbar.gif" width="880" alt="The toolbar on a window's title bar: pin it, put it in a corner, make it see-through or click-through, and move it with Alt+drag.">
 </p>
 
-Crop a view to the part you want and zoom in, or shrink a window to a small live tile.
-
-<p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Crop a view to the part you want and zoom in, or shrink a window to a small live tile.">
-</p>
-
 ## Use apps through a small view
 
 Press **Ctrl+Alt+P** on a window for a small live view of it that stays on top. Turn on **Interactive** in the view's

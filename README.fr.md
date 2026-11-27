@@ -73,12 +73,6 @@ La barre d'outils sur la barre de titre : garder la fenêtre au premier plan, la
   <img src="docs/assets/demos/toolbar.gif" width="880" alt="La barre d'outils sur la barre de titre : garder la fenêtre au premier plan, la placer dans un coin, la rendre translucide ou laisser passer les clics, et la déplacer avec Alt+glisser.">
 </p>
 
-Rognez une vue sur la partie qui vous intéresse et zoomez, ou réduisez une fenêtre en petite vignette en direct.
-
-<p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Rognez une vue sur la partie qui vous intéresse et zoomez, ou réduisez une fenêtre en petite vignette en direct.">
-</p>
-
 ## Utilisez vos applications dans une petite vue
 
 Appuyez sur **Ctrl+Alt+P** sur une fenêtre pour en obtenir une petite vue en direct qui reste au premier plan. Activez

@@ -71,12 +71,6 @@
   <img src="docs/assets/demos/toolbar.gif" width="880" alt="窗口标题栏上的工具栏：置顶、放到角落、半透明或点击穿透，按住 Alt 拖动就能移动窗口。">
 </p>
 
-把视图裁剪到你要的部分并放大，或把窗口缩成一个小小的实时缩略图。
-
-<p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="把视图裁剪到你要的部分并放大，或把窗口缩成一个小小的实时缩略图。">
-</p>
-
 ## 通过小视图使用应用
 
 在窗口上按 **Ctrl+Alt+P**，即可打开一个置顶的小实时视图。在视图菜单中开启**交互**，就能直接在视图里使用应用：

@@ -73,12 +73,6 @@ A barra de ferramentas na barra de título: deixe a janela sempre visível, colo
   <img src="docs/assets/demos/toolbar.gif" width="880" alt="A barra de ferramentas na barra de título: deixe a janela sempre visível, coloque-a num canto, deixe-a translúcida ou deixe os cliques passarem, e mova com Alt+arrastar.">
 </p>
 
-Corte uma visualização na parte que você quer e amplie, ou encolha uma janela para um pequeno bloco ao vivo.
-
-<p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Corte uma visualização na parte que você quer e amplie, ou encolha uma janela para um pequeno bloco ao vivo.">
-</p>
-
 ## Use aplicativos por uma pequena visualização
 
 Pressione **Ctrl+Alt+P** em uma janela para ter uma pequena visualização ao vivo dela, que fica sempre visível. Ative

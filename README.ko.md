@@ -73,12 +73,6 @@
   <img src="docs/assets/demos/toolbar.gif" width="880" alt="창 제목 표시줄의 도구 모음: 항상 위에 고정하고, 모서리에 놓고, 반투명이나 클릭 통과로 만들고, Alt를 누른 채 끌어서 옮길 수 있습니다.">
 </p>
 
-작은 화면을 원하는 부분만 남기고 잘라 확대하거나, 창을 작은 실시간 타일로 줄일 수 있습니다.
-
-<p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="작은 화면을 원하는 부분만 남기고 잘라 확대하거나, 창을 작은 실시간 타일로 줄일 수 있습니다.">
-</p>
-
 ## 작은 화면으로 앱 사용하기
 
 창에서 **Ctrl+Alt+P**를 누르면 항상 위에 떠 있는 작은 실시간 화면이 생깁니다. 화면 메뉴에서 **Interactive**를 켜면
