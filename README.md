@@ -96,7 +96,7 @@ Several can take turns, and they can come from a web link too.
 - See-through, with a default level, Ctrl+Alt+wheel under the pointer, and solid again while the mouse is over it
 - Click-through
 - Borderless, fill the display, dark title bar
-- Remember a program's setup for its windows, matched by title or class, once or every time
+- Remember an app's setup for its windows, matched by title or class, once or every time
 
 **Picture-in-Picture**
 - Live views of a window, a whole display or part of the screen
@@ -150,7 +150,7 @@ Several can take turns, and they can come from a web link too.
 - A command line for scripts
 - Settings and menus that work with the keyboard alone
 - Settings that look like Windows 11's, in light or dark
-- Programs to leave alone, or the only ones to work on
+- Apps to leave alone, or the only ones to work on
 - Pauses during games and full-screen apps
 - Runs as administrator when you want it to, for apps such as Task Manager
 - Put everything back with Ctrl+Alt+R; windows come back even if WinScreen stops unexpectedly
@@ -194,7 +194,7 @@ scoop install winscreen
 | Glass on or off | Ctrl+Alt+G |
 | Shrink to a live tile | Ctrl+Alt+W |
 | Crop or uncrop | Ctrl+Alt+X |
-| Remember or forget this program's setup | Ctrl+Alt+Shift+S |
+| Remember or forget this app's setup | Ctrl+Alt+Shift+S |
 | Put this window back | Ctrl+Alt+U |
 | Put every window back | Ctrl+Alt+R |
 | See your shortcuts | Hold Ctrl+Alt |

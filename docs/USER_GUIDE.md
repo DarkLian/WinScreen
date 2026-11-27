@@ -34,7 +34,7 @@ Hold **Ctrl+Alt** for a moment, anywhere, to see your shortcuts. Keep holding th
 | Glass | Ctrl+Alt+G |
 | Shrink to a live tile | Ctrl+Alt+W |
 | Crop or uncrop | Ctrl+Alt+X |
-| Remember or forget this program's setup | Ctrl+Alt+Shift+S |
+| Remember or forget this app's setup | Ctrl+Alt+Shift+S |
 | Put this window back | Ctrl+Alt+U |
 | Put every window back | Ctrl+Alt+R |
 
@@ -51,7 +51,7 @@ Other commands, like moving a window to a corner, have no shortcut until you giv
 
 If you can't reach a click-through window, press **Ctrl+Alt+R** to put every window back.
 
-If another program takes "always on top" away from a pinned window, WinScreen pins it again. If an app changes its
+If another app takes "always on top" away from a pinned window, WinScreen pins it again. If an app changes its
 own transparency, WinScreen lets go of the opacity and click-through it set, and tells you.
 
 In **Settings → Appearance** you can change the default opacity, give pinned windows a colored border, and turn on
@@ -132,13 +132,13 @@ turn on **Always show title bar** in **Options**, or for every new view in **Set
   On some newer controls, in Store apps and parts of File Explorer, you can click, right-click and scroll,
   but not hover, drag or select.
   By default, browser pointer shapes work, but hover effects and tooltips may not stay active.
-  **Enhanced hover (experimental)** keeps hover effects showing while you use an app through a view. WinScreen turns it on for the apps it works well with: Chrome, Edge, Brave and Vivaldi; Firefox; and apps like VS Code and Discord. In **Settings → Picture-in-Picture → Using apps through a view**, turn off **Choose for me** to pick the apps yourself, including File Explorer and any program you add, and each view's menu can change it for that view. It needs a 64-bit Intel or AMD PC. See the [compatibility table](FEATURE_COMPATIBILITY.md) for what has been tested. Native tooltips may still be unavailable.
+  **Enhanced hover (experimental)** keeps hover effects showing while you use an app through a view. WinScreen turns it on for the apps it works well with: Chrome, Edge, Brave and Vivaldi; Firefox; and apps like VS Code and Discord. In **Settings → Picture-in-Picture → Using apps through a view**, turn off **Choose for me** to pick the apps yourself, including File Explorer and any app you add, and each view's menu can change it for that view. It needs a 64-bit Intel or AMD PC. See the [compatibility table](FEATURE_COMPATIBILITY.md) for what has been tested. Native tooltips may still be unavailable.
   With Enhanced hover on, a browser's own middle-click scrolling works in the view, and so does VS Code's or Discord's.
   Where it doesn't, enable **Middle-click scrolling** in this view (or for new views in **Settings → Picture-in-Picture**), middle-click, then move away from that point. Middle-click again, left-click or press Escape to stop. Leave it off to keep the app's normal middle-click actions.
   A few apps can't be hidden, such as PowerShell ISE, and WinScreen tells you.
 - **Use it, then hide again** is for an app that doesn't work well through a view, such as a game.
   The original window comes back where it was, and hides again when you switch to another window.
-  To have a click on the view do this every time, add the program under
+  To have a click on the view do this every time, add the app under
   **Settings → Picture-in-Picture → Using apps through a view** and turn on **Show original** for it. Apps built with Java always work this way.
   If a click on a view doesn't get through, the view says so. Click that note to use the original instead.
   If it keeps happening with an app, the note offers to turn on **Show original** for it.
@@ -163,7 +163,7 @@ An Anchor is a small floating button for a window. Press **Ctrl+Alt+A** to add o
 - **Right-click** opens a menu to show, minimize or close it.
 - **Middle-click** asks the window to close.
 - **Drag a file over it** to bring the window forward and drop the file there.
-- **Rest the pointer** on it to see the window. Anchors of the same program show their window titles.
+- **Rest the pointer** on it to see the window. Anchors of the same app show their window titles.
 
 **Minimize to an Anchor** in the window menu gives a window an Anchor and minimizes it in one step.
 
@@ -273,10 +273,10 @@ The changes show on that window at once and last until it closes; **Save for thi
 **Page color** is how much of the page's own color covers the picture, and **Brightness** is how bright the picture itself
 is. On a dark page both make the picture dimmer. On a light page, a higher Page color makes it paler instead.
 
-## Remember a program's setup
+## Remember an app's setup
 
 Set a window up the way you like it: pinned, see-through, dark, with a view open if you want one. Then press
-**Ctrl+Alt+Shift+S**. From then on, that program's windows start the same way, even after a restart.
+**Ctrl+Alt+Shift+S**. From then on, that app's windows start the same way, even after a restart.
 Press it again on a plain window to forget the setup, or remove it in **Settings → Saved setups**. Glass isn't part of a setup.
 
 Choose **Change** there to keep a setup to windows whose title contains some text, to put the window in a place or on
@@ -304,8 +304,8 @@ Changes take effect as soon as you make them. The mouse wheel only scrolls; clic
 | Mouse gestures | Move and resize with a key, and the mouse menu |
 | Toolbar | Where the toolbar appears, how quickly, and which buttons it shows |
 | Actions and shortcuts | Everything WinScreen can do, in groups, with its shortcut and where else it is. Click a shortcut to change it |
-| Programs | Programs WinScreen should leave alone, or the only ones it should work on |
-| Saved setups | Program setups you've remembered |
+| Apps | Apps WinScreen should leave alone, or the only ones it should work on |
+| Saved setups | App setups you've remembered |
 
 ## Putting things back
 
@@ -334,7 +334,7 @@ After an update, WinScreen offers once to show what's new. **What's new** is als
 
 Choose **Save diagnostics** from the tray menu. WinScreen saves a small file and shows it in File Explorer; attach it to
 a [new issue](https://github.com/DarkLian/WinScreen/issues). It holds WinScreen's own short log and your settings.
-Programs appear only by file name, such as chrome.exe; window titles, file paths and anything you type are never in it.
+Apps appear only by file name, such as chrome.exe; window titles, file paths and anything you type are never in it.
 Nothing leaves your PC unless you send it yourself.
 
 ## Good to know
