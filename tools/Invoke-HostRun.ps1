@@ -59,7 +59,8 @@ param(
     # Before each test an administrator window has the focus, and input comes from an administrator program.
     [switch]$AdministratorInFront,
     [string]$ResultsDirectory,
-    [int]$HangMinutes = 3
+    # AdministratorHelperEndToEndTests' every-command test takes about 3 min 15 s on its own.
+    [int]$HangMinutes = 5
 )
 
 $ErrorActionPreference = 'Stop'
