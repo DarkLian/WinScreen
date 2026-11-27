@@ -31,40 +31,52 @@ Por enquanto, o aplicativo e o guia estão só em inglês e chinês.
 
 <p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Veja a demonstração de 5 minutos no YouTube</strong></a></p>
 
-Duas visualizações sobre um editor de código: uma toca um vídeo, a outra você usa direto na visualização. Elas continuam com você em outra área de trabalho virtual.
+Duas visualizações ao mesmo tempo: uma cortada só no vídeo e outra em que você rola a página direto na visualização. Elas vão com você para outra área de trabalho virtual.
 
 <p align="center">
-  <img src="docs/assets/demos/views.gif" width="880" alt="Duas visualizações sobre um editor de código: uma toca um vídeo, a outra você usa direto na visualização. Elas continuam com você em outra área de trabalho virtual.">
+  <img src="docs/assets/demos/views.gif" width="880" alt="Duas visualizações ao mesmo tempo: uma cortada só no vídeo e outra em que você rola a página direto na visualização. Elas vão com você para outra área de trabalho virtual.">
 </p>
 
-A barra de ferramentas na barra de título de uma janela: os comandos da janela, a um clique.
+Congele uma visualização, guarde uma cópia congelada ao lado, grave um clipe ou cubra partes privadas.
 
 <p align="center">
-  <img src="docs/assets/demos/toolbar.gif" width="880" alt="A barra de ferramentas na barra de título de uma janela: os comandos da janela, a um clique.">
+  <img src="docs/assets/demos/picture-tools.gif" width="880" alt="Congele uma visualização, guarde uma cópia congelada ao lado, grave um clipe ou cubra partes privadas.">
 </p>
 
-As âncoras trazem uma janela de volta com um clique, de qualquer área de trabalho. Arraste um arquivo para uma âncora para soltá-lo na janela dela.
+Uma imagem ou um vídeo atrás de qualquer app, revezando. Um vídeo toca o próprio som, e cada um tem sua velocidade e seu brilho.
 
 <p align="center">
-  <img src="docs/assets/demos/anchors.gif" width="880" alt="As âncoras trazem uma janela de volta com um clique, de qualquer área de trabalho. Arraste um arquivo para uma âncora para soltá-lo na janela dela.">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Uma imagem ou um vídeo atrás de qualquer app, revezando. Um vídeo toca o próprio som, e cada um tem sua velocidade e seu brilho.">
 </p>
 
-Corte uma visualização na parte que você quer e amplie. Uma visualização de parte da tela funciona do mesmo jeito.
+O Vidro esmaece só a página. Mude quanto, o texto e a sombra dele, e veja na hora.
 
 <p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Corte uma visualização na parte que você quer e amplie. Uma visualização de parte da tela funciona do mesmo jeito.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="O Vidro esmaece só a página. Mude quanto, o texto e a sombra dele, e veja na hora.">
 </p>
 
-Vidro esmaece só o fundo. Deixe uma janela escura ou translúcida, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.
+Uma foto ou um vídeo fica como está no modo escuro e no Vidro.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Vidro esmaece só o fundo. Deixe uma janela escura ou translúcida, pressione Ctrl+Alt+Shift+S e ela abre assim da próxima vez.">
+  <img src="docs/assets/demos/keep-areas.gif" width="880" alt="Uma foto ou um vídeo fica como está no modo escuro e no Vidro.">
 </p>
 
-Vidro com um vídeo atrás: a janela de qualquer app pode ter seu próprio fundo animado.
+As âncoras trazem uma janela de volta com um clique, de qualquer área de trabalho. Pare o ponteiro em cima para ver a janela, ou arraste um arquivo para soltá-lo nela.
 
 <p align="center">
-  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Vidro com um vídeo atrás: a janela de qualquer app pode ter seu próprio fundo animado.">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="As âncoras trazem uma janela de volta com um clique, de qualquer área de trabalho. Pare o ponteiro em cima para ver a janela, ou arraste um arquivo para soltá-lo nela.">
+</p>
+
+A barra de ferramentas na barra de título: deixe a janela sempre visível, coloque-a num canto, deixe-a translúcida ou deixe os cliques passarem, e mova com Alt+arrastar.
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="A barra de ferramentas na barra de título: deixe a janela sempre visível, coloque-a num canto, deixe-a translúcida ou deixe os cliques passarem, e mova com Alt+arrastar.">
+</p>
+
+Corte uma visualização na parte que você quer e amplie, ou encolha uma janela para um pequeno bloco ao vivo.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Corte uma visualização na parte que você quer e amplie, ou encolha uma janela para um pequeno bloco ao vivo.">
 </p>
 
 ## Use aplicativos por uma pequena visualização

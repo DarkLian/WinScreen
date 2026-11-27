@@ -29,40 +29,52 @@
 
 <p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Watch the 5-minute demo on YouTube</strong></a></p>
 
-Two views over a code editor: one plays a video, the other you use right inside the view. They stay with you on another virtual desktop.
+Two views at once: a video cropped to just the picture, and a page you scroll right inside its view. They follow you to another virtual desktop.
 
 <p align="center">
-  <img src="docs/assets/demos/views.gif" width="880" alt="Two views over a code editor: one plays a video, the other you use right inside the view. They stay with you on another virtual desktop.">
+  <img src="docs/assets/demos/views.gif" width="880" alt="Two views at once: a video cropped to just the picture, and a page you scroll right inside its view. They follow you to another virtual desktop.">
 </p>
 
-The toolbar on a window's title bar: the window's commands, one click away.
+Freeze a view, keep a frozen copy beside it, record a clip, or cover private parts.
 
 <p align="center">
-  <img src="docs/assets/demos/toolbar.gif" width="880" alt="The toolbar on a window's title bar: the window's commands, one click away.">
+  <img src="docs/assets/demos/picture-tools.gif" width="880" alt="Freeze a view, keep a frozen copy beside it, record a clip, or cover private parts.">
 </p>
 
-Anchors bring windows back with a click, from any desktop. Drag a file onto one to drop it into its window.
+A picture or video behind any app, taking turns. A video plays its own sound, and each has its own speed and brightness.
 
 <p align="center">
-  <img src="docs/assets/demos/anchors.gif" width="880" alt="Anchors bring windows back with a click, from any desktop. Drag a file onto one to drop it into its window.">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="A picture or video behind any app, taking turns. A video plays its own sound, and each has its own speed and brightness.">
 </p>
 
-Crop a view to the part you want and zoom in. A view of a region of the screen works the same way.
+Glass fades only the page. Change how much, the text and its shadow, and see it as you go.
 
 <p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Crop a view to the part you want and zoom in. A view of a region of the screen works the same way.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glass fades only the page. Change how much, the text and its shadow, and see it as you go.">
 </p>
 
-Glass fades only the background. Make a window dark or see-through, press Ctrl+Alt+Shift+S, and it opens that way next time.
+Keep a photo or video as it is under Dark mode and Glass.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glass fades only the background. Make a window dark or see-through, press Ctrl+Alt+Shift+S, and it opens that way next time.">
+  <img src="docs/assets/demos/keep-areas.gif" width="880" alt="Keep a photo or video as it is under Dark mode and Glass.">
 </p>
 
-Glass with a video behind it: any app's window can have its own live background.
+Anchors bring windows back with a click, from any desktop. Rest the pointer on one to see its window, or drag a file onto it to drop it there.
 
 <p align="center">
-  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Glass with a video behind it: any app's window can have its own live background.">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="Anchors bring windows back with a click, from any desktop. Rest the pointer on one to see its window, or drag a file onto it to drop it there.">
+</p>
+
+The toolbar on a window's title bar: pin it, put it in a corner, make it see-through or click-through, and move it with Alt+drag.
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="The toolbar on a window's title bar: pin it, put it in a corner, make it see-through or click-through, and move it with Alt+drag.">
+</p>
+
+Crop a view to the part you want and zoom in, or shrink a window to a small live tile.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Crop a view to the part you want and zoom in, or shrink a window to a small live tile.">
 </p>
 
 ## Use apps through a small view

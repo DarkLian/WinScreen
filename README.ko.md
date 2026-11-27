@@ -31,40 +31,52 @@
 
 <p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>YouTube에서 5분 데모 보기</strong></a></p>
 
-코드 편집기 위의 작은 화면 두 개: 하나는 동영상을 재생하고, 다른 하나는 화면 안에서 바로 사용합니다. 다른 가상 데스크톱으로 가도 그대로 따라옵니다.
+작은 화면 두 개를 함께: 하나는 동영상 부분만 남기고 잘랐고, 다른 하나는 화면 안에서 바로 페이지를 스크롤합니다. 다른 가상 데스크톱으로 가도 따라옵니다.
 
 <p align="center">
-  <img src="docs/assets/demos/views.gif" width="880" alt="코드 편집기 위의 작은 화면 두 개: 하나는 동영상을 재생하고, 다른 하나는 화면 안에서 바로 사용합니다. 다른 가상 데스크톱으로 가도 그대로 따라옵니다.">
+  <img src="docs/assets/demos/views.gif" width="880" alt="작은 화면 두 개를 함께: 하나는 동영상 부분만 남기고 잘랐고, 다른 하나는 화면 안에서 바로 페이지를 스크롤합니다. 다른 가상 데스크톱으로 가도 따라옵니다.">
 </p>
 
-창 제목 표시줄의 도구 모음: 창 명령을 클릭 한 번으로 쓸 수 있습니다.
+작은 화면을 멈추고, 멈춘 화면의 사본을 옆에 두고, 짧은 영상을 녹화하거나, 개인적인 부분을 가릴 수 있습니다.
 
 <p align="center">
-  <img src="docs/assets/demos/toolbar.gif" width="880" alt="창 제목 표시줄의 도구 모음: 창 명령을 클릭 한 번으로 쓸 수 있습니다.">
+  <img src="docs/assets/demos/picture-tools.gif" width="880" alt="작은 화면을 멈추고, 멈춘 화면의 사본을 옆에 두고, 짧은 영상을 녹화하거나, 개인적인 부분을 가릴 수 있습니다.">
 </p>
 
-앵커를 클릭하면 창이 돌아옵니다. 어느 데스크톱에서든 됩니다. 파일을 앵커 위로 끌면 그 창에 넣을 수 있습니다.
+어떤 앱 뒤에든 사진이나 동영상을 놓고 차례로 바꿀 수 있습니다. 동영상은 자기 소리를 내고, 하나하나 속도와 밝기를 따로 정할 수 있습니다.
 
 <p align="center">
-  <img src="docs/assets/demos/anchors.gif" width="880" alt="앵커를 클릭하면 창이 돌아옵니다. 어느 데스크톱에서든 됩니다. 파일을 앵커 위로 끌면 그 창에 넣을 수 있습니다.">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="어떤 앱 뒤에든 사진이나 동영상을 놓고 차례로 바꿀 수 있습니다. 동영상은 자기 소리를 내고, 하나하나 속도와 밝기를 따로 정할 수 있습니다.">
 </p>
 
-작은 화면을 원하는 부분만 남기고 잘라 확대할 수 있습니다. 화면 일부의 작은 화면도 똑같이 쓸 수 있습니다.
+유리 효과는 페이지만 흐리게 합니다. 흐린 정도, 글자, 글자 그림자를 바꾸면 바로 보입니다.
 
 <p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="작은 화면을 원하는 부분만 남기고 잘라 확대할 수 있습니다. 화면 일부의 작은 화면도 똑같이 쓸 수 있습니다.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="유리 효과는 페이지만 흐리게 합니다. 흐린 정도, 글자, 글자 그림자를 바꾸면 바로 보입니다.">
 </p>
 
-유리 효과는 배경만 흐리게 합니다. 창을 어둡게 하거나 반투명하게 하고 Ctrl+Alt+Shift+S를 누르면 다음부터 그대로 열립니다.
+다크 모드와 유리 효과에서도 사진이나 동영상은 원래대로 둘 수 있습니다.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="유리 효과는 배경만 흐리게 합니다. 창을 어둡게 하거나 반투명하게 하고 Ctrl+Alt+Shift+S를 누르면 다음부터 그대로 열립니다.">
+  <img src="docs/assets/demos/keep-areas.gif" width="880" alt="다크 모드와 유리 효과에서도 사진이나 동영상은 원래대로 둘 수 있습니다.">
 </p>
 
-유리 효과 뒤에 동영상을 깔면, 어떤 앱 창이든 나만의 움직이는 배경을 가질 수 있습니다.
+앵커를 클릭하면 창이 돌아옵니다. 어느 데스크톱에서든 됩니다. 포인터를 올리면 창을 미리 보고, 파일을 끌어다 놓으면 그 창에 넣을 수 있습니다.
 
 <p align="center">
-  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="유리 효과 뒤에 동영상을 깔면, 어떤 앱 창이든 나만의 움직이는 배경을 가질 수 있습니다.">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="앵커를 클릭하면 창이 돌아옵니다. 어느 데스크톱에서든 됩니다. 포인터를 올리면 창을 미리 보고, 파일을 끌어다 놓으면 그 창에 넣을 수 있습니다.">
+</p>
+
+창 제목 표시줄의 도구 모음: 항상 위에 고정하고, 모서리에 놓고, 반투명이나 클릭 통과로 만들고, Alt를 누른 채 끌어서 옮길 수 있습니다.
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="창 제목 표시줄의 도구 모음: 항상 위에 고정하고, 모서리에 놓고, 반투명이나 클릭 통과로 만들고, Alt를 누른 채 끌어서 옮길 수 있습니다.">
+</p>
+
+작은 화면을 원하는 부분만 남기고 잘라 확대하거나, 창을 작은 실시간 타일로 줄일 수 있습니다.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="작은 화면을 원하는 부분만 남기고 잘라 확대하거나, 창을 작은 실시간 타일로 줄일 수 있습니다.">
 </p>
 
 ## 작은 화면으로 앱 사용하기

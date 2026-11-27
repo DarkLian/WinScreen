@@ -29,40 +29,52 @@
 
 <p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>在 YouTube 上觀看 5 分鐘示範</strong></a></p>
 
-程式碼編輯器上方的兩個檢視：一個播放影片，另一個可以直接在檢視裡使用。切換到另一個虛擬桌面，它們也還在。
+同時開兩個檢視：一個裁切到只剩影片畫面，另一個可以直接在檢視裡捲動網頁。切換到另一個虛擬桌面，它們也跟著。
 
 <p align="center">
-  <img src="docs/assets/demos/views.gif" width="880" alt="程式碼編輯器上方的兩個檢視：一個播放影片，另一個可以直接在檢視裡使用。切換到另一個虛擬桌面，它們也還在。">
+  <img src="docs/assets/demos/views.gif" width="880" alt="同時開兩個檢視：一個裁切到只剩影片畫面，另一個可以直接在檢視裡捲動網頁。切換到另一個虛擬桌面，它們也跟著。">
 </p>
 
-視窗標題列上的工具列：視窗的各種命令，點一下就行。
+凍結檢視、在旁邊留一份凍結的副本、錄一段影片，或遮蓋隱私部分。
 
 <p align="center">
-  <img src="docs/assets/demos/toolbar.gif" width="880" alt="視窗標題列上的工具列：視窗的各種命令，點一下就行。">
+  <img src="docs/assets/demos/picture-tools.gif" width="880" alt="凍結檢視、在旁邊留一份凍結的副本、錄一段影片，或遮蓋隱私部分。">
 </p>
 
-錨點點一下就把視窗帶回來，在哪個桌面都可以。把檔案拖到錨點上，就能放進它的視窗。
+任何應用程式後面都能放圖片或影片，並輪流播放。影片可以帶自己的聲音，每一個都有自己的速度和亮度。
 
 <p align="center">
-  <img src="docs/assets/demos/anchors.gif" width="880" alt="錨點點一下就把視窗帶回來，在哪個桌面都可以。把檔案拖到錨點上，就能放進它的視窗。">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="任何應用程式後面都能放圖片或影片，並輪流播放。影片可以帶自己的聲音，每一個都有自己的速度和亮度。">
 </p>
 
-把檢視裁切到你要的部分並放大。螢幕某一部分的檢視也是同樣的用法。
+玻璃效果只淡化頁面。淡化程度、文字和文字陰影都能調，改動馬上看得到。
 
 <p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="把檢視裁切到你要的部分並放大。螢幕某一部分的檢視也是同樣的用法。">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="玻璃效果只淡化頁面。淡化程度、文字和文字陰影都能調，改動馬上看得到。">
 </p>
 
-玻璃效果只淡化背景。把視窗調成深色或半透明，按 Ctrl+Alt+Shift+S，下次開啟時就是這個樣子。
+在深色模式和玻璃效果下，讓相片或影片保持原樣。
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="玻璃效果只淡化背景。把視窗調成深色或半透明，按 Ctrl+Alt+Shift+S，下次開啟時就是這個樣子。">
+  <img src="docs/assets/demos/keep-areas.gif" width="880" alt="在深色模式和玻璃效果下，讓相片或影片保持原樣。">
 </p>
 
-玻璃後面放一段影片：任何應用程式的視窗都能有自己的動態背景。
+錨點點一下就把視窗帶回來，在哪個桌面都可以。指標停在錨點上就能預覽視窗，把檔案拖上去就能放進它的視窗。
 
 <p align="center">
-  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="玻璃後面放一段影片：任何應用程式的視窗都能有自己的動態背景。">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="錨點點一下就把視窗帶回來，在哪個桌面都可以。指標停在錨點上就能預覽視窗，把檔案拖上去就能放進它的視窗。">
+</p>
+
+視窗標題列上的工具列：置頂、放到角落、半透明或點擊穿透，按住 Alt 拖曳就能移動視窗。
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="視窗標題列上的工具列：置頂、放到角落、半透明或點擊穿透，按住 Alt 拖曳就能移動視窗。">
+</p>
+
+把檢視裁切到你要的部分並放大，或把視窗縮成一個小小的即時縮圖。
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="把檢視裁切到你要的部分並放大，或把視窗縮成一個小小的即時縮圖。">
 </p>
 
 ## 透過小檢視使用應用程式

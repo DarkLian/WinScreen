@@ -31,40 +31,52 @@ Die App und die Anleitung gibt es bisher nur auf Englisch und Chinesisch.
 
 <p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Die 5-minütige Demo auf YouTube ansehen</strong></a></p>
 
-Zwei Ansichten über einem Code-Editor: Eine spielt ein Video ab, die andere benutzt du direkt in der Ansicht. Auch auf einem anderen virtuellen Desktop bleiben sie bei dir.
+Zwei Ansichten zugleich: eine auf das Video zugeschnitten, in der anderen scrollst du die Seite direkt in der Ansicht. Auf einen anderen virtuellen Desktop kommen sie mit.
 
 <p align="center">
-  <img src="docs/assets/demos/views.gif" width="880" alt="Zwei Ansichten über einem Code-Editor: Eine spielt ein Video ab, die andere benutzt du direkt in der Ansicht. Auch auf einem anderen virtuellen Desktop bleiben sie bei dir.">
+  <img src="docs/assets/demos/views.gif" width="880" alt="Zwei Ansichten zugleich: eine auf das Video zugeschnitten, in der anderen scrollst du die Seite direkt in der Ansicht. Auf einen anderen virtuellen Desktop kommen sie mit.">
 </p>
 
-Die Symbolleiste auf der Titelleiste eines Fensters: die Befehle des Fensters, einen Klick entfernt.
+Friere eine Ansicht ein, behalte eine eingefrorene Kopie daneben, nimm einen Clip auf oder verdecke private Stellen.
 
 <p align="center">
-  <img src="docs/assets/demos/toolbar.gif" width="880" alt="Die Symbolleiste auf der Titelleiste eines Fensters: die Befehle des Fensters, einen Klick entfernt.">
+  <img src="docs/assets/demos/picture-tools.gif" width="880" alt="Friere eine Ansicht ein, behalte eine eingefrorene Kopie daneben, nimm einen Clip auf oder verdecke private Stellen.">
 </p>
 
-Anker holen Fenster mit einem Klick zurück, von jedem Desktop aus. Zieh eine Datei auf einen Anker, um sie in sein Fenster abzulegen.
+Ein Bild oder Video hinter jeder App, abwechselnd. Ein Video spielt seinen eigenen Ton, und jedes hat seine eigene Geschwindigkeit und Helligkeit.
 
 <p align="center">
-  <img src="docs/assets/demos/anchors.gif" width="880" alt="Anker holen Fenster mit einem Klick zurück, von jedem Desktop aus. Zieh eine Datei auf einen Anker, um sie in sein Fenster abzulegen.">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Ein Bild oder Video hinter jeder App, abwechselnd. Ein Video spielt seinen eigenen Ton, und jedes hat seine eigene Geschwindigkeit und Helligkeit.">
 </p>
 
-Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein. Eine Ansicht eines Bildschirmausschnitts funktioniert genauso.
+Glas blendet nur die Seite aus. Stärke, Text und Textschatten änderst du und siehst es sofort.
 
 <p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein. Eine Ansicht eines Bildschirmausschnitts funktioniert genauso.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glas blendet nur die Seite aus. Stärke, Text und Textschatten änderst du und siehst es sofort.">
 </p>
 
-Glas blendet nur den Hintergrund aus. Mach ein Fenster dunkel oder durchsichtig, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.
+Ein Foto oder Video bleibt unter Dunkelmodus und Glas, wie es ist.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Glas blendet nur den Hintergrund aus. Mach ein Fenster dunkel oder durchsichtig, drück Strg+Alt+Umschalt+S, und es öffnet sich beim nächsten Mal genauso.">
+  <img src="docs/assets/demos/keep-areas.gif" width="880" alt="Ein Foto oder Video bleibt unter Dunkelmodus und Glas, wie es ist.">
 </p>
 
-Glas mit einem Video dahinter: Jedes App-Fenster kann seinen eigenen bewegten Hintergrund haben.
+Anker holen Fenster mit einem Klick zurück, von jedem Desktop aus. Halte den Zeiger darauf, um das Fenster zu sehen, oder zieh eine Datei darauf, um sie dort abzulegen.
 
 <p align="center">
-  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Glas mit einem Video dahinter: Jedes App-Fenster kann seinen eigenen bewegten Hintergrund haben.">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="Anker holen Fenster mit einem Klick zurück, von jedem Desktop aus. Halte den Zeiger darauf, um das Fenster zu sehen, oder zieh eine Datei darauf, um sie dort abzulegen.">
+</p>
+
+Die Symbolleiste auf der Titelleiste: das Fenster im Vordergrund fixieren, in eine Ecke setzen, durchsichtig machen oder Klicks durchlassen und mit Alt+Ziehen verschieben.
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="Die Symbolleiste auf der Titelleiste: das Fenster im Vordergrund fixieren, in eine Ecke setzen, durchsichtig machen oder Klicks durchlassen und mit Alt+Ziehen verschieben.">
+</p>
+
+Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein, oder verkleinere ein Fenster zu einer kleinen Live-Kachel.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Schneide eine Ansicht auf den Teil zu, den du brauchst, und zoome hinein, oder verkleinere ein Fenster zu einer kleinen Live-Kachel.">
 </p>
 
 ## Apps über eine kleine Ansicht benutzen

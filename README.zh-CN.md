@@ -29,40 +29,52 @@
 
 <p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>在 YouTube 上观看 5 分钟演示</strong></a></p>
 
-代码编辑器上方的两个视图：一个播放视频，另一个可以直接在视图里使用。切换到另一个虚拟桌面，它们也还在。
+同时开两个视图：一个裁剪到只剩视频画面，另一个可以直接在视图里滚动网页。切换到另一个虚拟桌面，它们也跟着。
 
 <p align="center">
-  <img src="docs/assets/demos/views.gif" width="880" alt="代码编辑器上方的两个视图：一个播放视频，另一个可以直接在视图里使用。切换到另一个虚拟桌面，它们也还在。">
+  <img src="docs/assets/demos/views.gif" width="880" alt="同时开两个视图：一个裁剪到只剩视频画面，另一个可以直接在视图里滚动网页。切换到另一个虚拟桌面，它们也跟着。">
 </p>
 
-窗口标题栏上的工具栏：窗口的各种命令，点一下就行。
+冻结视图、在旁边留一份冻结的副本、录一段视频，或遮盖隐私部分。
 
 <p align="center">
-  <img src="docs/assets/demos/toolbar.gif" width="880" alt="窗口标题栏上的工具栏：窗口的各种命令，点一下就行。">
+  <img src="docs/assets/demos/picture-tools.gif" width="880" alt="冻结视图、在旁边留一份冻结的副本、录一段视频，或遮盖隐私部分。">
 </p>
 
-锚点点一下就把窗口带回来，在哪个桌面都可以。把文件拖到锚点上，就能放进它的窗口。
+任何应用后面都能放图片或视频，并轮流播放。视频可以带自己的声音，每一个都有自己的速度和亮度。
 
 <p align="center">
-  <img src="docs/assets/demos/anchors.gif" width="880" alt="锚点点一下就把窗口带回来，在哪个桌面都可以。把文件拖到锚点上，就能放进它的窗口。">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="任何应用后面都能放图片或视频，并轮流播放。视频可以带自己的声音，每一个都有自己的速度和亮度。">
 </p>
 
-把视图裁剪到你要的部分并放大。屏幕某一部分的视图也是同样的用法。
+玻璃效果只淡化页面。淡化程度、文字和文字阴影都能调，改动马上看得到。
 
 <p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="把视图裁剪到你要的部分并放大。屏幕某一部分的视图也是同样的用法。">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="玻璃效果只淡化页面。淡化程度、文字和文字阴影都能调，改动马上看得到。">
 </p>
 
-玻璃效果只淡化背景。把窗口调成深色或半透明，按 Ctrl+Alt+Shift+S，下次打开时就是这个样子。
+在深色模式和玻璃效果下，让照片或视频保持原样。
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="玻璃效果只淡化背景。把窗口调成深色或半透明，按 Ctrl+Alt+Shift+S，下次打开时就是这个样子。">
+  <img src="docs/assets/demos/keep-areas.gif" width="880" alt="在深色模式和玻璃效果下，让照片或视频保持原样。">
 </p>
 
-玻璃后面放一段视频：任何应用的窗口都能有自己的动态背景。
+锚点点一下就把窗口带回来，在哪个桌面都可以。指针停在锚点上就能预览窗口，把文件拖上去就能放进它的窗口。
 
 <p align="center">
-  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="玻璃后面放一段视频：任何应用的窗口都能有自己的动态背景。">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="锚点点一下就把窗口带回来，在哪个桌面都可以。指针停在锚点上就能预览窗口，把文件拖上去就能放进它的窗口。">
+</p>
+
+窗口标题栏上的工具栏：置顶、放到角落、半透明或点击穿透，按住 Alt 拖动就能移动窗口。
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="窗口标题栏上的工具栏：置顶、放到角落、半透明或点击穿透，按住 Alt 拖动就能移动窗口。">
+</p>
+
+把视图裁剪到你要的部分并放大，或把窗口缩成一个小小的实时缩略图。
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="把视图裁剪到你要的部分并放大，或把窗口缩成一个小小的实时缩略图。">
 </p>
 
 ## 通过小视图使用应用

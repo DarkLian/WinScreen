@@ -31,40 +31,52 @@ Por ahora, la aplicación y la guía solo están en inglés y chino.
 
 <p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Ver la demostración de 5 minutos en YouTube</strong></a></p>
 
-Dos vistas sobre un editor de código: una reproduce un vídeo y la otra se usa dentro de la propia vista. Te acompañan en otro escritorio virtual.
+Dos vistas a la vez: una recortada al vídeo y otra en la que desplazas la página dentro de la propia vista. Te acompañan a otro escritorio virtual.
 
 <p align="center">
-  <img src="docs/assets/demos/views.gif" width="880" alt="Dos vistas sobre un editor de código: una reproduce un vídeo y la otra se usa dentro de la propia vista. Te acompañan en otro escritorio virtual.">
+  <img src="docs/assets/demos/views.gif" width="880" alt="Dos vistas a la vez: una recortada al vídeo y otra en la que desplazas la página dentro de la propia vista. Te acompañan a otro escritorio virtual.">
 </p>
 
-La barra de herramientas en la barra de título de una ventana: los comandos de la ventana, a un clic.
+Congela una vista, guarda una copia congelada a su lado, graba un clip o tapa las partes privadas.
 
 <p align="center">
-  <img src="docs/assets/demos/toolbar.gif" width="880" alt="La barra de herramientas en la barra de título de una ventana: los comandos de la ventana, a un clic.">
+  <img src="docs/assets/demos/picture-tools.gif" width="880" alt="Congela una vista, guarda una copia congelada a su lado, graba un clip o tapa las partes privadas.">
 </p>
 
-Las anclas traen una ventana de vuelta con un clic, desde cualquier escritorio. Arrastra un archivo sobre una para soltarlo en su ventana.
+Una imagen o un vídeo detrás de cualquier aplicación, por turnos. Un vídeo reproduce su propio sonido y cada uno tiene su velocidad y su brillo.
 
 <p align="center">
-  <img src="docs/assets/demos/anchors.gif" width="880" alt="Las anclas traen una ventana de vuelta con un clic, desde cualquier escritorio. Arrastra un archivo sobre una para soltarlo en su ventana.">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Una imagen o un vídeo detrás de cualquier aplicación, por turnos. Un vídeo reproduce su propio sonido y cada uno tiene su velocidad y su brillo.">
 </p>
 
-Recorta una vista a la parte que quieres y amplíala. Una vista de parte de la pantalla funciona igual.
+Cristal difumina solo la página. Cambia cuánto, el texto y su sombra, y lo ves al momento.
 
 <p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Recorta una vista a la parte que quieres y amplíala. Una vista de parte de la pantalla funciona igual.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Cristal difumina solo la página. Cambia cuánto, el texto y su sombra, y lo ves al momento.">
 </p>
 
-Cristal difumina solo el fondo. Haz una ventana oscura o translúcida, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.
+Una foto o un vídeo se queda como está con el modo oscuro y Cristal.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="Cristal difumina solo el fondo. Haz una ventana oscura o translúcida, pulsa Ctrl+Alt+Mayús+S y se abrirá así la próxima vez.">
+  <img src="docs/assets/demos/keep-areas.gif" width="880" alt="Una foto o un vídeo se queda como está con el modo oscuro y Cristal.">
 </p>
 
-Cristal con un vídeo detrás: la ventana de cualquier aplicación puede tener su propio fondo animado.
+Las anclas traen una ventana de vuelta con un clic, desde cualquier escritorio. Deja el puntero encima para ver la ventana, o arrastra un archivo sobre una para soltarlo en ella.
 
 <p align="center">
-  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Cristal con un vídeo detrás: la ventana de cualquier aplicación puede tener su propio fondo animado.">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="Las anclas traen una ventana de vuelta con un clic, desde cualquier escritorio. Deja el puntero encima para ver la ventana, o arrastra un archivo sobre una para soltarlo en ella.">
+</p>
+
+La barra de herramientas en la barra de título: fija la ventana encima, colócala en una esquina, hazla translúcida o deja pasar los clics, y muévela con Alt+arrastrar.
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="La barra de herramientas en la barra de título: fija la ventana encima, colócala en una esquina, hazla translúcida o deja pasar los clics, y muévela con Alt+arrastrar.">
+</p>
+
+Recorta una vista a la parte que quieres y amplíala, o reduce una ventana a un pequeño mosaico en vivo.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Recorta una vista a la parte que quieres y amplíala, o reduce una ventana a un pequeño mosaico en vivo.">
 </p>
 
 ## Usa aplicaciones desde una vista pequeña

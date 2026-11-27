@@ -31,40 +31,52 @@ Pour l'instant, l'application et le guide n'existent qu'en anglais et en chinois
 
 <p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Voir la démo de 5 minutes sur YouTube</strong></a></p>
 
-Deux vues au-dessus d'un éditeur de code : l'une lit une vidéo, l'autre s'utilise directement dans la vue. Elles vous suivent sur un autre bureau virtuel.
+Deux vues à la fois : l'une rognée sur la vidéo, l'autre où vous faites défiler la page directement dans la vue. Elles vous suivent sur un autre bureau virtuel.
 
 <p align="center">
-  <img src="docs/assets/demos/views.gif" width="880" alt="Deux vues au-dessus d'un éditeur de code : l'une lit une vidéo, l'autre s'utilise directement dans la vue. Elles vous suivent sur un autre bureau virtuel.">
+  <img src="docs/assets/demos/views.gif" width="880" alt="Deux vues à la fois : l'une rognée sur la vidéo, l'autre où vous faites défiler la page directement dans la vue. Elles vous suivent sur un autre bureau virtuel.">
 </p>
 
-La barre d'outils sur la barre de titre d'une fenêtre : les commandes de la fenêtre, à un clic.
+Figez une vue, gardez une copie figée à côté, enregistrez un extrait ou masquez les parties privées.
 
 <p align="center">
-  <img src="docs/assets/demos/toolbar.gif" width="880" alt="La barre d'outils sur la barre de titre d'une fenêtre : les commandes de la fenêtre, à un clic.">
+  <img src="docs/assets/demos/picture-tools.gif" width="880" alt="Figez une vue, gardez une copie figée à côté, enregistrez un extrait ou masquez les parties privées.">
 </p>
 
-Les ancres ramènent une fenêtre d'un clic, depuis n'importe quel bureau. Faites glisser un fichier sur une ancre pour le déposer dans sa fenêtre.
+Une image ou une vidéo derrière n'importe quelle application, à tour de rôle. Une vidéo joue son propre son, et chacune a sa vitesse et sa luminosité.
 
 <p align="center">
-  <img src="docs/assets/demos/anchors.gif" width="880" alt="Les ancres ramènent une fenêtre d'un clic, depuis n'importe quel bureau. Faites glisser un fichier sur une ancre pour le déposer dans sa fenêtre.">
+  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="Une image ou une vidéo derrière n'importe quelle application, à tour de rôle. Une vidéo joue son propre son, et chacune a sa vitesse et sa luminosité.">
 </p>
 
-Rognez une vue sur la partie qui vous intéresse et zoomez. Une vue d'une partie de l'écran fonctionne de la même façon.
+L'effet verre n'atténue que la page. Réglez son intensité, le texte et son ombre, et voyez le résultat aussitôt.
 
 <p align="center">
-  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Rognez une vue sur la partie qui vous intéresse et zoomez. Une vue d'une partie de l'écran fonctionne de la même façon.">
+  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="L'effet verre n'atténue que la page. Réglez son intensité, le texte et son ombre, et voyez le résultat aussitôt.">
 </p>
 
-L'effet verre n'atténue que l'arrière-plan. Rendez une fenêtre sombre ou translucide, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.
+Une photo ou une vidéo reste telle quelle avec le mode sombre et l'effet verre.
 
 <p align="center">
-  <img src="docs/assets/demos/glass-setup.gif" width="880" alt="L'effet verre n'atténue que l'arrière-plan. Rendez une fenêtre sombre ou translucide, appuyez sur Ctrl+Alt+Maj+S, et elle s'ouvrira ainsi la prochaine fois.">
+  <img src="docs/assets/demos/keep-areas.gif" width="880" alt="Une photo ou une vidéo reste telle quelle avec le mode sombre et l'effet verre.">
 </p>
 
-L'effet verre avec une vidéo derrière : chaque fenêtre d'application peut avoir son propre fond animé.
+Les ancres ramènent une fenêtre d'un clic, depuis n'importe quel bureau. Posez le pointeur dessus pour voir la fenêtre, ou faites-y glisser un fichier pour le déposer dans sa fenêtre.
 
 <p align="center">
-  <img src="docs/assets/demos/backgrounds.gif" width="880" alt="L'effet verre avec une vidéo derrière : chaque fenêtre d'application peut avoir son propre fond animé.">
+  <img src="docs/assets/demos/anchors.gif" width="880" alt="Les ancres ramènent une fenêtre d'un clic, depuis n'importe quel bureau. Posez le pointeur dessus pour voir la fenêtre, ou faites-y glisser un fichier pour le déposer dans sa fenêtre.">
+</p>
+
+La barre d'outils sur la barre de titre : garder la fenêtre au premier plan, la placer dans un coin, la rendre translucide ou laisser passer les clics, et la déplacer avec Alt+glisser.
+
+<p align="center">
+  <img src="docs/assets/demos/toolbar.gif" width="880" alt="La barre d'outils sur la barre de titre : garder la fenêtre au premier plan, la placer dans un coin, la rendre translucide ou laisser passer les clics, et la déplacer avec Alt+glisser.">
+</p>
+
+Rognez une vue sur la partie qui vous intéresse et zoomez, ou réduisez une fenêtre en petite vignette en direct.
+
+<p align="center">
+  <img src="docs/assets/demos/crop-zoom.gif" width="880" alt="Rognez une vue sur la partie qui vous intéresse et zoomez, ou réduisez une fenêtre en petite vignette en direct.">
 </p>
 
 ## Utilisez vos applications dans une petite vue
