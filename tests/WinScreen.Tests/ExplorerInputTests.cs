@@ -723,7 +723,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
                     everHanded |= view.HandingOverDrop;
                     if (fromDesktop && step % 5 == 0) everDragged |= DragThreads(source) != "none";
                     if (step % 10 == 0)
-                        log.Append($"[{step}: under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} handing={view.HandingOverDrop} live={view.LiveInteraction is not null} original={Desktop.BoundsOf(window)} dnd={PipWindow.DragAndDropRunning(User32.GetWindowThreadProcessId(source, out _))} dndAny={DragThreads(source)} fg={WindowInfo.ClassName(User32.GetForegroundWindow())}] ");
+                        log.Append($"[{step}: under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} handing={view.HandingOverDrop} live={view.LiveInteraction is not null} original={Desktop.BoundsOf(window)} dnd={DragAndDrop.Running(User32.GetWindowThreadProcessId(source, out _))} dndAny={DragThreads(source)} fg={WindowInfo.ClassName(User32.GetForegroundWindow())}] ");
                 }
                 for (int wait = 0; wait < 10; wait++) { Desktop.NudgeMouse(wait % 2 == 0 ? 2 : -2, 0); Thread.Sleep(80); everHanded |= view.HandingOverDrop; }
                 log.Append($"before release: handing={view.HandingOverDrop} under={WindowInfo.ClassName(Desktop.TopWindowAt(Desktop.CursorPosition()))} original={Desktop.BoundsOf(window)}; ");
@@ -754,7 +754,7 @@ public sealed class ExplorerInputTests(Xunit.Abstractions.ITestOutputHelper outp
         try
         {
             using var p = System.Diagnostics.Process.GetProcessById((int)process);
-            var running = p.Threads.Cast<System.Diagnostics.ProcessThread>().Where(t => PipWindow.DragAndDropRunning((uint)t.Id)).Select(t => t.Id).ToList();
+            var running = p.Threads.Cast<System.Diagnostics.ProcessThread>().Where(t => DragAndDrop.Running((uint)t.Id)).Select(t => t.Id).ToList();
             return running.Count == 0 ? "none" : string.Join("+", running) + $" (window's {User32.GetWindowThreadProcessId(window, out _)})";
         }
         catch (ArgumentException) { return "gone"; }
