@@ -1186,7 +1186,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             throw new WindowOperationException(
-                T("errors.recovery.saveFailedPrefix") + e.Message);
+                string.Format(T("errors.recovery.saveFailed"), e.Message));
         }
 
         // After the save, so a watcher that starts now already has this window to recover.

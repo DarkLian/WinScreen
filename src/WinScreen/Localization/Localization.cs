@@ -35,20 +35,28 @@ public static class UiText
 
     internal static IReadOnlyDictionary<string, string> GetCatalog(string language) => Catalogs[language];
 
-    // Only for failures: it reads the whole catalog.
+    // Only for failures: it reads the whole catalog. A text that is exactly the message wins; otherwise the matching
+    // text with the most fixed words, so a general one ("{0}: {1}") never shadows a more specific one.
     internal static string? KeyOf(string message, string prefix = "errors.")
     {
         string first = message.Split('\n')[0].TrimEnd('\r');
         foreach (string language in new[] { Language, "en" })
+        {
+            string? best = null;
+            int bestFixed = -1;
             foreach ((string key, string text) in Catalogs[language])
             {
                 if (!key.StartsWith(prefix, StringComparison.Ordinal)) continue;
                 if (text == first) return key;
-                if (text.Contains('{') && System.Text.RegularExpressions.Regex.IsMatch(first,
+                if (!text.Contains('{')) continue;
+                int fixedLength = System.Text.RegularExpressions.Regex.Replace(text, @"\{\d+}", "").Length;
+                if (fixedLength > bestFixed && System.Text.RegularExpressions.Regex.IsMatch(first,
                         "^" + System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Escape(text), @"\\\{\d+}", ".*") + "$",
                         System.Text.RegularExpressions.RegexOptions.Singleline, TimeSpan.FromMilliseconds(50)))
-                    return key;
+                    (best, bestFixed) = (key, fixedLength);
             }
+            if (best is not null) return best;
+        }
         return null;
     }
 

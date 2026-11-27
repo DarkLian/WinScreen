@@ -40,18 +40,32 @@ public sealed class LocalizationTests : IDisposable
         UiText.Initialize(language);
         Assert.Equal(expected, new ProgramSetup { Program = "示例", Pinned = true, Alpha = 128, Dark = true }.ToString());
         Assert.DoesNotContain("{0}", string.Format(UiText.T("errors.window.changeRefusedCount"), 3));
-        Assert.NotEqual("Another app already uses: ", UiText.T("hotkeys.conflictPrefix"));
+        Assert.NotEqual("Another app already uses: {0}", UiText.T("hotkeys.conflict"));
     }
 
     [Theory]
-    [InlineData("zh-Hans", "其他应用已占用： ", "WinScreen 浮动锚点 - ")]
-    [InlineData("zh-Hant", "其他應用程式已占用： ", "WinScreen 浮動錨點 - ")]
-    public void Translated_prefixes_preserve_the_spaces_before_dynamic_content(string language, string conflictPrefix,
+    [InlineData("zh-Hans", "其他应用已占用：Ctrl+Alt+T", "WinScreen 浮动锚点 - ")]
+    [InlineData("zh-Hant", "其他應用程式已占用：Ctrl+Alt+T", "WinScreen 浮動錨點 - ")]
+    public void Translated_prefixes_preserve_the_spaces_before_dynamic_content(string language, string conflict,
         string anchorPrefix)
     {
         UiText.Initialize(language);
-        Assert.Equal(conflictPrefix + "Ctrl+Alt+T", UiText.T("hotkeys.conflictPrefix") + "Ctrl+Alt+T");
+        // A full-width colon brings its own space.
+        Assert.Equal(conflict, string.Format(UiText.T("hotkeys.conflict"), "Ctrl+Alt+T"));
         Assert.Equal(anchorPrefix + "ExampleProgram", UiText.T("anchor.titlePrefix") + "ExampleProgram");
+    }
+
+    // The log names a refusal by its key, which it finds from the text shown.
+    [Theory]
+    [InlineData("en")]
+    [InlineData("zh-Hans")]
+    [InlineData("zh-Hant")]
+    public void A_refusal_with_a_reason_after_it_is_found_by_its_key(string language)
+    {
+        UiText.Initialize(language);
+        Assert.Equal("errors.glass.sampleFailed", UiText.KeyOf(string.Format(UiText.T("errors.glass.sampleFailed"), "Access is denied.")));
+        Assert.Equal("errors.recovery.saveFailed", UiText.KeyOf(string.Format(UiText.T("errors.recovery.saveFailed"), "Disk full.")));
+        Assert.Equal("errors.pip.clickUnverified", UiText.KeyOf(UiText.T("errors.pip.clickUnverified")));
     }
 
     private static readonly string[] Languages = ["en", "zh-Hans", "zh-Hant"];
@@ -172,7 +186,7 @@ public sealed class LocalizationTests : IDisposable
         var partial = new Dictionary<string, string> { ["settings.title"] = "Custom" };
         Assert.Equal("Custom", UiText.Translate("settings.title", partial, english));
         Assert.Equal("&Add", UiText.Translate("common.add", partial, english));
-        Assert.Equal("Last result: ", UiText.Translate("tray.resultPrefix", partial, english));
+        Assert.Equal("Last result: {0}", UiText.Translate("tray.result", partial, english));
         Assert.Equal("unknown.key", UiText.Translate("unknown.key", partial, english));
     }
 

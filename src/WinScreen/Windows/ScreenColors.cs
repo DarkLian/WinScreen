@@ -33,7 +33,7 @@ public static class ScreenColors
                                       or InvalidOperationException)
         {
             throw new WindowOperationException(
-                UiText.T("errors.glass.sampleFailedPrefix") + e.Message);
+                string.Format(UiText.T("errors.glass.sampleFailed"), e.Message));
         }
     }
 }

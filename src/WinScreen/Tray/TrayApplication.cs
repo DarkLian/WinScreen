@@ -879,7 +879,7 @@ public sealed partial class TrayApplication : ApplicationContext
     }
 
     private static HotkeyProblem Taken(AppCommand command, AppSettings settings) => new(command,
-        T("hotkeys.conflictPrefix") + $"{settings.Hotkeys[command]} ({CommandCatalog.Name(command)})");
+        string.Format(T("hotkeys.conflict"), $"{settings.Hotkeys[command]} ({CommandCatalog.Name(command)})"));
 
     private static string Describe(IEnumerable<HotkeyProblem> problems) =>
         string.Join(Environment.NewLine, problems.Select(problem => problem.Message));
@@ -2476,7 +2476,7 @@ public sealed partial class TrayApplication : ApplicationContext
         ShowStatus();
     }
 
-    private void ShowStatus() => _statusItem.Text = T("tray.resultPrefix") + MenuText(_lastStatus);
+    private void ShowStatus() => _statusItem.Text = string.Format(T("tray.result"), MenuText(_lastStatus));
 
     // Windows reports a click on any balloon the same way, so each balloon sets this, and one without an action clears
     // it: a later error can't open an earlier offer.
