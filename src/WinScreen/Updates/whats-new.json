@@ -1,4 +1,30 @@
 {
+  "1.5.1": {
+    "en": [
+      "Actions and shortcuts is easier to use: actions come in groups, you change a shortcut right in its row, and Press keys tells you what a key combination does.",
+      "Hold Ctrl+Alt for a moment to see your shortcuts.",
+      "The window and view menus follow the toolbar's order, and a frozen copy has the same Capture as a view.",
+      "Notifications in General: Show all, Problems only or Off.",
+      "Opening WinScreen from its shortcut or the taskbar opens Settings.",
+      "2 other fixes."
+    ],
+    "zh-Hans": [
+      "“操作与快捷键”更好用了：操作分组显示，直接在行中更改快捷键，“按下按键”会告诉你某个组合键的作用。",
+      "按住 Ctrl+Alt 片刻即可查看你的快捷键。",
+      "窗口菜单和视图菜单与工具栏的顺序一致，冻结的副本也有与视图相同的“截取”。",
+      "“常规”中的“通知”：全部显示、仅显示问题或关闭。",
+      "从快捷方式或任务栏打开 WinScreen 时会打开设置。",
+      "还有 2 项其他修正。"
+    ],
+    "zh-Hant": [
+      "「操作與快捷鍵」更好用了：操作分組顯示，直接在列中變更快捷鍵，「按下按鍵」會告訴你某個組合鍵的作用。",
+      "按住 Ctrl+Alt 片刻即可查看你的快捷鍵。",
+      "視窗選單和檢視選單與工具列的順序一致，凍結的副本也有與檢視相同的「擷取」。",
+      "「一般」中的「通知」：全部顯示、僅顯示問題或關閉。",
+      "從捷徑或工作列開啟 WinScreen 時會開啟設定。",
+      "還有 2 項其他修正。"
+    ]
+  },
   "1.5.0": {
     "en": [
       "Dark mode is no longer experimental, and it has its own levels: Page brightness, Text brightness and Keep colors.",
