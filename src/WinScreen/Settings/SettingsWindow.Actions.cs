@@ -146,7 +146,9 @@ public sealed partial class SettingsWindow
         page.Controls.Add(table);
         page.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 8 });
         page.Controls.Add(card);
-        var sheet = new CardPanel { Dock = DockStyle.Bottom, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(12, 6, 12, 6) };
+        // A settings card's insets: its 8 plus a switch's own margin of 3 at the sides.
+        var sheet = new CardPanel { Dock = DockStyle.Bottom, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(11, 8, 11, 8) };
+        _shortcutSheet.Dock = DockStyle.Top;
         sheet.Controls.Add(_shortcutSheet);
         page.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 8 });
         page.Controls.Add(sheet);
