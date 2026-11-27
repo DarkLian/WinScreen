@@ -26,10 +26,10 @@ Por enquanto, o aplicativo e o guia estão só em inglês e chinês.
 ## Veja funcionando
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Veja a demonstração de 5 minutos no YouTube"></a>
+  <a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Veja a demonstração de 3 minutos no YouTube"></a>
 </p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Veja a demonstração de 5 minutos no YouTube</strong></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><strong>Veja a demonstração de 3 minutos no YouTube</strong></a></p>
 
 Duas visualizações ao mesmo tempo: uma cortada só no vídeo e outra em que você rola a página direto na visualização. Elas vão com você para outra área de trabalho virtual.
 

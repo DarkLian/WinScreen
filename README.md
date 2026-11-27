@@ -24,10 +24,10 @@
 ## See it in action
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Watch the 5-minute demo on YouTube"></a>
+  <a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Watch the 3-minute demo on YouTube"></a>
 </p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Watch the 5-minute demo on YouTube</strong></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><strong>Watch the 3-minute demo on YouTube</strong></a></p>
 
 Two views at once: a video cropped to just the picture, and a page you scroll right inside its view. They follow you to another virtual desktop.
 

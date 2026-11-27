@@ -24,10 +24,10 @@
 ## 实际效果
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="在 YouTube 上观看 5 分钟演示"></a>
+  <a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="在 YouTube 上观看 3 分钟演示"></a>
 </p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>在 YouTube 上观看 5 分钟演示</strong></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><strong>在 YouTube 上观看 3 分钟演示</strong></a></p>
 
 同时开两个视图：一个裁剪到只剩视频画面，另一个可以直接在视图里滚动网页。切换到另一个虚拟桌面，它们也跟着。
 

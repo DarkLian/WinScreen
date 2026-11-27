@@ -26,10 +26,10 @@ Por ahora, la aplicación y la guía solo están en inglés y chino.
 ## En acción
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Ver la demostración de 5 minutos en YouTube"></a>
+  <a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Ver la demostración de 3 minutos en YouTube"></a>
 </p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Ver la demostración de 5 minutos en YouTube</strong></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><strong>Ver la demostración de 3 minutos en YouTube</strong></a></p>
 
 Dos vistas a la vez: una recortada al vídeo y otra en la que desplazas la página dentro de la propia vista. Te acompañan a otro escritorio virtual.
 

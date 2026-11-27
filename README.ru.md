@@ -26,10 +26,10 @@
 ## Как это выглядит
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Смотреть 5-минутное демо на YouTube"></a>
+  <a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Смотреть 3-минутное демо на YouTube"></a>
 </p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Смотреть 5-минутное демо на YouTube</strong></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><strong>Смотреть 3-минутное демо на YouTube</strong></a></p>
 
 Две копии сразу: одна обрезана до видео, во второй можно прокручивать страницу прямо в копии. На другой виртуальный рабочий стол они идут за вами.
 

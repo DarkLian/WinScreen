@@ -26,10 +26,10 @@ Pour l'instant, l'application et le guide n'existent qu'en anglais et en chinois
 ## En action
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Voir la démo de 5 minutes sur YouTube"></a>
+  <a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Voir la démo de 3 minutes sur YouTube"></a>
 </p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Voir la démo de 5 minutes sur YouTube</strong></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><strong>Voir la démo de 3 minutes sur YouTube</strong></a></p>
 
 Deux vues à la fois : l'une rognée sur la vidéo, l'autre où vous faites défiler la page directement dans la vue. Elles vous suivent sur un autre bureau virtuel.
 

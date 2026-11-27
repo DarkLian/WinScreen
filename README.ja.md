@@ -26,10 +26,10 @@ WinScreen のアプリとユーザーガイドは、英語と中国語のみで�
 ## 動作の様子
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="YouTube で 5 分間のデモを見る"></a>
+  <a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="YouTube で 3 分間のデモを見る"></a>
 </p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>YouTube で 5 分間のデモを見る</strong></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><strong>YouTube で 3 分間のデモを見る</strong></a></p>
 
 2 つのビューを同時に。1 つは動画の部分だけに切り抜き、もう 1 つはビューの中でそのままページをスクロールできます。別の仮想デスクトップに切り替えてもついてきます。
 

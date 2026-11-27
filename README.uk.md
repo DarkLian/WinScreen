@@ -26,10 +26,10 @@
 ## Як це виглядає
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Дивитися 5-хвилинне демо на YouTube"></a>
+  <a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Дивитися 3-хвилинне демо на YouTube"></a>
 </p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Дивитися 5-хвилинне демо на YouTube</strong></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><strong>Дивитися 3-хвилинне демо на YouTube</strong></a></p>
 
 Дві копії одразу: одна обрізана до відео, у другій можна гортати сторінку просто в копії. На інший віртуальний робочий стіл вони йдуть за вами.
 

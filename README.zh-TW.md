@@ -24,10 +24,10 @@
 ## 實際效果
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="在 YouTube 上觀看 5 分鐘示範"></a>
+  <a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="在 YouTube 上觀看 3 分鐘示範"></a>
 </p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>在 YouTube 上觀看 5 分鐘示範</strong></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><strong>在 YouTube 上觀看 3 分鐘示範</strong></a></p>
 
 同時開兩個檢視：一個裁切到只剩影片畫面，另一個可以直接在檢視裡捲動網頁。切換到另一個虛擬桌面，它們也跟著。
 

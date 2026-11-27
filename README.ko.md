@@ -26,10 +26,10 @@
 ## 실제 모습
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="YouTube에서 5분 데모 보기"></a>
+  <a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="YouTube에서 3분 데모 보기"></a>
 </p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>YouTube에서 5분 데모 보기</strong></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><strong>YouTube에서 3분 데모 보기</strong></a></p>
 
 작은 화면 두 개를 함께: 하나는 동영상 부분만 남기고 잘랐고, 다른 하나는 화면 안에서 바로 페이지를 스크롤합니다. 다른 가상 데스크톱으로 가도 따라옵니다.
 

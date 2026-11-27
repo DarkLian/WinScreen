@@ -26,10 +26,10 @@ Die App und die Anleitung gibt es bisher nur auf Englisch und Chinesisch.
 ## So sieht es aus
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Die 5-minütige Demo auf YouTube ansehen"></a>
+  <a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><img src="docs/assets/demos/video-thumbnail.png" width="640" alt="Die 3-minütige Demo auf YouTube ansehen"></a>
 </p>
 
-<p align="center"><a href="https://www.youtube.com/watch?v=FncLMB3cYDQ"><strong>Die 5-minütige Demo auf YouTube ansehen</strong></a></p>
+<p align="center"><a href="https://www.youtube.com/watch?v=e7Cy8dLCOQk"><strong>Die 3-minütige Demo auf YouTube ansehen</strong></a></p>
 
 Zwei Ansichten zugleich: eine auf das Video zugeschnitten, in der anderen scrollst du die Seite direkt in der Ansicht. Auf einen anderen virtuellen Desktop kommen sie mit.
 
