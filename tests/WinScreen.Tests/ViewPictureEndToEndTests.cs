@@ -254,6 +254,12 @@ public sealed class ViewPictureEndToEndTests(Xunit.Abstractions.ITestOutputHelpe
                     }
                     still.CopyPicture();
                     Assert.True(Black(shelf.Pictures[^1].GetPixel(PictureSpot(view, middle)!.Value.X, PictureSpot(view, middle)!.Value.Y)));
+                    // Its menu's Capture follows the Capture setting as the view's does: here, copy only.
+                    int copies = shelf.Pictures.Count;
+                    still.CapturePicture();
+                    Assert.Equal(copies + 1, shelf.Pictures.Count);
+                    Assert.Equal(Localization.UiText.T("pip.picture.copy"), still.ContextMenuStrip!.Items[0].Text);
+                    Assert.Equal("Esc", still.ContextMenuStrip.Items.OfType<ToolStripMenuItem>().Last().ShortcutKeyDisplayString);
                     still.Close();
                     Assert.True(Red(Copy(middle)), "Uncovered, the view's copy is still black there.");
 

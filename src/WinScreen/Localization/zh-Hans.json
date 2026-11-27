@@ -653,8 +653,6 @@
   "status.pinned": "已置顶",
   "status.unpinned": "已取消置顶",
   "still.close": "关闭",
-  "still.copy": "复制画面",
-  "still.save": "保存画面",
   "still.saved": "已保存",
   "still.titlePrefix": "冻结的副本 - ",
   "toolbar.buttons.help": "已关闭的功能不会显示。取消所有按钮即可关闭工具栏。",

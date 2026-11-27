@@ -104,8 +104,8 @@ turn on **Always show title bar** in **Options**, or for every new view in **Set
   **Settings → Picture-in-Picture** you can choose another folder, and under **Capture**, **Save only** or **Copy only**. It works the same whatever covers the
   view, at any opacity, and on views of a display or part of the screen, which screenshots can't take.
 - **Freeze a copy:** keeps the picture in a small window of its own beside the view, while the view goes on. Move it,
-  resize it with the wheel, Ctrl+drag to crop and Ctrl+wheel to zoom. Right-click it to copy or save the picture, copy
-  its text, or close it (Esc).
+  resize it with the wheel, Ctrl+drag to crop and Ctrl+wheel to zoom. Right-click it for **Capture** (copy, save or both, as for the
+  view), Copy text or Close. Ctrl+C copies it, Ctrl+S saves it and Esc closes it.
 - **Copy text:** drag over the text you want, or click to take all of it, and the words are copied. It reads the text in
   the picture, so it also works on video, games, remote desktops and pages that won't let you select. It uses Windows'
   own text recognition for your languages.

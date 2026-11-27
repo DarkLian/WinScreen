@@ -653,8 +653,6 @@
   "status.pinned": "已置頂",
   "status.unpinned": "已取消置頂",
   "still.close": "關閉",
-  "still.copy": "複製畫面",
-  "still.save": "儲存畫面",
   "still.saved": "已儲存",
   "still.titlePrefix": "凍結的副本 - ",
   "toolbar.buttons.help": "已關閉的功能不會顯示。取消所有按鈕即可關閉工具列。",

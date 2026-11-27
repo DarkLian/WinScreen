@@ -63,8 +63,8 @@ internal sealed class StillPicture : Form
 
     private void BuildMenu()
     {
-        _menu.Items.Add(T("still.copy") + "\tCtrl+C", null, (_, _) => CopyPicture());
-        _menu.Items.Add(T("still.save") + "\tCtrl+S", null, (_, _) => SavePicture());
+        // Capture as the view's: it copies, saves or both, as Settings' Capture says. Ctrl+C and Ctrl+S still do one each.
+        _menu.Items.Add(T("pip.picture.copy"), null, (_, _) => CapturePicture());
         _menu.Items.Add(T("pip.picture.copyText"), null, (_, _) => CopyText());
         var opacity = new ToolStripMenuItem(T("pip.opacity"));
         foreach (int percent in new[] { 100, 75, 50, 25 })
@@ -76,12 +76,29 @@ internal sealed class StillPicture : Form
         _menu.Items.Add(opacity);
         _menu.Items.Add(T("pip.zoom.reset"), null, (_, _) => ResetCrop());
         _menu.Items.Add(new ToolStripSeparator());
-        _menu.Items.Add(T("still.close") + "\tEsc", MenuParts.Icon(MenuParts.Close), (_, _) => Close());
+        _menu.Items.Add(new ToolStripMenuItem(T("still.close"), MenuParts.Icon(MenuParts.Close), (_, _) => Close()) { ShortcutKeyDisplayString = "Esc" });
         MenuRenderer.Apply(_menu);
         ContextMenuStrip = _menu;
     }
 
     internal Bitmap ShownPicture() => _picture.Clone(ShownPart, _picture.PixelFormat);
+
+    internal void CapturePicture()
+    {
+        try
+        {
+            using Bitmap shown = ShownPicture();
+            (string? file, string? problem) = _shelf.Keep(shown);
+            if (problem is not null) Problem?.Invoke(string.Format(T("errors.pip.saveFailed"), problem));
+            // The view's "Click to show it" doesn't hold here: a click on the copy shows no file.
+            if (file is not null) Say(T("still.saved"));
+            else if (_shelf.Copies()) Say(T("pip.state.pictureCopied"));
+        }
+        catch (System.Runtime.InteropServices.ExternalException failure)
+        {
+            Problem?.Invoke(string.Format(T("errors.pip.copyFailed"), failure.Message));
+        }
+    }
 
     internal void CopyPicture()
     {

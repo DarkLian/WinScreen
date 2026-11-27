@@ -653,8 +653,6 @@
   "status.pinned": "Pinned on top",
   "status.unpinned": "Unpinned",
   "still.close": "Close",
-  "still.copy": "Copy picture",
-  "still.save": "Save picture",
   "still.saved": "Saved",
   "still.titlePrefix": "Frozen copy - ",
   "toolbar.buttons.help": "Features that are turned off stay hidden. Clear every button to turn the toolbar off.",

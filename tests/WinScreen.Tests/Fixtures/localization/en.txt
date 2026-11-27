@@ -655,8 +655,6 @@ status.clickThroughOn 5E2267BBF3CE14DA
 status.pinned A2F990F385034AFF
 status.unpinned EBE3B5488BC6A5FD
 still.close 7D9EB7ACB13E2462
-still.copy 05DECF94EA187240
-still.save 95325A076D7C11F9
 still.saved B5C120B316C237A0
 still.titlePrefix 6AA6FE2557B563E6
 toolbar.buttons.help FE48FE75C5C3CD28
