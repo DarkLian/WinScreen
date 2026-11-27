@@ -27,6 +27,11 @@ public sealed class ViewMenuLayoutTests
 
     private static string T(string key) => UiText.T(key);
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern nint GetDC(nint window);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int ReleaseDC(nint window, nint dc);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern bool BitBlt(nint into, int x, int y, int width, int height, nint from, int fromX, int fromY, int operation);
+
     // For checking by eye: the open menu as it is on screen, in light and in dark.
     internal static void Save(string name, params ToolStripDropDown[] open)
     {
@@ -40,9 +45,13 @@ public sealed class ViewMenuLayoutTests
                 foreach (ToolStripDropDown menu in open) menu.Invalidate(true);
                 Pump(150);
                 using var picture = new Bitmap(area.Width, area.Height);
-                // CaptureBlt takes layered windows too, which a menu can be.
+                // CAPTUREBLT takes layered windows too, which a menu can be; CopyFromScreen refuses the flag.
                 using (Graphics g = Graphics.FromImage(picture))
-                    g.CopyFromScreen(area.Location, Point.Empty, area.Size, CopyPixelOperation.SourceCopy | CopyPixelOperation.CaptureBlt);
+                {
+                    nint screen = GetDC(0), into = g.GetHdc();
+                    try { BitBlt(into, 0, 0, area.Width, area.Height, screen, area.Left, area.Top, 0x00CC0020 | 0x40000000); }
+                    finally { g.ReleaseHdc(into); ReleaseDC(0, screen); }
+                }
                 Directory.CreateDirectory(folder);
                 picture.Save(Path.Combine(folder, $"{name}-{theme}.png"));
             }
