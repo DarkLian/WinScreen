@@ -224,7 +224,7 @@ public sealed partial class TrayApplication
             case HelperLink.Save when message.Text is { } json:
                 try
                 {
-                    AppSettings changed = AppSettings.Parse(json);
+                    AppSettings changed = AppSettings.Parse(AppSettings.WithChanges(JsonSerializer.Serialize(_settings), json));
                     if (Apply(changed) is { Count: > 0 } problems) Alert(T("errors.settings.saveFailed"), Describe(problems));
                     if (_settingsWindow is { IsDisposed: false } open) open.LoadValues(_settings);
                 }
@@ -240,6 +240,7 @@ public sealed partial class TrayApplication
     // Started by the sign-in task with no ordinary copy yet, it starts one, as the person.
     private void StartAsHelper()
     {
+        _handedOver = JsonSerializer.Serialize(_settings);
         _ordinary = new HelperLink.HelperEnd(() => OnToolbar(LeaveAsHelper));
         _ordinary.Received += message => OnToolbar(() => FromOrdinaryCopy(message));
         _ordinary.ConnectionChanged += connected => OnToolbar(() =>
@@ -380,6 +381,7 @@ public sealed partial class TrayApplication
         string themeBefore = _settings.Theme;
         AppSettings before = _settings.Clone();
         _settings.CopyFrom(loaded);
+        _handedOver = JsonSerializer.Serialize(_settings);
         _setupNone.Clear();
         RulesChanged();
         ApplyPreferences(experimentalBefore, before);
@@ -404,6 +406,9 @@ public sealed partial class TrayApplication
 
     // The helper never writes settings itself (one writer): it hands them to the ordinary copy, which saves and applies
     // them, then hands them back. Throws when they couldn't be written or handed over.
+    // The helper's settings as the ordinary copy last had them: what a save hands over is measured from here.
+    private string? _handedOver;
+
     private void SaveSettings(AppSettings settings)
     {
         if (_role != AppRole.Helper)
@@ -412,7 +417,11 @@ public sealed partial class TrayApplication
             _helper?.Send(new HelperLink.Message(HelperLink.SettingsSaved));
             return;
         }
-        if (_ordinary?.Send(new HelperLink.Message(HelperLink.Save, Text: JsonSerializer.Serialize(settings))) != true)
+        string now = JsonSerializer.Serialize(settings);
+        string changes = AppSettings.Changes(_handedOver ?? now, now);
+        if (changes == "{}") return;
+        if (_ordinary?.Send(new HelperLink.Message(HelperLink.Save, Text: changes)) != true)
             throw new IOException(T("errors.settings.saveFailed"));
+        _handedOver = now;
     }
 }

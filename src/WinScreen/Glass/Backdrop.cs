@@ -35,6 +35,17 @@ internal sealed record BackdropChoice(string File, BackdropFit Fit, int Volume =
     public static bool IsLinkText(string? file) =>
         Uri.TryCreate(file?.Trim(), UriKind.Absolute, out Uri? link) && (link.Scheme == Uri.UriSchemeHttps || link.Scheme == Uri.UriSchemeHttp);
 
+    // Opened without the person typing it (an imported file), a link or a share reaches the network: Windows signs in
+    // to a share on its own.
+    public static bool IsRemoteText(string? file)
+    {
+        string text = file?.Trim() ?? "";
+        if (IsLinkText(text) || text.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return true;
+        if (text.StartsWith(@"\\?\", StringComparison.Ordinal) || text.StartsWith(@"\\.\", StringComparison.Ordinal)) return false;
+        return text.StartsWith(@"\\", StringComparison.Ordinal) || text.StartsWith("//", StringComparison.Ordinal) ||
+               Uri.TryCreate(text, UriKind.Absolute, out Uri? uri) && uri.IsUnc;
+    }
+
     // A link's kind is its path's extension; one without a picture's extension (a stream, say) is taken as a video.
     public bool IsVideo => IsVideoText(File);
 

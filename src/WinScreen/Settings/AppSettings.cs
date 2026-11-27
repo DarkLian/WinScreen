@@ -620,6 +620,25 @@ public sealed class AppSettings
         SavedSetups.Count == 0 ? null : ProgramSetup.Choose(SavedSetups, Windows.WindowInfo.ProgramOf(window),
             Windows.WindowInfo.ExecutablePath(window), Windows.WindowInfo.Title(window), Windows.WindowInfo.ClassName(window));
 
+    // The elevated helper hands over only the settings it changed, so it can't put back what the ordinary copy changed
+    // meanwhile. Whole top-level settings: a list or group changed in both still goes to the later one.
+    internal static string Changes(string before, string after)
+    {
+        JsonObject old = ReadObject(before), now = ReadObject(after), changed = [];
+        foreach ((string name, JsonNode? value) in now)
+            if (!old.TryGetPropertyValue(name, out JsonNode? was) || !JsonNode.DeepEquals(was, value))
+                changed[name] = value?.DeepClone();
+        return changed.ToJsonString();
+    }
+
+    internal static string WithChanges(string current, string changes)
+    {
+        JsonObject merged = ReadObject(current);
+        foreach ((string name, JsonNode? value) in ReadObject(changes))
+            merged[name] = value?.DeepClone();
+        return merged.ToJsonString();
+    }
+
     public AppSettings Clone() => JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(this))!;
 
     public void CopyFrom(AppSettings settings)

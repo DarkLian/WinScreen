@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
@@ -69,8 +70,10 @@ internal static class HelperLink
     // Messages and Connected changes arrive on its own thread; Send may be called from any thread.
     internal abstract class End : IDisposable
     {
+        private const int OutboxSize = 256;
         private readonly object _gate = new();
-        private StreamWriter? _writer;
+        private BlockingCollection<string>? _outbox;
+        private Thread? _delivering;
         private volatile bool _stopped;
         protected readonly CancellationTokenSource Stopping = new();
 
@@ -83,29 +86,61 @@ internal static class HelperLink
 
         protected bool Stopped => _stopped;
 
+        // Queued: a peer that stops reading must not stall the caller (often the UI thread). False when there is no
+        // peer, or it has stopped reading long enough for the queue to fill.
         internal bool Send(Message message)
         {
             lock (_gate)
             {
-                if (_writer is null) return false;
-                try
+                if (_outbox is null || _outbox.IsAddingCompleted) return false;
+                if (_outbox.TryAdd(Encode(message))) return true;
+            }
+            Diagnostics.Log.Event("helper.outboxFull");
+            return false;
+        }
+
+        // At most this long for what is queued to go out when this end closes (an exit message, a last save).
+        private static readonly TimeSpan DrainLimit = TimeSpan.FromSeconds(1);
+
+        private static void Deliver(BlockingCollection<string> outbox, StreamWriter writer)
+        {
+            try
+            {
+                foreach (string line in outbox.GetConsumingEnumerable())
                 {
-                    _writer.WriteLine(Encode(message));
-                    _writer.Flush();
-                    return true;
-                }
-                catch (Exception failure) when (failure is IOException or ObjectDisposedException or InvalidOperationException)
-                {
-                    Diagnostics.Log.Swallowed(failure);
-                    return false;
+                    writer.WriteLine(line);
+                    writer.Flush();
                 }
             }
+            catch (Exception failure) when (failure is IOException or ObjectDisposedException or InvalidOperationException)
+            {
+                Diagnostics.Log.Swallowed(failure);
+            }
+        }
+
+        private void CloseOutbox()
+        {
+            Thread? delivering;
+            lock (_gate)
+            {
+                _outbox?.CompleteAdding();
+                delivering = _delivering;
+            }
+            if (delivering is not null && delivering != Thread.CurrentThread) delivering.Join(DrainLimit);
         }
 
         protected void Talk(PipeStream pipe, uint peer)
         {
             var reader = new StreamReader(pipe, new UTF8Encoding(false), false, 1024, leaveOpen: true);
-            lock (_gate) _writer = new StreamWriter(pipe, new UTF8Encoding(false), 1024, leaveOpen: true);
+            var writer = new StreamWriter(pipe, new UTF8Encoding(false), 1024, leaveOpen: true);
+            var outbox = new BlockingCollection<string>(OutboxSize);
+            var delivering = new Thread(() => Deliver(outbox, writer)) { IsBackground = true, Name = "WinScreen helper link out" };
+            lock (_gate)
+            {
+                _outbox = outbox;
+                _delivering = delivering;
+            }
+            delivering.Start();
             Peer = peer;
             Connected = true;
             ConnectionChanged?.Invoke(true);
@@ -120,12 +155,15 @@ internal static class HelperLink
             }
             finally
             {
+                CloseOutbox();
                 lock (_gate)
                 {
-                    try { _writer?.Dispose(); }
-                    catch (Exception failure) when (failure is IOException or ObjectDisposedException) { Diagnostics.Log.Swallowed(failure); }
-                    _writer = null;
+                    _outbox = null;
+                    _delivering = null;
                 }
+                try { writer.Dispose(); }
+                catch (Exception failure) when (failure is IOException or ObjectDisposedException) { Diagnostics.Log.Swallowed(failure); }
+                outbox.Dispose();
                 reader.Dispose();
                 Connected = false;
                 Peer = 0;
@@ -135,6 +173,7 @@ internal static class HelperLink
 
         public virtual void Dispose()
         {
+            CloseOutbox();
             _stopped = true;
             Stopping.Cancel();
         }

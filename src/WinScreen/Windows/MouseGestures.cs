@@ -451,14 +451,7 @@ internal sealed class MouseGestures : IDisposable
                 HookSilent?.Invoke();
             }
             if (_gesture is null) silenceReported = false;
-            while (_endings.TryDequeue(out var ending))
-            {
-                if (drag is null || !ReferenceEquals(drag.Gesture, ending.Gesture))
-                    drag = Started(ending.Gesture); // Released before the mover got to it: it still goes where it was dropped.
-                if (!ending.Cancelled) Follow(drag, Pointer());
-                Finish(drag, ending.Cancelled);
-                drag = null;
-            }
+            drag = FinishEndings(drag);
 
             if (_stopping || _gesture is not { } gesture)
             {
@@ -472,7 +465,22 @@ internal sealed class MouseGestures : IDisposable
             Follow(drag, Pointer());
         }
 
+        // Reinstall queues the drag in hand and stops at once: its ending must still be carried out.
+        if (!_moveStopping) drag = FinishEndings(drag);
         if (drag is not null) ShowZone(drag, SnapZone.None);
+    }
+
+    private Drag? FinishEndings(Drag? drag)
+    {
+        while (_endings.TryDequeue(out var ending))
+        {
+            if (drag is null || !ReferenceEquals(drag.Gesture, ending.Gesture))
+                drag = Started(ending.Gesture); // Released before the mover got to it: it still goes where it was dropped.
+            if (!ending.Cancelled) Follow(drag, Pointer());
+            Finish(drag, ending.Cancelled);
+            drag = null;
+        }
+        return drag;
     }
 
     private Point Pointer()

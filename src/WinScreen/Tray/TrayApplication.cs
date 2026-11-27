@@ -1074,8 +1074,14 @@ public sealed partial class TrayApplication : ApplicationContext
     {
         if (_role == AppRole.Elevated) return true;
         User32.GetWindowThreadProcessId(window, out uint process);
-        return AppRoles.Reaches(_role, ProcessInfo.IsElevated(process));
+        // The toolbar asks every 60 ms for the window in front; a process's elevation never changes.
+        if (_reachChecked is not { } known || known.Process != process || Environment.TickCount64 - known.At > ReachRecheckMilliseconds)
+            _reachChecked = known = (process, ProcessInfo.IsElevated(process), Environment.TickCount64);
+        return AppRoles.Reaches(_role, known.Elevated);
     }
+
+    private const int ReachRecheckMilliseconds = 2000;
+    private (uint Process, bool Elevated, long At)? _reachChecked;
 
     private bool CanOpenWindowMenu(nint window) => _windows.Refusal(window) is null && !_windows.GestureBlocked(window) &&
         CanReach(window) && !User32.IsIconic(window) &&

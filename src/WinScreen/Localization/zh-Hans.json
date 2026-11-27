@@ -627,6 +627,7 @@
   "settings.transfer.imported": "设置已导入并开始使用。之前的设置已保留为备份。",
   "settings.transfer.invalid": "这不是受支持的 WinScreen 设置文件。",
   "settings.transfer.paths": "文件包含程序的位置。导入时会保留这台电脑的开机启动设置。",
+  "settings.transfer.remoteBackgrounds": "此文件包含 {0} 个来自互联网或其他电脑的背景，导入后会自动打开。要保留吗？选择“取消”则不导入它们。",
   "settings.transfer.title": "设置文件",
   "settings.window.title": "WinScreen 设置",
   "settings.windows": "窗口",

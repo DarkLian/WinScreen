@@ -384,11 +384,9 @@ internal sealed unsafe class ContentOverlay : Form
         using (IDXGIAdapter adapter = graphics.GetAdapter())
             if (adapter.Description.VendorId == SoftwareRendererVendor)
                 throw new NotSupportedException();
-        // d3dcompiler_47 from System32 only, never one beside the program.
-        Pip.D3D11Renderer.EnsureCompiler();
-        _stats = _device!.CreateComputeShader(Compiler.Compile(ContentShaders.Stats, "Stats", "stats", "cs_5_0").Span);
-        _composite = _device.CreateComputeShader(Compiler.Compile(ContentShaders.Composite, "Composite", "composite", "cs_5_0").Span);
-        _backdropShader = _device.CreateComputeShader(Compiler.Compile(ContentShaders.Backdrop, "Backdrop", "backdrop", "cs_5_0").Span);
+        _stats = _device!.CreateComputeShader(StatsCode.Value);
+        _composite = _device.CreateComputeShader(CompositeCode.Value);
+        _backdropShader = _device.CreateComputeShader(BackdropCode.Value);
         _options = _device.CreateBuffer(new BufferDescription((uint)sizeof(Options), BindFlags.ConstantBuffer, ResourceUsage.Default));
         _place = _device.CreateBuffer(new BufferDescription(48, BindFlags.ConstantBuffer, ResourceUsage.Default));
         _edge = _device.CreateSamplerState(new SamplerDescription(Filter.MinMagMipLinear, TextureAddressMode.Clamp));
@@ -827,10 +825,26 @@ internal sealed unsafe class ContentOverlay : Form
         context.CSSetShaderResource(0, null);
     }
 
+    private TileStats[] _tileStats = [];
+
+    // Compiled once a run, not once a window: the code doesn't depend on the device.
+    private static readonly Lazy<byte[]> StatsCode = new(() => Compiled(ContentShaders.Stats, "Stats", "stats")),
+        CompositeCode = new(() => Compiled(ContentShaders.Composite, "Composite", "composite")),
+        BackdropCode = new(() => Compiled(ContentShaders.Backdrop, "Backdrop", "backdrop"));
+
+    private static byte[] Compiled(string source, string entry, string name)
+    {
+        // d3dcompiler_47 from System32 only, never one beside the program.
+        Pip.D3D11Renderer.EnsureCompiler();
+        return Compiler.Compile(source, entry, name, "cs_5_0").ToArray();
+    }
+
     private void ReadPage(ID3D11Texture2D staging, int columns, int rows)
     {
         MappedSubresource map = _context!.Map(staging, 0, MapMode.Read);
-        var stats = new TileStats[columns * rows];
+        // Reused: at 1440p a frame's tiles are about 300 KB, a large-object allocation every frame otherwise.
+        if (_tileStats.Length < columns * rows) _tileStats = new TileStats[columns * rows];
+        TileStats[] stats = _tileStats;
         try
         {
             for (int y = 0; y < rows; y++)
@@ -849,7 +863,7 @@ internal sealed unsafe class ContentOverlay : Form
             _context.Unmap(staging, 0);
         }
 
-        _page.Read(stats);
+        _page.Read(stats.AsSpan(0, columns * rows));
     }
 
     // The window's levels, or the ones of the picture or video showing when it has its own.

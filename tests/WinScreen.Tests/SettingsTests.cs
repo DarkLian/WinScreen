@@ -22,6 +22,25 @@ public class SettingsTests
         Assert.Equal("system", settings.Language);
     }
 
+    // The helper used to hand over its whole settings, putting back anything the ordinary copy changed meanwhile.
+    [Fact]
+    public void The_helper_hands_over_only_what_it_changed()
+    {
+        var helperBase = new AppSettings { ShowToolbar = true, Language = "system" };
+        string before = System.Text.Json.JsonSerializer.Serialize(helperBase);
+        helperBase.SavedSetups.Add(new ProgramSetup { Program = "adminapp", Pinned = true });
+        string changes = AppSettings.Changes(before, System.Text.Json.JsonSerializer.Serialize(helperBase));
+
+        var ordinary = new AppSettings { ShowToolbar = false, Language = "zh-Hans" }; // Changed meanwhile.
+        AppSettings merged = AppSettings.Parse(AppSettings.WithChanges(System.Text.Json.JsonSerializer.Serialize(ordinary), changes));
+
+        Assert.False(merged.ShowToolbar);
+        Assert.Equal("zh-Hans", merged.Language);
+        ProgramSetup saved = Assert.Single(merged.SavedSetups);
+        Assert.Equal("adminapp", saved.Program);
+        Assert.Equal("{}", AppSettings.Changes(before, before));
+    }
+
     [Fact]
     public void Damaged_file_gives_defaults()
     {

@@ -627,6 +627,7 @@
   "settings.transfer.imported": "設定已匯入並開始使用。之前的設定已保留為備份。",
   "settings.transfer.invalid": "這不是支援的 WinScreen 設定檔。",
   "settings.transfer.paths": "檔案包含程式的位置。匯入時會保留這台電腦的開機啟動設定。",
+  "settings.transfer.remoteBackgrounds": "此檔案包含 {0} 個來自網際網路或其他電腦的背景，匯入後會自動開啟。要保留嗎？選擇「取消」則不匯入它們。",
   "settings.transfer.title": "設定檔",
   "settings.window.title": "WinScreen 設定",
   "settings.windows": "視窗",

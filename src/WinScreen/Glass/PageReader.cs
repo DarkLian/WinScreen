@@ -15,11 +15,15 @@ internal sealed class PageReader
     // page from flipping back and forth.
     public bool Light { get; private set; }
 
-    public void Read(TileStats[] tiles)
+    // Kept between frames: a new one each frame was steady garbage while a page showed.
+    private readonly Dictionary<int, int> _count = [];
+
+    public void Read(ReadOnlySpan<TileStats> tiles)
     {
         if (tiles.Length == 0)
             return;
-        var count = new Dictionary<int, int>();
+        Dictionary<int, int> count = _count;
+        count.Clear();
         foreach (TileStats t in tiles)
             count[Key(t)] = count.GetValueOrDefault(Key(t)) + 1;
         KeyValuePair<int, int> top = count.MaxBy(pair => pair.Value);

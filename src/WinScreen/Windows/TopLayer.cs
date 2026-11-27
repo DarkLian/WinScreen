@@ -223,6 +223,8 @@ internal static class TopLayer
     {
         lock (Unpinned)
         {
+            // Closed windows go, so a handle Windows gives a new window is never taken for one WinScreen pinned.
+            PinnedByWinScreen.RemoveWhere(earlier => !User32.IsWindow(earlier));
             if (pinned) PinnedByWinScreen.Add(window);
             else PinnedByWinScreen.Remove(window);
             Unpinned.Remove(window);

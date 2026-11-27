@@ -33,6 +33,15 @@ public sealed record BackgroundPreferences
 
     internal Glass.BackdropSet? For(string program) => (OwnOf(program) ?? Everywhere).Backdrop;
 
+    internal int RemoteCount => Everywhere.Items.Concat(Apps.SelectMany(app => app.Background.Items))
+        .Count(item => Glass.BackdropChoice.IsRemoteText(item.File));
+
+    internal BackgroundPreferences WithoutRemote() => this with
+    {
+        Everywhere = Everywhere.WithoutRemote(),
+        Apps = [.. Apps.Select(app => app with { Background = app.Background.WithoutRemote() })],
+    };
+
     // The app's own background, or Every app's when it has none, changed.
     internal BackgroundPreferences Change(string program, Func<BackgroundChoice, BackgroundChoice> change)
     {
@@ -163,6 +172,8 @@ public sealed record BackgroundChoice
             More = [.. all.Skip(1)],
         };
     }
+
+    internal BackgroundChoice WithoutRemote() => WithItems(Items.Where(item => !Glass.BackdropChoice.IsRemoteText(item.File)));
 
     internal BackgroundChoice Validated()
     {

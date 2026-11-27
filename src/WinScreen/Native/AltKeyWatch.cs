@@ -61,22 +61,20 @@ internal static class AltKeyWatch
             base.WndProc(ref m);
         }
 
-        private static void Read(nint input)
+        private static unsafe void Read(nint input)
         {
             uint header = (uint)Marshal.SizeOf<RawInputHeader>();
             uint size = 0;
-            if (GetRawInputData(input, RID_INPUT, 0, ref size, header) != 0 || size < header + 16) return;
-            nint buffer = Marshal.AllocHGlobal((int)size);
-            try
-            {
-                if (GetRawInputData(input, RID_INPUT, buffer, ref size, header) != size) return;
-                if (Marshal.PtrToStructure<RawInputHeader>(buffer).Type != RIM_TYPEKEYBOARD) return;
-                ushort key = (ushort)Marshal.ReadInt16(buffer, (int)header + 6); // RAWKEYBOARD.VKey
-                ushort flags = (ushort)Marshal.ReadInt16(buffer, (int)header + 2); // RAWKEYBOARD.Flags: 1 is a key going up
-                if (key is VK_MENU or VK_LMENU or VK_RMENU) Interlocked.Exchange(ref s_lastAlt, Environment.TickCount64);
-                Key?.Invoke(key, (flags & 1) == 0);
-            }
-            finally { Marshal.FreeHGlobal(buffer); }
+            // A keyboard's input is a few dozen bytes: on the stack, not an allocation per key system-wide.
+            if (GetRawInputData(input, RID_INPUT, 0, ref size, header) != 0 || size < header + 16 || size > 256) return;
+            byte* bytes = stackalloc byte[(int)size];
+            nint buffer = (nint)bytes;
+            if (GetRawInputData(input, RID_INPUT, buffer, ref size, header) != size) return;
+            if (Marshal.PtrToStructure<RawInputHeader>(buffer).Type != RIM_TYPEKEYBOARD) return;
+            ushort key = (ushort)Marshal.ReadInt16(buffer, (int)header + 6); // RAWKEYBOARD.VKey
+            ushort flags = (ushort)Marshal.ReadInt16(buffer, (int)header + 2); // RAWKEYBOARD.Flags: 1 is a key going up
+            if (key is VK_MENU or VK_LMENU or VK_RMENU) Interlocked.Exchange(ref s_lastAlt, Environment.TickCount64);
+            Key?.Invoke(key, (flags & 1) == 0);
         }
 
         public void Dispose() => DestroyHandle();

@@ -122,6 +122,57 @@ public sealed class BackdropTests
     private static readonly Size Picture = new(1600, 900), Window = new(800, 600);
 
     [Theory]
+    [InlineData("https://example.com/a.jpg", true)]
+    [InlineData(@"\\server\share\a.mp4", true)]
+    [InlineData("//server/share/a.mp4", true)]
+    [InlineData(@"\\?\UNC\server\share\a.mp4", true)]
+    [InlineData(@"C:\Pictures\a.jpg", false)]
+    [InlineData(@"\\?\C:\Pictures\a.jpg", false)]
+    [InlineData("", false)]
+    public void Links_and_shares_count_as_remote(string file, bool remote) =>
+        Assert.Equal(remote, BackdropChoice.IsRemoteText(file));
+
+    // An imported settings file could make Glass open a share (Windows signs in to it on its own) or a local address.
+    [Fact]
+    public void Leaving_out_remote_backgrounds_keeps_the_files_on_this_PC()
+    {
+        var choice = new BackgroundChoice().WithItems([
+            new BackgroundItem { File = @"\\server\share\a.mp4" },
+            new BackgroundItem { File = @"C:\Pictures\b.jpg", Brightness = 50 },
+            new BackgroundItem { File = "https://example.com/c.jpg" },
+        ]);
+        var backgrounds = new BackgroundPreferences
+        {
+            Everywhere = choice,
+            Apps = [new AppBackground { Program = "app", Background = new BackgroundChoice { File = "http://10.0.0.5/x.png" } }],
+        };
+        Assert.Equal(3, backgrounds.RemoteCount);
+
+        BackgroundPreferences kept = backgrounds.WithoutRemote();
+        Assert.Equal(0, kept.RemoteCount);
+        BackgroundItem left = Assert.Single(kept.Everywhere.Items);
+        Assert.Equal(@"C:\Pictures\b.jpg", left.File);
+        Assert.Equal(50, left.Brightness);
+        Assert.Empty(kept.Apps.Single().Background.Items);
+    }
+
+    [Theory]
+    [InlineData("127.0.0.1", true)]
+    [InlineData("10.1.2.3", true)]
+    [InlineData("172.20.0.1", true)]
+    [InlineData("192.168.1.1", true)]
+    [InlineData("169.254.169.254", true)]
+    [InlineData("::1", true)]
+    [InlineData("fe80::1", true)]
+    [InlineData("fd00::1", true)]
+    [InlineData("::ffff:192.168.0.1", true)]
+    [InlineData("8.8.8.8", false)]
+    [InlineData("172.32.0.1", false)]
+    [InlineData("2001:4860:4860::8888", false)]
+    public void A_redirect_may_not_lead_into_this_PC_or_its_network(string address, bool home) =>
+        Assert.Equal(home, BackdropLink.IsHome(System.Net.IPAddress.Parse(address)));
+
+    [Theory]
     [InlineData(BackdropFit.Fill, -133.33f, 0, 1066.67f, 600)]
     [InlineData(BackdropFit.Fit, 0, 75, 800, 450)]
     [InlineData(BackdropFit.Stretch, 0, 0, 800, 600)]

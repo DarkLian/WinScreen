@@ -629,6 +629,7 @@ settings.transfer.import 1A80D4A192698B02
 settings.transfer.imported 926724534E1548EC
 settings.transfer.invalid F73BDE6E0B8CBD07
 settings.transfer.paths E43784C4A232FA82
+settings.transfer.remoteBackgrounds 970826F6E997BD55
 settings.transfer.title 7C3708F655821A4C
 settings.window.title FF19B29493A92E6D
 settings.windows 9EFE01F647D67D91

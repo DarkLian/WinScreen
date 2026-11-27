@@ -282,18 +282,18 @@ internal static unsafe class DirectText
         if (layout == 0) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; }
         try
         {
-            if (!Surface(inner.Width, inner.Height)) return;
+            if (!Surface(inner.Width, inner.Height)) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; }
             var area = new Rect(0, 0, inner.Width, inner.Height);
             if (Call(Target, 57, (void*)_surfaceDc, &area) < 0) return; // BindDC
             ((delegate* unmanaged[Stdcall]<nint, void>)Slot(Target, 48))(Target); // BeginDraw
             nint brush = 0;
             var paint = new ColorF { R = color.R / 255f, G = color.G / 255f, B = color.B / 255f, A = color.A / 255f };
-            ((delegate* unmanaged[Stdcall]<nint, ColorF*, nint, nint*, int>)Slot(Target, 8))(Target, &paint, 0, &brush); // CreateSolidColorBrush
-            ((delegate* unmanaged[Stdcall]<nint, Point2F, nint, nint, int, void>)Slot(Target, 28))(Target, new Point2F(), layout, brush, 0); // DrawTextLayout
+            if (((delegate* unmanaged[Stdcall]<nint, ColorF*, nint, nint*, int>)Slot(Target, 8))(Target, &paint, 0, &brush) >= 0 && brush != 0) // CreateSolidColorBrush
+                ((delegate* unmanaged[Stdcall]<nint, Point2F, nint, nint, int, void>)Slot(Target, 28))(Target, new Point2F(), layout, brush, 0); // DrawTextLayout
             ulong tag1, tag2;
             int result = ((delegate* unmanaged[Stdcall]<nint, ulong*, ulong*, int>)Slot(Target, 49))(Target, &tag1, &tag2); // EndDraw
-            Release(brush);
-            if (result < 0) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; } // Drawn the old way once.
+            if (brush != 0) Release(brush);
+            if (result < 0 || brush == 0) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; } // Drawn the old way once.
             Drawn drawn = Keep(inner.Width, inner.Height);
             var made = new LinkedListNode<(DrawnKey, Drawn)>((key, drawn));
             KeptOrder.AddFirst(made);

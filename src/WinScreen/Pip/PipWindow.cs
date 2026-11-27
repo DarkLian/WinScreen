@@ -1436,6 +1436,8 @@ public sealed partial class PipWindow : Form
                 for (long until = Environment.TickCount64 + PickupFindFor; press is null && Environment.TickCount64 < until;)
                 {
                     Application.DoEvents();
+                    // Messages run here: the view can close, or its original go back, before the item is found.
+                    if (IsDisposed || !_windows.IsParked(_source)) break;
                     // On its name, near the start of the row: elsewhere in a row Windows 10 starts a selection box
                     // instead.
                     if (PipControlInput.Shared.ItemBounds(identity, item, 150) is { } found &&
@@ -1466,6 +1468,13 @@ public sealed partial class PipWindow : Form
             Diagnostics.Log.Swallowed(failure);
             _pickingUp = false;
             StepAside(false);
+            return;
+        }
+        if (IsDisposed || !_windows.IsParked(_source))
+        {
+            // Nothing to press into any more: no input goes out for a view that has gone.
+            _pickingUp = false;
+            Diagnostics.Log.Event("view.pickupAbandoned");
             return;
         }
         LastPickup = item.Length == 0 ? "at its own size" : $"{(itemFound ? "item found" : "item not found")} after {Environment.TickCount64 - pickupStarted} ms";

@@ -1623,7 +1623,12 @@ private readonly ErrorProvider _errors = new();
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
             try
             {
-                _pendingImport = SettingsTransfer.Import(dialog.FileName, _settings);
+                AppSettings imported = SettingsTransfer.Import(dialog.FileName, _settings);
+                if (imported.Backgrounds.RemoteCount is var remote and > 0 &&
+                    ThemedMessage.Show(this, string.Format(T("settings.transfer.remoteBackgrounds"), remote), T("settings.transfer.title"),
+                        okCancel: true) != DialogResult.OK)
+                    imported.Backgrounds = imported.Backgrounds.WithoutRemote();
+                _pendingImport = imported;
                 _removedSetups.Clear();
                 _changedSetups.Clear();
                 _removedKept.Clear();

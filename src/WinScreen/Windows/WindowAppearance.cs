@@ -94,7 +94,15 @@ public sealed partial class WindowController
                 throw Failure(T("actions.readTitleBar"), window);
             state.OriginalDarkTitleBar = original == 0 ? 0 : 1;
             Prepare(window, state);
-            WriteTitleBar(window, state, original == 0 ? 1 : 0);
+            try { WriteTitleBar(window, state, original == 0 ? 1 : 0); }
+            catch (WindowOperationException)
+            {
+                // Left recorded, the next toggle would only put back what never changed and say it was turned off.
+                try { RestoreTitleBar(window, state); }
+                catch (WindowOperationException stuck) { Diagnostics.Log.Swallowed(stuck); }
+                SaveJournal();
+                throw;
+            }
             SaveJournal();
             return original == 0;
         }

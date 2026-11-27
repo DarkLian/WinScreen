@@ -627,6 +627,7 @@
   "settings.transfer.imported": "Settings imported and in use. The ones you had before are kept as a backup.",
   "settings.transfer.invalid": "This is not a supported WinScreen settings file.",
   "settings.transfer.paths": "The file includes program locations. Importing keeps this PC's startup setting.",
+  "settings.transfer.remoteBackgrounds": "This file has {0} backgrounds from the internet or another PC. Once imported, they open on their own. Keep them? Cancel leaves them out.",
   "settings.transfer.title": "Settings file",
   "settings.window.title": "WinScreen Settings",
   "settings.windows": "Windows",
