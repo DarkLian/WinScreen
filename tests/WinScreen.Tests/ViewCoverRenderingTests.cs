@@ -21,7 +21,7 @@ public sealed class ViewCoverRenderingTests
                     StartPosition = FormStartPosition.Manual, FormBorderStyle = FormBorderStyle.None, TopMost = true, ShowInTaskbar = false };
                 destination.Show();
                 Application.DoEvents();
-                using var renderer = new D3D11Renderer(destination.Handle, PipDisplay.MonitorFromWindow(destination.Handle),
+                using var renderer = new D3D11Renderer(destination.Handle, WinScreen.Native.User32.MonitorFromWindow(destination.Handle),
                     new(), new PipDiagnostics(), false);
                 var cover = new Rectangle(20, 30, 17, 11);
                 var crop = new Rectangle(0, 0, 120, 90);

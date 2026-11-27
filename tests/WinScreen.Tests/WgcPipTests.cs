@@ -191,7 +191,7 @@ public sealed class WgcPipTests(ITestOutputHelper output)
             using var destination = new Form { Bounds = new(800, 120, 404, 304), FormBorderStyle = FormBorderStyle.None, TopMost = true };
             destination.Show();
             using var capture = new WgcCaptureSession(WindowIdentity.Capture(source.Handle), destination.Handle,
-                destination.ClientSize, PipDisplay.MonitorFromWindow(destination.Handle), new(), 144, 144, true);
+                destination.ClientSize, WinScreen.Native.User32.MonitorFromWindow(destination.Handle), new(), 144, 144, true);
             capture.SetViewport(new(2, 2, 400, 300), new(0, 0, 400, 300));
             Assert.True(Desktop.WaitFor(() => capture.State is PipSessionState.Live or PipSessionState.Failed, 10000, () => pump(20)));
             Assert.Equal(PipSessionState.Live, capture.State);
@@ -213,7 +213,7 @@ public sealed class WgcPipTests(ITestOutputHelper output)
                 StartPosition = FormStartPosition.Manual, ShowInTaskbar = false };
             destination.Show();
             using var capture = new WgcCaptureSession(WindowIdentity.Capture(source.Handle), destination.Handle,
-                destination.ClientSize, PipDisplay.MonitorFromWindow(destination.Handle), new(), 60, 60, false);
+                destination.ClientSize, WinScreen.Native.User32.MonitorFromWindow(destination.Handle), new(), 60, 60, false);
             try
             {
                 capture.SetViewport(destination.ClientRectangle, new(0, 0, 400, 300));
@@ -285,7 +285,7 @@ public sealed class WgcPipTests(ITestOutputHelper output)
                 StartPosition = FormStartPosition.Manual, ShowInTaskbar = false };
             destination.Show();
             using var capture = new WgcCaptureSession(WindowIdentity.Capture(source.Handle), destination.Handle,
-                destination.ClientSize, PipDisplay.MonitorFromWindow(destination.Handle), new(), 60, 60, false);
+                destination.ClientSize, WinScreen.Native.User32.MonitorFromWindow(destination.Handle), new(), 60, 60, false);
             capture.SetViewport(destination.ClientRectangle, new(0, 0, 400, 300));
             Assert.True(Desktop.WaitFor(() => capture.State == PipSessionState.Live, 10000, () => pump(10)));
             capture.Dispose();

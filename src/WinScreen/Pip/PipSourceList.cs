@@ -14,20 +14,14 @@ internal static class PipSourceList
 {
     private const int DWMWA_CLOAKED = 14;
 
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool EnumWindows(EnumProc callback, nint parameter);
-
-    private delegate bool EnumProc(nint window, nint parameter);
-
     internal static List<PipChoice> Windows(Func<nint, bool> allowed)
     {
         var found = new List<nint>();
-        EnumWindows((window, _) =>
+        TopWindows.Each(window =>
         {
             found.Add(window);
             return true;
-        }, 0);
+        });
 
         return found.Where(window => IsOffered(window) && allowed(window))
             .Select(window => Choice(window)).OfType<PipChoice>()

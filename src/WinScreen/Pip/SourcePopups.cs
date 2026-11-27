@@ -47,16 +47,16 @@ internal sealed class SourcePopups
             var seen = new Dictionary<nint, int>(); // Each popup and its depth in the z-order, topmost 0.
             int viewDepth = -1, depth = 0;
             if (thread != 0)
-                EnumWindows((window, _) =>
+                TopWindows.Each(window =>
                 {
                     if (window == viewWindow && viewWindow != 0) viewDepth = depth;
                     if (window != _source && User32.IsWindowVisible(window) && IsPopupOf(window, _source, process))
                         seen[window] = depth;
                     depth++;
                     return true;
-                }, 0);
+                });
 
-            bool question = thread != 0 && !IsWindowEnabled(_source), opened = false;
+            bool question = thread != 0 && !User32.IsWindowEnabled(_source), opened = false;
             foreach (nint popup in seen.Keys)
             {
                 if (!User32.GetWindowRect(popup, out Rect r)) continue;
@@ -201,7 +201,6 @@ internal sealed class SourcePopups
         return Kind.Interactive;
     }
 
-
     private void Hide(nint popup, Rect r)
     {
         if (!_hidden.ContainsKey(popup) || r.Right > SystemInformation.VirtualScreen.Left)
@@ -218,13 +217,4 @@ internal sealed class SourcePopups
             User32.SetWindowPos(popup, 0, at.X, at.Y, 0, 0, Move);
     }
 
-    private delegate bool EnumWindowsProc(nint window, nint data);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool EnumWindows(EnumWindowsProc callback, nint data);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindowEnabled(nint window);
 }

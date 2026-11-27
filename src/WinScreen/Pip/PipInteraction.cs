@@ -50,7 +50,6 @@ internal static class PressRules
     public static bool IsBorder(nint hit) => (int)hit is >= Left and <= BottomRight or Border;
 }
 
-
 // Windows drops a low-level hook that answers slowly, so the hook only decides from WinScreen's own state and hands the
 // rest, in order, to the input worker. Only the worker talks to the other app.
 internal sealed class PipInteraction : IDisposable
@@ -94,7 +93,7 @@ internal sealed class PipInteraction : IDisposable
     private readonly Windows.WindowIdentity _identity;
     internal Windows.WindowIdentity Identity => _identity;
     private readonly uint _sourceProcess;
-    private readonly HookProc _hook;
+    private readonly User32.HookProc _hook;
     private readonly AutoResetEvent _moved = new(false);
     private readonly Queue<(PressOutcome Outcome, Point At, nint Hit)> _log = new();
     private Thread? _hookThread, _watcher, _worker;
@@ -201,7 +200,7 @@ internal sealed class PipInteraction : IDisposable
             if (!ShareInput || _stopping || _appBusy || _viewThread == 0 || _sourceThread == 0 || _viewThread == _sourceThread) return false;
             if (Interlocked.CompareExchange(ref _sharing, 1, 0) != 0) return false;
             bool keysWithApp = User32.GetForegroundWindow() == _source;
-            if (!AttachThreadInput(_viewThread, _sourceThread, true))
+            if (!User32.AttachThreadInput(_viewThread, _sourceThread, true))
             {
                 Volatile.Write(ref _sharing, 0);
                 return false;
@@ -212,7 +211,7 @@ internal sealed class PipInteraction : IDisposable
             return false;
         }
         if (Interlocked.Exchange(ref _sharing, 0) != 1) return false;
-        AttachThreadInput(_viewThread, _sourceThread, false);
+        User32.AttachThreadInput(_viewThread, _sourceThread, false);
         return true;
     }
 
@@ -233,10 +232,6 @@ internal sealed class PipInteraction : IDisposable
     {
         if (!_rechecked.IsSet && messageTime - Volatile.Read(ref _unsharedAt) >= 0) _rechecked.Set();
     }
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool AttachThreadInput(uint attach, uint attachTo, [MarshalAs(UnmanagedType.Bool)] bool on);
 
     // Raised on the input worker.
     public event Action<CaptionAction>? CaptionPressed;
@@ -308,14 +303,14 @@ internal sealed class PipInteraction : IDisposable
         int hookError = 0;
         _hookThread = new Thread(() =>
         {
-            _hookThreadId = GetCurrentThreadId();
-            hook = SetWindowsHookEx(WH_MOUSE_LL, _hook, GetModuleHandle(0), 0);
+            _hookThreadId = Kernel32.GetCurrentThreadId();
+            hook = User32.SetWindowsHookEx(WH_MOUSE_LL, _hook, Kernel32.GetModuleHandle(0), 0);
             if (hook == 0) hookError = Marshal.GetLastWin32Error();
-            PeekMessage(out _, 0, 0, 0, 0); // Make the thread-message queue before publishing readiness.
+            User32.PeekMessage(out _, 0, 0, 0, 0); // Make the thread-message queue before publishing readiness.
             ready.Set();
             if (hook == 0) return;
-            while (GetMessage(out _, 0, 0, 0) > 0) { }
-            UnhookWindowsHookEx(hook);
+            while (User32.GetMessage(out _, 0, 0, 0) > 0) { }
+            User32.UnhookWindowsHookEx(hook);
         }) { IsBackground = true, Name = "WinScreen interaction hook", Priority = ThreadPriority.AboveNormal };
         _hookThread.Start();
         ready.Wait();
@@ -329,7 +324,7 @@ internal sealed class PipInteraction : IDisposable
         }
         // The visit began where the view last saw the pointer, which can be stale: a move made before the hook existed
         // reached no one. From here every move is seen; take where the pointer really is now.
-        if (GetCursorPos(out NativePoint now) && InView(new Point(now.X, now.Y)) && Pack(new Point(now.X, now.Y)) != Interlocked.Read(ref _pointer))
+        if (User32.GetCursorPos(out NativePoint now) && InView(new Point(now.X, now.Y)) && Pack(new Point(now.X, now.Y)) != Interlocked.Read(ref _pointer))
         {
             Interlocked.Exchange(ref _observedPointer, Pack(new Point(now.X, now.Y)));
             Publish(new Point(now.X, now.Y));
@@ -384,13 +379,13 @@ internal sealed class PipInteraction : IDisposable
     private nint Callback(int code, nint message, nint data)
     {
         if (code != 0 || _stopping)
-            return CallNextHookEx(0, code, message, data);
+            return User32.CallNextHookEx(0, code, message, data);
         long started = PipHookTiming.Start();
         bool swallow;
         try { swallow = Decide(message, data); }
         finally { Timing.Stop(started); }
         if ((int)message != WM_MOUSEMOVE) Trail((int)message, swallow ? 1 : 0);
-        return swallow ? 1 : CallNextHookEx(0, code, message, data);
+        return swallow ? 1 : User32.CallNextHookEx(0, code, message, data);
     }
 
     private bool Decide(nint message, nint data)
@@ -492,7 +487,7 @@ internal sealed class PipInteraction : IDisposable
         Interlocked.Exchange(ref _lastPress, Pack(point));
         Interlocked.And(ref _reachedViewBits, ~(int)button);
         if (button == MouseButtons.Left) _pressHandedOver = _handedOverReleased = false;
-        bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        bool alt = (User32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
         // Over a link the app shows a hand, and the pointer still has the app's shape here (sharing stops just below).
         bool onLink = button == MouseButtons.Left && HandsOverDrags == Compatibility.DragHandOver.Links && PointerShape.IsHand();
         if (!alt)
@@ -519,7 +514,7 @@ internal sealed class PipInteraction : IDisposable
     {
         if (_stopping || !InView(point)) return;
         Interlocked.Exchange(ref _lastPress, Pack(point));
-        bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+        bool alt = (User32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
         if (!alt)
         {
             _rechecked.Reset();
@@ -946,7 +941,7 @@ internal sealed class PipInteraction : IDisposable
         _moved.Set();
         if (_hookThread is not null)
         {
-            PostThreadMessage(_hookThreadId, WM_QUIT, 0, 0);
+            User32.PostThreadMessage(_hookThreadId, WM_QUIT, 0, 0);
             _hookThread.Join(2000);
         }
         // The hook is gone: what it queued still goes out, releases included, then the worker ends.
@@ -981,8 +976,6 @@ internal sealed class PipInteraction : IDisposable
         }
     }
 
-    private delegate nint HookProc(int code, nint message, nint data);
-
     [StructLayout(LayoutKind.Sequential)]
     private struct MouseHookInfo
     {
@@ -991,47 +984,4 @@ internal sealed class PipInteraction : IDisposable
         public nuint Extra;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Msg
-    {
-        public nint Window;
-        public int Message;
-        public nint WParam, LParam;
-        public uint Time;
-        public int X, Y;
-    }
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowsHookExW", SetLastError = true)]
-    private static extern nint SetWindowsHookEx(int kind, HookProc proc, nint module, uint thread);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool UnhookWindowsHookEx(nint hook);
-
-    [DllImport("user32.dll")]
-    private static extern nint CallNextHookEx(nint hook, int code, nint message, nint data);
-
-    [DllImport("user32.dll", EntryPoint = "GetMessageW")]
-    private static extern int GetMessage(out Msg message, nint window, uint first, uint last);
-
-    [DllImport("user32.dll", EntryPoint = "PeekMessageW")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool PeekMessage(out Msg message, nint window, uint first, uint last, uint remove);
-
-    [DllImport("user32.dll", EntryPoint = "PostThreadMessageW")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool PostThreadMessage(uint thread, int message, nint wParam, nint lParam);
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int key);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCursorPos(out NativePoint point);
-
-    [DllImport("kernel32.dll", EntryPoint = "GetModuleHandleW")]
-    private static extern nint GetModuleHandle(nint name);
-
-    [DllImport("kernel32.dll")]
-    private static extern uint GetCurrentThreadId();
 }

@@ -69,8 +69,8 @@ internal sealed class WindowMenuHost : Form
                 if (registered)
                 {
                     _deadline.Start();
-                    keybd_event(key, 0, 0, 0);
-                    keybd_event(key, 0, 2, 0);
+                    User32.keybd_event(key, 0, 0, 0);
+                    User32.keybd_event(key, 0, 2, 0);
                     return;
                 }
                 ReleaseKeys();
@@ -169,6 +169,4 @@ internal sealed class WindowMenuHost : Form
         base.Dispose(disposing);
     }
 
-    [DllImport("user32.dll")]
-    private static extern void keybd_event(byte key, byte scan, uint flags, nuint extra);
 }

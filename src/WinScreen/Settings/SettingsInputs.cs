@@ -265,17 +265,6 @@ internal sealed class HintTextBox : TextBox
 
     private const int WM_ERASEBKGND = 0x0014;
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct PaintStruct
-    {
-        public nint Dc;
-        public int Erase, Left, Top, Right, Bottom, Restore, IncUpdate;
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)] public byte[] Reserved;
-    }
-
-    [DllImport("user32.dll")] private static extern nint BeginPaint(nint window, out PaintStruct paint);
-    [DllImport("user32.dll")] private static extern bool EndPaint(nint window, ref PaintStruct paint);
-
     // An empty box is drawn whole, background and hint in one go: Windows wiping it first and the hint following made
     // it blink.
     protected override void WndProc(ref Message m)
@@ -285,9 +274,9 @@ internal sealed class HintTextBox : TextBox
         if (hinting && m.Msg == WM_ERASEBKGND) { m.Result = 1; return; }
         if (hinting && m.Msg == WM_PAINT)
         {
-            BeginPaint(Handle, out PaintStruct paint);
+            Native.User32.BeginPaint(Handle, out Native.PaintStruct paint);
             try { DrawHint(paint.Dc); }
-            finally { EndPaint(Handle, ref paint); }
+            finally { Native.User32.EndPaint(Handle, ref paint); }
             m.Result = 0;
             return;
         }
@@ -488,8 +477,8 @@ internal sealed class ThemedPicker : ComboBox
     {
         base.OnHandleCreated(e);
         BoxHeight.Fit(this);
-        var info = new ComboInfo { Size = Marshal.SizeOf<ComboInfo>() };
-        _listWindow = GetComboBoxInfo(Handle, ref info) ? info.List : 0;
+        var info = new Native.ComboInfo { Size = Marshal.SizeOf<Native.ComboInfo>() };
+        _listWindow = Native.User32.GetComboBoxInfo(Handle, ref info) ? info.List : 0;
         nint typing = Native.User32.FindWindowEx(Handle, 0, "Edit", null);
         if (typing == 0) return;
         _typing = new TypingPart(this);
@@ -497,19 +486,6 @@ internal sealed class ThemedPicker : ComboBox
         SetMargin();
         PlaceTyping(); // Placed before it was watched.
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct ComboInfo
-    {
-        public int Size;
-        public Native.Rect Item, Button;
-        public int ButtonState;
-        public nint Combo, Edit, List;
-    }
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetComboBoxInfo(nint combo, ref ComboInfo info);
 
     // Windows opens the list at its full height whatever it holds. Kept against the box when it opened upward for want
     // of room below.

@@ -120,7 +120,6 @@ internal sealed unsafe class ContentOverlay : Form
     private static long _allRestacks;
     internal static long AllRestacks => Interlocked.Read(ref _allRestacks);
 
-
     protected override bool ShowWithoutActivation => true;
 
     protected override CreateParams CreateParams
@@ -402,7 +401,7 @@ internal sealed unsafe class ContentOverlay : Form
 
         using var dxgi = _device.QueryInterface<IDXGIDevice>();
         Guid iid = new("C37EA93A-E7AA-450D-B16F-9746CB0407F3");
-        Marshal.ThrowExceptionForHR(DCompositionCreateDevice(dxgi.NativePointer, in iid, out _composition));
+        Marshal.ThrowExceptionForHR(WinRt.DCompositionCreateDevice(dxgi.NativePointer, in iid, out _composition));
         nint target = 0, visual = 0;
         Marshal.ThrowExceptionForHR(((delegate* unmanaged[Stdcall]<nint, nint, int, nint*, int>)Slot(_composition, 6))(_composition, Handle, 1, &target));
         _target = target;
@@ -426,9 +425,6 @@ internal sealed unsafe class ContentOverlay : Form
     }
 
     private static nint Slot(nint com, int index) => (*(nint**)com)[index];
-
-    [DllImport("dcomp.dll")]
-    private static extern int DCompositionCreateDevice(nint dxgiDevice, in Guid iid, out nint device);
 
     private void Render()
     {

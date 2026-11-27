@@ -13,8 +13,6 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     public const byte OpacityStep = 26;
     internal const string EnhancedHoverOwnerProperty = "WinScreen.EnhancedHoverOwner.v1";
     internal const string EnhancedHoverActiveProperty = "WinScreen.EnhancedHoverActive.v1";
-    [DllImport("user32.dll", EntryPoint = "RemovePropW", CharSet = CharSet.Unicode)]
-    private static extern nint RemoveProp(nint window, string name);
     public const byte MinimumOpacity = 51;
     public const byte ClickThroughOpacity = 204;
 
@@ -1273,8 +1271,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 User32.SendMessageTimeout(window, 0x02A3 /* WM_MOUSELEAVE */, 0, 0, 2, 30, out _);
                 if (User32.GetProp(window, EnhancedHoverOwnerProperty) == owner)
                 {
-                    RemoveProp(window, EnhancedHoverOwnerProperty);
-                    if (User32.GetProp(window, EnhancedHoverActiveProperty) == owner) RemoveProp(window, EnhancedHoverActiveProperty);
+                    User32.RemoveProp(window, EnhancedHoverOwnerProperty);
+                    if (User32.GetProp(window, EnhancedHoverActiveProperty) == owner) User32.RemoveProp(window, EnhancedHoverActiveProperty);
                 }
             }
         }

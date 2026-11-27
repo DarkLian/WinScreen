@@ -47,7 +47,7 @@ public sealed class PipNativeRenderingTests(ITestOutputHelper output)
                 destination.Show();
                 Application.DoEvents();
                 var diagnostics = new PipDiagnostics();
-                using var renderer = new D3D11Renderer(destination.Handle, PipDisplay.MonitorFromWindow(destination.Handle),
+                using var renderer = new D3D11Renderer(destination.Handle, WinScreen.Native.User32.MonitorFromWindow(destination.Handle),
                     new(), diagnostics, false, compute);
                 int sourceWidth = width + 12, sourceHeight = height + 10;
                 int[] pixels = new int[sourceWidth * sourceHeight];

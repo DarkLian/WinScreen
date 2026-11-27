@@ -9,14 +9,6 @@ namespace WinScreen.Pip;
 // Each returned COM reference has exactly one owner.
 internal static unsafe partial class WgcInterop
 {
-    [LibraryImport("combase.dll", StringMarshalling = StringMarshalling.Utf16)]
-    private static partial int WindowsCreateString(string value, int length, out nint result);
-    [LibraryImport("combase.dll")]
-    private static partial int WindowsDeleteString(nint value);
-    [LibraryImport("combase.dll")]
-    private static partial int RoGetActivationFactory(nint name, in Guid iid, out nint factory);
-    [LibraryImport("d3d11.dll")]
-    private static partial int CreateDirect3D11DeviceFromDXGIDevice(nint device, out nint result);
 
     private const int CreateForWindow = 3, CreateForMonitor = 4;
 
@@ -27,11 +19,11 @@ internal static unsafe partial class WgcInterop
     private static GraphicsCaptureItem CreateItem(nint target, int method)
     {
         const string className = "Windows.Graphics.Capture.GraphicsCaptureItem";
-        Marshal.ThrowExceptionForHR(WindowsCreateString(className, className.Length, out nint name));
+        Marshal.ThrowExceptionForHR(Native.WinRt.WindowsCreateString(className, className.Length, out nint name));
         nint factory = 0, item = 0;
         try
         {
-            Marshal.ThrowExceptionForHR(RoGetActivationFactory(name,
+            Marshal.ThrowExceptionForHR(Native.WinRt.RoGetActivationFactory(name,
                 new Guid("3628E81B-3CAC-4C60-B7F4-23CE0E0C3356"), out factory));
             Guid iid = new("79C3F95B-31F7-4EC2-A464-632EF5D30760");
             var create = (delegate* unmanaged[Stdcall]<nint, nint, Guid*, nint*, int>)(*(nint**)factory)[method];
@@ -42,14 +34,14 @@ internal static unsafe partial class WgcInterop
         {
             if (item != 0) Marshal.Release(item);
             if (factory != 0) Marshal.Release(factory);
-            WindowsDeleteString(name);
+            Native.WinRt.WindowsDeleteString(name);
         }
     }
 
     internal static IDirect3DDevice Device(ID3D11Device device)
     {
         using var dxgi = device.QueryInterface<IDXGIDevice>();
-        Marshal.ThrowExceptionForHR(CreateDirect3D11DeviceFromDXGIDevice(dxgi.NativePointer, out nint pointer));
+        Marshal.ThrowExceptionForHR(Native.WinRt.CreateDirect3D11DeviceFromDXGIDevice(dxgi.NativePointer, out nint pointer));
         try { return WinRT.MarshalInterface<IDirect3DDevice>.FromAbi(pointer); }
         finally { Marshal.Release(pointer); }
     }

@@ -125,7 +125,7 @@ internal sealed unsafe class ElementFinder : IDisposable
         Guid implementation = new("FF48DBA4-60EF-4201-AA87-54103EEF594E"), wanted = new("30CBE57D-D9D0-452A-AB13-7AC5AC4825EE");
         try
         {
-            if (CoCreateInstance(in implementation, 0, InProcessServer, in wanted, out automation) != 0 ||
+            if (Ole32.CoCreateInstance(in implementation, 0, InProcessServer, in wanted, out automation) != 0 ||
                 ((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(automation, ElementFromHandle))(automation, window, &element) != 0 ||
                 element == 0 ||
                 ((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(automation, ControlViewWalker))(automation, &walker) != 0)
@@ -205,7 +205,7 @@ internal sealed unsafe class ElementFinder : IDisposable
 
     private static nint WindowBelow(nint overlay, Point point)
     {
-        for (nint window = GetWindow(overlay, GW_HWNDNEXT); window != 0; window = GetWindow(window, GW_HWNDNEXT))
+        for (nint window = User32.GetWindow(overlay, GW_HWNDNEXT); window != 0; window = User32.GetWindow(window, GW_HWNDNEXT))
         {
             // A window presses pass through, such as the one Glass or Dark draws a window again in, is never what is marked.
             if (User32.IsWindowVisible(window) && !User32.IsIconic(window) && !WindowInfo.IsHiddenForView(window) &&
@@ -218,11 +218,6 @@ internal sealed unsafe class ElementFinder : IDisposable
         return 0;
     }
 
-    [DllImport("user32.dll")]
-    private static extern nint GetWindow(nint window, uint relation);
-
-    [DllImport("ole32.dll")]
-    private static extern int CoCreateInstance(in Guid implementation, nint outer, uint context, in Guid wanted, out nint instance);
 }
 
 internal sealed record FoundElement(Rectangle Bounds, nint Window, int[] Path, int ControlType);

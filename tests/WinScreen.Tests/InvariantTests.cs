@@ -305,7 +305,7 @@ public class InvariantTests
         Assert.Empty(NetworkProblems([Entry("Tray/About.cs", "string site = \"https://example.org\"; var socketless = 1; var content = Contents();")]));
     }
 
-    // ── 6. Ratchets: global state and scattered P/Invoke may shrink, never grow ───────────────────────────────────
+    // ── 6. Ratchets: global state may shrink, never grow; P/Invoke stays in Native/ ───────────────────────────────
 
     /// <summary>
     /// Settable static properties: state any code can change from anywhere, which is how a test or a second view
@@ -329,34 +329,6 @@ public class InvariantTests
         "WinScreen.Windows.WindowEvents.Active",
     ];
 
-    /// <summary>
-    /// [DllImport]/[LibraryImport] declarations outside Native/, per file. New ones go in Native/, where DPI,
-    /// marshalling and error handling are kept in one place. Taken on 13 Nov 2026.
-    /// </summary>
-    private static readonly Dictionary<string, int> ScatteredPInvoke = new()
-    {
-        ["Glass/ContentOverlay.cs"] = 1,
-        ["Pip/PipControlInput.cs"] = 1,
-        ["Pip/PipDisplay.cs"] = 3,
-        ["Pip/PipEnhancedHover.cs"] = 3,
-        ["Pip/PipInteraction.cs"] = 11,
-        ["Pip/PipMessageInput.cs"] = 12,
-        ["Pip/PipSourceList.cs"] = 1,
-        ["Pip/PipTitleBar.cs"] = 3,
-        ["Pip/PipWindow.cs"] = 1,
-        ["Pip/PipWorkerSignal.cs"] = 2,
-        ["Pip/PopupGuard.cs"] = 6,
-        ["Pip/SourcePopups.cs"] = 2,
-        ["Pip/WgcInterop.cs"] = 4,
-        ["Settings/SettingsInputs.cs"] = 3,
-        ["Settings/SettingsScroll.cs"] = 1,
-        ["Tray/WindowMenuHost.cs"] = 1,
-        ["Windows/ElementFinder.cs"] = 2,
-        ["Windows/FullScreen.cs"] = 1,
-        ["Windows/MouseGestures.cs"] = 15,
-        ["Windows/WindowController.cs"] = 1,
-    };
-
     internal static List<string> RatchetProblems(IReadOnlyDictionary<string, int> baseline, IReadOnlyDictionary<string, int> now)
     {
         var problems = new List<string>();
@@ -377,7 +349,7 @@ public class InvariantTests
                 .Select(property => $"{type.FullName!.Replace('+', '.')}.{property.Name}"))
             .ToDictionary(name => name, _ => 1, StringComparer.Ordinal);
 
-    private static readonly Regex PInvoke = new("""\[\s*(?:DllImport|LibraryImport)\s*\(""");
+    private static readonly Regex PInvoke = new("""\[\s*(?:System\.Runtime\.InteropServices\.)?(?:DllImport|LibraryImport)\s*\(""");
 
     private static Dictionary<string, int> CurrentScatteredPInvoke() =>
         Sources.Value.Where(pair => !pair.Key.StartsWith("Native/", StringComparison.Ordinal))
@@ -392,11 +364,13 @@ public class InvariantTests
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
     }
 
+    // Every [DllImport]/[LibraryImport] is under Native/, where marshalling and error handling are kept in one place
+    // and a call is declared once. Emptied on 28 Nov 2026 (TD-19); it was a shrinking ratchet before.
     [Fact]
-    public void Platform_calls_outside_Native_do_not_grow()
+    public void Platform_calls_are_declared_only_in_Native()
     {
-        List<string> problems = RatchetProblems(ScatteredPInvoke, CurrentScatteredPInvoke());
-        Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
+        Dictionary<string, int> outside = CurrentScatteredPInvoke();
+        Assert.True(outside.Count == 0, string.Join(Environment.NewLine, outside.Select(pair => $"{pair.Key}: {pair.Value}")));
     }
 
     [Fact]
@@ -407,7 +381,7 @@ public class InvariantTests
         Assert.Contains(RatchetProblems(baseline, new Dictionary<string, int> { ["Pip/A.cs"] = 3 }), p => p.Contains("more than", StringComparison.Ordinal));
         Assert.Contains(RatchetProblems(baseline, new Dictionary<string, int> { ["Pip/A.cs"] = 2, ["Tray/B.cs"] = 1 }), p => p.StartsWith("Tray/B.cs", StringComparison.Ordinal));
         Assert.Contains(RatchetProblems(baseline, new Dictionary<string, int>()), p => p.Contains("lower the baseline", StringComparison.Ordinal));
-        Assert.Equal(2, PInvoke.Matches(WithoutComments("[DllImport(\"user32.dll\")] x; [LibraryImport( \"a\")] y; // [DllImport(")).Count);
+        Assert.Equal(3, PInvoke.Matches(WithoutComments("[DllImport(\"user32.dll\")] x; [LibraryImport( \"a\")] y; [System.Runtime.InteropServices.DllImport(\"b\")] z; // [DllImport(")).Count);
     }
 
     // ── The log holds no person's text (P0-4) ──────────────────────────────────────────────────────────────────────

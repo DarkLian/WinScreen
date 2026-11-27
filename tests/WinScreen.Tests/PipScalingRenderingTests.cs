@@ -41,7 +41,7 @@ public sealed class PipScalingRenderingTests(ITestOutputHelper output)
                     ShowInTaskbar = false };
                 destination.Show();
                 Application.DoEvents();
-                using var renderer = new D3D11Renderer(destination.Handle, PipDisplay.MonitorFromWindow(destination.Handle),
+                using var renderer = new D3D11Renderer(destination.Handle, WinScreen.Native.User32.MonitorFromWindow(destination.Handle),
                     new(), new PipDiagnostics(), false, compute) { ViewScaling = scaling };
                 PipTurnRenderingTests.Load(renderer, width + 12, height + 10);
                 var crop = new Rectangle(5, 3, width, height);
@@ -96,7 +96,7 @@ public sealed class PipScalingRenderingTests(ITestOutputHelper output)
                     ShowInTaskbar = false };
                 destination.Show();
                 Application.DoEvents();
-                using var renderer = new D3D11Renderer(destination.Handle, PipDisplay.MonitorFromWindow(destination.Handle),
+                using var renderer = new D3D11Renderer(destination.Handle, WinScreen.Native.User32.MonitorFromWindow(destination.Handle),
                     new(), new PipDiagnostics(), false, compute) { ViewScaling = scaling };
                 var crop = new Rectangle(5, 3, width, height);
                 var size = new Size(targetWidth, targetHeight);

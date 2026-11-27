@@ -45,7 +45,7 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
             using var process = Process.GetProcessById((int)pid);
             PipHoverApp app = PipHoverApps.Classify(process.ProcessName, WindowInfo.ClassName(User32.GetAncestor(window, User32.GA_ROOT)),
                 HasElectronLayout(Path.GetDirectoryName(process.MainModule!.FileName) ?? ""), PipHoverApps.Preferences.Programs);
-            return (app, IsWow64Process2(process.Handle, out ushort machine, out _) && machine == 0);
+            return (app, Kernel32.IsWow64Process2(process.Handle, out ushort machine, out _) && machine == 0);
         }
         catch (Exception e) when (e is Win32Exception or ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
@@ -165,7 +165,7 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
     {
         if (_hook == 0) return;
         if (_disabled || _disarmed) return;
-        if (_identity?.StillThere() != true || IsHungAppWindow(_target)) { Dispose(); return; }
+        if (_identity?.StillThere() != true || User32.IsHungAppWindow(_target)) { Dispose(); return; }
         if (Environment.TickCount64 - _renewed < 500) return;
         Filtered = _renew!(_hook);
         _renewed = Environment.TickCount64;
@@ -196,7 +196,7 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
     {
         nint marker = Interlocked.CompareExchange(ref _marker, 0, 0);
         if (marker != 0 && sourceIdentity.StillThere() && User32.GetProp(sourceIdentity.Window, property) == marker)
-            RemoveProp(sourceIdentity.Window, property);
+            User32.RemoveProp(sourceIdentity.Window, property);
     }
 
     public void Dispose()
@@ -234,7 +234,4 @@ internal sealed class PipEnhancedHover(WindowIdentity sourceIdentity) : IDisposa
     [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)] private delegate bool StopHook(nint session);
     [UnmanagedFunctionPointer(CallingConvention.Winapi)] private delegate long InspectHook(nint session, int point);
     [UnmanagedFunctionPointer(CallingConvention.Winapi)] private delegate uint ReadVersion();
-    [DllImport("user32.dll")] private static extern bool IsHungAppWindow(nint window);
-    [DllImport("user32.dll", EntryPoint = "RemovePropW", CharSet = CharSet.Unicode)] private static extern nint RemoveProp(nint window, string name);
-    [DllImport("kernel32.dll", SetLastError = true)] private static extern bool IsWow64Process2(nint process, out ushort machine, out ushort nativeMachine);
 }

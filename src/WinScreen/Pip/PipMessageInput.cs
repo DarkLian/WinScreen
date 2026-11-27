@@ -41,19 +41,6 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     private readonly Dictionary<MouseButtons, (long Time, Point At, nint Target, Point Mapped)> _spot = [];
     private Point _pressAt, _pressMapped;
 
-    [DllImport("user32.dll")] private static extern bool ScreenToClient(nint window, ref NativePoint point);
-    [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")] private static extern nint GetClassLongPtr(nint window, int index);
-    [DllImport("user32.dll")] private static extern uint GetDoubleClickTime();
-    [DllImport("user32.dll")] private static extern nint GetWindowDpiAwarenessContext(nint window);
-    [DllImport("user32.dll")] private static extern nint SetThreadDpiAwarenessContext(nint context);
-    [DllImport("user32.dll")] private static extern int GetAwarenessFromDpiAwarenessContext(nint context);
-    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool AreDpiAwarenessContextsEqual(nint a, nint b);
-    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
-    [DllImport("user32.dll")] private static extern nint GetMenu(nint window);
-    [DllImport("user32.dll")] private static extern int MenuItemFromPoint(nint window, nint menu, NativePoint point);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetMenuString(nint menu, uint item, System.Text.StringBuilder text, int length, uint flags);
-    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsHungAppWindow(nint window);
-
     private InputRoute RouteOf(nint target) => PipInputRoutes.RouteFor(target, source, identity.ProcessId);
 
     internal Point MappedScreen(Point pointer, PipMapping map)
@@ -115,8 +102,8 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         if ((held & MouseButtons.Middle) != 0) keys |= 0x10;
         if ((held & MouseButtons.XButton1) != 0) keys |= 0x20;
         if ((held & MouseButtons.XButton2) != 0) keys |= 0x40;
-        if ((GetAsyncKeyState(0x10) & 0x8000) != 0) keys |= 4;
-        if ((GetAsyncKeyState(0x11) & 0x8000) != 0) keys |= 8;
+        if ((User32.GetAsyncKeyState(0x10) & 0x8000) != 0) keys |= 4;
+        if ((User32.GetAsyncKeyState(0x11) & 0x8000) != 0) keys |= 8;
         return keys;
     }
 
@@ -127,10 +114,10 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         if (target == 0 || !identity.StillThere() || !User32.IsWindow(target)) return false;
         User32.GetWindowThreadProcessId(target, out uint process);
         if (process != identity.ProcessId) return false;
-        if (!evenIfBusy && IsHungAppWindow(target)) return false;
+        if (!evenIfBusy && User32.IsHungAppWindow(target)) return false;
         var point = new NativePoint { X = mapped.X, Y = mapped.Y };
         if (screenCoordinates) return User32.PostMessage(target, message, keys, Pack(mapped));
-        if (!ScreenToClient(target, ref point)) return false;
+        if (!User32.ScreenToClient(target, ref point)) return false;
         return PostClient(target, message, keys, new Point(point.X, point.Y));
     }
 
@@ -140,14 +127,14 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     // two sizes.
     private static bool PostClient(nint target, int message, nint keys, Point client)
     {
-        nint context = GetWindowDpiAwarenessContext(target);
-        if (context == 0 || GetAwarenessFromDpiAwarenessContext(context) is not (0 or 1)) // Unaware or system aware.
+        nint context = User32.GetWindowDpiAwarenessContext(target);
+        if (context == 0 || User32.GetAwarenessFromDpiAwarenessContext(context) is not (0 or 1)) // Unaware or system aware.
             return User32.PostMessage(target, message, keys, Pack(client));
         // The top-level window gives the most exact scale, when it shares the target's context.
         nint root = User32.GetAncestor(target, 2 /* GA_ROOT */);
-        nint measured = root != 0 && AreDpiAwarenessContextsEqual(GetWindowDpiAwarenessContext(root), context) ? root : target;
+        nint measured = root != 0 && User32.AreDpiAwarenessContextsEqual(User32.GetWindowDpiAwarenessContext(root), context) ? root : target;
         if (!User32.GetWindowRect(measured, out Rect pixels)) return false;
-        nint previous = SetThreadDpiAwarenessContext(context);
+        nint previous = User32.SetThreadDpiAwarenessContext(context);
         if (previous == 0) return User32.PostMessage(target, message, keys, Pack(client));
         try
         {
@@ -157,18 +144,18 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
             return User32.PostMessage(target, message, keys,
                 Pack(new Point((int)Math.Round(client.X * x), (int)Math.Round(client.Y * y))));
         }
-        finally { SetThreadDpiAwarenessContext(previous); }
+        finally { User32.SetThreadDpiAwarenessContext(previous); }
     }
 
     // Its marked letter, or else its first, as Windows matches.
     private nint? MenuKeyAt(Point mapped)
     {
-        nint bar = GetMenu(source);
+        nint bar = User32.GetMenu(source);
         if (bar == 0) return null;
-        int item = MenuItemFromPoint(source, bar, new NativePoint { X = mapped.X, Y = mapped.Y });
+        int item = User32.MenuItemFromPoint(source, bar, new NativePoint { X = mapped.X, Y = mapped.Y });
         if (item < 0) return null;
         var text = new System.Text.StringBuilder(256);
-        if (GetMenuString(bar, (uint)item, text, text.Capacity, 0x400 /* MF_BYPOSITION */) <= 0) return null;
+        if (User32.GetMenuString(bar, (uint)item, text, text.Capacity, 0x400 /* MF_BYPOSITION */) <= 0) return null;
         string name = text.ToString();
         int marked = name.IndexOf('&');
         while (marked >= 0 && marked + 1 < name.Length && name[marked + 1] == '&') marked = name.IndexOf('&', marked + 2);
@@ -197,7 +184,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
     {
         mapped = default;
         if (!_spot.TryGetValue(button, out var last) || (target != 0 && last.Target != target) ||
-            Environment.TickCount64 - last.Time > GetDoubleClickTime() || !WithinDoubleClick(pointer, last.At)) return false;
+            Environment.TickCount64 - last.Time > User32.GetDoubleClickTime() || !WithinDoubleClick(pointer, last.At)) return false;
         mapped = last.Mapped;
         return true;
     }
@@ -226,7 +213,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
             PressTransport = "menu bar";
             PressRoute = null;
             Why = "";
-            if (!identity.StillThere() || IsHungAppWindow(source) ||
+            if (!identity.StillThere() || User32.IsHungAppWindow(source) ||
                 !User32.PostMessage(source, 0x112 /* WM_SYSCOMMAND */, 0xF100 /* SC_KEYMENU */, key)) return Delivery.Failed;
             _clicks.Remove(button);
             _spot.Remove(button);
@@ -243,7 +230,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
         PressRoute = route;
         long now = Environment.TickCount64;
         bool secondClick = _clicks.TryGetValue(button, out var previous) && previous.Target == target &&
-            now - previous.Time <= GetDoubleClickTime() && WithinDoubleClick(pointer, previous.At);
+            now - previous.Time <= User32.GetDoubleClickTime() && WithinDoubleClick(pointer, previous.At);
         InputOperation operation = button switch
         {
             MouseButtons.Left => secondClick ? InputOperation.DoubleClick : InputOperation.Click,
@@ -273,7 +260,7 @@ internal sealed class PipMessageInput(nint source, WindowIdentity identity)
             return Delivery.Deferred;
         }
         int down = DownMessage(button);
-        bool doubleClick = secondClick && ((long)GetClassLongPtr(target, -26) & 8) != 0;
+        bool doubleClick = secondClick && ((long)User32.GetClassLongPtr(target, -26) & 8) != 0;
         MouseButtons held = _held | button;
         // The second press of a double-click (or third of a triple) lands where the first did, as moves above.
         Point first = pointer;

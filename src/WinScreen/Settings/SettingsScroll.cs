@@ -16,19 +16,6 @@ internal sealed class ThinScrollBar : Control
     private bool _hot, _dragging;
     private int _dragFrom, _dragStart, _repeatStep;
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct ScrollInfo
-    {
-        public uint Size, Mask;
-        public int Min, Max;
-        public uint Page;
-        public int Pos, TrackPos;
-    }
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetScrollInfo(nint window, int bar, ref ScrollInfo info);
-
     internal ThinScrollBar(Control target, Action<int> scrollTo, Func<Color> back)
     {
         _target = target;
@@ -50,12 +37,12 @@ internal sealed class ThinScrollBar : Control
     internal void Sync()
     {
         if (!_target.IsHandleCreated || IsDisposed) return;
-        var info = new ScrollInfo { Size = (uint)Marshal.SizeOf<ScrollInfo>(), Mask = SIF_RANGE | SIF_PAGE | SIF_POS };
+        var info = new Native.ScrollInfo { Size = (uint)Marshal.SizeOf<Native.ScrollInfo>(), Mask = SIF_RANGE | SIF_PAGE | SIF_POS };
         // Windows keeps the range of a scroll bar it has hidden, so a page that fits after growing still read as one
         // that scrolls.
         const long WS_VSCROLL = 0x00200000;
         if ((Native.User32.GetWindowLongPtr(_target.Handle, Native.User32.GWL_STYLE) & WS_VSCROLL) == 0 ||
-            !GetScrollInfo(_target.Handle, SB_VERT, ref info)) info = default;
+            !Native.User32.GetScrollInfo(_target.Handle, SB_VERT, ref info)) info = default;
         bool changed = info.Min != _min || info.Max != _max || (int)info.Page != _page || info.Pos != _pos;
         (_min, _max, _page, _pos) = (info.Min, info.Max, (int)info.Page, info.Pos);
         if (Visible != Needed) Visible = Needed;

@@ -14,12 +14,9 @@ public static partial class FullScreen
     private const int RunningFullScreenGame = 3;
     private const int PresentationMode = 4;
 
-    [LibraryImport("shell32.dll")]
-    private static partial int SHQueryUserNotificationState(out int state);
-
     public static FullScreenState Current()
     {
-        if (SHQueryUserNotificationState(out int state) != 0)
+        if (Native.Shell32.SHQueryUserNotificationState(out int state) != 0)
             return FullScreenState.None;
         return state switch
         {
@@ -32,7 +29,7 @@ public static partial class FullScreen
 
     public static bool IsActive() => Current() != FullScreenState.None;
 
-    public static bool IsAway() => SHQueryUserNotificationState(out int state) == 0 && state == NotPresent;
+    public static bool IsAway() => Native.Shell32.SHQueryUserNotificationState(out int state) == 0 && state == NotPresent;
 }
 
 // Anything that only removes one of WinScreen's own views always works, so a view can never be left stuck over a game.

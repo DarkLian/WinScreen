@@ -9,16 +9,6 @@ internal static partial class TextCaret
     private const int ObjectCaret = -8;
     private static readonly Guid AccessibleId = new("618736E0-3C3D-11CF-810C-00AA00389B71");
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct GuiThreadInfo
-    {
-        public int Size, Flags;
-        public nint Active, Focus, Capture, MenuOwner, MoveSize, Caret;
-        public Rect CaretRect;
-    }
-
-    [DllImport("user32.dll")] private static extern bool GetGUIThreadInfo(uint thread, ref GuiThreadInfo info);
-    [DllImport("user32.dll")] private static extern bool IsHungAppWindow(nint window);
     [DllImport("oleacc.dll")]
     private static extern int AccessibleObjectFromEvent(nint window, int item, int child,
         [MarshalAs(UnmanagedType.Interface)] out Accessibility.IAccessible? accessible, out object? childId);
@@ -28,15 +18,15 @@ internal static partial class TextCaret
 
     internal static nint FocusOf(uint thread)
     {
-        var info = new GuiThreadInfo { Size = Marshal.SizeOf<GuiThreadInfo>() };
-        return thread != 0 && GetGUIThreadInfo(thread, ref info) ? info.Focus : 0;
+        var info = GuiThreadInfo.Empty;
+        return thread != 0 && User32.GetGUIThreadInfo(thread, ref info) ? info.Focus : 0;
     }
 
-    internal static bool IsHung(nint window) => IsHungAppWindow(window);
+    internal static bool IsHung(nint window) => User32.IsHungAppWindow(window);
 
     internal static Rectangle? FromEvent(nint window, int item, int child)
     {
-        if (item != ObjectCaret || window == 0 || IsHungAppWindow(window)) return null;
+        if (item != ObjectCaret || window == 0 || User32.IsHungAppWindow(window)) return null;
         try
         {
             if (AccessibleObjectFromEvent(window, item, child, out var accessible, out object? childId) != 0 || accessible is null) return null;
@@ -51,7 +41,7 @@ internal static partial class TextCaret
 
     internal static Rectangle? In(nint window)
     {
-        if (window == 0 || IsHungAppWindow(window)) return null;
+        if (window == 0 || User32.IsHungAppWindow(window)) return null;
         try
         {
             if (AccessibleObjectFromWindow(window, ObjectCaret, AccessibleId, out var accessible) != 0 || accessible is null) return null;
@@ -71,22 +61,11 @@ internal static partial class TextCaret
         return width <= 0 && height <= 0 && left == 0 && top == 0 ? null : new Rectangle(left, top, Math.Max(1, width), Math.Max(1, height));
     }
 
-    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
-    [DllImport("user32.dll")] private static extern int GetMessageW(out Msg message, nint window, uint first, uint last);
-    [DllImport("user32.dll")] private static extern bool PeekMessageW(out Msg message, nint window, uint first, uint last, uint remove);
-    [DllImport("user32.dll")] private static extern bool TranslateMessage(in Msg message);
-    [DllImport("user32.dll")] private static extern nint DispatchMessageW(in Msg message);
-    [DllImport("user32.dll")] private static extern bool PostThreadMessageW(uint thread, int message, nint w, nint l);
-    [DllImport("user32.dll")] private static extern uint MsgWaitForMultipleObjects(uint count, nint handles, bool all, uint milliseconds, uint wake);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Msg { public nint Window; public uint Message; public nint W, L; public uint Time; public int X, Y; }
-
     // Makes the thread's message queue now, so a later quit can't be lost.
     internal static uint PrepareThread()
     {
-        PeekMessageW(out _, 0, 0, 0, 0);
-        return GetCurrentThreadId();
+        User32.PeekMessage(out _, 0, 0, 0, 0);
+        return Kernel32.GetCurrentThreadId();
     }
 
     // WinEvent callbacks arrive through this thread's messages.
@@ -94,16 +73,16 @@ internal static partial class TextCaret
     {
         while (true)
         {
-            if (MsgWaitForMultipleObjects(0, 0, false, (uint)milliseconds, 0x04FF) != 0x102)
-                while (PeekMessageW(out Msg message, 0, 0, 0, 1))
+            if (User32.MsgWaitForMultipleObjects(0, 0, false, (uint)milliseconds, 0x04FF) != 0x102)
+                while (User32.PeekMessage(out Msg message, 0, 0, 0, 1))
                 {
                     if (message.Message == 0x0012) return;
-                    TranslateMessage(message);
-                    DispatchMessageW(message);
+                    User32.TranslateMessage(message);
+                    User32.DispatchMessage(message);
                 }
             tick();
         }
     }
 
-    internal static void Quit(uint thread) => PostThreadMessageW(thread, 0x0012, 0, 0);
+    internal static void Quit(uint thread) => User32.PostThreadMessage(thread, 0x0012, 0, 0);
 }

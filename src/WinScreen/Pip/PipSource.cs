@@ -61,7 +61,7 @@ internal sealed class WindowPipSource(WindowIdentity identity) : PipSource
     public override bool IsMinimized => User32.IsIconic(identity.Window);
     public override bool ShowsCursor => false;
     public override Screen Screen => Screen.FromHandle(identity.Window);
-    public override nint Monitor => PipDisplay.MonitorFromWindow(identity.Window);
+    public override nint Monitor => Native.User32.MonitorFromWindow(identity.Window);
     public override int Dpi => Native.Dpi.Of(identity.Window);
     public override int RefreshRate => PipDisplay.CachedRefresh(identity.Window);
     public override Size SurfaceSize => Size.Empty;

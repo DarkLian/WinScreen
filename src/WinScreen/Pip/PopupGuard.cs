@@ -33,7 +33,7 @@ internal static class PopupGuard
             _held[popup] = new Held(place, Environment.TickCount64 + HoldMilliseconds, process);
             if (added) EnsureThread();
         }
-        if (added) PostThreadMessageW(_thread, StartMessage, 0, 0);
+        if (added) User32.PostThreadMessage(_thread, StartMessage, 0, 0);
     }
 
     internal static void Release(nint popup)
@@ -45,8 +45,8 @@ internal static class PopupGuard
     {
         var entry = (process, opened);
         lock (_held) { _watchers.Add(entry); EnsureThread(); }
-        PostThreadMessageW(_thread, StartMessage, 0, 0);
-        return new Unwatch(() => { lock (_held) _watchers.Remove(entry); PostThreadMessageW(_thread, StartMessage, 0, 0); });
+        User32.PostThreadMessage(_thread, StartMessage, 0, 0);
+        return new Unwatch(() => { lock (_held) _watchers.Remove(entry); User32.PostThreadMessage(_thread, StartMessage, 0, 0); });
     }
 
     private sealed class Unwatch(Action stop) : IDisposable
@@ -61,8 +61,8 @@ internal static class PopupGuard
         using var ready = new ManualResetEventSlim();
         var thread = new Thread(() =>
         {
-            _thread = GetCurrentThreadId();
-            PeekMessageW(out _, 0, 0, 0, 0); // A message queue, before anyone posts to it.
+            _thread = Kernel32.GetCurrentThreadId();
+            User32.PeekMessage(out _, 0, 0, 0, 0); // A message queue, before anyone posts to it.
             ready.Set();
             Loop();
         }) { IsBackground = true, Name = "WinScreen popup guard" };
@@ -75,12 +75,12 @@ internal static class PopupGuard
         while (true)
         {
             // Wakes at least every 100 ms to let go of menus held long enough.
-            if (MsgWaitForMultipleObjects(0, 0, false, 100, 0x04FF) != 0x102)
-                while (PeekMessageW(out Msg message, 0, 0, 0, 1))
+            if (User32.MsgWaitForMultipleObjects(0, 0, false, 100, 0x04FF) != 0x102)
+                while (User32.PeekMessage(out Msg message, 0, 0, 0, 1))
                 {
                     if (message.Message == QuitMessage) return;
-                    TranslateMessage(message);
-                    DispatchMessageW(message);
+                    User32.TranslateMessage(message);
+                    User32.DispatchMessage(message);
                 }
             Tidy();
         }
@@ -115,15 +115,6 @@ internal static class PopupGuard
             if (User32.SetWinEventHook(Shown, Shown, 0, Callback, process, 0, OutOfContext | SkipOwnProcess) is var hook and not 0)
                 _showHooks[process] = hook;
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Msg { public nint Window; public uint Message; public nint W, L; public uint Time; public int X, Y; }
-    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
-    [DllImport("user32.dll")] private static extern bool PeekMessageW(out Msg message, nint window, uint first, uint last, uint remove);
-    [DllImport("user32.dll")] private static extern uint MsgWaitForMultipleObjects(uint count, nint handles, bool all, uint milliseconds, uint wake);
-    [DllImport("user32.dll")] private static extern bool TranslateMessage(in Msg message);
-    [DllImport("user32.dll")] private static extern nint DispatchMessageW(in Msg message);
-    [DllImport("user32.dll")] private static extern bool PostThreadMessageW(uint thread, int message, nint w, nint l);
 
     [UnmanagedCallersOnly]
     private static void OnEvent(nint hook, uint kind, nint window, int item, int child, uint thread, uint time)

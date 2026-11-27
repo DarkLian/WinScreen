@@ -71,11 +71,6 @@ internal sealed class PipTitleBar : Form
         if (_target == 0) Hide();
     }
 
-    [DllImport("user32.dll")] private static extern nint BeginDeferWindowPos(int count);
-    [DllImport("user32.dll")] private static extern nint DeferWindowPos(nint batch, nint window, nint after,
-        int x, int y, int width, int height, uint flags);
-    [DllImport("user32.dll")] private static extern bool EndDeferWindowPos(nint batch);
-
     internal bool Dragging { get; private set; }
 
     public PipTitleBar(Form view, Func<bool> locked, Action minimize)
@@ -123,10 +118,10 @@ internal sealed class PipTitleBar : Form
                 place = PipGeometry.KeepInside(new Rectangle(place, _view.Size), area);
                 int top = place.Y - Height >= area.Top ? place.Y - Height : place.Y + _view.Height;
                 const uint flags = User32.SWP_NOACTIVATE | User32.SWP_NOZORDER | User32.SWP_NOSIZE;
-                nint batch = BeginDeferWindowPos(2);
-                if (batch != 0) batch = DeferWindowPos(batch, _view.Handle, 0, place.X, place.Y, 0, 0, flags);
-                if (batch != 0) batch = DeferWindowPos(batch, Handle, 0, place.X, top, 0, 0, flags);
-                if (batch == 0 || !EndDeferWindowPos(batch)) _view.Location = place;
+                nint batch = User32.BeginDeferWindowPos(2);
+                if (batch != 0) batch = User32.DeferWindowPos(batch, _view.Handle, 0, place.X, place.Y, 0, 0, flags);
+                if (batch != 0) batch = User32.DeferWindowPos(batch, Handle, 0, place.X, top, 0, 0, flags);
+                if (batch == 0 || !User32.EndDeferWindowPos(batch)) _view.Location = place;
 
             };
             control.MouseUp += (_, _) => { Dragging = false; control.Capture = false; };

@@ -77,7 +77,7 @@ public sealed class PipEnlargeTests(ITestOutputHelper output)
                     FormBorderStyle = FormBorderStyle.None, TopMost = true, ShowInTaskbar = false };
                 destination.Show();
                 Application.DoEvents();
-                using var renderer = new D3D11Renderer(destination.Handle, PipDisplay.MonitorFromWindow(destination.Handle),
+                using var renderer = new D3D11Renderer(destination.Handle, WinScreen.Native.User32.MonitorFromWindow(destination.Handle),
                     new PipPreferences { Scaling = scaling }, new PipDiagnostics(), false);
                 fixed (int* data = small)
                 {

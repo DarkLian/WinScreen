@@ -116,8 +116,8 @@ internal sealed class PipControlInput
         if (_automation != 0) return _automation;
         Guid wanted = new("30CBE57D-D9D0-452A-AB13-7AC5AC4825EE"); // IUIAutomation
         Guid newer = new("E22AD333-B25F-460C-83D0-0581107395C9"), older = new("FF48DBA4-60EF-4201-AA87-54103EEF594E");
-        if (CoCreateInstance(in newer, 0, 1, in wanted, out _automation) < 0 &&
-            CoCreateInstance(in older, 0, 1, in wanted, out _automation) < 0) return _automation = 0;
+        if (Ole32.CoCreateInstance(in newer, 0, 1, in wanted, out _automation) < 0 &&
+            Ole32.CoCreateInstance(in older, 0, 1, in wanted, out _automation) < 0) return _automation = 0;
         // A busy or broken app must not hold this thread for UI Automation's long default timeouts.
         Guid second = new("34723AFF-0C9D-49D0-9896-7AB52DF8CD8A"); // IUIAutomation2
         if (Marshal.QueryInterface(_automation, in second, out nint automation2) >= 0)
@@ -418,5 +418,4 @@ internal sealed class PipControlInput
     }
 
     private static unsafe nint Slot(nint com, int index) => (*(nint**)com)[index];
-    [DllImport("ole32.dll")] private static extern int CoCreateInstance(in Guid cls, nint outer, uint context, in Guid iid, out nint instance);
 }

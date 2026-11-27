@@ -209,7 +209,7 @@ internal sealed class PipBackendSelector : IPipRenderBackend
         if (Stopwatch.GetElapsedTime(_lastDisplayCheck).TotalSeconds >= 1)
         {
             _lastDisplayCheck = Stopwatch.GetTimestamp();
-            nint monitor = PipDisplay.MonitorFromWindow(_hwnd);
+            nint monitor = Native.User32.MonitorFromWindow(_hwnd);
             _sourceHz = _source.RefreshRate; _targetHz = PipDisplay.CachedRefresh(_hwnd);
             if (_monitor != 0 && _monitor != monitor && _advanced is not null && !_policy.Pinned)
             {

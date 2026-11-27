@@ -791,8 +791,6 @@ public sealed partial class PipWindow : Form
         catch (WindowOperationException failure) { Problem?.Invoke(failure.Message); }
     }
 
-    [DllImport("user32.dll")] private static extern int GetMessageTime();
-
     protected override void WndProc(ref Message m)
     {
         if (m.Msg == User32.WM_NCHITTEST && !_overrides.ClickThrough)
@@ -816,7 +814,7 @@ public sealed partial class PipWindow : Form
         }
         // A pointer move to the view itself: Windows has checked where the real pointer is
         // (PipInteraction.MaxRecheckWait).
-        if (m.Msg == 0x0200) _live?.ViewPointerMoved(GetMessageTime());
+        if (m.Msg == 0x0200) _live?.ViewPointerMoved(User32.GetMessageTime());
         // Keep the modifiers carried by the press. This inactive view may process it after Ctrl is released.
         if (m.Msg is 0x0201 or 0x0203)
             _controlAtPress = (m.WParam.ToInt64() & 0x0008) != 0; // MK_CONTROL
@@ -1350,19 +1348,8 @@ public sealed partial class PipWindow : Form
     internal static bool DragAndDropRunning(uint thread)
     {
         var info = new GuiThreadInfo { Size = System.Runtime.InteropServices.Marshal.SizeOf<GuiThreadInfo>() };
-        return thread != 0 && GetGUIThreadInfo(thread, ref info) && info.Capture != 0 && WindowInfo.ClassName(info.Capture) == "CLIPBRDWNDCLASS";
+        return thread != 0 && User32.GetGUIThreadInfo(thread, ref info) && info.Capture != 0 && WindowInfo.ClassName(info.Capture) == "CLIPBRDWNDCLASS";
     }
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct GuiThreadInfo
-    {
-        public int Size, Flags;
-        public nint Active, Focus, Capture, MenuOwner, MoveSize, Caret;
-        public Rect CaretBounds;
-    }
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern bool GetGUIThreadInfo(uint thread, ref GuiThreadInfo info);
 
     private void HandOverDrop()
     {
@@ -1565,26 +1552,8 @@ public sealed partial class PipWindow : Form
         };
         Input[] inputs = press == hand ? [new() { Type = 0, Mouse = At(press, LeftDown) }]
             : [new() { Type = 0, Mouse = At(press, LeftDown) }, new() { Type = 0, Mouse = At(hand, 0) }];
-        SendInput((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf<Input>());
+        User32.SendInput((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf<Input>());
     }
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct Input
-    {
-        public int Type;
-        public MouseInput Mouse;
-    }
-
-    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    private struct MouseInput
-    {
-        public int X, Y;
-        public uint Data, Flags, Time;
-        public nuint Extra;
-    }
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern uint SendInput(uint count, Input[] inputs, int size);
 
     internal Point SourceSpotAt(Point screen) => new PipMapping(PictureArea, _lastShown, _appliedTurn).ToSource(PointToClient(screen));
 
