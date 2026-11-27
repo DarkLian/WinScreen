@@ -180,6 +180,14 @@ public sealed class ViewRecordingTests(Xunit.Abstractions.ITestOutputHelper outp
             RecordingResult result = await recording.Completion.WaitAsync(TimeSpan.FromSeconds(20));
             output.WriteLine($"{result}, {handed} handed in");
             Assert.Equal(path, result.File);
+            // The first frame taken covers the start, by design. On GitHub's ARM64 runner the start once took the whole
+            // three seconds (one frame, then the last), and once the recording's thread began after the red second had
+            // gone (no red): neither the rate nor the colours can be checked then.
+            if (result.StartMilliseconds > 1000)
+            {
+                Skipped.Because($"The encoder took {result.StartMilliseconds} ms to start, so the recording couldn't run at its rate.");
+                return;
+            }
             Assert.Equal(hardware, result.Hardware);
             using VideoFile video = VideoFile.Read(path, index => index % 10 == 5);
             Assert.Equal(size, video.Size);
