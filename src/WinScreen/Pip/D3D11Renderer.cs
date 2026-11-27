@@ -141,7 +141,7 @@ internal sealed class D3D11Renderer : IDisposable
 
     private static readonly object CompilerGate = new();
     private static bool _compilerResolved;
-    private static void EnsureCompiler()
+    internal static void EnsureCompiler()
     {
         lock (CompilerGate)
         {

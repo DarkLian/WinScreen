@@ -8,7 +8,9 @@ public sealed partial class WindowController
     private const uint ReturnDestroyEvent = 0x8001, ReturnLocationEvent = 0x800B;
     private readonly Dictionary<nint, (WindowPlacement Home, nint[] Hooks)> _returning = [];
     private User32.WinEventProc? _returnEvent;
-    private readonly Dictionary<nint, System.Threading.Timer> _returnSettles = [];
+    // A Windows Forms timer, so the settle runs on the thread that set the hooks: UnhookWinEvent from any other thread
+    // fails and leaves them in place.
+    private readonly Dictionary<nint, System.Windows.Forms.Timer> _returnSettles = [];
     private const int ReturnSettleMilliseconds = 300;
 
     internal bool IsWatchingReturn(nint window)
@@ -57,7 +59,10 @@ public sealed partial class WindowController
             // Leaving full screen, a browser can pass through a size on the screen before it reaches the spot it
             // remembers: where it ends up is judged once it has been still for a moment.
             if (_returnSettles.Remove(window, out var earlier)) earlier.Dispose();
-            _returnSettles[window] = new System.Threading.Timer(_ => SettleReturn(window), null, ReturnSettleMilliseconds, Timeout.Infinite);
+            var settle = new System.Windows.Forms.Timer { Interval = ReturnSettleMilliseconds };
+            settle.Tick += (_, _) => SettleReturn(window);
+            _returnSettles[window] = settle;
+            settle.Start();
         }
     }
 

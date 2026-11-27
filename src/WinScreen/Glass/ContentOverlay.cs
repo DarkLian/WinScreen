@@ -384,6 +384,8 @@ internal sealed unsafe class ContentOverlay : Form
         using (IDXGIAdapter adapter = graphics.GetAdapter())
             if (adapter.Description.VendorId == SoftwareRendererVendor)
                 throw new NotSupportedException();
+        // d3dcompiler_47 from System32 only, never one beside the program.
+        Pip.D3D11Renderer.EnsureCompiler();
         _stats = _device!.CreateComputeShader(Compiler.Compile(ContentShaders.Stats, "Stats", "stats", "cs_5_0").Span);
         _composite = _device.CreateComputeShader(Compiler.Compile(ContentShaders.Composite, "Composite", "composite", "cs_5_0").Span);
         _backdropShader = _device.CreateComputeShader(Compiler.Compile(ContentShaders.Backdrop, "Backdrop", "backdrop", "cs_5_0").Span);
@@ -653,6 +655,8 @@ internal sealed unsafe class ContentOverlay : Form
             backdrop?.Dispose();
             leaving?.Dispose();
             DisposeAll(cache, tiles, output, staging, final, cacheView, outputRead, tilesView, outputView, finalView);
+            if (Interlocked.Exchange(ref _renderEnd, RenderEnded) == RenderHandedOver)
+                Release();
         }
     }
 
@@ -899,10 +903,20 @@ internal sealed unsafe class ContentOverlay : Form
                 User32.UnhookWinEvent(hook);
         _hooks.Clear();
         _stop.Set();
-        _renderer?.Join(2000);
-        Release();
+        if (_renderer is null || _renderer.Join(2000))
+            Release();
+        else
+        {
+            // Still inside a driver or Media Foundation call: whichever of the two finishes last lets the device go.
+            Diagnostics.Log.Event("effect.renderOverran");
+            if (Interlocked.Exchange(ref _renderEnd, RenderHandedOver) == RenderEnded)
+                Release();
+        }
         Close();
     }
+
+    private const int RenderRunning = 0, RenderEnded = 1, RenderHandedOver = 2;
+    private int _renderEnd = RenderRunning;
 
     private void Release()
     {

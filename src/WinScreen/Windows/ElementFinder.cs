@@ -68,8 +68,16 @@ internal sealed unsafe class ElementFinder : IDisposable
             long question = Interlocked.Read(ref _question);
             var point = new Point((int)(question >> 32), (int)question);
             FoundElement? found = WindowBelow(_overlay, point) is var window and not 0 ? FindElement(window, point) : null;
-            if (!_stopping)
-                Found?.Invoke(found);
+            // The overlay can close between its own handle check and BeginInvoke; on this thread that would end the process.
+            try
+            {
+                if (!_stopping)
+                    Found?.Invoke(found);
+            }
+            catch (InvalidOperationException closed)
+            {
+                WinScreen.Diagnostics.Log.Swallowed(closed);
+            }
         }
     }
 

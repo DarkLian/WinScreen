@@ -432,7 +432,13 @@ internal sealed class PipSourcePicker : Form
                 using var thumbnail = DwmThumbnail.TryCreate(preview.Handle, choice.Window);
                 if (thumbnail is null) return;
                 void Update() => thumbnail.Show(preview.ClientRectangle, WindowInfo.VisiblePart(choice.Window, thumbnail.SourceSize));
-                preview.Resize += (_, _) => Update();
+                preview.Resize += (_, _) =>
+                {
+                    // Minimized, the preview has no area to show anything in.
+                    if (preview.WindowState == FormWindowState.Minimized || preview.ClientSize.IsEmpty) return;
+                    try { Update(); }
+                    catch (WindowOperationException gone) { Diagnostics.Log.Swallowed(gone); }
+                };
                 Update();
                 preview.ShowDialog(this);
             }

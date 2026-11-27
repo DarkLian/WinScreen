@@ -739,8 +739,9 @@ private readonly ErrorProvider _errors = new();
             foreach (SetupChange change in _changedSetups)
                 if (draft.SavedSetups.FindIndex(setup => Written(setup) == change.Before) is var at and >= 0)
                     draft.SavedSetups[at] = System.Text.Json.JsonSerializer.Deserialize<ProgramSetup>(Written(change.After))!;
-        draft.SavedSetups.RemoveAll(setup => _removedSetups.Any(removed =>
-            removed.Program == setup.Program && removed.ExecutablePath == setup.ExecutablePath));
+        // A whole rule matches, not its app: an app can have several, each for some of its windows.
+        HashSet<string> removedRules = [.. _removedSetups.Select(Written)];
+        draft.SavedSetups.RemoveAll(setup => removedRules.Contains(Written(setup)));
         draft.KeptAreas = draft.KeptAreas.Without(_removedKept);
         try
         {
@@ -957,9 +958,14 @@ private readonly ErrorProvider _errors = new();
     internal void RemoveSetup(ProgramSetup setup)
     {
         _setups.Items.Remove(setup);
-        _removedSetups.Add(setup);
         // A setup changed here and then removed: the one in effect goes, not the change.
-        _changedSetups.RemoveAll(change => ReferenceEquals(change.After, setup));
+        if (_changedSetups.Find(change => ReferenceEquals(change.After, setup)) is { } change)
+        {
+            _changedSetups.Remove(change);
+            if (_settings.SavedSetups.Find(inEffect => Written(inEffect) == change.Before) is { } inEffect)
+                setup = inEffect;
+        }
+        _removedSetups.Add(setup);
         QueueApplyRefresh();
     }
 

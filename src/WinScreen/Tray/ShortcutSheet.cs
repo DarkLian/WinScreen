@@ -132,9 +132,14 @@ internal sealed class ShortcutSheet : IDisposable
     private void OnKey(int key, bool down)
     {
         ShortcutSheetTrigger.Step step;
-        lock (_gate) step = _trigger.Key(key, down, Environment.TickCount64);
-        if (step == ShortcutSheetTrigger.Step.Wait) _timer.Change(ShortcutSheetTrigger.HoldMilliseconds + 20, Timeout.Infinite);
-        else if (step == ShortcutSheetTrigger.Step.Hide) Post(Close);
+        lock (_gate)
+        {
+            // Raised on the key watch's thread, which can still be here after Dispose unhooked it.
+            if (_disposed) return;
+            step = _trigger.Key(key, down, Environment.TickCount64);
+            if (step == ShortcutSheetTrigger.Step.Wait) _timer.Change(ShortcutSheetTrigger.HoldMilliseconds + 20, Timeout.Infinite);
+        }
+        if (step == ShortcutSheetTrigger.Step.Hide) Post(Close);
     }
 
     // The mouse was used with the keys held: they are for something else.
@@ -189,9 +194,12 @@ internal sealed class ShortcutSheet : IDisposable
 
     public void Dispose()
     {
-        _disposed = true;
         AltKeyWatch.Key -= OnKey;
-        _timer.Dispose();
+        lock (_gate)
+        {
+            _disposed = true;
+            _timer.Dispose();
+        }
         _window?.Dispose();
         _window = null;
     }

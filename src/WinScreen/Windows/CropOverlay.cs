@@ -42,7 +42,9 @@ public sealed class CropOverlay : Form
     public void ShowOnTop()
     {
         Show();
-        WindowController.Pin(Handle);
+        // Windows can refuse to bring it forward (a key pressed with another app in front): on top is enough.
+        try { WindowController.Pin(Handle); }
+        catch (WindowOperationException) { TopMost = true; }
         _words = new Instructions(this, T("crop.instructions"));
         _words.ShowOver(_covers);
         _finder = new ElementFinder(Handle);

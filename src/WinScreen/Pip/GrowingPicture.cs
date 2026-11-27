@@ -124,8 +124,8 @@ internal sealed class GrowingPicture : IDisposable
                 catch (Windows.WindowOperationException failure) { Diagnostics.Log.Swallowed(failure); }
             }
             window.DestroyHandle();
+            // _shown is not disposed: Start can still be about to wait on it, and without a wait handle it holds nothing.
             _picture.Dispose();
-            _shown.Dispose();
         }
     }
 

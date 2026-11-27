@@ -2512,9 +2512,9 @@ public sealed partial class TrayApplication : ApplicationContext
         overlay?.Close();
     }
 
-    internal static Icon LoadIcon()
-    {
-        string? path = Environment.ProcessPath;
-        return (path is null ? null : Icon.ExtractAssociatedIcon(path)) ?? SystemIcons.Application;
-    }
+    // One for every window: a form never disposes the icon it is given.
+    private static readonly Lazy<Icon> s_icon = new(() =>
+        (Environment.ProcessPath is { } path ? Icon.ExtractAssociatedIcon(path) : null) ?? SystemIcons.Application);
+
+    internal static Icon LoadIcon() => s_icon.Value;
 }

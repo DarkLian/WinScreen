@@ -88,9 +88,16 @@ public sealed class WindowPlacer(WindowController windows)
     public bool RestorePrior(nint window)
     {
         Check(window);
-        if (!_history.TryGetValue(window, out var history) || !history.Identity.IsSameWindow() || history.Earlier.Count == 0)
-            return false;
-        WindowPlacement placement = history.Earlier[^1];
+        (WindowIdentity Identity, List<WindowPlacement> Earlier) history;
+        WindowPlacement placement;
+        // Remember runs on the gesture mover's thread too.
+        lock (_history)
+        {
+            if (!_history.TryGetValue(window, out history) || !history.Identity.IsSameWindow() || history.Earlier.Count == 0)
+                return false;
+            placement = history.Earlier[^1];
+        }
+        WindowPlacement taken = placement;
         placement.Length = Marshal.SizeOf<WindowPlacement>();
         if (placement.ShowCommand == 1)
             placement.ShowCommand = User32.SW_SHOWNOACTIVATE;
@@ -104,7 +111,11 @@ public sealed class WindowPlacer(WindowController windows)
             Math.Abs(actual.NormalPosition.Right - placement.NormalPosition.Right) > Tolerance ||
             Math.Abs(actual.NormalPosition.Bottom - placement.NormalPosition.Bottom) > Tolerance)
             throw new WindowOperationException(string.Format(T("errors.placement.refused"), WindowInfo.Title(window)));
-        history.Earlier.RemoveAt(history.Earlier.Count - 1);
+        lock (_history)
+        {
+            int at = history.Earlier.LastIndexOf(taken);
+            if (at >= 0) history.Earlier.RemoveAt(at);
+        }
         return true;
     }
 

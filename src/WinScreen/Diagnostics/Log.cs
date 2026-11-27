@@ -164,7 +164,8 @@ internal sealed class DiagnosticLog : IDisposable
     public bool Flush(TimeSpan timeout)
     {
         if (_off || _stopping) return false;
-        using var done = new ManualResetEventSlim(false);
+        // Not disposed: after a timeout the writer still sets it.
+        var done = new ManualResetEventSlim(false);
         _queue.Enqueue(new LogEntry("", [], null, null) { Flushed = done });
         _wake.Set();
         return done.Wait(timeout);

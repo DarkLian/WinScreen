@@ -17,10 +17,14 @@ internal static class MenuParts
         Star = '', Help = '', Minimize = '', Close = '', Warning = '', Page = '',
         Monitor = '', Home = '', Keyboard = '', Mouse = '', Bar = '', Palette = '', Apps = '', Search = '', Sliders = '', Brightness = '', Repair = '', Volume = '\uE767', Pause = '\uE769', Rotate = '\uE7AD', Text = '\uE8D2', Record = '\uE7C8', Hide = '\uED1A', News = '\uE789', Diagnostic = '\uE9D9', History = '', Delete = '', Picture = '';
 
-    internal static int SystemDpi
+    // The system DPI is fixed for the life of the process.
+    private static readonly Lazy<int> s_systemDpi = new(() =>
     {
-        get { using Graphics graphics = Graphics.FromHwnd(0); return (int)Math.Round(graphics.DpiX); }
-    }
+        using Graphics graphics = Graphics.FromHwnd(0);
+        return (int)Math.Round(graphics.DpiX);
+    });
+
+    internal static int SystemDpi => s_systemDpi.Value;
 
     internal static int Scale(int value) => (int)Math.Round(value * SystemDpi / 96.0);
 

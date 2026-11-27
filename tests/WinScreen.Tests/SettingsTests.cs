@@ -356,6 +356,51 @@ public sealed class SettingsWindowTests : IDisposable
         });
     }
 
+    // Removing one rule for an app used to remove every rule for that app, since only the app was compared.
+    [Fact]
+    public void Removing_one_rule_keeps_the_other_rules_for_the_same_app()
+    {
+        OnUiThread(() =>
+        {
+            var everyWindow = new ProgramSetup { Program = "exampleprogram", Pinned = true };
+            var oneTitle = new ProgramSetup { Program = "exampleprogram", TitleContains = "Report", Dark = true };
+            var oneClass = new ProgramSetup { Program = "exampleprogram", WindowClass = "ExampleClass", Alpha = 200 };
+            var settings = new AppSettings { SavedSetups = [everyWindow, oneTitle, oneClass] };
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), draft => { settings.CopyFrom(draft); return []; });
+            _ = window.Handle;
+
+            window.RemoveSetup(oneTitle);
+            Assert.True(window.SaveChanges());
+
+            Assert.Equal(2, settings.SavedSetups.Count);
+            Assert.Contains(settings.SavedSetups, setup => setup.Pinned && !setup.Narrowed);
+            Assert.Contains(settings.SavedSetups, setup => setup.WindowClass == "ExampleClass" && setup.Alpha == 200);
+            Assert.DoesNotContain(settings.SavedSetups, setup => setup.TitleContains == "Report");
+        });
+    }
+
+    [Fact]
+    public void A_rule_changed_and_then_removed_goes_and_its_neighbours_stay()
+    {
+        OnUiThread(() =>
+        {
+            var everyWindow = new ProgramSetup { Program = "exampleprogram", Pinned = true };
+            var oneTitle = new ProgramSetup { Program = "exampleprogram", TitleContains = "Report", Dark = true };
+            var settings = new AppSettings { SavedSetups = [everyWindow, oneTitle] };
+            using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), draft => { settings.CopyFrom(draft); return []; });
+            _ = window.Handle;
+
+            var changed = new ProgramSetup { Program = "exampleprogram", TitleContains = "Invoice", Dark = true };
+            window.ReplaceSetup(oneTitle, changed);
+            window.RemoveSetup(changed);
+            Assert.True(window.SaveChanges());
+
+            var kept = Assert.Single(settings.SavedSetups);
+            Assert.True(kept.Pinned);
+            Assert.False(kept.Narrowed);
+        });
+    }
+
     [Theory]
     [InlineData("zh-Hans", "WinScreen 设置", "置顶", 2)]
     [InlineData("zh-Hant", "WinScreen 設定", "置頂", 3)]
