@@ -64,9 +64,10 @@ internal sealed class StillPicture : Form
     private void BuildMenu()
     {
         // Capture as the view's: it copies, saves or both, as Settings' Capture says. Ctrl+C and Ctrl+S still do one each.
-        _menu.Items.Add(T("pip.picture.copy"), null, (_, _) => CapturePicture());
-        _menu.Items.Add(T("pip.picture.copyText"), null, (_, _) => CopyText());
-        var opacity = new ToolStripMenuItem(T("pip.opacity"));
+        // The same icons as these items have in the view's menu and the window menu.
+        _menu.Items.Add(T("pip.picture.copy"), MenuParts.Icon(MenuParts.Copy), (_, _) => CapturePicture());
+        _menu.Items.Add(T("pip.picture.copyText"), MenuParts.Icon(MenuParts.Text), (_, _) => CopyText());
+        var opacity = new ToolStripMenuItem(T("pip.opacity"), MenuParts.Icon(MenuParts.Brightness));
         foreach (int percent in new[] { 100, 75, 50, 25 })
             opacity.DropDownItems.Add(new ToolStripMenuItem($"{percent}%", null, (sender, _) =>
             {
@@ -74,7 +75,7 @@ internal sealed class StillPicture : Form
                 foreach (ToolStripMenuItem item in opacity.DropDownItems) item.Checked = item == sender;
             }) { Checked = percent == 100 });
         _menu.Items.Add(opacity);
-        _menu.Items.Add(T("pip.zoom.reset"), null, (_, _) => ResetCrop());
+        _menu.Items.Add(T("pip.zoom.reset"), MenuParts.Icon(MenuParts.Crop), (_, _) => ResetCrop());
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(new ToolStripMenuItem(T("still.close"), MenuParts.Icon(MenuParts.Close), (_, _) => Close()) { ShortcutKeyDisplayString = "Esc" });
         MenuRenderer.Apply(_menu);

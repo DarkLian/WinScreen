@@ -260,6 +260,7 @@ public sealed class ViewPictureEndToEndTests(Xunit.Abstractions.ITestOutputHelpe
                     Assert.Equal(copies + 1, shelf.Pictures.Count);
                     Assert.Equal(Localization.UiText.T("pip.picture.copy"), still.ContextMenuStrip!.Items[0].Text);
                     Assert.Equal("Esc", still.ContextMenuStrip.Items.OfType<ToolStripMenuItem>().Last().ShortcutKeyDisplayString);
+                    Assert.All(still.ContextMenuStrip.Items.OfType<ToolStripMenuItem>(), item => Assert.NotNull(item.Image));
                     still.Close();
                     Assert.True(Red(Copy(middle)), "Uncovered, the view's copy is still black there.");
 
