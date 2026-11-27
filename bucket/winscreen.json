@@ -1,13 +1,13 @@
 {
-    "version": "1.5.0",
+    "version": "1.5.1",
     "description": "Keep any window, or part of one, in view while you work.",
     "homepage": "https://github.com/DarkLian/WinScreen",
     "license": "MIT",
     "notes": "WinScreen is in the tray. Scoop updates it: in Settings, leave New versions at Off or Tell me about them.",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/DarkLian/WinScreen/releases/download/v1.5.0/WinScreen-1.5.0-release-x64-Portable.zip",
-            "hash": "C7E8354FB94D81A2B509A756D105AB318C9FAE81F1317F5D47B3F9F62A93CF4D"
+            "url": "https://github.com/DarkLian/WinScreen/releases/download/v1.5.1/WinScreen-1.5.1-release-x64-Portable.zip",
+            "hash": "A2379FFC8DD7954F6F8D03EA3BD0D7FECDC8399CD391B8A4BA447207171FDE04"
         }
     },
     "shortcuts": [
