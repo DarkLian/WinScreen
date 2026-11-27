@@ -794,96 +794,52 @@ private readonly ErrorProvider _errors = new();
 
     private AppSettings Draft(AppSettings draft)
     {
-        static List<string> Programs(ListBox list, ComboBox typed) => list.Items.Cast<string>().ToList();
-        int Number(NumericUpDown box)
-        {
-            // Reading Value would tidy up a number that's still being typed, so the text is read instead.
-            if (!decimal.TryParse(box.Text, out decimal typed)) return (int)box.Value;
-            return (int)Math.Clamp(typed, box.Minimum, box.Maximum);
-        }
         foreach ((AppCommand command, TextBox box) in _hotkeys)
             draft.Hotkeys[command] = box.Text;
-
-        draft.ExcludedPrograms = Programs(_excluded, _newExcluded);
-        draft.IncludedPrograms = Programs(_included, _newIncluded);
         foreach (var (box, _, write) in Switches) write(draft, box.Checked);
-        draft.Toolbar = new ToolbarPreferences
-        {
-            Placement = (ToolbarPlacement)Math.Max(0, _toolbarPlacement.SelectedIndex),
-            Trigger = (ToolbarTrigger)Math.Max(0, _toolbarTrigger.SelectedIndex),
-            HoverDelayMilliseconds = Number(_toolbarDelay),
-            Buttons = _toolbarButtons.CheckedItems.Cast<ToolbarChoice>().Select(choice => choice.Command).ToList(),
-        }.Validated();
-        List<string> anchorOnly = Programs(_anchorOnly, _newAnchorOnly);
-        List<string> anchorExcluded = Programs(_anchorExcluded, _newAnchorExcluded);
-        draft.Anchors = new AnchorPreferences
-        {
-            Automatic = _autoAnchors.Checked,
-            OnlyPrograms = anchorOnly,
-            ExcludedPrograms = anchorExcluded,
-            Side = (AnchorSide)Math.Max(0, _anchorSide.SelectedIndex),
-            Style = (AnchorLook)Math.Max(0, _anchorLook.SelectedIndex),
-            MaxAutomatic = Number(_anchorLimit),
-            Size = Number(_anchorSize),
-            RecencyEmphasis = _anchorRecency.Checked,
-            AvoidContent = _anchorAvoid.Checked,
-            HoverPreview = _anchorPreview.Checked,
-            OffTaskbar = _anchorOffTaskbar.Checked,
-            EveryDesktop = _anchorEveryDesktop.Checked,
-        }.Validated();
+        foreach (var (box, _, write) in Choices) write(draft, Math.Max(0, box.SelectedIndex));
+        foreach (var (box, _, write) in Numbers) write(draft, Number(box));
+        foreach (var (list, _, write) in ProgramLists) write(draft, [.. list.Items.Cast<string>()]);
+
         draft.StartWithWindows = _startWithWindows.Checked;
-        draft.Language = Languages[Math.Max(0, _language.SelectedIndex)];
-        draft.Theme = Themes[Math.Max(0, _theme.SelectedIndex)];
-        draft.Updates = (UpdateMode)Math.Max(0, _updateMode.SelectedIndex);
-        draft.Notifications = (NotificationMode)Math.Max(0, _notifications.SelectedIndex);
-        draft.ModifierKey = (ModifierKey)Math.Max(0, _modifierKey.SelectedIndex);
-        draft.WindowMenuGesture = (WindowMenuGesture)Math.Max(0, _windowMenuGesture.SelectedIndex);
-        draft.WindowMenuExclusions = Programs(_windowMenuExclusions, _newMenuExclusion);
-        draft.ModifierExclusions = Programs(_modifierExclusions, _newModifierExclusion);
-        draft.PipOriginalPrograms = Programs(_originalPrograms, _newOriginalProgram);
+        draft.Toolbar = draft.Toolbar with { Buttons = [.. _toolbarButtons.CheckedItems.Cast<ToolbarChoice>().Select(choice => choice.Command)] };
         draft.PipHover = new PipHoverPreferences
         {
             ChooseForMe = _hoverAutomatic.Checked, Browsers = _hover.Browsers, Firefox = _hover.Firefox, Electron = _hover.Electron,
-            FileExplorer = _hover.FileExplorer, Programs = Programs(_hoverPrograms, _newHoverProgram),
+            FileExplorer = _hover.FileExplorer, Programs = [.. _hoverPrograms.Items.Cast<string>()],
         }.Validated();
         if (!_hoverAutomatic.Checked) draft.PipHover = draft.PipHover with
         {
             Browsers = _hoverBrowsers.Checked, Firefox = _hoverFirefox.Checked, Electron = _hoverElectron.Checked,
             FileExplorer = _hoverExplorer.Checked,
         };
-        draft.DefaultOpacityPercent = Number(_defaultOpacity);
-        draft.Effects = new EffectPreferences
-        {
-            LayeredGlass = _layeredGlass.Checked,
-            BackgroundPercent = Number(_glassBackground), TextPercent = Number(_glassText), FadeRangePercent = Number(_glassFade),
-            TextColor = TextColorOf(_glassTextColor), TextShadow = _glassShadow.Checked,
-            DarkPagePercent = Number(_darkPage), DarkTextPercent = Number(_darkText), DarkColorsPercent = Number(_darkColors),
-            Apps = [.. _glassApps],
-        }.Validated();
+        draft.Effects = draft.Effects with { Apps = [.. _glassApps] };
         draft.Backgrounds = _backgroundEdit.Validated();
-        draft.PinBorder = new PinBorderPreferences
+        // A colour still being typed leaves the one in effect alone.
+        if (HexColor(_borderColor.Text) is not null) draft.PinBorder = draft.PinBorder with { ColorHex = _borderColor.Text.Trim() };
+        draft.PipViews = draft.PipViews with
         {
-            // A colour still being typed leaves the one in effect alone.
-            ColorHex = HexColor(_borderColor.Text) is null ? draft.PinBorder.ColorHex : _borderColor.Text.Trim(),
-            OpacityPercent = Number(_borderOpacity),
-            Thickness = Number(_borderThickness),
-        }.Validated();
-        draft.Pip.Backend = (PipBackendPreference)Math.Max(0, _pipBackend.SelectedIndex);
-        draft.Pip.FrameRate = _pipRates[Math.Max(0, _pipRate.SelectedIndex)];
-        draft.Pip.Scaling = (PipScaling)Math.Max(0, _pipScaling.SelectedIndex);
-        draft.Pip.OpacityPercent = Number(_pipOpacity);
-        draft.Pip.ShowDiagnostics = _pipDiagnostics.Checked;
-        draft.PipViews = new PipViewPreferences { MinimizeToTaskbar = _pipTaskbar.Checked, AlwaysShowTitleBar = _pipTitleBar.Checked,
-            KeepHiddenOnNewViews = _pipKeepHidden.Checked, KeepMinimizedOriginalsOnTaskbar = _pipMinimizedOriginals.Checked,
-            SavePictures = _pictureSave.SelectedIndex != CopyOnly, CopyPictures = _pictureSave.SelectedIndex != SaveOnly, PictureFolder = _pictureFolder,
-            RecordingFolder = _recordingFolder, RecordSound = _recordSound.Checked,
-            RecordingFrameRate = Pip.RecordingGeometry.ChoosableRates[Math.Max(0, _recordingRate.SelectedIndex)],
-            HoverPreview = (PipHoverPreview)Math.Max(0, _pipPreview.SelectedIndex),
-            HoverDelayMilliseconds = draft.PipViews.HoverDelayMilliseconds }.Validated();
+            SavePictures = _pictureSave.SelectedIndex != CopyOnly, CopyPictures = _pictureSave.SelectedIndex != SaveOnly,
+            PictureFolder = _pictureFolder, RecordingFolder = _recordingFolder,
+        };
+        draft.Toolbar = draft.Toolbar.Validated();
+        draft.Anchors = draft.Anchors.Validated();
+        draft.Effects = draft.Effects.Validated();
+        draft.PinBorder = draft.PinBorder.Validated();
+        draft.PipViews = draft.PipViews.Validated();
         return draft;
     }
 
-    // Filling Settings in and reading it back both go through this list, so a new switch is one line here.
+    private static int Number(NumericUpDown box)
+    {
+        // Reading Value would tidy up a number that's still being typed, so the text is read instead.
+        if (!decimal.TryParse(box.Text, out decimal typed)) return (int)box.Value;
+        return (int)Math.Clamp(typed, box.Minimum, box.Maximum);
+    }
+
+    // Filling Settings in and reading it back both go through these lists, so a new switch, choice, number or program
+    // list is one line in one of them. A group's settings are written into it one at a time; Draft checks each group
+    // once at the end.
     private (CheckBox Box, Func<AppSettings, bool> Read, Action<AppSettings, bool> Write)[] Switches =>
     [
         (_showToolbar, settings => settings.ShowToolbar, (settings, on) => settings.ShowToolbar = on),
@@ -904,6 +860,77 @@ private readonly ErrorProvider _errors = new();
         (_opacityWheel, settings => settings.OpacityWheel, (settings, on) => settings.OpacityWheel = on),
         (_detectDark, settings => settings.DetectAlreadyDark, (settings, on) => settings.DetectAlreadyDark = on),
         (_pipCaptureBorder, settings => settings.HideCaptureBorder, (settings, on) => settings.HideCaptureBorder = on),
+        (_autoAnchors, settings => settings.Anchors.Automatic, (settings, on) => settings.Anchors = settings.Anchors with { Automatic = on }),
+        (_anchorRecency, settings => settings.Anchors.RecencyEmphasis, (settings, on) => settings.Anchors = settings.Anchors with { RecencyEmphasis = on }),
+        (_anchorAvoid, settings => settings.Anchors.AvoidContent, (settings, on) => settings.Anchors = settings.Anchors with { AvoidContent = on }),
+        (_anchorPreview, settings => settings.Anchors.HoverPreview, (settings, on) => settings.Anchors = settings.Anchors with { HoverPreview = on }),
+        (_anchorOffTaskbar, settings => settings.Anchors.OffTaskbar, (settings, on) => settings.Anchors = settings.Anchors with { OffTaskbar = on }),
+        (_anchorEveryDesktop, settings => settings.Anchors.EveryDesktop, (settings, on) => settings.Anchors = settings.Anchors with { EveryDesktop = on }),
+        (_layeredGlass, settings => settings.Effects.LayeredGlass, (settings, on) => settings.Effects = settings.Effects with { LayeredGlass = on }),
+        (_glassShadow, settings => settings.Effects.TextShadow, (settings, on) => settings.Effects = settings.Effects with { TextShadow = on }),
+        (_pipDiagnostics, settings => settings.Pip.ShowDiagnostics, (settings, on) => settings.Pip.ShowDiagnostics = on),
+        (_pipTaskbar, settings => settings.PipViews.MinimizeToTaskbar, (settings, on) => settings.PipViews = settings.PipViews with { MinimizeToTaskbar = on }),
+        (_pipTitleBar, settings => settings.PipViews.AlwaysShowTitleBar, (settings, on) => settings.PipViews = settings.PipViews with { AlwaysShowTitleBar = on }),
+        (_pipKeepHidden, settings => settings.PipViews.KeepHiddenOnNewViews, (settings, on) => settings.PipViews = settings.PipViews with { KeepHiddenOnNewViews = on }),
+        (_pipMinimizedOriginals, settings => settings.PipViews.KeepMinimizedOriginalsOnTaskbar,
+            (settings, on) => settings.PipViews = settings.PipViews with { KeepMinimizedOriginalsOnTaskbar = on }),
+        (_recordSound, settings => settings.PipViews.RecordSound, (settings, on) => settings.PipViews = settings.PipViews with { RecordSound = on }),
+    ];
+
+    // Each list's position, from 0.
+    private (ComboBox Box, Func<AppSettings, int> Read, Action<AppSettings, int> Write)[] Choices =>
+    [
+        (_language, settings => Array.IndexOf(Languages, settings.Language), (settings, at) => settings.Language = Languages[at]),
+        (_theme, settings => Array.IndexOf(Themes, settings.Theme), (settings, at) => settings.Theme = Themes[at]),
+        (_updateMode, settings => (int)settings.Updates, (settings, at) => settings.Updates = (UpdateMode)at),
+        (_notifications, settings => (int)settings.Notifications, (settings, at) => settings.Notifications = (NotificationMode)at),
+        (_modifierKey, settings => (int)settings.ModifierKey, (settings, at) => settings.ModifierKey = (ModifierKey)at),
+        (_windowMenuGesture, settings => (int)settings.WindowMenuGesture, (settings, at) => settings.WindowMenuGesture = (WindowMenuGesture)at),
+        (_toolbarPlacement, settings => (int)settings.Toolbar.Placement,
+            (settings, at) => settings.Toolbar = settings.Toolbar with { Placement = (ToolbarPlacement)at }),
+        (_toolbarTrigger, settings => (int)settings.Toolbar.Trigger, (settings, at) => settings.Toolbar = settings.Toolbar with { Trigger = (ToolbarTrigger)at }),
+        (_anchorSide, settings => (int)settings.Anchors.Side, (settings, at) => settings.Anchors = settings.Anchors with { Side = (AnchorSide)at }),
+        (_anchorLook, settings => (int)settings.Anchors.Style, (settings, at) => settings.Anchors = settings.Anchors with { Style = (AnchorLook)at }),
+        (_glassTextColor, settings => (int)settings.Effects.TextColor,
+            (settings, at) => settings.Effects = settings.Effects with { TextColor = (Glass.GlassText)at }),
+        (_pipBackend, settings => (int)settings.Pip.Backend, (settings, at) => settings.Pip.Backend = (PipBackendPreference)at),
+        (_pipRate, settings => _pipRates.IndexOf(settings.Pip.FrameRate), (settings, at) => settings.Pip.FrameRate = _pipRates[at]),
+        (_pipScaling, settings => (int)settings.Pip.Scaling, (settings, at) => settings.Pip.Scaling = (PipScaling)at),
+        (_pipPreview, settings => (int)settings.PipViews.HoverPreview,
+            (settings, at) => settings.PipViews = settings.PipViews with { HoverPreview = (PipHoverPreview)at }),
+        (_recordingRate, settings => Array.IndexOf(Pip.RecordingGeometry.ChoosableRates, settings.PipViews.RecordingFrameRate),
+            (settings, at) => settings.PipViews = settings.PipViews with { RecordingFrameRate = Pip.RecordingGeometry.ChoosableRates[at] }),
+    ];
+
+    private (NumericUpDown Box, Func<AppSettings, int> Read, Action<AppSettings, int> Write)[] Numbers =>
+    [
+        (_defaultOpacity, settings => Math.Clamp(settings.DefaultOpacityPercent, AppSettings.LowestOpacityPercent, AppSettings.HighestOpacityPercent),
+            (settings, n) => settings.DefaultOpacityPercent = n),
+        (_toolbarDelay, settings => settings.Toolbar.HoverDelayMilliseconds,
+            (settings, n) => settings.Toolbar = settings.Toolbar with { HoverDelayMilliseconds = n }),
+        (_anchorLimit, settings => settings.Anchors.MaxAutomatic, (settings, n) => settings.Anchors = settings.Anchors with { MaxAutomatic = n }),
+        (_anchorSize, settings => settings.Anchors.Size, (settings, n) => settings.Anchors = settings.Anchors with { Size = n }),
+        (_glassBackground, settings => settings.Effects.BackgroundPercent, (settings, n) => settings.Effects = settings.Effects with { BackgroundPercent = n }),
+        (_glassText, settings => settings.Effects.TextPercent, (settings, n) => settings.Effects = settings.Effects with { TextPercent = n }),
+        (_glassFade, settings => settings.Effects.FadeRangePercent, (settings, n) => settings.Effects = settings.Effects with { FadeRangePercent = n }),
+        (_darkPage, settings => settings.Effects.DarkPagePercent, (settings, n) => settings.Effects = settings.Effects with { DarkPagePercent = n }),
+        (_darkText, settings => settings.Effects.DarkTextPercent, (settings, n) => settings.Effects = settings.Effects with { DarkTextPercent = n }),
+        (_darkColors, settings => settings.Effects.DarkColorsPercent, (settings, n) => settings.Effects = settings.Effects with { DarkColorsPercent = n }),
+        (_borderOpacity, settings => settings.PinBorder.OpacityPercent, (settings, n) => settings.PinBorder = settings.PinBorder with { OpacityPercent = n }),
+        (_borderThickness, settings => settings.PinBorder.Thickness, (settings, n) => settings.PinBorder = settings.PinBorder with { Thickness = n }),
+        (_pipOpacity, settings => settings.Pip.OpacityPercent, (settings, n) => settings.Pip.OpacityPercent = n),
+    ];
+
+    private (ListBox List, Func<AppSettings, List<string>> Read, Action<AppSettings, List<string>> Write)[] ProgramLists =>
+    [
+        (_excluded, settings => settings.ExcludedPrograms, (settings, programs) => settings.ExcludedPrograms = programs),
+        (_included, settings => settings.IncludedPrograms, (settings, programs) => settings.IncludedPrograms = programs),
+        (_anchorOnly, settings => settings.Anchors.OnlyPrograms, (settings, programs) => settings.Anchors = settings.Anchors with { OnlyPrograms = programs }),
+        (_anchorExcluded, settings => settings.Anchors.ExcludedPrograms,
+            (settings, programs) => settings.Anchors = settings.Anchors with { ExcludedPrograms = programs }),
+        (_windowMenuExclusions, settings => settings.WindowMenuExclusions, (settings, programs) => settings.WindowMenuExclusions = programs),
+        (_modifierExclusions, settings => settings.ModifierExclusions, (settings, programs) => settings.ModifierExclusions = programs),
+        (_originalPrograms, settings => settings.PipOriginalPrograms, (settings, programs) => settings.PipOriginalPrograms = programs),
     ];
 
     internal void AddExcluded(string program) { AddProgram(_excluded, program); QueueApplyRefresh(); }
@@ -1248,104 +1275,61 @@ private readonly ErrorProvider _errors = new();
 
     private void Fill(AppSettings values)
     {
-        _excluded.Items.Clear();
-        _included.Items.Clear();
+        // The groups are shown as they would be used: checked once here.
+        AppSettings shown = values.Clone();
+        shown.Toolbar = shown.Toolbar.Validated();
+        shown.Anchors = shown.Anchors.Validated();
+        shown.Effects = shown.Effects.Validated();
+        shown.PinBorder = shown.PinBorder.Validated();
+        shown.Pip = shown.Pip.Validated();
+        shown.PipViews = shown.PipViews.Validated();
+
         _setups.Items.Clear();
         _newExcluded.Text = "";
         _newIncluded.Text = "";
         _errors.Clear();
         foreach ((AppCommand command, TextBox box) in _hotkeys)
-            box.Text = values.Hotkeys.GetValueOrDefault(command, "");
-        _excluded.Items.AddRange(values.ExcludedPrograms.Cast<object>().ToArray());
-        _included.Items.AddRange(values.IncludedPrograms.Cast<object>().ToArray());
-        _setups.Items.AddRange(values.SavedSetups.Cast<object>().ToArray());
+            box.Text = shown.Hotkeys.GetValueOrDefault(command, "");
+        _setups.Items.AddRange(values.SavedSetups.Cast<object>().ToArray()); // The rules themselves: edits find them by reference.
         _startWithWindows.Checked = _startup.IsOn;
-        foreach (var (box, read, _) in Switches) box.Checked = read(values);
-        _runAsAdministrator.Enabled = Native.ProcessInfo.CanElevate || values.RunAsAdministrator; // Still able to turn off.
-        ToolbarPreferences toolbar = values.Toolbar.Validated();
-        _toolbarPlacement.SelectedIndex = (int)toolbar.Placement;
-        _toolbarTrigger.SelectedIndex = (int)toolbar.Trigger;
-        _toolbarDelay.Value = toolbar.HoverDelayMilliseconds;
-        for (int i = 0; i < _toolbarButtons.Items.Count; i++)
-            _toolbarButtons.SetItemChecked(i, toolbar.Buttons.Contains(((ToolbarChoice)_toolbarButtons.Items[i]).Command));
-        AnchorPreferences anchors = values.Anchors.Validated();
-        _autoAnchors.Checked = anchors.Automatic;
-        _anchorSide.SelectedIndex = (int)anchors.Side;
-        _anchorLook.SelectedIndex = (int)anchors.Style;
-        _anchorLimit.Value = anchors.MaxAutomatic;
-        _anchorSize.Value = anchors.Size;
-        _anchorRecency.Checked = anchors.RecencyEmphasis;
-        _anchorAvoid.Checked = anchors.AvoidContent;
-        _anchorPreview.Checked = anchors.HoverPreview;
-        _anchorOffTaskbar.Checked = anchors.OffTaskbar;
-        _anchorEveryDesktop.Checked = anchors.EveryDesktop;
-        _anchorOnly.Items.Clear();
-        _anchorOnly.Items.AddRange(anchors.OnlyPrograms.Cast<object>().ToArray());
-        _anchorExcluded.Items.Clear();
-        _anchorExcluded.Items.AddRange(anchors.ExcludedPrograms.Cast<object>().ToArray());
-        _language.SelectedIndex = Math.Max(0, Array.IndexOf(Languages, values.Language));
-        _theme.SelectedIndex = Math.Max(0, Array.IndexOf(Themes, values.Theme));
-        _updateMode.SelectedIndex = (int)values.Updates;
-        _notifications.SelectedIndex = (int)values.Notifications;
-        _modifierKey.SelectedIndex = (int)values.ModifierKey;
-        _windowMenuGesture.SelectedIndex = (int)values.WindowMenuGesture;
-        _windowMenuExclusions.Items.Clear();
-        _windowMenuExclusions.Items.AddRange(values.WindowMenuExclusions.Cast<object>().ToArray());
-        _modifierExclusions.Items.Clear();
-        _modifierExclusions.Items.AddRange(values.ModifierExclusions.Cast<object>().ToArray());
-        _loadingHover = true;
-        _hover = values.PipHover;
-        _hoverAutomatic.Checked = values.PipHover.ChooseForMe;
-        ShowHoverChoices();
-        _loadingHover = false;
-        _originalPrograms.Items.Clear();
-        _originalPrograms.Items.AddRange(values.PipOriginalPrograms.Cast<object>().ToArray());
-        _hoverPrograms.Items.Clear();
-        _hoverPrograms.Items.AddRange(values.PipHover.Programs.Cast<object>().ToArray());
-        _addedApps.Clear();
-        RebuildApps();
-        PipPreferences pip = values.Pip.Validated();
-        if (!_pipRates.Contains(pip.FrameRate)) _pipRates.Add(pip.FrameRate);
+
+        // The frame rates offered are the usual ones, the monitor's and whatever was chosen before.
+        if (!_pipRates.Contains(shown.Pip.FrameRate)) _pipRates.Add(shown.Pip.FrameRate);
         int refresh = Pip.PipDisplay.CachedRefresh(Handle);
         if (!_pipRates.Contains(refresh)) _pipRates.Add(refresh);
         _pipRates.Sort();
         _pipRate.Items.Clear();
         foreach (int rate in _pipRates) _pipRate.Items.Add(rate == 0 ? T("pip.frameRate.matchMonitor") : rate + " FPS");
-        _pipBackend.SelectedIndex = (int)pip.Backend;
-        _pipRate.SelectedIndex = _pipRates.IndexOf(pip.FrameRate);
-        _pipScaling.SelectedIndex = (int)pip.Scaling;
-        _pipOpacity.Value = pip.OpacityPercent;
-        _pipDiagnostics.Checked = pip.ShowDiagnostics;
-        _pipTaskbar.Checked = values.PipViews.MinimizeToTaskbar;
-        _pipTitleBar.Checked = values.PipViews.AlwaysShowTitleBar;
-        _pipKeepHidden.Checked = values.PipViews.KeepHiddenOnNewViews;
-        _pipMinimizedOriginals.Checked = values.PipViews.KeepMinimizedOriginalsOnTaskbar;
-        _pipPreview.SelectedIndex = (int)values.PipViews.Validated().HoverPreview;
-        _pictureSave.SelectedIndex = !values.PipViews.SavePictures ? CopyOnly : values.PipViews.CopyPictures ? 0 : SaveOnly;
-        _pictureFolder = values.PipViews.Validated().PictureFolder;
+
+        foreach (var (box, read, _) in Switches) box.Checked = read(shown);
+        foreach (var (box, read, _) in Choices) box.SelectedIndex = Math.Max(0, read(shown));
+        foreach (var (box, read, _) in Numbers) box.Value = read(shown);
+        foreach (var (list, read, _) in ProgramLists)
+        {
+            list.Items.Clear();
+            list.Items.AddRange(read(shown).Cast<object>().ToArray());
+        }
+
+        _runAsAdministrator.Enabled = Native.ProcessInfo.CanElevate || shown.RunAsAdministrator; // Still able to turn off.
+        for (int i = 0; i < _toolbarButtons.Items.Count; i++)
+            _toolbarButtons.SetItemChecked(i, shown.Toolbar.Buttons.Contains(((ToolbarChoice)_toolbarButtons.Items[i]).Command));
+        _loadingHover = true;
+        _hover = values.PipHover;
+        _hoverAutomatic.Checked = values.PipHover.ChooseForMe;
+        ShowHoverChoices();
+        _loadingHover = false;
+        _hoverPrograms.Items.Clear();
+        _hoverPrograms.Items.AddRange(values.PipHover.Programs.Cast<object>().ToArray());
+        _addedApps.Clear();
+        RebuildApps();
+        _pictureSave.SelectedIndex = !shown.PipViews.SavePictures ? CopyOnly : shown.PipViews.CopyPictures ? 0 : SaveOnly;
+        _pictureFolder = shown.PipViews.PictureFolder;
         ShowPictureFolder();
-        _recordingFolder = values.PipViews.Validated().RecordingFolder;
-        _recordSound.Checked = values.PipViews.RecordSound;
-        _recordingRate.SelectedIndex = Math.Max(0, Array.IndexOf(Pip.RecordingGeometry.ChoosableRates, values.PipViews.Validated().RecordingFrameRate));
+        _recordingFolder = shown.PipViews.RecordingFolder;
         ShowRecordingFolder();
-        EffectPreferences effects = values.Effects.Validated();
-        _layeredGlass.Checked = effects.LayeredGlass;
-        _glassBackground.Value = effects.BackgroundPercent;
-        _glassText.Value = effects.TextPercent;
-        _glassFade.Value = effects.FadeRangePercent;
-        _glassTextColor.SelectedIndex = (int)effects.TextColor;
-        _glassShadow.Checked = effects.TextShadow;
-        _darkPage.Value = effects.DarkPagePercent;
-        _darkText.Value = effects.DarkTextPercent;
-        _darkColors.Value = effects.DarkColorsPercent;
-        FillGlassApps(effects);
+        FillGlassApps(shown.Effects);
         FillBackgrounds(values.Backgrounds);
-        PinBorderPreferences border = values.PinBorder.Validated();
-        _borderColor.Text = border.ColorHex;
-        _borderOpacity.Value = border.OpacityPercent;
-        _borderThickness.Value = border.Thickness;
-        _defaultOpacity.Value = Math.Clamp(values.DefaultOpacityPercent, AppSettings.LowestOpacityPercent,
-            AppSettings.HighestOpacityPercent);
+        _borderColor.Text = shown.PinBorder.ColorHex;
         RefreshFeatures();
     }
 

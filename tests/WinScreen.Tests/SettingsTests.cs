@@ -307,6 +307,96 @@ public sealed class SettingsWindowTests : IDisposable
         });
     }
 
+    // Every setting Settings shows, each off its default, goes into the boxes and comes back out the same. The window
+    // starts from defaults, so a value only reaches the result through its box.
+    [Fact]
+    public void Every_setting_shown_comes_back_the_same()
+    {
+        OnUiThread(() =>
+        {
+            AppSettings applied = null!;
+            using var window = new SettingsWindow(new AppSettings(), new StartWithWindows(_key, NoTasks.Instance), chosen =>
+            {
+                applied = chosen;
+                return [];
+            });
+            _ = window.Handle;
+            AppSettings shown = EverySettingChanged();
+            window.LoadValues(shown);
+            Assert.True(window.SaveChanges());
+
+            foreach (AppCommand command in shown.Hotkeys.Keys.Union(applied.Hotkeys.Keys)) // A shortcut box left empty is none.
+                Assert.Equal((command, shown.Hotkeys.GetValueOrDefault(command, "")), (command, applied.Hotkeys.GetValueOrDefault(command, "")));
+            foreach (string name in ShownSettings)
+            {
+                System.Reflection.PropertyInfo property = typeof(AppSettings).GetProperty(name)!;
+                Assert.Equal((name, Written(property.GetValue(shown))), (name, Written(property.GetValue(applied))));
+            }
+            Assert.Equal(shown.Toolbar.Buttons.Order(), applied.Toolbar.Buttons.Order());
+        });
+
+        static string Written(object? value) => System.Text.Json.JsonSerializer.Serialize(value switch
+        {
+            ToolbarPreferences toolbar => toolbar with { Buttons = [] },
+            _ => value,
+        });
+    }
+
+    private static readonly string[] ShownSettings =
+    [
+        nameof(AppSettings.ExcludedPrograms), nameof(AppSettings.IncludedPrograms),
+        nameof(AppSettings.ShowToolbar), nameof(AppSettings.ShortcutSheet), nameof(AppSettings.MenuTransparency),
+        nameof(AppSettings.ExperimentalFeatures), nameof(AppSettings.RunAsAdministrator), nameof(AppSettings.PauseInFullScreen),
+        nameof(AppSettings.AllowPipInFullScreen), nameof(AppSettings.ModifierDrag), nameof(AppSettings.SnapWhileDragging),
+        nameof(AppSettings.WindowMenu), nameof(AppSettings.PausePinWhenMaximized), nameof(AppSettings.OpaqueOnHover),
+        nameof(AppSettings.HighlightPinned), nameof(AppSettings.PipAutoMove), nameof(AppSettings.PipMiddleClickScroll),
+        nameof(AppSettings.OpacityWheel), nameof(AppSettings.DetectAlreadyDark), nameof(AppSettings.HideCaptureBorder),
+        nameof(AppSettings.Toolbar), nameof(AppSettings.Anchors), nameof(AppSettings.StartWithWindows), nameof(AppSettings.Language),
+        nameof(AppSettings.Theme), nameof(AppSettings.Updates), nameof(AppSettings.Notifications), nameof(AppSettings.ModifierKey),
+        nameof(AppSettings.WindowMenuGesture), nameof(AppSettings.WindowMenuExclusions), nameof(AppSettings.ModifierExclusions),
+        nameof(AppSettings.PipOriginalPrograms), nameof(AppSettings.PipHover), nameof(AppSettings.DefaultOpacityPercent),
+        nameof(AppSettings.Effects), nameof(AppSettings.PinBorder), nameof(AppSettings.Pip), nameof(AppSettings.PipViews),
+    ];
+
+    private static AppSettings EverySettingChanged()
+    {
+        var settings = new AppSettings
+        {
+            ExcludedPrograms = ["steam"], IncludedPrograms = ["obs64"],
+            ShowToolbar = false, ShortcutSheet = false, MenuTransparency = false, ExperimentalFeatures = true,
+            RunAsAdministrator = true, PauseInFullScreen = false, AllowPipInFullScreen = true, ModifierDrag = true,
+            SnapWhileDragging = false, WindowMenu = true, PausePinWhenMaximized = true, OpaqueOnHover = true,
+            HighlightPinned = true, PipAutoMove = true, PipMiddleClickScroll = true, OpacityWheel = true,
+            DetectAlreadyDark = false, HideCaptureBorder = false,
+            Toolbar = new ToolbarPreferences { Placement = ToolbarPlacement.Right, Trigger = ToolbarTrigger.Either,
+                HoverDelayMilliseconds = 900, Buttons = [AppCommand.ToggleDark, AppCommand.TogglePin] },
+            Anchors = new AnchorPreferences { Automatic = true, OnlyPrograms = ["code"], ExcludedPrograms = ["mspaint"],
+                Side = AnchorSide.Left, Style = AnchorLook.Light, MaxAutomatic = 7, Size = 64, RecencyEmphasis = false,
+                AvoidContent = true, HoverPreview = false, OffTaskbar = true, EveryDesktop = false },
+            StartWithWindows = false, // Shown from the startup entry, which is off here.
+            Language = "zh-Hant", Theme = "dark", Updates = UpdateMode.Install, Notifications = NotificationMode.Off,
+            ModifierKey = ModifierKey.Win, WindowMenuGesture = WindowMenuGesture.CtrlMiddleClick,
+            WindowMenuExclusions = ["calc"], ModifierExclusions = ["mstsc"], PipOriginalPrograms = ["javaw"],
+            PipHover = new PipHoverPreferences { ChooseForMe = false, Browsers = true, Firefox = true, Electron = true,
+                FileExplorer = true, Programs = ["notepad"] },
+            DefaultOpacityPercent = 60,
+            Effects = new EffectPreferences { LayeredGlass = false, BackgroundPercent = 40, TextPercent = 70, FadeRangePercent = 50,
+                TextColor = Glass.GlassText.Light, TextShadow = false, DarkPagePercent = 30, DarkTextPercent = 80, DarkColorsPercent = 20 },
+            PinBorder = new PinBorderPreferences { ColorHex = "#2080E0", OpacityPercent = 60, Thickness = 5 },
+            PipViews = new PipViewPreferences { HoverPreview = PipHoverPreview.Lens, MinimizeToTaskbar = false,
+                KeepMinimizedOriginalsOnTaskbar = false, AlwaysShowTitleBar = true, KeepHiddenOnNewViews = false,
+                SavePictures = true, CopyPictures = false, PictureFolder = @"C:\Views\Pictures", RecordingFolder = @"C:\Views\Recordings",
+                RecordSound = true, RecordingFrameRate = 30 },
+        };
+        settings.Hotkeys[AppCommand.OpenPip] = "Ctrl+Shift+F9";
+        settings.Pip.Backend = PipBackendPreference.Wgc;
+        settings.Pip.FrameRate = 30;
+        settings.Pip.OpacityPercent = 70;
+        settings.Pip.Scaling = PipScaling.Crisp;
+        settings.Pip.ShowDiagnostics = true;
+        return settings;
+    }
+
     [Fact]
     public void Enhanced_hover_choices_are_shown_and_saved()
     {
