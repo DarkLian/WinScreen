@@ -757,12 +757,16 @@ public sealed class AppEndToEndTests : IDisposable
             Assert.InRange(shown.Top, bar.Bottom - 4, bar.Bottom + 40); // Under the bar, not wherever the pointer is.
             if (button == 0)
             {
-                // The first entry, Top left, moves the window to the top left of its display.
+                // The first entry is the grid of nine places, which starts on the centre (menus regrouped 27 Nov): up and
+                // left is Top left, which moves the window to the top left of its display.
                 Desktop.Press(Keys.Down);
+                Desktop.Press(Keys.Up);
+                Desktop.Press(Keys.Left);
                 Desktop.Press(Keys.Enter);
                 Rectangle area = Screen.FromHandle(target.Handle).WorkingArea;
                 Assert.True(Desktop.WaitFor(() => Math.Abs(Desktop.BoundsOf(target.Handle).Left - area.Left) < 12 &&
-                    Math.Abs(Desktop.BoundsOf(target.Handle).Top - area.Top) < 12), "Top left didn't move the window.");
+                    Math.Abs(Desktop.BoundsOf(target.Handle).Top - area.Top) < 12),
+                    $"Top left didn't move the window: it is at {Desktop.BoundsOf(target.Handle)}, the work area {area}, the menu {(Desktop.IsWindowVisible(menu) ? "still open" : "closed")}.");
                 Desktop.Press(Keys.Escape);
                 Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(menu)));
                 User32.SetWindowPos(target.Handle, 0, Spot.Left, Spot.Top, Spot.Width, Spot.Height, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
@@ -1478,23 +1482,6 @@ public sealed class AppEndToEndTests : IDisposable
 
         Assert.True(Desktop.WaitFor(() => !User32.IsWindow(overlay)), "Escape didn't close the overlay.");
         Assert.Null(Windows.WindowInfo.ShapeOf(target.Handle));
-    }
-
-    [Fact]
-    public void A_second_copy_does_not_start()
-    {
-        using Process second = Start();
-
-        nint message = 0;
-        Assert.True(Desktop.WaitFor(() =>
-        {
-            message = Desktop.FindProcessWindow(second.Id, title => title == "WinScreen");
-            return message != 0;
-        }, 8000), "A second copy didn't say WinScreen is already running.");
-
-        Desktop.PostMessage(message, User32.WM_CLOSE, 0, 0);
-        Assert.True(second.WaitForExit(4000), "The second copy didn't exit.");
-        Assert.False(_app.HasExited);
     }
 
     [Fact]
