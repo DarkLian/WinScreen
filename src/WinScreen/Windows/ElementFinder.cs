@@ -9,12 +9,13 @@ internal sealed unsafe class ElementFinder : IDisposable
 {
     private const int DeepestLevel = 24;
     private const int MostSiblings = 300;
+    private const int MostLooked = 3000;
     private const int GW_HWNDNEXT = 2;
     private const uint InProcessServer = 1;
 
     // Places in the COM tables of IUIAutomation, IUIAutomationTreeWalker and IUIAutomationElement.
     private const int ElementFromHandle = 6, ControlViewWalker = 14, FirstChild = 4, NextSibling = 6, ControlType = 21,
-        BoundingRectangle = 43;
+        AutomationId = 29, ClassName = 30, BoundingRectangle = 43;
 
     private readonly nint _overlay;
     private readonly AutoResetEvent _asked = new(false);
@@ -85,20 +86,17 @@ internal sealed unsafe class ElementFinder : IDisposable
 
     internal static FoundElement? FindElement(nint window, Point point)
     {
-        var path = new List<int>();
         return Walk(window, (walker, element) =>
         {
-            for (int level = 0; level < DeepestLevel; level++)
+            List<(nint Element, int Index)> below = DeepestAt(walker, element, point);
+            if (below.Count > 0)
             {
-                nint inside = ChildAt(walker, element, point, out int index);
-                if (inside == 0)
-                    break;
                 Marshal.Release(element);
-                element = inside;
-                path.Add(index);
+                element = below[^1].Element;
+                foreach ((nint outer, _) in below.Take(below.Count - 1)) Marshal.Release(outer);
             }
             return (element, BoundsOf(element) is { Width: > 0, Height: > 0 } found
-                ? new FoundElement(found, window, [.. path], ControlTypeOf(element)) : null);
+                ? new FoundElement(found, window, [.. below.Select(step => step.Index)], ControlTypeOf(element)) : null);
         });
     }
 
@@ -116,6 +114,37 @@ internal sealed unsafe class ElementFinder : IDisposable
             return (element, ControlTypeOf(element) == earlier.ControlType && BoundsOf(element) is { Width: > 0, Height: > 0 } now
                 ? now : null);
         });
+    }
+
+    // Elements from the window's own down to the deepest one at the point, outermost first, for a caller that keeps
+    // some: it releases each. Null when the app didn't answer.
+    internal static List<nint>? ChainAt(nint automation, nint walker, nint window, Point point)
+    {
+        nint element = 0;
+        if (((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(automation, ElementFromHandle))(automation, window, &element) != 0 ||
+            element == 0)
+            return null;
+        return [element, .. DeepestAt(walker, element, point).Select(step => step.Element)];
+    }
+
+    // The caller releases it.
+    internal static nint ControlWalkerOf(nint automation)
+    {
+        nint walker = 0;
+        return ((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(automation, ControlViewWalker))(automation, &walker) == 0 ? walker : 0;
+    }
+
+    internal static string ClassNameOf(nint element) => Words(element, ClassName);
+
+    internal static string AutomationIdOf(nint element) => Words(element, AutomationId);
+
+    private static string Words(nint element, int slot)
+    {
+        nint words = 0;
+        if (((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(element, slot))(element, &words) != 0 || words == 0)
+            return "";
+        try { return Marshal.PtrToStringBSTR(words); }
+        finally { Marshal.FreeBSTR(words); }
     }
 
     // The step's held element is released here.
@@ -147,7 +176,7 @@ internal sealed unsafe class ElementFinder : IDisposable
 
     // The newer object, as PipControlInput uses: only it takes timeouts, and a hung app must not hold the pointer's hint
     // for UI Automation's 20 seconds. The caller releases it.
-    private static nint CreateAutomation()
+    internal static nint CreateAutomation()
     {
         Guid wanted = new("30CBE57D-D9D0-452A-AB13-7AC5AC4825EE"); // IUIAutomation
         Guid newer = new("E22AD333-B25F-460C-83D0-0581107395C9"), older = new("FF48DBA4-60EF-4201-AA87-54103EEF594E");
@@ -179,38 +208,50 @@ internal sealed unsafe class ElementFinder : IDisposable
         return child;
     }
 
-    private static int ControlTypeOf(nint element)
+    internal static int ControlTypeOf(nint element)
     {
         int type;
         return ((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(element, ControlType))(element, &type) == 0 ? type : 0;
     }
 
-    // The caller releases the result.
-    private static nint ChildAt(nint walker, nint element, Point point, out int index)
+    // The elements below this one at the point, outermost first, each with its place among its siblings; the caller
+    // releases each. Of siblings at the point, the one leading deepest is taken: Chrome's first child is a pane over
+    // the whole window with nothing in it, and its page is in a later one.
+    private static List<(nint Element, int Index)> DeepestAt(nint walker, nint element, Point point)
     {
-        index = -1;
-        nint child = 0;
-        if (((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(walker, FirstChild))(walker, element, &child) != 0)
-            return 0;
-        for (int sibling = 0; child != 0 && sibling < MostSiblings; sibling++)
-        {
-            if (BoundsOf(child) is { } bounds && bounds.Contains(point))
-            {
-                index = sibling;
-                return child;
-            }
-            nint next = 0;
-            int result = ((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(walker, NextSibling))(walker, child, &next);
-            Marshal.Release(child);
-            child = result == 0 ? next : 0;
-        }
-
-        if (child != 0)
-            Marshal.Release(child);
-        return 0;
+        int budget = MostLooked;
+        return Below(walker, element, point, 0, ref budget);
     }
 
-    private static Rectangle? BoundsOf(nint element)
+    private static List<(nint Element, int Index)> Below(nint walker, nint element, Point point, int level, ref int budget)
+    {
+        var best = new List<(nint Element, int Index)>();
+        nint child = 0;
+        if (level >= DeepestLevel ||
+            ((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(walker, FirstChild))(walker, element, &child) != 0)
+            return best;
+        for (int sibling = 0; child != 0 && sibling < MostSiblings && budget > 0; sibling++, budget--)
+        {
+            nint next = 0;
+            if (((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(walker, NextSibling))(walker, child, &next) != 0)
+                next = 0;
+            if (BoundsOf(child) is { } bounds && bounds.Contains(point))
+            {
+                List<(nint Element, int Index)> deeper = Below(walker, child, point, level + 1, ref budget);
+                deeper.Insert(0, (child, sibling));
+                if (deeper.Count > best.Count) (best, deeper) = (deeper, best);
+                foreach ((nint unused, _) in deeper) Marshal.Release(unused);
+            }
+            else
+                Marshal.Release(child);
+            child = next;
+        }
+        if (child != 0)
+            Marshal.Release(child);
+        return best;
+    }
+
+    internal static Rectangle? BoundsOf(nint element)
     {
         Rect bounds;
         return ((delegate* unmanaged[Stdcall]<nint, Rect*, int>)Slot(element, BoundingRectangle))(element, &bounds) == 0

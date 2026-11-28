@@ -46,6 +46,7 @@ internal sealed unsafe class ContentOverlay : Form
     private volatile StrongBox<ContentLevels> _levels;
     private volatile bool _changed;
     private volatile Settings.KeptArea[] _kept;
+    private volatile KeptAreaFollower? _follower;
     private readonly bool _leaveAlreadyDark;
     private volatile BackdropSet? _backdrop;
     private volatile BackdropChoice? _showing;
@@ -146,6 +147,7 @@ internal sealed unsafe class ContentOverlay : Form
     public void SetKept(Settings.KeptArea[] kept)
     {
         _kept = kept;
+        if (_renderer is not null) FollowControls(kept);
         _changed = true;
         if (!_stopping) _arrived.Set();
     }
@@ -205,7 +207,24 @@ internal sealed unsafe class ContentOverlay : Form
         _hooks.Add(User32.SetWinEventHook(Reorder, Reorder, 0, callback, 0, 0, OutOfContext));
         _renderer = new Thread(Render) { IsBackground = true, Name = "WinScreen effect" };
         _renderer.Start();
+        FollowControls(_kept);
     }
+
+    // On this thread only, as Start and Stop are.
+    private void FollowControls(Settings.KeptArea[] kept)
+    {
+        if (_stopping) return;
+        if (_follower is null && kept.Any(area => area.Follows))
+            _follower = new KeptAreaFollower(_source, () =>
+            {
+                _changed = true;
+                if (!_stopping) _arrived.Set();
+            });
+        _follower?.SetAreas(kept);
+    }
+
+    // Where each kept area is now, in the window's frame, for a test or a window's menu; null when none follows a control.
+    internal Rectangle?[]? KeptPlaces => _follower?.PlacesFor(_kept);
 
     private void OnWindowEvent(nint hook, uint kind, nint window, int item, int child, uint thread, uint time)
     {
@@ -582,6 +601,13 @@ internal sealed unsafe class ContentOverlay : Form
                 if (next is not null)
                     using (next)
                     {
+                        // A scrolled page's frame comes before the app says where its controls went: waiting a little
+                        // for that keeps a followed video from lagging a frame behind while the page moves.
+                        if (_follower is { Holding: true, Moving: true } follower)
+                        {
+                            follower.WaitFor(follower.Ask(), 10);
+                            _changed = false;
+                        }
                         var content = new Size(next.ContentSize.Width, next.ContentSize.Height);
                         if (content.Width >= 16 && content.Height >= 16)
                         {
@@ -804,12 +830,13 @@ internal sealed unsafe class ContentOverlay : Form
             PageR = pr, PageG = pg, PageB = pb, Flip = Flips(levels) ? 1 : 0,
         };
         Settings.KeptArea[] kept = _kept;
+        Rectangle?[]? places = _follower?.PlacesFor(kept);
         float scale = User32.GetDpiForWindow(_source) is var dpi and > 0 ? dpi / 96f : 1;
         int count = 0;
-        foreach (Settings.KeptArea area in kept)
+        for (int i = 0; i < kept.Length; i++)
         {
             if (count == Options.MostAreas) break;
-            Rectangle place = area.In(size, scale);
+            Rectangle place = places?[i] is { } now ? Rectangle.Intersect(now, new Rectangle(Point.Empty, size)) : kept[i].In(size, scale);
             if (place.IsEmpty) continue;
             options.Areas[count * 4] = place.Left;
             options.Areas[count * 4 + 1] = place.Top;
@@ -919,6 +946,7 @@ internal sealed unsafe class ContentOverlay : Form
             if (hook != 0)
                 User32.UnhookWinEvent(hook);
         _hooks.Clear();
+        _follower?.Dispose();
         _stop.Set();
         if (_renderer is null || _renderer.Join(2000))
             Release();

@@ -555,7 +555,7 @@ settings.fullScreen.pause 0533994D4EE99C8C
 settings.general 91E25F4DDC6F6CD8
 settings.hotkeys.captureHelp D91DD91C455200B8
 settings.keptAreas.empty ABB8BDE25543E3E3
-settings.keptAreas.help D70440E19F24BE81
+settings.keptAreas.help 5CE2499F9AA559BC
 settings.keptAreas.list 6A7EA9BCADEC95D4
 settings.keptAreas.title D0E13EFC149AFFC9
 settings.language DF028FD6BD35363E

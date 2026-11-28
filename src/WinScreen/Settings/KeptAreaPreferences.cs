@@ -52,9 +52,12 @@ public sealed record AppKeptAreas
 // Each edge is a distance, in pixels at 100% scaling, from one side of the window: by default the area's own side
 // (an inset), or the other side when the edge was nearer that one. So a player's picture, between a top bar and a
 // bottom bar of fixed height, stays on the picture when the window is resized.
+// Marked over a control (ControlType not 0), the area follows that control instead, found by these fields where the
+// rectangle is; the rectangle is used only while the app doesn't answer (KeptAreaFollower).
 public sealed record KeptArea
 {
     private const int Largest = 20000;
+    private const int LongestName = 256;
 
     public int Left { get; init; }
     public int Top { get; init; }
@@ -64,6 +67,11 @@ public sealed record KeptArea
     public bool TopFromBottom { get; init; }
     public bool RightFromLeft { get; init; }
     public bool BottomFromTop { get; init; }
+    public int ControlType { get; init; }
+    public string ControlClass { get; init; } = "";
+    public string ControlId { get; init; } = "";
+
+    internal bool Follows => ControlType != 0;
 
     internal bool IsUsable => Left >= 0 && Top >= 0 && Right >= 0 && Bottom >= 0;
 
@@ -71,7 +79,10 @@ public sealed record KeptArea
     {
         Left = Math.Clamp(Left, 0, Largest), Top = Math.Clamp(Top, 0, Largest),
         Right = Math.Clamp(Right, 0, Largest), Bottom = Math.Clamp(Bottom, 0, Largest),
+        ControlType = Math.Max(0, ControlType), ControlClass = Name(ControlClass), ControlId = Name(ControlId),
     };
+
+    private static string Name(string? name) => name is null ? "" : name.Length > LongestName ? name[..LongestName] : name;
 
     // part is in the window's pixels; scale is the window's DPI over 96.
     internal static KeptArea Of(Rectangle part, Size window, float scale)

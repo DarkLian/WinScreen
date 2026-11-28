@@ -25,15 +25,18 @@ public sealed class BrowserInputTests(Xunit.Abstractions.ITestOutputHelper outpu
         cursor == LoadCursor(0, 32512) ? "arrow" : cursor == LoadCursor(0, 32513) ? "ibeam" :
         cursor == LoadCursor(0, 32649) ? "hand" : cursor == 0 ? "none" : $"0x{cursor:X}";
 
-    internal static (Process Browser, nint Window, string Root) Open(string html, string title, bool app, string? path = null, double scale = 1)
+    /// <param name="accessibility">Chromium's accessibility on from the start; without it, as for people, it comes on
+    /// when first asked.</param>
+    internal static (Process Browser, nint Window, string Root) Open(string html, string title, bool app, string? path = null, double scale = 1,
+        bool accessibility = true)
     {
         string root = Directory.CreateTempSubdirectory("winscreen-browser").FullName;
         string page = Path.Combine(root, "page.html");
         File.WriteAllText(page, html);
         var browser = new Process { StartInfo = new ProcessStartInfo(path ?? EdgePath) { UseShellExecute = false } };
         foreach (string arg in new[] { "--user-data-dir=" + Path.Combine(root, "profile"), "--no-first-run", "--no-default-browser-check",
-            "--force-device-scale-factor=" + scale.ToString(System.Globalization.CultureInfo.InvariantCulture), "--force-renderer-accessibility", "--disable-sync", "--window-size=900,700", "--window-position=160,100", app ? "--app=" + new Uri(page).AbsoluteUri : new Uri(page).AbsoluteUri })
-            browser.StartInfo.ArgumentList.Add(arg);
+            "--force-device-scale-factor=" + scale.ToString(System.Globalization.CultureInfo.InvariantCulture), accessibility ? "--force-renderer-accessibility" : "", "--disable-sync", "--window-size=900,700", "--window-position=160,100", app ? "--app=" + new Uri(page).AbsoluteUri : new Uri(page).AbsoluteUri })
+            if (arg.Length > 0) browser.StartInfo.ArgumentList.Add(arg);
         browser.Start();
         nint window = 0;
         Desktop.WaitFor(() =>

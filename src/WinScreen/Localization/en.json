@@ -553,7 +553,7 @@
   "settings.general": "General",
   "settings.hotkeys.captureHelp": "Click a shortcut, or press Enter, then press the new keys. Esc keeps the old one, Delete removes it.",
   "settings.keptAreas.empty": "No areas yet",
-  "settings.keptAreas.help": "Glass and Dark mode leave these parts of an app's windows as they are, so a video or picture stays solid. To mark them, open a window's menu (Ctrl+right-click) and choose Effects, then Select areas to keep. With plain Glass, they need a graphics card.",
+  "settings.keptAreas.help": "Glass and Dark mode leave these parts of an app's windows as they are, so a video or picture stays solid. A part marked on a video or another control moves with it when the page scrolls. To mark them, open a window's menu (Ctrl+right-click) and choose Effects, then Select areas to keep. With plain Glass, they need a graphics card.",
   "settings.keptAreas.list": "Apps with areas to keep",
   "settings.keptAreas.title": "Areas to keep",
   "settings.language": "Language",

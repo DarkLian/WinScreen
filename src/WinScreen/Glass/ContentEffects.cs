@@ -148,6 +148,8 @@ internal sealed class ContentEffects : IDisposable
             overlay.SetKept(KeptOf(window));
     }
 
+    internal Rectangle?[]? KeptPlacesOf(nint window) => _overlays.TryGetValue(window, out ContentOverlay? overlay) ? overlay.KeptPlaces : null;
+
     private Settings.KeptArea[] KeptOf(nint window) => ProgramOf(window) is { Length: > 0 } program ? [.. _keptOf(program)] : [];
 
     internal BackdropSet? BackdropOf(nint window) => _overlays.TryGetValue(window, out ContentOverlay? overlay) ? overlay.Background : null;

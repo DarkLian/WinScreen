@@ -1400,6 +1400,53 @@ public sealed partial class TrayApplication : ApplicationContext
         }
     }
 
+    // Off this thread, as an app can be slow to answer: each area marked over a control is saved as following it.
+    private void DescribeKeptAreas(nint window, string program, Rectangle frame, List<(KeptArea Area, Rectangle Part)> fresh)
+    {
+        if (fresh.Count == 0) return;
+        Task.Run(() =>
+        {
+            KeptArea Describe((KeptArea Area, Rectangle Part) pair) =>
+                Glass.KeptAreaFollower.Described(pair.Area, window, new Rectangle(pair.Part.Location + (Size)frame.Location, pair.Part.Size));
+            var described = fresh.Select(pair => (pair.Area, Now: Describe(pair))).ToList();
+            // A browser builds its accessibility tree once first asked, and can answer with only part of it.
+            if (described.Any(pair => pair.Now == pair.Area))
+            {
+                Thread.Sleep(500);
+                described = [.. described.Zip(fresh, (was, pair) => was.Now != was.Area ? was : (was.Area, Describe(pair)))];
+            }
+            described = [.. described.Where(pair => pair.Now != pair.Area)];
+            if (described.Count == 0 || !_toolbar.IsHandleCreated) return;
+            _toolbar.BeginInvoke(() =>
+            {
+                List<KeptArea> now = [.. _settings.KeptAreas.For(program)];
+                bool changed = false;
+                foreach ((KeptArea was, KeptArea follows) in described)
+                {
+                    int at = now.IndexOf(was);
+                    if (at < 0 || now.Contains(follows)) continue;
+                    now[at] = follows;
+                    changed = true;
+                }
+                Diagnostics.Log.Event("keptAreas.follow", ("controls", described.Count), ("saved", changed));
+                if (!changed) return;
+                KeptAreaPreferences before = _settings.KeptAreas;
+                try
+                {
+                    _settings.KeptAreas = before.With(program, now);
+                    SaveSettings(_settings);
+                    _content.SetKeptAreas(_settings.KeptAreas.For);
+                    if (_settingsWindow is { IsDisposed: false } open) open.KeptAreasChanged();
+                }
+                catch (Exception failure) when (IsExpected(failure))
+                {
+                    _settings.KeptAreas = before;
+                    Diagnostics.Log.Swallowed(failure);
+                }
+            });
+        });
+    }
+
     private void KeepAreas(nint window)
     {
         if (_windows.IsHidden(window) && !_windows.IsDrawnByEffect(window) || _windows.IsPeeking(window))
@@ -1411,8 +1458,10 @@ public sealed partial class TrayApplication : ApplicationContext
             return;
 
         float scale = User32.GetDpiForWindow(window) is var dpi and > 0 ? dpi / 96f : 1;
-        var overlay = new KeptAreaOverlay(frame, _settings.KeptAreas.For(program).Select(area => area.In(frame.Size, scale)),
-            KeptAreaPreferences.MostPerApp);
+        var whole = new Rectangle(Point.Empty, frame.Size);
+        List<(KeptArea Area, Rectangle Shown)> marked = _settings.KeptAreas.For(program)
+            .Select(area => (area, Rectangle.Intersect(area.In(frame.Size, scale), whole))).ToList();
+        var overlay = new KeptAreaOverlay(frame, marked.Select(area => area.Shown), KeptAreaPreferences.MostPerApp);
         var identity = WindowIdentity.Capture(window);
         overlay.Done += areas =>
         {
@@ -1420,14 +1469,18 @@ public sealed partial class TrayApplication : ApplicationContext
             _cropping = null;
             _croppingWindow = 0;
             KeptAreaPreferences before = _settings.KeptAreas;
+            // An area left as it was keeps the control it follows.
+            List<KeptArea> chosen = areas.Select(area => marked.FirstOrDefault(old => old.Shown == area).Area ?? KeptArea.Of(area, frame.Size, scale)).ToList();
             try
             {
                 identity.Require();
-                _settings.KeptAreas = before.With(program, areas.Select(area => KeptArea.Of(area, frame.Size, scale)));
+                _settings.KeptAreas = before.With(program, chosen);
                 SaveSettings(_settings);
                 _content.SetKeptAreas(_settings.KeptAreas.For);
                 if (_settingsWindow is { IsDisposed: false } open) open.KeptAreasChanged();
                 User32.SetForegroundWindow(window);
+                // Areas marked before areas could follow a control are asked about too: saving again upgrades them.
+                DescribeKeptAreas(window, program, frame, chosen.Zip(areas).Where(pair => !pair.First.Follows).ToList());
             }
             catch (Exception failure) when (IsExpected(failure))
             {

@@ -172,6 +172,23 @@ internal sealed class TargetProcess : IDisposable
             throw new InvalidOperationException("Test target didn't add a corner control.");
     }
 
+    /// <summary>Fills the window with a white page that scrolls, holding a "picture" control 200 by 120 at 40, 60.</summary>
+    internal void AddScrollingPage(string pictureColor = "E8453C")
+    {
+        _process.StandardInput.WriteLine("scroller " + pictureColor);
+        _process.StandardInput.Flush();
+        if (NextReport() != "scroller")
+            throw new InvalidOperationException("Test target didn't add a scrolling page.");
+    }
+
+    internal void ScrollPageTo(int top)
+    {
+        _process.StandardInput.WriteLine("scroll " + top);
+        _process.StandardInput.Flush();
+        if (NextReport() != "scrolled")
+            throw new InvalidOperationException("Test target didn't scroll.");
+    }
+
     /// <summary>Plays silence on a loop, which gives the process a sound session in Windows' mixer.</summary>
     internal void PlaySilence()
     {

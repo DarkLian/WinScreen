@@ -184,6 +184,33 @@ internal static class Program
                             Console.WriteLine("corner");
                             Console.Out.Flush();
                         });
+                    if (parts[0] == "scroller")
+                        window.BeginInvoke(() =>
+                        {
+                            // A white page that scrolls, with a coloured "picture" control 200 by 120 at 40, 60 in it, as a
+                            // video on a web page.
+                            var page = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Color.White, Name = "page" };
+                            page.Controls.Add(new Panel { Bounds = new Rectangle(0, 1600, 10, 10), BackColor = Color.White });
+                            page.Controls.Add(new Panel
+                            {
+                                Name = "picture", Bounds = new Rectangle(40, 60, 200, 120),
+                                BackColor = ColorTranslator.FromHtml("#" + (parts.Length > 1 ? parts[1] : "E8453C")),
+                            });
+                            window.Controls.Add(page);
+                            Console.WriteLine("scroller");
+                            Console.Out.Flush();
+                        });
+                    if (parts[0] == "scroll")
+                        window.BeginInvoke(() =>
+                        {
+                            if (window.Controls["page"] is Panel page)
+                            {
+                                page.AutoScrollPosition = new Point(0, int.Parse(parts[1]));
+                                page.Update();
+                            }
+                            Console.WriteLine("scrolled");
+                            Console.Out.Flush();
+                        });
                     if (parts[0] == "popup")
                         window.BeginInvoke(() =>
                         {

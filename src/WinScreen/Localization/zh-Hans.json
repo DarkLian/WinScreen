@@ -553,7 +553,7 @@
   "settings.general": "常规",
   "settings.hotkeys.captureHelp": "点击快捷键或按 Enter，然后按新的按键。按 Esc 保留原来的，按 Delete 删除。",
   "settings.keptAreas.empty": "还没有区域",
-  "settings.keptAreas.help": "玻璃和深色模式不会改变应用窗口中的这些部分，因此视频或图片会保持不透明。要标记它们，请打开窗口菜单（Ctrl+右键点击），选择“效果”，然后选择“选择要保留的区域”。使用普通玻璃时，它们需要显卡。",
+  "settings.keptAreas.help": "玻璃和深色模式不会改变应用窗口中的这些部分，因此视频或图片会保持不透明。标记在视频或其他控件上的部分会随页面滚动而移动。要标记它们，请打开窗口菜单（Ctrl+右键点击），选择“效果”，然后选择“选择要保留的区域”。使用普通玻璃时，它们需要显卡。",
   "settings.keptAreas.list": "有要保留区域的应用",
   "settings.keptAreas.title": "要保留的区域",
   "settings.language": "语言",

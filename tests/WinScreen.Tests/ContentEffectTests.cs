@@ -85,6 +85,43 @@ public sealed class KeptAreaTests
         Assert.Empty(many.Without(["Code.exe"]).Apps);
     }
 
+    // Areas saved before they could follow a control stay where they were marked.
+    [Fact]
+    public void An_area_saved_before_controls_were_followed_stays_where_it_was_marked()
+    {
+        KeptArea old = Assert.Single(AppSettings.Parse("""
+            {"KeptAreas":{"Apps":[{"Program":"chrome","Areas":[{"Top":30,"Bottom":200}]}]}}
+            """).KeptAreas.For("chrome"));
+        Assert.False(old.Follows);
+        Assert.Equal("", old.ControlClass);
+        Assert.Equal("", old.ControlId);
+    }
+
+    [Fact]
+    public void An_area_following_a_control_is_saved_with_it()
+    {
+        var follows = new KeptArea { Top = 30, Bottom = 200, ControlType = 50026, ControlClass = "video-stream", ControlId = "player" };
+        var settings = new AppSettings
+        {
+            KeptAreas = new KeptAreaPreferences().With("chrome", [follows, new KeptArea { ControlClass = null!, ControlId = new string('x', 900) }]),
+        };
+        IReadOnlyList<KeptArea> read = AppSettings.Parse(System.Text.Json.JsonSerializer.Serialize(settings)).KeptAreas.For("chrome");
+        Assert.Equal(follows, read[0]);
+        Assert.True(read[0].Follows);
+        Assert.Equal("", read[1].ControlClass);
+        Assert.Equal(256, read[1].ControlId.Length);
+    }
+
+    [Fact]
+    public void Overlap_is_the_shared_part_of_both_together()
+    {
+        var part = new Rectangle(0, 0, 100, 100);
+        Assert.Equal(1f, KeptAreaFollower.Overlap(part, part));
+        Assert.Equal(0f, KeptAreaFollower.Overlap(part, new Rectangle(100, 0, 100, 100)));
+        Assert.Equal(1f / 3, KeptAreaFollower.Overlap(part, new Rectangle(50, 0, 100, 100)), 3);
+        Assert.Equal(0f, KeptAreaFollower.Overlap(part, Rectangle.Empty));
+    }
+
     [Fact]
     public void Marking_adds_a_dragged_part_and_a_click_on_a_marked_part_takes_it_away()
     {
