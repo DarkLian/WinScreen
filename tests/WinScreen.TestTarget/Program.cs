@@ -315,6 +315,8 @@ internal static class Program
                         window.BeginInvoke(() => window.UseCaptionHit(int.Parse(parts[1])));
                     if (parts[0] == "titlebar")
                         window.BeginInvoke(window.UseTitleBar);
+                    if (parts[0] == "tabrow")
+                        window.BeginInvoke(window.UseTabRow);
                     if (parts[0] == "hang")
                     {
                         unhang.Reset();
@@ -497,6 +499,15 @@ internal sealed partial class TargetForm : Form
         Report("titlebar");
     }
 
+    // As a browser's top row: tabs that answer "content", with its own minimize, maximize and close buttons at the right.
+    public void UseTabRow()
+    {
+        _hasTitleBar = true;
+        _captionHit = HTCLIENT;
+        _tabRow = true;
+        Report("tabrow");
+    }
+
     public void CreateUnattributedLayeredWindow()
     {
         // Native STATIC avoids WinForms automatically calling SetLayeredWindowAttributes on style changes.
@@ -542,7 +553,9 @@ internal sealed partial class TargetForm : Form
 
     private const int WM_INPUT = 0x00FF;
     private const int WM_NCHITTEST = 0x0084;
+    private const int HTCLIENT = 1;
     private const int HTCAPTION = 2;
+    private const int CaptionButtonWidth = 46;
     private const int TitleBarHeight = 34;
     private const int RealInputWindowMilliseconds = 250;
 
@@ -551,6 +564,7 @@ internal sealed partial class TargetForm : Form
     private bool _recordMessages;
     private bool _hasTitleBar;
     private int _captionHit = HTCAPTION;
+    private bool _tabRow;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RawInputDevice
@@ -643,8 +657,11 @@ internal sealed partial class TargetForm : Form
         if (m.Msg == WM_NCHITTEST && _hasTitleBar)
         {
             int y = (short)(m.LParam.ToInt64() >> 16);
+            int x = (short)(m.LParam.ToInt64() & 0xFFFF);
             if (y - Top < TitleBarHeight)
-                m.Result = _captionHit;
+                m.Result = _tabRow && Right - x <= 3 * CaptionButtonWidth
+                    ? (Right - x - 1) / CaptionButtonWidth switch { 0 => 20, 1 => 9, _ => 8 }
+                    : _captionHit;
         }
     }
 

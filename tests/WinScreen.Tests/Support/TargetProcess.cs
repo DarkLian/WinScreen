@@ -281,6 +281,14 @@ internal sealed class TargetProcess : IDisposable
         if (NextReport() != "titlebar") throw new InvalidOperationException("The target has no title bar.");
     }
 
+    /// <summary>A top row as a browser has: "content" all along it, with minimize, maximize and close at the right.</summary>
+    public void UseTabRow()
+    {
+        _process.StandardInput.WriteLine("tabrow");
+        _process.StandardInput.Flush();
+        if (NextReport() != "tabrow") throw new InvalidOperationException("The target has no tab row.");
+    }
+
     public nint CreateUnattributedLayeredWindow()
     {
         _process.StandardInput.WriteLine("layered");

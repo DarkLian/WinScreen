@@ -1085,6 +1085,87 @@ public sealed class AppEndToEndTests : IDisposable
     private static int WindowLeft(nint window) => User32.GetWindowRect(window, out Rect r) ? r.Left : 0;
 
     /// <summary>
+    /// The owner, 28 Nov, with "Either" and the bar in the middle: resting on a Chrome tab never opened it. A tab answers
+    /// "content", but it shares its row with the browser's own minimize, maximize and close buttons.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BrowserInputTests.BrowserCases), MemberType = typeof(BrowserInputTests))]
+    public void The_toolbar_opens_over_a_browser_tab(string path)
+    {
+        RestartWith(new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.TogglePin], Trigger = ToolbarTrigger.Either, Placement = ToolbarPlacement.Left } });
+        var (browser, window, root) = BrowserInputTests.Open("<!doctype html><title>TabRow</title><body style='background:#fff'>", "TabRow", app: false, path);
+        try
+        {
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Thread.Sleep(500);
+            Rectangle bounds = Desktop.BoundsOf(window);
+            int dpi = Dpi.Of(window);
+            // Where the left-placed bar opens: one caption height in from the window's edge, a bar's width wide.
+            int from = bounds.Left + Dpi.Scale(34, dpi) + 4, to = from + Dpi.Scale(34, dpi) - 8;
+            Point tab = Point.Empty;
+            for (int y = bounds.Top + Dpi.Scale(12, dpi); y < bounds.Top + Dpi.Scale(30, dpi) && tab.IsEmpty; y += 2)
+                for (int x = from + 6; x < to - 6 && tab.IsEmpty; x += 2)
+                    if (Enumerable.Range(-6, 13).All(dx => Hit(window, new Point(x + dx, y)) == User32.HTCLIENT))
+                        tab = new Point(x, y);
+            Assert.False(tab.IsEmpty, "No part of the tab row answered \"content\" where the bar opens.");
+            Desktop.RequireWindowAt(tab, window);
+            Desktop.SlideMouse(new Point(tab.X, tab.Y + Dpi.Scale(60, dpi)));
+            Thread.Sleep(80);
+            Desktop.SlideMouse(tab);
+            Assert.True(Desktop.WaitFor(() => Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar") is var bar and not 0 &&
+                Desktop.IsWindowVisible(bar), 4000), $"The toolbar didn't open over the tab at {tab} ({Path.GetFileName(path)}).");
+        }
+        finally
+        {
+            BrowserInputTests.Close(browser, root);
+        }
+
+        static nint Hit(nint window, Point point) =>
+            User32.SendMessageTimeout(window, User32.WM_NCHITTEST, 0, (nint)((point.Y << 16) | (point.X & 0xFFFF)), 2, 500, out nint hit) != 0 ? hit : -1;
+    }
+
+    /// <summary>
+    /// The owner, 28 Nov: the bar closed as soon as the pointer was a few pixels off it. It waits for a pointer that
+    /// strays and comes back, goes once it has been away for half a second, and goes along with a window moved by the app.
+    /// </summary>
+    [Fact]
+    public void The_toolbar_waits_for_a_pointer_that_strays_and_follows_its_window()
+    {
+        RestartWith(new AppSettings { WelcomeShown = true, Toolbar = new() { Buttons = [AppCommand.TogglePin], Placement = ToolbarPlacement.Left } });
+        using var target = new TargetProcess(Spot);
+        target.UseTitleBar();
+        Focus(target);
+        int caption = Dpi.Scale(34, Dpi.Of(target.Handle));
+        var rest = new Point(Spot.Left + caption + caption / 2, Spot.Top + 12);
+        Desktop.RequireWindowAt(rest, target.Handle);
+        Desktop.MoveMouse(new Point(rest.X + 30, rest.Y + 80));
+        Desktop.SlideMouse(rest);
+        nint toolbar = 0;
+        Assert.True(Desktop.WaitFor(() => (toolbar = Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar")) != 0 &&
+            Desktop.IsWindowVisible(toolbar), 4000), "The toolbar didn't open.");
+
+        // Off the bar for a moment, then back: it stays.
+        Desktop.MoveMouse(new Point(rest.X, rest.Y + caption * 3));
+        Thread.Sleep(200);
+        Desktop.MoveMouse(rest);
+        Thread.Sleep(WinScreen.Tray.ToolbarGeometry.LeaveMilliseconds + 300);
+        Assert.True(Desktop.IsWindowVisible(toolbar), "The toolbar closed when the pointer strayed for a moment.");
+
+        // The app moves its window: the bar goes along.
+        Rectangle before = Desktop.BoundsOf(toolbar);
+        User32.SetWindowPos(target.Handle, 0, Spot.Left + 20, Spot.Top, 0, 0, User32.SWP_NOSIZE | User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
+        Assert.True(Desktop.WaitFor(() => Desktop.BoundsOf(toolbar).Left == before.Left + 20, 1000) && Desktop.IsWindowVisible(toolbar),
+            $"The toolbar didn't follow its window: {before} became {Desktop.BoundsOf(toolbar)}.");
+
+        // Away for good: it goes, but not at once.
+        var away = Stopwatch.StartNew();
+        Desktop.MoveMouse(new Point(Spot.Left + 60, Spot.Bottom - 40));
+        Assert.True(Desktop.WaitFor(() => !Desktop.IsWindowVisible(toolbar), 3000), "The toolbar didn't hide.");
+        Assert.True(away.ElapsedMilliseconds >= WinScreen.Tray.ToolbarGeometry.LeaveMilliseconds - 150, $"The toolbar hid after {away.ElapsedMilliseconds} ms.");
+    }
+
+    /// <summary>
     /// Chrome on Fill display: the toolbar's Arrange window and Window menu stay open (the owner, 15 Nov, on beta 8:
     /// they closed right after opening).
     /// </summary>

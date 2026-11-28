@@ -38,6 +38,8 @@ public sealed class WindowToolbar : Form
     private Point _hoverPoint;
     private Rectangle _targetBounds;
     private Rectangle _hoverZone;
+    private bool _byMinimize;
+    private int _awayTime;
     private string _arrangement = "";
     private ToolbarPreferences _preferences = new();
     private bool _enabled;
@@ -216,10 +218,7 @@ public sealed class WindowToolbar : Form
         Point cursor = Cursor.Position;
         if (Visible)
         {
-            bool nearby = Rectangle.Inflate(Rectangle.Union(Bounds, _hoverZone), KeepOpenMargin, KeepOpenMargin)
-                .Contains(cursor);
-            if (!nearby || !TargetIsCurrent())
-                Hide();
+            StayOrHide(cursor);
             return;
         }
 
@@ -241,19 +240,14 @@ public sealed class WindowToolbar : Form
         }
 
         var window = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
-        Rectangle area = Screen.FromRectangle(window).WorkingArea;
-        int reserved = Dpi.Scale(CaptionButtonsWidth, dpi);
-        int caption = Dpi.Scale(CaptionHeight, dpi);
-        var bar = new Rectangle(ToolbarGeometry.PlaceAt(window, Size, area, reserved, caption, _preferences.Placement), Size);
-        Rectangle buttonsZone = ToolbarGeometry.CaptionButtonsZone(window, area, reserved, caption);
         // With Either, resting on the buttons counts as the minimize trigger; anywhere else on the bar's spot, the
         // title bar.
         bool minimizeTrigger = _preferences.Trigger == ToolbarTrigger.MinimizeButton ||
-                               (_preferences.Trigger == ToolbarTrigger.Either && buttonsZone.Contains(cursor));
-        if (minimizeTrigger) bar.Y = ToolbarGeometry.BelowCaption(window, Height, area, caption);
-        Rectangle zone = minimizeTrigger ? buttonsZone : ToolbarGeometry.HoverZone(window, bar, area, reserved, caption);
-        bool moved = Math.Abs(cursor.X - _hoverPoint.X) > StillPixels ||
-                     Math.Abs(cursor.Y - _hoverPoint.Y) > StillPixels;
+                               (_preferences.Trigger == ToolbarTrigger.Either && PlaceFor(window, dpi, true).Zone.Contains(cursor));
+        (Rectangle bar, Rectangle zone) = PlaceFor(window, dpi, minimizeTrigger);
+        int still = Dpi.Scale(StillPixels, dpi);
+        bool moved = Math.Abs(cursor.X - _hoverPoint.X) > still ||
+                     Math.Abs(cursor.Y - _hoverPoint.Y) > still;
         if (!zone.Contains(cursor) || moved)
         {
             _hoverPoint = cursor;
@@ -282,10 +276,64 @@ public sealed class WindowToolbar : Form
         _window = foreground;
         _targetBounds = window;
         _hoverZone = zone;
+        _byMinimize = minimizeTrigger;
+        _awayTime = 0;
         Location = bar.Location;
         ShowStates();
         Show();
         KeepAbove(Handle, foreground);
+    }
+
+    private (Rectangle Bar, Rectangle Zone) PlaceFor(Rectangle window, int dpi, bool minimizeTrigger)
+    {
+        Rectangle area = Screen.FromRectangle(window).WorkingArea;
+        int reserved = Dpi.Scale(CaptionButtonsWidth, dpi);
+        int caption = Dpi.Scale(CaptionHeight, dpi);
+        var bar = new Rectangle(ToolbarGeometry.PlaceAt(window, Size, area, reserved, caption, _preferences.Placement), Size);
+        if (!minimizeTrigger) return (bar, ToolbarGeometry.HoverZone(window, bar, area, reserved, caption));
+        bar.Y = ToolbarGeometry.BelowCaption(window, Height, area, caption);
+        return (bar, ToolbarGeometry.CaptionButtonsZone(window, area, reserved, caption));
+    }
+
+    // The owner, 28 Nov: one look with the pointer a few pixels off the bar was enough to close it.
+    private void StayOrHide(Point cursor)
+    {
+        if (!TargetIsCurrent(sameBounds: false))
+        {
+            HideFor(ToolbarHide.WindowChanged);
+            return;
+        }
+
+        bool pressed = MouseButtons != MouseButtons.None;
+        if (User32.GetWindowRect(_window, out Rect r) &&
+            Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom) is var now && now != _targetBounds)
+        {
+            // Dragged or resized by hand, the bar would be in the way; moved by the app or a button, it goes along.
+            if (pressed)
+            {
+                HideFor(ToolbarHide.Dragged);
+                return;
+            }
+
+            int dpi = Dpi.Of(_window);
+            Arrange(dpi);
+            (Rectangle bar, _hoverZone) = PlaceFor(now, dpi, _byMinimize);
+            _targetBounds = now;
+            Location = bar.Location;
+            KeepAbove(Handle, _window);
+        }
+
+        int margin = Dpi.Scale(KeepOpenMargin, Dpi.Of(_window));
+        bool nearby = Rectangle.Inflate(Rectangle.Union(Bounds, _hoverZone), margin, margin).Contains(cursor);
+        _awayTime = nearby ? 0 : _awayTime + Interval;
+        if (ToolbarGeometry.Leaves(nearby, _awayTime, pressed) is { } reason)
+            HideFor(reason);
+    }
+
+    private void HideFor(ToolbarHide reason)
+    {
+        Hide();
+        Diagnostics.Log.Event("toolbar.hide", ("reason", reason), ("program", Diagnostics.LogValue.ProgramOf(_window)));
     }
 
     // Asks the window itself, so content drawn at an app's top doesn't count as its title bar. Some apps draw their
@@ -298,14 +346,35 @@ public sealed class WindowToolbar : Form
             WindowInfo.CaptionButtonBounds(window, WindowInfo.CaptionButton.Minimize) is { } drawn)
             return drawn.Contains(cursor);
         nint wanted = trigger == ToolbarTrigger.MinimizeButton ? User32.HTMINBUTTON : User32.HTCAPTION;
-        nint position = (nint)((cursor.Y << 16) | (cursor.X & 0xFFFF));
-        if (Answers(window) == wanted) return true;
-        nint under = User32.WindowFromPoint(new NativePoint { X = cursor.X, Y = cursor.Y });
-        return under != 0 && under != window && User32.GetAncestor(under, User32.GA_ROOT) == window && Answers(under) == wanted;
-
-        nint Answers(nint asked) => User32.SendMessageTimeout(asked, User32.WM_NCHITTEST, 0, position, AbortIfHung,
-            CaptionCheckMilliseconds, out nint hit) != 0 ? hit : -1;
+        if (Answers(window, cursor).Contains(wanted)) return true;
+        // A browser's tabs answer "content" (the owner, 28 Nov: no bar over a Chrome tab), yet they share their row
+        // with the window's own minimize, maximize and close buttons: that row is the title bar.
+        return trigger == ToolbarTrigger.TitleBar && Answer(window, cursor) == User32.HTCLIENT && InButtonRow(window, cursor.Y);
     }
+
+    private static bool InButtonRow(nint window, int y)
+    {
+        if (!User32.GetWindowRect(window, out Rect r)) return false;
+        int dpi = Dpi.Of(window);
+        int right = Math.Min(r.Right, Screen.FromHandle(window).Bounds.Right) - 1;
+        int left = Math.Max(r.Left, right - Dpi.Scale(CaptionButtonsWidth, dpi));
+        for (int x = right; x > left; x -= Dpi.Scale(6, dpi))
+            if (Answers(window, new Point(x, y)).Any(hit => hit is User32.HTMINBUTTON or User32.HTMAXBUTTON or User32.HTCLOSE))
+                return true;
+        return false;
+    }
+
+    private static IEnumerable<nint> Answers(nint window, Point point)
+    {
+        yield return Answer(window, point);
+        nint under = User32.WindowFromPoint(new NativePoint { X = point.X, Y = point.Y });
+        if (under != 0 && under != window && User32.GetAncestor(under, User32.GA_ROOT) == window)
+            yield return Answer(under, point);
+    }
+
+    private static nint Answer(nint window, Point point) =>
+        User32.SendMessageTimeout(window, User32.WM_NCHITTEST, 0, (nint)((point.Y << 16) | (point.X & 0xFFFF)), AbortIfHung,
+            CaptionCheckMilliseconds, out nint hit) != 0 ? hit : -1;
 
     private void ShowStates()
     {
@@ -316,11 +385,11 @@ public sealed class WindowToolbar : Form
         }
     }
 
-    private bool TargetIsCurrent() => _identity?.IsSameWindow() == true &&
+    private bool TargetIsCurrent(bool sameBounds = true) => _identity?.IsSameWindow() == true &&
                                       User32.GetForegroundWindow() == _window && _canUse(_window) &&
                                       User32.GetWindowRect(_window, out var current) &&
-                                      Rectangle.FromLTRB(current.Left, current.Top, current.Right, current.Bottom) ==
-                                      _targetBounds;
+                                      (!sameBounds || Rectangle.FromLTRB(current.Left, current.Top, current.Right, current.Bottom) ==
+                                      _targetBounds);
 
     // A pinned window is topmost too, and Show alone can leave the bar under it. Windows also doesn't let WinScreen,
     // not being in front, put the bar over the pinned window in front, so then the window goes just under the bar

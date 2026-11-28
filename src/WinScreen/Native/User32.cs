@@ -104,8 +104,11 @@ internal static partial class User32
 
     public const int WM_CLOSE = 0x0010;
     public const int WM_NCHITTEST = 0x0084;
+    public const int HTCLIENT = 1;
     public const int HTCAPTION = 2;
     public const int HTMINBUTTON = 8;
+    public const int HTMAXBUTTON = 9;
+    public const int HTCLOSE = 20;
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

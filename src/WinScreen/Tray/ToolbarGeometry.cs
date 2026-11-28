@@ -1,7 +1,15 @@
 namespace WinScreen.Tray;
 
+public enum ToolbarHide { Away, PressedElsewhere, WindowChanged, Dragged }
+
 public static class ToolbarGeometry
 {
+    public const int LeaveMilliseconds = 500;
+
+    // The pointer can stray off the bar for a moment, as a hand does; a press elsewhere means it is done with.
+    public static ToolbarHide? Leaves(bool nearby, int awayMilliseconds, bool pressed) =>
+        nearby ? null : pressed ? ToolbarHide.PressedElsewhere : awayMilliseconds >= LeaveMilliseconds ? ToolbarHide.Away : null;
+
     public static Point Place(Rectangle window, Size bar, Rectangle area, int reservedRight, int captionHeight)
         => PlaceAt(window, bar, area, reservedRight, captionHeight, Settings.ToolbarPlacement.Centre);
 

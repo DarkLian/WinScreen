@@ -70,6 +70,19 @@ public class ToolbarGeometryTests
         Assert.Equal(window.Left + window.Width / 2, bar.Left + bar.Width / 2, 1.0);
     }
 
+    /// <summary>
+    /// The owner, 28 Nov: the bar closed the moment the pointer was a few pixels off it. It now waits half a second for
+    /// a pointer that strays and comes back, and goes at once on a press elsewhere.
+    /// </summary>
+    [Fact]
+    public void The_bar_waits_for_a_pointer_that_strays_and_goes_on_a_press_elsewhere()
+    {
+        Assert.Null(ToolbarGeometry.Leaves(nearby: true, 0, pressed: true));
+        Assert.Null(ToolbarGeometry.Leaves(nearby: false, ToolbarGeometry.LeaveMilliseconds - 60, pressed: false));
+        Assert.Equal(ToolbarHide.Away, ToolbarGeometry.Leaves(nearby: false, ToolbarGeometry.LeaveMilliseconds, pressed: false));
+        Assert.Equal(ToolbarHide.PressedElsewhere, ToolbarGeometry.Leaves(nearby: false, 60, pressed: true));
+    }
+
     [Fact]
     public void The_hover_zone_stays_within_reach_of_the_bar_so_it_cannot_flicker()
     {

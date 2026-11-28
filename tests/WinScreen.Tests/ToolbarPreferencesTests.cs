@@ -329,6 +329,27 @@ public sealed class ToolbarPreferencesTests
         Assert.False(WindowToolbar.MatchesTrigger(target.Handle, title, ToolbarTrigger.MinimizeButton));
     }
 
+    /// <summary>
+    /// A browser's tabs answer "content", so the bar never opened over a Chrome tab (the owner, 28 Nov). The row that
+    /// holds the window's own minimize, maximize and close buttons is its title bar; just under it, and on a window
+    /// that answers "content" everywhere, nothing is.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "RealWindows")]
+    public void A_tab_in_the_row_of_the_windows_own_buttons_counts_as_its_title_bar()
+    {
+        using var plain = new TargetProcess(new Rectangle(240, 160, 600, 300));
+        Rectangle bounds = Desktop.BoundsOf(plain.Handle);
+        var tab = new Point(bounds.Left + 200, bounds.Top + 16);
+        Assert.False(WindowToolbar.MatchesTrigger(plain.Handle, tab, ToolbarTrigger.TitleBar), "A window without buttons got a title bar.");
+
+        plain.UseTabRow();
+        Assert.True(WindowToolbar.MatchesTrigger(plain.Handle, tab, ToolbarTrigger.TitleBar), "The tab didn't count as the title bar.");
+        Assert.False(WindowToolbar.MatchesTrigger(plain.Handle, tab with { Y = bounds.Top + 60 }, ToolbarTrigger.TitleBar),
+            "The page under the tab row counted as the title bar.");
+        Assert.False(WindowToolbar.MatchesTrigger(plain.Handle, tab, ToolbarTrigger.MinimizeButton));
+    }
+
     private static IEnumerable<Control> Descendants(Control root) => root.Controls.Cast<Control>()
         .SelectMany(child => new[] { child }.Concat(Descendants(child)));
 }
