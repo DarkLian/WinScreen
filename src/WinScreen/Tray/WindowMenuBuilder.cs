@@ -25,6 +25,9 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     internal Func<nint, int>? OpacityPercent { get; init; }
     internal Action<nint, int>? SetOpacityPercent { get; init; }
 
+    // The toolbar's opacity button is lit at any level below 100%; the menu's "Use default opacity" only at that level.
+    internal Func<nint, bool>? AtDefaultOpacity { get; init; }
+
 
     private sealed record Group;
     private sealed record MoreGroup;
@@ -79,7 +82,12 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
     internal void PopulateOpacity(ToolStripItemCollection items)
     {
         if (OpacityPercent is not null && SetOpacityPercent is { } setOpacity)
-            items.Add(new OpacityRow(T("pip.opacity"), percent => WithTarget(window => setOpacity(window, percent))));
+            items.Add(new OpacityRow(T("pip.opacity"), percent =>
+            {
+                WithTarget(window => setOpacity(window, percent));
+                foreach (ToolStripMenuItem item in items.OfType<ToolStripMenuItem>().Where(item => item.Tag is AppCommand.ToggleDefaultOpacity))
+                    item.Checked = IsOn(AppCommand.ToggleDefaultOpacity, target()?.Window ?? 0);
+            }));
         else
         {
             items.Add(Command(AppCommand.OpacityDown));
@@ -211,6 +219,9 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
         else WithTarget(window => run(command, window));
     }) { Tag = command, ShortcutKeyDisplayString = Hotkey?.Invoke(command) is { Length: > 0 } keys ? keys : null };
 
+    private bool IsOn(AppCommand command, nint window) => window != 0 &&
+        (command == AppCommand.ToggleDefaultOpacity && AtDefaultOpacity is { } atDefault ? atDefault(window) : isOn(command, window));
+
     private void WithTarget(Action<nint> action)
     {
         if (target() is not { } identity || !(identity.Token == 0 ? identity.IsSameWindow() : identity.Matches())) { staleTarget(); return; }
@@ -235,7 +246,7 @@ internal sealed class WindowMenuBuilder(Func<WindowIdentity?> target, Action<App
             if (item.Tag is AppCommand command)
             {
                 item.Available = available(command);
-                item.Checked = window != 0 && isOn(command, window);
+                item.Checked = IsOn(command, window);
                 item.Enabled = command == AppCommand.RestoreAll || window != 0 && enabled(command, window);
                 MenuParts.ShowKeys(item, Hotkey?.Invoke(command));
             }

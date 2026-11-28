@@ -834,10 +834,13 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
+    // On means at the default level, as the menu shows it: from any other level it goes there.
     public byte ToggleDefaultOpacity(nint window)
     {
-        return SetOpacity(window, OpacityOf(window) == 255 ? DefaultOpacity : (byte)255);
+        return SetOpacity(window, IsAtDefaultOpacity(window) ? (byte)255 : DefaultOpacity);
     }
+
+    public bool IsAtDefaultOpacity(nint window) => OpacityOf(window) is var alpha && alpha < 255 && alpha == DefaultOpacity;
 
     public bool ToggleClickThrough(nint window)
     {

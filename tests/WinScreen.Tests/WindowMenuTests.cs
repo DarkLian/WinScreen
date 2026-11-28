@@ -55,6 +55,37 @@ public sealed class WindowMenuBuilderTests
         });
     }
 
+    // The owner, 29 Nov: every view's menu had an empty first row. A view's menu is made before the view has a title,
+    // and the cut above kept the first text it saw for good. A title set later shows, a cut one stays cut on the next
+    // opening, and a new one replaces it.
+    [Fact]
+    public void A_title_set_after_the_menu_was_made_shows()
+    {
+        OnUiThread(() =>
+        {
+            using var menu = new ContextMenuStrip();
+            menu.Items.Add(new ToolStripMenuItem { Enabled = false, Name = MenuRenderer.TitleName });
+            menu.Items.Add(new ToolStripMenuItem("Close this view and its picture"));
+            MenuRenderer.Apply(menu);
+            ToolStripItem title = menu.Items[MenuRenderer.TitleName]!;
+            void Open() => typeof(ToolStripDropDown).GetMethod("OnOpening", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(menu, [new System.ComponentModel.CancelEventArgs()]);
+            title.Text = "Notes";
+            Open();
+            Assert.Equal("Notes", title.Text);
+            string longTitle = string.Concat(Enumerable.Repeat("A very long window title ", 8));
+            title.Text = longTitle;
+            Open();
+            string cut = title.Text!;
+            Assert.EndsWith("…", cut);
+            Open();
+            Assert.Equal(cut, title.Text);
+            title.Text = "Calculator";
+            Open();
+            Assert.Equal("Calculator", title.Text);
+        });
+    }
+
     // The owner, 26 Nov: the background's sound, next and change left Effects for the Glass and background panel,
     // which has the same sliders as Settings. Effects holds the effects only.
     // 27 Nov: Glass and Dark mode moved up to Look, one click away, and the dark title bar moved into Effects.

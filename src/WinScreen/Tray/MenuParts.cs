@@ -383,11 +383,12 @@ internal sealed class OpacityRow : ToolStripControlHost
             Value = (int)Math.Round((Minimum + share * (Maximum - Minimum)) / Step) * Step;
         }
 
+        // Not focused by the pointer: while a control inside it has the focus, a menu stops lighting the row under the
+        // pointer (ToolStrip.CanHotTrack), so after a drag no other row lit up again.
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
             if (e.Button != MouseButtons.Left) return;
-            Focus();
             _dragging = Capture = true;
             Follow(e.X);
         }
@@ -656,6 +657,15 @@ internal static class StayingOpen
                 if (choice.Clicked is null) return; // Another menu of the same chain did it already.
                 choice.Clicked = null;
                 choice.Refresh();
+                // Some changes land a moment later, such as an administrator window's, which its helper reports every
+                // 300 ms: the ticks are read once more.
+                var again = new System.Windows.Forms.Timer { Interval = 450 };
+                again.Tick += (_, _) =>
+                {
+                    again.Dispose();
+                    if (!menu.IsDisposed && menu.Visible) choice.Refresh();
+                };
+                again.Start();
             });
         };
         menu.Opened += (_, _) => HookInside(menu, choice);

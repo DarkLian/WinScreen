@@ -74,6 +74,13 @@ public class WindowControllerTests
 
         Assert.Equal(255, windows.ToggleDefaultOpacity(target.Handle));
         Assert.Equal((byte?)255, Desktop.Alpha(target.Handle));
+
+        // The owner, 29 Nov: "Use default opacity" showed as on at any level below 100%. It is on only at the default
+        // level, and from another level it goes there, as its name says.
+        windows.SetOpacity(target.Handle, 166);
+        Assert.False(windows.IsAtDefaultOpacity(target.Handle));
+        Assert.Equal(128, windows.ToggleDefaultOpacity(target.Handle));
+        Assert.True(windows.IsAtDefaultOpacity(target.Handle));
     }
 
     [Fact]

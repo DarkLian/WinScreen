@@ -280,11 +280,11 @@ public sealed partial class PipWindow
         // Clear removes without disposing, so the one Move away item goes back in each time.
         options.DropDownItems.Clear();
         options.DropDownItems.Add(_autoMoveItem);
-        options.DropDownItems.Add(Toggle(T("pip.lockPosition"), _overrides.PositionLocked,
+        options.DropDownItems.Add(Toggle(T("pip.lockPosition"), () => _overrides.PositionLocked,
             () => Overrides = _overrides with { PositionLocked = !_overrides.PositionLocked }));
-        options.DropDownItems.Add(Toggle(T("pip.keepAspectRatio"), _overrides.KeepAspectRatio,
+        options.DropDownItems.Add(Toggle(T("pip.keepAspectRatio"), () => _overrides.KeepAspectRatio,
             () => Overrides = _overrides with { KeepAspectRatio = !_overrides.KeepAspectRatio }));
-        options.DropDownItems.Add(Toggle(T("pip.titleBarAlways"), TitleBarAlways,
+        options.DropDownItems.Add(Toggle(T("pip.titleBarAlways"), () => TitleBarAlways,
             () => Overrides = _overrides with { TitleBarAlways = !TitleBarAlways }));
         options.DropDownItems.Add(new ToolStripMenuItem(T("pip.clickThrough"), null,
             (_, _) => Overrides = _overrides with { ClickThrough = true }));
@@ -412,12 +412,13 @@ public sealed partial class PipWindow
         return menu;
     }
 
-    private static ToolStripMenuItem Toggle(string text, bool on, Action flip) =>
+    // Ticked from what the view then has, not flipped: a change the view turns down leaves it as it was.
+    private static ToolStripMenuItem Toggle(string text, Func<bool> on, Action flip) =>
         StayingOpen.Keep(new ToolStripMenuItem(text, null, (sender, _) =>
         {
-            flip();
-            ((ToolStripMenuItem)sender!).Checked ^= true;
-        }) { Checked = on });
+            try { flip(); }
+            finally { ((ToolStripMenuItem)sender!).Checked = on(); }
+        }) { Checked = on() });
 
     private void ReturnFocusAfterMenu()
     {

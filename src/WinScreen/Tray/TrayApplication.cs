@@ -387,6 +387,8 @@ public sealed partial class TrayApplication : ApplicationContext
             ResizeTo = (window, size) => Attempt(() => ResizeWindow(window, size)),
             Hotkey = command => MenuHotkey(command) ?? "",
             OpacityPercent = window => (int)Math.Round(_windows.OpacityOf(window) * 100.0 / 255),
+            // The helper only says whether an administrator window is see-through.
+            AtDefaultOpacity = window => HelperSaysOn(AppCommand.ToggleDefaultOpacity, window) ?? _windows.IsAtDefaultOpacity(window),
             SetOpacityPercent = (window, percent) => Attempt(() =>
             {
                 if (FullScreenDecision(AppCommand.OpacityUp, window) != FullScreenAction.Run || !_windows.CanControl(window)) return;

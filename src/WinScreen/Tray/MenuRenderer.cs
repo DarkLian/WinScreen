@@ -189,13 +189,24 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         FitTitle(menu);
     }
 
-    private static readonly ConditionalWeakTable<ToolStripItem, string> FullTitles = [];
+    private static readonly ConditionalWeakTable<ToolStripItem, StrongBox<(string Full, string Shown)>> FullTitles = [];
 
     // A window's title never widens its menu: a video page's long title made the menu twice as wide as its commands.
+    // A view sets its title again each time its menu opens, and was built with none: any text but the one cut here is
+    // the new whole title.
     private static void FitTitle(ToolStripDropDown menu)
     {
         if (menu.Items[TitleName] is not { } title) return;
-        string full = FullTitles.GetValue(title, item => item.Text ?? "");
+        StrongBox<(string Full, string Shown)> kept = FullTitles.GetValue(title, _ => new(("", "")));
+        string now = title.Text ?? "";
+        if (now != kept.Value.Shown) kept.Value = (now, now);
+        string full = kept.Value.Full;
+        try { Fit(title, full, menu); }
+        finally { kept.Value = (full, title.Text ?? ""); }
+    }
+
+    private static void Fit(ToolStripItem title, string full, ToolStripDropDown menu)
+    {
         title.Text = "";
         int room = menu.GetPreferredSize(Size.Empty).Width;
         title.Text = full;
