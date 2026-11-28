@@ -247,14 +247,15 @@ internal sealed class VelopackUpdateSession : IUpdateSession
                                          typeof(VelopackUpdateSession).Assembly.GetManifestResourceNames()
                                              .Contains("WinScreen.UpdatePublicKey");
 
-    internal static bool IsInstalled
+    internal static bool IsInstalled => IsInstalledIn(AppContext.BaseDirectory);
+
+    // The portable zip has the installed layout too, with a .portable file beside Update.exe. It updates by hand or by Scoop.
+    internal static bool IsInstalledIn(string programFolder)
     {
-        get
-        {
-            string folder = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
-            return string.Equals(Path.GetFileName(folder), "current", StringComparison.OrdinalIgnoreCase) &&
-                   File.Exists(Path.Combine(Path.GetDirectoryName(folder) ?? "", "Update.exe"));
-        }
+        string folder = programFolder.TrimEnd(Path.DirectorySeparatorChar);
+        string root = Path.GetDirectoryName(folder) ?? "";
+        return string.Equals(Path.GetFileName(folder), "current", StringComparison.OrdinalIgnoreCase) &&
+               File.Exists(Path.Combine(root, "Update.exe")) && !File.Exists(Path.Combine(root, ".portable"));
     }
 
     private readonly UpdateTransport _transport;
@@ -297,7 +298,7 @@ internal sealed class VelopackUpdateSession : IUpdateSession
 
     public async Task<bool> Download(CancellationToken cancellation, Action<UpdateProgress>? progress = null)
     {
-        if (!_manager.IsInstalled)
+        if (!IsInstalled || !_manager.IsInstalled)
             return false;
         progress?.Invoke(new UpdateProgress(UpdateStage.Checking));
         var update = await _manager.CheckForUpdatesAsync();

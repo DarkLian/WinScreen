@@ -277,6 +277,25 @@ public sealed class AutomaticUpdatesTests
     }
 
     [Fact]
+    public void Only_an_installed_copy_installs_updates_not_the_portable_zip_or_a_plain_folder()
+    {
+        // The installer and the portable zip both lay out Update.exe with the program in current\; the zip adds .portable.
+        string root = Path.Combine(Path.GetTempPath(), "WinScreen-layout-" + Guid.NewGuid().ToString("N"));
+        string current = Path.Combine(root, "current");
+        Directory.CreateDirectory(current);
+        try
+        {
+            Assert.False(VelopackUpdateSession.IsInstalledIn(current + Path.DirectorySeparatorChar));
+            File.WriteAllBytes(Path.Combine(root, "Update.exe"), []);
+            Assert.True(VelopackUpdateSession.IsInstalledIn(current + Path.DirectorySeparatorChar));
+            File.WriteAllBytes(Path.Combine(root, ".portable"), []);
+            Assert.False(VelopackUpdateSession.IsInstalledIn(current + Path.DirectorySeparatorChar));
+            Assert.False(VelopackUpdateSession.IsInstalledIn(root + Path.DirectorySeparatorChar));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
     public async Task An_ordinary_exit_installs_without_starting_again()
     {
         var session = new Session();
