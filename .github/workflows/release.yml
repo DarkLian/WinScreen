@@ -1,6 +1,7 @@
 name: Release
 
-# Push a version tag to build the installer and publish it as a GitHub Release.
+# Push a version tag to build the installer and make a draft GitHub Release from it. The owner publishes the draft;
+# installed copies see no update until then.
 # Releases are x64 only. ARM64 is not officially supported and gets no installer, portable zip or update feed; the
 # Build workflow still compiles it as a best-effort check, and this workflow doesn't depend on that job.
 #   v1.2.3        a stable release. Needs the release gate's lines in the tag message (tools/Confirm-Release.ps1)
@@ -172,7 +173,7 @@ jobs:
           # Signed under Velopack's names, which code signing expects; published with the version and release type.
           Rename-Item 'dist/release/WinScreen-win-Setup.exe' "WinScreen-$env:VERSION-release-x64-Setup.exe"
           Rename-Item 'dist/release/WinScreen-win-Portable.zip' "WinScreen-$env:VERSION-release-x64-Portable.zip"
-      - name: Publish the release
+      - name: Make the draft release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -194,7 +195,7 @@ jobs:
             if ($LASTEXITCODE -eq 0 -and $highlights.Trim()) { $notes = @($highlights.Trim()) + $notes }
           }
           $arguments = @($env:GITHUB_REF_NAME) + (Get-ChildItem dist/release -File).FullName +
-            @('--title', $env:TITLE, '--notes', ($notes -join "`n`n"), '--generate-notes')
+            @('--title', $env:TITLE, '--notes', ($notes -join "`n`n"), '--generate-notes', '--draft')
           if ($env:PRERELEASE -eq 'true') { $arguments += '--prerelease' }
           gh release create @arguments
-          if ($LASTEXITCODE -ne 0) { throw 'Publishing the release failed.' }
+          if ($LASTEXITCODE -ne 0) { throw 'Making the draft release failed.' }
