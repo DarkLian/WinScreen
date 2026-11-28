@@ -74,7 +74,7 @@ internal sealed class PipStateChip : Form
         Show();
         // Shown on a display at another scale, its words are now drawn at that scale: measured again there.
         if (Fit()) Location = new Point(bottomLeft.X, bottomLeft.Y - Height);
-        WinScreen.Windows.TopLayer.Raise(Handle);
+        if (Owner is { } view) WinScreen.Windows.TopLayer.RaiseOver(Handle, view.Handle);
     }
 
     private bool Fit()

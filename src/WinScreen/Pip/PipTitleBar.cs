@@ -29,15 +29,7 @@ internal sealed class PipTitleBar : Form
         if (!Visible) { Show(); ComeUp(); }
     }
 
-    // Just over its own view, under whatever is over that (a view pressed later), as hovering mustn't change which
-    // view is on top.
-    private void ComeUp()
-    {
-        nint above = User32.GetWindow(_view.Handle, User32.GW_HWNDPREV);
-        if (above == Handle) return;
-        User32.SetWindowPos(Handle, above == 0 ? User32.HWND_TOP : above, 0, 0, 0, 0,
-            User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
-    }
+    private void ComeUp() => TopLayer.RaiseOver(Handle, _view.Handle);
 
     internal void Dismiss()
     {

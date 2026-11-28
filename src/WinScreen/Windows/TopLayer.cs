@@ -83,6 +83,15 @@ internal static class TopLayer
 
     internal static void Raise(nint window) => RaiseGroup([window]);
 
+    // A part of a view (its title bar, chip, mark or preview, owned by it): just over the view, under whatever is over
+    // that. Raised to the top, Windows brought the view up with it, over views pressed after it.
+    internal static void RaiseOver(nint part, nint owner)
+    {
+        nint above = User32.GetWindow(owner, GW_HWNDPREV);
+        if (above == part) return;
+        User32.SetWindowPos(part, above == 0 ? User32.HWND_TOP : above, 0, 0, 0, 0, Flags);
+    }
+
     // Nothing moves when no other ordinary window is ahead and their order is already right; members never count as
     // covering each other.
     internal static void RaiseGroup(IReadOnlyList<nint> lowestFirst)

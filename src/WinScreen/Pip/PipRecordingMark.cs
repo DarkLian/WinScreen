@@ -34,7 +34,7 @@ internal sealed class PipRecordingMark : Form
         Bounds = bounds;
         if (Visible) return;
         Show();
-        Windows.TopLayer.Raise(Handle);
+        if (Owner is { } owner) Windows.TopLayer.RaiseOver(Handle, owner.Handle);
     }
 
     protected override bool ShowWithoutActivation => true;
