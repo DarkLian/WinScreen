@@ -81,6 +81,37 @@ public sealed class AdministratorHelperTests
         Assert.Null(AppRoles.DataFolderFrom([AppRoles.HelperArgument]));
     }
 
+    // The helper is started through the shell with one command line, which Windows splits again: a folder ending in a
+    // backslash used to arrive with a quote on its end instead (C:\Data\" ), and a drive's root not at all.
+    [Theory]
+    [InlineData(@"C:\Data\WinScreen")]
+    [InlineData(@"C:\Data\WinScreen\")]
+    [InlineData(@"C:\")]
+    [InlineData(@"D:\With space\\")]
+    public void A_data_folder_reaches_the_helper_as_it_was(string folder)
+    {
+        string[] arguments = SplitCommandLine("WinScreen.exe " + Elevation.DataFolderArguments(folder));
+        Assert.Equal(folder, AppRoles.DataFolderFrom(arguments[1..]));
+    }
+
+    private static string[] SplitCommandLine(string line)
+    {
+        nint list = CommandLineToArgvW(line, out int count);
+        Assert.NotEqual(0, list);
+        try
+        {
+            return [.. Enumerable.Range(0, count).Select(i =>
+                System.Runtime.InteropServices.Marshal.PtrToStringUni(System.Runtime.InteropServices.Marshal.ReadIntPtr(list, i * nint.Size))!)];
+        }
+        finally { LocalFree(list); }
+    }
+
+    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern nint CommandLineToArgvW(string line, out int count);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern nint LocalFree(nint memory);
+
     [Fact]
     public void Messages_go_through_whole_and_anything_else_is_dropped()
     {

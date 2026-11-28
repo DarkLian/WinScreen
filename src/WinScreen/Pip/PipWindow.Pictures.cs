@@ -114,6 +114,7 @@ public sealed partial class PipWindow
         {
             using Bitmap? picture = await TakePictureAsync();
             await UiThread.Back(this);
+            if (_cleaned || IsDisposed) return;
             if (picture is null) { Problem?.Invoke(T("errors.pip.noPicture")); return; }
             (string? file, string? problem) = Pictures.Keep(picture);
             if (problem is not null) Problem?.Invoke(string.Format(T("errors.pip.saveFailed"), problem));
@@ -140,8 +141,8 @@ public sealed partial class PipWindow
     {
         Bitmap? picture = await TakePictureAsync();
         await UiThread.Back(this);
+        if (_cleaned || IsDisposed) { picture?.Dispose(); return; }
         if (picture is null) { Problem?.Invoke(T("errors.pip.noPicture")); return; }
-        if (IsDisposed) { picture.Dispose(); return; }
         var still = new StillPicture(picture, Pictures, _origin.Title);
         still.Problem += text => Problem?.Invoke(text);
         Rectangle shown = RectangleToScreen(PictureArea);
@@ -181,6 +182,7 @@ public sealed partial class PipWindow
             {
                 using Bitmap? picture = await TakePictureAsync();
                 await UiThread.Back(this);
+                if (_cleaned || IsDisposed) return;
                 if (picture is null) { Problem?.Invoke(T("errors.pip.noPicture")); return; }
                 Rectangle chosen = part.IsEmpty ? new Rectangle(Point.Empty, picture.Size)
                     : ViewPicture.InPicture(part with { X = part.X + area.X, Y = part.Y + area.Y }, area, picture.Size);
@@ -258,8 +260,10 @@ internal static class UiThread
             try { control.BeginInvoke(continuation); }
             catch (Exception failure) when (failure is InvalidOperationException or ObjectDisposedException)
             {
-                // The window is gone; so is the work that was for it.
+                // The window is gone: the work still ends, off its thread, so it lets go of what it holds; callers
+                // check IsDisposed before touching the window or the clipboard.
                 Diagnostics.Log.Swallowed(failure);
+                ThreadPool.QueueUserWorkItem(_ => continuation());
             }
         }
         public void GetResult() { }
@@ -287,6 +291,7 @@ internal static class ViewText
             problem(string.Format(T("errors.pip.textFailed"), failure.Message));
             return null;
         }
+        if (owner.IsDisposed) return null;
         if (text.Length == 0) return T("pip.state.noText");
         try { shelf.PutText(text); }
         catch (System.Runtime.InteropServices.ExternalException failure)

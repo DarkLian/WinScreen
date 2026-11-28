@@ -307,7 +307,8 @@ internal sealed class MouseGestures : IDisposable
         if (code != HC_ACTION)
             return User32.CallNextHookEx(0, code, message, data);
 
-        var info = Marshal.PtrToStructure<MouseHookInfo>(data);
+        MouseHookInfo info;
+        unsafe { info = *(MouseHookInfo*)data; } // Read in place: PtrToStructure boxes, on every move in Windows.
         bool swallow = false;
         if (MenuVisible && (int)message is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN)
             OutsidePressed?.Invoke(new Point(info.X, info.Y));

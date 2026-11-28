@@ -35,7 +35,7 @@ internal static class BackdropLink
         {
             answer.EnsureSuccessStatusCode();
             if (answer.Content.Headers.ContentLength > Largest) throw new InvalidDataException("The picture is too big.");
-            var bytes = new MemoryStream();
+            var bytes = new MemoryStream((int)(answer.Content.Headers.ContentLength ?? 0));
             await using (Stream body = await answer.Content.ReadAsStreamAsync(cancel))
             {
                 var part = new byte[81920];
@@ -45,7 +45,8 @@ internal static class BackdropLink
                     if (bytes.Length > Largest) throw new InvalidDataException("The picture is too big.");
                 }
             }
-            return bytes.ToArray();
+            // Sized from the header, the buffer is usually the picture exactly: no second copy of up to the limit.
+            return bytes.Length == bytes.Capacity ? bytes.GetBuffer() : bytes.ToArray();
         }
     }
 

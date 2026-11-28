@@ -37,7 +37,8 @@ internal static unsafe class DirectText
         public uint MaxBidiReorderingDepth, LineCount;
     }
 
-    private static readonly nint Factory, Write, Target;
+    private static readonly nint Factory, Write;
+    private static nint Target; // Under Gate once made: made again when the device is lost.
 
     // The surface text is drawn on first: see-through, then laid over what is being drawn. Drawing straight onto a
     // device context went wrong where the context doesn't carry the colours under it, as for a picture.
@@ -85,14 +86,21 @@ internal static unsafe class DirectText
         try
         {
             if (D2D1CreateFactory(0, FactoryId, 0, out Factory) < 0 || DWriteCreateFactory(0, WriteId, out Write) < 0) return;
-            var properties = new RenderTargetProperties { Type = 0, Format = 87 /* B8G8R8A8_UNORM */, AlphaMode = 1 /* premultiplied */, DpiX = 96, DpiY = 96 };
-            nint target;
-            if (Call(Factory, 16, &properties, &target) < 0) return; // CreateDCRenderTarget
-            Target = target;
-            ((delegate* unmanaged[Stdcall]<nint, int, void>)Slot(Target, 34))(Target, 2); // Grey smoothing, as Windows 11 has.
+            if ((Target = MakeTarget()) == 0) return;
             Available = true;
         }
         catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { Diagnostics.Log.Swallowed(e); }
+    }
+
+    private const int RecreateTarget = unchecked((int)0x8899000C); // D2DERR_RECREATE_TARGET: the graphics device was lost.
+
+    private static nint MakeTarget()
+    {
+        var properties = new RenderTargetProperties { Type = 0, Format = 87 /* B8G8R8A8_UNORM */, AlphaMode = 1 /* premultiplied */, DpiX = 96, DpiY = 96 };
+        nint target;
+        if (Call(Factory, 16, &properties, &target) < 0) return 0; // CreateDCRenderTarget
+        ((delegate* unmanaged[Stdcall]<nint, int, void>)Slot(target, 34))(target, 2); // Grey smoothing, as Windows 11 has.
+        return target;
     }
 
     private static nint Slot(nint com, int index) => (*(nint**)com)[index];
@@ -282,7 +290,7 @@ internal static unsafe class DirectText
         if (layout == 0) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; }
         try
         {
-            if (!Surface(inner.Width, inner.Height)) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; }
+            if (Target == 0 || !Surface(inner.Width, inner.Height)) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; }
             var area = new Rect(0, 0, inner.Width, inner.Height);
             if (Call(Target, 57, (void*)_surfaceDc, &area) < 0) return; // BindDC
             ((delegate* unmanaged[Stdcall]<nint, void>)Slot(Target, 48))(Target); // BeginDraw
@@ -293,6 +301,11 @@ internal static unsafe class DirectText
             ulong tag1, tag2;
             int result = ((delegate* unmanaged[Stdcall]<nint, ulong*, ulong*, int>)Slot(Target, 49))(Target, &tag1, &tag2); // EndDraw
             if (brush != 0) Release(brush);
+            if (result == RecreateTarget)
+            {
+                Release(Target);
+                Target = MakeTarget();
+            }
             if (result < 0 || brush == 0) { TextRenderer.DrawText(dc, text, font, bounds, color, flags); return; } // Drawn the old way once.
             Drawn drawn = Keep(inner.Width, inner.Height);
             var made = new LinkedListNode<(DrawnKey, Drawn)>((key, drawn));

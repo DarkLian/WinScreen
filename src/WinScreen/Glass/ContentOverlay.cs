@@ -107,7 +107,7 @@ internal sealed unsafe class ContentOverlay : Form
     public void Jump(int? index)
     {
         Interlocked.Exchange(ref _jump, index ?? NextOne);
-        if (!_stopping) _arrived.Set();
+        Wake();
     }
 
     public nint Source => _source;
@@ -141,7 +141,7 @@ internal sealed unsafe class ContentOverlay : Form
     {
         _levels = new(levels);
         _changed = true;
-        if (!_stopping) _arrived.Set();
+        Wake();
     }
 
     public void SetKept(Settings.KeptArea[] kept)
@@ -149,20 +149,20 @@ internal sealed unsafe class ContentOverlay : Form
         _kept = kept;
         if (_renderer is not null) FollowControls(kept);
         _changed = true;
-        if (!_stopping) _arrived.Set();
+        Wake();
     }
 
     public void SetBackdrop(BackdropSet? backdrop)
     {
         _backdrop = backdrop;
-        if (!_stopping) _arrived.Set();
+        Wake();
     }
 
     public void SetAudible(bool audible)
     {
         if (_audible == audible) return;
         _audible = audible;
-        if (!_stopping) _arrived.Set();
+        Wake();
     }
 
     // Held: videos and moving pictures stop where they are, as for a full-screen game.
@@ -170,7 +170,7 @@ internal sealed unsafe class ContentOverlay : Form
     {
         if (_held == held) return;
         _held = held;
-        if (!_stopping) _arrived.Set();
+        Wake();
     }
 
     public void SetOpacity(byte alpha)
@@ -218,7 +218,7 @@ internal sealed unsafe class ContentOverlay : Form
             _follower = new KeptAreaFollower(_source, () =>
             {
                 _changed = true;
-                if (!_stopping) _arrived.Set();
+                Wake();
             });
         _follower?.SetAreas(kept);
     }
@@ -349,7 +349,16 @@ internal sealed unsafe class ContentOverlay : Form
     {
         if (_hidden == hidden) return;
         _hidden = hidden;
-        if (!_stopping) _arrived.Set();
+        Wake();
+    }
+
+    // Capture and the follower call this from threads of their own, which can be just past the check as Dispose
+    // closes the event.
+    private void Wake()
+    {
+        if (_stopping) return;
+        try { _arrived.Set(); }
+        catch (ObjectDisposedException late) { Diagnostics.Log.Swallowed(late); }
     }
 
     private void RetryFollow(object? sender, EventArgs e)
@@ -436,7 +445,7 @@ internal sealed unsafe class ContentOverlay : Form
         _captureDevice = WgcInterop.Device(_device);
         GraphicsCaptureItem item = WgcInterop.Item(_source);
         _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_captureDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, item.Size);
-        _pool.FrameArrived += (_, _) => { if (!_stopping) _arrived.Set(); };
+        _pool.FrameArrived += (_, _) => { Wake(); };
         _session = _pool.CreateCaptureSession(item);
         if (global::Windows.Foundation.Metadata.ApiInformation.IsPropertyPresent("Windows.Graphics.Capture.GraphicsCaptureSession", "IsCursorCaptureEnabled"))
             _session.IsCursorCaptureEnabled = false;

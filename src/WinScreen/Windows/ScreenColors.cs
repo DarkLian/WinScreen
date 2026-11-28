@@ -18,14 +18,24 @@ public static class ScreenColors
                 graphics.CopyFromScreen(area.Location, Point.Empty, area.Size);
 
             var counts = new Dictionary<int, int>();
-            for (int y = 0; y < bitmap.Height; y += Step)
+            System.Drawing.Imaging.BitmapData bits = bitmap.LockBits(new Rectangle(Point.Empty, bitmap.Size),
+                System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            try
             {
-                for (int x = 0; x < bitmap.Width; x += Step)
+                unsafe
                 {
-                    int color = bitmap.GetPixel(x, y).ToArgb();
-                    counts[color] = counts.GetValueOrDefault(color) + 1;
+                    for (int y = 0; y < bitmap.Height; y += Step)
+                    {
+                        int* row = (int*)((byte*)bits.Scan0 + (long)y * bits.Stride);
+                        for (int x = 0; x < bitmap.Width; x += Step)
+                        {
+                            int color = row[x];
+                            counts[color] = counts.GetValueOrDefault(color) + 1;
+                        }
+                    }
                 }
             }
+            finally { bitmap.UnlockBits(bits); }
 
             return Color.FromArgb(counts.MaxBy(pair => pair.Value).Key);
         }

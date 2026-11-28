@@ -50,14 +50,27 @@ public static class UiText
                 if (text == first) return key;
                 if (!text.Contains('{')) continue;
                 int fixedLength = System.Text.RegularExpressions.Regex.Replace(text, @"\{\d+}", "").Length;
-                if (fixedLength > bestFixed && System.Text.RegularExpressions.Regex.IsMatch(first,
-                        "^" + System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Escape(text), @"\\\{\d+}", ".*") + "$",
-                        System.Text.RegularExpressions.RegexOptions.Singleline, TimeSpan.FromMilliseconds(50)))
+                if (fixedLength > bestFixed && Fits(first, text))
                     (best, bestFixed) = (key, fixedLength);
             }
             if (best is not null) return best;
         }
         return null;
+    }
+
+    // The log's writer asks this: a text that takes too long to match is no match, never an exception there.
+    private static bool Fits(string message, string text)
+    {
+        try
+        {
+            return System.Text.RegularExpressions.Regex.IsMatch(message,
+                "^" + System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Escape(text), @"\\\{\d+}", ".*") + "$",
+                System.Text.RegularExpressions.RegexOptions.Singleline, TimeSpan.FromMilliseconds(50));
+        }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+        {
+            return false;
+        }
     }
 
     private static FrozenDictionary<string, FrozenDictionary<string, string>> LoadCatalogs() =>

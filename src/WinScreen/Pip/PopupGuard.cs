@@ -119,6 +119,13 @@ internal static class PopupGuard
     [UnmanagedCallersOnly]
     private static void OnEvent(nint hook, uint kind, nint window, int item, int child, uint thread, uint time)
     {
+        // Never let an exception out of a callback Windows makes into native code.
+        try { Handle(kind, window, item, child); }
+        catch (Exception e) when (e is not OutOfMemoryException) { Diagnostics.Log.Swallowed(e); }
+    }
+
+    private static void Handle(uint kind, nint window, int item, int child)
+    {
         if (item != 0 || child != 0) return; // The window itself, not a part of it.
         if (kind == Shown)
         {
@@ -126,7 +133,7 @@ internal static class PopupGuard
             User32.GetWindowThreadProcessId(window, out uint process);
             Action[] opened;
             lock (_held) opened = _watchers.Where(watcher => watcher.Process == process).Select(watcher => watcher.Opened).ToArray();
-            // Never let an exception out of a callback Windows makes into native code.
+            // One watcher that has gone mustn't keep the others from hearing.
             foreach (Action action in opened)
                 try { action(); } catch (ObjectDisposedException caught) { Diagnostics.Log.Swallowed(caught); }
             return;

@@ -403,16 +403,18 @@ internal sealed class AnchorButton : Form
     private static (Icon? Icon, string? Program) LoadIcon(nint target)
     {
         User32.GetWindowThreadProcessId(target, out uint processId);
+        // Its module list (Process.MainModule) is closed to a copy without an administrator app's rights; its path isn't.
+        string path = ProcessInfo.PathOf(processId);
+        if (path.Length == 0) return (null, null);
         try
         {
-            using var process = System.Diagnostics.Process.GetProcessById((int)processId);
-            string? path = process.MainModule?.FileName;
-            return (path is null ? null : Icon.ExtractAssociatedIcon(path), path);
+            return (Icon.ExtractAssociatedIcon(path), path);
         }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException
+        catch (Exception e) when (e is ArgumentException or IOException or UnauthorizedAccessException
                                       or System.ComponentModel.Win32Exception)
         {
-            return (null, null);
+            Diagnostics.Log.Swallowed(e);
+            return (null, path);
         }
     }
 }

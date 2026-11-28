@@ -95,18 +95,19 @@ internal sealed class ViewRecording
             if (_firstDelivered == 0) _firstDelivered = Stopwatch.GetTimestamp();
             if (_newest is not null) _free.Push(_newest);
             _newest = frame;
+            _signal.Set();
         }
-        _signal.Set();
     }
 
+    // Set only under the gate and before finishing, so Run can close the signal once it has finished.
     internal void Finish()
     {
         lock (_gate)
         {
             if (_finished) return;
             _finished = true;
+            _signal.Set();
         }
-        _signal.Set();
     }
 
     // At exit: the views have closed, so every recording is finishing; their files are completed before WinScreen goes.
@@ -225,6 +226,7 @@ internal sealed class ViewRecording
             sound?.Dispose();
             writer?.Dispose();
             Finish();
+            lock (_gate) _signal.Dispose();
             if (result?.File is null)
                 try { if (File.Exists(_path)) File.Delete(_path); }
                 catch (Exception gone) when (gone is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(gone); }

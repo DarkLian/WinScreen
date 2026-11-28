@@ -187,9 +187,12 @@ internal static class Elevation
     }
 
     // Windows gives a copy it starts the person's own environment, so a data folder elsewhere is passed as an argument.
-    public static string DataFolderArguments() =>
-        Environment.GetEnvironmentVariable(AppRoles.DataFolderVariable) is { Length: > 0 } folder
-            ? $"{AppRoles.DataFolderArgument} \"{folder}\"" : "";
+    public static string DataFolderArguments() => DataFolderArguments(Environment.GetEnvironmentVariable(AppRoles.DataFolderVariable));
+
+    // Backslashes before the closing quote are doubled, or Windows reads the last one as escaping the quote.
+    internal static string DataFolderArguments(string? folder) =>
+        folder is { Length: > 0 }
+            ? $"{AppRoles.DataFolderArgument} \"{folder}{new string('\\', folder.Length - folder.TrimEnd('\\').Length)}\"" : "";
 
     public static bool StartSingleCopy()
     {

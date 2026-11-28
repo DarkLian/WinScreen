@@ -163,32 +163,43 @@ internal sealed class BackgroundPictures(int largest, Action arrived) : IDisposa
     {
         // A link isn't fetched for a thumbnail, and a file that was moved or deleted has none.
         if (BackdropChoice.IsLinkText(file) || !File.Exists(file)) return (null, Size.Empty);
-        if (!BackdropChoice.Videos.Contains(Path.GetExtension(file).ToLowerInvariant()))
+        // This runs on a thread of its own, where anything uncaught ends WinScreen; GDI+ and the shell report a file
+        // they can't read with ExternalException as well as the others.
+        try
         {
-            try
+            if (!BackdropChoice.Videos.Contains(Path.GetExtension(file).ToLowerInvariant()))
             {
                 using Image image = Image.FromFile(file);
                 return (Smaller(image, largest), image.Size);
             }
-            catch (Exception failure) when (failure is IOException or OutOfMemoryException or ArgumentException or UnauthorizedAccessException)
-            {
-                Diagnostics.Log.Swallowed(failure);
-                return (null, Size.Empty);
-            }
+            Bitmap? frame = Native.ShellThumbnail.Of(file, Math.Min(largest, 640));
+            // A video's own size isn't known here; a common one in its shape stands in.
+            return (frame, frame is null ? Size.Empty : new Size(1920, Math.Max(1, 1920 * frame.Height / frame.Width)));
         }
-        Bitmap? frame = Native.ShellThumbnail.Of(file, Math.Min(largest, 640));
-        // A video's own size isn't known here; a common one in its shape stands in.
-        return (frame, frame is null ? Size.Empty : new Size(1920, Math.Max(1, 1920 * frame.Height / frame.Width)));
+        catch (Exception failure) when (failure is IOException or OutOfMemoryException or ArgumentException or UnauthorizedAccessException
+                                            or System.Runtime.InteropServices.ExternalException)
+        {
+            Diagnostics.Log.Swallowed(failure);
+            return (null, Size.Empty);
+        }
     }
 
     private static Bitmap Smaller(Image image, int largest)
     {
         float scale = Math.Min(1, largest / (float)Math.Max(image.Width, image.Height));
         var copy = new Bitmap(Math.Max(1, (int)(image.Width * scale)), Math.Max(1, (int)(image.Height * scale)));
-        using Graphics g = Graphics.FromImage(copy);
-        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        g.DrawImage(image, 0, 0, copy.Width, copy.Height);
-        return copy;
+        try
+        {
+            using Graphics g = Graphics.FromImage(copy);
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(image, 0, 0, copy.Width, copy.Height);
+            return copy;
+        }
+        catch
+        {
+            copy.Dispose();
+            throw;
+        }
     }
 
     public void Dispose()

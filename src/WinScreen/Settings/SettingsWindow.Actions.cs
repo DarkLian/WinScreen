@@ -395,8 +395,14 @@ public sealed partial class SettingsWindow
         _features.ForeColor = SettingsStyle.Text;
         int Unit(int value) => SettingsStyle.Unit(_features, value);
         // A list of tiny pictures is the way to set the height of a row.
-        void RowHeight() => _features.SmallImageList = new ImageList { ImageSize = new Size(1, Math.Max(Unit(32), _features.Font.Height + Unit(14))) };
+        void RowHeight()
+        {
+            ImageList? before = _features.SmallImageList;
+            _features.SmallImageList = new ImageList { ImageSize = new Size(1, Math.Max(Unit(32), _features.Font.Height + Unit(14))) };
+            before?.Dispose();
+        }
         _features.HandleCreated += (_, _) => RowHeight();
+        _features.Disposed += (_, _) => _features.SmallImageList?.Dispose();
         _features.DrawColumnHeader += (_, e) =>
         {
             Graphics g = e.Graphics;

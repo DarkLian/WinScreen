@@ -48,12 +48,13 @@ internal static partial class LayeredPicture
 
     internal static bool Show(nint window, Bitmap picture, byte opacity, Point? at)
     {
-        nint screen = GetDC(0);
-        nint memory = CreateCompatibleDC(screen);
-        nint bitmap = picture.GetHbitmap(Color.FromArgb(0));
-        nint previous = SelectObject(memory, bitmap);
+        nint screen = 0, memory = 0, bitmap = 0, previous = 0;
         try
         {
+            screen = GetDC(0);
+            memory = CreateCompatibleDC(screen);
+            bitmap = picture.GetHbitmap(Color.FromArgb(0));
+            previous = SelectObject(memory, bitmap);
             var size = new NativeSize { Width = picture.Width, Height = picture.Height };
             var from = new NativePoint();
             var blend = new Blend { Opacity = opacity, Format = AC_SRC_ALPHA };
@@ -63,10 +64,10 @@ internal static partial class LayeredPicture
         }
         finally
         {
-            SelectObject(memory, previous);
-            DeleteObject(bitmap);
-            DeleteDC(memory);
-            ReleaseDC(0, screen);
+            if (previous != 0) SelectObject(memory, previous);
+            if (bitmap != 0) DeleteObject(bitmap);
+            if (memory != 0) DeleteDC(memory);
+            if (screen != 0) ReleaseDC(0, screen);
         }
     }
 }

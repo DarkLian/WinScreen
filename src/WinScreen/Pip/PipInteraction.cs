@@ -395,9 +395,9 @@ internal sealed class PipInteraction : IDisposable
         return swallow ? 1 : User32.CallNextHookEx(0, code, message, data);
     }
 
-    private bool Decide(nint message, nint data)
+    private unsafe bool Decide(nint message, nint data)
     {
-        var info = Marshal.PtrToStructure<MouseHookInfo>(data);
+        MouseHookInfo info = *(MouseHookInfo*)data; // Read in place: PtrToStructure boxes, on every move in Windows.
         var point = new Point(info.X, info.Y);
         Interlocked.Exchange(ref _observedPointer, Pack(point));
         // A move while the left button is held can start a drag: where it went, and whether Windows marks it as made by a
