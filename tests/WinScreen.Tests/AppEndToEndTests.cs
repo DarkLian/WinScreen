@@ -1109,16 +1109,34 @@ public sealed class AppEndToEndTests : IDisposable
                     if (Enumerable.Range(-6, 13).All(dx => Hit(window, new Point(x + dx, y)) == User32.HTCLIENT))
                         tab = new Point(x, y);
             Assert.False(tab.IsEmpty, "No part of the tab row answered \"content\" where the bar opens.");
+            // Vivaldi on Windows 10 answers "content" over its own caption buttons too: nothing tells its top row from
+            // the page, and only a rule's "toolbar by position" brings the bar there.
+            if (!Row(window, tab.Y).Split(' ').Any(part => part.EndsWith("=8") || part.EndsWith("=9") || part.EndsWith("=20")))
+            {
+                Skipped.Because($"{Path.GetFileName(path)} answers no caption button in its tab row here: {Row(window, tab.Y)}.");
+                return;
+            }
             Desktop.RequireWindowAt(tab, window);
             Desktop.SlideMouse(new Point(tab.X, tab.Y + Dpi.Scale(60, dpi)));
             Thread.Sleep(80);
             Desktop.SlideMouse(tab);
             Assert.True(Desktop.WaitFor(() => Desktop.FindProcessWindow(_app.Id, title => title == "WinScreen toolbar") is var bar and not 0 &&
-                Desktop.IsWindowVisible(bar), 4000), $"The toolbar didn't open over the tab at {tab} ({Path.GetFileName(path)}).");
+                Desktop.IsWindowVisible(bar), 4000), $"The toolbar didn't open over the tab at {tab} ({Path.GetFileName(path)}); " +
+                $"along the tab's row from the right: {Row(window, tab.Y)}.");
         }
         finally
         {
             BrowserInputTests.Close(browser, root);
+        }
+
+        static string Row(nint window, int y)
+        {
+            Rectangle bounds = Desktop.BoundsOf(window);
+            var parts = new List<string>();
+            nint last = -99;
+            for (int x = bounds.Right - 1; x > bounds.Right - 200; x -= 3)
+                if (Hit(window, new Point(x, y)) is var hit && hit != last) { parts.Add($"x{x}={hit}"); last = hit; }
+            return string.Join(" ", parts);
         }
 
         static nint Hit(nint window, Point point) =>
