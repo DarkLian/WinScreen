@@ -63,6 +63,23 @@ internal static class WindowStack
         return WindowInfo.TryGetFrameBounds(window, out Rectangle bounds, out _) && !bounds.IsEmpty ? bounds : null;
     }
 
+    // Whether a window above this one is at the point: another view, a menu. Overlays the pointer goes through, and
+    // windows ignore() names (the target's own parts), don't count.
+    public static bool CoveredAt(nint target, Point point, Func<nint, bool> ignore)
+    {
+        const long PassedThrough = User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT | User32.WS_EX_NOACTIVATE;
+        nint window = target;
+        for (int seen = 0; seen < 4096 && (window = User32.GetWindow(window, User32.GW_HWNDPREV)) != 0; seen++)
+        {
+            if (!User32.IsWindowVisible(window) || User32.IsIconic(window) || IsCloaked(window) || ignore(window) ||
+                (User32.GetWindowLongPtr(window, User32.GWL_EXSTYLE) & PassedThrough) == PassedThrough ||
+                !User32.GetWindowRect(window, out Rect r) || !Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom).Contains(point))
+                continue;
+            return true;
+        }
+        return false;
+    }
+
     private static bool IsCloaked(nint window) =>
         Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0;
 

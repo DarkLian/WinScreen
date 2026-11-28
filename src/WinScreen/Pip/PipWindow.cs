@@ -2092,8 +2092,9 @@ public sealed partial class PipWindow : Form
         }
         _titleBar.UpdateTitle(_origin.Title, _sourceIcon);
         if (_titleBar.Width != _titleBar.FittedWidth(Width)) PositionTitleBar(); // Titles change, as tabs do.
-        bool over = Bounds.Contains(pointer) || _titleBar.Dragging ||
-            (_titleBar.Visible && _titleBar.Bounds.Contains(pointer));
+        // Not where another view or a menu covers it: the pointer there is over that one.
+        bool over = _titleBar.Dragging || (Bounds.Contains(pointer) || (_titleBar.Visible && _titleBar.Bounds.Contains(pointer))) &&
+            !WindowStack.CoveredAt(Handle, pointer, window => WindowInfo.IsOwnedBy(window, Handle));
         if (_menu.Visible || _titleBar.Dragging || TitleBarAlways) _titleBar.HoldVisible();
         else _titleBar.FollowHover(over, now);
         if (over && !_pressed && !_menu.Visible) FollowHoverPreview(pointer, now);

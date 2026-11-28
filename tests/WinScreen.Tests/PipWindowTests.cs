@@ -184,6 +184,65 @@ public class PipWindowTests
         });
     }
 
+    /// <summary>
+    /// The owner, 29 Nov, after the fix above: the pointer over a view still brought it forward, so hovering over
+    /// views (or over a menu above them) shuffled them. Its title bar came up at the top and took the view with it, and
+    /// a view counted the pointer as over it even where another view covered it. The real pointer goes over the lower
+    /// view's own part and over the spot the upper view covers, past the title bar's and the preview's delays.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Hovering_over_a_view_leaves_the_views_in_their_order(bool preview)
+    {
+        using var first = new TargetProcess(SourceSpot);
+        using var second = new TargetProcess(new Rectangle(SourceSpot.X + 60, SourceSpot.Y + 60, SourceSpot.Width, SourceSpot.Height), "1E1EC8");
+        OnUiThread(pump =>
+        {
+            var windows = new WindowController([]);
+            using var lower = new PipWindow(first.Handle, windows);
+            using var upper = new PipWindow(second.Handle, windows);
+            var look = new Settings.PipViewPreferences { HoverPreview = preview ? Settings.PipHoverPreview.Lens : Settings.PipHoverPreview.Off, HoverDelayMilliseconds = 250 };
+            lower.ApplyViewPreferences(look);
+            upper.ApplyViewPreferences(look);
+            Desktop.GainForegroundRights();
+            lower.ShowOnTop();
+            upper.ShowOnTop();
+            lower.Location = new Point(100, 100);
+            upper.Location = new Point(160, 140);
+            Point away = new(Screen.PrimaryScreen!.Bounds.Right - 40, Screen.PrimaryScreen.Bounds.Bottom - 200);
+            Desktop.MoveMouse(away);
+            pump(300);
+            User32.SendMessage(upper.Handle, 0x0201, 1, (20 << 16) | 20);
+            User32.SendMessage(upper.Handle, 0x0202, 0, (20 << 16) | 20);
+            pump(300);
+            Assert.True(IsAbove(upper.Handle, lower.Handle), "The view pressed didn't come up.");
+            void HoverAt(Point point)
+            {
+                Desktop.MoveMouse(point);
+                for (int i = 0; i < 10; i++)
+                {
+                    pump(120);
+                    Desktop.NudgeMouse(i % 2 == 0 ? 1 : -1, 0);
+                }
+            }
+            // The lower view's own part, left of and above the upper one.
+            HoverAt(new Point(lower.Left + 30, lower.Top + 30));
+            Assert.True(IsAbove(upper.Handle, lower.Handle), "Hovering over the lower view brought it over the view pressed after it.");
+            Desktop.MoveMouse(away);
+            pump(1600); // The title bar fades out a second after the pointer leaves.
+            Assert.True(IsAbove(upper.Handle, lower.Handle), "The lower view came up once the pointer left it.");
+            // Where the upper view covers the lower one: the pointer is over the upper one only.
+            Point covered = new(lower.Right - 20, lower.Bottom - 20);
+            Assert.True(upper.Bounds.Contains(covered));
+            HoverAt(covered);
+            Assert.True(IsAbove(upper.Handle, lower.Handle), "The pointer over the upper view brought up the one under it.");
+            Desktop.MoveMouse(away);
+            pump(300);
+            windows.RestoreAll();
+        });
+    }
+
     private static bool IsAbove(nint upper, nint lower)
     {
         const uint GW_HWNDPREV = 3;
