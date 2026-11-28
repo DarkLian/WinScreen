@@ -65,6 +65,58 @@ public sealed class KeptAreaFollowTests(ITestOutputHelper output)
         finally { BrowserInputTests.Close(browser, root); }
     }
 
+    public static IEnumerable<object[]> NextPages() =>
+        BrowserInputTests.ToolbarCases().Select(c => (string)c[0]).Distinct().SelectMany(path => new[] { new object[] { path, false }, [path, true] });
+
+    // The owner, 28 Nov 2026: an area kept on Bilibili's player wasn't kept once the next video opened, until it was
+    // marked again. Chrome went on answering for the player on the page before, where it used to be. Here the next
+    // page's video is 40 pixels lower, opened in the same tab or in a new one.
+    [Theory]
+    [MemberData(nameof(NextPages))]
+    public void A_followed_area_goes_to_its_control_on_the_next_page(string path, bool newTab)
+    {
+        const string style = "body{margin:0;background:#fff}video{position:absolute;left:40px;width:320px;height:180px}" +
+            "a{position:absolute;left:40px;top:20px;font:20px sans-serif}";
+        string first = $"<!doctype html><title>VideoFirst</title><style>{style}video{{top:100px;background:#e8453c}}</style>" +
+            $"<a href=\"next.html\"{(newTab ? " target=\"_blank\"" : "")}>Next video</a><video class=\"player-video\" muted></video>";
+        string next = $"<!doctype html><title>VideoNext</title><style>{style}video{{top:140px;background:#3c78e8}}</style>" +
+            "<video class=\"player-video\" muted></video>";
+        var (browser, window, root) = BrowserInputTests.Open(first, "VideoFirst", app: false, path);
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "next.html"), next);
+            Rectangle document = Rectangle.Empty;
+            Assert.True(Desktop.WaitFor(() => (document = BrowserAccessibility.Read(window, 24).FirstOrDefault(c => c.Type == 50030)?.Bounds ?? Rectangle.Empty)
+                .Width > 0, 10000), "No document.");
+            var video = new Rectangle(document.Left + 40, document.Top + 100, 320, 180);
+            Assert.True(Desktop.WaitFor(() => ElementFinder.Find(window, new Point(video.Left + 160, video.Top + 90)) == video, 10000),
+                "The video wasn't found.");
+            (KeptArea area, Rectangle frame) = Marked(window, video);
+            Assert.True(area.Follows, "The video wasn't found as a control.");
+            Rectangle InFrame(Rectangle screen) => screen with { X = screen.X - frame.X, Y = screen.Y - frame.Y };
+
+            using var follower = new KeptAreaFollower(window, () => { });
+            KeptArea[] kept = [area];
+            follower.SetAreas(kept);
+            Rectangle? last = null;
+            bool Followed(Rectangle at) => Desktop.WaitFor(() =>
+            {
+                follower.WaitFor(follower.Ask(), 100);
+                return (last = follower.PlacesFor(kept)?[0]) == InFrame(at);
+            }, 6000);
+            Assert.True(Followed(video), $"Not followed on the first page: {last?.ToString() ?? "where it was marked"}.");
+
+            Desktop.GainForegroundRights();
+            Desktop.Activate(window);
+            Desktop.ClickOn(new Point(document.Left + 60, document.Top + 32), window);
+            Assert.True(Desktop.WaitFor(() => WindowInfo.Title(window).StartsWith("VideoNext"), 10000),
+                $"The next page didn't open: {WindowInfo.Title(window)}.");
+            Rectangle nextVideo = video with { Y = video.Y + 40 };
+            Assert.True(Followed(nextVideo), $"The area stayed at {last?.ToString() ?? "where it was marked"}, not on the next video at {InFrame(nextVideo)}.");
+        }
+        finally { BrowserInputTests.Close(browser, root); }
+    }
+
     private static Rectangle PictureOf(TargetProcess target)
     {
         Rectangle bounds = Desktop.BoundsOf(target.Handle);

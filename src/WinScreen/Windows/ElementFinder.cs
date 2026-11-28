@@ -14,7 +14,7 @@ internal sealed unsafe class ElementFinder : IDisposable
     private const uint InProcessServer = 1;
 
     // Places in the COM tables of IUIAutomation, IUIAutomationTreeWalker and IUIAutomationElement.
-    private const int ElementFromHandle = 6, ControlViewWalker = 14, FirstChild = 4, NextSibling = 6, ControlType = 21,
+    private const int CompareElements = 3, ElementFromHandle = 6, ControlViewWalker = 14, FirstChild = 4, NextSibling = 6, ControlType = 21,
         AutomationId = 29, ClassName = 30, BoundingRectangle = 43;
 
     private readonly nint _overlay;
@@ -206,6 +206,13 @@ internal sealed unsafe class ElementFinder : IDisposable
             child = result == 0 ? next : 0;
         }
         return child;
+    }
+
+    internal static bool Same(nint automation, nint one, nint other)
+    {
+        int same;
+        return ((delegate* unmanaged[Stdcall]<nint, nint, nint, int*, int>)Slot(automation, CompareElements))(automation, one, other, &same) == 0 &&
+               same != 0;
     }
 
     internal static int ControlTypeOf(nint element)

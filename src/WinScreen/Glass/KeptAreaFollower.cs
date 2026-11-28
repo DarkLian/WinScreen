@@ -11,7 +11,7 @@ internal sealed class KeptAreaFollower : IDisposable
 {
     internal const float SameControl = 0.85f;
     private const float FoundAgain = 0.5f;
-    private const int Soonest = 8, Check = 500, LookAgain = 1000, StillAfter = 300;
+    private const int Soonest = 8, Check = 500, LookAgain = 1000, StillAfter = 300, PageCheckFor = 8000;
     private const int WindowType = 50032, DocumentType = 50030, PaneType = 50033;
 
     private readonly nint _window;
@@ -24,6 +24,8 @@ internal sealed class KeptAreaFollower : IDisposable
     private volatile Placed _placed = new([], []);
     private volatile bool _holding;
     private long _movedAt = long.MinValue / 2;
+    private string? _title;
+    private long _checkPageUntil, _checkPageAt;
 
     private sealed record Placed(KeptArea[] For, Rectangle?[] Places);
 
@@ -198,13 +200,28 @@ internal sealed class KeptAreaFollower : IDisposable
         if (!WindowInfo.TryGetFrameBounds(_window, out Rectangle frame, out _)) return;
         float scale = User32.GetDpiForWindow(_window) is var dpi and > 0 ? dpi / 96f : 1;
         long now = Environment.TickCount64;
+        // A new title, as when another video opens in the tab or another tab comes forward: for a while, each second, is
+        // the page in the window still the one the control is on.
+        if (WindowInfo.Title(_window) is var title && title != _title)
+        {
+            _title = title;
+            _checkPageUntil = now + PageCheckFor;
+        }
+        bool checkPage = now < _checkPageUntil && now >= _checkPageAt;
+        if (checkPage) _checkPageAt = now + LookAgain;
         for (int i = 0; i < tracked.Length; i++)
         {
             Tracked t = tracked[i];
             if (!t.Area.Follows) continue;
             Rectangle? bounds = t.Element == 0 ? null : ElementFinder.BoundsOf(t.Element);
-            // The control is gone, as when its page went: looked for again where it was marked.
-            if (t.Element != 0 && bounds is null) t.Release();
+            // The control is gone, as when its page went: looked for again where it was marked. The owner, 28 Nov: Chrome
+            // went on answering for Bilibili's player on the page before, so the next video wasn't kept.
+            if (t.Element != 0 && (bounds is null || checkPage && OnAnotherPage(automation, walker, t, frame)))
+            {
+                t.Release();
+                t.LookedFor = long.MinValue;
+                bounds = null;
+            }
             // Only when something changed since the last look: a still page would be walked every second for nothing.
             if (t.Element == 0 && now >= t.LookAt && asked != t.LookedFor)
             {
@@ -247,7 +264,10 @@ internal sealed class KeptAreaFollower : IDisposable
             // outer control only when it held the whole control: a page's boxes can be smaller than what they hold.
             else if (i < best && found is { } inside && (ElementFinder.ControlTypeOf(chain[i]) is WindowType or DocumentType or PaneType ||
                      ElementFinder.BoundsOf(chain[i]) is { } outer && outer.Contains(inside)))
+            {
                 t.Clips.Add(chain[i]);
+                if (t.Page == 0 && ElementFinder.ControlTypeOf(chain[i]) == DocumentType) t.Page = chain[i];
+            }
             else
                 Marshal.Release(chain[i]);
         }
@@ -283,6 +303,27 @@ internal sealed class KeptAreaFollower : IDisposable
         return (float)(shared / ((double)a.Width * a.Height + (double)b.Width * b.Height - shared));
     }
 
+    // The control's page has left the window (Chrome then calls it 0 by 0), or the document shown in its middle now is
+    // another one, as in a tab that came forward. A control with no page around it, in an app that isn't a browser, is
+    // never asked.
+    private bool OnAnotherPage(nint automation, nint walker, Tracked t, Rectangle frame)
+    {
+        if (t.Page == 0) return false;
+        if (ElementFinder.BoundsOf(t.Page) is not { } page || Rectangle.Intersect(page, frame) is not { Width: > 0, Height: > 0 } seen)
+            return true;
+        List<nint>? chain = ElementFinder.ChainAt(automation, walker, _window, Middle(seen));
+        if (chain is null) return false;
+        try
+        {
+            nint shown = chain.FirstOrDefault(element => ElementFinder.ControlTypeOf(element) == DocumentType);
+            return shown != 0 && !ElementFinder.Same(automation, shown, t.Page);
+        }
+        finally
+        {
+            foreach (nint element in chain) Marshal.Release(element);
+        }
+    }
+
     private static Rectangle ClipOf(List<nint> clips)
     {
         var clip = Rectangle.FromLTRB(int.MinValue / 2, int.MinValue / 2, int.MaxValue / 2, int.MaxValue / 2);
@@ -299,6 +340,7 @@ internal sealed class KeptAreaFollower : IDisposable
         public KeptArea Area { get; } = area;
         public nint Element;
         public readonly List<nint> Clips = [];
+        public nint Page;
         public Rectangle Clip;
         public Rectangle? Last;
         public long ClipAt, LookAt;
@@ -311,6 +353,7 @@ internal sealed class KeptAreaFollower : IDisposable
             Element = 0;
             foreach (nint outer in Clips) Marshal.Release(outer);
             Clips.Clear();
+            Page = 0;
             Last = null;
             LookAt = 0;
         }
