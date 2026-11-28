@@ -291,7 +291,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 state.CropPart = part;
                 state.CropsPutBack = 0;
                 if (!croppedBefore) HideFrameLook(window, state);
-                // Chrome answers its frame going off by dropping the shape, at once from the second crop on.
+                // Chrome answers its frame going off by dropping the shape, at once from the second crop on; on Windows
+                // 11 it drops it even here, and StillCropped puts it back a moment later.
                 if (state.FrameDrawingOff && WindowInfo.ShapeOf(window) != part)
                 {
                     nint again = User32.CreateRectRgn(part.Left, part.Top, part.Right, part.Bottom);
@@ -299,7 +300,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 }
                 // Some apps put their own shape straight back (Windows Forms ones with a frame, for one), so a crop
                 // that didn't stay is said to have failed rather than shown as on.
-                if (WindowInfo.ShapeOf(window) is null)
+                if (WindowInfo.ShapeOf(window) is null && !state.FrameDrawingOff)
                     throw new WindowOperationException(string.Format(T("errors.crop.customShape"), WindowInfo.Title(window)));
             }
             catch (WindowOperationException)
@@ -699,7 +700,16 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
     private void StillCropped(nint window, ChangedWindow state)
     {
         if (!state.Cropped || User32.IsIconic(window)) return;
-        if (WindowInfo.ShapeOf(window) is { } shape)
+        Rectangle? found = WindowInfo.ShapeOf(window);
+        if (found is null && state.FrameDrawingOff && state.CropPart is { } lost && state.CropsPutBack < MostCropsPutBack)
+        {
+            state.CropsPutBack++;
+            nint region = User32.CreateRectRgn(lost.Left, lost.Top, lost.Right, lost.Bottom);
+            if (User32.SetWindowRgn(window, region, true) == 0) User32.DeleteObject(region);
+            Diagnostics.Log.Event("crop.putBack", ("program", Diagnostics.LogValue.ProgramOf(window)), ("times", state.CropsPutBack));
+            found = WindowInfo.ShapeOf(window);
+        }
+        if (found is { } shape)
         {
             if (StopFrameDrawing(window, state)) TrySaveJournal();
             // Put back a few times only: an app that keeps replacing it is left with its own.
