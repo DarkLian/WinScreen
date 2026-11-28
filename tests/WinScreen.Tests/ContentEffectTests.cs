@@ -347,12 +347,12 @@ public sealed class BackdropTests
     [Fact]
     public void A_picture_or_video_can_have_its_own_glass_levels_and_they_go_to_the_whole_set_with_the_rest()
     {
-        var own = new ItemGlass { PagePercent = 70, TextPercent = 90, FadeRangePercent = 40, TextColor = GlassText.Dark, TextShadow = false };
+        var own = new ItemGlass { PagePercent = 70, TextPercent = 90, FadeRangePercent = 40, TextColor = GlassText.Dark, ShadowPercent = 0, ShadowWidth = 5 };
         BackgroundChoice set = new BackgroundChoice().WithItems([new BackgroundItem { File = @"C:\a\sea.mp4", GlassLevels = own },
             new BackgroundItem { File = @"C:\a\hills.jpg" }]);
         Assert.Equal(own, set.GlassLevels);
         Assert.Equal([own, null], set.Items.Select(item => item.GlassLevels));
-        Assert.Equal([new GlassOver(0.7f, 0.9f, 0.4f, GlassText.Dark, false), (GlassOver?)null], set.Backdrop!.Items.Select(item => item.Glass));
+        Assert.Equal([new GlassOver(0.7f, 0.9f, 0.4f, GlassText.Dark, 0, 5), (GlassOver?)null], set.Backdrop!.Items.Select(item => item.Glass));
         Assert.All(set.WithLookOf(0).Items, item => Assert.Equal(own, item.GlassLevels));
         Assert.All(set.WithLookOf(1).Items, item => Assert.Null(item.GlassLevels));
         Assert.NotEqual(set, set.WithItems([set.Items[0] with { GlassLevels = own with { PagePercent = 10 } }, set.Items[1]]));
@@ -527,16 +527,17 @@ public sealed class PageReaderTests
     public void Text_stays_as_it_is_with_its_shadow_until_chosen_and_each_app_keeps_its_own()
     {
         EffectPreferences effects = AppSettings.Parse("{}").Effects;
-        Assert.Equal((GlassText.AsItIs, true), (effects.TextColor, effects.TextShadow));
-        Assert.Equal((GlassText.AsItIs, true), (effects.Levels.TextColor, effects.Levels.Shadow));
+        Assert.Equal((GlassText.AsItIs, 100, 3), (effects.TextColor, effects.ShadowPercent, effects.ShadowWidth));
+        Assert.Equal((GlassText.AsItIs, 1f, 3), (effects.Levels.TextColor, effects.Levels.Shadow, effects.Levels.ShadowWidth));
         EffectPreferences chosen = AppSettings.Parse(
-            @"{""Effects"":{""TextColor"":9,""Apps"":[{""Program"":""Chrome"",""TextColor"":1,""TextShadow"":false},{""Program"":""Notes""}]}}").Effects;
+            @"{""SchemaVersion"":6,""Effects"":{""TextColor"":9,""Apps"":[{""Program"":""Chrome"",""TextColor"":1,""ShadowPercent"":40,""ShadowWidth"":6},{""Program"":""Notes""}]}}").Effects;
         Assert.Equal(GlassText.AsItIs, chosen.TextColor);
-        Assert.Equal((GlassText.Light, false), (chosen.LevelsFor("chrome").TextColor, chosen.LevelsFor("chrome").Shadow));
-        Assert.Equal((GlassText.AsItIs, true), (chosen.LevelsFor("notes").TextColor, chosen.LevelsFor("notes").Shadow));
+        ContentLevels chrome = chosen.LevelsFor("chrome"), notes = chosen.LevelsFor("notes");
+        Assert.Equal((GlassText.Light, 0.4f, 6), (chrome.TextColor, chrome.Shadow, chrome.ShadowWidth));
+        Assert.Equal((GlassText.AsItIs, 1f, 3), (notes.TextColor, notes.Shadow, notes.ShadowWidth));
         // An app's own levels start from every app's, text color and shadow included.
-        AppGlassLevels fresh = (chosen with { TextColor = GlassText.Dark, TextShadow = false }).LevelsOf("paint");
-        Assert.Equal((GlassText.Dark, false), (fresh.TextColor, fresh.TextShadow));
+        AppGlassLevels fresh = (chosen with { TextColor = GlassText.Dark, ShadowPercent = 0, ShadowWidth = 8 }).LevelsOf("paint");
+        Assert.Equal((GlassText.Dark, 0, 8), (fresh.TextColor, fresh.ShadowPercent, fresh.ShadowWidth));
         string saved = System.Text.Json.JsonSerializer.Serialize(new AppSettings { Effects = chosen with { TextColor = GlassText.Dark } });
         Assert.Equal(GlassText.Dark, AppSettings.Parse(saved).Effects.TextColor);
     }
@@ -967,7 +968,7 @@ public sealed class ContentEffectTests
         {
             var windows = new WindowController([]);
             using var effects = new ContentEffects(windows);
-            effects.SetLevels(new ContentLevels(0, 1, 1, Shadow: false));
+            effects.SetLevels(new ContentLevels(0, 1, 1, Shadow: 0));
             try
             {
                 Assert.True(effects.Toggle(target.Handle, ContentLook.Glass));
@@ -975,7 +976,7 @@ public sealed class ContentEffectTests
                 Pump(() => Desktop.IsNear(Desktop.ColorOnScreen(band), grey, 20));
                 Assert.True(Desktop.IsNear(Desktop.ColorOnScreen(band), grey, 20), $"{Desktop.ColorOnScreen(band)} at 100%");
 
-                effects.SetLevels(new ContentLevels(0, 1, WinScreen.Settings.EffectPreferences.MostFadeRange / 100f, Shadow: false));
+                effects.SetLevels(new ContentLevels(0, 1, WinScreen.Settings.EffectPreferences.MostFadeRange / 100f, Shadow: 0));
                 bool Faded() => Desktop.ColorOnScreen(band) is var now && now.B - now.R > 40;
                 Pump(Faded);
                 Assert.True(Faded(), $"{Desktop.ColorOnScreen(band)} at the widest: the blue window behind should show through the grey.");
@@ -1009,7 +1010,7 @@ public sealed class ContentEffectTests
             {
                 var windows = new WindowController([]);
                 using var effects = new ContentEffects(windows);
-                effects.SetLevels(new ContentLevels(0, 1, Shadow: false));
+                effects.SetLevels(new ContentLevels(0, 1, Shadow: 0));
                 effects.SetBackgrounds(_ => new BackdropSet([new(red, BackdropFit.Fill)]));
                 try
                 {
@@ -1018,7 +1019,7 @@ public sealed class ContentEffectTests
                     Pump(() => Desktop.IsNear(Middle(bounds), picture, 24));
                     Assert.True(Desktop.IsNear(Middle(bounds), picture, 24), $"{Middle(bounds)} rather than the red picture");
 
-                    effects.SetBackgrounds(_ => new BackdropSet([new(red, BackdropFit.Fill, Glass: new GlassOver(1, 1, 1, GlassText.AsItIs, false))]));
+                    effects.SetBackgrounds(_ => new BackdropSet([new(red, BackdropFit.Fill, Glass: new GlassOver(1, 1, 1, GlassText.AsItIs, 0, 3))]));
                     Pump(() => Desktop.IsNear(Middle(bounds), Color.White, 24));
                     Assert.True(Desktop.IsNear(Middle(bounds), Color.White, 24), $"{Middle(bounds)} rather than the page over the picture");
                 }
@@ -1055,7 +1056,7 @@ public sealed class ContentEffectTests
                 using var effects = new ContentEffects(windows);
                 var problems = new List<string>();
                 effects.Problem += problems.Add;
-                effects.SetLevels(new ContentLevels(0, 1, Shadow: false));
+                effects.SetLevels(new ContentLevels(0, 1, Shadow: 0));
                 BackdropSet Set(int brightness) => new([new(gone, BackdropFit.Fill), new(red, BackdropFit.Fill, Brightness: brightness)]);
                 effects.SetBackgrounds(_ => Set(100));
                 try
@@ -1112,7 +1113,7 @@ public sealed class ContentEffectTests
                 string red = ColourVideo(folder, "red.mp4", Color.FromArgb(0xC8, 0x1E, 0x1E)), blue = ColourVideo(folder, "blue.mp4", Color.FromArgb(0x1E, 0x1E, 0xC8));
                 var windows = new WindowController([]);
                 using var effects = new ContentEffects(windows);
-                effects.SetLevels(new ContentLevels(0, 1, Shadow: false));
+                effects.SetLevels(new ContentLevels(0, 1, Shadow: 0));
                 effects.SetBackgrounds(_ => new BackdropSet([new(red, BackdropFit.Fill), new(Path.Combine(folder, "gone.mp4"), BackdropFit.Fill), new(blue, BackdropFit.Fill)]));
                 try
                 {
@@ -1235,7 +1236,7 @@ public sealed class ContentEffectTests
             using var effects = new ContentEffects(windows);
             var problems = new List<string>();
             effects.Problem += problems.Add;
-            effects.SetLevels(new ContentLevels(0, 1, Shadow: false));
+            effects.SetLevels(new ContentLevels(0, 1, Shadow: 0));
             effects.SetBackgrounds(_ => new BackdropSet([new(at + "gone.png", BackdropFit.Fill), new(at + "green.png", BackdropFit.Fill)]));
             try
             {
@@ -1279,7 +1280,7 @@ public sealed class ContentEffectTests
             {
                 var windows = new WindowController([]);
                 using var effects = new ContentEffects(windows);
-                effects.SetLevels(new ContentLevels(0, 1, Shadow: false));
+                effects.SetLevels(new ContentLevels(0, 1, Shadow: 0));
                 effects.SetBackgrounds(_ => new BackdropSet([new(r, BackdropFit.Fill)]));
                 void Shows(TargetProcess window, Color color)
                 {
@@ -1383,6 +1384,62 @@ public sealed class ContentEffectTests
         });
     }
 
+    // The owner, 28 Nov: the shadow's switch went for a strength and a width. A black band on a see-through white page
+    // over a blue window: next to the band the page stays white as solid as the strength says; further out only a wide
+    // shadow reaches.
+    [GraphicsCardFact]
+    public void The_text_shadow_is_as_solid_and_as_wide_as_chosen()
+    {
+        using var behind = new TargetProcess(new Rectangle(250, 180, 520, 400), "1E64C8");
+        using var target = new TargetProcess(Spot, "FFFFFF,000000,FFFFFF");
+        User32.SetWindowPos(target.Handle, 0, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+        Rectangle bounds = Desktop.BoundsOf(target.Handle);
+        int middle = bounds.Top + bounds.Height / 2, bandLeft = bounds.Left + bounds.Width / 3 - 20;
+        while (bandLeft < bounds.Left + bounds.Width / 3 + 20 && Desktop.ColorOnScreen(new Rectangle(bandLeft, middle, 1, 1)).R > 128) bandLeft++;
+        float scale = User32.GetDpiForWindow(target.Handle) / 96f;
+        Rectangle near = new(bandLeft - (int)Math.Ceiling(2 * scale), middle - 5, Math.Max(1, (int)scale), 10);
+        Rectangle far = new(bandLeft - (int)Math.Ceiling(6 * scale), middle - 5, Math.Max(1, (int)scale), 10);
+        Rectangle page = new(bounds.Left + 20, middle - 5, 30, 10);
+        WindowMenuBuilderTests.OnUiThread(() =>
+        {
+            var windows = new WindowController([]);
+            using var effects = new ContentEffects(windows);
+            int Red(Rectangle area) => Desktop.ColorOnScreen(area).R;
+            (int Near, int Far) Shown(float strength, int width, Func<int, int, bool> ready)
+            {
+                effects.SetLevels(new ContentLevels(0, 1, Shadow: strength, ShadowWidth: width));
+                Pump(() => ready(Red(near), Red(far)));
+                Thread.Sleep(150);
+                return (Red(near), Red(far));
+            }
+            try
+            {
+                effects.SetLevels(new ContentLevels(0, 1, ShadowWidth: 3));
+                Assert.True(effects.Toggle(target.Handle, ContentLook.Glass));
+                Pump(() => Red(page) < 60);
+                Assert.True(Red(page) < 60, $"The page {Desktop.ColorOnScreen(page)} didn't go see-through.");
+
+                (int Near, int Far) full = Shown(1, 3, (n, _) => n > 180);
+                Assert.True(full.Near > 180, $"Next to the band {full.Near}: no shadow at full strength.");
+                Assert.True(full.Far < 70, $"6 px out {full.Far}: a 3 px shadow reached it.");
+
+                (int Near, int Far) wide = Shown(1, 8, (_, f) => f > 110);
+                Assert.True(wide.Far > 110, $"6 px out {wide.Far}: an 8 px shadow didn't reach it.");
+
+                (int Near, int Far) weak = Shown(0.4f, 3, (n, _) => n < 160);
+                Assert.True(weak.Near is > 70 and < 160, $"Next to the band {weak.Near} at 40% (full was {full.Near}).");
+
+                (int Near, int Far) none = Shown(0, 3, (n, _) => n < 60);
+                Assert.True(none.Near < 60, $"Next to the band {none.Near} with no shadow.");
+            }
+            finally
+            {
+                effects.TurnAllOff();
+                windows.RestoreAll();
+            }
+        });
+    }
+
     // Light text on a white page with a black band: the page turns dark and see-through, the band light; the shadow
     // keeps a strip of the page solid beside the band, and without it that strip is as see-through as the rest.
     [GraphicsCardFact]
@@ -1413,7 +1470,7 @@ public sealed class ContentEffectTests
                 Color shadow = Desktop.ColorOnScreen(beside);
                 Assert.True(shadow.B < 120, $"Beside the band {shadow}: no shadow.");
 
-                effects.SetLevels(new ContentLevels(0.15f, 1, TextColor: GlassText.Light, Shadow: false));
+                effects.SetLevels(new ContentLevels(0.15f, 1, TextColor: GlassText.Light, Shadow: 0));
                 Pump(() => Desktop.ColorOnScreen(beside).B > 140);
                 Color none = Desktop.ColorOnScreen(beside);
                 Assert.True(Desktop.IsNear(none, expected, 30), $"Beside the band {none} rather than {expected} with the shadow off.");

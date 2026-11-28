@@ -17,7 +17,7 @@ namespace WinScreen.Glass;
 internal enum ContentLook { Glass, Dark }
 
 internal readonly record struct ContentLevels(float Background, float Text, float FadeRange = 1, bool Plain = false,
-    GlassText TextColor = GlassText.AsItIs, bool Shadow = true, float DarkPage = 0.1f, float DarkText = 1, float DarkColors = 0);
+    GlassText TextColor = GlassText.AsItIs, float Shadow = 1, int ShadowWidth = 3, float DarkPage = 0.1f, float DarkText = 1, float DarkColors = 0);
 
 // Light or Dark flips a page that is the other way, as Dark mode does, before Glass.
 public enum GlassText { AsItIs, Light, Dark }
@@ -60,7 +60,7 @@ internal sealed unsafe class ContentOverlay : Form
 
     private ID3D11Device? _device;
     private ID3D11DeviceContext? _context;
-    private ID3D11ComputeShader? _stats, _composite, _backdropShader;
+    private ID3D11ComputeShader? _stats, _composite, _shadowAcross, _backdropShader;
     private ID3D11Buffer? _options, _place;
     private ID3D11SamplerState? _edge, _repeat;
     private IDXGISwapChain1? _chain;
@@ -404,6 +404,7 @@ internal sealed unsafe class ContentOverlay : Form
                 throw new NotSupportedException();
         _stats = _device!.CreateComputeShader(StatsCode.Value);
         _composite = _device.CreateComputeShader(CompositeCode.Value);
+        _shadowAcross = _device.CreateComputeShader(ShadowCode.Value);
         _backdropShader = _device.CreateComputeShader(BackdropCode.Value);
         _options = _device.CreateBuffer(new BufferDescription((uint)sizeof(Options), BindFlags.ConstantBuffer, ResourceUsage.Default));
         _place = _device.CreateBuffer(new BufferDescription(48, BindFlags.ConstantBuffer, ResourceUsage.Default));
@@ -825,7 +826,7 @@ internal sealed unsafe class ContentOverlay : Form
         var options = new Options
         {
             Background = dark ? levels.DarkPage : levels.Background, Text = dark ? levels.DarkText : levels.Text,
-            FadeRange = dark ? levels.DarkColors : levels.FadeRange, Shadow = levels.Shadow ? 1 : 0,
+            FadeRange = dark ? levels.DarkColors : levels.FadeRange, Shadow = dark || levels.Plain ? 0 : levels.Shadow,
             Mode = dark ? 2 : levels.Plain ? 1 : 0, AlreadyDark = _leaveAlreadyDark && _page.AlreadyDark ? 1 : 0,
             PageR = pr, PageG = pg, PageB = pb, Flip = Flips(levels) ? 1 : 0,
         };
@@ -845,14 +846,44 @@ internal sealed unsafe class ContentOverlay : Form
             count++;
         }
         options.KeptCount = count;
+        options.ShadowWidth = levels.ShadowWidth * scale;
         context.UpdateSubresource(in options, _options!);
-        context.CSSetShader(_composite);
         context.CSSetConstantBuffer(0, _options);
         context.CSSetShaderResource(0, cacheView);
+        // The shadow is spread across first and down in the composite: two short rows of reads instead of a square of
+        // them, so a wide one costs little more than a thin one.
+        bool shadow = options.Shadow > 0 && options.Background < 0.9f;
+        if (shadow)
+        {
+            EnsureShadowTexture(size);
+            context.CSSetShader(_shadowAcross);
+            context.CSSetUnorderedAccessView(0, _shadowWrite);
+            context.Dispatch((uint)(size.Width + 15) / 16, (uint)(size.Height + 15) / 16, 1);
+            context.CSSetUnorderedAccessView(0, null);
+        }
+        context.CSSetShader(_composite);
+        context.CSSetShaderResource(1, shadow ? _shadowRead : null);
         context.CSSetUnorderedAccessView(0, outputView);
         context.Dispatch((uint)(size.Width + 15) / 16, (uint)(size.Height + 15) / 16, 1);
         context.CSSetUnorderedAccessView(0, null);
         context.CSSetShaderResource(0, null);
+        context.CSSetShaderResource(1, null);
+    }
+
+    private ID3D11Texture2D? _shadowAcross2D;
+    private ID3D11UnorderedAccessView? _shadowWrite;
+    private ID3D11ShaderResourceView? _shadowRead;
+    private Size _shadowSize;
+
+    private void EnsureShadowTexture(Size size)
+    {
+        if (_shadowAcross2D is not null && _shadowSize == size) return;
+        DisposeAll(_shadowRead, _shadowWrite, _shadowAcross2D);
+        _shadowAcross2D = _device!.CreateTexture2D(new Texture2DDescription(Format.R16_Float, (uint)size.Width, (uint)size.Height, 1, 1,
+            BindFlags.UnorderedAccess | BindFlags.ShaderResource));
+        _shadowWrite = _device.CreateUnorderedAccessView(_shadowAcross2D);
+        _shadowRead = _device.CreateShaderResourceView(_shadowAcross2D);
+        _shadowSize = size;
     }
 
     private TileStats[] _tileStats = [];
@@ -860,6 +891,7 @@ internal sealed unsafe class ContentOverlay : Form
     // Compiled once a run, not once a window: the code doesn't depend on the device.
     private static readonly Lazy<byte[]> StatsCode = new(() => Compiled(ContentShaders.Stats, "Stats", "stats")),
         CompositeCode = new(() => Compiled(ContentShaders.Composite, "Composite", "composite")),
+        ShadowCode = new(() => Compiled(ContentShaders.ShadowAcross, "ShadowAcross", "shadow")),
         BackdropCode = new(() => Compiled(ContentShaders.Backdrop, "Backdrop", "backdrop"));
 
     private static byte[] Compiled(string source, string entry, string name)
@@ -901,7 +933,7 @@ internal sealed unsafe class ContentOverlay : Form
     {
         ContentLevels levels = _levels.Value;
         if (_look != ContentLook.Glass || levels.Plain || _showing?.Glass is not { } own) return levels;
-        return levels with { Background = own.Page, Text = own.Text, FadeRange = own.FadeRange, TextColor = own.TextColor, Shadow = own.Shadow };
+        return levels with { Background = own.Page, Text = own.Text, FadeRange = own.FadeRange, TextColor = own.TextColor, Shadow = own.Shadow, ShadowWidth = own.ShadowWidth };
     }
 
     private bool Flips(ContentLevels levels) => _look == ContentLook.Glass && !levels.Plain && levels.TextColor switch
@@ -924,7 +956,7 @@ internal sealed unsafe class ContentOverlay : Form
     {
         public float Background, Text, FadeRange, Shadow;
         public const int MostAreas = 8;
-        public float Mode, AlreadyDark, KeptCount, Unused4;
+        public float Mode, AlreadyDark, KeptCount, ShadowWidth;
         public float PageR, PageG, PageB, Flip;
         public fixed float Areas[MostAreas * 4];
     }
@@ -984,6 +1016,11 @@ internal sealed unsafe class ContentOverlay : Form
         _backdropShader?.Dispose();
         _stats?.Dispose();
         _composite?.Dispose();
+        _shadowAcross?.Dispose();
+        DisposeAll(_shadowRead, _shadowWrite, _shadowAcross2D);
+        _shadowRead = null;
+        _shadowWrite = null;
+        _shadowAcross2D = null;
         _context?.ClearState();
         _context?.Dispose();
         _device?.Dispose();

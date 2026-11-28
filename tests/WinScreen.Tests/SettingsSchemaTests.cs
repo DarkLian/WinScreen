@@ -55,6 +55,29 @@ public sealed class SettingsSchemaTests : IDisposable
         Assert.Equal([AppCommand.TogglePin], AppSettings.Parse(Toolbar(null, offered: true)).Toolbar.Buttons);
     }
 
+    // The owner, 28 Nov: the text shadow's switch went for a strength and a width; a shadow turned off is no shadow.
+    [Fact]
+    public void A_text_shadow_turned_off_becomes_none_and_older_copies_still_read_it()
+    {
+        const string before = """
+            { "SchemaVersion": 5,
+              "Effects": { "TextShadow": false, "Apps": [ { "Program": "chrome", "TextShadow": false }, { "Program": "notes", "TextShadow": true } ] },
+              "Backgrounds": { "Everywhere": { "File": "C:\\a\\sea.jpg", "GlassLevels": { "TextShadow": false },
+                "More": [ { "File": "C:\\a\\hills.jpg", "GlassLevels": { "PagePercent": 30 } } ] } } }
+            """;
+        AppSettings loaded = AppSettings.Parse(before);
+
+        Assert.Equal(0, loaded.Effects.ShadowPercent);
+        Assert.Equal([0, 100], loaded.Effects.Apps.Select(app => app.ShadowPercent));
+        Assert.Equal([0, 100], loaded.Backgrounds.Everywhere.Items.Select(item => item.GlassLevels!.ShadowPercent));
+        Assert.All(loaded.Effects.Apps, app => Assert.Equal(3, app.ShadowWidth));
+
+        loaded.Save(SettingsFile);
+        JsonObject saved = JsonNode.Parse(File.ReadAllText(SettingsFile))!.AsObject();
+        Assert.False(saved["Effects"]!["TextShadow"]!.GetValue<bool>());
+        Assert.True(saved["Effects"]!["Apps"]![1]!["TextShadow"]!.GetValue<bool>());
+    }
+
     [Fact]
     public void A_file_from_a_newer_version_is_kept_aside_before_it_is_written_over()
     {

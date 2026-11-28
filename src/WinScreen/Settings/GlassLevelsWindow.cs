@@ -22,7 +22,8 @@ internal sealed class GlassLevelsWindow : ThemedDialog
     private readonly NumericUpDown _text = new() { Minimum = 20, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _fade = new CurvedNumber { Minimum = 1, Maximum = EffectPreferences.MostFadeRange, Width = 70, Curve = CurvedNumber.FadeCurve };
     private readonly ComboBox _textColor = Picker(160);
-    private readonly SwitchBox _shadow = new() { Compact = true, AccessibleName = T("settings.effects.shadow"), AutoSize = true };
+    private readonly NumericUpDown _shadow = new() { Minimum = 0, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _shadowWidth = new() { Minimum = TextShadowLevels.Thinnest, Maximum = TextShadowLevels.Widest, Width = 70 };
     private readonly NumericUpDown _darkPage = new() { Minimum = 0, Maximum = EffectPreferences.MostDarkPage, Width = 70 };
     private readonly NumericUpDown _darkText = new() { Minimum = EffectPreferences.LeastDarkText, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _darkColors = new() { Minimum = 0, Maximum = 100, Width = 70 };
@@ -75,9 +76,8 @@ internal sealed class GlassLevelsWindow : ThemedDialog
             BuildGlass();
         Fill(levels);
         ShowBackground(0);
-        foreach (NumericUpDown box in new[] { _background, _text, _fade, _darkPage, _darkText, _darkColors }) box.ValueChanged += (_, _) => ChangeLevels();
+        foreach (NumericUpDown box in new[] { _background, _text, _fade, _shadow, _shadowWidth, _darkPage, _darkText, _darkColors }) box.ValueChanged += (_, _) => ChangeLevels();
         _textColor.SelectedIndexChanged += (_, _) => ChangeLevels();
-        _shadow.CheckedChanged += (_, _) => ChangeLevels();
         _itemOwn.CheckedChanged += (_, _) =>
         {
             if (_filling || _choice.Items.Count == 0) return;
@@ -123,7 +123,8 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         Slider(T("settings.effects.text"), _text);
         Slider(T("settings.effects.fade"), _fade);
         Row(T("settings.effects.textColor"), _textColor);
-        Row(T("settings.effects.shadow"), _shadow);
+        Slider(T("settings.effects.shadow"), _shadow);
+        Slider(T("settings.effects.shadowWidth"), _shadowWidth);
         Row(T("glassLevels.itemOwn"), _itemOwn);
 
         Column();
@@ -204,7 +205,8 @@ internal sealed class GlassLevelsWindow : ThemedDialog
             _text.Value = Math.Clamp(levels.TextPercent, 20, 100);
             _fade.Value = Math.Clamp(levels.FadeRangePercent, 1, EffectPreferences.MostFadeRange);
             _textColor.SelectedIndex = (int)levels.TextColor;
-            _shadow.Checked = levels.TextShadow;
+            _shadow.Value = Math.Clamp(levels.ShadowPercent, 0, 100);
+            _shadowWidth.Value = Math.Clamp(levels.ShadowWidth, TextShadowLevels.Thinnest, TextShadowLevels.Widest);
             _darkPage.Value = Math.Clamp(levels.DarkPagePercent, 0, EffectPreferences.MostDarkPage);
             _darkText.Value = Math.Clamp(levels.DarkTextPercent, EffectPreferences.LeastDarkText, 100);
             _darkColors.Value = Math.Clamp(levels.DarkColorsPercent, 0, 100);
@@ -215,7 +217,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
     private AppGlassLevels Current() => new()
     {
         Program = _program, BackgroundPercent = (int)_background.Value, TextPercent = (int)_text.Value, FadeRangePercent = (int)_fade.Value,
-        TextColor = (GlassText)Math.Max(0, _textColor.SelectedIndex), TextShadow = _shadow.Checked,
+        TextColor = (GlassText)Math.Max(0, _textColor.SelectedIndex), ShadowPercent = (int)_shadow.Value, ShadowWidth = (int)_shadowWidth.Value,
         DarkPagePercent = (int)_darkPage.Value, DarkTextPercent = (int)_darkText.Value, DarkColorsPercent = (int)_darkColors.Value,
     };
 
@@ -264,7 +266,7 @@ internal sealed class GlassLevelsWindow : ThemedDialog
         if (!_dark) Fill(itemGlass is { } own ? _windowLevels with
         {
             BackgroundPercent = own.PagePercent, TextPercent = own.TextPercent, FadeRangePercent = own.FadeRangePercent,
-            TextColor = own.TextColor, TextShadow = own.TextShadow,
+            TextColor = own.TextColor, ShadowPercent = own.ShadowPercent, ShadowWidth = own.ShadowWidth,
         } : _windowLevels);
         _chosenAt = Environment.TickCount64;
     }

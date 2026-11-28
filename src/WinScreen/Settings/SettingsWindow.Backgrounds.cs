@@ -23,7 +23,8 @@ public sealed partial class SettingsWindow
     private readonly NumericUpDown _appGlassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _appGlassFade = new CurvedNumber { Minimum = 1, Maximum = EffectPreferences.MostFadeRange, Width = 70, Curve = CurvedNumber.FadeCurve };
     private readonly ComboBox _appGlassTextColor = TextColorPicker();
-    private readonly SwitchBox _appGlassShadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
+    private readonly NumericUpDown _appGlassShadow = new() { Minimum = 0, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _appGlassShadowWidth = new() { Minimum = TextShadowLevels.Thinnest, Maximum = TextShadowLevels.Widest, Width = 70 };
     private readonly NumericUpDown _appDarkPage = new() { Minimum = 0, Maximum = EffectPreferences.MostDarkPage, Width = 70 };
     private readonly NumericUpDown _appDarkText = new() { Minimum = EffectPreferences.LeastDarkText, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _appDarkColors = new() { Minimum = 0, Maximum = 100, Width = 70 };
@@ -52,7 +53,8 @@ public sealed partial class SettingsWindow
     private readonly NumericUpDown _itemText = new() { Minimum = 20, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _itemFade = new CurvedNumber { Minimum = 1, Maximum = EffectPreferences.MostFadeRange, Width = 70, Curve = CurvedNumber.FadeCurve };
     private readonly ComboBox _itemTextColor = TextColorPicker();
-    private readonly SwitchBox _itemShadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
+    private readonly NumericUpDown _itemShadow = new() { Minimum = 0, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _itemShadowWidth = new() { Minimum = TextShadowLevels.Thinnest, Maximum = TextShadowLevels.Widest, Width = 70 };
     private readonly List<Control> _itemGlassRows = [];
     private readonly PlainButton _backgroundRemoveApp = new() { Text = T("common.remove"), Enabled = false };
     private readonly ComboBox _backgroundFit = new ThemedCombo { Width = 200 };
@@ -128,9 +130,8 @@ public sealed partial class SettingsWindow
         _applyAll.Click += (_, _) => ChangeBackground(choice => choice.WithLookOf(_itemAt));
         _itemOwnGlass.CheckedChanged += (_, _) =>
             ChangeItem(item => item with { GlassLevels = _itemOwnGlass.Checked ? ItemGlass.From(AppGlassShown(ShownApp)) : null });
-        foreach (NumericUpDown box in new[] { _itemPage, _itemText, _itemFade }) box.TextChanged += (_, _) => ChangeItemGlass();
+        foreach (NumericUpDown box in new[] { _itemPage, _itemText, _itemFade, _itemShadow, _itemShadowWidth }) box.TextChanged += (_, _) => ChangeItemGlass();
         _itemTextColor.SelectedIndexChanged += (_, _) => ChangeItemGlass();
-        _itemShadow.CheckedChanged += (_, _) => ChangeItemGlass();
         _itemList.SelectedIndexChanged += (_, _) =>
         {
             if (_showingBackground || _itemList.SelectedIndex < 0) return;
@@ -172,7 +173,8 @@ public sealed partial class SettingsWindow
             SettingRow(T("settings.backgrounds.speed"), _backgroundSpeed),
             SettingRow(T("settings.backgrounds.brightness"), _backgroundBrightness)]);
         _itemGlassRows.AddRange([SettingRow(T("settings.effects.background"), _itemPage), SettingRow(T("settings.effects.text"), _itemText),
-            SettingRow(T("settings.effects.fade"), _itemFade), SettingRow(T("settings.effects.textColor"), _itemTextColor), _itemShadow]);
+            SettingRow(T("settings.effects.fade"), _itemFade), SettingRow(T("settings.effects.textColor"), _itemTextColor),
+            SettingRow(T("settings.effects.shadow"), _itemShadow), SettingRow(T("settings.effects.shadowWidth"), _itemShadowWidth)]);
         _backgroundRows.AddRange([_itemOwnGlass, Note(T("settings.backgrounds.ownGlassHelp")), .. _itemGlassRows,
             _applyAllRow = SettingRow(T("settings.backgrounds.applyAll"), _applyAll), Note(T("settings.backgrounds.applyAllHelp"))]);
         _ownBackground.CheckedChanged += (_, _) => SetOwnBackground(_ownBackground.Checked);
@@ -194,21 +196,23 @@ public sealed partial class SettingsWindow
         var keptButtons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(4, 8, 3, 6), BackColor = SettingsStyle.Card };
         keptButtons.Controls.Add(_keptRemove);
 
-        foreach (NumericUpDown box in new[] { _appGlassBackground, _appGlassText, _appGlassFade, _appDarkPage, _appDarkText, _appDarkColors })
+        foreach (NumericUpDown box in new[] { _appGlassBackground, _appGlassText, _appGlassFade, _appGlassShadow, _appGlassShadowWidth, _appDarkPage, _appDarkText, _appDarkColors })
             box.TextChanged += (_, _) => ChangeGlassApp();
         _appGlassTextColor.SelectedIndexChanged += (_, _) => ChangeGlassApp();
-        _appGlassShadow.CheckedChanged += (_, _) => ChangeGlassApp();
         _appGlassRows.Add(SettingRow(T("settings.effects.background"), _appGlassBackground));
         _appGlassRows.Add(SettingRow(T("settings.effects.text"), _appGlassText));
         _appGlassRows.Add(SettingRow(T("settings.effects.fade"), _appGlassFade));
         _appGlassRows.Add(SettingRow(T("settings.effects.textColor"), _appGlassTextColor));
-        _appGlassRows.Add(_appGlassShadow);
+        _appGlassRows.Add(SettingRow(T("settings.effects.shadow"), _appGlassShadow));
+        _appGlassRows.Add(SettingRow(T("settings.effects.shadowWidth"), _appGlassShadowWidth));
         _appDarkRows.Add(SettingRow(T("settings.dark.page"), _appDarkPage));
         _appDarkRows.Add(SettingRow(T("settings.dark.text"), _appDarkText));
         _appDarkRows.Add(SettingRow(T("settings.dark.colors"), _appDarkColors));
         _mainGlassRows.AddRange([SettingRow(T("settings.effects.background"), _glassBackground), SettingRow(T("settings.effects.text"), _glassText),
             SettingRow(T("settings.effects.fade"), _glassFade), Note(T("settings.effects.fadeHelp")),
-            SettingRow(T("settings.effects.textColor"), _glassTextColor), Note(T("settings.effects.textColorHelp")), _glassShadow,
+            SettingRow(T("settings.effects.textColor"), _glassTextColor), Note(T("settings.effects.textColorHelp")),
+            SettingRow(T("settings.effects.shadow"), _glassShadow), SettingRow(T("settings.effects.shadowWidth"), _glassShadowWidth),
+            Note(T("settings.effects.shadowHelp")),
             Note(T("settings.effects.help"))]);
         _appGlassNote = Note(T("settings.apps.glassHelp"));
         _appDarkNote = Note(T("settings.apps.darkHelp"));
@@ -291,7 +295,7 @@ public sealed partial class SettingsWindow
     private AppGlassLevels MainGlass(string program) => new()
     {
         Program = program, BackgroundPercent = Typed(_glassBackground), TextPercent = Typed(_glassText), FadeRangePercent = Typed(_glassFade),
-        TextColor = TextColorOf(_glassTextColor), TextShadow = _glassShadow.Checked,
+        TextColor = TextColorOf(_glassTextColor), ShadowPercent = Typed(_glassShadow), ShadowWidth = Typed(_glassShadowWidth),
         DarkPagePercent = Typed(_darkPage), DarkTextPercent = Typed(_darkText), DarkColorsPercent = Typed(_darkColors),
     };
 
@@ -323,7 +327,7 @@ public sealed partial class SettingsWindow
             GlassLevels = new ItemGlass
             {
                 PagePercent = Typed(_itemPage), TextPercent = Typed(_itemText), FadeRangePercent = Typed(_itemFade),
-                TextColor = TextColorOf(_itemTextColor), TextShadow = _itemShadow.Checked,
+                TextColor = TextColorOf(_itemTextColor), ShadowPercent = Typed(_itemShadow), ShadowWidth = Typed(_itemShadowWidth),
             },
         });
     }
@@ -341,7 +345,8 @@ public sealed partial class SettingsWindow
             _itemText.Value = glass.TextPercent;
             _itemFade.Value = glass.FadeRangePercent;
             _itemTextColor.SelectedIndex = (int)glass.TextColor;
-            _itemShadow.Checked = glass.TextShadow;
+            _itemShadow.Value = Math.Clamp(glass.ShadowPercent, 0, 100);
+            _itemShadowWidth.Value = Math.Clamp(glass.ShadowWidth, TextShadowLevels.Thinnest, TextShadowLevels.Widest);
         }
         finally { _showingBackground = was; }
         _itemOwnGlass.Visible = item is not null;
@@ -367,7 +372,8 @@ public sealed partial class SettingsWindow
             _appGlassText.Value = shown.TextPercent;
             _appGlassFade.Value = shown.FadeRangePercent;
             _appGlassTextColor.SelectedIndex = (int)shown.TextColor;
-            _appGlassShadow.Checked = shown.TextShadow;
+            _appGlassShadow.Value = Math.Clamp(shown.ShadowPercent, 0, 100);
+            _appGlassShadowWidth.Value = Math.Clamp(shown.ShadowWidth, TextShadowLevels.Thinnest, TextShadowLevels.Widest);
             _appDarkPage.Value = Math.Clamp(shown.DarkPagePercent, 0, EffectPreferences.MostDarkPage);
             _appDarkText.Value = Math.Clamp(shown.DarkTextPercent, EffectPreferences.LeastDarkText, 100);
             _appDarkColors.Value = Math.Clamp(shown.DarkColorsPercent, 0, 100);
@@ -384,7 +390,7 @@ public sealed partial class SettingsWindow
         _glassApps[at] = app with
         {
             BackgroundPercent = Typed(_appGlassBackground), TextPercent = Typed(_appGlassText), FadeRangePercent = Typed(_appGlassFade),
-            TextColor = TextColorOf(_appGlassTextColor), TextShadow = _appGlassShadow.Checked,
+            TextColor = TextColorOf(_appGlassTextColor), ShadowPercent = Typed(_appGlassShadow), ShadowWidth = Typed(_appGlassShadowWidth),
             DarkPagePercent = Typed(_appDarkPage), DarkTextPercent = Typed(_appDarkText), DarkColorsPercent = Typed(_appDarkColors),
         };
         QueueApplyRefresh();

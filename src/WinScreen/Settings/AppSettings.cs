@@ -385,7 +385,7 @@ public sealed class AppSettings
     private static readonly JsonSerializerOptions Format = new() { WriteIndented = true };
 
     // Raise it only together with a new step in Migrations.
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
 
     // Step n turns format n into n + 1, on the file's JSON alone. Files from before the format was numbered are 0.
     internal static readonly Action<JsonObject>[] Migrations =
@@ -395,6 +395,7 @@ public sealed class AppSettings
         DropFirstSuggestions, // 2 → 3
         AddToolbarButtons, // 3 → 4
         ChooseNotifications, // 4 → 5
+        ShadowFromSwitch, // 5 → 6
     ];
 
     // The first versions filled both lists with sample programs nobody chose.
@@ -439,6 +440,19 @@ public sealed class AppSettings
         if (root.ContainsKey(nameof(Notifications))) return;
         bool all = root[nameof(ShowNotifications)] is not JsonValue value || !value.TryGetValue(out bool on) || on;
         root[nameof(Notifications)] = (int)(all ? NotificationMode.All : NotificationMode.Problems);
+    }
+
+    // Glass's text shadow was on or off; it has a strength now, and off is none. Every app's, each app's own and each
+    // background's own levels had it.
+    private static void ShadowFromSwitch(JsonNode? node)
+    {
+        if (node is JsonArray list)
+            foreach (JsonNode? item in list) ShadowFromSwitch(item);
+        if (node is not JsonObject levels) return;
+        if (levels[nameof(EffectPreferences.TextShadow)] is JsonValue value && value.TryGetValue(out bool on) && !on &&
+            !levels.ContainsKey(nameof(EffectPreferences.ShadowPercent)))
+            levels[nameof(EffectPreferences.ShadowPercent)] = 0;
+        foreach (KeyValuePair<string, JsonNode?> part in levels.ToArray()) ShadowFromSwitch(part.Value);
     }
 
     private static void ChooseUpdates(JsonObject root)

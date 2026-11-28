@@ -12,7 +12,10 @@ public sealed record EffectPreferences
     public int TextPercent { get; init; } = 100;
     public int FadeRangePercent { get; init; } = 100;
     public Glass.GlassText TextColor { get; init; }
-    public bool TextShadow { get; init; } = true;
+    public int ShadowPercent { get; init; } = 100;
+    public int ShadowWidth { get; init; } = TextShadowLevels.Width;
+    // Read by copies from before 1.5.3 only.
+    public bool TextShadow => ShadowPercent > 0;
     public int DarkPagePercent { get; init; } = 10;
     public int DarkTextPercent { get; init; } = 100;
     public int DarkColorsPercent { get; init; }
@@ -35,6 +38,8 @@ public sealed record EffectPreferences
             DarkPagePercent = Math.Clamp(DarkPagePercent, 0, MostDarkPage),
             DarkTextPercent = Math.Clamp(DarkTextPercent, LeastDarkText, 100),
             DarkColorsPercent = Math.Clamp(DarkColorsPercent, 0, 100),
+            ShadowPercent = Math.Clamp(ShadowPercent, 0, 100),
+            ShadowWidth = Math.Clamp(ShadowWidth, TextShadowLevels.Thinnest, TextShadowLevels.Widest),
             Apps = apps,
         };
     }
@@ -78,7 +83,7 @@ public sealed record EffectPreferences
     {
         Program = BackgroundPreferences.ProgramKey(program),
         BackgroundPercent = BackgroundPercent, TextPercent = TextPercent, FadeRangePercent = FadeRangePercent,
-        TextColor = TextColor, TextShadow = TextShadow,
+        TextColor = TextColor, ShadowPercent = ShadowPercent, ShadowWidth = ShadowWidth,
         DarkPagePercent = DarkPagePercent, DarkTextPercent = DarkTextPercent, DarkColorsPercent = DarkColorsPercent,
     };
 }
@@ -92,7 +97,10 @@ public sealed record AppGlassLevels
     public int TextPercent { get; init; } = 100;
     public int FadeRangePercent { get; init; } = 100;
     public Glass.GlassText TextColor { get; init; }
-    public bool TextShadow { get; init; } = true;
+    public int ShadowPercent { get; init; } = 100;
+    public int ShadowWidth { get; init; } = TextShadowLevels.Width;
+    // Read by copies from before 1.5.3 only.
+    public bool TextShadow => ShadowPercent > 0;
     public int DarkPagePercent { get; init; } = 10;
     public int DarkTextPercent { get; init; } = 100;
     public int DarkColorsPercent { get; init; }
@@ -107,12 +115,14 @@ public sealed record AppGlassLevels
         DarkPagePercent = Math.Clamp(DarkPagePercent, 0, EffectPreferences.MostDarkPage),
         DarkTextPercent = Math.Clamp(DarkTextPercent, EffectPreferences.LeastDarkText, 100),
         DarkColorsPercent = Math.Clamp(DarkColorsPercent, 0, 100),
+        ShadowPercent = Math.Clamp(ShadowPercent, 0, 100),
+        ShadowWidth = Math.Clamp(ShadowWidth, TextShadowLevels.Thinnest, TextShadowLevels.Widest),
     };
 
     internal AppGlassLevels WithGlassOf(AppGlassLevels other) => this with
     {
         BackgroundPercent = other.BackgroundPercent, TextPercent = other.TextPercent, FadeRangePercent = other.FadeRangePercent,
-        TextColor = other.TextColor, TextShadow = other.TextShadow,
+        TextColor = other.TextColor, ShadowPercent = other.ShadowPercent, ShadowWidth = other.ShadowWidth,
     };
 
     internal AppGlassLevels WithDarkOf(AppGlassLevels other) => this with
@@ -121,6 +131,13 @@ public sealed record AppGlassLevels
     };
 
     internal Glass.ContentLevels Levels =>
-        new(BackgroundPercent / 100f, TextPercent / 100f, FadeRangePercent / 100f, TextColor: TextColor, Shadow: TextShadow,
+        new(BackgroundPercent / 100f, TextPercent / 100f, FadeRangePercent / 100f, TextColor: TextColor, Shadow: ShadowPercent / 100f, ShadowWidth: ShadowWidth,
             DarkPage: DarkPagePercent / 100f, DarkText: DarkTextPercent / 100f, DarkColors: DarkColorsPercent / 100f);
+}
+
+// The shadow behind Glass's text: how solid it is (ShadowPercent, 0 for none) and how far it reaches, in pixels at 100%
+// scaling.
+internal static class TextShadowLevels
+{
+    internal const int Thinnest = 1, Width = 3, Widest = 8;
 }

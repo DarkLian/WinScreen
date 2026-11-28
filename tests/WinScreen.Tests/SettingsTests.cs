@@ -381,7 +381,7 @@ public sealed class SettingsWindowTests : IDisposable
                 FileExplorer = true, Programs = ["notepad"] },
             DefaultOpacityPercent = 60,
             Effects = new EffectPreferences { LayeredGlass = false, BackgroundPercent = 40, TextPercent = 70, FadeRangePercent = 50,
-                TextColor = Glass.GlassText.Light, TextShadow = false, DarkPagePercent = 30, DarkTextPercent = 80, DarkColorsPercent = 20 },
+                TextColor = Glass.GlassText.Light, ShadowPercent = 30, ShadowWidth = 6, DarkPagePercent = 30, DarkTextPercent = 80, DarkColorsPercent = 20 },
             PinBorder = new PinBorderPreferences { ColorHex = "#2080E0", OpacityPercent = 60, Thickness = 5 },
             PipViews = new PipViewPreferences { HoverPreview = PipHoverPreview.Lens, MinimizeToTaskbar = false,
                 KeepMinimizedOriginalsOnTaskbar = false, AlwaysShowTitleBar = true, KeepHiddenOnNewViews = false,
@@ -662,7 +662,7 @@ public sealed class SettingsWindowTests : IDisposable
         OnUiThread(() =>
         {
             AppSettings? applied = null;
-            var settings = new AppSettings { Effects = new EffectPreferences { TextColor = Glass.GlassText.Light, TextShadow = false } };
+            var settings = new AppSettings { Effects = new EffectPreferences { TextColor = Glass.GlassText.Light, ShadowPercent = 0, ShadowWidth = 2 } };
             using var window = new SettingsWindow(settings, new StartWithWindows(_key, NoTasks.Instance), chosen =>
             {
                 applied = chosen;
@@ -672,19 +672,21 @@ public sealed class SettingsWindowTests : IDisposable
             window.AddApp("Notes.exe");
             Assert.True(window.SaveChanges());
             AppGlassLevels notes = applied!.Effects.OwnOf("Notes")!;
-            Assert.Equal((Glass.GlassText.Light, false), (notes.TextColor, notes.TextShadow));
+            Assert.Equal((Glass.GlassText.Light, 0, 2), (notes.TextColor, notes.ShadowPercent, notes.ShadowWidth));
 
             string asItIs = Localization.UiText.T("settings.effects.textColor.asItIs");
             ComboBox[] pickers = [.. Descendants(window).OfType<ComboBox>().Where(combo => combo.Items.Contains(asItIs))];
             Assert.Equal(3, pickers.Length); // The chosen picture or video's, Every app's, then the app's own.
             pickers[2].SelectedIndex = (int)Glass.GlassText.Dark;
-            Descendants(window).OfType<SwitchBox>().Last(box => box.Text == Localization.UiText.T("settings.effects.shadow")).Checked = true;
+            NumberSlider Slider(string key) => Descendants(window).OfType<NumberSlider>().Last(slider => slider.AccessibleName == Localization.UiText.T(key));
+            Slider("settings.effects.shadow").Number.Value = 60;
+            Slider("settings.effects.shadowWidth").Number.Value = 5;
             Assert.True(window.SaveChanges());
             notes = applied.Effects.OwnOf("Notes")!;
-            Assert.Equal((Glass.GlassText.Dark, true), (notes.TextColor, notes.TextShadow));
-            Assert.Equal((Glass.GlassText.Light, false), (applied.Effects.TextColor, applied.Effects.TextShadow));
+            Assert.Equal((Glass.GlassText.Dark, 60, 5), (notes.TextColor, notes.ShadowPercent, notes.ShadowWidth));
+            Assert.Equal((Glass.GlassText.Light, 0, 2), (applied.Effects.TextColor, applied.Effects.ShadowPercent, applied.Effects.ShadowWidth));
             Assert.Equal(Glass.GlassText.Dark, applied.Effects.LevelsFor("notes").TextColor);
-            Assert.False(applied.Effects.LevelsFor("other").Shadow);
+            Assert.Equal(0, applied.Effects.LevelsFor("other").Shadow);
         });
     }
 

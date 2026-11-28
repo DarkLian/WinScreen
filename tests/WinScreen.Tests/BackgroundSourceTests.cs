@@ -146,7 +146,7 @@ public sealed class BackgroundSourceTests(ITestOutputHelper output) : IDisposabl
             using var effects = new ContentEffects(windows);
             var problems = new List<string>();
             effects.Problem += problems.Add;
-            effects.SetLevels(new ContentLevels(0, 1, Shadow: false));
+            effects.SetLevels(new ContentLevels(0, 1, Shadow: 0));
             effects.SetBackgrounds(_ => set);
             try
             {

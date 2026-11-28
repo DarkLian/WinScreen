@@ -105,12 +105,15 @@ public sealed record ItemGlass
     public int TextPercent { get; init; } = 100;
     public int FadeRangePercent { get; init; } = 100;
     public Glass.GlassText TextColor { get; init; }
-    public bool TextShadow { get; init; } = true;
+    public int ShadowPercent { get; init; } = 100;
+    public int ShadowWidth { get; init; } = TextShadowLevels.Width;
+    // Read by copies from before 1.5.3 only.
+    public bool TextShadow => ShadowPercent > 0;
 
     internal static ItemGlass From(AppGlassLevels levels) => new()
     {
         PagePercent = levels.BackgroundPercent, TextPercent = levels.TextPercent, FadeRangePercent = levels.FadeRangePercent,
-        TextColor = levels.TextColor, TextShadow = levels.TextShadow,
+        TextColor = levels.TextColor, ShadowPercent = levels.ShadowPercent, ShadowWidth = levels.ShadowWidth,
     };
 
     internal ItemGlass Validated() => this with
@@ -119,9 +122,11 @@ public sealed record ItemGlass
         TextPercent = Math.Clamp(TextPercent, 20, 100),
         FadeRangePercent = Math.Clamp(FadeRangePercent, 1, EffectPreferences.MostFadeRange),
         TextColor = Enum.IsDefined(TextColor) ? TextColor : WinScreen.Glass.GlassText.AsItIs,
+        ShadowPercent = Math.Clamp(ShadowPercent, 0, 100),
+        ShadowWidth = Math.Clamp(ShadowWidth, TextShadowLevels.Thinnest, TextShadowLevels.Widest),
     };
 
-    internal Glass.GlassOver Over => new(PagePercent / 100f, TextPercent / 100f, FadeRangePercent / 100f, TextColor, TextShadow);
+    internal Glass.GlassOver Over => new(PagePercent / 100f, TextPercent / 100f, FadeRangePercent / 100f, TextColor, ShadowPercent / 100f, ShadowWidth);
 }
 
 // A background is one picture or video, or several taking turns. The first is kept in File, Fit, Volume, Speed and

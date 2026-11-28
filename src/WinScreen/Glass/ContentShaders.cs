@@ -85,8 +85,29 @@ internal static class ContentShaders
         }
         """;
 
+    // The shadow's first half: for each pixel, the strongest text edge within reach across, nearer ones counting more.
+    // Only strong contrast, as text has, counts: a panel's faint border doesn't.
+    public const string ShadowAcross = """
+        Texture2D<float4> source : register(t0);
+        RWTexture2D<float> across : register(u0);
+        cbuffer Options : register(b0) { float4 levels; float4 mode; float4 page; float4 areas[8]; };
+        [numthreads(16,16,1)]
+        void ShadowAcross(uint3 id : SV_DispatchThreadID) {
+            uint ow, oh; across.GetDimensions(ow, oh);
+            if (id.x >= ow || id.y >= oh) return;
+            int reach = (int)ceil(mode.w);
+            float most = 0;
+            for (int k = -reach; k <= reach; k++) {
+                float3 n = source.Load(int3(clamp((int)id.x + k, 0, (int)ow - 1), id.y, 0)).rgb;
+                most = max(most, smoothstep(0.18, 0.45, length(n - page.rgb)) * saturate(1 - abs(k) / (mode.w + 1)));
+            }
+            across[id.xy] = most;
+        }
+        """;
+
     public const string Composite = Flip + """
         Texture2D<float4> source : register(t0);
+        Texture2D<float> shadow : register(t1);
         RWTexture2D<float4> output : register(u0);
         cbuffer Options : register(b0) { float4 levels; float4 mode; float4 page; float4 areas[8]; };
         float3 Across(int2 at, uint ow, uint oh) {
@@ -130,18 +151,17 @@ internal static class ContentShaders
                     shown = Flipped(c, Across(int2(id.xy), ow, oh));
                 }
                 float3 ink = d > 0.001 ? saturate((shown - (1 - d) * shownPage) / d) : shown;
-                // Text keeps a thin halo of the page colour, a few pixels wide: dark text on a light page sat right on
-                // whatever was behind, often dark, and couldn't be read. It can be turned off.
+                // Text keeps a halo of the page colour: dark text on a light page sat right on whatever was behind,
+                // often dark, and couldn't be read. levels.w is how solid it gets (0 for none), mode.w how many
+                // pixels it reaches; ShadowAcross has spread it across already, and it is spread down here.
                 float halo = 0;
-                // Only strong contrast, as text has, makes a halo: a panel's faint border doesn't. A pixel that keeps
-                // its colour fully (d of 1) or a page at 0.9 or more never shows it, so those skip its 49 reads.
-                if (levels.w > 0.5 && d < 1 && levels.x < 0.9)
-                    for (int py = -3; py <= 3; py++) for (int px = -3; px <= 3; px++) {
-                        float3 n = source.Load(int3(clamp(int2(id.xy) + int2(px, py), int2(0,0), int2(ow - 1, oh - 1)), 0)).rgb;
-                        float nd = smoothstep(0.18, 0.45, length(n - page.rgb));
-                        halo = max(halo, nd * saturate(1 - length(float2(px, py)) / 4.0));
-                    }
-                float under = lerp(levels.x, max(levels.x, 0.9), smoothstep(0.0, 0.45, halo));
+                // A pixel that keeps its colour fully (d of 1) or a page at 0.9 or more never shows it.
+                if (levels.w > 0 && d < 1 && levels.x < 0.9) {
+                    int reach = (int)ceil(mode.w);
+                    for (int j = -reach; j <= reach; j++)
+                        halo = max(halo, shadow.Load(int3(id.x, clamp((int)id.y + j, 0, (int)oh - 1), 0)) * saturate(1 - abs(j) / (mode.w + 1)));
+                }
+                float under = lerp(levels.x, lerp(levels.x, max(levels.x, 0.9), levels.w), smoothstep(0.0, 0.45, halo));
                 float alpha = lerp(under, levels.y, d);
                 result = float4(lerp(shownPage * under, ink * levels.y, d), alpha);
             }

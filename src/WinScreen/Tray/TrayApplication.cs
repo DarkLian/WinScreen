@@ -1530,7 +1530,8 @@ public sealed partial class TrayApplication : ApplicationContext
         var levels = new AppGlassLevels
         {
             Program = program, BackgroundPercent = (int)Math.Round(now.Background * 100), TextPercent = (int)Math.Round(now.Text * 100),
-            FadeRangePercent = (int)Math.Round(now.FadeRange * 100), TextColor = now.TextColor, TextShadow = now.Shadow,
+            FadeRangePercent = (int)Math.Round(now.FadeRange * 100), TextColor = now.TextColor,
+            ShadowPercent = (int)Math.Round(now.Shadow * 100), ShadowWidth = now.ShadowWidth,
             DarkPagePercent = (int)Math.Round(now.DarkPage * 100), DarkTextPercent = (int)Math.Round(now.DarkText * 100),
             DarkColorsPercent = (int)Math.Round(now.DarkColors * 100),
         };

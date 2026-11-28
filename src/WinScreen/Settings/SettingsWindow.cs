@@ -20,7 +20,8 @@ public sealed partial class SettingsWindow : Form
     private readonly NumericUpDown _glassText = new() { Minimum = 20, Maximum = 100, Width = 70 };
     private readonly NumericUpDown _glassFade = new CurvedNumber { Minimum = 1, Maximum = EffectPreferences.MostFadeRange, Width = 70, Curve = CurvedNumber.FadeCurve };
     private readonly ComboBox _glassTextColor = TextColorPicker();
-    private readonly SwitchBox _glassShadow = new() { Text = T("settings.effects.shadow"), AutoSize = true };
+    private readonly NumericUpDown _glassShadow = new() { Minimum = 0, Maximum = 100, Width = 70 };
+    private readonly NumericUpDown _glassShadowWidth = new() { Minimum = TextShadowLevels.Thinnest, Maximum = TextShadowLevels.Widest, Width = 70 };
     private readonly CheckBox _detectDark = new SwitchBox { Text = T("settings.dark.detect"), AutoSize = true };
     private readonly NumericUpDown _darkPage = new() { Minimum = 0, Maximum = EffectPreferences.MostDarkPage, Width = 70 };
     private readonly NumericUpDown _darkText = new() { Minimum = EffectPreferences.LeastDarkText, Maximum = 100, Width = 70 };
@@ -354,8 +355,8 @@ private readonly ErrorProvider _errors = new();
             [_glassText] = '\uE8D2', [_glassFade] = '\uE790', [_appGlassBackground] = '\uE706', [_appGlassText] = '\uE8D2',
             [_darkPage] = '\uE708', [_darkText] = '\uE8D2', [_darkColors] = '\uE790',
             [_appDarkPage] = '\uE708', [_appDarkText] = '\uE8D2', [_appDarkColors] = '\uE790',
-            [_appGlassFade] = '\uE790', [_glassTextColor] = '\uE8D3', [_appGlassTextColor] = '\uE8D3', [_glassShadow] = '\uE81E',
-            [_appGlassShadow] = '\uE81E', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_ownDark] = '\uE708', [_itemOwnGlass] = '\uE706', [_itemPage] = '\uE706', [_itemText] = '\uE8D2', [_itemFade] = '\uE790', [_itemTextColor] = '\uE8D3', [_itemShadow] = '\uE81E', [_applyAll] = '\uE8C8', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767', [_soundInFront] = '\uE995', [_pauseFullScreen] = '\uE7FC', [_pauseSaver] = '\uE863', [_backgroundSpeed] = '\uEC4A', [_backgroundBrightness] = '\uE706', [_backgroundOrder] = '\uE8B1', [_backgroundSwitch] = '\uE893', [_pictureMinutes] = '\uE823',
+            [_appGlassFade] = '\uE790', [_glassTextColor] = '\uE8D3', [_appGlassTextColor] = '\uE8D3', [_glassShadow] = '\uE81E', [_glassShadowWidth] = '\uE81E',
+            [_appGlassShadow] = '\uE81E', [_appGlassShadowWidth] = '\uE81E', [_ownBackground] = '\uE91B', [_ownGlass] = '\uE706', [_ownDark] = '\uE708', [_itemOwnGlass] = '\uE706', [_itemPage] = '\uE706', [_itemText] = '\uE8D2', [_itemFade] = '\uE790', [_itemTextColor] = '\uE8D3', [_itemShadow] = '\uE81E', [_itemShadowWidth] = '\uE81E', [_applyAll] = '\uE8C8', [_backgroundChoose] = '\uE91B', [_backgroundFit] = '\uE9A6', [_backgroundVolume] = '\uE767', [_soundInFront] = '\uE995', [_pauseFullScreen] = '\uE7FC', [_pauseSaver] = '\uE863', [_backgroundSpeed] = '\uEC4A', [_backgroundBrightness] = '\uE706', [_backgroundOrder] = '\uE8B1', [_backgroundSwitch] = '\uE893', [_pictureMinutes] = '\uE823',
             [_showToolbar] = '\uE700', [_toolbarPlacement] = '\uE8E3', [_toolbarTrigger] = '\uE8B0', [_toolbarDelay] = '\uE916',
             [_autoAnchors] = '\uE840', [_anchorSide] = '\uE8A0', [_anchorLook] = '\uE790', [_anchorLimit] = '\uE8FD',
             [_anchorSize] = '\uE740', [_anchorRecency] = '\uE81C', [_anchorAvoid] = '\uE8B9', [_anchorPreview] = '\uE890',
@@ -867,7 +868,6 @@ private readonly ErrorProvider _errors = new();
         (_anchorOffTaskbar, settings => settings.Anchors.OffTaskbar, (settings, on) => settings.Anchors = settings.Anchors with { OffTaskbar = on }),
         (_anchorEveryDesktop, settings => settings.Anchors.EveryDesktop, (settings, on) => settings.Anchors = settings.Anchors with { EveryDesktop = on }),
         (_layeredGlass, settings => settings.Effects.LayeredGlass, (settings, on) => settings.Effects = settings.Effects with { LayeredGlass = on }),
-        (_glassShadow, settings => settings.Effects.TextShadow, (settings, on) => settings.Effects = settings.Effects with { TextShadow = on }),
         (_pipDiagnostics, settings => settings.Pip.ShowDiagnostics, (settings, on) => settings.Pip.ShowDiagnostics = on),
         (_pipTaskbar, settings => settings.PipViews.MinimizeToTaskbar, (settings, on) => settings.PipViews = settings.PipViews with { MinimizeToTaskbar = on }),
         (_pipTitleBar, settings => settings.PipViews.AlwaysShowTitleBar, (settings, on) => settings.PipViews = settings.PipViews with { AlwaysShowTitleBar = on }),
@@ -913,6 +913,8 @@ private readonly ErrorProvider _errors = new();
         (_glassBackground, settings => settings.Effects.BackgroundPercent, (settings, n) => settings.Effects = settings.Effects with { BackgroundPercent = n }),
         (_glassText, settings => settings.Effects.TextPercent, (settings, n) => settings.Effects = settings.Effects with { TextPercent = n }),
         (_glassFade, settings => settings.Effects.FadeRangePercent, (settings, n) => settings.Effects = settings.Effects with { FadeRangePercent = n }),
+        (_glassShadow, settings => settings.Effects.ShadowPercent, (settings, n) => settings.Effects = settings.Effects with { ShadowPercent = n }),
+        (_glassShadowWidth, settings => settings.Effects.ShadowWidth, (settings, n) => settings.Effects = settings.Effects with { ShadowWidth = n }),
         (_darkPage, settings => settings.Effects.DarkPagePercent, (settings, n) => settings.Effects = settings.Effects with { DarkPagePercent = n }),
         (_darkText, settings => settings.Effects.DarkTextPercent, (settings, n) => settings.Effects = settings.Effects with { DarkTextPercent = n }),
         (_darkColors, settings => settings.Effects.DarkColorsPercent, (settings, n) => settings.Effects = settings.Effects with { DarkColorsPercent = n }),

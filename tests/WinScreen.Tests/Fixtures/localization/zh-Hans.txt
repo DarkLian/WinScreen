@@ -540,7 +540,9 @@ settings.effects.glassFor 2CB0936AD931A158
 settings.effects.help 3C20AB9FB87A1388
 settings.effects.layeredGlass 64E518CE6528270C
 settings.effects.layeredGlassHelp 46513B0BDEDF88A4
-settings.effects.shadow 490573C2281112E9
+settings.effects.shadow 405F902F9905F356
+settings.effects.shadowHelp 9CCE45D46FCB62B4
+settings.effects.shadowWidth 82D9EE3321727437
 settings.effects.text 2317E7A1901A6CD7
 settings.effects.textColor F21EF4ABA5AB4E55
 settings.effects.textColor.asItIs 90B59FE7F8ACF79E
