@@ -25,18 +25,31 @@ internal static class DiagnosticsFile
         Directory.CreateDirectory(folder);
         string path = Path.Combine(folder, FileName), temporary = path + ".tmp";
         File.Delete(temporary);
-        using (ZipArchive zip = ZipFile.Open(temporary, ZipArchiveMode.Create))
+        try
         {
-            foreach (string file in logFiles)
+            using (ZipArchive zip = ZipFile.Open(temporary, ZipArchiveMode.Create))
             {
-                using var source = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                using Stream entry = zip.CreateEntry(Path.GetFileName(file)).Open();
-                source.CopyTo(entry);
+                foreach (string file in logFiles)
+                {
+                    FileStream source;
+                    // A log can roll over between the listing and here.
+                    try { source = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); }
+                    catch (FileNotFoundException gone) { Log.Swallowed(gone); continue; }
+                    using (source)
+                    using (Stream entry = zip.CreateEntry(Path.GetFileName(file)).Open())
+                        source.CopyTo(entry);
+                }
+                using var writer = new StreamWriter(zip.CreateEntry("settings.json").Open());
+                writer.Write(Shrunk(settings));
             }
-            using var writer = new StreamWriter(zip.CreateEntry("settings.json").Open());
-            writer.Write(Shrunk(settings));
+            File.Move(temporary, path, overwrite: true);
         }
-        File.Move(temporary, path, overwrite: true);
+        catch
+        {
+            try { File.Delete(temporary); }
+            catch (Exception left) when (left is IOException or UnauthorizedAccessException) { Log.Swallowed(left); }
+            throw;
+        }
         return path;
     }
 

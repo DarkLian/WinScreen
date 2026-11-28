@@ -10,6 +10,7 @@ internal interface IAudioSessions
 {
     AudioSession[] List();
 
+    // How many were set, or Unanswered when the call ran out of time or failed: it may still change them.
     int SetMuted(string device, Func<AudioSession, bool> matches, bool muted);
 
     string[] Devices();
@@ -46,17 +47,18 @@ internal sealed unsafe partial class AudioSessions : IAudioSessions
         return OnOwnThread(() => Visit(null, null, found.Add)) ? found.ToArray() : [];
     }
 
+    public const int Unanswered = -1;
+
     public int SetMuted(string device, Func<AudioSession, bool> matches, bool muted)
     {
         int set = 0;
-        OnOwnThread(() => Visit(device, (session, volume) =>
+        return OnOwnThread(() => Visit(device, (session, volume) =>
         {
             if (!matches(session)) return;
             Guid none = Guid.Empty;
             if (((delegate* unmanaged[Stdcall]<nint, int, Guid*, int>)Slot(volume, SetMute))(volume, muted ? 1 : 0, &none) == 0)
                 set++;
-        }));
-        return set;
+        })) ? set : Unanswered;
     }
 
     private static bool OnOwnThread(Action work)

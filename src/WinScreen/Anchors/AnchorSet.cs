@@ -222,7 +222,8 @@ public sealed class AnchorSet : IDisposable
         (double size, double opacity) = rank >= 0 && _preferences.RecencyEmphasis
             ? AnchorEmphasis.For(rank, _recency.Count)
             : (1.0, 1.0);
-        int full = Dpi.Scale(_preferences.Size, Dpi.Of(anchor.Target));
+        // The anchor's own screen: it can be moved to another one than its window's.
+        int full = Dpi.Scale(_preferences.Size, Dpi.Of(anchor.Handle));
         anchor.Apply((int)Math.Round(full * size), opacity, _preferences.Style,
             HasView?.Invoke(anchor.Target) == true, _preferences.AvoidContent, TitleOf(anchor));
     }

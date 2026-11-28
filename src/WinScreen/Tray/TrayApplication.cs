@@ -1076,12 +1076,14 @@ public sealed partial class TrayApplication : ApplicationContext
         User32.GetWindowThreadProcessId(window, out uint process);
         // The toolbar asks every 60 ms for the window in front; a process's elevation never changes.
         if (_reachChecked is not { } known || known.Process != process || Environment.TickCount64 - known.At > ReachRecheckMilliseconds)
-            _reachChecked = known = (process, ProcessInfo.IsElevated(process), Environment.TickCount64);
+            _reachChecked = known = new ReachChecked(process, ProcessInfo.IsElevated(process), Environment.TickCount64);
         return AppRoles.Reaches(_role, known.Elevated);
     }
 
     private const int ReachRecheckMilliseconds = 2000;
-    private (uint Process, bool Elevated, long At)? _reachChecked;
+    // Read by the mouse hook's thread too: a reference is swapped whole, where a struct copy could be torn.
+    private sealed record ReachChecked(uint Process, bool Elevated, long At);
+    private volatile ReachChecked? _reachChecked;
 
     private bool CanOpenWindowMenu(nint window) => _windows.Refusal(window) is null && !_windows.GestureBlocked(window) &&
         CanReach(window) && !User32.IsIconic(window) &&

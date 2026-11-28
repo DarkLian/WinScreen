@@ -13,7 +13,7 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
 {
     private readonly Func<uint, string> _pathOf = pathOf ?? ProcessInfo.PathOf;
 
-    private const int ReapplyMilliseconds = 1000;
+    private const int ReapplyMilliseconds = 1000, SlowReapplyMilliseconds = 30_000;
 
     private readonly Dictionary<nint, string> _mutedWindows = [];
     private readonly List<MutedSession> _sessions = [];
@@ -62,12 +62,16 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
     // person unmuted in Windows' mixer is left as they set it.
     public void Reapply()
     {
-        if (_mutedWindows.Count == 0 || Environment.TickCount64 < _reapplyAt) return;
-        _reapplyAt = Environment.TickCount64 + ReapplyMilliseconds;
+        long started = Environment.TickCount64;
+        if (_mutedWindows.Count == 0 || started < _reapplyAt) return;
         foreach (nint gone in _mutedWindows.Keys.Where(window => !User32.IsWindow(window)).ToArray())
             Unmute(gone);
         foreach (string program in _mutedWindows.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToArray())
             MuteNewSessions(program);
+        // This runs on the thread that answers clicks: an audio service that stopped answering is asked rarely.
+        long took = Environment.TickCount64 - started;
+        _reapplyAt = Environment.TickCount64 + (took >= ReapplyMilliseconds ? SlowReapplyMilliseconds : ReapplyMilliseconds);
+        if (took >= ReapplyMilliseconds) Diagnostics.Log.Event("sound.slow", ("milliseconds", took));
     }
 
     private bool MuteNewSessions(string program)
@@ -84,6 +88,7 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
             foreach (MutedSession session in added) _sessions.Remove(session);
             return false;
         }
+        // Kept when the call ran out of time: its thread may still mute it.
         foreach (MutedSession session in added)
             if (audio.SetMuted(session.Device, candidate => candidate.Instance == session.Instance, true) == 0)
                 _sessions.Remove(session);
@@ -99,8 +104,8 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
         var devices = audio.Devices().ToHashSet();
         foreach (MutedSession session in mine)
         {
-            if (devices.Contains(session.Device)) Unmute(audio, now, session);
-            else _elsewhere.Add(session);
+            // One not unmuted stays written down, for the next start to unmute.
+            if (!devices.Contains(session.Device) || !Unmute(audio, now, session)) _elsewhere.Add(session);
             _sessions.Remove(session);
         }
         bool saved = TrySave();
@@ -109,13 +114,13 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
     }
 
     // After a restart, Windows starts the program's new sessions muted under the same identifier.
-    private static void Unmute(IAudioSessions audio, AudioSession[] now, MutedSession session)
+    private static bool Unmute(IAudioSessions audio, AudioSession[] now, MutedSession session)
     {
         bool stillThere = now.Any(candidate => candidate.Device == session.Device && candidate.Instance == session.Instance);
-        if (stillThere)
-            audio.SetMuted(session.Device, candidate => candidate.Instance == session.Instance, false);
-        else
-            audio.SetMuted(session.Device, candidate => candidate.Identifier == session.Identifier && candidate.Muted, false);
+        return (stillThere
+            ? audio.SetMuted(session.Device, candidate => candidate.Instance == session.Instance, false)
+            : audio.SetMuted(session.Device, candidate => candidate.Identifier == session.Identifier && candidate.Muted, false))
+            != AudioSessions.Unanswered;
     }
 
     private IEnumerable<AudioSession> SessionsOf(string program, AudioSession[] sessions)
@@ -202,8 +207,7 @@ internal sealed class ProgramSound(IAudioSessions audio, string? journalPath, Fu
         var kept = new List<MutedSession>();
         foreach (MutedSession session in left)
         {
-            if (devices.Contains(session.Device)) Unmute(audio, now, session);
-            else kept.Add(session);
+            if (!devices.Contains(session.Device) || !Unmute(audio, now, session)) kept.Add(session);
         }
         try { Save(path, kept); }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException) { Diagnostics.Log.Error("sound.saveFailed", failure); }

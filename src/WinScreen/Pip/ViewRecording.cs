@@ -148,6 +148,8 @@ internal sealed class ViewRecording
             while ((current = TakeNewest()) is null)
             {
                 if (Finished) { result = new(null, 0, false, false, false); return; }
+                // Sound from before the first frame is never written; a window that shows nothing for long mustn't pile it up.
+                sound?.Packets.Clear();
                 _signal.Wait(250);
             }
             // The clock starts with the first frame: the time the sound and the encoder take to start (over a second, cold,

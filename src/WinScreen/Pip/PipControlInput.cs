@@ -88,7 +88,7 @@ internal sealed class PipControlInput
                 result = new(false, $"automation error 0x{e.HResult:X8}");
                 Drop();
             }
-            catch (Exception e) when (e is InvalidOperationException or AccessViolationException)
+            catch (InvalidOperationException e)
             {
                 result = new(false, e.GetType().Name);
                 Drop();

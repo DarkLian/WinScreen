@@ -27,6 +27,20 @@ internal static partial class ProcessInfo
     [return: MarshalAs(UnmanagedType.Bool)]
     private static unsafe partial bool QueryFullProcessImageName(nint process, uint flags, char* path, ref uint size);
 
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetProcessTimes(nint process, out long creation, out long exit, out long kernel, out long user);
+
+    // The value Process.StartTime gives, converted the same way, so records written by older copies still match; without
+    // the Process object, as views and overlays ask many times a second.
+    public static long? StartTicks(uint processId)
+    {
+        nint process = OpenProcess(ProcessQueryLimited, false, processId);
+        if (process == 0) return null;
+        try { return GetProcessTimes(process, out long creation, out _, out _, out _) ? DateTime.FromFileTime(creation).ToUniversalTime().Ticks : null; }
+        finally { CloseHandle(process); }
+    }
+
     // Works for elevated processes too.
     public static unsafe string PathOf(uint processId)
     {

@@ -133,8 +133,9 @@ internal static class ContentShaders
                 // Text keeps a thin halo of the page colour, a few pixels wide: dark text on a light page sat right on
                 // whatever was behind, often dark, and couldn't be read. It can be turned off.
                 float halo = 0;
-                // Only strong contrast, as text has, makes a halo: a panel's faint border doesn't.
-                if (levels.w > 0.5)
+                // Only strong contrast, as text has, makes a halo: a panel's faint border doesn't. A pixel that keeps
+                // its colour fully (d of 1) or a page at 0.9 or more never shows it, so those skip its 49 reads.
+                if (levels.w > 0.5 && d < 1 && levels.x < 0.9)
                     for (int py = -3; py <= 3; py++) for (int px = -3; px <= 3; px++) {
                         float3 n = source.Load(int3(clamp(int2(id.xy) + int2(px, py), int2(0,0), int2(ow - 1, oh - 1)), 0)).rgb;
                         float nd = smoothstep(0.18, 0.45, length(n - page.rgb));

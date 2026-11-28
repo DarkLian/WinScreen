@@ -63,7 +63,7 @@ internal static class BackdropLink
         }
     }
 
-    // This PC, its network, or a link-local address.
+    // This PC, its network (0.x.x.x included), or a link-local address.
     internal static bool IsHome(IPAddress address)
     {
         if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
@@ -71,7 +71,7 @@ internal static class BackdropLink
         if (address.AddressFamily == AddressFamily.InterNetworkV6)
             return address.IsIPv6LinkLocal || address.IsIPv6SiteLocal || address.IsIPv6UniqueLocal;
         byte[] b = address.GetAddressBytes();
-        return b[0] == 10 || b[0] == 172 && b[1] is >= 16 and <= 31 || b[0] == 192 && b[1] == 168 ||
+        return b[0] is 0 or 10 || b[0] == 172 && b[1] is >= 16 and <= 31 || b[0] == 192 && b[1] == 168 ||
                b[0] == 169 && b[1] == 254 || b[0] == 100 && b[1] is >= 64 and <= 127;
     }
 }

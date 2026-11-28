@@ -169,7 +169,7 @@ internal sealed class WgcCaptureSession : IPipCaptureBackend
                         {
                             var next = sender.TryGetNextFrame();
                             if (next is null) break;
-                            Diagnostics.Received++;
+                            Interlocked.Increment(ref Diagnostics.Received);
                             newest?.Dispose();
                             if (newest is not null) Interlocked.Increment(ref Diagnostics.Dropped);
                             newest = next;

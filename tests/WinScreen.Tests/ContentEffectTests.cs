@@ -162,6 +162,7 @@ public sealed class BackdropTests
     [InlineData("172.20.0.1", true)]
     [InlineData("192.168.1.1", true)]
     [InlineData("169.254.169.254", true)]
+    [InlineData("0.1.2.3", true)]
     [InlineData("::1", true)]
     [InlineData("fe80::1", true)]
     [InlineData("fd00::1", true)]

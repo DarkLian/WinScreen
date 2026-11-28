@@ -21,7 +21,7 @@ public sealed partial class PipWindow
         AskForDrop();
     }
 
-    private bool MayTakeDrop => _dropSince == 0 && _hideItem.Checked && !_usingOriginal && !_suspended && _thumbnail is not null &&
+    private bool MayTakeDrop => _dropSince == 0 && !_pickingUp && _hideItem.Checked && !_usingOriginal && !_suspended && _thumbnail is not null &&
         _origin.IsWindow && _windows.IsParked(_source) && !_lastShown.IsEmpty;
 
     private void AskForDrop()

@@ -25,6 +25,8 @@ public sealed class ProgramSoundTests
         public readonly List<AudioSession> Sessions = [];
         public readonly HashSet<string> Present = [Speakers, Headphones];
         public Action<AudioSession, bool>? Setting;
+        // Like an audio service past the time limit: the change still happens, but the answer never comes.
+        public bool Late;
 
         public AudioSession Add(uint process, bool muted = false, string device = Speakers, string? identifier = null)
         {
@@ -48,7 +50,7 @@ public sealed class ProgramSoundTests
                 Sessions[i] = session with { Muted = muted };
                 set++;
             }
-            return set;
+            return Late ? AudioSessions.Unanswered : set;
         }
 
         public string[] Devices() => Present.ToArray();
@@ -125,6 +127,39 @@ public sealed class ProgramSoundTests
         Assert.False(mixer.IsMuted(first));
         Assert.Equal(0, sound.UnmuteAll());
         Assert.False(mixer.IsMuted(later));
+    }
+
+    // A mute that ran out of time may still land; dropping it from the journal would leave the program muted for good.
+    [Fact]
+    public void A_mute_with_no_answer_stays_written_down()
+    {
+        var mixer = new Mixer { Late = true };
+        AudioSession playing = mixer.Add(1);
+        string journal = NewJournal();
+        var sound = new ProgramSound(mixer, journal, PathOf);
+
+        Assert.True(sound.Mute(Window));
+
+        Assert.True(mixer.IsMuted(playing));
+        Assert.Equal([playing.Instance], ProgramSound.Load(journal).Select(saved => saved.Instance));
+    }
+
+    [Fact]
+    public void An_unmute_with_no_answer_is_left_for_the_next_start()
+    {
+        var mixer = new Mixer();
+        AudioSession playing = mixer.Add(1);
+        string journal = NewJournal();
+        var sound = new ProgramSound(mixer, journal, PathOf);
+        Assert.True(sound.Mute(Window));
+        mixer.Late = true;
+        sound.Unmute(Window);
+
+        Assert.Equal([playing.Instance], ProgramSound.Load(journal).Select(saved => saved.Instance));
+        mixer.Late = false;
+        Assert.Equal(0, ProgramSound.Recover(mixer, journal));
+        Assert.False(mixer.IsMuted(playing));
+        Assert.False(File.Exists(journal));
     }
 
     [Fact]

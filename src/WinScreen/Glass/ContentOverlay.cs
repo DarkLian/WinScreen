@@ -416,7 +416,7 @@ internal sealed unsafe class ContentOverlay : Form
         _captureDevice = WgcInterop.Device(_device);
         GraphicsCaptureItem item = WgcInterop.Item(_source);
         _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_captureDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, item.Size);
-        _pool.FrameArrived += (_, _) => _arrived.Set();
+        _pool.FrameArrived += (_, _) => { if (!_stopping) _arrived.Set(); };
         _session = _pool.CreateCaptureSession(item);
         if (global::Windows.Foundation.Metadata.ApiInformation.IsPropertyPresent("Windows.Graphics.Capture.GraphicsCaptureSession", "IsCursorCaptureEnabled"))
             _session.IsCursorCaptureEnabled = false;
@@ -604,7 +604,7 @@ internal sealed unsafe class ContentOverlay : Form
                                 _pool.Recreate(_captureDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, next.ContentSize);
                                 _page.Reset();
                                 Size newSize = size;
-                                BeginInvoke(() => { if (!IsDisposed) ClientSize = newSize; });
+                                Post(() => { if (!IsDisposed) ClientSize = newSize; });
                             }
 
                             using (var texture = WgcInterop.Texture(next))
@@ -642,7 +642,7 @@ internal sealed unsafe class ContentOverlay : Form
         catch (Exception failure) when (failure is SharpGen.Runtime.SharpGenException or COMException or ObjectDisposedException or InvalidOperationException)
         {
             if (!_stopping)
-                BeginInvoke(() => Failed?.Invoke(Localization.UiText.T("errors.glass.stopped")));
+                Post(() => Failed?.Invoke(Localization.UiText.T("errors.glass.stopped")));
         }
         finally
         {
@@ -729,7 +729,13 @@ internal sealed unsafe class ContentOverlay : Form
         if (item is null || _stopping) return;
         // Looked at here, not on the thread that answers clicks: a share that is gone takes seconds to say so.
         bool missing = failure is FileNotFoundException or DirectoryNotFoundException || item.IsMissing;
-        try { BeginInvoke(() => BackdropFailed?.Invoke(item.File, missing)); }
+        Post(() => BackdropFailed?.Invoke(item.File, missing));
+    }
+
+    // From the drawing thread: the window can lose its handle between a check and the call.
+    private void Post(Action action)
+    {
+        try { BeginInvoke(action); }
         catch (InvalidOperationException closed) { Diagnostics.Log.Swallowed(closed); }
     }
 
@@ -962,8 +968,13 @@ internal sealed unsafe class ContentOverlay : Form
         if (disposing)
         {
             Stop();
-            _arrived.Dispose();
-            _stop.Dispose();
+            // A drawing thread still stuck in a driver waits on them, and the capture can still signal a frame until
+            // that thread lets it go; the finalizer closes them then.
+            if (Volatile.Read(ref _renderEnd) != RenderHandedOver)
+            {
+                _arrived.Dispose();
+                _stop.Dispose();
+            }
             GC.KeepAlive(_eventProc);
         }
 

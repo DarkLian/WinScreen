@@ -305,7 +305,7 @@ public sealed class WindowPlacementTests
         using var target = new TargetProcess(Spot, title: "Facts target");
         var facts = WindowInfo.Facts(target.Handle).ToDictionary(fact => fact.Label, fact => fact.Value);
         Assert.Equal("Facts target", facts["Title"]);
-        Assert.Equal("WinScreen.TestTarget", facts["Program"]);
+        Assert.Equal("WinScreen.TestTarget", facts["App"]);
         // The target runs as the tests do, which the test VM can make administrator.
         Assert.Equal(Native.ProcessInfo.SelfElevated ? "Yes" : "No", facts["Runs as administrator"]);
     }

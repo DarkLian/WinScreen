@@ -69,9 +69,18 @@ public sealed class DarkMode : IDisposable
     {
         var overlay = new DarkOverlay(window, DarkOverlay.IsPinned(window));
         _overlays[window] = overlay;
-        Level(window, overlay);
-        _ = overlay.Handle;
-        UpdateFilters();
+        try
+        {
+            Level(window, overlay);
+            _ = overlay.Handle;
+            UpdateFilters();
+        }
+        catch
+        {
+            _overlays.Remove(window);
+            overlay.Dispose();
+            throw;
+        }
         return overlay;
     }
 

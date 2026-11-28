@@ -952,27 +952,41 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             if (state.PlacementBeforeBorderless is not null)
                 throw new WindowOperationException(T("errors.borderless.disableFirst"));
             EnsureLayeringSafe(state);
+            EnsureResponsive(window); // Before anything in the record changes, so a hung window is left as it was.
             // Lifted while covered, it is see-through and on top already: it stays so, now hidden.
-            if (!TakeOverLift(state)) state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
+            bool lifted = TakeOverLift(state);
+            if (!lifted) state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
             state.Hidden = true;
-            Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT | User32.WS_EX_TOPMOST);
-            try { Conceal(window, state); }
+            try
+            {
+                Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT | User32.WS_EX_TOPMOST);
+                Conceal(window, state);
+            }
             catch (WindowOperationException)
             {
-                // Not hidden after all (the app refused to become see-through): it mustn't stay recorded as hidden,
-                // or WinScreen would keep a recovery record, and a watcher, for a window it never hid.
-                state.Hidden = false;
-                try
-                {
-                    RestoreBorder(window, state);
-                    if (!state.ClickThrough) WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
-                }
-                catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
-                SaveJournal();
+                NotHiddenAfterAll(window, state, lifted);
                 throw;
             }
             LiftWhileHidden(window, state);
         }
+    }
+
+    // The app refused to become see-through: it mustn't stay recorded as hidden, or WinScreen would keep a recovery
+    // record, and a watcher, for a window it never hid. A lifted window goes back to being recorded as lifted.
+    private void NotHiddenAfterAll(nint window, ChangedWindow state, bool lifted)
+    {
+        state.Hidden = false;
+        state.HiddenButUsable = false;
+        state.LiftedWhileCovered = lifted;
+        if (!lifted)
+            try
+            {
+                RestoreBorder(window, state);
+                if (!state.ClickThrough) WriteExStyle(window, ReadExStyle(window) & ~User32.WS_EX_TRANSPARENT);
+            }
+            catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
+        try { SaveJournal(); }
+        catch (WindowOperationException caught) { Diagnostics.Log.Swallowed(caught); }
     }
 
     // Left clickable and in its place in the stack, for an effect that draws it again on top. Recovery treats it like
@@ -985,13 +999,23 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             if (state.Hidden)
                 return;
             EnsureLayeringSafe(state);
-            if (TakeOverLift(state))
-                User32.SetWindowPos(window, User32.HWND_NOTOPMOST, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
-            else state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
+            EnsureResponsive(window); // Before anything in the record changes, so a hung window is left as it was.
+            bool lifted = TakeOverLift(state);
+            if (!lifted) state.AlphaBeforeHiding = state.Layered ? state.Alpha : (byte)255;
             state.Hidden = true;
             state.HiddenButUsable = true;
-            Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT);
-            Conceal(window, state);
+            try
+            {
+                Prepare(window, state, User32.WS_EX_LAYERED | User32.WS_EX_TRANSPARENT);
+                Conceal(window, state);
+            }
+            catch (WindowOperationException)
+            {
+                NotHiddenAfterAll(window, state, lifted);
+                throw;
+            }
+            if (lifted)
+                User32.SetWindowPos(window, User32.HWND_NOTOPMOST, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
         }
     }
 
@@ -1011,9 +1035,11 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 // Let the app repaint at its restored placement while it remains fully transparent.
                 User32.SendMessageTimeout(window, 0x000F, 0, 0, 2, 100, out _);
                 Thread.Sleep(50);
+                // The first step records what was put back above; the rest change nothing recovery reads (it puts back
+                // OriginalAlpha), and each record is written through to the disk.
                 for (int step = 1; step < 8; step++)
                 {
-                    ApplyAlpha(window, state, (byte)(state.AlphaBeforeHiding * step / 8));
+                    ApplyAlpha(window, state, (byte)(state.AlphaBeforeHiding * step / 8), journal: step == 1);
                     Thread.Sleep(10);
                 }
             }
@@ -1576,11 +1602,12 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         }
     }
 
-    private void Prepare(nint window, ChangedWindow state, long styles = 0)
+    private void Prepare(nint window, ChangedWindow state, long styles = 0, bool journal = true)
     {
         state.Identity.Require();
+        journal |= (state.OwnedStyles & styles) != styles;
         state.OwnedStyles |= styles;
-        SaveJournal(); // Must succeed before the first native change, including its intent/owned bits.
+        if (journal) SaveJournal(); // Must succeed before the first native change, including its intent/owned bits.
         EnsureResponsive(window);
         Checkpoint?.Invoke("before-mutation", window);
     }
@@ -1627,10 +1654,10 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         return state;
     }
 
-    private void ApplyAlpha(nint window, ChangedWindow state, byte alpha)
+    private void ApplyAlpha(nint window, ChangedWindow state, byte alpha, bool journal = true)
     {
         EnsureLayeringSafe(state);
-        Prepare(window, state, User32.WS_EX_LAYERED);
+        Prepare(window, state, User32.WS_EX_LAYERED, journal);
         if (!state.Layered)
         {
             WriteExStyle(window, ReadExStyle(window) | User32.WS_EX_LAYERED);

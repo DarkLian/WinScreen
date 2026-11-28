@@ -1,5 +1,4 @@
 using static WinScreen.Localization.UiText;
-using System.Diagnostics;
 using System.Security.Cryptography;
 using WinScreen.Native;
 
@@ -38,19 +37,8 @@ internal sealed record WindowIdentity(nint Window, uint ProcessId, uint ThreadId
         return identity;
     }
 
-    private static long StartTicks(uint pid)
-    {
-        try
-        {
-            using var process = Process.GetProcessById((int)pid);
-            return process.StartTime.ToUniversalTime().Ticks;
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException
-                                      or System.ComponentModel.Win32Exception)
-        {
-            throw new WindowOperationException(T("errors.identity.processUnverifiable"));
-        }
-    }
+    private static long StartTicks(uint pid) =>
+        ProcessInfo.StartTicks(pid) ?? throw new WindowOperationException(T("errors.identity.processUnverifiable"));
 
     internal bool IsSameWindow()
     {

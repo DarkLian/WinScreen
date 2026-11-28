@@ -92,17 +92,24 @@ internal sealed class PipTaskbarProxy : Form
         nint handle = User32.CreateDIBSection(0, in header, 0, out nint bits, 0, 0);
         if (handle == 0)
             throw new OutOfMemoryException();
-        var whole = new Rectangle(Point.Empty, picture.Size);
-        System.Drawing.Imaging.BitmapData data = picture.LockBits(whole, System.Drawing.Imaging.ImageLockMode.ReadOnly,
-            System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
         try
         {
-            for (int row = 0; row < picture.Height; row++)
-                Buffer.MemoryCopy((byte*)data.Scan0 + row * data.Stride, (byte*)bits + row * picture.Width * 4,
-                    picture.Width * 4L, picture.Width * 4L);
+            var whole = new Rectangle(Point.Empty, picture.Size);
+            System.Drawing.Imaging.BitmapData data = picture.LockBits(whole, System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            try
+            {
+                for (int row = 0; row < picture.Height; row++)
+                    Buffer.MemoryCopy((byte*)data.Scan0 + row * data.Stride, (byte*)bits + row * picture.Width * 4,
+                        picture.Width * 4L, picture.Width * 4L);
+            }
+            finally { picture.UnlockBits(data); }
         }
-        finally { picture.UnlockBits(data); }
-
+        catch
+        {
+            User32.DeleteObject(handle);
+            throw;
+        }
         return handle;
     }
 

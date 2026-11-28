@@ -167,6 +167,21 @@ public sealed class RecoverySafetyTests
         Assert.InRange(elapsed.ElapsedMilliseconds, 0, 1500);
     }
 
+    // Both ways of hiding stop at the responsiveness check before changing anything; neither may stay recorded as hidden.
+    [Fact]
+    public void A_hide_refused_by_a_hung_target_is_not_recorded_as_hidden()
+    {
+        using var target = new TargetProcess(Spot);
+        string path = JournalPath();
+        var windows = new WindowController([], new ChangeJournal(path));
+        target.Hang();
+        Assert.Throws<WindowOperationException>(() => windows.Hide(target.Handle));
+        Assert.Throws<WindowOperationException>(() => windows.ConcealSolid(target.Handle));
+        Assert.False(windows.IsHidden(target.Handle));
+        Assert.False(windows.NeedsRecoveryWatcher);
+        Assert.DoesNotContain(new ChangeJournal(path).Load(), record => record.Concealed);
+    }
+
     [Fact]
     public void Failed_crop_restore_keeps_its_record_while_restoring_other_effects_and_survives_restart()
     {
