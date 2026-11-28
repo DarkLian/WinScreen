@@ -1062,16 +1062,40 @@ internal class ThemedList : ListBox
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
     }
 
+    private int _wheelLeft;
+
+    // Windows animates a list box's scroll and holds the window up until it ends, on every turn, and three of the
+    // background list's tall rows a turn moved most of what showed. The rows move at once, about as far as three
+    // ordinary rows; a wheel that turns in smaller steps adds them up.
+    private void Wheel(int delta)
+    {
+        _wheelLeft += delta;
+        int notches = _wheelLeft / 120;
+        if (notches == 0) return;
+        _wheelLeft -= notches * 120;
+        int shown = Math.Max(1, ClientSize.Height / Math.Max(1, ItemHeight));
+        int lines = SystemInformation.MouseWheelScrollLines;
+        int rows = lines <= 0 ? shown : Math.Max(1, lines * ListRows.RowHeight(this) / Math.Max(1, ItemHeight));
+        int top = Math.Clamp(TopIndex - notches * rows, 0, Math.Max(0, Items.Count - shown));
+        if (top != TopIndex) TopIndex = top;
+    }
+
     protected override void WndProc(ref Message m)
     {
         if (m.Msg == ListRows.WM_ERASEBKGND && m.WParam != 0) { ListRows.EraseBelowRows(this, ref m); return; }
+        if (m.Msg == WM_MOUSEWHEEL)
+        {
+            Wheel((short)(((long)m.WParam >> 16) & 0xFFFF));
+            m.Result = 0;
+            return;
+        }
         base.WndProc(ref m);
         if (m.Msg == ListRows.WM_PAINT)
         {
             ListRows.Empty(this, EmptyText);
             Moved?.Invoke();
         }
-        else if (m.Msg is WM_VSCROLL or WM_MOUSEWHEEL or WM_KEYDOWN or LB_SETTOPINDEX or LB_SETCURSEL) Moved?.Invoke();
+        else if (m.Msg is WM_VSCROLL or WM_KEYDOWN or LB_SETTOPINDEX or LB_SETCURSEL) Moved?.Invoke();
         else if (ListRows.ChangesItems(m.Msg))
         {
             Invalidate();

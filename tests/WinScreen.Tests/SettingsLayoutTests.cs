@@ -884,6 +884,7 @@ public sealed class SettingsLayoutTests
             UiText.Initialize("en");
             var settings = new AppSettings { Language = "en" };
             settings.ExcludedPrograms = [.. Enumerable.Range(1, 30).Select(index => "program" + index)];
+            settings.Effects = settings.Effects with { Apps = [.. Enumerable.Range(1, 12).Select(index => new AppGlassLevels { Program = "app" + index })] };
             using var window = new SettingsWindow(settings, new StartWithWindows(tasks: NoTasks.Instance), _ => []) { StartPosition = FormStartPosition.Manual, Location = new Point(40, 40), TopMost = true };
             window.Show();
             window.Height = 460; // Short enough that every page used here scrolls.
@@ -949,6 +950,24 @@ public sealed class SettingsLayoutTests
             string typed = picker.Text;
             Assert.True(Wheel(picker, 1));
             Assert.Equal(typed, picker.Text);
+
+            // The owner, 29 Nov: the Effects app list stalled on every turn (Windows animated the scroll and held the
+            // window up meanwhile), and three of its tall rows a turn moved most of what showed. A turn moves it about
+            // as far as three ordinary rows, at once, and its bar follows.
+            BackgroundList apps = Descendants(window).OfType<BackgroundList>().First();
+            for (int index = 0; index < 20 && !apps.Visible; index++)
+            {
+                window.PageIndex = index;
+                Application.DoEvents();
+            }
+            Assert.True(apps.Visible, "The app list isn't on the page chosen.");
+            Assert.True(apps.ItemHeight > ListRows.RowHeight(apps) * 3 / 2, "The app list's rows aren't tall.");
+            apps.TopIndex = 0;
+            Thread.Sleep(SettingsWindow.WheelHold + 100);
+            Assert.True(Wheel(apps, -1));
+            Assert.Equal(1, apps.TopIndex);
+            list = apps;
+            Assert.Equal(apps.TopIndex, BarAt());
             window.Close();
         });
     }
