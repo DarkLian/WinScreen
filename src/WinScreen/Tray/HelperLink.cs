@@ -25,6 +25,8 @@ internal static class HelperLink
     public const string Watch = "watch";
     // The helper's outcome of a command from the command line (Id), so the script hears what happened.
     public const string Outcome = "outcome";
+    // The window menu's opacity slider on an administrator app's window: Command is the level, 0 to 255.
+    public const string Opacity = "opacity";
 
     internal sealed record HelperView(long Handle, long Source, string Title, bool Suspended, bool SourceIsWindow,
         bool ClickThrough, bool CanRetry, long PointedAt, long SuspendedAt);

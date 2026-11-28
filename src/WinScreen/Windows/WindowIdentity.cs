@@ -22,6 +22,10 @@ internal sealed record WindowIdentity(nint Window, uint ProcessId, uint ThreadId
     internal static WindowIdentity Capture(nint window)
     {
         WindowIdentity observed = Observe(window);
+        // Marked already by the administrator helper, an administrator app's window passed the check below, and the
+        // ordinary copy kept a change it could neither make nor undo, which then held up its exit.
+        if (!ProcessInfo.SelfElevated && ProcessInfo.IsElevated(observed.ProcessId))
+            throw new WindowOperationException(T("errors.identity.accessDenied"));
         long token = User32.GetProp(window, PropertyName);
         if (token == 0)
         {

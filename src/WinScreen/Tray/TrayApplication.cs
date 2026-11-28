@@ -392,7 +392,14 @@ public sealed partial class TrayApplication : ApplicationContext
             SetOpacityPercent = (window, percent) => Attempt(() =>
             {
                 if (FullScreenDecision(AppCommand.OpacityUp, window) != FullScreenAction.Run || !_windows.CanControl(window)) return;
-                _windows.SetOpacity(window, (byte)Math.Round(percent * 255 / 100.0));
+                byte alpha = (byte)Math.Round(percent * 255 / 100.0);
+                // An administrator app's window is its helper's, as the menu's commands are.
+                if (!CanReach(window))
+                {
+                    if (_helper is { Connected: true } link) link.Send(new HelperLink.Message(HelperLink.Opacity, alpha, window));
+                    return;
+                }
+                _windows.SetOpacity(window, alpha);
             }),
         };
 

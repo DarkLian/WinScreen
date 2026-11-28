@@ -270,7 +270,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             // A hidden window is parked out of sight, so a part chosen on screen would be a part of something else.
             if (state.Hidden || state.PlacementBeforePeek is not null)
                 throw new WindowOperationException(T("errors.window.showFirst"));
-            if (!state.Cropped && WindowInfo.ShapeOf(window) is not null)
+            if (!state.Cropped && WindowInfo.ShapeOf(window) is { } own && !WholeShape(window, own))
                 throw new WindowOperationException(
                     string.Format(T("errors.crop.customShape"), WindowInfo.Title(window)));
 
@@ -291,6 +291,12 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                 state.CropPart = part;
                 state.CropsPutBack = 0;
                 if (!croppedBefore) HideFrameLook(window, state);
+                // Chrome answers its frame going off by dropping the shape, at once from the second crop on.
+                if (state.FrameDrawingOff && WindowInfo.ShapeOf(window) != part)
+                {
+                    nint again = User32.CreateRectRgn(part.Left, part.Top, part.Right, part.Bottom);
+                    if (User32.SetWindowRgn(window, again, true) == 0) User32.DeleteObject(again);
+                }
                 // Some apps put their own shape straight back (Windows Forms ones with a frame, for one), so a crop
                 // that didn't stay is said to have failed rather than shown as on.
                 if (WindowInfo.ShapeOf(window) is null)
@@ -299,12 +305,34 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             catch (WindowOperationException)
             {
                 state.Cropped = croppedBefore;
+                // Nothing left behind: with its frame left off, Chrome kept a shape of its own over the whole window,
+                // and every crop after was refused.
+                if (!croppedBefore)
+                {
+                    state.CropPart = null;
+                    if (User32.IsWindow(window))
+                    {
+                        if (state.FrameDrawingOff || state.LookBeforeCrop is not null) User32.SetWindowRgn(window, 0, true);
+                        RestoreFrameLook(window, state);
+                    }
+                }
                 TrySaveJournal();
                 throw;
             }
 
             SaveJournal();
         }
+    }
+
+    // Chrome with its frame off keeps a shape of all of itself, or a maximized one of all but the edges Windows puts past
+    // the screen: no shape of its own to lose.
+    private static bool WholeShape(nint window, Rectangle shape)
+    {
+        if (!User32.GetWindowRect(window, out Rect r)) return false;
+        var whole = new Rectangle(0, 0, r.Right - r.Left, r.Bottom - r.Top);
+        if (shape == whole) return true;
+        int edge = shape.Left;
+        return User32.IsZoomed(window) && edge is > 0 and <= 16 && shape == Rectangle.Inflate(whole, -edge, -edge);
     }
 
     public void RemoveCrop(nint window)
@@ -1080,7 +1108,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             var problems = new List<string>();
             foreach ((nint window, ChangedWindow state) in _changed.ToArray())
             {
-                if (!state.Identity.Matches())
+                if (!state.Identity.Matches() || OutOfReach(state.Identity))
                 {
                     _changed.Remove(window);
                     continue;
@@ -1118,6 +1146,15 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
             RestoreFailures = problems;
             return failed;
         }
+    }
+
+    // An administrator app's window, which the ordinary copy can't change: a record of one is of nothing it did (its
+    // helper keeps its own), and putting it back failed every time, so WinScreen couldn't exit.
+    private static bool OutOfReach(WindowIdentity identity)
+    {
+        if (ProcessInfo.SelfElevated || !ProcessInfo.IsElevated(identity.ProcessId)) return false;
+        Diagnostics.Log.Event("restore.outOfReach", ("program", Diagnostics.LogValue.ProgramOf(identity.Window)));
+        return true;
     }
 
     public void RecoverFromJournal()
@@ -1171,6 +1208,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                     Diagnostics.Log.Event("journal.windowGone");
                     continue;
                 }
+                if (OutOfReach(identity)) continue;
 
                 var state = new ChangedWindow
                 {
@@ -1567,7 +1605,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         {
             if (!_changed.TryGetValue(window, out var state))
                 return true;
-            if (!state.Identity.Matches())
+            if (!state.Identity.Matches() || OutOfReach(state.Identity))
                 _changed.Remove(window);
             else
             {

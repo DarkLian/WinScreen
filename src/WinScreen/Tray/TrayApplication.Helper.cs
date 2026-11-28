@@ -334,6 +334,12 @@ public sealed partial class TrayApplication
                 }
                 SendState();
                 break;
+            case HelperLink.Opacity when message.Command is >= 0 and <= 255:
+                nint seeThrough = (nint)message.Window;
+                if (!User32.IsWindow(seeThrough) || !CanReach(seeThrough) || !_windows.CanControl(seeThrough)) return;
+                Attempt(() => _windows.SetOpacity(seeThrough, (byte)message.Command));
+                SendState();
+                break;
             case HelperLink.ViewAction when message.Text == "showTile":
                 TileActionFromOrdinaryCopy((nint)message.Window);
                 break;

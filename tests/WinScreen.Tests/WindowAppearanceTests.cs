@@ -168,10 +168,14 @@ public sealed class WindowAppearanceTests
     /// Chrome draws its own title bar too. With its frame left on, Windows drew its accent line and shadow round the whole
     /// window, a dark outline round the part kept (the owner, 29 Nov). With the frame off, Chrome puts its own shape over
     /// the whole window (27 Nov), so the part kept is put back: only that part shows, with nothing round it, and the
-    /// frame comes back with the whole window.
+    /// frame comes back with the whole window. The owner, 29 Nov: a second crop was refused, as Chrome dropped the shape
+    /// at once, and its frame was left off, after which Chrome kept a shape of its own: every crop after was refused. Each
+    /// time, maximized too, the part kept stays and the window is whole again after.
     /// </summary>
-    [Fact]
-    public void A_cropped_browser_keeps_its_crop_with_no_frame_round_it()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_cropped_browser_keeps_its_crop_with_no_frame_round_it(bool maximized)
     {
         string chrome = Path.Combine(AppContext.BaseDirectory, "chrome-win64", "chrome.exe");
         if (!File.Exists(chrome)) { Skipped.Because("The portable Chrome isn't in the test output."); return; }
@@ -185,18 +189,30 @@ public sealed class WindowAppearanceTests
             User32.SetWindowPos(window, 0, Spot.Left, Spot.Top, Spot.Width, Spot.Height, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
             TestDesktop.Pump(500);
             User32.SetWindowPos(back.Handle, window, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
+            if (maximized) { User32.ShowWindow(window, 3); TestDesktop.Pump(800); }
             bool before = FrameDrawn(window);
             var part = new Rectangle(Spot.Width - 260, Spot.Height - 190, 200, 150);
-            windows.Crop(window, part);
-            for (int i = 0; i < 20; i++)
+            for (int time = 1; time <= 3; time++)
             {
-                TestDesktop.Pump(100);
-                windows.Refresh(Cursor.Position, false, false);
+                windows.Crop(window, part);
+                for (int i = 0; i < 20; i++)
+                {
+                    TestDesktop.Pump(100);
+                    windows.Refresh(Cursor.Position, false, false);
+                }
+                TestDesktop.Pump(500);
+                Assert.True(part == WindowInfo.ShapeOf(window), $"Crop {time}: {WindowInfo.ShapeOf(window)}.");
+                Assert.True(windows.IsCropped(window));
+                if (time == 1 && !maximized) NothingRound();
+                if (time == 2) windows.RestoreWindow(window); else windows.RemoveCrop(window);
+                TestDesktop.Pump(2500); // Chrome put its own shape back about a second after its frame came back.
+                Assert.True(WindowInfo.ShapeOf(window) is null, $"After crop {time}: {WindowInfo.ShapeOf(window)}.");
+                Assert.Equal(before, FrameDrawn(window));
             }
-            TestDesktop.Pump(500);
-            Assert.Equal(part, WindowInfo.ShapeOf(window));
-            Assert.True(windows.IsCropped(window));
+
             // Just inside the window's old edges, away from the part kept: what is behind, not a line or a shadow.
+            void NothingRound()
+            {
             using (var picture = new Bitmap(Spot.Width, Spot.Height))
             {
                 using (Graphics g = Graphics.FromImage(picture)) g.CopyFromScreen(Spot.Location, Point.Empty, Spot.Size);
@@ -206,10 +222,7 @@ public sealed class WindowAppearanceTests
                     Assert.True(seen.R > 240 && seen.G > 240 && seen.B > 240, $"At {at} round the part kept: {seen}.");
                 }
             }
-            windows.RemoveCrop(window);
-            TestDesktop.Pump(800);
-            Assert.Null(WindowInfo.ShapeOf(window));
-            Assert.Equal(before, FrameDrawn(window));
+            }
         }
         finally
         {

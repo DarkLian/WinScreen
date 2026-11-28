@@ -170,6 +170,32 @@ public sealed class AdministratorHelperEndToEndTests(ITestOutputHelper output) :
         Assert.True(Desktop.WaitFor(() => !ClickThrough(adminTarget), 3000), "Restore window didn't reach the helper's window.");
     }
 
+    // Owner, 29 Nov: the window menu's opacity slider on an administrator app's window the helper had changed. The
+    // window carried the helper's mark, so the ordinary copy took it as its own, kept a change it couldn't make, and
+    // failed to put it back at every exit: WinScreen wouldn't close.
+    [Fact]
+    public void A_window_the_helper_marked_stays_out_of_the_ordinary_copys_reach()
+    {
+        if (!ElevatesWithoutAsking) { Skipped.Because("Windows asks before running as administrator here, and a test can't answer."); return; }
+        if (ProcessInfo.SelfElevated || !ProcessInfo.CanElevate) { Skipped.Because("Needs an administrator account and a test run that isn't elevated."); return; }
+        Assert.True(Desktop.FindWindow(null, HotkeyHost.WindowTitle) == 0 && HelperProcess() == 0, "Close the running WinScreen before these tests.");
+        new AppSettings { WelcomeShown = true, ShowToolbar = false, RunAsAdministrator = true }.Save(Path.Combine(_data, "settings.json"));
+        nint adminTarget = ElevatedTarget("WinScreen helper marked admin", new Rectangle(620, 160, 420, 300));
+        _app = Start();
+        Assert.True(Desktop.WaitFor(() => HelperProcess() != 0, 20000), "No helper started.");
+        Assert.True(Desktop.WaitFor(() => Log("winscreen.log").Contains("helper.connected"), 15000), "The helper didn't connect.");
+        Assert.Equal(0, Run("ToggleDefaultOpacity", "title:WinScreen helper marked admin"));
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(adminTarget) is < 255, 3000), "The helper didn't change the window:\n" + Log("winscreen-administrator.log"));
+
+        string journal = Path.Combine(_data, "ordinary-test-journal.json");
+        var ordinary = new WinScreen.Windows.WindowController([], new WinScreen.Windows.ChangeJournal(journal));
+        Assert.Throws<WinScreen.Windows.WindowOperationException>(() => ordinary.SetOpacity(adminTarget, 128));
+        Assert.False(ordinary.HasChanges(adminTarget));
+        Assert.Equal(0, ordinary.RestoreAll());
+        Assert.Equal(0, Run("RestoreWindow", "title:WinScreen helper marked admin"));
+        Assert.True(Desktop.WaitFor(() => Desktop.Alpha(adminTarget) is null or 255, 3000), "The helper didn't put the window back.");
+    }
+
     private static int Count(string text, string part) => text.Split(part).Length - 1;
 
     // The ordinary copy has the keys, the helper has an administrator app's view, which never takes the focus: a key
