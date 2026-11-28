@@ -1807,18 +1807,11 @@ public static class WindowInfo
         finally { Marshal.FreeHGlobal(buffer); }
     }
 
+    // Read as an administrator app's can be: its module list (Process.MainModule) is closed to a copy without the rights.
     public static string ExecutablePath(nint window)
     {
         User32.GetWindowThreadProcessId(window, out uint pid);
-        try
-        {
-            using var process = Process.GetProcessById((int)pid);
-            return process.MainModule?.FileName ?? "";
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
-        {
-            return "";
-        }
+        return ProcessInfo.PathOf(pid);
     }
 
     public static (string Label, string Value)[] Facts(nint window)
@@ -1967,8 +1960,16 @@ public static class WindowInfo
         return !bounds.IsEmpty;
     }
 
+    // Asked many times a second (the toolbar every 60 ms, the mouse hook): the path costs one call, where Process reads
+    // every process on the PC. Process stays for the few it can't open (System), and says the same: the file name
+    // without ".exe".
     public static string ProcessName(uint processId)
     {
+        if (ProcessInfo.PathOf(processId) is { Length: > 0 } path)
+        {
+            string file = Path.GetFileName(path);
+            return file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? file[..^4] : file;
+        }
         try
         {
             using Process process = Process.GetProcessById((int)processId);

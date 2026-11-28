@@ -27,7 +27,8 @@ internal sealed class UpdateTransport : IDisposable
                                          uri.Host is "release-assets.githubusercontent.com"
                                              or "objects.githubusercontent.com");
 
-    internal async Task Copy(Uri uri, Stream destination, long limit, CancellationToken cancellation)
+    // progress: the share of limit received, as a percentage, each time it changes.
+    internal async Task Copy(Uri uri, Stream destination, long limit, CancellationToken cancellation, Action<int>? progress = null)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromMinutes(10));
@@ -50,13 +51,15 @@ internal sealed class UpdateTransport : IDisposable
             await using var body = await response.Content.ReadAsStreamAsync(deadline.Token);
             byte[] buffer = new byte[81920];
             long total = 0;
-            int count;
+            int count, shown = -1;
             while ((count = await body.ReadAsync(buffer, deadline.Token)) != 0)
             {
                 total += count;
                 if (total > limit)
                     throw new InvalidDataException("Update download exceeds its size limit.");
                 await destination.WriteAsync(buffer.AsMemory(0, count), deadline.Token);
+                if (progress is not null && limit > 0 && (int)(total * 100 / limit) is var percent && percent != shown)
+                    progress(shown = percent);
             }
 
             return;

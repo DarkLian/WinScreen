@@ -70,7 +70,7 @@ internal static class AltKeyWatch
             byte* bytes = stackalloc byte[(int)size];
             nint buffer = (nint)bytes;
             if (GetRawInputData(input, RID_INPUT, buffer, ref size, header) != size) return;
-            if (Marshal.PtrToStructure<RawInputHeader>(buffer).Type != RIM_TYPEKEYBOARD) return;
+            if (((RawInputHeader*)bytes)->Type != RIM_TYPEKEYBOARD) return; // Read in place: PtrToStructure boxes.
             ushort key = (ushort)Marshal.ReadInt16(buffer, (int)header + 6); // RAWKEYBOARD.VKey
             ushort flags = (ushort)Marshal.ReadInt16(buffer, (int)header + 2); // RAWKEYBOARD.Flags: 1 is a key going up
             if (key is VK_MENU or VK_LMENU or VK_RMENU) Interlocked.Exchange(ref s_lastAlt, Environment.TickCount64);

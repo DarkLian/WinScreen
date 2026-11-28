@@ -68,13 +68,16 @@ internal sealed class SignedUpdateSource(
         try
         {
             await using (var output = new FileStream(localFile, FileMode.Create, FileAccess.Write, FileShare.None))
-                await transport.Copy(uri, output, releaseEntry.Size, linked.Token);
+                // 100 only once the package is checked too.
+                await transport.Copy(uri, output, releaseEntry.Size, linked.Token, percent => progress(Math.Min(percent, 99)));
             await UpdateSecurity.VerifyPackage(localFile, releaseEntry, linked.Token);
             progress(100);
         }
         catch
         {
-            File.Delete(localFile);
+            // A file a virus scanner still holds stays behind, not in place of the failure that matters.
+            try { File.Delete(localFile); }
+            catch (Exception held) when (held is IOException or UnauthorizedAccessException) { Diagnostics.Log.Swallowed(held); }
             throw;
         }
     }

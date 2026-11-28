@@ -177,7 +177,8 @@ public sealed partial class TrayApplication
             wait.Tick += (_, _) =>
             {
                 wait.Dispose();
-                if (_helperAnswers.Remove(id, out Action<CommandLineExit>? late)) late(CommandLineExit.Done);
+                // A dialog or menu it opened has answered already (Started): no answer at all is not a success.
+                if (_helperAnswers.Remove(id, out Action<CommandLineExit>? late)) late(CommandLineExit.Failed);
             };
             wait.Start();
         }

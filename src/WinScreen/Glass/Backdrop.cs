@@ -409,7 +409,9 @@ internal sealed class AnimationBackdrop : Backdrop
             }
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested) { return; }
-        catch (Exception failure) when (failure is ExternalException or ArgumentException or OutOfMemoryException or InvalidOperationException)
+        // A file on a drive or share that goes away mid-play too: on this thread anything else ends WinScreen.
+        catch (Exception failure) when (failure is ExternalException or ArgumentException or OutOfMemoryException or InvalidOperationException or
+                                        IOException or UnauthorizedAccessException)
         {
             Diagnostics.Log.Error("effect.backdropFailed", failure);
             _failed = true;

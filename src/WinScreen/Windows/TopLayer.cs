@@ -48,7 +48,8 @@ internal static class TopLayer
         "ShellHost", "TextInputHost", "LockApp", "Widgets", "WidgetBoard", "ScreenSketch",
     ];
 
-    private static readonly Dictionary<uint, bool> SystemProcesses = [];
+    // With each process's start, so a number Windows gives again to a later program isn't taken for the shell's.
+    private static readonly Dictionary<uint, (long? Started, bool System)> SystemProcesses = [];
 
     private static bool SystemSurface(nint window)
     {
@@ -58,13 +59,15 @@ internal static class TopLayer
         if (User32.GetWindowThreadProcessId(window, out uint process) == 0 || process == (uint)Environment.ProcessId) return false;
         lock (SystemProcesses)
         {
-            if (SystemProcesses.TryGetValue(process, out bool known)) return known;
+            long? started = ProcessInfo.StartTicks(process);
+            if (SystemProcesses.TryGetValue(process, out var known) && known.Started == started) return known.System;
             if (SystemProcesses.Count > 256) SystemProcesses.Clear();
             string program = WindowInfo.ProcessName(process);
             // Explorer's other always-on-top windows are the taskbar's flyouts and menus.
             bool system = program.Equals("explorer", StringComparison.OrdinalIgnoreCase) ||
                 SystemPrograms.Contains(program, StringComparer.OrdinalIgnoreCase);
-            return SystemProcesses[process] = system;
+            SystemProcesses[process] = (started, system);
+            return system;
         }
     }
 

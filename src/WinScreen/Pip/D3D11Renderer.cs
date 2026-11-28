@@ -99,14 +99,13 @@ internal sealed class D3D11Renderer : IDisposable
 
             // Windows 11 ships the system compiler. Resolve from System32 only; a missing compiler falls back to DWM.
             EnsureCompiler();
-            _vertex = Device.CreateVertexShader(Compiler.Compile(PipShaders.Source, "VS", "PipShaders", "vs_4_0").Span);
-            _pixel = Device.CreatePixelShader(Compiler.Compile(PipShaders.Source, "PS", "PipShaders", "ps_4_0").Span);
+            _vertex = Device.CreateVertexShader(Compiled("VS", "vs_4_0"));
+            _pixel = Device.CreatePixelShader(Compiled("PS", "ps_4_0"));
             if (compute && preferCompute)
             {
                 try
                 {
-                    _compute = Device.CreateComputeShader(Compiler.Compile("#define COMPUTE\n" + PipShaders.Source,
-                        "CS", "PipShaders", "cs_5_0").Span);
+                    _compute = Device.CreateComputeShader(Compiled("CS", "cs_5_0"));
                 }
                 catch (Exception e) when (e is SharpGen.Runtime.SharpGenException or ExternalException)
                 {
@@ -117,8 +116,7 @@ internal sealed class D3D11Renderer : IDisposable
                 if (_compute is not null && !software)
                     try
                     {
-                        _computeCubic = Device.CreateComputeShader(Compiler.Compile("#define COMPUTE\n" + PipShaders.Source,
-                            "CSCubic", "PipShaders", "cs_5_0").Span);
+                        _computeCubic = Device.CreateComputeShader(Compiled("CSCubic", "cs_5_0"));
                     }
                     catch (Exception e) when (e is SharpGen.Runtime.SharpGenException or ExternalException) { Log.Swallowed(e); }
             }
@@ -138,6 +136,13 @@ internal sealed class D3D11Renderer : IDisposable
         }
         catch { Dispose(); throw; }
     }
+
+    // Compiled once per run, not again for every view, resume and change of display. A failure isn't kept.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> Shaders = new(StringComparer.Ordinal);
+
+    private static byte[] Compiled(string entry, string profile) =>
+        Shaders.GetOrAdd(entry, _ => Compiler.Compile((profile.StartsWith("cs", StringComparison.Ordinal) ? "#define COMPUTE\n" : "") +
+            PipShaders.Source, entry, "PipShaders", profile).ToArray());
 
     private static readonly object CompilerGate = new();
     private static bool _compilerResolved;

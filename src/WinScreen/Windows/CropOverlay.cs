@@ -57,6 +57,7 @@ public sealed class CropOverlay : Form
             return;
         BeginInvoke(() =>
         {
+            if (IsDisposed) return;
             Rectangle hint = found?.Bounds is { } rectangle
                 ? Rectangle.Intersect(new Rectangle(rectangle.Location - (Size)_covers.Location, rectangle.Size), ClientRectangle)
                 : Rectangle.Empty;

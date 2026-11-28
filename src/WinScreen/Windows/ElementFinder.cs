@@ -122,10 +122,9 @@ internal sealed unsafe class ElementFinder : IDisposable
     private static T? Walk<T>(nint window, Func<nint, nint, (nint Held, T? Result)> step)
     {
         nint automation = 0, walker = 0, element = 0;
-        Guid implementation = new("FF48DBA4-60EF-4201-AA87-54103EEF594E"), wanted = new("30CBE57D-D9D0-452A-AB13-7AC5AC4825EE");
         try
         {
-            if (Ole32.CoCreateInstance(in implementation, 0, InProcessServer, in wanted, out automation) != 0 ||
+            if ((automation = CreateAutomation()) == 0 ||
                 ((delegate* unmanaged[Stdcall]<nint, nint, nint*, int>)Slot(automation, ElementFromHandle))(automation, window, &element) != 0 ||
                 element == 0 ||
                 ((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(automation, ControlViewWalker))(automation, &walker) != 0)
@@ -144,6 +143,24 @@ internal sealed unsafe class ElementFinder : IDisposable
             if (walker != 0) Marshal.Release(walker);
             if (automation != 0) Marshal.Release(automation);
         }
+    }
+
+    // The newer object, as PipControlInput uses: only it takes timeouts, and a hung app must not hold the pointer's hint
+    // for UI Automation's 20 seconds. The caller releases it.
+    private static nint CreateAutomation()
+    {
+        Guid wanted = new("30CBE57D-D9D0-452A-AB13-7AC5AC4825EE"); // IUIAutomation
+        Guid newer = new("E22AD333-B25F-460C-83D0-0581107395C9"), older = new("FF48DBA4-60EF-4201-AA87-54103EEF594E");
+        if (Ole32.CoCreateInstance(in newer, 0, InProcessServer, in wanted, out nint automation) != 0 &&
+            Ole32.CoCreateInstance(in older, 0, InProcessServer, in wanted, out automation) != 0) return 0;
+        Guid second = new("34723AFF-0C9D-49D0-9896-7AB52DF8CD8A"); // IUIAutomation2
+        if (Marshal.QueryInterface(automation, in second, out nint automation2) >= 0)
+        {
+            ((delegate* unmanaged[Stdcall]<nint, uint, int>)Slot(automation2, 61))(automation2, 1500); // put_ConnectionTimeout
+            ((delegate* unmanaged[Stdcall]<nint, uint, int>)Slot(automation2, 63))(automation2, 1500); // put_TransactionTimeout
+            Marshal.Release(automation2);
+        }
+        return automation;
     }
 
     // The caller releases the result.

@@ -18,10 +18,7 @@ internal sealed class BackdropPreview : Control
     public BackdropPreview()
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-        _pictures = new BackgroundPictures(1280, () =>
-        {
-            if (IsHandleCreated && !IsDisposed) BeginInvoke(Invalidate);
-        });
+        _pictures = new BackgroundPictures(1280, () => BackgroundPictures.Redraw(this));
         BackColor = SettingsStyle.Card;
         Margin = new Padding(3, 6, 3, 10);
         Size = new Size(SwitchBox.RowWidth, SwitchBox.RowWidth * 9 / 16);

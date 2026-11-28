@@ -268,7 +268,8 @@ internal sealed class ContentEffects : IDisposable
             return;
         try
         {
-            if (Native.User32.IsWindow(window))
+            // Not a window that closed or whose handle now belongs to another: there is nothing of it to show.
+            if (Native.User32.IsWindow(window) && windows.IsConcealedBy(window, overlay))
                 windows.ShowOwned(window, overlay);
         }
         catch (WindowOperationException failure)

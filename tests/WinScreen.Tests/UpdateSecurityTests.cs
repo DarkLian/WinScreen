@@ -164,6 +164,25 @@ public sealed class UpdateSecurityTests
             transport.Read(new Uri("https://github.com/owner/repo/releases/feed"), 100, CancellationToken.None));
     }
 
+    // The update window's bar moved only once the whole package was in.
+    [Fact]
+    public async Task A_download_reports_its_progress_as_it_arrives()
+    {
+        var handler = new Handler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new UnknownLengthStream(new byte[200_000])),
+        });
+        using var transport = new UpdateTransport("owner/repo", handler);
+        using var output = new MemoryStream();
+        var seen = new List<int>();
+        await transport.Copy(new Uri("https://github.com/owner/repo/releases/download/v1/a.nupkg"), output, 200_000,
+            CancellationToken.None, seen.Add);
+        Assert.Equal(200_000, output.Length);
+        Assert.True(seen.Count >= 2, string.Join(",", seen));
+        Assert.Equal(seen.OrderBy(percent => percent).Distinct(), seen);
+        Assert.Equal(100, seen[^1]);
+    }
+
     [Fact]
     public async Task A_repository_with_no_releases_yet_means_no_update_rather_than_a_failure()
     {

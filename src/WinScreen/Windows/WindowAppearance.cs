@@ -262,8 +262,9 @@ public sealed partial class WindowController
     {
         state.Identity.Require();
         Marshal.SetLastPInvokeError(0);
-        User32.SetWindowLongPtr(window, User32.GWL_STYLE, (nint)style);
-        if (Marshal.GetLastPInvokeError() != 0) throw Failure(T("actions.changeFrame"), window);
+        // Only a zero answer can be a failure; the error left by a call that worked means nothing.
+        if (User32.SetWindowLongPtr(window, User32.GWL_STYLE, (nint)style) == 0 && Marshal.GetLastPInvokeError() != 0)
+            throw Failure(T("actions.changeFrame"), window);
     }
 
     // Windows keeps Store apps' taskbar button and Alt+Tab entry itself, so they can't leave the switcher, but they can

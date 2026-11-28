@@ -600,7 +600,8 @@ internal sealed unsafe class ContentOverlay : Form
                                 outputRead = _device.CreateShaderResourceView(output);
                                 final = null;
                                 finalView = null;
-                                _chain!.ResizeBuffers(2, (uint)size.Width, (uint)size.Height, Format.R8G8B8A8_UNorm, SwapChainFlags.None);
+                                // A lost graphics card fails here and at Present without throwing: the effect would stay frozen.
+                                _chain!.ResizeBuffers(2, (uint)size.Width, (uint)size.Height, Format.R8G8B8A8_UNorm, SwapChainFlags.None).CheckError();
                                 _pool.Recreate(_captureDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, next.ContentSize);
                                 _page.Reset();
                                 Size newSize = size;
@@ -773,7 +774,7 @@ internal sealed unsafe class ContentOverlay : Form
         }
         using (var back = _chain!.GetBuffer<ID3D11Texture2D>(0))
             context.CopyResource(back, shown);
-        _chain.Present(0, PresentFlags.None);
+        _chain.Present(0, PresentFlags.None).CheckError(); // Covered (occluded) is a success code and passes.
     }
 
     private void Process(Size size, ID3D11ShaderResourceView cacheView, ID3D11UnorderedAccessView tilesView, ID3D11Texture2D tiles,

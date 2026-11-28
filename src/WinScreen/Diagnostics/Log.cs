@@ -222,9 +222,16 @@ internal sealed class DiagnosticLog : IDisposable
         if (dropped > 0) lines.Append(Stamp(DateTime.UtcNow.Ticks)).Append(" log.dropped count=").Append(dropped).AppendLine();
         if (_stopping || flushes.Count > 0) EndMerges(lines, all: true);
         else EndMerges(lines, all: false);
-        if (lines.Length > 0) Append(lines.ToString());
-        _failures = 0;
-        foreach (ManualResetEventSlim flushed in flushes) flushed.Set();
+        // Those waiting are let go even when the file can't be written (a full disk, a lock), not at their timeout.
+        try
+        {
+            if (lines.Length > 0) Append(lines.ToString());
+            _failures = 0;
+        }
+        finally
+        {
+            foreach (ManualResetEventSlim flushed in flushes) flushed.Set();
+        }
     }
 
     private void Add(StringBuilder lines, LogEntry entry)

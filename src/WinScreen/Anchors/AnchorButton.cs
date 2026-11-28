@@ -319,6 +319,14 @@ internal sealed class AnchorButton : Form
         }
     }
 
+    // Capture taken away mid-press (a dialog, Alt+Tab) brings no release: a later move with the button down elsewhere
+    // would drag the anchor.
+    protected override void OnMouseCaptureChanged(EventArgs e)
+    {
+        base.OnMouseCaptureChanged(e);
+        if (!Capture) _pressed = false;
+    }
+
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);

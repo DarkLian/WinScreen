@@ -135,7 +135,7 @@ internal sealed class WindowMenuHost : Form
         _deadline.Stop();
         _outside.Stop();
         nint foreground = User32.GetForegroundWindow();
-        bool returnFocus = foreground == Handle || foreground == _menu.Handle;
+        bool returnFocus = foreground == Handle || _menu.IsHandleCreated && foreground == _menu.Handle;
         Diagnostics.Log.Event("menu.finished", ("returnFocus", returnFocus));
         ReleaseKeys();
         User32.UnregisterHotKey(Handle, EscapeHotkey);

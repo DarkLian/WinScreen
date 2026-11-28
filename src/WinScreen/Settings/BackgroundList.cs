@@ -24,10 +24,7 @@ internal sealed class BackgroundList : ThemedList
 
     public BackgroundList()
     {
-        _pictures = new BackgroundPictures(256, () =>
-        {
-            if (IsHandleCreated && !IsDisposed) BeginInvoke(Invalidate);
-        });
+        _pictures = new BackgroundPictures(256, () => BackgroundPictures.Redraw(this));
         ItemHeight = Unit(58);
     }
 
@@ -76,10 +73,10 @@ internal sealed class BackgroundList : ThemedList
             // Filled as Fill would: the middle of the picture, cut to the box's shape.
             float scale = Math.Max(box.Width / (float)picture.Width, box.Height / (float)picture.Height);
             float width = picture.Width * scale, height = picture.Height * scale;
-            Region clip = g.Clip;
+            GraphicsState state = g.Save();
             g.SetClip(outline, CombineMode.Intersect);
             g.DrawImage(picture, box.X + (box.Width - width) / 2, box.Y + (box.Height - height) / 2, width, height);
-            g.Clip = clip;
+            g.Restore(state);
         }
         using var pen = new Pen(SettingsStyle.CardStroke);
         g.DrawPath(pen, outline);
@@ -99,6 +96,19 @@ internal sealed class BackgroundPictures(int largest, Action arrived) : IDisposa
     private readonly Dictionary<string, (Bitmap? Picture, Size Real)> _made = new(StringComparer.OrdinalIgnoreCase);
     private readonly Queue<string> _wanted = new();
     private bool _working, _disposed;
+
+    // From the pictures thread: Settings can close between the check and the post, which there would end WinScreen.
+    internal static void Redraw(Control control)
+    {
+        try
+        {
+            if (control.IsHandleCreated && !control.IsDisposed) control.BeginInvoke(control.Invalidate);
+        }
+        catch (Exception closed) when (closed is InvalidOperationException or ObjectDisposedException)
+        {
+            Diagnostics.Log.Swallowed(closed);
+        }
+    }
 
     public Bitmap? Of(string file) => Read(file)?.Picture;
 

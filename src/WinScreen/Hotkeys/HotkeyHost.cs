@@ -53,13 +53,23 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
         _dispatch.Clear();
     }
 
+    // Windows takes an app's own hotkey numbers up to 0xBFFF only: past it every shortcut would be refused as taken, after
+    // some hundreds of registrations in one run.
+    private int NextId()
+    {
+        while (_registered.Contains(_nextId)) _nextId = _nextId >= 0xbffe ? 0x4000 : _nextId + 1;
+        int id = _nextId;
+        _nextId = _nextId >= 0xbffe ? 0x4000 : _nextId + 1;
+        return id;
+    }
+
     internal IReadOnlyList<int> RegisterAvailable(IReadOnlyDictionary<int, (uint Modifiers, Keys Key)> desired)
     {
         UnregisterAll();
         var conflicts = new List<int>();
         foreach (var (command, combination) in desired)
         {
-            int nativeId = _nextId++;
+            int nativeId = NextId();
             if (!User32.RegisterHotKey(Handle, nativeId, combination.Modifiers | User32.MOD_NOREPEAT,
                     (uint)combination.Key))
             {
@@ -95,9 +105,7 @@ public sealed class HotkeyHost : NativeWindow, IDisposable
             int nativeId = _bindings.FirstOrDefault(pair => pair.Value == combination).Key;
             if (nativeId == 0)
             {
-                while (_registered.Contains(_nextId)) _nextId = _nextId >= 0xbffe ? 0x4000 : _nextId + 1;
-                nativeId = _nextId;
-                _nextId = _nextId >= 0xbffe ? 0x4000 : _nextId + 1;
+                nativeId = NextId();
                 if (!User32.RegisterHotKey(Handle, nativeId, combination.Modifiers | User32.MOD_NOREPEAT,
                         (uint)combination.Key))
                 {

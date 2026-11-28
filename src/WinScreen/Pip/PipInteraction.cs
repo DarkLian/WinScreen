@@ -75,10 +75,15 @@ internal sealed class PipInteraction : IDisposable
                 .Select(i => _buttonTrail[i & 31])
                 .Select(e => $"{e.At % 100000}:" + (e.What switch
                 {
-                    -1 => "press", -2 => "release", -3 => "dragPickedUp", _ => $"hook{e.What:X}",
-                }) + $"/{e.Data}"));
+                    -1 => "press", -2 => "release", -3 => "dragPickedUp", WM_MOUSEMOVE => "heldMove", _ => $"hook{e.What:X}",
+                }) + (e.What is -3 or WM_MOUSEMOVE ? $"/{TrailText(e.Data)}" : $"/{e.Data}")));
         }
     }
+
+    // x and y in 14 bits each, and 2 bits of flags (1: made by a program).
+    private static int TrailPoint(Point point, uint flags) => (int)(flags << 28) | (point.X & 0x3FFF) << 14 | point.Y & 0x3FFF;
+
+    private static string TrailText(int data) => $"{(data >> 14) & 0x3FFF},{data & 0x3FFF}" + ((data >> 28 & 3) != 0 ? "i" : "");
 
     private const int WH_MOUSE_LL = 14;
     private const int WM_QUIT = 0x12, WM_MOUSEMOVE = 0x200, WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202,
@@ -395,6 +400,10 @@ internal sealed class PipInteraction : IDisposable
         var info = Marshal.PtrToStructure<MouseHookInfo>(data);
         var point = new Point(info.X, info.Y);
         Interlocked.Exchange(ref _observedPointer, Pack(point));
+        // A move while the left button is held can start a drag: where it went, and whether Windows marks it as made by a
+        // program (TD-77: a move nobody sent turned a test's click into a drag).
+        if ((int)message == WM_MOUSEMOVE && (Volatile.Read(ref _swallowedBits) & (int)MouseButtons.Left) != 0)
+            Trail(WM_MOUSEMOVE, TrailPoint(point, info.Flags & 3));
         return (int)message switch
         {
             WM_MOUSEMOVE => OnMove(point),
@@ -654,7 +663,7 @@ internal sealed class PipInteraction : IDisposable
                 // Let go already: the release waiting in the queue makes it a click.
                 if (!_left.HandOver(_leftWaiting)) return;
                 _leftWaitsForDrag = false;
-                Trail(-3, 0);
+                Trail(-3, TrailPoint(_pressAt, 0)); // Where it was pressed; the held moves above say where it went.
                 _pressHandedOver = true;
                 DragPickedUp?.Invoke(_pressAt);
                 return;

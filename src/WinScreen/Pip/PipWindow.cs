@@ -345,6 +345,14 @@ public sealed partial class PipWindow : Form
     private void CacheTaskbarPicture()
     {
         if (!Visible || Width <= 0 || Height <= 0) return;
+        // A view kept out of screen capture would be read through: the picture would be what is behind it. The taskbar
+        // shows the icon instead.
+        if (!_origin.IsWindow || _autoMoveItem.Checked)
+        {
+            _taskbarPicture?.Dispose();
+            _taskbarPicture = null;
+            return;
+        }
         try
         {
             var picture = new Bitmap(Width, Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);

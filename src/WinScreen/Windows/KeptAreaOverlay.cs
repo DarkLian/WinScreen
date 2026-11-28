@@ -78,6 +78,7 @@ public sealed class KeptAreaOverlay : Form
             return;
         BeginInvoke(() =>
         {
+            if (IsDisposed) return;
             Rectangle hint = found?.Bounds is { } rectangle
                 ? Rectangle.Intersect(new Rectangle(rectangle.Location - (Size)_covers.Location, rectangle.Size), ClientRectangle)
                 : Rectangle.Empty;
