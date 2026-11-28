@@ -621,6 +621,13 @@ private readonly ErrorProvider _errors = new();
         public bool PreFilterMessage(ref Message m) => m.Msg is WM_MOUSEWHEEL or WM_MOUSEHWHEEL && owner.RouteWheel(m);
     }
 
+    // One turn of the wheel after another goes on scrolling what the first one scrolled, as in a browser: a list that
+    // reached its end handed the rest of a turn to the page, which jumped, and a page scrolled under the pointer onto a
+    // list stopped there.
+    private Control? _wheelTaker;
+    private long _wheelAt = -100_000;
+    internal const int WheelHold = 600;
+
     internal bool RouteWheel(Message m)
     {
         if (IsDisposed || !Visible) return false;
@@ -632,13 +639,14 @@ private readonly ErrorProvider _errors = new();
         if (page is null) return false; // The page list, and the table of actions, which is a page of its own.
         if (m.Msg == WM_MOUSEHWHEEL) return true;
         int delta = (short)(((long)m.WParam >> 16) & 0xFFFF);
-        for (Control? up = under; up is not null && up != page; up = up.Parent)
-            if (up is ListBox list && CanScroll(list, delta))
-            {
-                Native.User32.SendMessage(list.Handle, WM_MOUSEWHEEL, m.WParam, m.LParam);
-                return true;
-            }
-        Native.User32.SendMessage(page.Handle, WM_MOUSEWHEEL, m.WParam, m.LParam);
+        ListBox? list = null;
+        for (Control? up = under; up is not null && up != page && list is null; up = up.Parent) list = up as ListBox;
+        long now = Environment.TickCount64;
+        bool held = now - _wheelAt < WheelHold && _wheelTaker is { IsDisposed: false, IsHandleCreated: true } taker &&
+                    (taker == page || taker == list);
+        _wheelAt = now;
+        if (!held) _wheelTaker = list is not null && CanScroll(list, delta) ? list : page;
+        Native.User32.SendMessage(_wheelTaker!.Handle, WM_MOUSEWHEEL, m.WParam, m.LParam);
         return true;
 
         static bool CanScroll(ListBox list, int delta)

@@ -64,27 +64,63 @@ internal sealed class BackgroundList : ThemedList
             Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, Line | TextFormatFlags.Top);
     }
 
+    // Made once per picture and size: scaled smoothly on every paint, the list fell behind the wheel.
+    private readonly Dictionary<(string File, Size Size, int Page), Bitmap> _thumbnails = [];
+
     private void DrawThumbnail(Graphics g, Rectangle box, string file)
     {
         using GraphicsPath outline = SettingsStyle.Rounded(box, Unit(4));
-        using (var page = new SolidBrush(SettingsStyle.Page)) g.FillPath(page, outline);
         if (file.Length > 0 && _pictures.Of(file) is { } picture)
         {
-            // Filled as Fill would: the middle of the picture, cut to the box's shape.
-            float scale = Math.Max(box.Width / (float)picture.Width, box.Height / (float)picture.Height);
-            float width = picture.Width * scale, height = picture.Height * scale;
-            GraphicsState state = g.Save();
-            g.SetClip(outline, CombineMode.Intersect);
-            g.DrawImage(picture, box.X + (box.Width - width) / 2, box.Y + (box.Height - height) / 2, width, height);
-            g.Restore(state);
+            var key = (file, box.Size, SettingsStyle.Page.ToArgb());
+            if (!_thumbnails.TryGetValue(key, out Bitmap? made))
+            {
+                if (_thumbnails.Count > 64) ForgetThumbnails();
+                _thumbnails[key] = made = Thumbnail(picture, box.Size);
+            }
+            InterpolationMode smooth = g.InterpolationMode;
+            g.InterpolationMode = InterpolationMode.NearestNeighbor; // Drawn at its own size.
+            g.DrawImage(made, new Rectangle(box.Location, made.Size));
+            g.InterpolationMode = smooth;
+        }
+        else
+        {
+            using var page = new SolidBrush(SettingsStyle.Page);
+            g.FillPath(page, outline);
         }
         using var pen = new Pen(SettingsStyle.CardStroke);
         g.DrawPath(pen, outline);
     }
 
+    // Filled as Fill would: the middle of the picture, cut to the box's shape.
+    private Bitmap Thumbnail(Bitmap picture, Size size)
+    {
+        var made = new Bitmap(size.Width + 1, size.Height + 1, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using Graphics g = Graphics.FromImage(made);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        using GraphicsPath outline = SettingsStyle.Rounded(new Rectangle(Point.Empty, size), Unit(4));
+        using (var page = new SolidBrush(SettingsStyle.Page)) g.FillPath(page, outline);
+        float scale = Math.Max(size.Width / (float)picture.Width, size.Height / (float)picture.Height);
+        float width = picture.Width * scale, height = picture.Height * scale;
+        g.SetClip(outline);
+        g.DrawImage(picture, (size.Width - width) / 2, (size.Height - height) / 2, width, height);
+        return made;
+    }
+
+    private void ForgetThumbnails()
+    {
+        foreach (Bitmap made in _thumbnails.Values) made.Dispose();
+        _thumbnails.Clear();
+    }
+
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _pictures.Dispose();
+        if (disposing)
+        {
+            _pictures.Dispose();
+            ForgetThumbnails();
+        }
         base.Dispose(disposing);
     }
 }

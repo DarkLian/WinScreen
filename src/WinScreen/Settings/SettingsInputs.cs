@@ -84,7 +84,7 @@ internal sealed class InputFrame : Panel
         if (inner is ThemedList names)
         {
             _bar = new ThinScrollBar(names, row => names.TopIndex = row, () => SettingsStyle.Card);
-            names.Painted += _bar.Sync;
+            names.Moved += _bar.Sync;
         }
         else if (inner is ThemedTable table)
         {
@@ -874,18 +874,23 @@ internal static class ProgramIcons
     private static Dictionary<string, nint> _running = new(StringComparer.OrdinalIgnoreCase);
     private static long _runningAt = -100_000; // Long enough ago that the first look runs.
 
-    // At most every half minute: rows are drawn often.
+    // At most every half minute, from a row being drawn: one pass over the windows. Process.MainWindowHandle walked
+    // every window once per process, and the list stalled while scrolling.
     private static Dictionary<string, nint> Running()
     {
         if (Environment.TickCount64 - _runningAt < 30000) return _running;
         _runningAt = Environment.TickCount64;
         var found = new Dictionary<string, nint>(StringComparer.OrdinalIgnoreCase);
-        foreach (Process process in Process.GetProcesses())
-            using (process)
+        var names = new Dictionary<uint, string>();
+        Native.TopWindows.Each(window =>
+        {
+            if (Native.User32.IsWindowVisible(window) && Native.User32.GetWindowThreadProcessId(window, out uint process) != 0)
             {
-                try { if (process.MainWindowHandle != 0) found.TryAdd(process.ProcessName, process.MainWindowHandle); }
-                catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { Diagnostics.Log.Swallowed(e); }
+                if (!names.TryGetValue(process, out string? name)) names[process] = name = WinScreen.Windows.WindowInfo.ProcessName(process);
+                if (name.Length > 0) found.TryAdd(name, window);
             }
+            return true;
+        });
         return _running = found;
     }
 
@@ -1006,11 +1011,14 @@ internal static class ListRows
 
 internal class ThemedList : ListBox
 {
+    private const int WM_VSCROLL = 0x0115, WM_MOUSEWHEEL = 0x020A, WM_KEYDOWN = 0x0100, LB_SETTOPINDEX = 0x0197, LB_SETCURSEL = 0x0186;
     private int _hot = -1;
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal string EmptyText { get; set; } = "";
     internal event EventHandler? ItemsChanged;
-    internal event Action? Painted;
+    // After a paint, and after anything that scrolls: a turn of the wheel draws the new rows before the list sets its
+    // scroll position, so a bar read at that paint stayed where it was.
+    internal event Action? Moved;
 
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<object, int, Image?>? IconOf { get; set; }
@@ -1061,8 +1069,9 @@ internal class ThemedList : ListBox
         if (m.Msg == ListRows.WM_PAINT)
         {
             ListRows.Empty(this, EmptyText);
-            Painted?.Invoke();
+            Moved?.Invoke();
         }
+        else if (m.Msg is WM_VSCROLL or WM_MOUSEWHEEL or WM_KEYDOWN or LB_SETTOPINDEX or LB_SETCURSEL) Moved?.Invoke();
         else if (ListRows.ChangesItems(m.Msg))
         {
             Invalidate();

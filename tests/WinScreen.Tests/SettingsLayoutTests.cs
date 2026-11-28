@@ -928,7 +928,21 @@ public sealed class SettingsLayoutTests
             Assert.True(Wheel(list, -1));
             Assert.True(list.TopIndex > 0, "The long list didn't scroll.");
             Assert.Equal(0, programs.AutoScrollPosition.Y);
+            // The list's own thin bar follows it (the owner, 29 Nov: it stayed where it was).
+            int BarAt()
+            {
+                Control frame = list.Parent!.Parent!;
+                object bar = frame.GetType().GetField("_bar", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(frame)!;
+                return (int)bar.GetType().GetField("_pos", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(bar)!;
+            }
+            Assert.Equal(list.TopIndex, BarAt());
             for (int i = 0; i < 40 && list.TopIndex + list.ClientSize.Height / list.ItemHeight < list.Items.Count; i++) Wheel(list, -1);
+            Assert.Equal(list.TopIndex, BarAt());
+            // The owner, 29 Nov: turning on past the list's end made the page jump. The same turn of the wheel stays
+            // with the list; only a new one, after a pause, goes on to the page.
+            Assert.True(Wheel(list, -1));
+            Assert.Equal(0, programs.AutoScrollPosition.Y);
+            Thread.Sleep(SettingsWindow.WheelHold + 100);
             Assert.True(Wheel(list, -1));
             Assert.True(programs.AutoScrollPosition.Y < 0, "The page didn't go on once the list was at its end.");
             ComboBox picker = Descendants(window).OfType<ThemedPicker>().First(control => control.Visible);
