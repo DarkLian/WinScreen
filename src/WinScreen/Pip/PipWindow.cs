@@ -854,8 +854,8 @@ public sealed partial class PipWindow : Form
             if (m.Msg == WM_DISPLAYCHANGE) BeginInvokeIfAlive(FollowDisplays);
         }
         if (m.Msg == WM_WINDOWPOSCHANGING && m.LParam != 0 && (Marshal.ReadInt32(m.LParam, IntPtr.Size * 2 + 16) & User32.SWP_NOZORDER) == 0)
-            LogRestack("moved", Marshal.ReadIntPtr(m.LParam, IntPtr.Size));
-        else if (m.Msg == WM_ACTIVATE && (m.WParam & 0xFFFF) != 0) LogRestack("activated", 0);
+            LogRestack(activated: false, Marshal.ReadIntPtr(m.LParam, IntPtr.Size));
+        else if (m.Msg == WM_ACTIVATE && (m.WParam & 0xFFFF) != 0) LogRestack(activated: true, 0);
         if (m.Msg == WM_MOUSEACTIVATE)
         {
             m.Result = MA_NOACTIVATE;
@@ -1554,20 +1554,15 @@ public sealed partial class PipWindow : Form
     // The owner, 29 Nov: views still took turns on top under the pointer, which tests didn't reproduce. Each move in
     // the stack and each activation is logged with what in WinScreen asked for it ("windows" when nothing did), at
     // most 40 a minute per view.
-    private void LogRestack(string what, nint after)
+    private void LogRestack(bool activated, nint after)
     {
         long now = Environment.TickCount64;
         if (now - _restackLogSince > 60_000) { _restackLogSince = now; _restacksLogged = 0; }
         if (++_restacksLogged > 40) return;
-        string by = string.Join("<", new System.Diagnostics.StackTrace(2, false).GetFrames()
-            .Select(frame => frame.GetMethod())
-            .Where(method => method?.DeclaringType?.Namespace?.StartsWith("WinScreen", StringComparison.Ordinal) == true &&
-                             method.DeclaringType.Name != "User32" && !method.Name.StartsWith('<'))
-            .Take(6).Select(method => method!.DeclaringType!.Name + "." + method.Name));
-        Diagnostics.Log.Event("view.restacked", ("what", Diagnostics.LogValue.Known(what)),
-            ("by", Diagnostics.LogValue.Known(by.Length == 0 ? "windows" : by)),
-            ("after", after is 0 or -1 or -2 or 1 ? Diagnostics.LogValue.Known(after.ToString()) : Diagnostics.LogValue.ClassOf(after)),
-            ("afterProgram", after is 0 or -1 or -2 or 1 ? Diagnostics.LogValue.Known("") : Diagnostics.LogValue.ProgramOf(after)),
+        bool special = after is 0 or -1 or -2 or 1; // Top, topmost, not topmost, bottom.
+        Diagnostics.Log.Event("view.restacked", ("activated", activated), ("by", Diagnostics.LogValue.Callers(6)),
+            ("after", special ? (int)after : Diagnostics.LogValue.ClassOf(after)),
+            ("afterProgram", Diagnostics.LogValue.ProgramOf(special ? 0 : after)),
             ("visit", _live is not null), ("titleBar", _titleBar?.Visible == true), ("chip", _chip?.Visible == true),
             ("preview", _hoverPreview?.Visible == true), ("pressedLast", Pressed.Count > 0 && Pressed[^1] == this),
             ("front", Diagnostics.LogValue.ProgramOf(User32.GetForegroundWindow())));

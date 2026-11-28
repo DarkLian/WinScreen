@@ -46,6 +46,18 @@ public readonly struct LogValue
     // Only text WinScreen fixes itself; a test keeps it to this folder.
     internal static LogValue Known(string text) => new(text);
 
+    // The WinScreen methods that led to the caller, nearest first: names from the code, never text; "windows" when
+    // none did (Windows itself, through a message).
+    internal static LogValue Callers(int most)
+    {
+        string by = string.Join("<", new System.Diagnostics.StackTrace(2, false).GetFrames()
+            .Select(frame => frame.GetMethod())
+            .Where(method => method?.DeclaringType?.Namespace?.StartsWith("WinScreen", StringComparison.Ordinal) == true &&
+                             method.DeclaringType.Name != "User32" && !method.Name.StartsWith('<'))
+            .Take(most).Select(method => method!.DeclaringType!.Name + "." + method.Name));
+        return new(by.Length == 0 ? "windows" : by);
+    }
+
     internal string Text => _value switch
     {
         null => "",
