@@ -8,6 +8,7 @@
     .\build.ps1 -DesktopTests -SkipInteractive
                                     Includes native desktop tests; may use the mouse/keyboard.
     .\build.ps1 -CI                 For build servers with no desktop: logic tests only.
+    .\build.ps1 -Beta 4 -SkipTests  No tests at all, when the owner asks for a build without them.
     .\build.ps1 -Beta 4             A numbered local beta: version 0.8.0-beta.4 (the version in Directory.Build.props
                                     plus .4), kept in dist\local\0.8.0-beta.4\<arch>. Never published.
     .\build.ps1 -Release -Version 0.8.0-beta
@@ -30,6 +31,7 @@
 #>
 param(
     [switch]$SkipInteractive,
+    [switch]$SkipTests,
     [switch]$CI,
     [switch]$DesktopTests,
     [string]$Version,
@@ -110,7 +112,10 @@ if ($Stage -ne 'Pack') {
 Step 'Build'@('build', 'WinScreen.slnx', '-c', 'Release', "-p:Version=$Version", $updateProperty, $architectureProperty, $releaseTypeProperty)
 
 $filter = if ($CI -or ($SkipInteractive -and -not $DesktopTests)) { 'Category!=RealWindows&Category!=Interactive' } else { 'Category!=Interactive' }
-if ($canTest) {
+if ($SkipTests) {
+    Write-Output '== Test skipped (-SkipTests)'
+}
+elseif ($canTest) {
     Step 'Test' @('test', 'WinScreen.slnx', '-c', 'Release', '--no-build', '--filter', $filter, $architectureProperty)
 }
 else {
@@ -121,7 +126,7 @@ else {
 Step 'Package' @('publish', 'src\WinScreen\WinScreen.csproj', '-c', 'Release', '-o', $program,
     '--self-contained', 'true', '-p:DebugType=embedded', "-p:Version=$Version", $updateProperty, $architectureProperty, $releaseTypeProperty)
 
-if ($canTest -and -not $CI -and -not $SkipInteractive) {
+if ($canTest -and -not $CI -and -not $SkipInteractive -and -not $SkipTests) {
     $env:WINSCREEN_EXE = Join-Path $program 'WinScreen.exe'
     Step 'Test the packaged program' @('test', 'WinScreen.slnx', '-c', 'Release', '--no-build', '--filter', 'Category=Interactive', $architectureProperty)
     Remove-Item Env:\WINSCREEN_EXE
