@@ -365,7 +365,9 @@ internal sealed class ThemedCombo : ComboBox
             g.FillPath(brush, path);
             g.DrawPath(pen, path);
         }
-        string text = (SelectedIndex >= 0 ? GetItemText(SelectedItem) : Text) ?? "";
+        // While the list is open, the row under the pointer is reported as chosen: the box keeps showing the choice.
+        int shown = DroppedDown && _chosen < Items.Count ? _chosen : SelectedIndex;
+        string text = (shown >= 0 ? GetItemText(Items[shown]) : Text) ?? "";
         Native.DirectText.DrawText(g, text, Font, new Rectangle(Unit(11), 0, Width - Unit(44), Height), Enabled ? SettingsStyle.Text : SettingsStyle.Disabled,
             TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
         SettingsStyle.Chevron(g, new Point(Width - Unit(18), Height / 2), Enabled ? SettingsStyle.Secondary : SettingsStyle.Disabled, this);
@@ -375,6 +377,9 @@ internal sealed class ThemedCombo : ComboBox
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
         SettingsStyle.SoftText(e.Graphics);
+        // Windows draws the box itself as a row when focus moves or the pointer crosses the open list: shown as a row
+        // over the box for a moment, or as the row the pointer was on. The box is OnPaint's alone.
+        if ((e.State & DrawItemState.ComboBoxEdit) != 0) { Invalidate(); return; }
         if (e.Index < 0) return;
         Graphics g = e.Graphics;
         using (var back = new SolidBrush(SettingsStyle.Flyout)) g.FillRectangle(back, e.Bounds);
