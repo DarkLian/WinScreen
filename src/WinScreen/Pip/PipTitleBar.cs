@@ -18,6 +18,7 @@ internal sealed class PipTitleBar : Form
     private long _leftAt, _fadeAt;
     private double _from, _target;
     internal event Action<Point>? MenuRequested;
+    internal event Action? Pressed;
 
     internal void HoldVisible()
     {
@@ -95,12 +96,14 @@ internal sealed class PipTitleBar : Form
         foreach (Control button in new Control[] { _minimize, _close })
             button.MouseDown += (_, e) =>
             {
+                Pressed?.Invoke();
                 if (e.Button == MouseButtons.Right) MenuRequested?.Invoke(button.PointToScreen(e.Location));
             };
         foreach (Control control in new Control[] { this, _title, _icon })
         {
             control.MouseDown += (_, e) =>
             {
+                Pressed?.Invoke();
                 if (e.Button == MouseButtons.Right) { MenuRequested?.Invoke(control.PointToScreen(e.Location)); return; }
                 if (e.Button != MouseButtons.Left || e.Clicks > 1 || _locked()) return;
                 _start = control.PointToScreen(e.Location);

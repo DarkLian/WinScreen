@@ -141,6 +141,58 @@ public class PipWindowTests
         });
     }
 
+    /// <summary>
+    /// The owner, 29 Nov: which of several views was on top seemed random, as a view went over the others whenever a
+    /// visit or a check of its own ended. Views stack as windows do: the one last pressed is on top, and one that only
+    /// raises itself again stays under the views pressed after it.
+    /// </summary>
+    [Fact]
+    public void The_view_last_pressed_stays_over_the_others()
+    {
+        using var first = new TargetProcess(SourceSpot);
+        using var second = new TargetProcess(new Rectangle(SourceSpot.X + 60, SourceSpot.Y + 60, SourceSpot.Width, SourceSpot.Height), "1E1EC8");
+        OnUiThread(pump =>
+        {
+            var windows = new WindowController([]);
+            using var older = new PipWindow(first.Handle, windows);
+            using var newer = new PipWindow(second.Handle, windows);
+            Desktop.GainForegroundRights();
+            older.ShowOnTop();
+            newer.ShowOnTop();
+            older.Location = new Point(100, 100);
+            newer.Location = new Point(160, 140);
+            pump(200);
+            void Press(PipWindow view)
+            {
+                User32.SendMessage(view.Handle, 0x0201, 1, (20 << 16) | 20);
+                User32.SendMessage(view.Handle, 0x0202, 0, (20 << 16) | 20);
+                pump(150);
+            }
+            void RaisesItself(PipWindow view)
+            {
+                typeof(PipWindow).GetMethod("StayOnTop", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(view, null);
+                pump(150);
+            }
+            Assert.True(IsAbove(newer.Handle, older.Handle), "The newer view didn't open over the older one.");
+            Press(older);
+            Assert.True(IsAbove(older.Handle, newer.Handle), "The view pressed didn't come up.");
+            RaisesItself(newer);
+            Assert.True(IsAbove(older.Handle, newer.Handle), "A view raising itself went over the one pressed after it.");
+            Press(newer);
+            Assert.True(IsAbove(newer.Handle, older.Handle), "The view pressed last didn't come up.");
+            windows.RestoreAll();
+        });
+    }
+
+    private static bool IsAbove(nint upper, nint lower)
+    {
+        const uint GW_HWNDPREV = 3;
+        nint window = lower;
+        for (int seen = 0; seen < 4096 && (window = User32.GetWindow(window, GW_HWNDPREV)) != 0; seen++)
+            if (window == upper) return true;
+        return false;
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

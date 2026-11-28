@@ -37,7 +37,8 @@ public sealed partial class PipWindow : Form
     private const int WM_MOUSEACTIVATE = 0x0021;
     private const int MA_NOACTIVATE = 3;
     private const int WM_SETCURSOR = 0x0020, HTCLIENT = 1;
-    private const int WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202;
+    private const int WM_RBUTTONDOWN = 0x0204, WM_RBUTTONUP = 0x0205, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202,
+        WM_MBUTTONDOWN = 0x0207, WM_XBUTTONDOWN = 0x020B, WM_NCLBUTTONDOWN = 0x00A1, WM_NCRBUTTONDOWN = 0x00A4;
 
     private bool _cursorFromFrame;
 
@@ -830,6 +831,7 @@ public sealed partial class PipWindow : Form
         // the view itself between visits. It starts one and goes to the app, never to the view's menu.
         // With an administrator window in front no visit starts (BeginLive), so a left press reaches the view too: it
         // goes to the app the same way (not with Ctrl, which selects), and the app coming forward ends the blindness.
+        if (m.Msg is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MBUTTONDOWN or WM_XBUTTONDOWN or WM_NCLBUTTONDOWN or WM_NCRBUTTONDOWN) Touch();
         if (m.Msg is WM_RBUTTONDOWN or WM_LBUTTONDOWN)
         {
             _pressVisit = null;
@@ -1115,6 +1117,7 @@ public sealed partial class PipWindow : Form
     {
         if (_cleaned) return;
         _cleaned = true;
+        Pressed.Remove(this);
         DropTaskbarProxy();
         _watch.Dispose();
         _autoMove.Dispose();
@@ -1393,7 +1396,11 @@ public sealed partial class PipWindow : Form
         live.AppScrollsWithHover = AppScrollsWithHover;
         live.EnhancedHover = HoverOn;
         live.Left += () => BeginInvokeIfAlive(() => { _endReason = "the pointer left"; EndLive(); });
-        live.Pressed += _pressOutcomes.Enqueue;
+        live.Pressed += outcome =>
+        {
+            _pressOutcomes.Enqueue(outcome);
+            BeginInvokeIfAlive(Touch);
+        };
         live.Answered += outcome => BeginInvokeIfAlive(() => OnAnswered(outcome));
         live.ViewDragged += moved => BeginInvokeIfAlive(() => DragLiveView(moved));
         live.CaptionPressed += action => BeginInvokeIfAlive(() => OnCaption(action));
@@ -1531,10 +1538,34 @@ public sealed partial class PipWindow : Form
             User32.UnregisterHotKey(Handle, EscapeHotkey);
     }
 
-    // A hidden original just went above other topmost windows too.
+    // Views are stacked by when each was last pressed, as windows are by being clicked; one that only had the pointer
+    // pass over it, or a visit end, stays under the views pressed since. Oldest first, per thread: the app's views share
+    // one, and views made on other threads (tests) never meet them.
+    [ThreadStatic] private static List<PipWindow>? s_pressed;
+    private static List<PipWindow> Pressed => s_pressed ??= [];
+
+    private void Touch()
+    {
+        if (_cleaned || IsDisposed) return;
+        Pressed.Remove(this);
+        Pressed.Add(this);
+        StayOnTop();
+    }
+
+    // A hidden original just went above other topmost windows too. Lifted with the views pressed after it, which keep
+    // their place over it.
     private void StayOnTop()
     {
-        if (!_inputPaused && !_menu.Visible && !TopLayer.InputBlocked) TopLayer.RaiseGroup([Handle, .. _pickerWindows]);
+        if (_inputPaused || _menu.Visible || TopLayer.InputBlocked) return;
+        if (!Pressed.Contains(this)) Pressed.Add(this); // A new view comes up over the others.
+        var group = new List<nint>();
+        foreach (PipWindow view in Pressed.Skip(Pressed.IndexOf(this)))
+        {
+            if (view != this && (view._cleaned || view.IsDisposed || !view.IsHandleCreated || !User32.IsWindowVisible(view.Handle))) continue;
+            group.Add(view.Handle);
+            group.AddRange(view._pickerWindows);
+        }
+        TopLayer.RaiseGroup(group);
     }
 
     private void PauseInput(bool paused, bool keepTitleBar = false)
@@ -2056,6 +2087,7 @@ public sealed partial class PipWindow : Form
             _titleBar = new PipTitleBar(this, () => _overrides.PositionLocked, SuspendView);
             KeepPartOutOfScreenCapture(_titleBar);
             _titleBar.MenuRequested += point => _menu.Show(point);
+            _titleBar.Pressed += Touch;
             PositionTitleBar();
         }
         _titleBar.UpdateTitle(_origin.Title, _sourceIcon);
