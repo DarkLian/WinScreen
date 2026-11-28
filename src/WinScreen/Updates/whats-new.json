@@ -1,4 +1,30 @@
 {
+  "1.5.2": {
+    "en": [
+      "Removing one saved setup for an app no longer removes the app's other setups.",
+      "A quick click on a link in a view is no longer taken for a drag.",
+      "Glass recovers when the graphics driver restarts, instead of freezing.",
+      "Downloading an update shows its progress.",
+      "Clearer, more consistent text in English and Chinese.",
+      "3 other fixes."
+    ],
+    "zh-Hans": [
+      "删除某个应用的一个已保存配置时，不再同时删除该应用的其他配置。",
+      "在画中画中快速点击链接，不再被当作拖动。",
+      "显卡驱动重新启动后，玻璃效果会恢复，而不会卡住。",
+      "下载更新时会显示进度。",
+      "英文和中文的文字更清楚、更一致。",
+      "还有 3 项其他修正。"
+    ],
+    "zh-Hant": [
+      "刪除某個應用程式的一個已儲存配置時，不再同時刪除該應用程式的其他配置。",
+      "在子母畫面中快速點選連結，不再被當成拖曳。",
+      "顯示卡驅動程式重新啟動後，玻璃效果會恢復，而不會卡住。",
+      "下載更新時會顯示進度。",
+      "英文和中文的文字更清楚、更一致。",
+      "還有 3 項其他修正。"
+    ]
+  },
   "1.5.1": {
     "en": [
       "Actions and shortcuts is easier to use: actions come in groups, you change a shortcut right in its row, and Press keys tells you what a key combination does.",
