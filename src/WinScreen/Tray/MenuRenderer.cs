@@ -186,6 +186,34 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
             else if (item is ToolStripControlHost host && host.Margin.Left != MenuParts.Scale(4))
                 host.Margin = host.Margin with { Left = MenuParts.Scale(4) };
         }
+        FitTitle(menu);
+    }
+
+    private static readonly ConditionalWeakTable<ToolStripItem, string> FullTitles = [];
+
+    // A window's title never widens its menu: a video page's long title made the menu twice as wide as its commands.
+    private static void FitTitle(ToolStripDropDown menu)
+    {
+        if (menu.Items[TitleName] is not { } title) return;
+        string full = FullTitles.GetValue(title, item => item.Text ?? "");
+        title.Text = "";
+        int room = menu.GetPreferredSize(Size.Empty).Width;
+        title.Text = full;
+        if (menu.GetPreferredSize(Size.Empty).Width <= room) return;
+        int fits = 0, over = full.Length;
+        while (over - fits > 1)
+        {
+            int length = (fits + over) / 2;
+            title.Text = Shortened(full, length);
+            if (menu.GetPreferredSize(Size.Empty).Width <= room) fits = length; else over = length;
+        }
+        title.Text = Shortened(full, Math.Max(fits, 1));
+    }
+
+    private static string Shortened(string text, int length)
+    {
+        if (char.IsHighSurrogate(text[length - 1])) length--;
+        return text[..length].TrimEnd().TrimEnd('&') + "…"; // Never half of an && that stands for &.
     }
 
     private static int IconRoom => MenuParts.Scale(10);

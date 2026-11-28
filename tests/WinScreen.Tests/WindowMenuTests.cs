@@ -23,6 +23,38 @@ public sealed class WindowMenuBuilderTests
     private static IEnumerable<ToolStripMenuItem> Commands(ToolStripItemCollection items) =>
         items.OfType<ToolStripMenuItem>().SelectMany(item => new[] { item }.Concat(Commands(item.DropDownItems)));
 
+    // The owner, 28 Nov: a video page's long Chinese title made the window menu about 700 px wide, and the opacity
+    // slider with it. The title is cut to the width the commands need.
+    [Theory]
+    [InlineData("谁是最适合当主人的AI？五大AI挑战“人类饲养”测试！【牢大百科18】_哔哩哔哩_bilibili - Google Chrome", true)]
+    [InlineData("Notes", false)]
+    public void A_long_window_title_never_widens_its_menu(string title, bool cut)
+    {
+        OnUiThread(() =>
+        {
+            UiText.Initialize("en");
+            int Width(string? shown)
+            {
+                using var menu = new ContextMenuStrip();
+                if (shown is not null)
+                    menu.Items.Add(new ToolStripMenuItem(shown) { Enabled = false, Name = MenuRenderer.TitleName });
+                menu.Items.Add(new ToolStripSeparator());
+                var builder = new WindowMenuBuilder(() => null, (_, _) => { }, (_, _) => { }, _ => true, (_, _) => true, (_, _) => false, () => { });
+                builder.Populate(menu.Items, false);
+                MenuRenderer.Apply(menu);
+                if (shown is not null)
+                {
+                    string now = menu.Items[MenuRenderer.TitleName]!.Text!;
+                    Assert.Equal(cut, now.EndsWith('…'));
+                    if (cut) Assert.StartsWith(now[..^1], title);
+                    else Assert.Equal(title, now);
+                }
+                return menu.GetPreferredSize(Size.Empty).Width;
+            }
+            Assert.True(Width(title) <= Width(null), "The title widened the menu.");
+        });
+    }
+
     // The owner, 26 Nov: the background's sound, next and change left Effects for the Glass and background panel,
     // which has the same sliders as Settings. Effects holds the effects only.
     // 27 Nov: Glass and Dark mode moved up to Look, one click away, and the dark title bar moved into Effects.
