@@ -126,7 +126,8 @@ public sealed class WindowAppearanceTests
     /// Windows stops drawing the frame of a window with a shape, but a cropped Task Manager kept its whole frame, in
     /// the title bar's colour with its buttons, around the part kept (the owner, 27 Nov). A window without Windows'
     /// title bar, with a WinUI content child and asking for its frame always, stands in for it: the frame is off while
-    /// cropped, and Windows' own choice is back after. Without the child it is left alone, as Chrome is.
+    /// cropped, and Windows' own choice is back after. Since 29 Nov one without the child goes the same way, as Chrome
+    /// does (A_cropped_browser_keeps_its_crop_with_no_frame_round_it).
     /// </summary>
     [Fact]
     public void A_crop_stops_the_frame_a_window_would_keep_drawing_around_it()
@@ -155,7 +156,7 @@ public sealed class WindowAppearanceTests
             Assert.Null(WindowInfo.ShapeOf(window));
 
             windows.Crop(other, new Rectangle(40, 40, 150, 100));
-            Assert.True(FrameDrawn(other));
+            Assert.False(FrameDrawn(other));
         }
         finally { windows.RestoreAll(); }
     }
@@ -164,14 +165,17 @@ public sealed class WindowAppearanceTests
         Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_NCRENDERING_ENABLED, out int value, sizeof(int)) == 0 && value != 0;
 
     /// <summary>
-    /// Chrome draws its own title bar too, but answered its frame going by putting its own shape over the whole window
-    /// (27 Nov, this test, before the frame was turned off only for WinUI windows): it keeps its frame and its crop.
+    /// Chrome draws its own title bar too. With its frame left on, Windows drew its accent line and shadow round the whole
+    /// window, a dark outline round the part kept (the owner, 29 Nov). With the frame off, Chrome puts its own shape over
+    /// the whole window (27 Nov), so the part kept is put back: only that part shows, with nothing round it, and the
+    /// frame comes back with the whole window.
     /// </summary>
     [Fact]
-    public void A_cropped_browser_keeps_its_crop_and_its_frame()
+    public void A_cropped_browser_keeps_its_crop_with_no_frame_round_it()
     {
         string chrome = Path.Combine(AppContext.BaseDirectory, "chrome-win64", "chrome.exe");
         if (!File.Exists(chrome)) { Skipped.Because("The portable Chrome isn't in the test output."); return; }
+        using var back = new TargetProcess(Rectangle.Inflate(Spot, 60, 60), "FFFFFF");
         var (browser, window, root) = BrowserInputTests.Open("<!doctype html><title>CropFrame</title><body style='background:#1e6'>",
             "CropFrame", app: false, chrome);
         var windows = new WindowController([]);
@@ -180,15 +184,30 @@ public sealed class WindowAppearanceTests
             if (User32.IsZoomed(window)) User32.ShowWindow(window, User32.SW_RESTORE);
             User32.SetWindowPos(window, 0, Spot.Left, Spot.Top, Spot.Width, Spot.Height, User32.SWP_NOZORDER | User32.SWP_NOACTIVATE);
             TestDesktop.Pump(500);
+            User32.SetWindowPos(back.Handle, window, 0, 0, 0, 0, User32.SWP_NOMOVE | User32.SWP_NOSIZE | User32.SWP_NOACTIVATE);
             bool before = FrameDrawn(window);
-            var part = new Rectangle(60, 120, 200, 150);
+            var part = new Rectangle(Spot.Width - 260, Spot.Height - 190, 200, 150);
             windows.Crop(window, part);
-            TestDesktop.Pump(1500);
+            for (int i = 0; i < 20; i++)
+            {
+                TestDesktop.Pump(100);
+                windows.Refresh(Cursor.Position, false, false);
+            }
+            TestDesktop.Pump(500);
             Assert.Equal(part, WindowInfo.ShapeOf(window));
             Assert.True(windows.IsCropped(window));
-            Assert.Equal(before, FrameDrawn(window));
+            // Just inside the window's old edges, away from the part kept: what is behind, not a line or a shadow.
+            using (var picture = new Bitmap(Spot.Width, Spot.Height))
+            {
+                using (Graphics g = Graphics.FromImage(picture)) g.CopyFromScreen(Spot.Location, Point.Empty, Spot.Size);
+                foreach (Point at in new[] { new Point(120, 0), new Point(120, 1), new Point(0, 120), new Point(Spot.Width - 1, 60), new Point(120, Spot.Height - 1) })
+                {
+                    Color seen = picture.GetPixel(at.X, at.Y);
+                    Assert.True(seen.R > 240 && seen.G > 240 && seen.B > 240, $"At {at} round the part kept: {seen}.");
+                }
+            }
             windows.RemoveCrop(window);
-            TestDesktop.Pump(500);
+            TestDesktop.Pump(800);
             Assert.Null(WindowInfo.ShapeOf(window));
             Assert.Equal(before, FrameDrawn(window));
         }

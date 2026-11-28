@@ -76,6 +76,10 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         [NotJournalled("Windows 11's backdrop and corners a crop turned off; after a crash the app's own come back when it next opens.")]
         public (int Backdrop, int Corners)? LookBeforeCrop { get; set; }
         public bool FrameDrawingOff { get; set; }
+        [NotJournalled("Transient: the part kept, to put back when the app replaces it with its own shape; recovery takes any shape away.")]
+        public Rectangle? CropPart { get; set; }
+        [NotJournalled("Transient: how often the part kept was put back since the crop was made.")]
+        public int CropsPutBack { get; set; }
         [NotJournalled("Transient: how often another program took the pin away in the current run of takings.")]
         public int PinRestores { get; set; }
         [NotJournalled("Transient: when the current run of takings began.")]
@@ -284,6 +288,8 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
                     User32.DeleteObject(region);
                     throw Failure(T("actions.crop"), window);
                 }
+                state.CropPart = part;
+                state.CropsPutBack = 0;
                 if (!croppedBefore) HideFrameLook(window, state);
                 // Some apps put their own shape straight back (Windows Forms ones with a frame, for one), so a crop
                 // that didn't stay is said to have failed rather than shown as on.
@@ -320,6 +326,7 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         if (User32.SetWindowRgn(window, 0, true) == 0)
             throw Failure(T("actions.uncrop"), window);
         state.Cropped = false;
+        state.CropPart = null;
         RestoreFrameLook(window, state);
     }
 
@@ -336,22 +343,20 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         StopFrameDrawing(window, state);
     }
 
-    // Windows stops drawing the frame of a window with a shape, but not of a WinUI one that draws its own title bar
-    // (Task Manager): its whole frame showed around the part kept, in the title bar's colour with its buttons. Not for
-    // others: with Windows' title bar it would take on the old look and Windows puts its own shape over the crop, and
-    // Chrome does the same. A minimized window can't be told apart, so it waits until it comes back.
+    // Windows stops drawing the frame of a window with a shape, but not of one that draws its own title bar: a WinUI
+    // one (Task Manager) showed its whole frame around the part kept, in the title bar's colour with its buttons, and
+    // Chrome its accent line and shadow. Not with Windows' title bar: it would take on the old look and Windows puts its
+    // own shape over the crop. Chrome answers by putting its own shape over the whole window; StillCropped puts the
+    // part kept back. A minimized window can't be told apart, so it waits until it comes back.
     private static bool StopFrameDrawing(nint window, ChangedWindow state)
     {
         if (state.FrameDrawingOff || User32.IsIconic(window) || !DrawsOwnTitleBar(window) ||
-            User32.FindWindowEx(window, 0, WinUiContent, null) == 0 ||
             Dwmapi.DwmGetWindowAttribute(window, Dwmapi.DWMWA_NCRENDERING_ENABLED, out int drawn, sizeof(int)) != 0 || drawn == 0 ||
             Dwmapi.DwmSetWindowAttribute(window, Dwmapi.DWMWA_NCRENDERING_POLICY, Dwmapi.DWMNCRP_DISABLED, sizeof(int)) != 0)
             return false;
         state.FrameDrawingOff = true;
         return true;
     }
-
-    private const string WinUiContent = "Windows.UI.Composition.DesktopWindowContentBridge";
 
     private static bool DrawsOwnTitleBar(nint window)
     {
@@ -660,13 +665,23 @@ public sealed partial class WindowController(IEnumerable<string> excludedProcess
         return string.Format(T("errors.layered.rewritten"), WindowInfo.Title(window));
     }
 
+    private const int MostCropsPutBack = 5;
+
     // A crop keeps its rectangle through a resize (one made from a control follows the control instead).
     private void StillCropped(nint window, ChangedWindow state)
     {
         if (!state.Cropped || User32.IsIconic(window)) return;
-        if (WindowInfo.ShapeOf(window) is not null)
+        if (WindowInfo.ShapeOf(window) is { } shape)
         {
             if (StopFrameDrawing(window, state)) TrySaveJournal();
+            // Put back a few times only: an app that keeps replacing it is left with its own.
+            if (state.FrameDrawingOff && state.CropPart is { } part && shape != part && state.CropsPutBack < MostCropsPutBack)
+            {
+                state.CropsPutBack++;
+                nint region = User32.CreateRectRgn(part.Left, part.Top, part.Right, part.Bottom);
+                if (User32.SetWindowRgn(window, region, true) == 0) User32.DeleteObject(region);
+                Diagnostics.Log.Event("crop.putBack", ("program", Diagnostics.LogValue.ProgramOf(window)), ("times", state.CropsPutBack));
+            }
             return;
         }
         state.Cropped = false;
